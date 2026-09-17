@@ -61,6 +61,7 @@ apply → plan cycle is broken. Running the CLI against real files shows it.
 - [ ] The orchestrator's parts get their collaborators passed in, not `bind`-ed callbacks.
 - [ ] The CLI commands share their helpers instead of copying them.
 - [ ] `apply` parses the config and reads data sources once, not twice.
+- [ ] Comments that only restate the code are gone (`// Mock Provider for testing`).
 - [ ] The ESLint config fits this repo. The current one came from a React project.
 
 ## 4 — repo

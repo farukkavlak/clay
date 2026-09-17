@@ -52,7 +52,7 @@ describe('apply and plan against real files', () => {
     expect(actions.map((action) => action.type)).toEqual(['CREATE']);
   });
 
-  // Known bug: the planner compares resolved state values with raw config values. See docs/TECH_DEBT.md.
+  // Known bug: the planner compares resolved state values with raw config values.
   it.fails('plans no changes right after an apply', async () => {
     await orchestrator.apply(fileConfig('hello'), dir);
 
