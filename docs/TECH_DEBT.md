@@ -19,12 +19,8 @@ apply → plan cycle is broken. Running the CLI against real files shows it.
 
 ## 0 — formatting
 
-Done first, in a commit of its own, so later diffs show only real changes.
-
-- [x] Prettier runs with its defaults. The import-sorting and package.json plugins are
-      gone.
-- [ ] The whole repo is reformatted in one `style:` commit, and that commit is listed in
-      `.git-blame-ignore-revs`.
+- [x] Prettier keeps the old style (single quotes, 180 columns, es5 trailing commas)
+      without its plugins, so no file had to be reformatted.
 
 ## 1 — bugs
 
