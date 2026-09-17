@@ -51,7 +51,8 @@ Try the CLI in a temp directory, never in the repo: `node packages/cli/bin/minif
   `fix`, `refactor`, `test`, `docs`, `chore`, `ci`.
 - Say what the change does, in plain words: `fix: keep a replaced resource in state`.
 - Small changes go straight to `main`. Larger ones get a branch (`fix/replace-state`) and
-  a PR, squash-merged, with the PR title as the commit message.
+  a PR, squash-merged. The PR title is the whole commit message and says the change in
+  one sentence; the PR description stays empty.
 - One change per commit. Don't mix a fix with a refactor.
 - Build, tests, type check and lint pass before a commit.
 - Before giving the PR commands, run the `pr-reviewer` agent on the branch, fix what it

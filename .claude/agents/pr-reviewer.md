@@ -66,7 +66,7 @@ commit or push. You report.
 
 - The planned title follows `type: what changed`, lowercase, no period, under 72
   characters.
-- The planned description is short and plain; it becomes the commit body on merge.
+- The title says the whole change in one sentence; the PR description is empty.
 
 ## Report
 
