@@ -35,6 +35,10 @@ apply → plan cycle is broken. Running the CLI against real files shows it.
 - [ ] `apply` never takes the state lock.
 - [ ] The planner matches replacements by type and name only, ignoring the module path.
 - [ ] The plan output says "destroyd".
+- [ ] `plan` never says "No changes". It checks for an empty list, but the planner returns a
+      `NO_OP` action for every unchanged resource.
+- [ ] Relative paths in `local_file` resolve against the current directory, not the config's
+      directory.
 - [ ] End-to-end tests with the real CLI in a temp directory, one for each bug above.
 
 ## 2 — dependencies

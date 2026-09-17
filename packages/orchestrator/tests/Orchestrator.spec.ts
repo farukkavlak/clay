@@ -3,7 +3,7 @@ import { LocalBackend, StateManager } from '@miniform/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Orchestrator } from '../src/index';
 
@@ -201,7 +201,8 @@ describe('Orchestrator', () => {
       expect(updated.get(originalId)).toEqual({ name: 'updated_value' });
     });
 
-    it('should not call provider if no changes (NO_OP)', async () => {
+    // Known bug: the planner compares resolved state values with raw config values. See docs/TECH_DEBT.md.
+    it.fails('should not call provider if no changes (NO_OP)', async () => {
       const config = `
         resource "mock_resource" "test" {
           name = "same_value"
@@ -209,14 +210,15 @@ describe('Orchestrator', () => {
       `;
 
       await orchestrator.apply(config);
-      const firstCount = mockProvider.getCreatedResources().size;
+      const create = vi.spyOn(mockProvider, 'create');
+      const update = vi.spyOn(mockProvider, 'update');
+      const remove = vi.spyOn(mockProvider, 'delete');
 
-      // Apply same config again
       await orchestrator.apply(config);
-      const secondCount = mockProvider.getCreatedResources().size;
 
-      // Should not create a new resource
-      expect(secondCount).toBe(firstCount);
+      expect(create).not.toHaveBeenCalled();
+      expect(update).not.toHaveBeenCalled();
+      expect(remove).not.toHaveBeenCalled();
     });
   });
 
