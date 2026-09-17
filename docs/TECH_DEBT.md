@@ -21,7 +21,8 @@ apply → plan cycle is broken. Running the CLI against real files shows it.
 
 Done first, in a commit of its own, so later diffs show only real changes.
 
-- [ ] Prettier runs with its defaults. The import-sorting and package.json plugins are gone.
+- [x] Prettier runs with its defaults. The import-sorting and package.json plugins are
+      gone.
 - [ ] The whole repo is reformatted in one `style:` commit, and that commit is listed in
       `.git-blame-ignore-revs`.
 
