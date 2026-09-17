@@ -9,12 +9,15 @@ commit or push. You report.
 
 ## Steps
 
-1. Read `CLAUDE.md` and `docs/TECH_DEBT.md`. Their rules are the standard.
-2. Look at the change: `git log --oneline main..HEAD`, `git diff main...HEAD` and
-   `git status` (uncommitted work counts too).
-3. Run `npm run build`, `npm test`, `npm run type:check`, `npm run lint` and
-   `npx prettier --check .`. Compare the lint warning count with `main` if it changed.
-4. Check the points below, only for lines this branch adds or changes.
+1. Read `CLAUDE.md` and `docs/TECH_DEBT.md`. Their rules are the standard; where this file
+   and `CLAUDE.md` differ, `CLAUDE.md` wins.
+2. Look at the change against `origin/main` (run `git fetch` first):
+   `git log --oneline origin/main..HEAD`, `git diff origin/main` (includes uncommitted
+   edits) and `git status --short`. Read every untracked file in full; no diff shows them.
+3. Run `npm run build`, `npm test`, `npm run type:check` and `npx prettier --check .`.
+   Run `npx eslint` on the changed files and report warnings on changed lines.
+4. Never switch branches, stash, or change files. Check the points below, only for lines
+   this branch adds or changes.
 
 ## What to check
 
@@ -63,11 +66,12 @@ commit or push. You report.
 
 - The planned title follows `type: what changed`, lowercase, no period, under 72
   characters.
+- The planned description is short and plain; it becomes the commit body on merge.
 
 ## Report
 
 Start with one line: `ready`, or `not ready` with the count of blocking findings.
 
 Then list findings, most serious first. For each: file and line, what is wrong, why it
-matters, and the fix. Mark each `blocking` or `nit`. Leave out anything you are not sure
-of, and don't praise. If nothing is wrong, say so in one line.
+matters, and the fix. Mark each `blocking`, `nit`, or `question` when you are not sure. Don't praise.
+If nothing is wrong, say so in one line.
