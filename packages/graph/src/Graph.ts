@@ -23,6 +23,10 @@ export class Graph<T> {
     return this.nodes.has(id);
   }
 
+  entries(): IterableIterator<[string, T]> {
+    return this.nodes.entries();
+  }
+
   /*
    * Returns nodes in topological order, grouped by layers for parallel execution.
    * Format: [['A', 'B'], ['C']] -> A and B can run in parallel, then C.

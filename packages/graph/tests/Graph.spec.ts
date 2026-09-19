@@ -75,6 +75,17 @@ describe('Graph', () => {
     expect(() => graph.topologicalSort()).toThrow('Dependency cycle detected: A -> B -> C -> A');
   });
 
+  it('should list every node with its data', () => {
+    const graph = new Graph<string>();
+    graph.addNode('A', 'first');
+    graph.addNode('B', 'second');
+
+    expect([...graph.entries()]).toEqual([
+      ['A', 'first'],
+      ['B', 'second'],
+    ]);
+  });
+
   it('should detect self-reference cycle', () => {
     // A -> A
     const graph = new Graph<string>();

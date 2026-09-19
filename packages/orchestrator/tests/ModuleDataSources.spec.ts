@@ -26,7 +26,8 @@ vi.mock('@miniform/state', () => ({
   })),
 }));
 
-vi.mock('@miniform/planner', () => ({
+vi.mock('@miniform/planner', async () => ({
+  ...(await vi.importActual<object>('@miniform/planner')),
   plan: vi.fn(() => []),
 }));
 

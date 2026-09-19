@@ -15,7 +15,7 @@ export class VariableResolver implements IResolver {
     const scope = this.scopeManager.getScope(context);
 
     const scopeVars = this.scopeManager.getVariable(scope, varName);
-    if (!scopeVars) throw new Error(`Variable "${varName}" is not defined in scope "${scope}"`);
+    if (!scopeVars) throw new Error(`variable "${varName}" is not defined`);
 
     return this.referenceResolver.resolveValue(scopeVars.value, state, scopeVars.context);
   }

@@ -28,8 +28,9 @@ vi.mock('@miniform/state', () => {
 });
 
 // Mock Planner
-vi.mock('@miniform/planner', () => ({
-  plan: vi.fn(() => []), // Return empty actions function
+vi.mock('@miniform/planner', async () => ({
+  ...(await vi.importActual<object>('@miniform/planner')),
+  plan: vi.fn(() => []),
 }));
 
 describe('Orchestrator - Module Loading', () => {

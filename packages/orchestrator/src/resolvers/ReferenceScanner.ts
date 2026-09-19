@@ -1,48 +1,56 @@
 import { Address } from '../Address';
+import { childScope, outputKey, variableKey } from '../keys';
 import { ScopeManager } from '../scope/ScopeManager';
 
-/** Finds the resources and module outputs a config value reads from. */
+/** What a config value reads from, with the graph key it is addressed by. */
+export type Reference =
+  | { kind: 'resource'; key: string; address: string }
+  | { kind: 'variable'; key: string; name: string }
+  | { kind: 'output'; key: string; scope: string; module: string; name: string };
+
 export class ReferenceScanner {
   constructor(private scopeManager: ScopeManager) {}
 
-  keysIn(value: unknown, context: Address): string[] {
-    const keys: string[] = [];
-    this.collect(value, context, keys);
-    return keys;
+  referencesIn(value: unknown, context: Address): Reference[] {
+    const references: Reference[] = [];
+    this.collect(value, context, references);
+    return references;
   }
 
-  private collect(value: unknown, context: Address, keys: string[]): void {
+  private collect(value: unknown, context: Address, references: Reference[]): void {
     if (!value || typeof value !== 'object') return;
 
-    if (Array.isArray(value)) for (const item of value) this.collect(item, context, keys);
-    else this.collectFromObject(value as Record<string, unknown>, context, keys);
+    if (Array.isArray(value)) for (const item of value) this.collect(item, context, references);
+    else this.collectFromObject(value as Record<string, unknown>, context, references);
   }
 
-  private collectFromObject(obj: Record<string, unknown>, context: Address, keys: string[]): void {
-    if (obj.type === 'Reference' && Array.isArray(obj.value)) this.addReference(obj.value as string[], context, keys);
-    else if ((obj.type === 'Interpolation' || obj.type === 'String') && typeof obj.value === 'string') this.addInterpolations(obj.value, context, keys);
-    else for (const item of Object.values(obj)) this.collect(item, context, keys);
+  private collectFromObject(obj: Record<string, unknown>, context: Address, references: Reference[]): void {
+    if (obj.type === 'Reference' && Array.isArray(obj.value)) this.addReference(obj.value as string[], context, references);
+    else if ((obj.type === 'Interpolation' || obj.type === 'String') && typeof obj.value === 'string') this.addInterpolations(obj.value, context, references);
+    else for (const item of Object.values(obj)) this.collect(item, context, references);
   }
 
-  private addInterpolations(content: string, context: Address, keys: string[]): void {
+  private addInterpolations(content: string, context: Address, references: Reference[]): void {
     const regex = /\${([^}]+)}/g;
     let match: RegExpExecArray | null;
 
-    while ((match = regex.exec(content)) !== null) this.addReference(match[1].trim().split('.'), context, keys);
+    while ((match = regex.exec(content)) !== null) this.addReference(match[1].trim().split('.'), context, references);
   }
 
-  private addReference(refParts: string[], context: Address, keys: string[]): void {
+  private addReference(refParts: string[], context: Address, references: Reference[]): void {
     const refType = refParts[0];
-    if (refType === 'var' || refType === 'data') return;
+    if (refType === 'data') return;
 
-    if (refType === 'module') {
-      const [, moduleName, outputName] = refParts;
-      const scope = this.scopeManager.getScope(context);
-      const childScope = scope ? `${scope}.module.${moduleName}` : `module.${moduleName}`;
-      keys.push(`${childScope}.outputs.${outputName}`);
-      return;
+    const scope = this.scopeManager.getScope(context);
+
+    if (refType === 'var') references.push({ kind: 'variable', key: variableKey(scope, refParts[1]), name: refParts[1] });
+    else if (refType === 'module') {
+      const [, module, name] = refParts;
+      const child = childScope(scope, module);
+      references.push({ kind: 'output', key: outputKey(child, name), scope: child, module, name });
+    } else {
+      const address = new Address(context.modulePath, refParts[0], refParts[1]).toString();
+      references.push({ kind: 'resource', key: address, address });
     }
-
-    keys.push(new Address(context.modulePath, refParts[0], refParts[1]).toString());
   }
 }
