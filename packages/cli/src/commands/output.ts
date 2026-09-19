@@ -1,9 +1,9 @@
-import { LocalBackend, StateManager } from '@miniform/state';
+import { StateManager } from '@miniform/state';
 import chalk from 'chalk';
 import { Command } from 'commander';
-import * as fs from 'node:fs';
-// eslint-disable-next-line unicorn/import-style
-import * as path from 'node:path';
+import fs from 'node:fs/promises';
+
+import { stateBackend } from '../stateFile';
 
 function extractScopeOutputs(scope: string, vars: unknown, outputs: Record<string, unknown>): void {
   // Root scope outputs don't have module prefix
@@ -38,6 +38,15 @@ function displayOutputs(outputs: Record<string, unknown>, json: boolean): void {
   }
 }
 
+async function exists(file: string): Promise<boolean> {
+  try {
+    await fs.access(file);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function createOutputCommand(): Command {
   const command = new Command('output');
 
@@ -46,18 +55,15 @@ export function createOutputCommand(): Command {
     .option('--json', 'Output in JSON format')
     .option('--state <path>', 'Path to state file')
     .action(async (options) => {
-      const statePath = options.state ? path.resolve(process.cwd(), options.state) : path.resolve(process.cwd(), '.miniform/state.json');
+      const backend = stateBackend(options.state);
 
-      if (!fs.existsSync(statePath)) {
-        console.log(chalk.yellow('No state file found at ' + statePath));
+      if (!(await exists(backend.path))) {
+        console.log(chalk.yellow(`No state file found at ${backend.path}`));
         return;
       }
 
       try {
-        // Read state
-        const backend = new LocalBackend(statePath);
-        const stateManager = new StateManager(backend);
-        const state = await stateManager.read();
+        const state = await new StateManager(backend).read();
 
         // Extract outputs from state
         const outputs = extractOutputs(state.variables);
