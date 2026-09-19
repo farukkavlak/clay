@@ -1,7 +1,7 @@
 import { IProvider, ISchema } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { AttributeValue, Lexer, Parser, Statement } from '@clay/parser';
-import { DesiredResource, hasChanges, isUnknown, plan, Plan, PlanAction, UNKNOWN } from '@clay/planner';
+import { DesiredResource, hasChanges, isUnknown, outputChanges, plan, Plan, PlanAction, UNKNOWN } from '@clay/planner';
 import { IState, StateManager } from '@clay/state';
 
 import { Address } from './Address';
@@ -130,7 +130,7 @@ export class Orchestrator {
     const { loadedResources, loadedModules } = await this.loadContext(configContent, currentState);
 
     const graph = this.dependencyGraphBuilder.buildExecutionGraph(loadedResources, loadedModules);
-    const desiredResources = this.resolveInDependencyOrder(loadedResources, graph, currentState);
+    const { resources: desiredResources, outputs } = this.resolveInDependencyOrder(loadedResources, graph, currentState);
 
     const schemas: Record<string, ISchema> = {};
     for (const r of loadedResources)
@@ -139,7 +139,7 @@ export class Orchestrator {
         if (schema) schemas[r.block.resourceType] = schema;
       }
 
-    return { serial: currentState.serial, actions: plan(desiredResources, currentState, schemas) };
+    return { serial: currentState.serial, actions: plan(desiredResources, currentState, schemas), outputs: outputChanges(currentState.outputs ?? {}, outputs) };
   }
 
   /** Plans and runs it, reporting each step; the state file is rewritten after every action, so a failed run loses nothing done before it. */
@@ -182,6 +182,8 @@ export class Orchestrator {
 
     yield { type: 'planned', actions };
 
+    // Outputs belong to a finished run; every write before the last leaves them out.
+    delete state.outputs;
     if (!(yield* this.applyInOrder(actions, graph, loadedModules, state))) return;
     if (!(yield* this.applyDeletes(actions, state))) return;
 
@@ -272,21 +274,22 @@ export class Orchestrator {
   }
 
   /** Resolves each resource after the ones it reads from, so a value an earlier action will change is UNKNOWN, not stale. */
-  private resolveInDependencyOrder(loadedResources: LoadedResource[], graph: Graph<GraphNode>, state: IState): DesiredResource[] {
+  private resolveInDependencyOrder(loadedResources: LoadedResource[], graph: Graph<GraphNode>, state: IState): { resources: DesiredResource[]; outputs: Record<string, unknown> } {
     const byKey = new Map(loadedResources.map((r) => [r.address.toString(), r]));
     const pending = new Set<string>();
-    const desired: DesiredResource[] = [];
+    const resources: DesiredResource[] = [];
+    const outputs: Record<string, unknown> = {};
 
     for (const layer of graph.topologicalSort())
       for (const key of layer) {
         const node = graph.getNode(key)!;
 
         if (node.kind === 'variable') this.planVariable(key, node, state, pending);
-        else if (node.kind === 'output') this.planOutput(key, node, state, pending);
-        else desired.push(this.planResource(key, byKey.get(key)!, graph, state, pending));
+        else if (node.kind === 'output') this.planOutput(key, node, state, pending, outputs);
+        else resources.push(this.planResource(key, byKey.get(key)!, graph, state, pending));
       }
 
-    return desired;
+    return { resources, outputs };
   }
 
   private planResource(key: string, loaded: LoadedResource, graph: Graph<GraphNode>, state: IState, pending: Set<string>): DesiredResource {
@@ -303,10 +306,12 @@ export class Orchestrator {
   }
 
   /** Gives an output its value so the resources reading it can be planned; an output fed by a pending resource keeps none. */
-  private planOutput(key: string, node: ValueNode, state: IState, pending: Set<string>): void {
+  private planOutput(key: string, node: ValueNode, state: IState, pending: Set<string>, rootOutputs: Record<string, unknown>): void {
     const value = this.resolveOrUnknown(node.value, state, node.context, pending);
     if (isUnknown(value)) pending.add(key);
     else this.scopeManager.setOutput(node.scope, node.name, value);
+
+    if (node.context.modulePath.length === 0) rootOutputs[node.name] = value;
   }
 
   /** Resolves config values the way the diff needs them; what an apply has to produce first stays UNKNOWN. */
