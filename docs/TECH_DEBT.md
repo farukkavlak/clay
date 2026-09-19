@@ -96,6 +96,8 @@ In order: the safety net first, then the engine, then the CLI, then the output.
       `--state` read the wrong place. One helper now builds the backend for both: the
       default is the engine's own, and a path on the command line is split into the two
       parts the backend wants.
+- [ ] `state show` prints the resource type as `Resource`. State keeps the AST node type in
+      `type` and the real type in `resourceType`, and the command reads the first one.
 - [ ] `output` prints the variables saved in state as if they were outputs, and state holds
       variables in the first place. State should hold outputs, the way Terraform does, and
       `output` should read those.
