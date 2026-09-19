@@ -1,7 +1,7 @@
 import { IProvider, ISchema } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { AttributeValue, Lexer, Parser, Statement } from '@clay/parser';
-import { DesiredResource, hasChanges, isUnknown, plan, PlanAction, UNKNOWN } from '@clay/planner';
+import { DesiredResource, hasChanges, isUnknown, plan, Plan, PlanAction, UNKNOWN } from '@clay/planner';
 import { IState, StateManager } from '@clay/state';
 
 import { Address } from './Address';
@@ -125,7 +125,7 @@ export class Orchestrator {
   /**
    * Generate an execution plan without applying it
    */
-  async plan(configContent: string): Promise<PlanAction[]> {
+  async plan(configContent: string): Promise<Plan> {
     const currentState = await this.stateManager.read();
     const { loadedResources, loadedModules } = await this.loadContext(configContent, currentState);
 
@@ -139,7 +139,7 @@ export class Orchestrator {
         if (schema) schemas[r.block.resourceType] = schema;
       }
 
-    return plan(desiredResources, currentState, schemas);
+    return { serial: currentState.serial, actions: plan(desiredResources, currentState, schemas) };
   }
 
   /** Plans and runs it, reporting each step; the state file is rewritten after every action, so a failed run loses nothing done before it. */
@@ -147,9 +147,9 @@ export class Orchestrator {
     yield* this.locked(this.planAndApply(configContent));
   }
 
-  /** Runs actions planned earlier, against the configuration they were planned from. */
-  async *runPlan(actions: PlanAction[], configContent: string): AsyncGenerator<RunEvent> {
-    yield* this.locked(this.applyActions(actions, configContent));
+  /** Runs a plan made earlier, against the configuration it was planned from. */
+  async *runPlan(saved: Plan, configContent: string): AsyncGenerator<RunEvent> {
+    yield* this.locked(this.applySaved(saved, configContent));
   }
 
   private async *locked(run: AsyncGenerator<RunEvent>): AsyncGenerator<RunEvent> {
@@ -164,11 +164,18 @@ export class Orchestrator {
   }
 
   private async *planAndApply(configContent: string): AsyncGenerator<RunEvent> {
-    yield* this.applyActions(await this.plan(configContent), configContent);
+    const { actions } = await this.plan(configContent);
+    yield* this.applyActions(actions, configContent, await this.stateManager.read());
   }
 
-  private async *applyActions(actions: PlanAction[], configContent: string): AsyncGenerator<RunEvent> {
+  private async *applySaved(saved: Plan, configContent: string): AsyncGenerator<RunEvent> {
     const state = await this.stateManager.read();
+    if (state.serial !== saved.serial) throw new Error('The state has changed since the plan was made. Plan again.');
+
+    yield* this.applyActions(saved.actions, configContent, state);
+  }
+
+  private async *applyActions(actions: PlanAction[], configContent: string, state: IState): AsyncGenerator<RunEvent> {
     const { mainProgram, loadedModules, loadedResources } = await this.loadContext(configContent, state);
     const graph = this.dependencyGraphBuilder.buildExecutionGraph(loadedResources, loadedModules);
     this.checkActionsMatch(actions, graph);
@@ -180,7 +187,7 @@ export class Orchestrator {
 
     // Outputs are read after the last action, so they never name a half-applied resource.
     state.outputs = this.processOutputs(mainProgram, state, Address.root('', ''));
-    await this.persist(state);
+    await this.stateManager.write(state);
     yield { type: 'done', outputs: state.outputs };
   }
 
@@ -238,21 +245,16 @@ export class Orchestrator {
       await this.actionExecutor.execute(action, state);
     } catch (error) {
       // A replacement may have deleted before it failed to create; what happened is saved either way.
-      await this.persist(state).catch(() => undefined);
+      await this.stateManager.write(state).catch(() => undefined);
       yield { type: 'failed', action, error: error instanceof Error ? error : new Error(String(error)) };
       return false;
     }
 
     if (quiet) return true;
 
-    await this.persist(state);
+    await this.stateManager.write(state);
     yield { type: 'applied', action };
     return true;
-  }
-
-  /** Named field by field, so a key an older version wrote is dropped. A field added to the state belongs here too. */
-  private async persist(state: IState): Promise<void> {
-    await this.stateManager.write({ version: state.version, outputs: state.outputs, resources: state.resources });
   }
 
   private processOutputs(program: Statement[], state: IState, context: Address): Record<string, unknown> {

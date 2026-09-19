@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-340 tests pass, and so do the type check and the build. Lint shows 12 warnings, and
+342 tests pass, and so do the type check and the build. Lint shows 12 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -91,10 +91,11 @@ In order: the safety net first, then the engine, then the CLI, then the output.
       one. The engine no longer takes a root directory; where files come from is decided
       where it is built. The orchestrator tests stopped mocking `node:fs` for the same
       reason.
-- [ ] A saved plan is still run against whatever the state holds at the time. If another
-      run changed the state in between, the plan is stale: a resource it plans to create
-      may already exist. Terraform catches this with a serial number in state that the plan
-      records and the apply checks.
+- [x] A saved plan was run against whatever the state held at the time. If another run
+      changed the state in between, the plan was stale: a resource it planned to create
+      could already exist. The state now carries a `serial` that every write increments,
+      as in Terraform. A plan records the serial it was made from, and applying it stops
+      when the state has moved on.
 - [x] `state` and `output` read a state file nothing writes. Both defaulted to
       `.clay/state.json` while the engine writes `clay.state.json`, and both handed
       that whole path to `LocalBackend`, which takes a directory and a file name, so even

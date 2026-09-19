@@ -46,6 +46,7 @@ describe('ActionExecutor', () => {
 
   const mockState: IState = {
     version: 1,
+    serial: 0,
     resources: {},
   };
 

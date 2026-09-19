@@ -24,12 +24,13 @@ describe('StateManager', () => {
 
   it('should return default empty state if file does not exist', async () => {
     const state = await stateManager.read();
-    expect(state).toEqual({ version: 1, resources: {} });
+    expect(state).toEqual({ version: 1, serial: 0, resources: {} });
   });
 
   it('should write and read state correctly', async () => {
     const mockState: IState = {
       version: 1,
+      serial: 0,
       resources: {
         'mock_resource.test_a': {
           type: 'Resource',
@@ -51,8 +52,19 @@ describe('StateManager', () => {
     expect(readState).toEqual(mockState);
   });
 
+  it('counts every write in the serial, on disk and in the state it was given', async () => {
+    const state: IState = { version: 1, serial: 0, resources: {} };
+
+    await stateManager.write(state);
+    await stateManager.write(state);
+
+    const stored = await stateManager.read();
+    expect(state.serial).toBe(2);
+    expect(stored.serial).toBe(2);
+  });
+
   describe('writeIfAbsent', () => {
-    const empty: IState = { version: 1, resources: {} };
+    const empty: IState = { version: 1, serial: 0, resources: {} };
 
     it('should write the state when none is stored yet', async () => {
       expect(await stateManager.writeIfAbsent(empty)).toBe(true);
@@ -60,7 +72,7 @@ describe('StateManager', () => {
     });
 
     it('should keep the stored state and say it wrote nothing', async () => {
-      const stored: IState = { version: 1, resources: { 'mock_resource.a': { type: 'Resource', resourceType: 'mock_resource', name: 'a', attributes: {} } } };
+      const stored: IState = { version: 1, serial: 0, resources: { 'mock_resource.a': { type: 'Resource', resourceType: 'mock_resource', name: 'a', attributes: {} } } };
       await stateManager.write(stored);
 
       expect(await stateManager.writeIfAbsent(empty)).toBe(false);
@@ -128,8 +140,8 @@ describe('StateManager', () => {
 
   describe('Backup', () => {
     it('should create a backup file before writing if state exists', async () => {
-      const state1 = { version: 1, resources: { a: { type: 't', resourceType: 'rt', name: 'n', attributes: {} } } };
-      const state2 = { version: 2, resources: {} };
+      const state1 = { version: 1, serial: 0, resources: { a: { type: 't', resourceType: 'rt', name: 'n', attributes: {} } } };
+      const state2 = { version: 2, serial: 0, resources: {} };
 
       // First write (no backup expected)
       await stateManager.write(state1);

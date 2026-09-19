@@ -21,7 +21,7 @@ vi.mock('@clay/planner', async () => {
   return {
     ...actual,
     serializePlan: vi.fn(() => ({
-      version: '3.0',
+      version: '4.0',
       timestamp: 'mock-time',
       config: 'mock config',
       modules: {},
@@ -55,7 +55,7 @@ describe('CLI: plan command', () => {
     vi.mocked(fs.access).mockResolvedValue(void 0);
     vi.mocked(fs.readFile).mockResolvedValue('');
 
-    const planMock = vi.fn().mockResolvedValue([{ type: 'NO_OP', resourceType: 'test', name: 't1' }]);
+    const planMock = vi.fn().mockResolvedValue({ serial: 0, actions: [{ type: 'NO_OP', resourceType: 'test', name: 't1' }] });
     vi.mocked(Orchestrator).mockImplementation(function () {
       return {
         registerProvider: vi.fn(),
@@ -81,7 +81,7 @@ describe('CLI: plan command', () => {
       { type: 'CREATE', resourceType: 'test', name: 't', attributes: {} },
       { type: 'NO_OP', resourceType: 'test', name: 't2' },
     ];
-    const planMock = vi.fn().mockResolvedValue(actions);
+    const planMock = vi.fn().mockResolvedValue({ serial: 0, actions });
 
     vi.mocked(Orchestrator).mockImplementation(function () {
       return {
@@ -113,7 +113,7 @@ describe('CLI: plan command', () => {
         changes: { path: { old: '/old', new: '/new' } },
       },
     ];
-    const planMock = vi.fn().mockResolvedValue(actions);
+    const planMock = vi.fn().mockResolvedValue({ serial: 0, actions });
 
     vi.mocked(Orchestrator).mockImplementation(function () {
       return {
@@ -144,7 +144,7 @@ describe('CLI: plan command', () => {
         changes: { path: { old: '/old', new: UNKNOWN }, mode: { old: '0644', new: undefined }, owner: { old: undefined, new: 'me' } },
       },
     ];
-    const planMock = vi.fn().mockResolvedValue(actions);
+    const planMock = vi.fn().mockResolvedValue({ serial: 0, actions });
 
     vi.mocked(Orchestrator).mockImplementation(function () {
       return {
@@ -176,7 +176,7 @@ describe('CLI: plan command', () => {
         changes: { path: { old: '/old', new: '/new' } },
       },
     ];
-    const planMock = vi.fn().mockResolvedValue(actions);
+    const planMock = vi.fn().mockResolvedValue({ serial: 0, actions });
 
     vi.mocked(Orchestrator).mockImplementation(function () {
       return {
@@ -201,7 +201,7 @@ describe('CLI: plan command', () => {
     vi.mocked(fs.readFile).mockResolvedValue('');
 
     const actions = [{ type: 'DELETE', resourceType: 'test', name: 't' }];
-    const planMock = vi.fn().mockResolvedValue(actions);
+    const planMock = vi.fn().mockResolvedValue({ serial: 0, actions });
 
     vi.mocked(Orchestrator).mockImplementation(function () {
       return {
@@ -248,7 +248,7 @@ describe('CLI: plan command', () => {
     vi.mocked(fs.readFile).mockResolvedValue('');
 
     const actions = [{ type: 'UNKNOWN', resourceType: 'test', name: 't' }];
-    const planMock = vi.fn().mockResolvedValue(actions);
+    const planMock = vi.fn().mockResolvedValue({ serial: 0, actions });
 
     vi.mocked(Orchestrator).mockImplementation(function () {
       return {
@@ -273,7 +273,7 @@ describe('CLI: plan command', () => {
     vi.mocked(fs.writeFile).mockResolvedValue(void 0);
 
     const actions = [{ type: 'CREATE', resourceType: 'test', name: 't', attributes: {} }];
-    const planMock = vi.fn().mockResolvedValue(actions);
+    const planMock = vi.fn().mockResolvedValue({ serial: 0, actions });
 
     vi.mocked(Orchestrator).mockImplementation(function () {
       return {

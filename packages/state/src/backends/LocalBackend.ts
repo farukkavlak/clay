@@ -34,7 +34,7 @@ export class LocalBackend implements IStateBackend {
       const err = error as { code?: string };
       if (err.code === 'ENOENT')
         // Return empty state if file doesn't exist
-        return { version: 1, resources: {} };
+        return { version: 1, serial: 0, resources: {} };
 
       throw error;
     }

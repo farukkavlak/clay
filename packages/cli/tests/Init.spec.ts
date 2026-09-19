@@ -46,7 +46,7 @@ describe('CLI: init command', () => {
 
     expect(fs.mkdir).toHaveBeenCalledWith(clayDir, { recursive: true });
     expect(StateManager).toHaveBeenCalledWith(expect.any(Object));
-    expect(writeIfAbsentMock).toHaveBeenCalledWith({ version: 1, resources: {} });
+    expect(writeIfAbsentMock).toHaveBeenCalledWith({ version: 1, serial: 0, resources: {} });
   });
 
   it('should handle errors gracefully', async () => {

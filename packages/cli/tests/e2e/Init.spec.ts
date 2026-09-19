@@ -15,6 +15,7 @@ describe('init against real files', () => {
 
   const stateWithResource = {
     version: 1,
+    serial: 0,
     resources: { 'local_file.a': { id: 'a.txt', type: 'Resource', resourceType: 'local_file', name: 'a', attributes: { content: 'hello' } } },
   };
 
@@ -34,7 +35,7 @@ describe('init against real files', () => {
   it('starts an empty state in a new workspace', async () => {
     await init();
 
-    expect(await new LocalBackend(dir).read()).toEqual({ version: 1, resources: {} });
+    expect(await new LocalBackend(dir).read()).toEqual({ version: 1, serial: 0, resources: {} });
   });
 
   it('says what it found when it runs again', async () => {

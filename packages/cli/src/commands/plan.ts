@@ -54,7 +54,8 @@ async function executePlan(cwd: string, configPath: string, outFile?: string): P
 
   console.log(chalk.blue('Refreshing state...'));
 
-  const actions = await orchestrator.plan(configContent);
+  const planned = await orchestrator.plan(configContent);
+  const { actions } = planned;
   const changes = actions.filter((action) => action.type !== 'NO_OP');
 
   if (changes.length === 0) console.log(chalk.green('No changes. Your infrastructure matches the configuration.'));
@@ -65,7 +66,7 @@ async function executePlan(cwd: string, configPath: string, outFile?: string): P
   }
 
   if (outFile) {
-    const planFile = serializePlan(actions, configContent, files.snapshot());
+    const planFile = serializePlan(planned, configContent, files.snapshot());
     await fs.writeFile(outFile, JSON.stringify(planFile, null, 2), 'utf8');
     console.log(chalk.green(`\nPlan saved to: ${outFile}`));
   }

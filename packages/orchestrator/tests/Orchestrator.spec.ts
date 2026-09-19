@@ -163,7 +163,7 @@ describe('Orchestrator', () => {
         }
       `;
 
-      const actions = await orchestrator.plan(config);
+      const { actions } = await orchestrator.plan(config);
 
       expect(actions).toHaveLength(1);
       expect(actions[0].type).toBe('CREATE');
