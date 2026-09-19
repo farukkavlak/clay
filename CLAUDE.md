@@ -84,6 +84,8 @@ Try the CLI in a temp directory, never in the repo: `node packages/cli/bin/minif
 - Anything that crosses packages also gets an end-to-end test with real files in a temp
   directory. Mocks hid the bugs in `TECH_DEBT.md`.
 - Tests never write into the repo.
+- Nothing lives in `src` only because a test needs it. A helper a test needs sits next to
+  the tests.
 
 ## Docs
 
