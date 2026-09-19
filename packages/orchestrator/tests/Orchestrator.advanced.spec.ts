@@ -100,7 +100,7 @@ describe('Orchestrator: Advanced Features', () => {
         }
       `;
 
-      await expect(orchestrator.apply(config)).rejects.toThrow('Variable "undefined_var" is not defined');
+      await expect(orchestrator.apply(config)).rejects.toThrow('variable "undefined_var" is not defined');
     });
   });
 

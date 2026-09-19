@@ -1,4 +1,5 @@
 import { Address } from '../Address';
+import { childScope } from '../keys';
 
 export interface VariableValue {
   value: unknown;
@@ -11,7 +12,7 @@ export class ScopeManager {
 
   getScope(address?: Address): string {
     if (!address) return '';
-    return address.modulePath.map((p: string) => `module.${p}`).join('.');
+    return address.modulePath.reduce((scope, moduleName) => childScope(scope, moduleName), '');
   }
 
   setVariable(scope: string, name: string, value: VariableValue): void {

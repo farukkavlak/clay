@@ -1,11 +1,12 @@
 import { IProvider, ISchema } from '@miniform/contracts';
+import { Graph } from '@miniform/graph';
 import { AttributeValue, Lexer, Parser, Statement } from '@miniform/parser';
 import { DesiredResource, hasChanges, isUnknown, plan, PlanAction, UNKNOWN } from '@miniform/planner';
 import { IState, StateManager } from '@miniform/state';
 
 import { Address } from './Address';
 import { ActionExecutor } from './components/ActionExecutor';
-import { DependencyGraphBuilder } from './components/DependencyGraphBuilder';
+import { DependencyGraphBuilder, GraphNode, ValueNode } from './components/DependencyGraphBuilder';
 import { LoadedModule, LoadedResource, ModuleLoader } from './components/ModuleLoader';
 import { ReferenceResolver } from './resolvers/ReferenceResolver';
 import { ReferenceScanner } from './resolvers/ReferenceScanner';
@@ -30,7 +31,7 @@ export class Orchestrator {
     this.moduleLoader = new ModuleLoader(this.processVariables.bind(this), this.initializeChildVariables.bind(this), this.getAttributesMap.bind(this));
     this.referenceScanner = new ReferenceScanner(this.scopeManager);
     this.dependencyGraphBuilder = new DependencyGraphBuilder(this.scopeManager, this.referenceScanner);
-    this.actionExecutor = new ActionExecutor(this.providers, this.convertAttributes.bind(this), this.resolveOutputByKey.bind(this));
+    this.actionExecutor = new ActionExecutor(this.providers, this.convertAttributes.bind(this), this.resolveOutputsOf.bind(this));
   }
 
   /**
@@ -126,7 +127,7 @@ export class Orchestrator {
     const { loadedResources, loadedModules } = await this.loadContext(configContent, rootDir, currentState);
 
     const graph = this.dependencyGraphBuilder.buildExecutionGraph(loadedResources, loadedModules);
-    const desiredResources = this.resolveInDependencyOrder(loadedResources, loadedModules, graph.topologicalSort(), currentState);
+    const desiredResources = this.resolveInDependencyOrder(loadedResources, graph, currentState);
 
     const schemas: Record<string, ISchema> = {};
     for (const r of loadedResources)
@@ -185,44 +186,41 @@ export class Orchestrator {
   }
 
   /** Resolves each resource after the ones it reads from, so a value an earlier action will change is UNKNOWN, not stale. */
-  private resolveInDependencyOrder(loadedResources: LoadedResource[], loadedModules: LoadedModule[], layers: string[][], state: IState): DesiredResource[] {
+  private resolveInDependencyOrder(loadedResources: LoadedResource[], graph: Graph<GraphNode>, state: IState): DesiredResource[] {
     const byKey = new Map(loadedResources.map((r) => [r.address.toString(), r]));
     const pending = new Set<string>();
     const desired: DesiredResource[] = [];
 
-    for (const layer of layers)
+    for (const layer of graph.topologicalSort())
       for (const key of layer) {
-        const loaded = byKey.get(key);
-        if (!loaded) {
-          this.planOutput(key, loadedModules, state, pending);
-          continue;
-        }
+        const node = graph.getNode(key)!;
 
-        const attributes = this.resolveForPlan(loaded.block.attributes, state, loaded.address, pending);
-        const current = state.resources[key];
-        if (!current || hasChanges(current.attributes, attributes)) pending.add(key);
-
-        desired.push({ block: { ...loaded.block, modulePath: loaded.address.modulePath }, attributes });
+        if (node.kind === 'variable') this.planVariable(key, node, state, pending);
+        else if (node.kind === 'output') this.planOutput(key, node, state, pending);
+        else desired.push(this.planResource(key, byKey.get(key)!, state, pending));
       }
 
     return desired;
   }
 
+  private planResource(key: string, loaded: LoadedResource, state: IState, pending: Set<string>): DesiredResource {
+    const attributes = this.resolveForPlan(loaded.block.attributes, state, loaded.address, pending);
+    const current = state.resources[key];
+    if (!current || hasChanges(current.attributes, attributes)) pending.add(key);
+
+    return { block: { ...loaded.block, modulePath: loaded.address.modulePath }, attributes };
+  }
+
+  /** A variable fed by a pending resource is pending itself, so everything reading it plans against UNKNOWN. */
+  private planVariable(key: string, node: ValueNode, state: IState, pending: Set<string>): void {
+    if (node.value !== undefined && isUnknown(this.resolveOrUnknown(node.value, state, node.context, pending))) pending.add(key);
+  }
+
   /** Gives an output its value so the resources reading it can be planned; an output fed by a pending resource keeps none. */
-  private planOutput(key: string, loadedModules: LoadedModule[], state: IState, pending: Set<string>): void {
-    const separator = key.lastIndexOf('outputs.');
-    if (separator === -1) return;
-
-    const scope = separator === 0 ? '' : key.slice(0, separator - 1);
-    const name = key.slice(separator + 'outputs.'.length);
-
-    const mod = loadedModules.find((m) => this.scopeManager.getScope(m.address) === scope);
-    const output = mod?.program.find((stmt) => stmt.type === 'Output' && stmt.name === name);
-    if (!mod || !output || output.type !== 'Output') return;
-
-    const value = this.resolveOrUnknown(output.value, state, mod.address, pending);
+  private planOutput(key: string, node: ValueNode, state: IState, pending: Set<string>): void {
+    const value = this.resolveOrUnknown(node.value, state, node.context, pending);
     if (isUnknown(value)) pending.add(key);
-    else this.scopeManager.setOutput(scope, name, value);
+    else this.scopeManager.setOutput(node.scope, node.name, value);
   }
 
   /** Resolves config values the way the diff needs them; what an apply has to produce first stays UNKNOWN. */
@@ -235,7 +233,7 @@ export class Orchestrator {
   }
 
   private resolveOrUnknown(value: unknown, state: IState, context: Address, pending: Set<string>): unknown {
-    if (this.referenceScanner.keysIn(value, context).some((target) => pending.has(target))) return UNKNOWN;
+    if (this.referenceScanner.referencesIn(value, context).some((reference) => pending.has(reference.key))) return UNKNOWN;
 
     try {
       return this.resolveValue(value, state, context);
@@ -255,9 +253,7 @@ export class Orchestrator {
     return result;
   }
 
-  private resolveOutputByKey(key: string, loadedModules: LoadedModule[], currentState: IState): void {
-    const parts = key.split('.outputs.');
-    const scope = parts[0];
+  private resolveOutputsOf(scope: string, loadedModules: LoadedModule[], currentState: IState): void {
     const mod = loadedModules.find((m) => this.scopeManager.getScope(m.address) === scope);
     if (mod) this.processOutputs(mod.program, currentState, mod.address);
   }

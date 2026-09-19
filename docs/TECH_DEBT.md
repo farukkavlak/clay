@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-282 tests pass, and so do the type check and the build. Lint shows 23 warnings, and
+294 tests pass, and so do the type check and the build. Lint shows 23 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -40,9 +40,14 @@ In order: the safety net first, then the engine, then the CLI, then the output.
       apply. The plan now walks the dependency graph: a reference whose target has a
       pending action is unknown, a reference to a resource no config declares is an error,
       and a cycle names the resources in it.
-- [ ] A module input that reads a resource (`module "m" { text = "${local_file.a.content}" }`)
-      is not scanned for dependencies, so the first apply fails with the resource missing
-      from state.
+- [x] A module input that reads a resource (`module "m" { text = "${local_file.a.content}" }`)
+      was not scanned for dependencies, so the first apply failed with the resource missing
+      from state. Variables are graph nodes now, the way Terraform has them: what a
+      variable reads runs before it, and it runs before whoever reads it. A variable fed by
+      a pending resource is unknown, and one that is used but never defined is named.
+- [ ] A variable default that reads a resource (`variable "v" { default = "${local_file.a.id}" }`)
+      is written out literally. `processVariables` stores the unwrapped string, so the
+      resolver never interpolates it. Module inputs keep their AST node and work.
 - [ ] A reference into a module (`module.app.local_file.a.content`) is read as an output
       named `local_file` and fails as undeclared. Reaching inside a module stays
       unsupported, the way Terraform has it; the message has to say that modules are read
@@ -100,7 +105,9 @@ In order: the safety net first, then the engine, then the CLI, then the output.
 - [ ] The orchestrator's parts get their collaborators passed in, not `bind`-ed callbacks.
       One factory builds the object graph and hands it over. No DI container: at this size
       it buys nothing the factory does not, and it would hide the wiring behind a runtime
-      dependency.
+      dependency. The plan walk (graph order, the pending set, resolve-or-unknown) moves
+      into a part of its own; `Orchestrator` grew from 228 to 287 lines through the planner
+      fixes.
 - [ ] `apply` parses the config, reads data sources and builds the dependency graph once,
       not twice. It calls `plan`, which now does all three, and then does them again.
 - [ ] `apply` and `plan` yield events (resource started, created, failed, done) and the CLI

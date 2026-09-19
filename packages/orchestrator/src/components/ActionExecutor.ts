@@ -4,16 +4,17 @@ import { PlanAction } from '@miniform/planner';
 import { IState } from '@miniform/state';
 
 import { Address } from '../Address';
+import { GraphNode } from './DependencyGraphBuilder';
 import { LoadedModule } from './ModuleLoader';
 
 export class ActionExecutor {
   constructor(
     private providers: Map<string, IProvider>,
     private convertAttributes: (attributes: Record<string, unknown>, state: IState, context?: Address) => Record<string, unknown>,
-    private resolveOutputByKey: (key: string, loadedModules: LoadedModule[], currentState: IState) => void
+    private resolveOutputsOf: (scope: string, loadedModules: LoadedModule[], currentState: IState) => void
   ) {}
 
-  async executeActionsSequentially(actions: PlanAction[], graph: Graph<null>, currentState: IState, loadedModules: LoadedModule[]): Promise<void> {
+  async executeActionsSequentially(actions: PlanAction[], graph: Graph<GraphNode>, currentState: IState, loadedModules: LoadedModule[]): Promise<void> {
     const layers = graph.topologicalSort();
     const actionMap = new Map<string, PlanAction>();
 
@@ -26,9 +27,9 @@ export class ActionExecutor {
     for (const layer of layers)
       await Promise.all(
         layer.map(async (key: string) => {
-          // Handle output resolution
-          if (key.includes('.outputs.')) {
-            this.resolveOutputByKey(key, loadedModules, currentState);
+          const node = graph.getNode(key);
+          if (node?.kind === 'output') {
+            this.resolveOutputsOf(node.scope, loadedModules, currentState);
             return;
           }
 

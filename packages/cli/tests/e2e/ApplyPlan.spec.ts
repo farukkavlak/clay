@@ -220,4 +220,67 @@ describe('apply and plan against real files', () => {
 
     expect(await changes(config)).toEqual([]);
   });
+
+  const throughModule = (content: string) => `
+    resource "local_file" "a" {
+      path = "${path.join(dir, 'a.txt')}"
+      content = "${content}"
+    }
+    module "m" {
+      source = "./m"
+      text = "\${local_file.a.content}"
+    }
+  `;
+
+  const writeModule = async () =>
+    fs.writeFile(path.join(dir, 'm', 'main.mf'), `resource "local_file" "inner" { path = "${path.join(dir, 'inner.txt')}" content = "\${var.text}" }`);
+
+  it('applies a module that reads a resource through its input', async () => {
+    await fs.mkdir(path.join(dir, 'm'));
+    await writeModule();
+
+    await orchestrator.apply(throughModule('one'), dir);
+
+    expect(await fs.readFile(path.join(dir, 'inner.txt'), 'utf8')).toBe('one');
+  });
+
+  it('plans and applies a change that reaches a module through its input', async () => {
+    await fs.mkdir(path.join(dir, 'm'));
+    await writeModule();
+    await orchestrator.apply(throughModule('one'), dir);
+
+    const actions = await changes(throughModule('two'));
+    expect(actions.map((action) => action.name)).toEqual(['a', 'inner']);
+
+    await newOrchestrator().apply(throughModule('two'), dir);
+
+    expect(await fs.readFile(path.join(dir, 'inner.txt'), 'utf8')).toBe('two');
+    expect(await changes(throughModule('two'))).toEqual([]);
+  });
+
+  it('names the variable that is not defined', async () => {
+    const config = `
+      resource "local_file" "a" {
+        path = "${path.join(dir, 'a.txt')}"
+        content = "\${var.missing}"
+      }
+    `;
+
+    await expect(newOrchestrator().plan(config, dir)).rejects.toThrow('variable "missing" is not defined');
+  });
+
+  it('plans no changes for a module named after a graph node kind', async () => {
+    await fs.mkdir(path.join(dir, 'vars'));
+    await fs.writeFile(path.join(dir, 'vars', 'main.mf'), 'output "o" { value = "inner" }');
+    const config = `
+      module "vars" { source = "./vars" }
+      resource "local_file" "b" {
+        path = "${path.join(dir, 'b.txt')}"
+        content = "\${module.vars.o}"
+      }
+    `;
+    await orchestrator.apply(config, dir);
+
+    expect(await changes(config)).toEqual([]);
+  });
 });

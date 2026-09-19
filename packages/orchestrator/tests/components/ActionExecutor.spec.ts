@@ -6,11 +6,12 @@ import { afterEach, beforeEach, describe, expect, it, Mock, vi } from 'vitest';
 
 import { Address } from '../../src/Address';
 import { ActionExecutor } from '../../src/components/ActionExecutor';
+import { GraphNode } from '../../src/components/DependencyGraphBuilder';
 
 describe('ActionExecutor', () => {
   let providers: Map<string, IProvider>;
   let convertAttributes: Mock;
-  let resolveOutputByKey: Mock;
+  let resolveOutputsOf: Mock;
   let executor: ActionExecutor;
   let mockProvider: IProvider;
 
@@ -37,10 +38,10 @@ describe('ActionExecutor', () => {
 
       return resolved;
     });
-    resolveOutputByKey = vi.fn();
+    resolveOutputsOf = vi.fn();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    executor = new ActionExecutor(providers, convertAttributes as any, resolveOutputByKey as any);
+    executor = new ActionExecutor(providers, convertAttributes as any, resolveOutputsOf as any);
   });
 
   afterEach(() => {
@@ -64,8 +65,8 @@ describe('ActionExecutor', () => {
       };
 
       const actionAddress = new Address([], 'unknown', 'main');
-      const graph = new Graph<null>();
-      graph.addNode(actionAddress.toString(), null);
+      const graph = new Graph<GraphNode>();
+      graph.addNode(actionAddress.toString(), { kind: 'resource' });
 
       await expect(executor.executeActionsSequentially([action], graph, mockState, [])).rejects.toThrow('No provider registered');
     });
@@ -80,8 +81,8 @@ describe('ActionExecutor', () => {
       };
 
       const actionAddress = new Address([], 'test', 'main');
-      const graph = new Graph<null>();
-      graph.addNode(actionAddress.toString(), null);
+      const graph = new Graph<GraphNode>();
+      graph.addNode(actionAddress.toString(), { kind: 'resource' });
 
       await expect(executor.executeActionsSequentially([action], graph, mockState, [])).rejects.toThrow('Unknown action type');
     });
@@ -94,8 +95,8 @@ describe('ActionExecutor', () => {
       };
 
       const actionAddress = new Address([], 'test', 'main');
-      const graph = new Graph<null>();
-      graph.addNode(actionAddress.toString(), null);
+      const graph = new Graph<GraphNode>();
+      graph.addNode(actionAddress.toString(), { kind: 'resource' });
 
       await executor.executeActionsSequentially([action], graph, mockState, []);
       expect(mockProvider.create).not.toHaveBeenCalled();
@@ -112,8 +113,8 @@ describe('ActionExecutor', () => {
       };
 
       const actionAddress = new Address([], 'test', 'main');
-      const graph = new Graph<null>();
-      graph.addNode(actionAddress.toString(), null);
+      const graph = new Graph<GraphNode>();
+      graph.addNode(actionAddress.toString(), { kind: 'resource' });
 
       await executor.executeActionsSequentially([action], graph, mockState, []);
       expect(mockProvider.delete).toHaveBeenCalledWith('existing-id', 'test');
@@ -225,13 +226,13 @@ describe('ActionExecutor', () => {
   });
 
   describe('Graph Execution', () => {
-    it('should resolve outputs if key indicates output', async () => {
-      const graph = new Graph<null>();
-      graph.addNode('module.app.outputs.ip', null);
+    it("should resolve the outputs of an output node's scope", async () => {
+      const graph = new Graph<GraphNode>();
+      graph.addNode('module.app.outputs.ip', { kind: 'output', scope: 'module.app', name: 'ip', value: undefined, context: new Address(['app'], '', '') });
 
       await executor.executeActionsSequentially([], graph, mockState, []);
 
-      expect(resolveOutputByKey).toHaveBeenCalledWith('module.app.outputs.ip', [], mockState);
+      expect(resolveOutputsOf).toHaveBeenCalledWith('module.app', [], mockState);
     });
   });
 });
