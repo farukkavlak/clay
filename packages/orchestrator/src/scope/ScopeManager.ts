@@ -33,10 +33,6 @@ export class ScopeManager {
     return this.outputs.get(scope)?.get(name);
   }
 
-  getAllVariables(): Map<string, Map<string, VariableValue>> {
-    return this.variables;
-  }
-
   clear(): void {
     this.variables.clear();
     this.outputs.clear();

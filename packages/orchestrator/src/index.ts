@@ -176,8 +176,10 @@ export class Orchestrator {
     if (!(yield* this.applyInOrder(actions, graph, loadedModules, state))) return;
     if (!(yield* this.applyDeletes(actions, state))) return;
 
+    // Outputs are read after the last action, so they never name a half-applied resource.
+    state.outputs = this.processOutputs(mainProgram, state, Address.root('', ''));
     await this.persist(state);
-    yield { type: 'done', outputs: this.processOutputs(mainProgram, state, Address.root('', '')) };
+    yield { type: 'done', outputs: state.outputs };
   }
 
   /** An action with no node would be walked past in silence. A plan made from this configuration has one for each; a saved plan may not. */
@@ -246,9 +248,9 @@ export class Orchestrator {
     return true;
   }
 
+  /** Named field by field, so a key an older miniform wrote is dropped. A field added to the state belongs here too. */
   private async persist(state: IState): Promise<void> {
-    this.syncStateVariables(state);
-    await this.stateManager.write(state);
+    await this.stateManager.write({ version: state.version, outputs: state.outputs, resources: state.resources });
   }
 
   private processOutputs(program: Statement[], state: IState, context: Address): Record<string, unknown> {
@@ -336,16 +338,6 @@ export class Orchestrator {
   private resolveOutputsOf(scope: string, loadedModules: LoadedModule[], currentState: IState): void {
     const mod = loadedModules.find((m) => this.scopeManager.getScope(m.address) === scope);
     if (mod) this.processOutputs(mod.program, currentState, mod.address);
-  }
-
-  private syncStateVariables(currentState: IState): void {
-    const varsObj: Record<string, Record<string, unknown>> = {};
-    for (const [scope, varMap] of this.scopeManager.getAllVariables().entries()) {
-      const simpleVarMap: Record<string, unknown> = {};
-      for (const [k, v] of varMap.entries()) simpleVarMap[k] = this.resolveValue(v.value, currentState, v.context);
-      varsObj[scope] = simpleVarMap;
-    }
-    currentState.variables = varsObj;
   }
 
   private getAttributesMap(attributes: Record<string, AttributeValue> | undefined): Record<string, unknown> {

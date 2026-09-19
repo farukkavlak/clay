@@ -58,12 +58,7 @@ describe('Output Command', () => {
   it('should display outputs from state in formatted table', async () => {
     const mockState = {
       resources: {},
-      variables: {
-        '': {
-          my_output: 'test_value',
-          another_output: 42,
-        },
-      },
+      outputs: { myOutput: 'test_value', anotherOutput: 42 },
     };
 
     vi.mocked(fs.access).mockResolvedValue(void 0);
@@ -74,21 +69,16 @@ describe('Output Command', () => {
 
     const allCalls = consoleLogSpy.mock.calls.map((call: unknown[]) => call[0]).join('\n');
     expect(allCalls).toContain('Outputs:');
-    expect(allCalls).toContain('my_output');
+    expect(allCalls).toContain('myOutput');
     expect(allCalls).toContain('test_value');
-    expect(allCalls).toContain('another_output');
+    expect(allCalls).toContain('anotherOutput');
     expect(allCalls).toContain('42');
   });
 
   it('should output JSON format with --json flag', async () => {
     const mockState = {
       resources: {},
-      variables: {
-        '': {
-          my_output: 'test_value',
-          number_output: 123,
-        },
-      },
+      outputs: { myOutput: 'test_value', numberOutput: 123 },
     };
 
     vi.mocked(fs.access).mockResolvedValue(void 0);
@@ -103,14 +93,14 @@ describe('Output Command', () => {
     expect(jsonArgs).toBeDefined();
 
     const parsed = JSON.parse(jsonArgs![0] as string);
-    expect(parsed).toHaveProperty('my_output', 'test_value');
-    expect(parsed).toHaveProperty('number_output', 123);
+    expect(parsed).toHaveProperty('myOutput', 'test_value');
+    expect(parsed).toHaveProperty('numberOutput', 123);
   });
 
   it('should handle empty state gracefully', async () => {
     const mockState = {
       resources: {},
-      variables: {},
+      outputs: {},
     };
 
     vi.mocked(fs.access).mockResolvedValue(void 0);
@@ -132,56 +122,6 @@ describe('Output Command', () => {
     // processExitSpy might or might not be called depending on impl, check logs
   });
 
-  it('should filter out module-scoped variables', async () => {
-    const mockState = {
-      resources: {},
-      variables: {
-        '': {
-          root_output: 'visible',
-        },
-        'module.db': {
-          module_output: 'hidden',
-        },
-      },
-    };
-
-    vi.mocked(fs.access).mockResolvedValue(void 0);
-    readMock.mockResolvedValue(mockState);
-
-    const command = createOutputCommand();
-    await command.parseAsync(['node', 'test', '--state', testStatePath]);
-
-    const allCalls = consoleLogSpy.mock.calls.map((call: unknown[]) => call[0]).join('\n');
-    expect(allCalls).toContain('root_output');
-    expect(allCalls).not.toContain('module_output');
-  });
-
-  it('should extract values from complex objects', async () => {
-    const mockState = {
-      resources: {},
-      variables: {
-        '': {
-          obj_out: {
-            value: { nested: 'value' }, // Miniform variable structure
-          },
-          raw_out: {
-            simple: 'object', // Raw object without value wrapper
-          },
-        },
-      },
-    };
-
-    vi.mocked(fs.access).mockResolvedValue(void 0);
-    readMock.mockResolvedValue(mockState);
-
-    const command = createOutputCommand();
-    await command.parseAsync(['node', 'test', '--state', testStatePath]);
-
-    const allCalls = consoleLogSpy.mock.calls.map((call: unknown[]) => call[0]).join('\n');
-    expect(allCalls).toContain('nested');
-    expect(allCalls).toContain('simple');
-  });
-
   it('should handle state reading errors', async () => {
     vi.mocked(fs.access).mockResolvedValue(void 0);
     readMock.mockRejectedValue(new Error('Corrupt state'));
@@ -198,10 +138,10 @@ describe('Output Command', () => {
     expect(processExitSpy).toHaveBeenCalledWith(1);
   });
 
-  it('should handle state with undefined variables', async () => {
+  it('should handle state with no outputs at all', async () => {
     const mockState = {
       resources: {},
-      variables: undefined,
+      outputs: undefined,
     };
     vi.mocked(fs.access).mockResolvedValue(void 0);
     readMock.mockResolvedValue(mockState);
@@ -215,11 +155,7 @@ describe('Output Command', () => {
   it('should use default state path if not specified', async () => {
     const mockState = {
       resources: {},
-      variables: {
-        '': {
-          default_out: 'default',
-        },
-      },
+      outputs: { defaultOut: 'default' },
     };
     vi.mocked(fs.access).mockResolvedValue(void 0);
     readMock.mockResolvedValue(mockState);
@@ -231,7 +167,7 @@ describe('Output Command', () => {
     expect(LocalBackend).toHaveBeenCalledWith(process.cwd());
 
     // Check output
-    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('default_out'));
+    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('defaultOut'));
   });
 
   it('should handle non-Error exceptions', async () => {

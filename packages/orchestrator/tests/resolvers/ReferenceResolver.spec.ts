@@ -24,11 +24,6 @@ describe('ReferenceResolver', () => {
         },
       },
     },
-    variables: {
-      '': {
-        my_var: 'var_value',
-      },
-    },
   };
 
   // Setup Variable

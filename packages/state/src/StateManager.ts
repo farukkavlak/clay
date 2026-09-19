@@ -4,7 +4,8 @@ import { IStateBackend } from './IStateBackend';
 
 export interface IState {
   version: number;
-  variables?: Record<string, unknown>;
+  /** What the root module's outputs came to on the last run. */
+  outputs?: Record<string, unknown>;
   resources: Record<string, IResource>;
 }
 

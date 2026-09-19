@@ -5,24 +5,6 @@ import fs from 'node:fs/promises';
 
 import { stateBackend } from '../stateFile';
 
-function extractScopeOutputs(scope: string, vars: unknown, outputs: Record<string, unknown>): void {
-  // Root scope outputs don't have module prefix
-  if ((scope === '' || !scope.includes('module.')) && typeof vars === 'object' && vars !== null)
-    for (const [key, varValue] of Object.entries(vars))
-      // Skip internal variables, only show outputs
-      outputs[key] = typeof varValue === 'object' && varValue !== null && 'value' in varValue ? (varValue as { value: unknown }).value : varValue;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function extractOutputs(variables: Record<string, any> | undefined): Record<string, unknown> {
-  const outputs: Record<string, unknown> = {};
-  if (!variables) return outputs;
-
-  for (const [scope, vars] of Object.entries(variables)) extractScopeOutputs(scope, vars, outputs);
-
-  return outputs;
-}
-
 function displayOutputs(outputs: Record<string, unknown>, json: boolean): void {
   if (json) {
     console.log(JSON.stringify(outputs, null, 2));
@@ -65,11 +47,7 @@ export function createOutputCommand(): Command {
       try {
         const state = await new StateManager(backend).read();
 
-        // Extract outputs from state
-        const outputs = extractOutputs(state.variables);
-
-        // Display outputs
-        displayOutputs(outputs, options.json);
+        displayOutputs(state.outputs ?? {}, options.json);
       } catch (error) {
         console.error(chalk.red('Error reading outputs:'), error instanceof Error ? error.message : error);
         process.exit(1);

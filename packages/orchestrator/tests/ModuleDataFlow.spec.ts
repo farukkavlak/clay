@@ -199,13 +199,6 @@ module "L2" {
     const resource = stateArg.resources['module.L2.test_resource.child'];
 
     expect(resource.attributes.loc).toBe('eu-west-1');
-
-    // Verify root variable map in state (should be hierarchical)
-    expect(stateArg.variables['module.L2']).toBeDefined();
-    // In current implementation, we store raw values in state for variables
-    const varEntry = stateArg.variables['module.L2'].region;
-    const innerVal = (varEntry as { value: unknown }).value || varEntry;
-    expect(innerVal).toBe('eu-west-1');
   });
 
   it('should pass variables to modules and use them in resources', async () => {

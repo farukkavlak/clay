@@ -21,6 +21,7 @@ describe('state and output against a real state file', () => {
       path = "${path.join(dir, 'a.txt')}"
       content = "hello"
     }
+    output "file" { value = "\${local_file.a.id}" }
   `;
 
   const applyConfig = async () => {
@@ -75,7 +76,18 @@ describe('state and output against a real state file', () => {
 
     await createOutputCommand().parseAsync(['node', 'miniform', '--json']);
 
-    expect(JSON.parse(printed.join('\n'))).toEqual({ greeting: 'hi' });
+    expect(JSON.parse(printed.join('\n'))).toEqual({ file: path.join(dir, 'a.txt') });
+  });
+
+  it('does not take a variable for an output', async () => {
+    const onlyAVariable = 'variable "greeting" { default = "hi" }';
+    const engine = new Orchestrator(new StateManager(new LocalBackend(dir)));
+    engine.registerProvider(new LocalProvider());
+    for await (const event of engine.run(onlyAVariable, dir)) if (event.type === 'failed') throw event.error;
+
+    await createOutputCommand().parseAsync(['node', 'miniform']);
+
+    expect(printed.join('\n')).toContain('No outputs found');
   });
 
   it('says where it looked when there is no state file', async () => {
