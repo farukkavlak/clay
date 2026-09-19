@@ -81,6 +81,10 @@ In order: the safety net first, then the engine, then the CLI, then the output.
 - [ ] The CLI uses Node built-ins instead of chalk (`util.styleText`), commander
       (`util.parseArgs`) and inquirer (`readline/promises`).
 - [ ] `engines.node` is `>=22`, which `util.styleText` needs.
+- [ ] `IState` moves to `contracts`, next to `IResource`. `planner` and `orchestrator`
+      depend on `@miniform/state` only for that type, and the shape state is written in is
+      a contract every side has to agree on. Keeping it inside one side is how the planner
+      drifted away from it.
 
 ## 3 — code
 
@@ -88,6 +92,13 @@ In order: the safety net first, then the engine, then the CLI, then the output.
 - [ ] The ESLint config fits this repo. The current one came from a React project.
 - [ ] The orchestrator's parts get their collaborators passed in, not `bind`-ed callbacks.
 - [ ] `apply` parses the config and reads data sources once, not twice.
+- [ ] `apply` and `plan` yield events (resource started, created, failed, done) and the CLI
+      only renders them. Do this with the failed-action bug above: writing state as the
+      events arrive is the fix, progress becomes visible, and the CLI tests stop spying on
+      `console.log`.
+- [ ] Resolving works on a context that can be cloned per scope, instead of one mutable
+      `ScopeManager` keyed by scope strings. The dependency-order fix needs to resolve the
+      same config against different sets of pending values.
 - [ ] The CLI commands share their helpers instead of copying them.
 - [ ] Comments that only restate the code are gone (`// Mock Provider for testing`).
 
