@@ -27,6 +27,10 @@ export class StateManager {
     await this.backend.write(state);
   }
 
+  async writeIfAbsent(state: IState): Promise<boolean> {
+    return this.backend.writeIfAbsent(state);
+  }
+
   async lock(): Promise<void> {
     await this.backend.lock();
   }
