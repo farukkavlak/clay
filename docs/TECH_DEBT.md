@@ -93,6 +93,9 @@ In order: the safety net first, then the engine, then the CLI, then the output.
 - [ ] Lint has no warnings, and warnings count as errors.
 - [ ] The ESLint config fits this repo. The current one came from a React project.
 - [ ] The orchestrator's parts get their collaborators passed in, not `bind`-ed callbacks.
+      One factory builds the object graph and hands it over. No DI container: at this size
+      it buys nothing the factory does not, and it would hide the wiring behind a runtime
+      dependency.
 - [ ] `apply` parses the config, reads data sources and builds the dependency graph once,
       not twice. It calls `plan`, which now does all three, and then does them again.
 - [ ] `apply` and `plan` yield events (resource started, created, failed, done) and the CLI
