@@ -49,7 +49,7 @@ export function createStateCommand(): Command {
         }
 
         console.log(chalk.bold(`# ${address}:`));
-        console.log(`resource "${resource.type}" "${resource.name}" {`);
+        console.log(`resource "${resource.resourceType}" "${resource.name}" {`);
         for (const [key, value] of Object.entries(resource.attributes || {})) console.log(`  ${key} = ${JSON.stringify(value)}`);
 
         console.log('}');

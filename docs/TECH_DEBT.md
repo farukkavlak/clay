@@ -96,8 +96,9 @@ In order: the safety net first, then the engine, then the CLI, then the output.
       `--state` read the wrong place. One helper now builds the backend for both: the
       default is the engine's own, and a path on the command line is split into the two
       parts the backend wants.
-- [ ] `state show` prints the resource type as `Resource`. State keeps the AST node type in
-      `type` and the real type in `resourceType`, and the command reads the first one.
+- [x] `state show` printed the resource type as `Resource`. State keeps the AST node type in
+      `type` and the real type in `resourceType`, and the command read the first one. The
+      mocked test had put the real type in `type`, which is how it passed.
 - [x] `output` printed the variables saved in state as if they were outputs, and state held
       variables in the first place, so `apply` and `output` answered the same question
       differently. State holds the root module's outputs now, the way Terraform does, and
@@ -174,7 +175,9 @@ In order: the safety net first, then the engine, then the CLI, then the output.
 - [ ] The `I` prefix on type names is gone: `IResource`, `IProvider`, `IResourceHandler`,
       `ISchemaDefinition`, `ISchema`, `IState`, `IStateBackend` and `IResolver` carry it
       and the other seventeen types do not. TypeScript does not need the prefix, and half
-      the names that would earn it by any rule (`PlanAction`, `RunEvent`) go without.
+      the names that would earn it by any rule (`PlanAction`, `RunEvent`) go without. While
+      there: `IResource.type` is always `Resource`, an AST label copied into state that
+      nothing reads; it goes.
 
 ## 4 — repo
 

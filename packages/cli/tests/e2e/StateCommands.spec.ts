@@ -59,6 +59,7 @@ describe('state and output against a real state file', () => {
 
     await createStateCommand().parseAsync(['node', 'clay', 'show', 'local_file.a']);
 
+    expect(printed.join('\n')).toContain('resource "local_file" "a" {');
     expect(printed.join('\n')).toContain('content = "hello"');
   });
 
