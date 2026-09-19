@@ -1,4 +1,4 @@
-import { Orchestrator } from '@miniform/orchestrator';
+import { Orchestrator, RunEvent } from '@miniform/orchestrator';
 import { PlanAction, PlanFile, validatePlanFile } from '@miniform/planner';
 import { LocalProvider } from '@miniform/provider-local';
 import { LocalBackend, StateManager } from '@miniform/state';
@@ -23,6 +23,37 @@ function displayActions(actions: PlanAction[]): void {
     if (action.type === 'NO_OP') continue;
     const symbol = getActionSymbol(action.type);
     console.log(`  ${symbol} ${action.resourceType}.${action.name}`);
+  }
+}
+
+function pastTense(actionType: PlanAction['type']): string {
+  if (actionType === 'CREATE') return 'created';
+  if (actionType === 'UPDATE') return 'updated';
+  if (actionType === 'REPLACE') return 'replaced';
+  return 'destroyed';
+}
+
+function reportEvent(event: RunEvent): void {
+  if (event.type === 'applied') console.log(`  ${getActionSymbol(event.action.type)} ${event.action.resourceType}.${event.action.name} ${pastTense(event.action.type)}`);
+  if (event.type === 'failed') throw new Error(`${event.action.resourceType}.${event.action.name}: ${event.error.message}`);
+}
+
+async function runAndReport(orchestrator: Orchestrator, configContent: string): Promise<void> {
+  console.log(chalk.blue('\napplying...'));
+
+  let applied = 0;
+  let outputs: Record<string, unknown> = {};
+  for await (const event of orchestrator.run(configContent)) {
+    reportEvent(event);
+    if (event.type === 'applied') applied += 1;
+    if (event.type === 'done') outputs = event.outputs;
+  }
+
+  console.log(chalk.green(`\nApply complete! Resources: ${applied} changed.`));
+
+  if (Object.keys(outputs).length > 0) {
+    console.log(chalk.cyan('\nOutputs:'));
+    for (const [key, value] of Object.entries(outputs)) console.log(chalk.white(`  ${key} = ${JSON.stringify(value)}`));
   }
 }
 
@@ -66,14 +97,7 @@ async function executeApply(cwd: string, configPath: string, autoConfirm: boolea
     return;
   }
 
-  console.log(chalk.blue('\napplying...'));
-  const outputs = await orchestrator.apply(configContent);
-  console.log(chalk.green('\nApply complete! Resources: ' + actions.length + ' processed.'));
-
-  if (Object.keys(outputs).length > 0) {
-    console.log(chalk.cyan('\nOutputs:'));
-    for (const [key, value] of Object.entries(outputs)) console.log(chalk.white(`  ${key} = ${JSON.stringify(value)}`));
-  }
+  await runAndReport(orchestrator, configContent);
 }
 
 async function executeApplyFromPlan(cwd: string, planFile: PlanFile, autoConfirm: boolean): Promise<void> {
@@ -102,14 +126,7 @@ async function executeApplyFromPlan(cwd: string, planFile: PlanFile, autoConfirm
     return;
   }
 
-  console.log(chalk.blue('\napplying...'));
-  const outputs = await orchestrator.apply(configContent);
-  console.log(chalk.green('\nApply complete! Resources: ' + planFile.actions.length + ' processed.'));
-
-  if (Object.keys(outputs).length > 0) {
-    console.log(chalk.cyan('\nOutputs:'));
-    for (const [key, value] of Object.entries(outputs)) console.log(chalk.white(`  ${key} = ${JSON.stringify(value)}`));
-  }
+  await runAndReport(orchestrator, configContent);
 }
 
 export function createApplyCommand() {

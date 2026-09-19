@@ -6,6 +6,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { Orchestrator } from '../src/index';
+import { apply } from './apply';
 
 // Mock Provider for testing Data Sources
 class MockDataProvider implements IProvider {
@@ -83,7 +84,7 @@ describe('Orchestrator - Data Sources', () => {
     `;
 
     // Apply
-    await orchestrator.apply(config);
+    await apply(orchestrator, config);
 
     // Verify
     const backend = new LocalBackend(tmpDir);
@@ -103,7 +104,7 @@ describe('Orchestrator - Data Sources', () => {
       }
     `;
     // 'really_unknown_provider' is NOT in MockDataProvider.resources
-    await expect(orchestrator.apply(config)).rejects.toThrow('Provider for data source type "really_unknown_provider" not registered');
+    await expect(apply(orchestrator, config)).rejects.toThrow('Provider for data source type "really_unknown_provider" not registered');
   });
 
   it('should throw error if data source not found', async () => {
@@ -113,7 +114,7 @@ describe('Orchestrator - Data Sources', () => {
       }
     `;
 
-    await expect(orchestrator.apply(config)).rejects.toThrow('Data source mock_data with id missing-id not found');
+    await expect(apply(orchestrator, config)).rejects.toThrow('Data source mock_data with id missing-id not found');
   });
 
   it('should throw error if data reference is incomplete', async () => {
@@ -128,7 +129,7 @@ describe('Orchestrator - Data Sources', () => {
         val = data.mock_data.test
       }
     `;
-    await expect(orchestrator.apply(config)).rejects.toThrow('Data source reference must include attribute');
+    await expect(apply(orchestrator, config)).rejects.toThrow('Data source reference must include attribute');
   });
 
   it('should support string interpolation with data sources', async () => {
@@ -147,7 +148,7 @@ describe('Orchestrator - Data Sources', () => {
       }
     `;
 
-    await orchestrator.apply(config);
+    await apply(orchestrator, config);
 
     const backend = new LocalBackend(tmpDir);
     const stateManager = new StateManager(backend);

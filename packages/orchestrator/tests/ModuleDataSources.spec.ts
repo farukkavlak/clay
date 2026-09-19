@@ -6,6 +6,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
 import { Orchestrator } from '../src/index';
+import { apply } from './apply';
 
 vi.mock('node:fs');
 
@@ -102,7 +103,7 @@ module "app" {
       },
     ]);
 
-    await orchestrator.apply(rootConfig, '/root');
+    await apply(orchestrator, rootConfig, '/root');
 
     const stateArg = writeMock.mock.calls[0][0];
     const resource = stateArg.resources['module.app.test_resource.server'];
@@ -141,6 +142,6 @@ module "app" {
     // Terraform usually allows seeing root variables IF they are passed, but data sources are usually top-level.
     // In Miniform, we've implemented strict module-level scoping for simplicity unless we decide otherwise.
 
-    await expect(orchestrator.apply(rootConfig, '/root')).rejects.toThrow(/Data source "module.app.aws_ami.root_ami" not found/);
+    await expect(apply(orchestrator, rootConfig, '/root')).rejects.toThrow(/Data source "module.app.aws_ami.root_ami" not found/);
   });
 });

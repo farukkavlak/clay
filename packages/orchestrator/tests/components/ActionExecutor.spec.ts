@@ -1,17 +1,14 @@
 import { IProvider } from '@miniform/contracts';
-import { Graph } from '@miniform/graph';
 import { PlanAction } from '@miniform/planner';
 import { IState } from '@miniform/state';
 import { afterEach, beforeEach, describe, expect, it, Mock, vi } from 'vitest';
 
 import { Address } from '../../src/Address';
 import { ActionExecutor } from '../../src/components/ActionExecutor';
-import { GraphNode } from '../../src/components/DependencyGraphBuilder';
 
 describe('ActionExecutor', () => {
   let providers: Map<string, IProvider>;
   let convertAttributes: Mock;
-  let resolveOutputsOf: Mock;
   let executor: ActionExecutor;
   let mockProvider: IProvider;
 
@@ -38,10 +35,9 @@ describe('ActionExecutor', () => {
 
       return resolved;
     });
-    resolveOutputsOf = vi.fn();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    executor = new ActionExecutor(providers, convertAttributes as any, resolveOutputsOf as any);
+    executor = new ActionExecutor(providers, convertAttributes as any);
   });
 
   afterEach(() => {
@@ -55,7 +51,7 @@ describe('ActionExecutor', () => {
 
   const context = new Address([], 'test', 'main');
 
-  describe('executeAction', () => {
+  describe('execute', () => {
     it('should throw if provider not found', async () => {
       const action: PlanAction = {
         type: 'CREATE',
@@ -64,11 +60,7 @@ describe('ActionExecutor', () => {
         attributes: {},
       };
 
-      const actionAddress = new Address([], 'unknown', 'main');
-      const graph = new Graph<GraphNode>();
-      graph.addNode(actionAddress.toString(), { kind: 'resource' });
-
-      await expect(executor.executeActionsSequentially([action], graph, mockState, [])).rejects.toThrow('No provider registered');
+      await expect(executor.execute(action, mockState)).rejects.toThrow('No provider registered');
     });
 
     it('should throw on unknown action type', async () => {
@@ -80,11 +72,7 @@ describe('ActionExecutor', () => {
         attributes: {},
       };
 
-      const actionAddress = new Address([], 'test', 'main');
-      const graph = new Graph<GraphNode>();
-      graph.addNode(actionAddress.toString(), { kind: 'resource' });
-
-      await expect(executor.executeActionsSequentially([action], graph, mockState, [])).rejects.toThrow('Unknown action type');
+      await expect(executor.execute(action, mockState)).rejects.toThrow('Unknown action type');
     });
 
     it('should ignore NO_OP actions', async () => {
@@ -94,17 +82,13 @@ describe('ActionExecutor', () => {
         name: 'main',
       };
 
-      const actionAddress = new Address([], 'test', 'main');
-      const graph = new Graph<GraphNode>();
-      graph.addNode(actionAddress.toString(), { kind: 'resource' });
-
-      await executor.executeActionsSequentially([action], graph, mockState, []);
+      await executor.execute(action, mockState);
       expect(mockProvider.create).not.toHaveBeenCalled();
       expect(mockProvider.update).not.toHaveBeenCalled();
       expect(mockProvider.delete).not.toHaveBeenCalled();
     });
 
-    it('should execute DELETE action via sequential execution', async () => {
+    it('should execute a DELETE action', async () => {
       const action: PlanAction = {
         type: 'DELETE',
         resourceType: 'test',
@@ -112,11 +96,7 @@ describe('ActionExecutor', () => {
         id: 'existing-id',
       };
 
-      const actionAddress = new Address([], 'test', 'main');
-      const graph = new Graph<GraphNode>();
-      graph.addNode(actionAddress.toString(), { kind: 'resource' });
-
-      await executor.executeActionsSequentially([action], graph, mockState, []);
+      await executor.execute(action, mockState);
       expect(mockProvider.delete).toHaveBeenCalledWith('existing-id', 'test');
     });
   });
@@ -211,10 +191,8 @@ describe('ActionExecutor', () => {
       const key = context.toString();
       mockState.resources[key] = { id: 'old', type: 'Resource', resourceType: 'test', name: 'main', attributes: { path: 'old' } };
       const action: PlanAction = { type: 'REPLACE', resourceType: 'test', name: 'main', id: 'old', attributes: { path: { type: 'String', value: 'new' } } };
-      const graph = new Graph<GraphNode>();
-      graph.addNode(key, { kind: 'resource' });
 
-      await executor.executeActionsSequentially([action], graph, mockState, []);
+      await executor.execute(action, mockState);
 
       expect(mockProvider.delete).toHaveBeenCalledWith('old', 'test');
       expect(mockProvider.create).toHaveBeenCalledWith('test', { path: 'new' });
@@ -231,17 +209,6 @@ describe('ActionExecutor', () => {
       };
 
       await expect(executor.executeDelete(action, mockProvider, mockState)).rejects.toThrow('missing id');
-    });
-  });
-
-  describe('Graph Execution', () => {
-    it("should resolve the outputs of an output node's scope", async () => {
-      const graph = new Graph<GraphNode>();
-      graph.addNode('module.app.outputs.ip', { kind: 'output', scope: 'module.app', name: 'ip', value: undefined, context: new Address(['app'], '', '') });
-
-      await executor.executeActionsSequentially([], graph, mockState, []);
-
-      expect(resolveOutputsOf).toHaveBeenCalledWith('module.app', [], mockState);
     });
   });
 });

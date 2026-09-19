@@ -38,6 +38,11 @@ vi.mock('node:crypto', () => ({
   },
 }));
 
+const doneWith = (outputs: Record<string, unknown>) =>
+  async function* () {
+    yield { type: 'done', outputs };
+  };
+
 describe('CLI: apply command', () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -69,13 +74,13 @@ describe('CLI: apply command', () => {
         { type: 'DELETE', resourceType: 'test', name: 't3' },
         { type: 'NO_OP', resourceType: 'test', name: 't4' },
       ]);
-      const applyMock = vi.fn().mockResolvedValue({});
+      const runMock = vi.fn(doneWith({}));
 
       vi.mocked(Orchestrator).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
           plan: planMock,
-          apply: applyMock,
+          run: runMock,
         } as Partial<Orchestrator> as Orchestrator;
       });
 
@@ -85,7 +90,37 @@ describe('CLI: apply command', () => {
 
       expect(planMock).toHaveBeenCalled();
       expect(inquirer.prompt).toHaveBeenCalled();
-      expect(applyMock).toHaveBeenCalledWith('content');
+      expect(runMock).toHaveBeenCalledWith('content');
+    });
+
+    it('should print each resource as it is applied', async () => {
+      vi.mocked(fs.access).mockResolvedValue(void 0);
+      vi.mocked(fs.readFile).mockResolvedValue('content');
+
+      const planMock = vi.fn().mockResolvedValue([{ type: 'CREATE', resourceType: 'test', name: 't' }]);
+      const runMock = vi.fn(async function* () {
+        yield { type: 'applied', action: { type: 'CREATE', resourceType: 'test', name: 't' } };
+        yield { type: 'applied', action: { type: 'DELETE', resourceType: 'test', name: 'gone' } };
+        yield { type: 'done', outputs: {} };
+      });
+
+      vi.mocked(Orchestrator).mockImplementation(function () {
+        return {
+          registerProvider: vi.fn(),
+          plan: planMock,
+          run: runMock,
+        } as Partial<Orchestrator> as Orchestrator;
+      });
+
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      await createApplyCommand().parseAsync(['node', 'miniform', '--yes']);
+
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('+ test.t created'));
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('- test.gone destroyed'));
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Resources: 2 changed'));
+
+      consoleSpy.mockRestore();
     });
 
     it('should skip confirmation with --yes flag', async () => {
@@ -93,20 +128,20 @@ describe('CLI: apply command', () => {
       vi.mocked(fs.readFile).mockResolvedValue('content');
 
       const planMock = vi.fn().mockResolvedValue([{ type: 'CREATE', resourceType: 'test', name: 't' }]);
-      const applyMock = vi.fn().mockResolvedValue({});
+      const runMock = vi.fn(doneWith({}));
 
       vi.mocked(Orchestrator).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
           plan: planMock,
-          apply: applyMock,
+          run: runMock,
         } as Partial<Orchestrator> as Orchestrator;
       });
 
       await createApplyCommand().parseAsync(['node', 'miniform', '--yes']);
 
       expect(inquirer.prompt).not.toHaveBeenCalled();
-      expect(applyMock).toHaveBeenCalled();
+      expect(runMock).toHaveBeenCalled();
     });
 
     it('should abort if confirmation declined', async () => {
@@ -114,13 +149,13 @@ describe('CLI: apply command', () => {
       vi.mocked(fs.readFile).mockResolvedValue('content');
 
       const planMock = vi.fn().mockResolvedValue([{ type: 'CREATE', resourceType: 'test', name: 't' }]);
-      const applyMock = vi.fn().mockResolvedValue({});
+      const runMock = vi.fn(doneWith({}));
 
       vi.mocked(Orchestrator).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
           plan: planMock,
-          apply: applyMock,
+          run: runMock,
         } as Partial<Orchestrator> as Orchestrator;
       });
 
@@ -129,7 +164,7 @@ describe('CLI: apply command', () => {
 
       await createApplyCommand().parseAsync(['node', 'miniform']);
 
-      expect(applyMock).not.toHaveBeenCalled();
+      expect(runMock).not.toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith('Apply cancelled.');
 
       consoleSpy.mockRestore();
@@ -163,16 +198,13 @@ describe('CLI: apply command', () => {
       vi.mocked(fs.readFile).mockResolvedValue('content');
 
       const planMock = vi.fn().mockResolvedValue([{ type: 'CREATE', resourceType: 'test', name: 't' }]);
-      const applyMock = vi.fn().mockResolvedValue({
-        my_output: 'test_value',
-        another_output: 42,
-      });
+      const runMock = vi.fn(doneWith({ my_output: 'test_value', another_output: 42 }));
 
       vi.mocked(Orchestrator).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
           plan: planMock,
-          apply: applyMock,
+          run: runMock,
         } as Partial<Orchestrator> as Orchestrator;
       });
 
@@ -181,7 +213,7 @@ describe('CLI: apply command', () => {
 
       await createApplyCommand().parseAsync(['node', 'miniform']);
 
-      expect(applyMock).toHaveBeenCalled();
+      expect(runMock).toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Outputs:'));
 
       consoleSpy.mockRestore();
@@ -192,13 +224,13 @@ describe('CLI: apply command', () => {
       vi.mocked(fs.readFile).mockResolvedValue('content');
 
       const planMock = vi.fn().mockResolvedValue([{ type: 'UNKNOWN', resourceType: 'test', name: 't' }]);
-      const applyMock = vi.fn().mockResolvedValue({});
+      const runMock = vi.fn(doneWith({}));
 
       vi.mocked(Orchestrator).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
           plan: planMock,
-          apply: applyMock,
+          run: runMock,
         } as Partial<Orchestrator> as Orchestrator;
       });
 
@@ -210,7 +242,7 @@ describe('CLI: apply command', () => {
       // Should print action but without specific symbol (default case)
       expect(consoleSpy).toHaveBeenCalled();
       // Should invoke apply
-      expect(applyMock).toHaveBeenCalled();
+      expect(runMock).toHaveBeenCalled();
 
       consoleSpy.mockRestore();
     });
@@ -230,12 +262,12 @@ describe('CLI: apply command', () => {
         return 'config content';
       });
 
-      const applyMock = vi.fn().mockResolvedValue({});
+      const runMock = vi.fn(doneWith({}));
 
       vi.mocked(Orchestrator).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
-          apply: applyMock,
+          run: runMock,
         } as Partial<Orchestrator> as Orchestrator;
       });
 
@@ -244,7 +276,7 @@ describe('CLI: apply command', () => {
 
       await createApplyCommand().parseAsync(['node', 'miniform', 'plan.json']);
 
-      expect(applyMock).toHaveBeenCalled();
+      expect(runMock).toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Applying from saved plan'));
 
       consoleSpy.mockRestore();
@@ -263,12 +295,12 @@ describe('CLI: apply command', () => {
         return 'config content';
       });
 
-      const applyMock = vi.fn().mockResolvedValue({});
+      const runMock = vi.fn(doneWith({}));
 
       vi.mocked(Orchestrator).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
-          apply: applyMock,
+          run: runMock,
         } as Partial<Orchestrator> as Orchestrator;
       });
 
@@ -277,7 +309,7 @@ describe('CLI: apply command', () => {
 
       await createApplyCommand().parseAsync(['node', 'miniform', 'plan.json']);
 
-      expect(applyMock).not.toHaveBeenCalled();
+      expect(runMock).not.toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith('Apply cancelled.');
 
       consoleSpy.mockRestore();
@@ -296,14 +328,12 @@ describe('CLI: apply command', () => {
         return 'config content';
       });
 
-      const applyMock = vi.fn().mockResolvedValue({
-        plan_output: 'value',
-      });
+      const runMock = vi.fn(doneWith({ plan_output: 'value' }));
 
       vi.mocked(Orchestrator).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
-          apply: applyMock,
+          run: runMock,
         } as Partial<Orchestrator> as Orchestrator;
       });
 
@@ -312,7 +342,7 @@ describe('CLI: apply command', () => {
 
       await createApplyCommand().parseAsync(['node', 'miniform', 'plan.json']);
 
-      expect(applyMock).toHaveBeenCalled();
+      expect(runMock).toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Outputs:'));
 
       consoleSpy.mockRestore();
@@ -340,13 +370,15 @@ describe('CLI: apply command', () => {
       vi.mocked(fs.readFile).mockResolvedValue('content');
 
       const planMock = vi.fn().mockResolvedValue([{ type: 'CREATE', resourceType: 'test', name: 't' }]);
-      const applyMock = vi.fn().mockRejectedValue(new Error('Apply failed'));
+      const runMock = vi.fn(async function* () {
+        yield { type: 'failed', action: { type: 'CREATE', resourceType: 'test', name: 't' }, error: new Error('disk full') };
+      });
 
       vi.mocked(Orchestrator).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
           plan: planMock,
-          apply: applyMock,
+          run: runMock,
         } as Partial<Orchestrator> as Orchestrator;
       });
 
@@ -357,7 +389,7 @@ describe('CLI: apply command', () => {
 
       await createApplyCommand().parseAsync(['node', 'miniform']);
 
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Apply failed:'), 'Apply failed');
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Apply failed:'), 'test.t: disk full');
       expect(exitSpy).toHaveBeenCalledWith(1);
 
       exitSpy.mockRestore();
