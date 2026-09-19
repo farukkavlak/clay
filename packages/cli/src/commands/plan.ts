@@ -8,6 +8,8 @@ import { Command } from 'commander';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
+import { changesNothing, displayOutputChanges } from '../outputChanges';
+
 function getActionSymbol(actionType: string): string {
   if (actionType === 'CREATE') return chalk.green('+');
   if (actionType === 'UPDATE') return chalk.yellow('~');
@@ -55,14 +57,18 @@ async function executePlan(cwd: string, configPath: string, outFile?: string): P
   console.log(chalk.blue('Refreshing state...'));
 
   const planned = await orchestrator.plan(configContent);
-  const { actions } = planned;
+  const { actions, outputs } = planned;
   const changes = actions.filter((action) => action.type !== 'NO_OP');
 
-  if (changes.length === 0) console.log(chalk.green('No changes. Your infrastructure matches the configuration.'));
+  if (changesNothing(planned)) console.log(chalk.green('No changes. Your infrastructure matches the configuration.'));
   else {
-    console.log(chalk.bold('\nClay will perform the following actions:\n'));
-    for (const action of changes) displayAction(action);
-    displayPlanSummary(actions);
+    if (changes.length > 0) {
+      console.log(chalk.bold('\nClay will perform the following actions:\n'));
+      for (const action of changes) displayAction(action);
+    }
+    displayOutputChanges(outputs);
+    if (changes.length > 0) displayPlanSummary(actions);
+    else console.log(chalk.bold('\nAn apply would only update the outputs in state.'));
   }
 
   if (outFile) {

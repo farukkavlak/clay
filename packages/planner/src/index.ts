@@ -20,6 +20,9 @@ export interface DesiredResource {
   dependencies: string[];
 }
 
+/** What each named value was and would become; a missing `old` is an addition, a missing `new` a removal. */
+export type Changes = Record<string, { old: unknown; new: unknown }>;
+
 export interface PlanAction {
   type: ActionType;
   resourceType: string;
@@ -27,18 +30,19 @@ export interface PlanAction {
   modulePath?: string[]; // Path of modules leading to this resource
   id?: string;
   attributes?: Record<string, AttributeValue>;
-  changes?: Record<string, { old: unknown; new: unknown }>;
+  changes?: Changes;
   dependencies?: string[];
 }
 
-/** The actions to take, and the serial of the state they were planned against. */
+/** The actions to take, how the root outputs would change, and the serial of the state it was planned against. */
 export interface Plan {
   serial: number;
   actions: PlanAction[];
+  outputs: Changes;
 }
 
 /** Bumped whenever the shape below changes, so a plan file from an older version is refused instead of misread. */
-export const PLAN_FILE_VERSION = '4.0';
+export const PLAN_FILE_VERSION = '5.0';
 
 export interface PlanFile extends Plan {
   version: string;
@@ -57,11 +61,16 @@ export function serializePlan(plan: Plan, configContent: string, modules: Record
     modules,
     serial: plan.serial,
     actions: plan.actions,
+    outputs: plan.outputs,
   };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 function isModuleFiles(modules: unknown): modules is Record<string, string> {
-  return typeof modules === 'object' && modules !== null && !Array.isArray(modules) && Object.values(modules).every((content) => typeof content === 'string');
+  return isRecord(modules) && Object.values(modules).every((content) => typeof content === 'string');
 }
 
 export function validatePlanFile(planFile: unknown): planFile is PlanFile {
@@ -74,7 +83,8 @@ export function validatePlanFile(planFile: unknown): planFile is PlanFile {
     typeof pf.config === 'string' &&
     isModuleFiles(pf.modules) &&
     typeof pf.serial === 'number' &&
-    Array.isArray(pf.actions)
+    Array.isArray(pf.actions) &&
+    isRecord(pf.outputs)
   );
 }
 
@@ -83,8 +93,8 @@ function valueChanged(oldValue: unknown, newValue: unknown): boolean {
   return JSON.stringify(oldValue) !== JSON.stringify(newValue);
 }
 
-function calculateDiff(oldAttrs: Record<string, unknown>, newAttrs: Record<string, unknown>): Record<string, { old: unknown; new: unknown }> | null {
-  const changes: Record<string, { old: unknown; new: unknown }> = {};
+function calculateDiff(oldAttrs: Record<string, unknown>, newAttrs: Record<string, unknown>): Changes | null {
+  const changes: Changes = {};
   let changed = false;
 
   const allKeys = new Set([...Object.keys(oldAttrs), ...Object.keys(newAttrs)]);
@@ -100,6 +110,10 @@ function calculateDiff(oldAttrs: Record<string, unknown>, newAttrs: Record<strin
   }
 
   return changed ? changes : null;
+}
+
+export function outputChanges(current: Record<string, unknown>, desired: Record<string, unknown>): Changes {
+  return calculateDiff(current, desired) ?? {};
 }
 
 /** Tells whether a resource in state would change, without building the action for it. */

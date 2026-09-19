@@ -1,6 +1,6 @@
 import { ConfigFiles, DiskFiles, InMemoryFiles, Orchestrator, RunEvent } from '@clay/orchestrator';
 import { CONFIG_FILE } from '@clay/parser';
-import { PlanAction, PlanFile, validatePlanFile } from '@clay/planner';
+import { Plan, PlanAction, PlanFile, validatePlanFile } from '@clay/planner';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
 import chalk from 'chalk';
@@ -8,6 +8,8 @@ import { Command } from 'commander';
 import inquirer from 'inquirer';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+
+import { changesNothing, displayOutputChanges } from '../outputChanges';
 
 function getActionSymbol(actionType: string): string {
   if (actionType === 'CREATE') return chalk.green('+');
@@ -17,13 +19,13 @@ function getActionSymbol(actionType: string): string {
   return ' ';
 }
 
-function displayActions(actions: PlanAction[]): void {
-  console.log(chalk.bold('\nClay will perform the following actions:\n'));
-  for (const action of actions) {
-    if (action.type === 'NO_OP') continue;
-    const symbol = getActionSymbol(action.type);
-    console.log(`  ${symbol} ${action.resourceType}.${action.name}`);
+function displayPlan(plan: Plan): void {
+  const changes = plan.actions.filter((action) => action.type !== 'NO_OP');
+  if (changes.length > 0) {
+    console.log(chalk.bold('\nClay will perform the following actions:\n'));
+    for (const action of changes) console.log(`  ${getActionSymbol(action.type)} ${action.resourceType}.${action.name}`);
   }
+  displayOutputChanges(plan.outputs);
 }
 
 function pastTense(actionType: PlanAction['type']): string {
@@ -85,14 +87,14 @@ async function executeApply(cwd: string, configPath: string, autoConfirm: boolea
 
   // Show plan first
   console.log(chalk.blue('Calculating plan...'));
-  const { actions } = await orchestrator.plan(configContent);
+  const planned = await orchestrator.plan(configContent);
 
-  if (actions.every((a) => a.type === 'NO_OP')) {
+  if (changesNothing(planned)) {
     console.log(chalk.green('No changes needed.'));
     return;
   }
 
-  displayActions(actions);
+  displayPlan(planned);
 
   const confirmed = await confirmApply(autoConfirm);
   if (!confirmed) {
@@ -109,7 +111,7 @@ async function executeApplyFromPlan(cwd: string, planFile: PlanFile): Promise<vo
   console.log(chalk.blue('Applying from saved plan...'));
   console.log(chalk.gray(`Plan created: ${planFile.timestamp}`));
 
-  displayActions(planFile.actions);
+  displayPlan(planFile);
 
   await runAndReport(orchestrator.runPlan(planFile, planFile.config));
 }

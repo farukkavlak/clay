@@ -84,6 +84,8 @@ export function createStateCommand(): Command {
             ...state.resources[source],
           };
           delete state.resources[source];
+          // Outputs come from a finished run; the next one writes them again.
+          delete state.outputs;
 
           await manager.write(state);
           console.log(chalk.green('Successfully moved resource.'));
@@ -115,6 +117,7 @@ export function createStateCommand(): Command {
 
           console.log(chalk.yellow(`Removing ${address}...`));
           delete state.resources[address];
+          delete state.outputs;
 
           await manager.write(state);
           console.log(chalk.green('Successfully removed resource.'));

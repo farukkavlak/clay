@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-342 tests pass, and so do the type check and the build. Lint shows 12 warnings, and
+351 tests pass, and so do the type check and the build. Lint shows 12 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -110,11 +110,16 @@ In order: the safety net first, then the engine, then the CLI, then the output.
       differently. State holds the root module's outputs now, the way Terraform does, and
       nothing else: variables are inputs that come with each run. `output` reads those, and
       state is written in full, so what an older version left behind goes.
-- [ ] Outputs in state are only written at the end of an apply that gets there, so they go
-      stale. A config that changes nothing but an `output` block plans no actions, and the
-      CLI stops at "No changes needed" without running; a run that fails partway leaves the
-      previous run's outputs next to the new resources; `state rm` and `state mv` do not
-      touch outputs at all, so one can name a resource that is gone.
+- [x] Outputs in state were only written at the end of an apply that got there, so they
+      went stale. A config that changed nothing but an `output` block planned no actions,
+      and the CLI stopped at "No changes needed" without running; a run that failed partway
+      left the previous run's outputs next to the new resources; `state rm` and `state mv`
+      did not touch outputs at all, so one could name a resource that was gone. Outputs in
+      state are now what the last finished run left: the plan lists output changes, as
+      Terraform does, and an output change alone is reason to run; a run drops the outputs
+      before its first write and puts them back with its last; `state rm` and `state mv`
+      drop them too, and the next run writes them again. Terraform leaves them after
+      `state rm`; a stale value shown as current is a wrong value, so Clay does not.
 - [x] The config file had two names: the CLI read `main.mini`, modules were loaded from
       `main.mf`, and `validate` defaulted to `main.mf`, so a module had to be written under
       a different name than the config that called it. One name now: `main.clay`.

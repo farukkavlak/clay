@@ -72,6 +72,24 @@ describe('state and output against a real state file', () => {
     expect(printed).toContain('local_file.a');
   });
 
+  it('drops the outputs when rm takes a resource out', async () => {
+    await applyConfig();
+
+    await createStateCommand().parseAsync(['node', 'clay', 'rm', 'local_file.a']);
+
+    const state = await new LocalBackend(dir).read();
+    expect(state.outputs).toBeUndefined();
+  });
+
+  it('drops the outputs when mv renames a resource', async () => {
+    await applyConfig();
+
+    await createStateCommand().parseAsync(['node', 'clay', 'mv', 'local_file.a', 'local_file.b']);
+
+    const state = await new LocalBackend(dir).read();
+    expect(state.outputs).toBeUndefined();
+  });
+
   it('reads what the engine wrote for output', async () => {
     await applyConfig();
 
