@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-306 tests pass, and so do the type check and the build. Lint shows 23 warnings, and
+310 tests pass, and so do the type check and the build. Lint shows 23 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -66,7 +66,9 @@ In order: the safety net first, then the engine, then the CLI, then the output.
 - [x] A failed action lost the whole run. `apply` wrote state only after the last action,
       so resources already created were left untracked. The state file is rewritten after
       every action now, and a failed run stops with everything before it on disk.
-- [ ] `apply` never takes the state lock, so two runs can write the same file.
+- [x] `apply` never took the state lock, so two runs could write the same file. A run holds
+      the lock from start to finish and lets go however it ends. `plan` only reads, so it
+      does not lock.
 - [ ] Resources removed from the config are deleted in state order, not in reverse
       dependency order, so a dependency can go before what still reads it. The graph only
       knows the config; Terraform solves this by writing each resource's dependencies into
@@ -122,7 +124,7 @@ In order: the safety net first, then the engine, then the CLI, then the output.
       One factory builds the object graph and hands it over. No DI container: at this size
       it buys nothing the factory does not, and it would hide the wiring behind a runtime
       dependency. The plan walk (graph order, the pending set, resolve-or-unknown) moves
-      into a part of its own; `Orchestrator` grew from 228 to 317 lines through the planner
+      into a part of its own; `Orchestrator` grew from 228 to 328 lines through the planner
       fixes.
 - [ ] `apply` parses the config, reads data sources and builds the dependency graph once,
       not twice. It calls `plan`, which now does all three, and then does them again.

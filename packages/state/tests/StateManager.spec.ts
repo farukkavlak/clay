@@ -70,7 +70,7 @@ describe('StateManager', () => {
 
     it('should throw if already locked', async () => {
       await stateManager.lock();
-      await expect(stateManager.lock()).rejects.toThrow(/locked by another process/i);
+      await expect(stateManager.lock()).rejects.toThrow(/locked by another run/i);
     });
 
     it('should remove lock file on unlock', async () => {

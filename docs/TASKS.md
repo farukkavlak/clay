@@ -304,7 +304,8 @@ hand shows up in the plan. Miniform plans against what it last applied.
 - [ ] **Refresh before the diff**
   - [ ] `read()` on every resource type; today each returns `{}`
   - [ ] State holds what the provider returns, not only the inputs that were sent
-  - [ ] `plan` refreshes first, `-refresh=false` skips it
+  - [ ] `plan` refreshes first, `-refresh=false` skips it; a plan that writes state has to
+        take the lock, as `apply` does
 
 ### 10.3. Lifecycle Management
 
@@ -338,6 +339,13 @@ hand shows up in the plan. Miniform plans against what it last applied.
   - [ ] Workspace-specific variables
 
 ---
+
+### 10.6. Force Unlock
+
+A run that dies leaves its lock behind. The error names the file; a `force-unlock`
+command would remove it the way Terraform's does.
+
+- [ ] `miniform force-unlock`
 
 ## 11. Nice to Have
 
