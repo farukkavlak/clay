@@ -5,8 +5,7 @@ export interface IResource {
   resourceType: string;
   name: string;
   modulePath?: string[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  attributes: Record<string, any>;
+  attributes: Record<string, unknown>;
 }
 
 export type SchemaType = 'string' | 'number' | 'boolean' | 'list' | 'map' | 'object';

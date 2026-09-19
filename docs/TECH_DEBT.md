@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-266 tests pass, and so do the type check and the build. Lint shows 25 warnings, and
+272 tests pass, and so do the type check and the build. Lint shows 25 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -29,13 +29,24 @@ In order: the safety net first, then the engine, then the CLI, then the output.
 
 - [x] End-to-end tests that run the engine with the real provider and a real state file in
       a temp directory. Each fix below brings its own.
-- [ ] A plan right after an apply wants to replace everything. The planner compares
-      resolved values in state with raw AST values from the config, so they never match.
-      This hides every other planner bug, so it comes first.
+- [x] A plan right after an apply wants to replace everything, for every value the plan can
+      resolve. The planner compared resolved values in state with raw AST values from the
+      config, so they never matched. It broke when the orchestrator started writing
+      resolved values to state and nothing told the planner; a `Record<string, any>` on
+      `IResource.attributes` and a cast in the planner kept the compiler quiet, and the
+      planner's tests built their own state in the old shape.
+- [ ] A resource that reads a value from a resource changing in the same run is planned
+      against the old state, so it comes out `NO_OP` and keeps its old content until the
+      next apply. Resolve in dependency order: a reference whose target has a pending
+      action is unknown, not the old value. The same graph tells a typo from a value that
+      is not there yet; until then `plan` calls a reference to a resource no config
+      declares "(known after apply)" and only the apply reports it.
+- [ ] `plan` never computes module outputs, so every `${module.x.y}` is unknown and its
+      resource shows a change that never settles.
 - [ ] Replacing a resource destroys it. Creates run before deletes, so the delete removes
       the file the create just wrote, and drops it from state.
-- [ ] An attribute removed from the config stays in state. `executeUpdate` only copies
-      changes whose new value is defined.
+- [ ] An attribute removed from the config stays in state. `executeUpdate` spreads the old
+      attributes under the new ones, so a key the config dropped survives.
 - [ ] A failed action loses the whole run. `apply` writes state only after the last
       action, so resources already created are left untracked.
 - [ ] `apply` never takes the state lock, so two runs can write the same file.
@@ -70,6 +81,10 @@ In order: the safety net first, then the engine, then the CLI, then the output.
 - [ ] The CLI uses Node built-ins instead of chalk (`util.styleText`), commander
       (`util.parseArgs`) and inquirer (`readline/promises`).
 - [ ] `engines.node` is `>=22`, which `util.styleText` needs.
+- [ ] `IState` moves to `contracts`, next to `IResource`. `planner` and `orchestrator`
+      depend on `@miniform/state` only for that type, and the shape state is written in is
+      a contract every side has to agree on. Keeping it inside one side is how the planner
+      drifted away from it.
 
 ## 3 — code
 
@@ -77,6 +92,13 @@ In order: the safety net first, then the engine, then the CLI, then the output.
 - [ ] The ESLint config fits this repo. The current one came from a React project.
 - [ ] The orchestrator's parts get their collaborators passed in, not `bind`-ed callbacks.
 - [ ] `apply` parses the config and reads data sources once, not twice.
+- [ ] `apply` and `plan` yield events (resource started, created, failed, done) and the CLI
+      only renders them. Do this with the failed-action bug above: writing state as the
+      events arrive is the fix, progress becomes visible, and the CLI tests stop spying on
+      `console.log`.
+- [ ] Resolving works on a context that can be cloned per scope, instead of one mutable
+      `ScopeManager` keyed by scope strings. The dependency-order fix needs to resolve the
+      same config against different sets of pending values.
 - [ ] The CLI commands share their helpers instead of copying them.
 - [ ] Comments that only restate the code are gone (`// Mock Provider for testing`).
 

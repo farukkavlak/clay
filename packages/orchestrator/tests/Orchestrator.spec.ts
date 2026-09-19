@@ -201,8 +201,7 @@ describe('Orchestrator', () => {
       expect(updated.get(originalId)).toEqual({ name: 'updated_value' });
     });
 
-    // Known bug: the planner compares resolved state values with raw config values.
-    it.fails('should not call provider if no changes (NO_OP)', async () => {
+    it('should not call provider if no changes (NO_OP)', async () => {
       const config = `
         resource "mock_resource" "test" {
           name = "same_value"

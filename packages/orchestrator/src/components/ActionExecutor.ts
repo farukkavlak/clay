@@ -87,7 +87,7 @@ export class ActionExecutor {
   }
 
   async executeUpdate(action: PlanAction, provider: IProvider, currentState: IState): Promise<void> {
-    if (!action.changes) throw new Error('UPDATE action missing changes');
+    if (!action.attributes) throw new Error('UPDATE action missing attributes');
 
     const contextAddress = new Address(action.modulePath || [], action.resourceType, action.name);
 
@@ -95,10 +95,8 @@ export class ActionExecutor {
     const currentResource = currentState.resources[key];
     if (!currentResource) throw new Error(`Resource "${key}" not found in state for update`);
 
-    const newAttributes = { ...currentResource.attributes };
-    for (const [k, change] of Object.entries(action.changes)) if (change.new !== undefined) newAttributes[k] = change.new;
-
-    const inputs = this.convertAttributes(newAttributes, currentState, contextAddress);
+    // The plan resolved these against an older state, so resolve them again here.
+    const inputs = { ...currentResource.attributes, ...this.convertAttributes(action.attributes, currentState, contextAddress) };
 
     await provider.validate(action.resourceType, inputs);
     if (!action.id) throw new Error(`UPDATE action for "${key}" missing resource ID`);
