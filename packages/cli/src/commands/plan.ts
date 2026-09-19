@@ -1,4 +1,4 @@
-import { Orchestrator } from '@clay/orchestrator';
+import { DiskFiles, Orchestrator, RecordingFiles } from '@clay/orchestrator';
 import { CONFIG_FILE } from '@clay/parser';
 import { isUnknown, PlanAction, serializePlan } from '@clay/planner';
 import { LocalProvider } from '@clay/provider-local';
@@ -48,9 +48,8 @@ function displayPlanSummary(actions: PlanAction[]): void {
 async function executePlan(cwd: string, configPath: string, outFile?: string): Promise<void> {
   const configContent = await fs.readFile(configPath, 'utf8');
 
-  const backend = new LocalBackend(cwd);
-  const stateManager = new StateManager(backend);
-  const orchestrator = new Orchestrator(stateManager);
+  const files = new RecordingFiles(new DiskFiles(cwd));
+  const orchestrator = new Orchestrator(new StateManager(new LocalBackend(cwd)), files);
   orchestrator.registerProvider(new LocalProvider());
 
   console.log(chalk.blue('Refreshing state...'));
@@ -66,7 +65,7 @@ async function executePlan(cwd: string, configPath: string, outFile?: string): P
   }
 
   if (outFile) {
-    const planFile = serializePlan(actions, configContent);
+    const planFile = serializePlan(actions, configContent, files.snapshot());
     await fs.writeFile(outFile, JSON.stringify(planFile, null, 2), 'utf8');
     console.log(chalk.green(`\nPlan saved to: ${outFile}`));
   }

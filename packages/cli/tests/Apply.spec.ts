@@ -1,4 +1,4 @@
-import { Orchestrator } from '@clay/orchestrator';
+import { InMemoryFiles, Orchestrator } from '@clay/orchestrator';
 import inquirer from 'inquirer';
 import fs from 'node:fs/promises';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -251,9 +251,10 @@ describe('CLI: apply command', () => {
   describe('Plan file apply', () => {
     it('should run the saved actions against the saved configuration, without asking again', async () => {
       const planFileContent = JSON.stringify({
-        version: '2.0',
+        version: '3.0',
         timestamp: '2024-01-01T00:00:00Z',
         config: 'saved config',
+        modules: { 'm/main.clay': 'saved module' },
         actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }],
       });
 
@@ -278,6 +279,7 @@ describe('CLI: apply command', () => {
       await createApplyCommand().parseAsync(['node', 'clay', 'plan.json']);
 
       expect(runPlanMock).toHaveBeenCalledWith([{ type: 'CREATE', resourceType: 'test', name: 't' }], 'saved config');
+      expect(InMemoryFiles).toHaveBeenCalledWith({ 'm/main.clay': 'saved module' });
       expect(runMock).not.toHaveBeenCalled();
       expect(inquirer.prompt).not.toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Applying from saved plan'));
@@ -287,9 +289,10 @@ describe('CLI: apply command', () => {
 
     it('should not read the configuration on disk', async () => {
       const planFileContent = JSON.stringify({
-        version: '2.0',
+        version: '3.0',
         timestamp: '2024-01-01T00:00:00Z',
         config: 'saved config',
+        modules: { 'm/main.clay': 'saved module' },
         actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }],
       });
 
@@ -320,9 +323,10 @@ describe('CLI: apply command', () => {
 
     it('should display outputs when returned from plan apply', async () => {
       const planFileContent = JSON.stringify({
-        version: '2.0',
+        version: '3.0',
         timestamp: '2024-01-01T00:00:00Z',
         config: 'saved config',
+        modules: { 'm/main.clay': 'saved module' },
         actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }],
       });
 

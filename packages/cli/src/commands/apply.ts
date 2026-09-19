@@ -1,4 +1,4 @@
-import { Orchestrator, RunEvent } from '@clay/orchestrator';
+import { ConfigFiles, DiskFiles, InMemoryFiles, Orchestrator, RunEvent } from '@clay/orchestrator';
 import { CONFIG_FILE } from '@clay/parser';
 import { PlanAction, PlanFile, validatePlanFile } from '@clay/planner';
 import { LocalProvider } from '@clay/provider-local';
@@ -72,8 +72,8 @@ async function confirmApply(autoConfirm: boolean): Promise<boolean> {
   return confirm;
 }
 
-function newOrchestrator(cwd: string): Orchestrator {
-  const orchestrator = new Orchestrator(new StateManager(new LocalBackend(cwd)));
+function newOrchestrator(cwd: string, files: ConfigFiles): Orchestrator {
+  const orchestrator = new Orchestrator(new StateManager(new LocalBackend(cwd)), files);
   orchestrator.registerProvider(new LocalProvider());
 
   return orchestrator;
@@ -81,7 +81,7 @@ function newOrchestrator(cwd: string): Orchestrator {
 
 async function executeApply(cwd: string, configPath: string, autoConfirm: boolean): Promise<void> {
   const configContent = await fs.readFile(configPath, 'utf8');
-  const orchestrator = newOrchestrator(cwd);
+  const orchestrator = newOrchestrator(cwd, new DiskFiles(cwd));
 
   // Show plan first
   console.log(chalk.blue('Calculating plan...'));
@@ -104,7 +104,7 @@ async function executeApply(cwd: string, configPath: string, autoConfirm: boolea
 }
 
 async function executeApplyFromPlan(cwd: string, planFile: PlanFile): Promise<void> {
-  const orchestrator = newOrchestrator(cwd);
+  const orchestrator = newOrchestrator(cwd, new InMemoryFiles(planFile.modules));
 
   console.log(chalk.blue('Applying from saved plan...'));
   console.log(chalk.gray(`Plan created: ${planFile.timestamp}`));

@@ -1,14 +1,11 @@
 import { plan } from '@clay/planner';
-import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
-import { Orchestrator } from '../src/index';
+import { InMemoryFiles, Orchestrator } from '../src/index';
 import { apply } from './apply';
-
-vi.mock('node:fs');
 
 const readMock = vi.fn().mockResolvedValue({ resources: {}, variables: {}, version: 1 });
 const writeMock = vi.fn().mockResolvedValue(undefined);
@@ -38,6 +35,7 @@ vi.mock('@clay/planner', async () => ({
 
 describe('Orchestrator - Module Loading', () => {
   let tmpDir: string;
+  let files: Record<string, string>;
   let orchestrator: Orchestrator;
   let mockProvider: {
     resources: string[];
@@ -66,7 +64,8 @@ describe('Orchestrator - Module Loading', () => {
     const { StateManager, LocalBackend } = await import('@clay/state');
     const backend = new LocalBackend(tmpDir);
     const stateManager = new StateManager(backend);
-    orchestrator = new Orchestrator(stateManager);
+    files = {};
+    orchestrator = new Orchestrator(stateManager, new InMemoryFiles(files));
     orchestrator.registerProvider(mockProvider);
 
     (plan as Mock).mockReturnValue([]);
@@ -89,12 +88,7 @@ describe('Orchestrator - Module Loading', () => {
             }
         `;
 
-    // Mock FS Sync for Module Loading
-    (fs.existsSync as Mock).mockReturnValue(true);
-    (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
-      if (filePath.includes('modules/vpc/main.clay')) return vpcConfig;
-      return '';
-    });
+    files['modules/vpc/main.clay'] = vpcConfig;
 
     // Mock Plan to return expected actions
     (plan as Mock).mockReturnValue([
@@ -107,7 +101,7 @@ describe('Orchestrator - Module Loading', () => {
       },
     ]);
 
-    await apply(orchestrator, rootConfig, '/root');
+    await apply(orchestrator, rootConfig);
 
     // Check StateManager write using the exposed mock
     expect(writeMock).toHaveBeenCalled();
@@ -124,13 +118,8 @@ describe('Orchestrator - Module Loading', () => {
     const appConfig = `module "db" { source = "./db" }`;
     const dbConfig = `resource "test_resource" "rds" {}`;
 
-    (fs.existsSync as Mock).mockReturnValue(true);
-    (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
-      if (filePath.endsWith('app/main.clay')) return appConfig;
-      if (filePath.endsWith('db/main.clay')) return dbConfig;
-      // The orchestrator re-reads the root config for execution, so we need to return it
-      return rootConfig;
-    });
+    files['app/main.clay'] = appConfig;
+    files['app/db/main.clay'] = dbConfig;
 
     // Reset mock calls from previous tests or setup
     writeMock.mockClear();
@@ -146,12 +135,11 @@ describe('Orchestrator - Module Loading', () => {
       },
     ]);
 
-    await apply(orchestrator, rootConfig, '/root');
+    await apply(orchestrator, rootConfig);
 
     expect(writeMock).toHaveBeenCalled();
     const stateArg = writeMock.mock.calls[0][0];
 
-    console.log('DEBUG ACTUAL KEYS:', Object.keys(stateArg.resources));
     const expectedKey = 'module.app.module.db.test_resource.rds';
     expect(stateArg.resources).toHaveProperty(expectedKey);
     expect(stateArg.resources).toHaveProperty(expectedKey);
@@ -165,14 +153,10 @@ describe('Orchestrator - Module Loading', () => {
     const config4 = `module "L5" { source = "./L5" }`;
     const config5 = `resource "test_resource" "deep" {}`;
 
-    (fs.existsSync as Mock).mockReturnValue(true);
-    (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
-      if (filePath.endsWith('L2/main.clay')) return config2;
-      if (filePath.endsWith('L3/main.clay')) return config3;
-      if (filePath.endsWith('L4/main.clay')) return config4;
-      if (filePath.endsWith('L5/main.clay')) return config5;
-      return config1; // Root (L1)
-    });
+    files['L2/main.clay'] = config2;
+    files['L2/L3/main.clay'] = config3;
+    files['L2/L3/L4/main.clay'] = config4;
+    files['L2/L3/L4/L5/main.clay'] = config5;
 
     // Reset mock calls
     writeMock.mockClear();
@@ -187,7 +171,7 @@ describe('Orchestrator - Module Loading', () => {
       },
     ]);
 
-    await apply(orchestrator, config1, '/root'); // Pass root config content
+    await apply(orchestrator, config1);
 
     expect(writeMock).toHaveBeenCalled();
     const stateArg = writeMock.mock.calls[0][0];
@@ -199,7 +183,6 @@ describe('Orchestrator - Module Loading', () => {
 
   it('should throw error if module source is missing', async () => {
     const rootConfig = `module "invalid" {}`;
-    (fs.existsSync as Mock).mockReturnValue(true);
 
     // Mock plan to return relevant action if needed, but plan() might fail before if syntax is valid but semantic check fails
     // Here we are testing orchestrator.run -> moduleLoader.loadModuleTree
@@ -210,13 +193,12 @@ describe('Orchestrator - Module Loading', () => {
     // 2. ModuleLoader loads tree
     // So we just need apply() to be called.
 
-    await expect(apply(orchestrator, rootConfig, '/root')).rejects.toThrow('missing a valid "source" attribute');
+    await expect(apply(orchestrator, rootConfig)).rejects.toThrow('missing a valid "source" attribute');
   });
 
   it('should throw error if module source file not found', async () => {
     const rootConfig = `module "missing" { source = "./missing" }`;
-    (fs.existsSync as Mock).mockImplementation((path) => !path.toString().includes('missing/main.clay'));
 
-    await expect(apply(orchestrator, rootConfig, '/root')).rejects.toThrow('Module source not found');
+    await expect(apply(orchestrator, rootConfig)).rejects.toThrow('Module source not found at: missing/main.clay');
   });
 });

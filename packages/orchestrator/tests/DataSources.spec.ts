@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { Orchestrator } from '../src/index';
+import { InMemoryFiles, Orchestrator } from '../src/index';
 import { apply } from './apply';
 
 // Mock Provider for testing Data Sources
@@ -55,7 +55,7 @@ describe('Orchestrator - Data Sources', () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'orchestrator-data-test-'));
     const backend = new LocalBackend(tmpDir);
     const stateManager = new StateManager(backend);
-    orchestrator = new Orchestrator(stateManager);
+    orchestrator = new Orchestrator(stateManager, new InMemoryFiles({}));
     mockProvider = new MockDataProvider();
     orchestrator.registerProvider(mockProvider);
   });

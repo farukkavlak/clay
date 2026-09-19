@@ -1,14 +1,11 @@
 import { plan } from '@clay/planner';
-import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
-import { Orchestrator } from '../src/index';
+import { InMemoryFiles, Orchestrator } from '../src/index';
 import { apply } from './apply';
-
-vi.mock('node:fs');
 
 const readMock = vi.fn().mockResolvedValue({ resources: {}, variables: {}, version: 1 });
 const writeMock = vi.fn().mockResolvedValue(undefined);
@@ -36,6 +33,7 @@ vi.mock('@clay/planner', async () => ({
 
 describe('Orchestrator - Phase 5: Scoped Data Sources', () => {
   let tmpDir: string;
+  let files: Record<string, string>;
   let orchestrator: Orchestrator;
   let mockProvider: {
     resources: string[];
@@ -64,7 +62,8 @@ describe('Orchestrator - Phase 5: Scoped Data Sources', () => {
     const { StateManager, LocalBackend } = await import('@clay/state');
     const backend = new LocalBackend(tmpDir);
     const stateManager = new StateManager(backend);
-    orchestrator = new Orchestrator(stateManager);
+    files = {};
+    orchestrator = new Orchestrator(stateManager, new InMemoryFiles(files));
     orchestrator.registerProvider(mockProvider);
 
     (plan as Mock).mockReturnValue([]);
@@ -89,11 +88,7 @@ module "app" {
 }
 `;
 
-    (fs.existsSync as Mock).mockReturnValue(true);
-    (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
-      if (filePath.endsWith('app/main.clay')) return appConfig;
-      return rootConfig;
-    });
+    files['app/main.clay'] = appConfig;
 
     (plan as Mock).mockReturnValue([
       {
@@ -105,7 +100,7 @@ module "app" {
       },
     ]);
 
-    await apply(orchestrator, rootConfig, '/root');
+    await apply(orchestrator, rootConfig);
 
     const stateArg = writeMock.mock.calls[0][0];
     const resource = stateArg.resources['module.app.test_resource.server'];
@@ -127,8 +122,7 @@ module "app" {
 }
 `;
 
-    (fs.existsSync as Mock).mockReturnValue(true);
-    (fs.readFileSync as Mock).mockImplementation((f: string) => (f.endsWith('app/main.clay') ? appConfig : rootConfig));
+    files['app/main.clay'] = appConfig;
 
     (plan as Mock).mockReturnValue([
       {
@@ -141,6 +135,6 @@ module "app" {
     ]);
 
     // A module sees what it is passed and nothing else, data sources included.
-    await expect(apply(orchestrator, rootConfig, '/root')).rejects.toThrow(/Data source "module.app.aws_ami.root_ami" not found/);
+    await expect(apply(orchestrator, rootConfig)).rejects.toThrow(/Data source "module.app.aws_ami.root_ami" not found/);
   });
 });

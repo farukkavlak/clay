@@ -1,4 +1,4 @@
-import { Orchestrator } from '@clay/orchestrator';
+import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { isUnknown } from '@clay/planner';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
@@ -13,7 +13,7 @@ describe('apply and plan against real files', () => {
   let orchestrator: Orchestrator;
 
   const newOrchestrator = () => {
-    const engine = new Orchestrator(new StateManager(new LocalBackend(dir)));
+    const engine = new Orchestrator(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
     engine.registerProvider(new LocalProvider());
     return engine;
   };
@@ -38,7 +38,7 @@ describe('apply and plan against real files', () => {
 
   const apply = async (engine: Orchestrator, config: string) => {
     let outputs: Record<string, unknown> = {};
-    for await (const event of engine.run(config, dir)) {
+    for await (const event of engine.run(config)) {
       if (event.type === 'failed') throw event.error;
       if (event.type === 'done') outputs = event.outputs;
     }
@@ -46,7 +46,7 @@ describe('apply and plan against real files', () => {
   };
 
   const changes = async (config: string) => {
-    const actions = await newOrchestrator().plan(config, dir);
+    const actions = await newOrchestrator().plan(config);
     return actions.filter((action) => action.type !== 'NO_OP');
   };
 
@@ -165,7 +165,7 @@ describe('apply and plan against real files', () => {
       }
     `;
 
-    await expect(newOrchestrator().plan(config, dir)).rejects.toThrow('"local_file.typo" is not declared in the configuration');
+    await expect(newOrchestrator().plan(config)).rejects.toThrow('"local_file.typo" is not declared in the configuration');
   });
 
   it('names the resources in a dependency cycle', async () => {
@@ -180,7 +180,7 @@ describe('apply and plan against real files', () => {
       }
     `;
 
-    await expect(newOrchestrator().plan(config, dir)).rejects.toThrow('Dependency cycle detected: local_file.a -> local_file.b -> local_file.a');
+    await expect(newOrchestrator().plan(config)).rejects.toThrow('Dependency cycle detected: local_file.a -> local_file.b -> local_file.a');
   });
 
   it('plans an update through a module output when the resource behind it changes', async () => {
@@ -275,7 +275,7 @@ describe('apply and plan against real files', () => {
       }
     `;
 
-    await expect(newOrchestrator().plan(config, dir)).rejects.toThrow('variable "missing" is not defined');
+    await expect(newOrchestrator().plan(config)).rejects.toThrow('variable "missing" is not defined');
   });
 
   it('plans no changes for a module named after a graph node kind', async () => {
@@ -341,7 +341,7 @@ describe('apply and plan against real files', () => {
       }
     `;
 
-    await expect(newOrchestrator().plan(config, dir)).rejects.toThrow('modules are read through their outputs');
+    await expect(newOrchestrator().plan(config)).rejects.toThrow('modules are read through their outputs');
   });
 
   it('plans one replacement when a forceNew attribute changes', async () => {
@@ -382,7 +382,7 @@ describe('apply and plan against real files', () => {
 
   const destroyedNames = async (config: string) => {
     const names: string[] = [];
-    for await (const event of newOrchestrator().run(config, dir)) {
+    for await (const event of newOrchestrator().run(config)) {
       if (event.type === 'failed') throw event.error;
       if (event.type === 'applied' && event.action.type === 'DELETE') names.push(event.action.name);
     }
@@ -466,8 +466,7 @@ describe('apply and plan against real files', () => {
 
   it('reports each step as it goes and stops at the one that fails', async () => {
     const events: string[] = [];
-    for await (const event of orchestrator.run(secondFails(), dir))
-      events.push(event.type === 'planned' || event.type === 'done' ? event.type : `${event.type} ${event.action.name}`);
+    for await (const event of orchestrator.run(secondFails())) events.push(event.type === 'planned' || event.type === 'done' ? event.type : `${event.type} ${event.action.name}`);
 
     expect(events).toEqual(['planned', 'started a', 'applied a', 'started b', 'failed b']);
   });
@@ -475,7 +474,7 @@ describe('apply and plan against real files', () => {
   const lockFile = () => path.join(dir, 'clay.state.json.lock');
 
   it('refuses a second run while one holds the state', async () => {
-    const first = orchestrator.run(fileConfig('hello'), dir);
+    const first = orchestrator.run(fileConfig('hello'));
     await first.next();
 
     await expect(apply(newOrchestrator(), fileConfig('hello'))).rejects.toThrow('locked by another run');
@@ -496,7 +495,7 @@ describe('apply and plan against real files', () => {
   });
 
   it('holds the lock while running and releases it when the caller stops reading', async () => {
-    const run = orchestrator.run(fileConfig('hello'), dir);
+    const run = orchestrator.run(fileConfig('hello'));
     await run.next();
     await expect(fs.access(lockFile())).resolves.toBeUndefined();
 

@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { Orchestrator } from '../src/index';
+import { DiskFiles, InMemoryFiles, Orchestrator } from '../src/index';
 import { apply } from './apply';
 
 // Mock Provider for testing
@@ -59,7 +59,7 @@ describe('Orchestrator', () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'orchestrator-test-'));
     const backend = new LocalBackend(tmpDir);
     const stateManager = new StateManager(backend);
-    orchestrator = new Orchestrator(stateManager);
+    orchestrator = new Orchestrator(stateManager, new InMemoryFiles({}));
     mockProvider = new MockProvider();
     orchestrator.registerProvider(mockProvider);
   });
@@ -72,7 +72,7 @@ describe('Orchestrator', () => {
     it('should register a provider', () => {
       const backend = new LocalBackend(tmpDir);
       const stateManager = new StateManager(backend);
-      const newOrchestrator = new Orchestrator(stateManager);
+      const newOrchestrator = new Orchestrator(stateManager, new InMemoryFiles({}));
       expect(() => newOrchestrator.registerProvider(mockProvider)).not.toThrow();
     });
 
@@ -418,8 +418,9 @@ describe('Orchestrator', () => {
         }
       `;
 
-      // Apply with tmpDir as root to locate module
-      const result = await apply(orchestrator, rootConfig, tmpDir);
+      const engine = new Orchestrator(new StateManager(new LocalBackend(tmpDir)), new DiskFiles(tmpDir));
+      engine.registerProvider(mockProvider);
+      const result = await apply(engine, rootConfig);
 
       // Verify root output contains module value
       // This confirms that module output was resolved and passed to root

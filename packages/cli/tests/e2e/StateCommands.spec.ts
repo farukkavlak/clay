@@ -1,4 +1,4 @@
-import { Orchestrator } from '@clay/orchestrator';
+import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
@@ -25,9 +25,9 @@ describe('state and output against a real state file', () => {
   `;
 
   const applyConfig = async () => {
-    const engine = new Orchestrator(new StateManager(new LocalBackend(dir)));
+    const engine = new Orchestrator(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
     engine.registerProvider(new LocalProvider());
-    for await (const event of engine.run(config(), dir)) if (event.type === 'failed') throw event.error;
+    for await (const event of engine.run(config())) if (event.type === 'failed') throw event.error;
   };
 
   beforeEach(async () => {
@@ -82,9 +82,9 @@ describe('state and output against a real state file', () => {
 
   it('does not take a variable for an output', async () => {
     const onlyAVariable = 'variable "greeting" { default = "hi" }';
-    const engine = new Orchestrator(new StateManager(new LocalBackend(dir)));
+    const engine = new Orchestrator(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
     engine.registerProvider(new LocalProvider());
-    for await (const event of engine.run(onlyAVariable, dir)) if (event.type === 'failed') throw event.error;
+    for await (const event of engine.run(onlyAVariable)) if (event.type === 'failed') throw event.error;
 
     await createOutputCommand().parseAsync(['node', 'clay']);
 
