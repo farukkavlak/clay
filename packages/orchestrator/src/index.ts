@@ -58,12 +58,10 @@ export class Orchestrator {
   private processVariables(program: Statement[], address: Address): void {
     const scope = this.scopeManager.getScope(address);
 
+    // A module input set before this wins; a variable with no default stays undefined.
     for (const stmt of program)
-      if (stmt.type === 'Variable') {
-        const defaultValue = stmt.attributes.default?.value;
-        // Set variable even if no default (will be undefined until set by module inputs)
-        if (!this.scopeManager.getVariable(scope, stmt.name)) this.scopeManager.setVariable(scope, stmt.name, { value: defaultValue, context: address });
-      }
+      if (stmt.type === 'Variable' && !this.scopeManager.getVariable(scope, stmt.name))
+        this.scopeManager.setVariable(scope, stmt.name, { value: stmt.attributes.default, context: address });
   }
 
   private async processDataSources(program: Statement[], state: IState, scopeAddress: Address): Promise<void> {
@@ -262,7 +260,7 @@ export class Orchestrator {
     const varsObj: Record<string, Record<string, unknown>> = {};
     for (const [scope, varMap] of this.scopeManager.getAllVariables().entries()) {
       const simpleVarMap: Record<string, unknown> = {};
-      for (const [k, v] of varMap.entries()) simpleVarMap[k] = v.value;
+      for (const [k, v] of varMap.entries()) simpleVarMap[k] = this.resolveValue(v.value, currentState, v.context);
       varsObj[scope] = simpleVarMap;
     }
     currentState.variables = varsObj;
