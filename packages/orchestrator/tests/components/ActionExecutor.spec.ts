@@ -75,17 +75,17 @@ describe('ActionExecutor', () => {
       await expect(executor.execute(action, mockState)).rejects.toThrow('Unknown action type');
     });
 
-    it('should ignore NO_OP actions', async () => {
-      const action: PlanAction = {
-        type: 'NO_OP',
-        resourceType: 'test',
-        name: 'main',
-      };
+    it('should only refresh the dependencies on a NO_OP action', async () => {
+      const key = context.toString();
+      mockState.resources[key] = { id: 'existing', type: 'Resource', resourceType: 'test', name: 'main', attributes: {}, dependencies: ['test.old'] };
+      const action: PlanAction = { type: 'NO_OP', resourceType: 'test', name: 'main', dependencies: ['test.new'] };
 
       await executor.execute(action, mockState);
+
       expect(mockProvider.create).not.toHaveBeenCalled();
       expect(mockProvider.update).not.toHaveBeenCalled();
       expect(mockProvider.delete).not.toHaveBeenCalled();
+      expect(mockState.resources[key].dependencies).toEqual(['test.new']);
     });
 
     it('should execute a DELETE action', async () => {
@@ -110,6 +110,14 @@ describe('ActionExecutor', () => {
       };
 
       await expect(executor.executeCreate(action, mockProvider, mockState)).rejects.toThrow('missing attributes');
+    });
+
+    it('should write the new resource with its dependencies', async () => {
+      const action: PlanAction = { type: 'CREATE', resourceType: 'test', name: 'main', attributes: { path: { type: 'String', value: 'p' } }, dependencies: ['test.dep'] };
+
+      await executor.executeCreate(action, mockProvider, mockState);
+
+      expect(mockState.resources[context.toString()]).toMatchObject({ id: 'created-id', attributes: { path: 'p' }, dependencies: ['test.dep'] });
     });
   });
 
@@ -183,6 +191,16 @@ describe('ActionExecutor', () => {
 
       expect(mockProvider.update).toHaveBeenCalledWith('existing', 'test', { old: 'updated' });
       expect(mockState.resources[key].attributes).toEqual({ old: 'updated' });
+    });
+
+    it('should write the dependencies the action carries', async () => {
+      const key = context.toString();
+      mockState.resources[key] = { id: 'existing', type: 'Resource', resourceType: 'test', name: 'main', attributes: {}, dependencies: ['test.old'] };
+      const action: PlanAction = { type: 'UPDATE', resourceType: 'test', name: 'main', id: 'existing', attributes: {}, dependencies: ['test.dep'] };
+
+      await executor.executeUpdate(action, mockProvider, mockState);
+
+      expect(mockState.resources[key].dependencies).toEqual(['test.dep']);
     });
   });
 

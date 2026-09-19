@@ -13,6 +13,7 @@ function desiredResource(name: string, attributes: Record<string, string>, modul
       attributes: Object.fromEntries(Object.entries(attributes).map(([key, value]) => [key, { type: 'String' as const, value }])),
     },
     attributes,
+    dependencies: [],
   };
 }
 
@@ -48,6 +49,17 @@ describe('Planner', () => {
     expect(actions).toHaveLength(1);
     expect(actions[0].type).toBe('CREATE');
     expect(actions[0].modulePath).toEqual(['app', 'db']);
+  });
+
+  it('should carry the dependencies of a resource on every action but a delete', () => {
+    const desired = { ...desiredResource('r', { path: 'x' }), dependencies: ['mock_resource.dep'] };
+
+    expect(plan([desired], { version: 1, resources: {} })[0]).toMatchObject({ type: 'CREATE', dependencies: ['mock_resource.dep'] });
+    expect(plan([desired], stateWith('r', { path: 'old' }))[0]).toMatchObject({ type: 'UPDATE', dependencies: ['mock_resource.dep'] });
+    expect(plan([desired], stateWith('r', { path: 'x' }))[0]).toMatchObject({ type: 'NO_OP', dependencies: ['mock_resource.dep'] });
+    const forcesNew = Object.fromEntries([[desired.block.resourceType, { path: { type: 'string' as const, forceNew: true } }]]);
+    expect(plan([desired], stateWith('r', { path: 'old' }), forcesNew)[0]).toMatchObject({ type: 'REPLACE', dependencies: ['mock_resource.dep'] });
+    expect(plan([], stateWith('r', { path: 'x' }))[0]).not.toHaveProperty('dependencies');
   });
 
   it('should plan DELETE for removed resources', () => {

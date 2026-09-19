@@ -27,6 +27,13 @@ export class Graph<T> {
     return this.nodes.entries();
   }
 
+  /** The nodes with an edge into this one: what it depends on. */
+  dependenciesOf(id: string): string[] {
+    if (!this.nodes.has(id)) throw new Error(`Node ${id} does not exist`);
+
+    return [...this.adjacencyList.entries()].filter(([, neighbors]) => neighbors.has(id)).map(([from]) => from);
+  }
+
   /*
    * Returns nodes in topological order, grouped by layers for parallel execution.
    * Format: [['A', 'B'], ['C']] -> A and B can run in parallel, then C.

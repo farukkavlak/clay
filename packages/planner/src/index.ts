@@ -18,6 +18,7 @@ export function isUnknown(value: unknown): boolean {
 export interface DesiredResource {
   block: ResourceBlock;
   attributes: Record<string, unknown>;
+  dependencies: string[];
 }
 
 export interface PlanAction {
@@ -28,6 +29,7 @@ export interface PlanAction {
   id?: string;
   attributes?: Record<string, AttributeValue>;
   changes?: Record<string, { old: unknown; new: unknown }>;
+  dependencies?: string[];
 }
 
 export interface PlanFile {
@@ -101,6 +103,7 @@ function processExistingResource(actions: PlanAction[], desired: DesiredResource
       name: resource.name,
       modulePath: resource.modulePath,
       id: currentResource.id,
+      dependencies: desired.dependencies,
     });
     return;
   }
@@ -116,6 +119,7 @@ function processExistingResource(actions: PlanAction[], desired: DesiredResource
     id: currentResource.id,
     attributes: resource.attributes,
     changes,
+    dependencies: desired.dependencies,
   });
 }
 
@@ -137,6 +141,7 @@ export function plan(desiredResources: DesiredResource[], currentState: IState, 
         name: desired.block.name,
         modulePath: desired.block.modulePath,
         attributes: desired.block.attributes,
+        dependencies: desired.dependencies,
       });
   }
 

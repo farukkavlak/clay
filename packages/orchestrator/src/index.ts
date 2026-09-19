@@ -169,7 +169,7 @@ export class Orchestrator {
 
   /** Creates, updates and replacements follow the graph, so a resource runs after what it reads from. */
   private async *applyInOrder(actions: PlanAction[], graph: Graph<GraphNode>, loadedModules: LoadedModule[], state: IState): AsyncGenerator<RunEvent, boolean> {
-    const byKey = new Map(actions.map((action) => [new Address(action.modulePath || [], action.resourceType, action.name).toString(), action]));
+    const byKey = new Map(actions.map((action) => [Address.of(action).toString(), action]));
 
     for (const layer of graph.topologicalSort())
       for (const key of layer) {
@@ -177,21 +177,37 @@ export class Orchestrator {
         if (node.kind === 'output') this.resolveOutputsOf(node.scope, loadedModules, state);
 
         const action = byKey.get(key);
-        if (!action || action.type === 'NO_OP' || action.type === 'DELETE') continue;
+        if (!action || action.type === 'DELETE') continue;
         if (!(yield* this.step(action, state))) return false;
       }
 
     return true;
   }
 
+  /** The config no longer knows a removed resource, so its dependencies come from state: a resource goes before what it reads from. */
   private async *applyDeletes(actions: PlanAction[], state: IState): AsyncGenerator<RunEvent, boolean> {
-    for (const action of actions) if (action.type === 'DELETE' && !(yield* this.step(action, state))) return false;
+    const deletes = new Map(actions.filter((action) => action.type === 'DELETE').map((action) => [Address.of(action).toString(), action]));
+    const graph = this.deleteGraph(deletes, state);
+
+    for (const layer of graph.topologicalSort().reverse()) for (const key of layer) if (!(yield* this.step(graph.getNode(key)!, state))) return false;
 
     return true;
   }
 
+  private deleteGraph(deletes: Map<string, PlanAction>, state: IState): Graph<PlanAction> {
+    const graph = new Graph<PlanAction>();
+
+    for (const [key, action] of deletes) graph.addNode(key, action);
+
+    for (const key of deletes.keys()) for (const dependency of state.resources[key]?.dependencies ?? []) if (deletes.has(dependency)) graph.addEdge(dependency, key);
+
+    return graph;
+  }
+
   private async *step(action: PlanAction, state: IState): AsyncGenerator<RunEvent, boolean> {
-    yield { type: 'started', action };
+    // An unchanged resource has nothing to report; it only refreshes what it reads from, and the write that ends the run saves that.
+    const quiet = action.type === 'NO_OP';
+    if (!quiet) yield { type: 'started', action };
 
     try {
       await this.actionExecutor.execute(action, state);
@@ -201,6 +217,8 @@ export class Orchestrator {
       yield { type: 'failed', action, error: error instanceof Error ? error : new Error(String(error)) };
       return false;
     }
+
+    if (quiet) return true;
 
     await this.persist(state);
     yield { type: 'applied', action };
@@ -238,18 +256,18 @@ export class Orchestrator {
 
         if (node.kind === 'variable') this.planVariable(key, node, state, pending);
         else if (node.kind === 'output') this.planOutput(key, node, state, pending);
-        else desired.push(this.planResource(key, byKey.get(key)!, state, pending));
+        else desired.push(this.planResource(key, byKey.get(key)!, graph, state, pending));
       }
 
     return desired;
   }
 
-  private planResource(key: string, loaded: LoadedResource, state: IState, pending: Set<string>): DesiredResource {
+  private planResource(key: string, loaded: LoadedResource, graph: Graph<GraphNode>, state: IState, pending: Set<string>): DesiredResource {
     const attributes = this.resolveForPlan(loaded.block.attributes, state, loaded.address, pending);
     const current = state.resources[key];
     if (!current || hasChanges(current.attributes, attributes)) pending.add(key);
 
-    return { block: { ...loaded.block, modulePath: loaded.address.modulePath }, attributes };
+    return { block: { ...loaded.block, modulePath: loaded.address.modulePath }, attributes, dependencies: this.dependencyGraphBuilder.resourceDependencies(graph, key) };
   }
 
   /** A variable fed by a pending resource is pending itself, so everything reading it plans against UNKNOWN. */

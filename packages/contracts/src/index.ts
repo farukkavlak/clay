@@ -6,6 +6,8 @@ export interface IResource {
   name: string;
   modulePath?: string[];
   attributes: Record<string, unknown>;
+  /** Addresses of the resources this one reads from, kept so it can be deleted before them once the config drops it. */
+  dependencies?: string[];
 }
 
 export type SchemaType = 'string' | 'number' | 'boolean' | 'list' | 'map' | 'object';

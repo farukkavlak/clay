@@ -9,6 +9,11 @@ export class Address {
     this.name = name;
   }
 
+  /** The address of anything that names a resource: a plan action, a state entry. */
+  static of(resource: { modulePath?: string[]; resourceType: string; name: string }): Address {
+    return new Address(resource.modulePath || [], resource.resourceType, resource.name);
+  }
+
   static root(resourceType: string, name: string): Address {
     return new Address([], resourceType, name);
   }

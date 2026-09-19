@@ -11,6 +11,12 @@ export class ActionExecutor {
   ) {}
 
   async execute(action: PlanAction, currentState: IState): Promise<void> {
+    // An unchanged resource only refreshes what it reads from, so it needs no provider.
+    if (action.type === 'NO_OP') {
+      this.recordDependencies(action, currentState);
+      return;
+    }
+
     const provider = this.providers.get(action.resourceType);
     if (!provider) throw new Error(`No provider registered for resource type "${action.resourceType}"`);
 
@@ -32,9 +38,6 @@ export class ActionExecutor {
         await this.executeDelete(action, provider, currentState);
         break;
       }
-      case 'NO_OP': {
-        break;
-      }
       default: {
         throw new Error(`Unknown action type: ${action.type}`);
       }
@@ -44,7 +47,7 @@ export class ActionExecutor {
   async executeCreate(action: PlanAction, provider: IProvider, currentState: IState): Promise<void> {
     if (!action.attributes) throw new Error('CREATE action missing attributes');
 
-    const contextAddress = new Address(action.modulePath || [], action.resourceType, action.name);
+    const contextAddress = Address.of(action);
     const inputs = this.convertAttributes(action.attributes, currentState, contextAddress);
 
     await provider.validate(action.resourceType, inputs);
@@ -59,13 +62,14 @@ export class ActionExecutor {
       name: contextAddress.name,
       modulePath: contextAddress.modulePath,
       attributes: inputs,
+      dependencies: action.dependencies ?? [],
     };
   }
 
   async executeUpdate(action: PlanAction, provider: IProvider, currentState: IState): Promise<void> {
     if (!action.attributes) throw new Error('UPDATE action missing attributes');
 
-    const contextAddress = new Address(action.modulePath || [], action.resourceType, action.name);
+    const contextAddress = Address.of(action);
 
     const key = contextAddress.toString();
     const currentResource = currentState.resources[key];
@@ -79,12 +83,22 @@ export class ActionExecutor {
     await provider.update(action.id, action.resourceType, inputs);
 
     currentResource.attributes = inputs;
+    currentResource.dependencies = action.dependencies ?? [];
+  }
+
+  /** What a resource reads from can change while its values do not, so an unchanged resource still refreshes its list. */
+  private recordDependencies(action: PlanAction, currentState: IState): void {
+    const key = Address.of(action).toString();
+    const currentResource = currentState.resources[key];
+    if (!currentResource) throw new Error(`Resource "${key}" not found in state`);
+
+    currentResource.dependencies = action.dependencies ?? [];
   }
 
   async executeDelete(action: PlanAction, provider: IProvider, currentState: IState): Promise<void> {
     if (!action.id) throw new Error(`${action.type} action missing id`);
 
-    const contextAddress = new Address(action.modulePath || [], action.resourceType, action.name);
+    const contextAddress = Address.of(action);
 
     await provider.delete(action.id, action.resourceType);
     const key = contextAddress.toString();
