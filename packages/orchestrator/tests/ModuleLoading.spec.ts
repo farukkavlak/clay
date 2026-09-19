@@ -6,6 +6,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
 import { Orchestrator } from '../src/index';
+import { apply } from './apply';
 
 vi.mock('node:fs');
 
@@ -104,7 +105,7 @@ describe('Orchestrator - Module Loading', () => {
       },
     ]);
 
-    await orchestrator.apply(rootConfig, '/root');
+    await apply(orchestrator, rootConfig, '/root');
 
     // Check StateManager write using the exposed mock
     expect(writeMock).toHaveBeenCalled();
@@ -143,7 +144,7 @@ describe('Orchestrator - Module Loading', () => {
       },
     ]);
 
-    await orchestrator.apply(rootConfig, '/root');
+    await apply(orchestrator, rootConfig, '/root');
 
     expect(writeMock).toHaveBeenCalled();
     const stateArg = writeMock.mock.calls[0][0];
@@ -184,7 +185,7 @@ describe('Orchestrator - Module Loading', () => {
       },
     ]);
 
-    await orchestrator.apply(config1, '/root'); // Pass root config content
+    await apply(orchestrator, config1, '/root'); // Pass root config content
 
     expect(writeMock).toHaveBeenCalled();
     const stateArg = writeMock.mock.calls[0][0];
@@ -199,21 +200,21 @@ describe('Orchestrator - Module Loading', () => {
     (fs.existsSync as Mock).mockReturnValue(true);
 
     // Mock plan to return relevant action if needed, but plan() might fail before if syntax is valid but semantic check fails
-    // Here we are testing orchestrator.apply -> moduleLoader.loadModuleTree
+    // Here we are testing orchestrator.run -> moduleLoader.loadModuleTree
     // We need to bypass plan() mock and let module loader run.
 
-    // In Orchestrator.apply:
+    // In Orchestrator.run:
     // 1. Parser parses root config
     // 2. ModuleLoader loads tree
     // So we just need apply() to be called.
 
-    await expect(orchestrator.apply(rootConfig, '/root')).rejects.toThrow('missing a valid "source" attribute');
+    await expect(apply(orchestrator, rootConfig, '/root')).rejects.toThrow('missing a valid "source" attribute');
   });
 
   it('should throw error if module source file not found', async () => {
     const rootConfig = `module "missing" { source = "./missing" }`;
     (fs.existsSync as Mock).mockImplementation((path) => !path.toString().includes('missing/main.mf'));
 
-    await expect(orchestrator.apply(rootConfig, '/root')).rejects.toThrow('Module source not found');
+    await expect(apply(orchestrator, rootConfig, '/root')).rejects.toThrow('Module source not found');
   });
 });

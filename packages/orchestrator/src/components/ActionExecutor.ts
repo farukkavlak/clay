@@ -1,46 +1,16 @@
 import { IProvider } from '@miniform/contracts';
-import { Graph } from '@miniform/graph';
 import { PlanAction } from '@miniform/planner';
 import { IState } from '@miniform/state';
 
 import { Address } from '../Address';
-import { GraphNode } from './DependencyGraphBuilder';
-import { LoadedModule } from './ModuleLoader';
 
 export class ActionExecutor {
   constructor(
     private providers: Map<string, IProvider>,
-    private convertAttributes: (attributes: Record<string, unknown>, state: IState, context?: Address) => Record<string, unknown>,
-    private resolveOutputsOf: (scope: string, loadedModules: LoadedModule[], currentState: IState) => void
+    private convertAttributes: (attributes: Record<string, unknown>, state: IState, context?: Address) => Record<string, unknown>
   ) {}
 
-  async executeActionsSequentially(actions: PlanAction[], graph: Graph<GraphNode>, currentState: IState, loadedModules: LoadedModule[]): Promise<void> {
-    const layers = graph.topologicalSort();
-    const actionMap = new Map<string, PlanAction>();
-
-    // Pre-compute map for O(1) lookup
-    for (const action of actions) {
-      const key = new Address(action.modulePath || [], action.resourceType, action.name).toString();
-      actionMap.set(key, action);
-    }
-
-    for (const layer of layers)
-      await Promise.all(
-        layer.map(async (key: string) => {
-          const node = graph.getNode(key);
-          if (node?.kind === 'output') {
-            this.resolveOutputsOf(node.scope, loadedModules, currentState);
-            return;
-          }
-
-          // Execute resource action if it matches a plan action
-          const action = actionMap.get(key);
-          if (action) await this.executeAction(action, currentState);
-        })
-      );
-  }
-
-  private async executeAction(action: PlanAction, currentState: IState): Promise<void> {
+  async execute(action: PlanAction, currentState: IState): Promise<void> {
     const provider = this.providers.get(action.resourceType);
     if (!provider) throw new Error(`No provider registered for resource type "${action.resourceType}"`);
 

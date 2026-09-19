@@ -6,6 +6,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { Orchestrator } from '../src/index';
+import { apply } from './apply';
 
 // Mock Provider for testing
 class MockProvider implements IProvider {
@@ -84,7 +85,7 @@ describe('Orchestrator: Advanced Features', () => {
         }
       `;
 
-      await orchestrator.apply(config);
+      await apply(orchestrator, config);
 
       const created = mockProvider.getCreatedResources();
       expect(created.size).toBe(1);
@@ -100,7 +101,7 @@ describe('Orchestrator: Advanced Features', () => {
         }
       `;
 
-      await expect(orchestrator.apply(config)).rejects.toThrow('variable "undefined_var" is not defined');
+      await expect(apply(orchestrator, config)).rejects.toThrow('variable "undefined_var" is not defined');
     });
   });
 
@@ -120,7 +121,7 @@ describe('Orchestrator: Advanced Features', () => {
         }
       `;
 
-      await orchestrator.apply(config);
+      await apply(orchestrator, config);
 
       const created = mockProvider.getCreatedResources();
       const [, inputs] = Array.from(created.entries())[0];
@@ -134,7 +135,7 @@ describe('Orchestrator: Advanced Features', () => {
         }
       `;
 
-      await orchestrator.apply(config);
+      await apply(orchestrator, config);
 
       const created = mockProvider.getCreatedResources();
       const [, inputs] = Array.from(created.entries())[0];
@@ -154,7 +155,7 @@ describe('Orchestrator: Advanced Features', () => {
         }
       `;
 
-      await orchestrator.apply(config);
+      await apply(orchestrator, config);
 
       const created = mockProvider.getCreatedResources();
       expect(created.size).toBe(2);
@@ -167,7 +168,7 @@ describe('Orchestrator: Advanced Features', () => {
         }
       `;
 
-      await orchestrator.apply(config1);
+      await apply(orchestrator, config1);
 
       // Second apply with reference - this should add dependency edge
       const config2 = `
@@ -180,7 +181,7 @@ describe('Orchestrator: Advanced Features', () => {
         }
       `;
 
-      await orchestrator.apply(config2);
+      await apply(orchestrator, config2);
 
       const created = mockProvider.getCreatedResources();
       expect(created.size).toBe(2);
@@ -195,7 +196,7 @@ describe('Orchestrator: Advanced Features', () => {
         }
       `;
 
-      await expect(orchestrator.apply(config)).rejects.toThrow('is not declared in the configuration');
+      await expect(apply(orchestrator, config)).rejects.toThrow('is not declared in the configuration');
     });
   });
 
@@ -210,7 +211,7 @@ describe('Orchestrator: Advanced Features', () => {
         }
       `;
 
-      const outputs = await orchestrator.apply(config);
+      const outputs = await apply(orchestrator, config);
 
       expect(outputs).toEqual({
         my_string: 'test_value',
@@ -228,7 +229,7 @@ describe('Orchestrator: Advanced Features', () => {
         }
       `;
 
-      const outputs = await orchestrator.apply(config);
+      const outputs = await apply(orchestrator, config);
 
       expect(outputs.resource_name).toBe('my_resource');
     });
@@ -243,7 +244,7 @@ describe('Orchestrator: Advanced Features', () => {
         }
       `;
 
-      const outputs = await orchestrator.apply(config);
+      const outputs = await apply(orchestrator, config);
 
       expect(outputs.message).toBe('Environment: production');
     });
@@ -260,7 +261,7 @@ describe('Orchestrator: Advanced Features', () => {
         }
       `;
 
-      await expect(orchestrator.apply(config)).rejects.toThrow(/cycle detected/);
+      await expect(apply(orchestrator, config)).rejects.toThrow(/cycle detected/);
     });
 
     it('should detect indirect circular dependency (A -> B -> C -> A)', async () => {
@@ -276,7 +277,7 @@ describe('Orchestrator: Advanced Features', () => {
         }
       `;
 
-      await expect(orchestrator.apply(config)).rejects.toThrow(/cycle detected/);
+      await expect(apply(orchestrator, config)).rejects.toThrow(/cycle detected/);
     });
 
     it('should detect self-reference circular dependency', async () => {
@@ -286,7 +287,7 @@ describe('Orchestrator: Advanced Features', () => {
         }
       `;
 
-      await expect(orchestrator.apply(config)).rejects.toThrow(/cycle detected/);
+      await expect(apply(orchestrator, config)).rejects.toThrow(/cycle detected/);
     });
   });
 });

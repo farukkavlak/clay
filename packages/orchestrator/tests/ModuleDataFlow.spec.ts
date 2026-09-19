@@ -6,6 +6,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
 import { Orchestrator } from '../src/index';
+import { apply } from './apply';
 
 // Mock fs and path
 vi.mock('node:fs');
@@ -100,7 +101,7 @@ describe('Orchestrator - Phase 4: Data Flow', () => {
 
     (fs.existsSync as Mock).mockReturnValue(true);
 
-    await orchestrator.apply(config, '/root');
+    await apply(orchestrator, config, '/root');
 
     expect(writeMock).toHaveBeenCalled();
     const stateArg = writeMock.mock.calls[0][0];
@@ -148,7 +149,7 @@ module "app" {
       },
     ]);
 
-    await orchestrator.apply(rootConfig, '/root');
+    await apply(orchestrator, rootConfig, '/root');
 
     expect(writeMock).toHaveBeenCalled();
     const stateArg = writeMock.mock.calls[0][0];
@@ -190,7 +191,7 @@ module "L2" {
       },
     ]);
 
-    await orchestrator.apply(rootConfig, '/root');
+    await apply(orchestrator, rootConfig, '/root');
 
     const stateArg = writeMock.mock.calls[0][0];
     const resource = stateArg.resources['module.L2.test_resource.child'];
@@ -251,7 +252,7 @@ resource "test_resource" "instance" {
 
     mockProvider.create.mockImplementation(() => 'resource-id');
 
-    await orchestrator.apply(rootConfig, '/root');
+    await apply(orchestrator, rootConfig, '/root');
 
     const stateArg = writeMock.mock.calls[0][0];
 

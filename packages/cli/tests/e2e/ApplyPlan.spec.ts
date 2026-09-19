@@ -36,6 +36,15 @@ describe('apply and plan against real files', () => {
     }
   `;
 
+  const apply = async (engine: Orchestrator, config: string) => {
+    let outputs: Record<string, unknown> = {};
+    for await (const event of engine.run(config, dir)) {
+      if (event.type === 'failed') throw event.error;
+      if (event.type === 'done') outputs = event.outputs;
+    }
+    return outputs;
+  };
+
   const changes = async (config: string) => {
     const actions = await newOrchestrator().plan(config, dir);
     return actions.filter((action) => action.type !== 'NO_OP');
@@ -51,7 +60,7 @@ describe('apply and plan against real files', () => {
   });
 
   it('creates the file and records it in state', async () => {
-    await orchestrator.apply(fileConfig('hello'), dir);
+    await apply(orchestrator, fileConfig('hello'));
 
     expect(await fs.readFile(path.join(dir, 'a.txt'), 'utf8')).toBe('hello');
     const state = await new LocalBackend(dir).read();
@@ -65,7 +74,7 @@ describe('apply and plan against real files', () => {
   });
 
   it('plans no changes right after an apply', async () => {
-    await orchestrator.apply(fileConfig('hello'), dir);
+    await apply(orchestrator, fileConfig('hello'));
 
     expect(await changes(fileConfig('hello'))).toEqual([]);
   });
@@ -78,7 +87,7 @@ describe('apply and plan against real files', () => {
         content = "\${var.greeting} Miniform!"
       }
     `;
-    await orchestrator.apply(config, dir);
+    await apply(orchestrator, config);
 
     expect(await changes(config)).toEqual([]);
   });
@@ -112,7 +121,7 @@ describe('apply and plan against real files', () => {
         content = "\${local_file.a.mode}"
       }
     `;
-    await orchestrator.apply(fileConfig('hello'), dir);
+    await apply(orchestrator, fileConfig('hello'));
 
     const actions = await changes(withMode);
 
@@ -120,7 +129,7 @@ describe('apply and plan against real files', () => {
   });
 
   it('plans an update, not a replacement, when only the content changes', async () => {
-    await orchestrator.apply(fileConfig('hello'), dir);
+    await apply(orchestrator, fileConfig('hello'));
 
     const actions = await changes(fileConfig('bye'));
 
@@ -129,7 +138,7 @@ describe('apply and plan against real files', () => {
   });
 
   it('plans an update for a resource that reads a value changing in the same run', async () => {
-    await orchestrator.apply(chained('one'), dir);
+    await apply(orchestrator, chained('one'));
 
     const actions = await changes(chained('two'));
 
@@ -141,9 +150,9 @@ describe('apply and plan against real files', () => {
   });
 
   it('writes the new value through to the resource that reads it', async () => {
-    await orchestrator.apply(chained('one'), dir);
+    await apply(orchestrator, chained('one'));
 
-    await newOrchestrator().apply(chained('two'), dir);
+    await apply(newOrchestrator(), chained('two'));
 
     expect(await fs.readFile(path.join(dir, 'b.txt'), 'utf8')).toBe('two');
   });
@@ -194,13 +203,13 @@ describe('apply and plan against real files', () => {
     `;
     await fs.mkdir(path.join(dir, 'm'));
     await fs.writeFile(path.join(dir, 'm', 'main.mf'), moduleConfig);
-    await orchestrator.apply(rootConfig('one'), dir);
+    await apply(orchestrator, rootConfig('one'));
 
     const actions = await changes(rootConfig('two'));
     expect(actions.map((action) => action.name)).toEqual(['inner', 'c']);
     expect(isUnknown(actions[1].changes!.content.new)).toBe(true);
 
-    await newOrchestrator().apply(rootConfig('two'), dir);
+    await apply(newOrchestrator(), rootConfig('two'));
 
     expect(await fs.readFile(path.join(dir, 'c.txt'), 'utf8')).toBe('two');
     expect(await changes(rootConfig('two'))).toEqual([]);
@@ -216,7 +225,7 @@ describe('apply and plan against real files', () => {
         content = "\${module.m.name}"
       }
     `;
-    await orchestrator.apply(config, dir);
+    await apply(orchestrator, config);
 
     expect(await changes(config)).toEqual([]);
   });
@@ -239,7 +248,7 @@ describe('apply and plan against real files', () => {
     await fs.mkdir(path.join(dir, 'm'));
     await writeModule();
 
-    await orchestrator.apply(throughModule('one'), dir);
+    await apply(orchestrator, throughModule('one'));
 
     expect(await fs.readFile(path.join(dir, 'inner.txt'), 'utf8')).toBe('one');
   });
@@ -247,12 +256,12 @@ describe('apply and plan against real files', () => {
   it('plans and applies a change that reaches a module through its input', async () => {
     await fs.mkdir(path.join(dir, 'm'));
     await writeModule();
-    await orchestrator.apply(throughModule('one'), dir);
+    await apply(orchestrator, throughModule('one'));
 
     const actions = await changes(throughModule('two'));
     expect(actions.map((action) => action.name)).toEqual(['a', 'inner']);
 
-    await newOrchestrator().apply(throughModule('two'), dir);
+    await apply(newOrchestrator(), throughModule('two'));
 
     expect(await fs.readFile(path.join(dir, 'inner.txt'), 'utf8')).toBe('two');
     expect(await changes(throughModule('two'))).toEqual([]);
@@ -279,7 +288,7 @@ describe('apply and plan against real files', () => {
         content = "\${module.vars.o}"
       }
     `;
-    await orchestrator.apply(config, dir);
+    await apply(orchestrator, config);
 
     expect(await changes(config)).toEqual([]);
   });
@@ -297,7 +306,7 @@ describe('apply and plan against real files', () => {
       }
     `;
 
-    await orchestrator.apply(config, dir);
+    await apply(orchestrator, config);
 
     expect(await fs.readFile(path.join(dir, 'b.txt'), 'utf8')).toBe(path.join(dir, 'a.txt'));
     expect(await changes(config)).toEqual([]);
@@ -314,7 +323,7 @@ describe('apply and plan against real files', () => {
     await fs.mkdir(path.join(dir, 'm'));
     await fs.writeFile(path.join(dir, 'm', 'main.mf'), `output "echo" { value = "\${var.text}" }`);
 
-    await orchestrator.apply(config, dir);
+    await apply(orchestrator, config);
 
     const state = await new LocalBackend(dir).read();
     expect(state.variables).toEqual({ '': { greeting: 'hello' }, 'module.m': { text: 'hello' } });
@@ -335,7 +344,7 @@ describe('apply and plan against real files', () => {
   });
 
   it('plans one replacement when a forceNew attribute changes', async () => {
-    await orchestrator.apply(fileConfig('hello'), dir);
+    await apply(orchestrator, fileConfig('hello'));
     const moved = fileConfig('hello').replace('a.txt', 'moved.txt');
 
     const actions = await changes(moved);
@@ -344,10 +353,10 @@ describe('apply and plan against real files', () => {
   });
 
   it('keeps a replaced resource in state and settles on the next plan', async () => {
-    await orchestrator.apply(fileConfig('hello'), dir);
+    await apply(orchestrator, fileConfig('hello'));
     const moved = fileConfig('hello').replace('a.txt', 'moved.txt');
 
-    await newOrchestrator().apply(moved, dir);
+    await apply(newOrchestrator(), moved);
 
     const files = await fs.readdir(dir);
     expect(files.filter((name) => name.endsWith('.txt'))).toEqual(['moved.txt']);
@@ -358,15 +367,44 @@ describe('apply and plan against real files', () => {
 
   it('drops an attribute from state when the config drops it', async () => {
     const withMode = fileConfig('hello').replace('content = "hello"', 'content = "hello"\n      mode = "0644"');
-    await orchestrator.apply(withMode, dir);
+    await apply(orchestrator, withMode);
 
     const actions = await changes(fileConfig('hello'));
     expect(actions[0].changes).toEqual({ mode: { old: '0644', new: undefined } });
 
-    await newOrchestrator().apply(fileConfig('hello'), dir);
+    await apply(newOrchestrator(), fileConfig('hello'));
 
     const state = await new LocalBackend(dir).read();
     expect(state.resources['local_file.a'].attributes).not.toHaveProperty('mode');
     expect(await changes(fileConfig('hello'))).toEqual([]);
+  });
+
+  // b's path sits under a file, so its create fails after a's has succeeded.
+  const secondFails = () => `
+    resource "local_file" "a" {
+      path = "${path.join(dir, 'a.txt')}"
+      content = "hello"
+    }
+    resource "local_file" "b" {
+      path = "${path.join(dir, 'a.txt', 'b.txt')}"
+      content = "hello"
+    }
+  `;
+
+  it('keeps what a failed run managed to do', async () => {
+    await expect(apply(orchestrator, secondFails())).rejects.toThrow();
+
+    const state = await new LocalBackend(dir).read();
+    expect(Object.keys(state.resources)).toEqual(['local_file.a']);
+    const actions = await changes(secondFails());
+    expect(actions.map((action) => action.name)).toEqual(['b']);
+  });
+
+  it('reports each step as it goes and stops at the one that fails', async () => {
+    const events: string[] = [];
+    for await (const event of orchestrator.run(secondFails(), dir))
+      events.push(event.type === 'planned' || event.type === 'done' ? event.type : `${event.type} ${event.action.name}`);
+
+    expect(events).toEqual(['planned', 'started a', 'applied a', 'started b', 'failed b']);
   });
 });

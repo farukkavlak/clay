@@ -9,9 +9,12 @@ import { ActionExecutor } from './components/ActionExecutor';
 import { DependencyGraphBuilder, GraphNode, ValueNode } from './components/DependencyGraphBuilder';
 import { LoadedModule, LoadedResource, ModuleLoader } from './components/ModuleLoader';
 import { ReferenceResolver } from './resolvers/ReferenceResolver';
+import { RunEvent } from './RunEvent';
 import { ReferenceScanner } from './resolvers/ReferenceScanner';
 import { UnresolvedReferenceError } from './resolvers/UnresolvedReferenceError';
 import { ScopeManager } from './scope/ScopeManager';
+
+export type { RunEvent } from './RunEvent';
 
 export class Orchestrator {
   private providers: Map<string, IProvider> = new Map();
@@ -31,7 +34,7 @@ export class Orchestrator {
     this.moduleLoader = new ModuleLoader(this.processVariables.bind(this), this.initializeChildVariables.bind(this), this.getAttributesMap.bind(this));
     this.referenceScanner = new ReferenceScanner(this.scopeManager);
     this.dependencyGraphBuilder = new DependencyGraphBuilder(this.scopeManager, this.referenceScanner);
-    this.actionExecutor = new ActionExecutor(this.providers, this.convertAttributes.bind(this), this.resolveOutputsOf.bind(this));
+    this.actionExecutor = new ActionExecutor(this.providers, this.convertAttributes.bind(this));
   }
 
   /**
@@ -137,36 +140,65 @@ export class Orchestrator {
     return plan(desiredResources, currentState, schemas);
   }
 
-  async apply(configContent: string, rootDir: string = process.cwd()): Promise<Record<string, unknown>> {
-    // 1. Initial Plan (Dry Run to get actions)
-    // Note: We might be engaging in double work here (re-parsing), but plan() is stateless.
-    // Optimization: plan could return context, but for now we keep API simple.
-    const allActions = await this.plan(configContent, rootDir);
-
-    const currentState = await this.stateManager.read();
-
-    // 2. Load execution context (Modules, DataSources, etc.)
-    const { mainProgram, loadedModules, loadedResources } = await this.loadContext(configContent, rootDir, currentState);
-
-    // 3. Build Dependency Graph
+  /** Runs the plan and reports each step; the state file is rewritten after every action, so a failed run loses nothing done before it. */
+  async *run(configContent: string, rootDir: string = process.cwd()): AsyncGenerator<RunEvent> {
+    const actions = await this.plan(configContent, rootDir);
+    const state = await this.stateManager.read();
+    const { mainProgram, loadedModules, loadedResources } = await this.loadContext(configContent, rootDir, state);
     const graph = this.dependencyGraphBuilder.buildExecutionGraph(loadedResources, loadedModules);
 
-    // 4. Execution
-    const createUpdateActions = allActions.filter((a) => a.type !== 'DELETE');
-    await this.actionExecutor.executeActionsSequentially(createUpdateActions, graph, currentState, loadedModules);
+    yield { type: 'planned', actions };
 
-    const deleteActions = allActions.filter((a) => a.type === 'DELETE');
-    for (const action of deleteActions) {
-      const provider = this.providers.get(action.resourceType);
-      if (!provider) throw new Error(`No provider registered for resource type "${action.resourceType}"`);
-      await this.actionExecutor.executeDelete(action, provider, currentState);
+    if (!(yield* this.applyInOrder(actions, graph, loadedModules, state))) return;
+    if (!(yield* this.applyDeletes(actions, state))) return;
+
+    await this.persist(state);
+    yield { type: 'done', outputs: this.processOutputs(mainProgram, state, Address.root('', '')) };
+  }
+
+  /** Creates, updates and replacements follow the graph, so a resource runs after what it reads from. */
+  private async *applyInOrder(actions: PlanAction[], graph: Graph<GraphNode>, loadedModules: LoadedModule[], state: IState): AsyncGenerator<RunEvent, boolean> {
+    const byKey = new Map(actions.map((action) => [new Address(action.modulePath || [], action.resourceType, action.name).toString(), action]));
+
+    for (const layer of graph.topologicalSort())
+      for (const key of layer) {
+        const node = graph.getNode(key)!;
+        if (node.kind === 'output') this.resolveOutputsOf(node.scope, loadedModules, state);
+
+        const action = byKey.get(key);
+        if (!action || action.type === 'NO_OP' || action.type === 'DELETE') continue;
+        if (!(yield* this.step(action, state))) return false;
+      }
+
+    return true;
+  }
+
+  private async *applyDeletes(actions: PlanAction[], state: IState): AsyncGenerator<RunEvent, boolean> {
+    for (const action of actions) if (action.type === 'DELETE' && !(yield* this.step(action, state))) return false;
+
+    return true;
+  }
+
+  private async *step(action: PlanAction, state: IState): AsyncGenerator<RunEvent, boolean> {
+    yield { type: 'started', action };
+
+    try {
+      await this.actionExecutor.execute(action, state);
+    } catch (error) {
+      // A replacement may have deleted before it failed to create; what happened is saved either way.
+      await this.persist(state).catch(() => undefined);
+      yield { type: 'failed', action, error: error instanceof Error ? error : new Error(String(error)) };
+      return false;
     }
 
-    // 5. Sync & Persist
-    this.syncStateVariables(currentState);
-    await this.stateManager.write(currentState);
+    await this.persist(state);
+    yield { type: 'applied', action };
+    return true;
+  }
 
-    return this.processOutputs(mainProgram, currentState, Address.root('', ''));
+  private async persist(state: IState): Promise<void> {
+    this.syncStateVariables(state);
+    await this.stateManager.write(state);
   }
 
   private processOutputs(program: Statement[], state: IState, context: Address): Record<string, unknown> {

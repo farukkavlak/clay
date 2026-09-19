@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-304 tests pass, and so do the type check and the build. Lint shows 23 warnings, and
+306 tests pass, and so do the type check and the build. Lint shows 23 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -63,8 +63,9 @@ In order: the safety net first, then the engine, then the CLI, then the output.
 - [x] An attribute removed from the config stayed in state. `executeUpdate` spread the old
       attributes under the new ones, so a key the config dropped survived and every plan
       wanted to drop it again. State holds what was last applied, nothing older.
-- [ ] A failed action loses the whole run. `apply` writes state only after the last
-      action, so resources already created are left untracked.
+- [x] A failed action lost the whole run. `apply` wrote state only after the last action,
+      so resources already created were left untracked. The state file is rewritten after
+      every action now, and a failed run stops with everything before it on disk.
 - [ ] `apply` never takes the state lock, so two runs can write the same file.
 - [ ] Resources removed from the config are deleted in state order, not in reverse
       dependency order, so a dependency can go before what still reads it. The graph only
@@ -121,14 +122,15 @@ In order: the safety net first, then the engine, then the CLI, then the output.
       One factory builds the object graph and hands it over. No DI container: at this size
       it buys nothing the factory does not, and it would hide the wiring behind a runtime
       dependency. The plan walk (graph order, the pending set, resolve-or-unknown) moves
-      into a part of its own; `Orchestrator` grew from 228 to 287 lines through the planner
+      into a part of its own; `Orchestrator` grew from 228 to 317 lines through the planner
       fixes.
 - [ ] `apply` parses the config, reads data sources and builds the dependency graph once,
       not twice. It calls `plan`, which now does all three, and then does them again.
-- [ ] `apply` and `plan` yield events (resource started, created, failed, done) and the CLI
-      only renders them. Do this with the failed-action bug above: writing state as the
-      events arrive is the fix, progress becomes visible, and the CLI tests stop spying on
-      `console.log`.
+- [x] `apply` yields events (planned, started, applied, failed, done) and the CLI only
+      renders them. Writing state as each `applied` arrives was the failed-action fix; the
+      CLI now prints a line per resource. `plan` stays a plain call: it computes a list and
+      has nothing to report along the way. Resources in one layer run one after another
+      now, not in parallel.
 - [ ] Resolving works on a context that can be cloned per scope, instead of one mutable
       `ScopeManager` keyed by scope strings. The dependency-order fix needs to resolve the
       same config against different sets of pending values.

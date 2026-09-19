@@ -6,6 +6,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Orchestrator } from '../src/index';
+import { apply } from './apply';
 
 // Mock Provider for testing
 class MockProvider implements IProvider {
@@ -88,7 +89,7 @@ describe('Orchestrator', () => {
         }
       `;
 
-      await orchestrator.apply(config);
+      await apply(orchestrator, config);
 
       const created = mockProvider.getCreatedResources();
       expect(created.size).toBe(1);
@@ -108,7 +109,7 @@ describe('Orchestrator', () => {
         }
       `;
 
-      await orchestrator.apply(config);
+      await apply(orchestrator, config);
 
       const created = mockProvider.getCreatedResources();
       expect(created.size).toBe(2);
@@ -121,7 +122,7 @@ describe('Orchestrator', () => {
         }
       `;
 
-      await orchestrator.apply(config);
+      await apply(orchestrator, config);
 
       // Read state directly
       const backend = new LocalBackend(tmpDir);
@@ -142,7 +143,7 @@ describe('Orchestrator', () => {
         }
       `;
 
-      await orchestrator.apply(config);
+      await apply(orchestrator, config);
 
       const created = mockProvider.getCreatedResources();
       const [, inputs] = Array.from(created.entries())[0];
@@ -182,7 +183,7 @@ describe('Orchestrator', () => {
           name = "original_value"
         }
       `;
-      await orchestrator.apply(createConfig);
+      await apply(orchestrator, createConfig);
 
       const originalCreated = mockProvider.getCreatedResources();
       const [originalId] = Array.from(originalCreated.keys());
@@ -193,7 +194,7 @@ describe('Orchestrator', () => {
           name = "updated_value"
         }
       `;
-      await orchestrator.apply(updateConfig);
+      await apply(orchestrator, updateConfig);
 
       // Should still have only 1 resource (updated, not recreated)
       const updated = mockProvider.getCreatedResources();
@@ -208,12 +209,12 @@ describe('Orchestrator', () => {
         }
       `;
 
-      await orchestrator.apply(config);
+      await apply(orchestrator, config);
       const create = vi.spyOn(mockProvider, 'create');
       const update = vi.spyOn(mockProvider, 'update');
       const remove = vi.spyOn(mockProvider, 'delete');
 
-      await orchestrator.apply(config);
+      await apply(orchestrator, config);
 
       expect(create).not.toHaveBeenCalled();
       expect(update).not.toHaveBeenCalled();
@@ -229,13 +230,13 @@ describe('Orchestrator', () => {
           name = "value"
         }
       `;
-      await orchestrator.apply(createConfig);
+      await apply(orchestrator, createConfig);
 
       expect(mockProvider.getCreatedResources().size).toBe(1);
 
       // Now remove it from config
       const deleteConfig = ``;
-      await orchestrator.apply(deleteConfig);
+      await apply(orchestrator, deleteConfig);
 
       // Should be deleted
       expect(mockProvider.getCreatedResources().size).toBe(0);
@@ -247,10 +248,10 @@ describe('Orchestrator', () => {
           name = "value"
         }
       `;
-      await orchestrator.apply(createConfig);
+      await apply(orchestrator, createConfig);
 
       const deleteConfig = ``;
-      await orchestrator.apply(deleteConfig);
+      await apply(orchestrator, deleteConfig);
 
       // Check state
       const backend = new LocalBackend(tmpDir);
@@ -269,7 +270,7 @@ describe('Orchestrator', () => {
         }
       `;
 
-      await expect(orchestrator.apply(config)).rejects.toThrow('No provider registered');
+      await expect(apply(orchestrator, config)).rejects.toThrow('No provider registered');
     });
 
     it('should throw error for invalid config syntax', async () => {
@@ -279,7 +280,7 @@ describe('Orchestrator', () => {
         }
       `;
 
-      await expect(orchestrator.apply(config)).rejects.toThrow();
+      await expect(apply(orchestrator, config)).rejects.toThrow();
     });
   });
 
@@ -297,7 +298,7 @@ describe('Orchestrator', () => {
           name = "delete_value"
         }
       `;
-      await orchestrator.apply(initial);
+      await apply(orchestrator, initial);
       expect(mockProvider.getCreatedResources().size).toBe(3);
 
       // New state: keep one, update one, delete one, create one
@@ -312,7 +313,7 @@ describe('Orchestrator', () => {
           name = "create_value"
         }
       `;
-      await orchestrator.apply(updated);
+      await apply(orchestrator, updated);
 
       const final = mockProvider.getCreatedResources();
 
@@ -342,7 +343,7 @@ describe('Orchestrator', () => {
           enabled = true
         }
       `;
-      await orchestrator.apply(createConfig);
+      await apply(orchestrator, createConfig);
 
       // Update multiple attributes
       const updateConfig = `
@@ -352,7 +353,7 @@ describe('Orchestrator', () => {
           enabled = false
         }
       `;
-      await orchestrator.apply(updateConfig);
+      await apply(orchestrator, updateConfig);
 
       const updated = mockProvider.getCreatedResources();
       expect(updated.size).toBe(1);
@@ -368,7 +369,7 @@ describe('Orchestrator', () => {
     it('should handle empty config (no resources)', async () => {
       const config = ``;
 
-      await orchestrator.apply(config);
+      await apply(orchestrator, config);
 
       const created = mockProvider.getCreatedResources();
       expect(created.size).toBe(0);
@@ -380,7 +381,7 @@ describe('Orchestrator', () => {
         }
       `;
 
-      await orchestrator.apply(config);
+      await apply(orchestrator, config);
 
       const created = mockProvider.getCreatedResources();
       expect(created.size).toBe(1);
@@ -418,7 +419,7 @@ describe('Orchestrator', () => {
       `;
 
       // Apply with tmpDir as root to locate module
-      const result = await orchestrator.apply(rootConfig, tmpDir);
+      const result = await apply(orchestrator, rootConfig, tmpDir);
 
       // Verify root output contains module value
       // This confirms that module output was resolved and passed to root
