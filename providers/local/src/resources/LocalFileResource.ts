@@ -13,7 +13,7 @@ export class LocalFileResource implements IResourceHandler {
   async validate(inputs: Record<string, unknown>): Promise<void> {
     if (!inputs.path || typeof inputs.path !== 'string') throw new Error('local_file requires "path" attribute (string)');
 
-    if (!inputs.content || typeof inputs.content !== 'string') throw new Error('local_file requires "content" attribute (string)');
+    if (typeof inputs.content !== 'string') throw new Error('local_file requires "content" attribute (string)');
   }
 
   async create(inputs: Record<string, unknown>): Promise<string> {

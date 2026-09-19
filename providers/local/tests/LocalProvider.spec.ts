@@ -44,6 +44,15 @@ describe('LocalProvider', () => {
       ).rejects.toThrow('requires "content"');
     });
 
+    it('should accept empty content and write an empty file', async () => {
+      const filePath = path.join(tmpDir, 'empty.txt');
+      await expect(provider.validate('local_file', { path: filePath, content: '' })).resolves.not.toThrow();
+
+      await provider.create('local_file', { path: filePath, content: '' });
+
+      expect(await fs.readFile(filePath, 'utf8')).toBe('');
+    });
+
     it('should throw if path is not a string', async () => {
       await expect(
         provider.validate('local_file', {

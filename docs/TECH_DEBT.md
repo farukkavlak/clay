@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-338 tests pass, and so do the type check and the build. Lint shows 12 warnings, and
+339 tests pass, and so do the type check and the build. Lint shows 12 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -116,8 +116,9 @@ In order: the safety net first, then the engine, then the CLI, then the output.
       values and knows nothing about where the config lives, and Terraform's `local_file`
       resolves the same way. A module that wants a file next to itself needs `path.module`,
       which is on the feature list. A test now pins the rule.
-- [ ] `local_file` rejects empty content. `validate` tests the value for truthiness
-      instead of its type.
+- [x] `local_file` rejected empty content: `validate` tested the value for truthiness
+      instead of its type, and `""` is falsy. It checks the type now, so an empty file is
+      a file.
 - [x] The planner matched replacements by type and name only, ignoring the module path. The
       check existed to keep a replacement's DELETE apart from a removal's; with one
       `REPLACE` action there is nothing to tell apart.
