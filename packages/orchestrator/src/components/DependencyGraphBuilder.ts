@@ -1,12 +1,15 @@
 import { Graph } from '@miniform/graph';
-import { ResourceBlock } from '@miniform/parser';
 
 import { Address } from '../Address';
+import { ReferenceScanner } from '../resolvers/ReferenceScanner';
 import { ScopeManager } from '../scope/ScopeManager';
 import { LoadedModule, LoadedResource } from './ModuleLoader';
 
 export class DependencyGraphBuilder {
-  constructor(private scopeManager: ScopeManager) {}
+  constructor(
+    private scopeManager: ScopeManager,
+    private scanner: ReferenceScanner
+  ) {}
 
   buildExecutionGraph(loadedResources: LoadedResource[], loadedModules: LoadedModule[]): Graph<null> {
     const graph = new Graph<null>();
@@ -18,7 +21,7 @@ export class DependencyGraphBuilder {
     this.addOutputDependencies(loadedModules, graph);
 
     // Add resource dependencies
-    for (const { address, block } of loadedResources) this.addResourceDependencies(block, graph, address);
+    for (const { address, block } of loadedResources) this.addDependencies(block.attributes, graph, address.toString(), address);
 
     return graph;
   }
@@ -40,63 +43,16 @@ export class DependencyGraphBuilder {
       for (const stmt of mod.program)
         if (stmt.type === 'Output') {
           const outputKey = scope ? `${scope}.outputs.${stmt.name}` : `outputs.${stmt.name}`;
-          this.addValueDependencies(stmt.value, graph, outputKey, mod.address);
+          this.addDependencies(stmt.value, graph, outputKey, mod.address);
         }
     }
   }
 
-  private addResourceDependencies(stmt: ResourceBlock, graph: Graph<null>, parsedAddress: Address): void {
-    const dependentKey = parsedAddress.toString();
-    this.addValueDependencies(stmt.attributes, graph, dependentKey, parsedAddress);
-  }
+  private addDependencies(value: unknown, graph: Graph<null>, dependentKey: string, context: Address): void {
+    for (const key of this.scanner.keysIn(value, context)) {
+      if (!graph.hasNode(key)) throw new Error(`Invalid reference in "${dependentKey}": "${key}" is not declared in the configuration`);
 
-  private addValueDependencies(value: unknown, graph: Graph<null>, dependentKey: string, context: Address): void {
-    if (!value || typeof value !== 'object') return;
-
-    if (Array.isArray(value)) {
-      for (const item of value) this.addValueDependencies(item, graph, dependentKey, context);
-      return;
+      graph.addEdge(key, dependentKey);
     }
-
-    this.processObjectDependencies(value as Record<string, unknown>, graph, dependentKey, context);
-  }
-
-  private processObjectDependencies(obj: Record<string, unknown>, graph: Graph<null>, dependentKey: string, context: Address): void {
-    if (obj.type === 'Reference' && Array.isArray(obj.value)) this.addReferenceDependencies(obj.value as string[], graph, dependentKey, context);
-    else if ((obj.type === 'Interpolation' || obj.type === 'String') && typeof obj.value === 'string') this.addInterpolationDependencies(obj.value, graph, dependentKey, context);
-    else for (const v of Object.values(obj)) this.addValueDependencies(v, graph, dependentKey, context);
-  }
-
-  private addReferenceDependencies(refParts: string[], graph: Graph<null>, dependentKey: string, context: Address): void {
-    const refType = refParts[0];
-
-    if (refType === 'var' || refType === 'data') return;
-
-    if (refType === 'module') {
-      const moduleName = refParts[1];
-      const outputName = refParts[2];
-      const currentScope = this.scopeManager.getScope(context);
-      const childScope = currentScope ? `${currentScope}.module.${moduleName}` : `module.${moduleName}`;
-      const outputKey = `${childScope}.outputs.${outputName}`;
-      graph.addEdge(outputKey, dependentKey);
-    } else {
-      const resourceAddress = this.parseResourceAddress(refParts.slice(0, -1), context);
-      const resourceKey = resourceAddress.toString();
-      graph.addEdge(resourceKey, dependentKey);
-    }
-  }
-
-  private addInterpolationDependencies(content: string, graph: Graph<null>, dependentKey: string, context: Address): void {
-    const regex = /\${([^}]+)}/g;
-    let match: RegExpExecArray | null;
-    while ((match = regex.exec(content)) !== null) {
-      const expr = match[1].trim();
-      const pathParts = expr.split('.');
-      this.addReferenceDependencies(pathParts, graph, dependentKey, context);
-    }
-  }
-
-  private parseResourceAddress(addressParts: string[], context?: Address): Address {
-    return new Address(context ? context.modulePath : [], addressParts[0], addressParts[1]);
   }
 }

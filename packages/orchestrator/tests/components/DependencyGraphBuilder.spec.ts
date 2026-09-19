@@ -1,121 +1,54 @@
-import { Graph } from '@miniform/graph';
 import { describe, expect, it } from 'vitest';
 
 import { Address } from '../../src/Address';
 import { DependencyGraphBuilder } from '../../src/components/DependencyGraphBuilder';
+import { LoadedModule, LoadedResource } from '../../src/components/ModuleLoader';
+import { ReferenceScanner } from '../../src/resolvers/ReferenceScanner';
 import { ScopeManager } from '../../src/scope/ScopeManager';
+
+function resource(name: string, attributes: Record<string, unknown> = {}, modulePath: string[] = []): LoadedResource {
+  const address = new Address(modulePath, 'resource', name);
+  return {
+    uniqueId: address.toString(),
+    address,
+    block: { type: 'Resource', resourceType: 'resource', name, attributes },
+  } as LoadedResource;
+}
 
 describe('DependencyGraphBuilder', () => {
   const scopeManager = new ScopeManager();
-  const builder = new DependencyGraphBuilder(scopeManager);
-  const context = new Address([], 'resource', 'main');
+  const builder = new DependencyGraphBuilder(scopeManager, new ReferenceScanner(scopeManager));
 
-  it('should add dependencies from array attributes', () => {
-    // Access private method via casting
-    const graph = new Graph<null>();
-    graph.addNode('resource.main', null);
-    graph.addNode('resource.dep', null); // Add dependency node
+  it('should run a resource after the one it reads from', () => {
+    const main = resource('main', { id: { type: 'Reference', value: ['resource', 'dep', 'id'] } });
 
-    // We need to cast builder to any to access private methods for unit testing specific logic
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (builder as any).addValueDependencies(['param', { type: 'Reference', value: ['data', 'aws_ami', 'ubuntu', 'id'] }], graph, 'resource.main', context);
+    const graph = builder.buildExecutionGraph([main, resource('dep')], []);
 
-    // Should NOT add edge for 'param' (string)
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (builder as any).addValueDependencies([{ type: 'Reference', value: ['resource', 'dep', 'id'] }], graph, 'resource.main', context);
-
-    // Check if edge exists: resource.dep -> resource.main
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const adj = (graph as any).adjacencyList;
-    expect(adj.get('resource.dep').has('resource.main')).toBe(true);
+    expect(graph.topologicalSort()).toEqual([['resource.dep'], ['resource.main']]);
   });
 
-  it('should add dependencies from module output references', () => {
-    const graph = new Graph<null>();
-    graph.addNode('resource.main', null);
-    graph.addNode('module.vpc.outputs.subnet_id', null); // Add output node
+  it('should keep resources that do not read from each other in one layer', () => {
+    const graph = builder.buildExecutionGraph([resource('a'), resource('b')], []);
 
-    // ref: module.vpc.subnet_id
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (builder as any).addReferenceDependencies(['module', 'vpc', 'subnet_id'], graph, 'resource.main', context);
-
-    // Expect edge: module.vpc.outputs.subnet_id -> resource.main
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const adj = (graph as any).adjacencyList;
-    expect(adj.get('module.vpc.outputs.subnet_id').has('resource.main')).toBe(true);
+    expect(graph.topologicalSort()).toEqual([['resource.a', 'resource.b']]);
   });
 
-  it('should add dependencies from string interpolation', () => {
-    const graph = new Graph<null>();
-    graph.addNode('resource.main', null);
-    graph.addNode('resource.db', null); // Add interpolation dependency node
-
-    // val: "${resource.db.endpoint}"
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-template-curly-in-string
-    (builder as any).addInterpolationDependencies('Server at ${resource.db.endpoint} is ready', graph, 'resource.main', context);
-
-    // Expect edge: resource.db -> resource.main
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const adj = (graph as any).adjacencyList;
-    expect(adj.get('resource.db').has('resource.main')).toBe(true);
-  });
-
-  it('should handle Interpolation object in addValueDependencies', () => {
-    const graph = new Graph<null>();
-    graph.addNode('resource.main', null);
-    graph.addNode('resource.kv', null);
-
-    const interpolationVal = {
-      type: 'Interpolation',
-      value: '${resource.kv.id}',
-    };
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (builder as any).addValueDependencies(interpolationVal, graph, 'resource.main', context);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const adj = (graph as any).adjacencyList;
-    expect(adj.get('resource.kv').has('resource.main')).toBe(true);
-  });
-
-  it('should build graph with module outputs', () => {
-    const mockModules = [
+  it('should run a module output after the resource it reads from', () => {
+    const modules = [
       {
         address: new Address(['app'], '', ''),
-        program: [
-          {
-            type: 'Output',
-            name: 'ip',
-            value: { type: 'Reference', value: ['resource', 'instance', 'ip'] },
-          },
-        ],
+        program: [{ type: 'Output', name: 'ip', value: { type: 'Reference', value: ['resource', 'instance', 'ip'] } }],
       },
-    ];
+    ] as LoadedModule[];
 
-    const mockResources = [
-      {
-        uniqueId: 'module.app.resource.instance',
-        address: new Address(['app'], 'resource', 'instance'),
-        block: { type: 'Resource', resourceType: 'instance', name: 'ip', attributes: {} },
-      },
-    ];
+    const graph = builder.buildExecutionGraph([resource('instance', {}, ['app'])], modules);
 
-    // Need scope manager to return scope string
-    scopeManager.getScope = (addr) => 'module.app';
+    expect(graph.topologicalSort()).toEqual([['module.app.resource.instance'], ['module.app.outputs.ip']]);
+  });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const graph = builder.buildExecutionGraph(mockResources as any, mockModules as any);
+  it('should reject a reference to a resource the config does not declare', () => {
+    const main = resource('main', { id: { type: 'Reference', value: ['resource', 'typo', 'id'] } });
 
-    // Check Output Node existence
-    expect(graph.hasNode('module.app.outputs.ip')).toBe(true);
-    // Check Dependency Node existence
-    expect(graph.hasNode('module.app.resource.instance')).toBe(true);
-
-    // Verify edge: module.app.resource.instance -> module.app.outputs.ip
-    // Note: Value dependency on resolves to creates edge from DEPENDENCY to DEPENDENT
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const adj = (graph as any).adjacencyList;
-    expect(adj.get('module.app.resource.instance').has('module.app.outputs.ip')).toBe(true);
+    expect(() => builder.buildExecutionGraph([main], [])).toThrow('"resource.typo" is not declared in the configuration');
   });
 });

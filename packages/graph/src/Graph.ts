@@ -53,9 +53,43 @@ export class Graph<T> {
     }
 
     const totalNodes = result.reduce((acc, layer) => acc + layer.length, 0);
-    if (totalNodes !== this.nodes.size) throw new Error('Dependency Cycle Detected');
+    // Reversed, so each arrow points from a node to what it depends on.
+    if (totalNodes !== this.nodes.size) throw new Error(`Dependency cycle detected: ${this.findCycle().reverse().join(' -> ')}`);
 
     return result;
+  }
+
+  /** Walks the graph depth first and returns the first path that comes back to a node it is still visiting. */
+  private findCycle(): string[] {
+    const visiting = new Set<string>();
+    const visited = new Set<string>();
+    const path: string[] = [];
+
+    const walk = (node: string): string[] | null => {
+      visiting.add(node);
+      path.push(node);
+
+      for (const neighbor of this.adjacencyList.get(node)!) {
+        if (visiting.has(neighbor)) return [...path.slice(path.indexOf(neighbor)), neighbor];
+        if (!visited.has(neighbor)) {
+          const cycle = walk(neighbor);
+          if (cycle) return cycle;
+        }
+      }
+
+      path.pop();
+      visiting.delete(node);
+      visited.add(node);
+      return null;
+    };
+
+    for (const node of this.nodes.keys())
+      if (!visited.has(node)) {
+        const cycle = walk(node);
+        if (cycle) return cycle;
+      }
+
+    return [];
   }
 
   private calculateInDegrees(): Map<string, number> {

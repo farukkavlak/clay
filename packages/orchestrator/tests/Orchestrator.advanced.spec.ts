@@ -188,14 +188,14 @@ describe('Orchestrator: Advanced Features', () => {
   });
 
   describe('Reference Resolution Errors', () => {
-    it('should throw error for resource not found in state', async () => {
+    it('should throw for a reference to a resource the config does not declare', async () => {
       const config = `
         resource "mock_resource" "test" {
           ref = nonexistent_resource.foo.bar
         }
       `;
 
-      await expect(orchestrator.apply(config)).rejects.toThrow('does not exist');
+      await expect(orchestrator.apply(config)).rejects.toThrow('is not declared in the configuration');
     });
   });
 
@@ -260,7 +260,7 @@ describe('Orchestrator: Advanced Features', () => {
         }
       `;
 
-      await expect(orchestrator.apply(config)).rejects.toThrow(/Cycle/);
+      await expect(orchestrator.apply(config)).rejects.toThrow(/cycle detected/);
     });
 
     it('should detect indirect circular dependency (A -> B -> C -> A)', async () => {
@@ -276,7 +276,7 @@ describe('Orchestrator: Advanced Features', () => {
         }
       `;
 
-      await expect(orchestrator.apply(config)).rejects.toThrow(/Cycle/);
+      await expect(orchestrator.apply(config)).rejects.toThrow(/cycle detected/);
     });
 
     it('should detect self-reference circular dependency', async () => {
@@ -286,7 +286,7 @@ describe('Orchestrator: Advanced Features', () => {
         }
       `;
 
-      await expect(orchestrator.apply(config)).rejects.toThrow(/Cycle/);
+      await expect(orchestrator.apply(config)).rejects.toThrow(/cycle detected/);
     });
   });
 });

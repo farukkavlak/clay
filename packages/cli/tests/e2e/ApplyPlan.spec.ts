@@ -1,5 +1,6 @@
 import { Orchestrator } from '@miniform/orchestrator';
 import { LocalProvider } from '@miniform/provider-local';
+import { isUnknown } from '@miniform/planner';
 import { LocalBackend, StateManager } from '@miniform/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -116,24 +117,61 @@ describe('apply and plan against real files', () => {
     expect(actions[0].changes).toEqual({ content: { old: 'hello', new: 'bye' } });
   });
 
-  // Known bug: the plan resolves against the state as it is now, so a value another action
-  // is about to produce reads as unchanged.
-  it.fails('plans an update for a resource that reads a value changing in the same run', async () => {
-    const chained = (content: string) => `
+  const chained = (content: string) => `
+    resource "local_file" "a" {
+      path = "${path.join(dir, 'a.txt')}"
+      content = "${content}"
+    }
+    resource "local_file" "b" {
+      path = "${path.join(dir, 'b.txt')}"
+      content = "\${local_file.a.content}"
+    }
+  `;
+
+  it('plans an update for a resource that reads a value changing in the same run', async () => {
+    await orchestrator.apply(chained('one'), dir);
+
+    const actions = await changes(chained('two'));
+
+    expect(actions.map((action) => [action.name, action.type])).toEqual([
+      ['a', 'UPDATE'],
+      ['b', 'UPDATE'],
+    ]);
+    expect(isUnknown(actions[1].changes!.content.new)).toBe(true);
+  });
+
+  it('writes the new value through to the resource that reads it', async () => {
+    await orchestrator.apply(chained('one'), dir);
+
+    await newOrchestrator().apply(chained('two'), dir);
+
+    expect(await fs.readFile(path.join(dir, 'b.txt'), 'utf8')).toBe('two');
+  });
+
+  it('rejects a reference to a resource the config does not declare', async () => {
+    const config = `
       resource "local_file" "a" {
         path = "${path.join(dir, 'a.txt')}"
-        content = "${content}"
+        content = "\${local_file.typo.content}"
+      }
+    `;
+
+    await expect(newOrchestrator().plan(config, dir)).rejects.toThrow('"local_file.typo" is not declared in the configuration');
+  });
+
+  it('names the resources in a dependency cycle', async () => {
+    const config = `
+      resource "local_file" "a" {
+        path = "${path.join(dir, 'a.txt')}"
+        content = "\${local_file.b.content}"
       }
       resource "local_file" "b" {
         path = "${path.join(dir, 'b.txt')}"
         content = "\${local_file.a.content}"
       }
     `;
-    await orchestrator.apply(chained('one'), dir);
 
-    const actions = await changes(chained('two'));
-
-    expect(actions.map((action) => action.name)).toEqual(['a', 'b']);
+    await expect(newOrchestrator().plan(config, dir)).rejects.toThrow('Dependency cycle detected: local_file.a -> local_file.b -> local_file.a');
   });
 
   // Known bug: `plan` never computes module outputs, so the reference is unknown every time.

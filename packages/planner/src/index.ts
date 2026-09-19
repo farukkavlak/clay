@@ -55,14 +55,14 @@ export function validatePlanFile(planFile: unknown): planFile is PlanFile {
   return typeof pf.version === 'string' && typeof pf.timestamp === 'string' && typeof pf.configHash === 'string' && Array.isArray(pf.actions);
 }
 
-function hasChanged(oldValue: unknown, newValue: unknown): boolean {
+function valueChanged(oldValue: unknown, newValue: unknown): boolean {
   if (isUnknown(newValue)) return true;
   return JSON.stringify(oldValue) !== JSON.stringify(newValue);
 }
 
 function calculateDiff(oldAttrs: Record<string, unknown>, newAttrs: Record<string, unknown>): Record<string, { old: unknown; new: unknown }> | null {
   const changes: Record<string, { old: unknown; new: unknown }> = {};
-  let hasChanges = false;
+  let changed = false;
 
   const allKeys = new Set([...Object.keys(oldAttrs), ...Object.keys(newAttrs)]);
 
@@ -70,13 +70,18 @@ function calculateDiff(oldAttrs: Record<string, unknown>, newAttrs: Record<strin
     const oldValue = oldAttrs[key];
     const newValue = newAttrs[key];
 
-    if (hasChanged(oldValue, newValue)) {
+    if (valueChanged(oldValue, newValue)) {
       changes[key] = { old: oldValue, new: newValue };
-      hasChanges = true;
+      changed = true;
     }
   }
 
-  return hasChanges ? changes : null;
+  return changed ? changes : null;
+}
+
+/** Tells whether a resource in state would change, without building the action for it. */
+export function hasChanges(currentAttrs: Record<string, unknown>, desiredAttrs: Record<string, unknown>): boolean {
+  return calculateDiff(currentAttrs, desiredAttrs) !== null;
 }
 
 function getResourceKey(resource: ResourceBlock): string {

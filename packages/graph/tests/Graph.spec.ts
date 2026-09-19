@@ -59,7 +59,20 @@ describe('Graph', () => {
     graph.addEdge('A', 'B');
     graph.addEdge('B', 'A');
 
-    expect(() => graph.topologicalSort()).toThrow(/Cycle/);
+    expect(() => graph.topologicalSort()).toThrow('Dependency cycle detected: A -> B -> A');
+  });
+
+  it('should point each arrow at what the node depends on', () => {
+    // C is needed by B, B by A: A depends on B depends on C depends on A.
+    const graph = new Graph<string>();
+    graph.addNode('A', 'val');
+    graph.addNode('B', 'val');
+    graph.addNode('C', 'val');
+    graph.addEdge('C', 'B');
+    graph.addEdge('B', 'A');
+    graph.addEdge('A', 'C');
+
+    expect(() => graph.topologicalSort()).toThrow('Dependency cycle detected: A -> B -> C -> A');
   });
 
   it('should detect self-reference cycle', () => {
@@ -68,7 +81,7 @@ describe('Graph', () => {
     graph.addNode('A', 'val');
     graph.addEdge('A', 'A');
 
-    expect(() => graph.topologicalSort()).toThrow(/Cycle/);
+    expect(() => graph.topologicalSort()).toThrow(/cycle detected/);
   });
 
   it('should detect multi-node cycle', () => {
@@ -81,7 +94,7 @@ describe('Graph', () => {
     graph.addEdge('B', 'C');
     graph.addEdge('C', 'A');
 
-    expect(() => graph.topologicalSort()).toThrow(/Cycle/);
+    expect(() => graph.topologicalSort()).toThrow(/cycle detected/);
   });
 
   it('should detect cycle in complex graph', () => {
@@ -98,7 +111,7 @@ describe('Graph', () => {
     graph.addEdge('C', 'D');
     graph.addEdge('D', 'B'); // Creates cycle
 
-    expect(() => graph.topologicalSort()).toThrow(/Cycle/);
+    expect(() => graph.topologicalSort()).toThrow(/cycle detected/);
   });
 
   it('should sort nodes batch-wise (parallel)', () => {
