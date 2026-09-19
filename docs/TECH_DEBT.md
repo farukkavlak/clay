@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-336 tests pass, and so do the type check and the build. Lint shows 22 warnings, and
+335 tests pass, and so do the type check and the build. Lint shows 12 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -98,9 +98,16 @@ In order: the safety net first, then the engine, then the CLI, then the output.
       parts the backend wants.
 - [ ] `state show` prints the resource type as `Resource`. State keeps the AST node type in
       `type` and the real type in `resourceType`, and the command reads the first one.
-- [ ] `output` prints the variables saved in state as if they were outputs, and state holds
-      variables in the first place. State should hold outputs, the way Terraform does, and
-      `output` should read those.
+- [x] `output` printed the variables saved in state as if they were outputs, and state held
+      variables in the first place, so `apply` and `output` answered the same question
+      differently. State holds the root module's outputs now, the way Terraform does, and
+      nothing else: variables are inputs that come with each run. `output` reads those, and
+      state is written in full, so what an older miniform left behind goes.
+- [ ] Outputs in state are only written at the end of an apply that gets there, so they go
+      stale. A config that changes nothing but an `output` block plans no actions, and the
+      CLI stops at "No changes needed" without running; a run that fails partway leaves the
+      previous run's outputs next to the new resources; `state rm` and `state mv` do not
+      touch outputs at all, so one can name a resource that is gone.
 - [ ] The config file has two names: the CLI reads `main.mini`, modules are loaded from
       `main.mf`, and `validate` defaults to `main.mf`.
 - [ ] Relative paths in `local_file` resolve against the current directory, not the

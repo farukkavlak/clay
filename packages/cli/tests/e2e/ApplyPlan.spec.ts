@@ -312,13 +312,14 @@ describe('apply and plan against real files', () => {
     expect(await changes(config)).toEqual([]);
   });
 
-  it('writes resolved values, not syntax, into the state variables', async () => {
+  it('writes resolved values, not syntax, into the state outputs', async () => {
     const config = `
       variable "greeting" { default = "hello" }
       module "m" {
         source = "./m"
         text = "\${var.greeting}"
       }
+      output "echo" { value = "\${module.m.echo}" }
     `;
     await fs.mkdir(path.join(dir, 'm'));
     await fs.writeFile(path.join(dir, 'm', 'main.mf'), `output "echo" { value = "\${var.text}" }`);
@@ -326,7 +327,7 @@ describe('apply and plan against real files', () => {
     await apply(orchestrator, config);
 
     const state = await new LocalBackend(dir).read();
-    expect(state.variables).toEqual({ '': { greeting: 'hello' }, 'module.m': { text: 'hello' } });
+    expect(state.outputs).toEqual({ echo: 'hello' });
   });
 
   it('says that modules are read through their outputs', async () => {

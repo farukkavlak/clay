@@ -24,7 +24,7 @@ describe('StateManager', () => {
 
   it('should return default empty state if file does not exist', async () => {
     const state = await stateManager.read();
-    expect(state).toEqual({ version: 1, variables: {}, resources: {} });
+    expect(state).toEqual({ version: 1, resources: {} });
   });
 
   it('should write and read state correctly', async () => {
