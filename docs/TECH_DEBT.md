@@ -129,7 +129,8 @@ In order: the safety net first, then the engine, then the CLI, then the output.
 - [x] A replacement printed as one add and one destroy, not as one replace. It is one
       `-+ ... will be replaced` line now; the summary still counts it as an add and a
       destroy, the way Terraform sums it.
-- [ ] The plan output says "destroyd" and "no-opd".
+- [x] The plan output said "destroyd" and "no-opd": the verb had a `d` glued on. It says
+      "destroyed" now, and a NO_OP is never printed.
 
 ## 2 — dependencies
 

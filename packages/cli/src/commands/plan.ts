@@ -16,12 +16,11 @@ function getActionSymbol(actionType: string): string {
   return ' ';
 }
 
-function getActionTypeColor(actionType: string): string {
-  if (actionType === 'CREATE') return chalk.green('create');
-  if (actionType === 'UPDATE') return chalk.yellow('update');
-  if (actionType === 'REPLACE') return chalk.red('replace');
-  if (actionType === 'DELETE') return chalk.red('destroy');
-  return 'no-op';
+function pastTense(actionType: PlanAction['type']): string {
+  if (actionType === 'CREATE') return chalk.green('created');
+  if (actionType === 'UPDATE') return chalk.yellow('updated');
+  if (actionType === 'REPLACE') return chalk.red('replaced');
+  return chalk.red('destroyed');
 }
 
 function describeValue(value: unknown, whenAbsent: string): string {
@@ -30,9 +29,7 @@ function describeValue(value: unknown, whenAbsent: string): string {
 }
 
 function displayAction(action: PlanAction): void {
-  const symbol = getActionSymbol(action.type);
-  const typeColor = getActionTypeColor(action.type);
-  console.log(`  ${symbol} ${action.resourceType}.${action.name} will be ${typeColor}d`);
+  console.log(`  ${getActionSymbol(action.type)} ${action.resourceType}.${action.name} will be ${pastTense(action.type)}`);
 
   if ((action.type === 'UPDATE' || action.type === 'REPLACE') && action.changes)
     for (const [key, change] of Object.entries(action.changes)) console.log(`      ${key}: ${describeValue(change.old, '(none)')} -> ${describeValue(change.new, '(removed)')}`);

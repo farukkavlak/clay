@@ -213,7 +213,7 @@ describe('CLI: plan command', () => {
 
     await createPlanCommand().parseAsync(['node', 'clay', 'plan']);
 
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('- test.t will be destroyd'));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('- test.t will be destroyed'));
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Plan: 0 to add, 0 to change, 1 to destroy.'));
 
     consoleSpy.mockRestore();
