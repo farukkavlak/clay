@@ -407,4 +407,37 @@ describe('apply and plan against real files', () => {
 
     expect(events).toEqual(['planned', 'started a', 'applied a', 'started b', 'failed b']);
   });
+
+  const lockFile = () => path.join(dir, 'miniform.state.json.lock');
+
+  it('refuses a second run while one holds the state', async () => {
+    const first = orchestrator.run(fileConfig('hello'), dir);
+    await first.next();
+
+    await expect(apply(newOrchestrator(), fileConfig('hello'))).rejects.toThrow('locked by another run');
+
+    await first.return(undefined);
+  });
+
+  it('releases the lock when a run finishes', async () => {
+    await apply(orchestrator, fileConfig('hello'));
+
+    await expect(fs.access(lockFile())).rejects.toThrow();
+  });
+
+  it('releases the lock when a run fails', async () => {
+    await expect(apply(orchestrator, secondFails())).rejects.toThrow();
+
+    await expect(fs.access(lockFile())).rejects.toThrow();
+  });
+
+  it('holds the lock while running and releases it when the caller stops reading', async () => {
+    const run = orchestrator.run(fileConfig('hello'), dir);
+    await run.next();
+    await expect(fs.access(lockFile())).resolves.toBeUndefined();
+
+    await run.return(undefined);
+
+    await expect(fs.access(lockFile())).rejects.toThrow();
+  });
 });

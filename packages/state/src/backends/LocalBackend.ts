@@ -49,7 +49,7 @@ export class LocalBackend implements IStateBackend {
       // 'wx' flag fails if file exists
       await fs.writeFile(this.lockFilePath, String(Date.now()), { flag: 'wx' });
     } catch (error) {
-      if ((error as { code: string }).code === 'EEXIST') throw new Error('State is locked by another process.');
+      if ((error as { code: string }).code === 'EEXIST') throw new Error(`State is locked by another run. If that run is gone, remove ${this.lockFilePath}`);
 
       throw error;
     }

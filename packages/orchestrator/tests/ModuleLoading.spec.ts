@@ -17,6 +17,8 @@ vi.mock('@miniform/state', () => {
   const StateManager = vi.fn((backend) => ({
     read: readMock,
     write: writeMock,
+    lock: vi.fn(),
+    unlock: vi.fn(),
     backend,
   }));
   const LocalBackend = vi.fn(() => ({

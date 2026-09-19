@@ -142,6 +142,17 @@ export class Orchestrator {
 
   /** Runs the plan and reports each step; the state file is rewritten after every action, so a failed run loses nothing done before it. */
   async *run(configContent: string, rootDir: string = process.cwd()): AsyncGenerator<RunEvent> {
+    await this.stateManager.lock();
+
+    // Released on the way out however the run ends: done, failed, thrown, or dropped by the caller.
+    try {
+      yield* this.runLocked(configContent, rootDir);
+    } finally {
+      await this.stateManager.unlock();
+    }
+  }
+
+  private async *runLocked(configContent: string, rootDir: string): AsyncGenerator<RunEvent> {
     const actions = await this.plan(configContent, rootDir);
     const state = await this.stateManager.read();
     const { mainProgram, loadedModules, loadedResources } = await this.loadContext(configContent, rootDir, state);
