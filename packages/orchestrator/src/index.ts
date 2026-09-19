@@ -7,8 +7,8 @@ import { Address } from './Address';
 import { ActionExecutor } from './components/ActionExecutor';
 import { DependencyGraphBuilder } from './components/DependencyGraphBuilder';
 import { LoadedModule, LoadedResource, ModuleLoader } from './components/ModuleLoader';
-import { ReferenceScanner } from './resolvers/ReferenceScanner';
 import { ReferenceResolver } from './resolvers/ReferenceResolver';
+import { ReferenceScanner } from './resolvers/ReferenceScanner';
 import { UnresolvedReferenceError } from './resolvers/UnresolvedReferenceError';
 import { ScopeManager } from './scope/ScopeManager';
 
@@ -192,6 +192,7 @@ export class Orchestrator {
 
     for (const layer of layers)
       for (const key of layer) {
+        // The graph holds module outputs too; only resources are planned.
         const loaded = byKey.get(key);
         if (!loaded) continue;
 

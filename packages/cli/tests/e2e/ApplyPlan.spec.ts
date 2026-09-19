@@ -1,6 +1,6 @@
 import { Orchestrator } from '@miniform/orchestrator';
-import { LocalProvider } from '@miniform/provider-local';
 import { isUnknown } from '@miniform/planner';
+import { LocalProvider } from '@miniform/provider-local';
 import { LocalBackend, StateManager } from '@miniform/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -22,6 +22,17 @@ describe('apply and plan against real files', () => {
     resource "local_file" "a" {
       path = "${path.join(dir, 'a.txt')}"
       content = "${content}"
+    }
+  `;
+
+  const chained = (content: string) => `
+    resource "local_file" "a" {
+      path = "${path.join(dir, 'a.txt')}"
+      content = "${content}"
+    }
+    resource "local_file" "b" {
+      path = "${path.join(dir, 'b.txt')}"
+      content = "\${local_file.a.content}"
     }
   `;
 
@@ -116,17 +127,6 @@ describe('apply and plan against real files', () => {
     expect(actions.map((action) => action.type)).toEqual(['UPDATE']);
     expect(actions[0].changes).toEqual({ content: { old: 'hello', new: 'bye' } });
   });
-
-  const chained = (content: string) => `
-    resource "local_file" "a" {
-      path = "${path.join(dir, 'a.txt')}"
-      content = "${content}"
-    }
-    resource "local_file" "b" {
-      path = "${path.join(dir, 'b.txt')}"
-      content = "\${local_file.a.content}"
-    }
-  `;
 
   it('plans an update for a resource that reads a value changing in the same run', async () => {
     await orchestrator.apply(chained('one'), dir);
