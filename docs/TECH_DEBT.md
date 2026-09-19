@@ -123,8 +123,9 @@ In order: the safety net first, then the engine, then the CLI, then the output.
 - [x] The planner matched replacements by type and name only, ignoring the module path. The
       check existed to keep a replacement's DELETE apart from a removal's; with one
       `REPLACE` action there is nothing to tell apart.
-- [ ] `plan` never says "No changes". It checks for an empty list, but the planner returns
-      a `NO_OP` action for every unchanged resource.
+- [x] `plan` never said "No changes". It checked for an empty list, but the planner returns
+      a `NO_OP` action for every unchanged resource, so the list is never empty. It looks
+      for actions that do something now. A plan with none is still saved when `--out` asks.
 - [x] A replacement printed as one add and one destroy, not as one replace. It is one
       `-+ ... will be replaced` line now; the summary still counts it as an add and a
       destroy, the way Terraform sums it.

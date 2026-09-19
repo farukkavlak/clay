@@ -49,11 +49,12 @@ describe('CLI: plan command', () => {
     consoleSpy.mockRestore();
   });
 
-  it('should display "No changes" when plan is empty', async () => {
+  // The planner lists every resource, so a plan with nothing to do is all NO_OP, never empty.
+  it('should display "No changes" when every action is a NO_OP', async () => {
     vi.mocked(fs.access).mockResolvedValue(void 0);
     vi.mocked(fs.readFile).mockResolvedValue('');
 
-    const planMock = vi.fn().mockResolvedValue([]);
+    const planMock = vi.fn().mockResolvedValue([{ type: 'NO_OP', resourceType: 'test', name: 't1' }]);
     vi.mocked(Orchestrator).mockImplementation(function () {
       return {
         registerProvider: vi.fn(),

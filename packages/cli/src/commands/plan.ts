@@ -59,20 +59,14 @@ async function executePlan(cwd: string, configPath: string, outFile?: string): P
   console.log(chalk.blue('Refreshing state...'));
 
   const actions = await orchestrator.plan(configContent);
+  const changes = actions.filter((action) => action.type !== 'NO_OP');
 
-  if (actions.length === 0) {
-    console.log(chalk.green('No changes. Your infrastructure matches the configuration.'));
-    return;
+  if (changes.length === 0) console.log(chalk.green('No changes. Your infrastructure matches the configuration.'));
+  else {
+    console.log(chalk.bold('\nClay will perform the following actions:\n'));
+    for (const action of changes) displayAction(action);
+    displayPlanSummary(actions);
   }
-
-  console.log(chalk.bold('\nClay will perform the following actions:\n'));
-
-  for (const action of actions) {
-    if (action.type === 'NO_OP') continue;
-    displayAction(action);
-  }
-
-  displayPlanSummary(actions);
 
   if (outFile) {
     const planFile = serializePlan(actions, configContent);
