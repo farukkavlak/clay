@@ -1,5 +1,5 @@
 import { Orchestrator } from '@miniform/orchestrator';
-import { PlanAction, serializePlan } from '@miniform/planner';
+import { isUnknown, PlanAction, serializePlan } from '@miniform/planner';
 import { LocalProvider } from '@miniform/provider-local';
 import { LocalBackend, StateManager } from '@miniform/state';
 import chalk from 'chalk';
@@ -21,13 +21,17 @@ function getActionTypeColor(actionType: string): string {
   return 'no-op';
 }
 
+function describeValue(value: unknown): string {
+  return isUnknown(value) ? '(known after apply)' : JSON.stringify(value);
+}
+
 function displayAction(action: PlanAction): void {
   const symbol = getActionSymbol(action.type);
   const typeColor = getActionTypeColor(action.type);
   console.log(`  ${symbol} ${action.resourceType}.${action.name} will be ${typeColor}d`);
 
   if (action.type === 'UPDATE' && action.changes)
-    for (const [key, change] of Object.entries(action.changes)) console.log(`      ${key}: ${JSON.stringify(change.old)} -> ${JSON.stringify(change.new)}`);
+    for (const [key, change] of Object.entries(action.changes)) console.log(`      ${key}: ${JSON.stringify(change.old)} -> ${describeValue(change.new)}`);
 }
 
 function displayPlanSummary(actions: PlanAction[]): void {

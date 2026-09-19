@@ -1,6 +1,6 @@
 import { IProvider, ISchema } from '@miniform/contracts';
 import { AttributeValue, Lexer, Parser, Statement } from '@miniform/parser';
-import { plan, PlanAction } from '@miniform/planner';
+import { DesiredResource, plan, PlanAction, UNKNOWN } from '@miniform/planner';
 import { IState, StateManager } from '@miniform/state';
 
 import { Address } from './Address';
@@ -8,6 +8,7 @@ import { ActionExecutor } from './components/ActionExecutor';
 import { DependencyGraphBuilder } from './components/DependencyGraphBuilder';
 import { LoadedModule, ModuleLoader } from './components/ModuleLoader';
 import { ReferenceResolver } from './resolvers/ReferenceResolver';
+import { UnresolvedReferenceError } from './resolvers/UnresolvedReferenceError';
 import { ScopeManager } from './scope/ScopeManager';
 
 export class Orchestrator {
@@ -121,9 +122,9 @@ export class Orchestrator {
     const currentState = await this.stateManager.read();
     const { loadedResources } = await this.loadContext(configContent, rootDir, currentState);
 
-    const virtualProgram: Statement[] = loadedResources.map((r) => ({
-      ...r.block,
-      modulePath: r.address.modulePath,
+    const desiredResources: DesiredResource[] = loadedResources.map((r) => ({
+      block: { ...r.block, modulePath: r.address.modulePath },
+      attributes: this.resolveForPlan(r.block.attributes, currentState, r.address),
     }));
 
     const schemas: Record<string, ISchema> = {};
@@ -133,7 +134,7 @@ export class Orchestrator {
         if (schema) schemas[r.block.resourceType] = schema;
       }
 
-    return plan(virtualProgram, currentState, schemas);
+    return plan(desiredResources, currentState, schemas);
   }
 
   async apply(configContent: string, rootDir: string = process.cwd()): Promise<Record<string, unknown>> {
@@ -180,6 +181,21 @@ export class Orchestrator {
       }
 
     return outputs;
+  }
+
+  /** Resolves config values the way the diff needs them; what an apply has to produce first stays UNKNOWN. */
+  private resolveForPlan(attributes: Record<string, AttributeValue>, state: IState, context: Address): Record<string, unknown> {
+    const resolved: Record<string, unknown> = {};
+
+    for (const [key, value] of Object.entries(attributes))
+      try {
+        resolved[key] = this.resolveValue(value, state, context);
+      } catch (error) {
+        if (!(error instanceof UnresolvedReferenceError)) throw error;
+        resolved[key] = UNKNOWN;
+      }
+
+    return resolved;
   }
 
   private resolveValue(value: unknown, state: IState, context?: Address): unknown {

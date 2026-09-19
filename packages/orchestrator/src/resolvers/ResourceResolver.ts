@@ -3,6 +3,7 @@ import { IState } from '@miniform/state';
 import { Address } from '../Address';
 import { ScopeManager } from '../scope/ScopeManager';
 import { IResolver } from './IResolver';
+import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 
 export class ResourceResolver implements IResolver {
   constructor(private scopeManager: ScopeManager) {}
@@ -14,7 +15,7 @@ export class ResourceResolver implements IResolver {
     const resourceKey = address.toString();
     const resource = state.resources[resourceKey];
 
-    if (!resource) throw new Error(`Invalid resource reference "${pathParts.join('.')}": Resource "${resourceKey}" not found in state`);
+    if (!resource) throw new UnresolvedReferenceError(`Invalid resource reference "${pathParts.join('.')}": Resource "${resourceKey}" not found in state`);
 
     const attributeName = pathParts.at(-1)!;
     return this.getResolvedAttribute(resource, attributeName, pathParts.join('.'));
@@ -29,7 +30,7 @@ export class ResourceResolver implements IResolver {
     let attrValue: unknown = resource.attributes[attributeName];
     if (attrValue === undefined && attributeName === 'id') attrValue = resource.id;
 
-    if (attrValue === undefined) throw new Error(`Invalid resource reference "${fullPath}": Attribute "${attributeName}" not found on resource`);
+    if (attrValue === undefined) throw new UnresolvedReferenceError(`Invalid resource reference "${fullPath}": Attribute "${attributeName}" not found on resource`);
 
     if (attrValue && typeof attrValue === 'object' && 'type' in attrValue && 'value' in attrValue) return (attrValue as { value: unknown }).value;
 

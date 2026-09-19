@@ -133,7 +133,7 @@ describe('ActionExecutor', () => {
   });
 
   describe('executeUpdate', () => {
-    it('should throw if UPDATE action missing changes', async () => {
+    it('should throw if UPDATE action missing attributes', async () => {
       const action: PlanAction = {
         type: 'UPDATE',
         resourceType: 'test',
@@ -141,7 +141,7 @@ describe('ActionExecutor', () => {
         id: 'id',
       };
 
-      await expect(executor.executeUpdate(action, mockProvider, mockState)).rejects.toThrow('missing changes');
+      await expect(executor.executeUpdate(action, mockProvider, mockState)).rejects.toThrow('missing attributes');
     });
 
     it('should throw if resource not found in state', async () => {
@@ -150,7 +150,7 @@ describe('ActionExecutor', () => {
         resourceType: 'test',
         name: 'missing',
         id: 'id',
-        changes: {},
+        attributes: {},
       };
 
       // Ensure state is empty
@@ -173,14 +173,14 @@ describe('ActionExecutor', () => {
         type: 'UPDATE',
         resourceType: 'test',
         name: 'main',
-        changes: {},
+        attributes: {},
         // missing id
       };
 
       await expect(executor.executeUpdate(action, mockProvider, mockState)).rejects.toThrow('missing resource ID');
     });
 
-    it('should update specific attributes based on changes', async () => {
+    it('should send the config attributes resolved against the current state', async () => {
       const key = context.toString();
       // Setup initial state
       mockState.resources[key] = {
@@ -196,10 +196,7 @@ describe('ActionExecutor', () => {
         resourceType: 'test',
         name: 'main',
         id: 'existing',
-        changes: {
-          old: { old: { type: 'String', value: 'val' }, new: { type: 'String', value: 'updated' } },
-          kept: { old: { type: 'String', value: 'val' }, new: undefined },
-        },
+        attributes: { old: { type: 'String', value: 'updated' } },
       };
 
       await executor.executeUpdate(action, mockProvider, mockState);

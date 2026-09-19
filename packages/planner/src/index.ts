@@ -1,9 +1,24 @@
 import { IResource, ISchema } from '@miniform/contracts';
-import { AttributeValue, Program, ResourceBlock } from '@miniform/parser';
+import { AttributeValue, ResourceBlock } from '@miniform/parser';
 import { IState } from '@miniform/state';
 import crypto from 'node:crypto';
 
 export type ActionType = 'CREATE' | 'UPDATE' | 'DELETE' | 'NO_OP';
+
+/** Stands for a value that only exists once the resources it depends on are created. */
+const UNKNOWN_KEY = '@@miniform/unknown';
+
+export const UNKNOWN = { [UNKNOWN_KEY]: true } as const;
+
+export function isUnknown(value: unknown): boolean {
+  return typeof value === 'object' && value !== null && (value as Record<string, unknown>)[UNKNOWN_KEY] === true;
+}
+
+/** A resource from the config: the block to execute, and its values with references resolved. */
+export interface DesiredResource {
+  block: ResourceBlock;
+  attributes: Record<string, unknown>;
+}
 
 export interface PlanAction {
   type: ActionType;
@@ -12,7 +27,7 @@ export interface PlanAction {
   modulePath?: string[]; // Path of modules leading to this resource
   id?: string;
   attributes?: Record<string, AttributeValue>;
-  changes?: Record<string, { old: AttributeValue | undefined; new: AttributeValue | undefined }>;
+  changes?: Record<string, { old: unknown; new: unknown }>;
 }
 
 export interface PlanFile {
@@ -40,11 +55,13 @@ export function validatePlanFile(planFile: unknown): planFile is PlanFile {
   return typeof pf.version === 'string' && typeof pf.timestamp === 'string' && typeof pf.configHash === 'string' && Array.isArray(pf.actions);
 }
 
-function calculateDiff(
-  oldAttrs: Record<string, AttributeValue>,
-  newAttrs: Record<string, AttributeValue>
-): Record<string, { old: AttributeValue | undefined; new: AttributeValue | undefined }> | null {
-  const changes: Record<string, { old: AttributeValue | undefined; new: AttributeValue | undefined }> = {};
+function hasChanged(oldValue: unknown, newValue: unknown): boolean {
+  if (isUnknown(newValue)) return true;
+  return JSON.stringify(oldValue) !== JSON.stringify(newValue);
+}
+
+function calculateDiff(oldAttrs: Record<string, unknown>, newAttrs: Record<string, unknown>): Record<string, { old: unknown; new: unknown }> | null {
+  const changes: Record<string, { old: unknown; new: unknown }> = {};
   let hasChanges = false;
 
   const allKeys = new Set([...Object.keys(oldAttrs), ...Object.keys(newAttrs)]);
@@ -53,7 +70,7 @@ function calculateDiff(
     const oldValue = oldAttrs[key];
     const newValue = newAttrs[key];
 
-    if (JSON.stringify(oldValue) !== JSON.stringify(newValue)) {
+    if (hasChanged(oldValue, newValue)) {
       changes[key] = { old: oldValue, new: newValue };
       hasChanges = true;
     }
@@ -68,8 +85,9 @@ function getResourceKey(resource: ResourceBlock): string {
   return prefix ? `${prefix}.${suffix}` : suffix;
 }
 
-function processExistingResource(actions: PlanAction[], resource: ResourceBlock, currentResource: IResource, schemas: Record<string, ISchema>) {
-  const changes = calculateDiff(currentResource.attributes as Record<string, AttributeValue>, resource.attributes);
+function processExistingResource(actions: PlanAction[], desired: DesiredResource, currentResource: IResource, schemas: Record<string, ISchema>) {
+  const resource = desired.block;
+  const changes = calculateDiff(currentResource.attributes, desired.attributes);
 
   if (!changes) {
     actions.push({
@@ -109,33 +127,29 @@ function processExistingResource(actions: PlanAction[], resource: ResourceBlock,
       name: resource.name,
       modulePath: resource.modulePath,
       id: currentResource.id,
+      attributes: resource.attributes,
       changes,
     });
 }
 
-export function plan(desiredState: Program, currentState: IState, schemas: Record<string, ISchema> = {}): PlanAction[] {
+export function plan(desiredResources: DesiredResource[], currentState: IState, schemas: Record<string, ISchema> = {}): PlanAction[] {
   const actions: PlanAction[] = [];
   const currentMap = new Map<string, IResource>(Object.entries(currentState.resources));
-  const desiredMap = new Map<string, ResourceBlock>();
+  const desiredMap = new Map<string, DesiredResource>();
 
-  // Map desired resources for easier lookup
-  for (const stmt of desiredState)
-    if (stmt.type === 'Resource') {
-      const key = getResourceKey(stmt);
-      desiredMap.set(key, stmt);
-    }
+  for (const desired of desiredResources) desiredMap.set(getResourceKey(desired.block), desired);
 
   // 1. Check for Create, Update, or Replace
-  for (const [key, resource] of desiredMap.entries()) {
+  for (const [key, desired] of desiredMap.entries()) {
     const currentResource = currentMap.get(key);
-    if (currentResource) processExistingResource(actions, resource, currentResource, schemas);
+    if (currentResource) processExistingResource(actions, desired, currentResource, schemas);
     else
       actions.push({
         type: 'CREATE',
-        resourceType: resource.resourceType,
-        name: resource.name,
-        modulePath: resource.modulePath,
-        attributes: resource.attributes,
+        resourceType: desired.block.resourceType,
+        name: desired.block.name,
+        modulePath: desired.block.modulePath,
+        attributes: desired.block.attributes,
       });
   }
 

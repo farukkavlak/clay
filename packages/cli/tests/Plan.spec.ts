@@ -1,4 +1,5 @@
 import { Orchestrator } from '@miniform/orchestrator';
+import { UNKNOWN } from '@miniform/planner';
 import fs from 'node:fs/promises';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -125,6 +126,36 @@ describe('CLI: plan command', () => {
 
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('~ test.t will be updated'));
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Plan: 0 to add, 1 to change, 0 to destroy.'));
+
+    consoleSpy.mockRestore();
+  });
+
+  it('should display a value it cannot know yet as known after apply', async () => {
+    vi.mocked(fs.access).mockResolvedValue(void 0);
+    vi.mocked(fs.readFile).mockResolvedValue('resource "test" "t" {}');
+
+    const actions = [
+      {
+        type: 'UPDATE',
+        resourceType: 'test',
+        name: 't',
+        changes: { path: { old: '/old', new: UNKNOWN } },
+      },
+    ];
+    const planMock = vi.fn().mockResolvedValue(actions);
+
+    vi.mocked(Orchestrator).mockImplementation(function () {
+      return {
+        registerProvider: vi.fn(),
+        plan: planMock,
+      } as Partial<Orchestrator> as Orchestrator;
+    });
+
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await createPlanCommand().parseAsync(['node', 'miniform', 'plan']);
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('path: "/old" -> (known after apply)'));
 
     consoleSpy.mockRestore();
   });

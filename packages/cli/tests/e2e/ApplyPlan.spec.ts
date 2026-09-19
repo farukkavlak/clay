@@ -52,35 +52,103 @@ describe('apply and plan against real files', () => {
     expect(actions.map((action) => action.type)).toEqual(['CREATE']);
   });
 
-  // The planner compares resolved state values with raw config values, so every plan
-  // after an apply asks for a replacement.
-  describe('known planner bug', () => {
-    it.fails('plans no changes right after an apply', async () => {
-      await orchestrator.apply(fileConfig('hello'), dir);
+  it('plans no changes right after an apply', async () => {
+    await orchestrator.apply(fileConfig('hello'), dir);
 
-      expect(await changes(fileConfig('hello'))).toEqual([]);
-    });
+    expect(await changes(fileConfig('hello'))).toEqual([]);
+  });
 
-    it.fails('plans no changes when the config uses a variable', async () => {
-      const config = `
-        variable "greeting" { default = "Hello" }
-        resource "local_file" "a" {
-          path = "${path.join(dir, 'a.txt')}"
-          content = "\${var.greeting} Miniform!"
-        }
-      `;
-      await orchestrator.apply(config, dir);
+  it('plans no changes when the config uses a variable', async () => {
+    const config = `
+      variable "greeting" { default = "Hello" }
+      resource "local_file" "a" {
+        path = "${path.join(dir, 'a.txt')}"
+        content = "\${var.greeting} Miniform!"
+      }
+    `;
+    await orchestrator.apply(config, dir);
 
-      expect(await changes(config)).toEqual([]);
-    });
+    expect(await changes(config)).toEqual([]);
+  });
 
-    it.fails('plans an update, not a replacement, when only the content changes', async () => {
-      await orchestrator.apply(fileConfig('hello'), dir);
+  it('plans a create when one resource reads a value the other has not produced yet', async () => {
+    const config = `
+      resource "local_file" "a" {
+        path = "${path.join(dir, 'a.txt')}"
+        content = "hello"
+      }
+      resource "local_file" "b" {
+        path = "${path.join(dir, 'b.txt')}"
+        content = "\${local_file.a.id}"
+      }
+    `;
 
-      const actions = await changes(fileConfig('bye'));
+    const actions = await changes(config);
 
-      expect(actions.map((action) => action.type)).toEqual(['UPDATE']);
-      expect(actions[0].changes).toEqual({ content: { old: 'hello', new: 'bye' } });
-    });
+    expect(actions.map((action) => action.type)).toEqual(['CREATE', 'CREATE']);
+  });
+
+  it('plans, instead of failing, when a reference reads an attribute the state does not have yet', async () => {
+    const withMode = `
+      resource "local_file" "a" {
+        path = "${path.join(dir, 'a.txt')}"
+        content = "hello"
+        mode = "0644"
+      }
+      resource "local_file" "b" {
+        path = "${path.join(dir, 'b.txt')}"
+        content = "\${local_file.a.mode}"
+      }
+    `;
+    await orchestrator.apply(fileConfig('hello'), dir);
+
+    const actions = await changes(withMode);
+
+    expect(actions.map((action) => action.type)).toEqual(['UPDATE', 'CREATE']);
+  });
+
+  it('plans an update, not a replacement, when only the content changes', async () => {
+    await orchestrator.apply(fileConfig('hello'), dir);
+
+    const actions = await changes(fileConfig('bye'));
+
+    expect(actions.map((action) => action.type)).toEqual(['UPDATE']);
+    expect(actions[0].changes).toEqual({ content: { old: 'hello', new: 'bye' } });
+  });
+
+  // Known bug: the plan resolves against the state as it is now, so a value another action
+  // is about to produce reads as unchanged.
+  it.fails('plans an update for a resource that reads a value changing in the same run', async () => {
+    const chained = (content: string) => `
+      resource "local_file" "a" {
+        path = "${path.join(dir, 'a.txt')}"
+        content = "${content}"
+      }
+      resource "local_file" "b" {
+        path = "${path.join(dir, 'b.txt')}"
+        content = "\${local_file.a.content}"
+      }
+    `;
+    await orchestrator.apply(chained('one'), dir);
+
+    const actions = await changes(chained('two'));
+
+    expect(actions.map((action) => action.name)).toEqual(['a', 'b']);
+  });
+
+  // Known bug: `plan` never computes module outputs, so the reference is unknown every time.
+  it.fails('plans no changes when a resource reads a module output', async () => {
+    await fs.mkdir(path.join(dir, 'm'));
+    await fs.writeFile(path.join(dir, 'm', 'main.mf'), 'output "name" { value = "produced" }');
+    const config = `
+      module "m" { source = "./m" }
+      resource "local_file" "c" {
+        path = "${path.join(dir, 'c.txt')}"
+        content = "\${module.m.name}"
+      }
+    `;
+    await orchestrator.apply(config, dir);
+
+    expect(await changes(config)).toEqual([]);
   });
 });

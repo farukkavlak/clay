@@ -1,6 +1,7 @@
 import { Address } from '../Address';
 import { ScopeManager } from '../scope/ScopeManager';
 import { IResolver } from './IResolver';
+import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 
 export class ModuleOutputResolver implements IResolver {
   constructor(private scopeManager: ScopeManager) {}
@@ -13,7 +14,7 @@ export class ModuleOutputResolver implements IResolver {
     const childScope = currentScope ? `${currentScope}.module.${moduleName}` : `module.${moduleName}`;
 
     const output = this.scopeManager.getOutput(childScope, outputName);
-    if (output === undefined) throw new Error(`Output "${outputName}" not found in module "${childScope}"`);
+    if (output === undefined) throw new UnresolvedReferenceError(`Output "${outputName}" not found in module "${childScope}"`);
 
     return output;
   }
