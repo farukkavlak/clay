@@ -53,6 +53,11 @@ export class ActionExecutor {
         await this.executeUpdate(action, provider, currentState);
         break;
       }
+      case 'REPLACE': {
+        await this.executeDelete(action, provider, currentState);
+        await this.executeCreate(action, provider, currentState);
+        break;
+      }
       case 'DELETE': {
         await this.executeDelete(action, provider, currentState);
         break;
@@ -107,7 +112,7 @@ export class ActionExecutor {
   }
 
   async executeDelete(action: PlanAction, provider: IProvider, currentState: IState): Promise<void> {
-    if (!action.id) throw new Error('DELETE action missing id');
+    if (!action.id) throw new Error(`${action.type} action missing id`);
 
     const contextAddress = new Address(action.modulePath || [], action.resourceType, action.name);
 

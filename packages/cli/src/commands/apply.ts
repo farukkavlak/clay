@@ -12,6 +12,7 @@ import path from 'node:path';
 function getActionSymbol(actionType: string): string {
   if (actionType === 'CREATE') return chalk.green('+');
   if (actionType === 'UPDATE') return chalk.yellow('~');
+  if (actionType === 'REPLACE') return chalk.red('-') + chalk.green('+');
   if (actionType === 'DELETE') return chalk.red('-');
   return ' ';
 }

@@ -10,6 +10,7 @@ import path from 'node:path';
 function getActionSymbol(actionType: string): string {
   if (actionType === 'CREATE') return chalk.green('+');
   if (actionType === 'UPDATE') return chalk.yellow('~');
+  if (actionType === 'REPLACE') return chalk.red('-') + chalk.green('+');
   if (actionType === 'DELETE') return chalk.red('-');
   return ' ';
 }
@@ -17,6 +18,7 @@ function getActionSymbol(actionType: string): string {
 function getActionTypeColor(actionType: string): string {
   if (actionType === 'CREATE') return chalk.green('create');
   if (actionType === 'UPDATE') return chalk.yellow('update');
+  if (actionType === 'REPLACE') return chalk.red('replace');
   if (actionType === 'DELETE') return chalk.red('destroy');
   return 'no-op';
 }
@@ -30,14 +32,16 @@ function displayAction(action: PlanAction): void {
   const typeColor = getActionTypeColor(action.type);
   console.log(`  ${symbol} ${action.resourceType}.${action.name} will be ${typeColor}d`);
 
-  if (action.type === 'UPDATE' && action.changes)
+  if ((action.type === 'UPDATE' || action.type === 'REPLACE') && action.changes)
     for (const [key, change] of Object.entries(action.changes)) console.log(`      ${key}: ${JSON.stringify(change.old)} -> ${describeValue(change.new)}`);
 }
 
 function displayPlanSummary(actions: PlanAction[]): void {
-  const createCount = actions.filter((a) => a.type === 'CREATE').length;
+  // A replacement counts as one add and one destroy, as Terraform sums it.
+  const replaceCount = actions.filter((a) => a.type === 'REPLACE').length;
+  const createCount = actions.filter((a) => a.type === 'CREATE').length + replaceCount;
   const updateCount = actions.filter((a) => a.type === 'UPDATE').length;
-  const deleteCount = actions.filter((a) => a.type === 'DELETE').length;
+  const deleteCount = actions.filter((a) => a.type === 'DELETE').length + replaceCount;
 
   console.log(chalk.bold(`\nPlan: ${createCount} to add, ${updateCount} to change, ${deleteCount} to destroy.`));
 }

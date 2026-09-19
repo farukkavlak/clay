@@ -160,6 +160,38 @@ describe('CLI: plan command', () => {
     consoleSpy.mockRestore();
   });
 
+  it('should display a REPLACE as one line and count it as an add and a destroy', async () => {
+    vi.mocked(fs.access).mockResolvedValue(void 0);
+    vi.mocked(fs.readFile).mockResolvedValue('resource "test" "t" {}');
+
+    const actions = [
+      {
+        type: 'REPLACE',
+        resourceType: 'test',
+        name: 't',
+        changes: { path: { old: '/old', new: '/new' } },
+      },
+    ];
+    const planMock = vi.fn().mockResolvedValue(actions);
+
+    vi.mocked(Orchestrator).mockImplementation(function () {
+      return {
+        registerProvider: vi.fn(),
+        plan: planMock,
+      } as Partial<Orchestrator> as Orchestrator;
+    });
+
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await createPlanCommand().parseAsync(['node', 'miniform', 'plan']);
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('-+ test.t will be replaced'));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('path: "/old" -> "/new"'));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Plan: 1 to add, 0 to change, 1 to destroy.'));
+
+    consoleSpy.mockRestore();
+  });
+
   it('should display DELETE actions', async () => {
     vi.mocked(fs.access).mockResolvedValue(void 0);
     vi.mocked(fs.readFile).mockResolvedValue('');

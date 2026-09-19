@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-298 tests pass, and so do the type check and the build. Lint shows 23 warnings, and
+303 tests pass, and so do the type check and the build. Lint shows 23 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -56,8 +56,14 @@ In order: the safety net first, then the engine, then the CLI, then the output.
 - [x] `plan` never computed module outputs, so every `${module.x.y}` was unknown and its
       resource showed a change that never settled. Outputs are now given their value on the
       same walk as the resources, and an output fed by a pending resource is unknown.
-- [ ] Replacing a resource destroys it. Creates run before deletes, so the delete removes
-      the file the create just wrote, and drops it from state.
+- [x] Replacing a resource dropped it from state. The planner emitted a DELETE and a CREATE,
+      creates ran before deletes, and the delete removed the entry the create had just
+      written, so the next plan created it again. A replacement is one `REPLACE` action
+      now: delete, create, one state entry.
+- [ ] Resources removed from the config are deleted in state order, not in reverse
+      dependency order, so a dependency can go before what still reads it. The graph only
+      knows the config; Terraform solves this by writing each resource's dependencies into
+      state.
 - [ ] An attribute removed from the config stays in state. `executeUpdate` spreads the old
       attributes under the new ones, so a key the config dropped survives.
 - [ ] A failed action loses the whole run. `apply` writes state only after the last
@@ -78,10 +84,14 @@ In order: the safety net first, then the engine, then the CLI, then the output.
       config's directory.
 - [ ] `local_file` rejects empty content. `validate` tests the value for truthiness
       instead of its type.
-- [ ] The planner matches replacements by type and name only, ignoring the module path.
+- [x] The planner matched replacements by type and name only, ignoring the module path. The
+      check existed to keep a replacement's DELETE apart from a removal's; with one
+      `REPLACE` action there is nothing to tell apart.
 - [ ] `plan` never says "No changes". It checks for an empty list, but the planner returns
       a `NO_OP` action for every unchanged resource.
-- [ ] A replacement prints as one add and one destroy, not as one replace.
+- [x] A replacement printed as one add and one destroy, not as one replace. It is one
+      `-+ ... will be replaced` line now; the summary still counts it as an add and a
+      destroy, the way Terraform sums it.
 - [ ] The plan output says "destroyd" and "no-opd".
 
 ## 2 — dependencies
@@ -121,7 +131,9 @@ In order: the safety net first, then the engine, then the CLI, then the output.
 - [ ] Resolving works on a context that can be cloned per scope, instead of one mutable
       `ScopeManager` keyed by scope strings. The dependency-order fix needs to resolve the
       same config against different sets of pending values.
-- [ ] The CLI commands share their helpers instead of copying them.
+- [ ] The CLI commands share their helpers instead of copying them. `apply` has its own
+      copy of the action list and it says less than `plan`'s: no "will be replaced", no
+      diff.
 - [ ] Comments that only restate the code are gone (`// Mock Provider for testing`).
 
 ## 4 — repo
