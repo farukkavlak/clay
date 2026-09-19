@@ -319,4 +319,18 @@ describe('apply and plan against real files', () => {
     const state = await new LocalBackend(dir).read();
     expect(state.variables).toEqual({ '': { greeting: 'hello' }, 'module.m': { text: 'hello' } });
   });
+
+  it('says that modules are read through their outputs', async () => {
+    await fs.mkdir(path.join(dir, 'm'));
+    await fs.writeFile(path.join(dir, 'm', 'main.mf'), `resource "local_file" "inner" { path = "${path.join(dir, 'inner.txt')}" content = "x" }`);
+    const config = `
+      module "m" { source = "./m" }
+      resource "local_file" "c" {
+        path = "${path.join(dir, 'c.txt')}"
+        content = "\${module.m.local_file.inner.content}"
+      }
+    `;
+
+    await expect(newOrchestrator().plan(config, dir)).rejects.toThrow('modules are read through their outputs');
+  });
 });
