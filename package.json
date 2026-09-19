@@ -1,11 +1,11 @@
 {
-  "name": "miniform",
+  "name": "clay",
   "version": "1.0.0",
   "private": true,
   "description": "Infrastructure-as-Code (IaC) Engine",
   "keywords": [
     "iac",
-    "terraform",
+    "infrastructure-as-code",
     "typescript"
   ],
   "license": "ISC",
@@ -18,7 +18,7 @@
     "build": "npm run build --workspaces --if-present",
     "format": "prettier --write .",
     "lint": "eslint .",
-    "miniform": "ts-node src/index.ts",
+    "clay": "ts-node src/index.ts",
     "test": "npm run test --workspaces --if-present",
     "type:check": "npm run type:check --workspaces --if-present && tsc --noEmit"
   },

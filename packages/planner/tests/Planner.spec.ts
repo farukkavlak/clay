@@ -1,4 +1,4 @@
-import { IState } from '@miniform/state';
+import { IState } from '@clay/state';
 import { describe, expect, it } from 'vitest';
 
 import { DesiredResource, plan, PLAN_FILE_VERSION, PlanAction, serializePlan, UNKNOWN, validatePlanFile } from '../src/index';
@@ -164,7 +164,7 @@ describe('Planner', () => {
       expect(validatePlanFile({ version: 1 })).toBe(false); // wrong type
     });
 
-    it('should reject a plan file from an older miniform', () => {
+    it('should reject a plan file from an older version', () => {
       const old = { version: '1.0', timestamp: new Date().toISOString(), configHash: 'hash', actions: [] };
 
       expect(validatePlanFile(old)).toBe(false);

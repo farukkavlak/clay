@@ -1,7 +1,7 @@
-import { Orchestrator } from '@miniform/orchestrator';
-import { serializePlan } from '@miniform/planner';
-import { LocalProvider } from '@miniform/provider-local';
-import { LocalBackend, StateManager } from '@miniform/state';
+import { Orchestrator } from '@clay/orchestrator';
+import { serializePlan } from '@clay/planner';
+import { LocalProvider } from '@clay/provider-local';
+import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -43,7 +43,7 @@ describe('a plan saved to a file', () => {
   const save = async (config: string) => serializePlan(await newOrchestrator().plan(config, dir), config);
 
   beforeEach(async () => {
-    dir = await fs.mkdtemp(path.join(os.tmpdir(), 'miniform-saved-plan-'));
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-saved-plan-'));
   });
 
   afterEach(async () => {
@@ -54,7 +54,7 @@ describe('a plan saved to a file', () => {
   it('is applied by the CLI without reading the configuration on disk', async () => {
     const saved = await save(fileConfig('planned'));
     await fs.writeFile(path.join(dir, 'plan.json'), JSON.stringify(saved), 'utf8');
-    await fs.writeFile(path.join(dir, 'main.mini'), fileConfig('changed'), 'utf8');
+    await fs.writeFile(path.join(dir, 'main.clay'), fileConfig('changed'), 'utf8');
 
     const cwd = process.cwd();
     process.chdir(dir);
@@ -63,7 +63,7 @@ describe('a plan saved to a file', () => {
     vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
 
     try {
-      await createApplyCommand().parseAsync(['node', 'miniform', 'plan.json']);
+      await createApplyCommand().parseAsync(['node', 'clay', 'plan.json']);
     } finally {
       vi.restoreAllMocks();
       process.chdir(cwd);

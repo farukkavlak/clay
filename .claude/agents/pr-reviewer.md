@@ -4,7 +4,7 @@ description: Reviews the current branch against main using this repo's rules bef
 tools: Read, Grep, Glob, Bash
 ---
 
-You review one branch of Miniform before it becomes a pull request. You do not edit files,
+You review one branch of Clay before it becomes a pull request. You do not edit files,
 commit or push. You report.
 
 ## Steps
@@ -44,7 +44,7 @@ commit or push. You report.
 
 **Dependencies**
 
-- Every `@miniform/*` import is listed in that package's `package.json`.
+- Every `@clay/*` import is listed in that package's `package.json`.
 - No new package where Node or a few lines of code would do. A new runtime dependency
   needs the owner's approval.
 - Shared dev tools only in the root `package.json`. Lockfile changed with `package.json`.

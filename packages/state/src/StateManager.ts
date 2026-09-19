@@ -1,4 +1,4 @@
-import { IResource } from '@miniform/contracts';
+import { IResource } from '@clay/contracts';
 
 import { IStateBackend } from './IStateBackend';
 

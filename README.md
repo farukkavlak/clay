@@ -1,6 +1,6 @@
-# Miniform
+# Clay
 
-**Miniform** is an educational Infrastructure-as-Code (IaC) engine built to demonstrate how tools like Terraform work under the hood.
+**Clay** is an Infrastructure-as-Code engine: you describe resources in a config file, and Clay works out what to create, change or destroy, then does it.
 
 ## 🚀 Features
 
@@ -20,21 +20,21 @@ npm install
 1.  Initialize a new workspace:
 
     ```bash
-    npm run miniform init
+    npm run clay init
     ```
 
-2.  Create a `main.mini` file:
+2.  Create a `main.clay` file:
 
     ```
     resource "file" "example" {
       path = "./hello.txt"
-      content = "Hello Miniform!"
+      content = "Hello Clay!"
     }
     ```
 
 3.  Apply changes:
     ```bash
-    npm run miniform apply
+    npm run clay apply
     ```
 
 ## 📝 License

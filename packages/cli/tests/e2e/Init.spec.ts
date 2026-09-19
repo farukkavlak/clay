@@ -1,4 +1,4 @@
-import { LocalBackend } from '@miniform/state';
+import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createInitCommand } from '../../src/commands/init';
 
-const init = () => createInitCommand().parseAsync(['node', 'miniform', 'init']);
+const init = () => createInitCommand().parseAsync(['node', 'clay', 'init']);
 
 // init works on the current directory, so the tests run it from a temp one.
 describe('init against real files', () => {
@@ -19,7 +19,7 @@ describe('init against real files', () => {
   };
 
   beforeEach(async () => {
-    dir = await fs.mkdtemp(path.join(os.tmpdir(), 'miniform-init-'));
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-init-'));
     cwd = process.cwd();
     process.chdir(dir);
     vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -42,7 +42,7 @@ describe('init against real files', () => {
     await init();
 
     const printed = vi.mocked(console.log).mock.calls.flat().join('\n');
-    expect(printed).toContain(`Found ${path.join(process.cwd(), '.miniform')}`);
+    expect(printed).toContain(`Found ${path.join(process.cwd(), '.clay')}`);
     expect(printed).toContain('Kept the state already here');
   });
 

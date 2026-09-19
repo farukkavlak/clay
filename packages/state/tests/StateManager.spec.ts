@@ -12,7 +12,7 @@ describe('StateManager', () => {
 
   beforeEach(async () => {
     // Create a safe temporary directory for each test
-    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'miniform-state-test-'));
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-state-test-'));
     const backend = new LocalBackend(tmpDir, 'test.state.json');
     stateManager = new StateManager(backend);
   });

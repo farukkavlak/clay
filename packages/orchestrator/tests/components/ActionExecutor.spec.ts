@@ -1,6 +1,6 @@
-import { IProvider } from '@miniform/contracts';
-import { PlanAction } from '@miniform/planner';
-import { IState } from '@miniform/state';
+import { IProvider } from '@clay/contracts';
+import { PlanAction } from '@clay/planner';
+import { IState } from '@clay/state';
 import { afterEach, beforeEach, describe, expect, it, Mock, vi } from 'vitest';
 
 import { Address } from '../../src/Address';

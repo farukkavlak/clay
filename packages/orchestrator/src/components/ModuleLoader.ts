@@ -1,4 +1,4 @@
-import { AttributeValue, Lexer, Parser, ResourceBlock, Statement } from '@miniform/parser';
+import { AttributeValue, CONFIG_FILE, Lexer, Parser, ResourceBlock, Statement } from '@clay/parser';
 import * as fs from 'node:fs';
 import path from 'node:path';
 
@@ -74,7 +74,7 @@ export class ModuleLoader {
   }
 
   private parseModuleFile(moduleDir: string): Statement[] {
-    const moduleFile = path.join(moduleDir, 'main.mf');
+    const moduleFile = path.join(moduleDir, CONFIG_FILE);
     if (!fs.existsSync(moduleFile)) throw new Error(`Module source not found at: ${moduleFile}`);
 
     const moduleContent = fs.readFileSync(moduleFile, 'utf8');

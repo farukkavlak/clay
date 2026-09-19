@@ -1,4 +1,4 @@
-# Miniform Execution Checklist
+# Clay Execution Checklist
 
 ## 0. Architectural Standards
 
@@ -27,11 +27,11 @@
 
 **Requirement:** A modular system to manage state, resolve dependencies, and execute changes.
 
-- [x] **`@miniform/contracts`:** Define shared interfaces (`IResource`, `IProvider`)
-- [x] **`@miniform/graph`:** Implement DAG (Directed Acyclic Graph) & Topological Sort
-- [x] **`@miniform/state`:** Implement JSON reader/writer & Locking mechanism
-- [x] **`@miniform/planner`:** Diff Engine logic (Config vs State)
-- [x] **`@miniform/orchestrator`:** The Orchestrator that binds everything together
+- [x] **`@clay/contracts`:** Define shared interfaces (`IResource`, `IProvider`)
+- [x] **`@clay/graph`:** Implement DAG (Directed Acyclic Graph) & Topological Sort
+- [x] **`@clay/state`:** Implement JSON reader/writer & Locking mechanism
+- [x] **`@clay/planner`:** Diff Engine logic (Config vs State)
+- [x] **`@clay/orchestrator`:** The Orchestrator that binds everything together
   - [x] Provider Registry
   - [x] Config Parsing Integration
   - [x] Dependency Graph Building
@@ -55,7 +55,7 @@
 
 ### 4.1. Local Provider
 
-- [x] **`@miniform/provider-local`:** Local file system provider
+- [x] **`@clay/provider-local`:** Local file system provider
   - [x] `local_file` resource (create/update/delete files)
   - [x] Modular resource handler architecture
   - [x] Validation logic
@@ -74,10 +74,10 @@
 
 **Requirement:** Command-line interface for user interaction.
 
-- [x] **`@miniform/cli`:** User-facing commands
-  - [x] `miniform init`: Workspace setup (create .miniform/, initialize state)
-  - [x] `miniform plan`: Dry-run (show diffs without applying)
-  - [x] `miniform apply`: Execute changes (calls Orchestrator.apply())
+- [x] **`@clay/cli`:** User-facing commands
+  - [x] `clay init`: Workspace setup (create .clay/, initialize state)
+  - [x] `clay plan`: Dry-run (show diffs without applying)
+  - [x] `clay apply`: Execute changes (calls Orchestrator.apply())
   - [x] Pretty output formatting (colored diffs, progress indicators)
 
 ## 6. Future Scope: Scalable Provider Architecture
@@ -140,7 +140,7 @@
 ### 8.1. TypeScript Config Support
 
 - [ ] **Config File Support**
-  - [ ] Parse `miniform.config.ts` files
+  - [ ] Parse `clay.config.ts` files
   - [ ] `defineConfig` helper function
   - [ ] Type definitions for resources
   - [ ] Compile-time validation
@@ -152,7 +152,7 @@
 ### 8.2. Programmatic API
 
 - [ ] **Core API**
-  - [ ] Export `Miniform` class
+  - [ ] Export `Clay` class
   - [ ] `plan()` method
   - [ ] `apply()` method
   - [ ] `destroy()` method
@@ -168,9 +168,9 @@
 ### 8.3. Unique Features
 
 - [ ] **Resource Snapshots**
-  - [ ] `miniform snapshot create`
-  - [ ] `miniform snapshot rollback`
-  - [ ] `miniform snapshot list`
+  - [ ] `clay snapshot create`
+  - [ ] `clay snapshot rollback`
+  - [ ] `clay snapshot list`
   - [ ] Snapshot diff
 - [ ] **Visual Diff**
   - [ ] HTML diff generation
@@ -205,13 +205,13 @@
 
 ### 8.2. Plan Command
 
-- [x] **`miniform plan` Command**
+- [x] **`clay plan` Command**
   - [x] Show changes
   - [x] Colored output (+, ~, -)
   - [x] Resource count summary
 - [x] **Plan File Support**
   - [x] Save plan to file (`-out` flag)
-  - [x] Apply from saved plan (`miniform apply [plan-file]`)
+  - [x] Apply from saved plan (`clay apply [plan-file]`)
   - [x] Plan validation and hash check
 
 ### 8.3. Output Values
@@ -221,7 +221,7 @@
   - [x] Store outputs in state
 - [x] **Output Display**
   - [x] Show outputs after apply
-  - [x] `miniform output` command
+  - [x] `clay output` command
   - [x] JSON output format
 
 ### 8.4. Better Error Messages
@@ -251,11 +251,11 @@
 ### 9.2. State Management Commands
 
 - [x] **State Inspection**
-  - [x] `miniform state list`
-  - [x] `miniform state show <resource>`
+  - [x] `clay state list`
+  - [x] `clay state show <resource>`
 - [x] **State Manipulation**
-  - [x] `miniform state rm <resource>`
-  - [x] `miniform state mv <old> <new>`
+  - [x] `clay state rm <resource>`
+  - [x] `clay state mv <old> <new>`
 - [ ] **State Import/Export**
   - [ ] Import existing resources
   - [ ] Export state to JSON
@@ -263,7 +263,7 @@
 ### 9.3. Validation
 
 - [x] **Config Validation**
-  - [x] `miniform validate` command
+  - [x] `clay validate` command
   - [x] Syntax validation
   - [x] Provider schema validation
 - [x] **Dependency Validation**
@@ -299,7 +299,7 @@
 ### 10.2. Refresh
 
 Terraform reads every resource from its provider before the diff, so a change made by
-hand shows up in the plan. Miniform plans against what it last applied.
+hand shows up in the plan. Clay plans against what it last applied.
 
 - [ ] **Refresh before the diff**
   - [ ] `read()` on every resource type; today each returns `{}`
@@ -331,9 +331,9 @@ hand shows up in the plan. Miniform plans against what it last applied.
 ### 10.5. Workspaces
 
 - [ ] **Workspace Management**
-  - [ ] `miniform workspace new <name>`
-  - [ ] `miniform workspace select <name>`
-  - [ ] `miniform workspace list`
+  - [ ] `clay workspace new <name>`
+  - [ ] `clay workspace select <name>`
+  - [ ] `clay workspace list`
 - [ ] **Workspace Isolation**
   - [ ] Separate state per workspace
   - [ ] Workspace-specific variables
@@ -345,7 +345,7 @@ hand shows up in the plan. Miniform plans against what it last applied.
 A run that dies leaves its lock behind. The error names the file; a `force-unlock`
 command would remove it the way Terraform's does.
 
-- [ ] `miniform force-unlock`
+- [ ] `clay force-unlock`
 
 ## 11. Nice to Have
 
@@ -363,7 +363,7 @@ command would remove it the way Terraform's does.
 
 - [ ] **Graph Generation**
   - [ ] Generate DOT format
-  - [ ] `miniform graph` command
+  - [ ] `clay graph` command
 - [ ] **Visualization**
   - [ ] SVG output
   - [ ] Interactive HTML
@@ -371,7 +371,7 @@ command would remove it the way Terraform's does.
 ### 11.3. Auto-formatting
 
 - [ ] **Format Command**
-  - [ ] `miniform fmt` command
+  - [ ] `clay fmt` command
   - [ ] Consistent indentation
   - [ ] Sort attributes alphabetically
 

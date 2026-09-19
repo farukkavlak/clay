@@ -1,4 +1,4 @@
-import { plan } from '@miniform/planner';
+import { plan } from '@clay/planner';
 import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
 import os from 'node:os';
@@ -14,7 +14,7 @@ vi.mock('node:fs');
 const readMock = vi.fn().mockResolvedValue({ resources: {}, variables: {}, version: 1 });
 const writeMock = vi.fn().mockResolvedValue(undefined);
 
-vi.mock('@miniform/state', () => {
+vi.mock('@clay/state', () => {
   const StateManager = vi.fn((backend) => ({
     read: readMock,
     write: writeMock,
@@ -32,8 +32,8 @@ vi.mock('@miniform/state', () => {
 });
 
 // Mock Planner
-vi.mock('@miniform/planner', async () => ({
-  ...(await vi.importActual<object>('@miniform/planner')),
+vi.mock('@clay/planner', async () => ({
+  ...(await vi.importActual<object>('@clay/planner')),
   plan: vi.fn(() => []),
 }));
 
@@ -65,7 +65,7 @@ describe('Orchestrator - Phase 4: Data Flow', () => {
       getSchema: vi.fn().mockReturnValue({}),
     };
 
-    const { StateManager, LocalBackend } = await import('@miniform/state');
+    const { StateManager, LocalBackend } = await import('@clay/state');
     const backend = new LocalBackend(tmpDir);
     const stateManager = new StateManager(backend);
     orchestrator = new Orchestrator(stateManager);
@@ -135,7 +135,7 @@ module "app" {
 
     (fs.existsSync as Mock).mockReturnValue(true);
     (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
-      if (filePath.endsWith('app/main.mf')) return appConfig;
+      if (filePath.endsWith('app/main.clay')) return appConfig;
       if (filePath.includes('root')) return rootConfig;
       return rootConfig;
     });
@@ -178,7 +178,7 @@ module "L2" {
 
     (fs.existsSync as Mock).mockReturnValue(true);
     (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
-      if (filePath.endsWith('L2/main.mf')) return l2Config;
+      if (filePath.endsWith('L2/main.clay')) return l2Config;
       return rootConfig;
     });
 
@@ -223,7 +223,7 @@ resource "test_resource" "instance" {
 
     (fs.existsSync as Mock).mockReturnValue(true);
     (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
-      if (filePath.endsWith('db/main.mf')) return dbConfig;
+      if (filePath.endsWith('db/main.clay')) return dbConfig;
       return rootConfig;
     });
 

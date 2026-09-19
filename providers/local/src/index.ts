@@ -1,4 +1,4 @@
-import { IProvider, IResourceHandler, ISchema } from '@miniform/contracts';
+import { IProvider, IResourceHandler, ISchema } from '@clay/contracts';
 
 import { CommandExecResource } from './resources/CommandExecResource';
 import { LocalFileResource } from './resources/LocalFileResource';

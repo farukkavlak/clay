@@ -1,4 +1,4 @@
-import { plan } from '@miniform/planner';
+import { plan } from '@clay/planner';
 import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
 import os from 'node:os';
@@ -13,7 +13,7 @@ vi.mock('node:fs');
 const readMock = vi.fn().mockResolvedValue({ resources: {}, variables: {}, version: 1 });
 const writeMock = vi.fn().mockResolvedValue(undefined);
 
-vi.mock('@miniform/state', () => {
+vi.mock('@clay/state', () => {
   const StateManager = vi.fn((backend) => ({
     read: readMock,
     write: writeMock,
@@ -31,8 +31,8 @@ vi.mock('@miniform/state', () => {
 });
 
 // Mock Planner
-vi.mock('@miniform/planner', async () => ({
-  ...(await vi.importActual<object>('@miniform/planner')),
+vi.mock('@clay/planner', async () => ({
+  ...(await vi.importActual<object>('@clay/planner')),
   plan: vi.fn(() => []),
 }));
 
@@ -63,7 +63,7 @@ describe('Orchestrator - Module Loading', () => {
       getSchema: vi.fn().mockReturnValue({}),
     };
 
-    const { StateManager, LocalBackend } = await import('@miniform/state');
+    const { StateManager, LocalBackend } = await import('@clay/state');
     const backend = new LocalBackend(tmpDir);
     const stateManager = new StateManager(backend);
     orchestrator = new Orchestrator(stateManager);
@@ -92,7 +92,7 @@ describe('Orchestrator - Module Loading', () => {
     // Mock FS Sync for Module Loading
     (fs.existsSync as Mock).mockReturnValue(true);
     (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
-      if (filePath.includes('modules/vpc/main.mf')) return vpcConfig;
+      if (filePath.includes('modules/vpc/main.clay')) return vpcConfig;
       return '';
     });
 
@@ -126,8 +126,8 @@ describe('Orchestrator - Module Loading', () => {
 
     (fs.existsSync as Mock).mockReturnValue(true);
     (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
-      if (filePath.endsWith('app/main.mf')) return appConfig;
-      if (filePath.endsWith('db/main.mf')) return dbConfig;
+      if (filePath.endsWith('app/main.clay')) return appConfig;
+      if (filePath.endsWith('db/main.clay')) return dbConfig;
       // The orchestrator re-reads the root config for execution, so we need to return it
       return rootConfig;
     });
@@ -167,10 +167,10 @@ describe('Orchestrator - Module Loading', () => {
 
     (fs.existsSync as Mock).mockReturnValue(true);
     (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
-      if (filePath.endsWith('L2/main.mf')) return config2;
-      if (filePath.endsWith('L3/main.mf')) return config3;
-      if (filePath.endsWith('L4/main.mf')) return config4;
-      if (filePath.endsWith('L5/main.mf')) return config5;
+      if (filePath.endsWith('L2/main.clay')) return config2;
+      if (filePath.endsWith('L3/main.clay')) return config3;
+      if (filePath.endsWith('L4/main.clay')) return config4;
+      if (filePath.endsWith('L5/main.clay')) return config5;
       return config1; // Root (L1)
     });
 
@@ -215,7 +215,7 @@ describe('Orchestrator - Module Loading', () => {
 
   it('should throw error if module source file not found', async () => {
     const rootConfig = `module "missing" { source = "./missing" }`;
-    (fs.existsSync as Mock).mockImplementation((path) => !path.toString().includes('missing/main.mf'));
+    (fs.existsSync as Mock).mockImplementation((path) => !path.toString().includes('missing/main.clay'));
 
     await expect(apply(orchestrator, rootConfig, '/root')).rejects.toThrow('Module source not found');
   });

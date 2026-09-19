@@ -1,5 +1,5 @@
-import { IProvider, ISchema } from '@miniform/contracts';
-import { LocalBackend, StateManager } from '@miniform/state';
+import { IProvider, ISchema } from '@clay/contracts';
+import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';

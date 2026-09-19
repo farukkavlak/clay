@@ -1,4 +1,4 @@
-import { LocalBackend } from '@miniform/state';
+import { LocalBackend } from '@clay/state';
 import path from 'node:path';
 
 /** A path given on the command line names a file, and the backend takes a directory and a name, so it is split here. */

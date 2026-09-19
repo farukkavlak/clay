@@ -9,7 +9,7 @@ function makeParser(input: string): Parser {
   return new Parser(lexer.tokenize());
 }
 
-describe('Miniform Parser - Modules', () => {
+describe('Clay Parser - Modules', () => {
   it('should parse a simple module block', () => {
     const input = `
       module "vpc" {

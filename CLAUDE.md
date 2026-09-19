@@ -1,8 +1,9 @@
-# Miniform
+# Clay
 
-A small infrastructure-as-code engine in TypeScript, built to show how Terraform works
-inside. It is a portfolio project, so clean code and clean history matter as much as
-features.
+An infrastructure-as-code engine in TypeScript. It aims to do what Terraform does, differ
+where it can do better, and add what Terraform lacks. Clean code and clean history matter
+as much as features. Terraform is the reference for problems it has already solved well,
+not a specification to copy.
 
 ## Now
 
@@ -22,13 +23,13 @@ The owner makes the decisions and has to understand every line that lands.
 
 | Package          | Does                                                           |
 | ---------------- | -------------------------------------------------------------- |
-| `parser`         | Turns `.mini` files into an AST (`docs/GRAMMAR.md`)            |
+| `parser`         | Turns `.clay` files into an AST (`docs/GRAMMAR.md`)            |
 | `graph`          | Dependency graph, sorted into layers that can run in parallel  |
 | `contracts`      | Interfaces shared by the engine and providers                  |
 | `state`          | Reads and writes state, with a lock and a backup               |
 | `planner`        | Compares config with state and lists the actions               |
 | `orchestrator`   | Loads modules, resolves references and runs the plan           |
-| `cli`            | The `miniform` command                                         |
+| `cli`            | The `clay` command                                             |
 | `provider-local` | `local_file`, `random_string`, `null_resource`, `command_exec` |
 
 ## Commands
@@ -42,7 +43,7 @@ npm run type:check
 npm run format
 ```
 
-Try the CLI in a temp directory, never in the repo: `node packages/cli/bin/miniform.js plan`.
+Try the CLI in a temp directory, never in the repo: `node packages/cli/bin/clay.js plan`.
 
 ## Commits
 
@@ -60,7 +61,7 @@ Try the CLI in a temp directory, never in the repo: `node packages/cli/bin/minif
 
 ## Dependencies
 
-- A package lists every `@miniform/*` package it imports.
+- A package lists every `@clay/*` package it imports.
 - Shared dev tools live in the root `package.json` only.
 - If Node or a few lines of our own can do it, don't add a package. Ask before adding
   a runtime dependency.

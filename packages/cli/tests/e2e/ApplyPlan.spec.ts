@@ -1,7 +1,7 @@
-import { Orchestrator } from '@miniform/orchestrator';
-import { isUnknown } from '@miniform/planner';
-import { LocalProvider } from '@miniform/provider-local';
-import { LocalBackend, StateManager } from '@miniform/state';
+import { Orchestrator } from '@clay/orchestrator';
+import { isUnknown } from '@clay/planner';
+import { LocalProvider } from '@clay/provider-local';
+import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -51,7 +51,7 @@ describe('apply and plan against real files', () => {
   };
 
   beforeEach(async () => {
-    dir = await fs.mkdtemp(path.join(os.tmpdir(), 'miniform-e2e-'));
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-e2e-'));
     orchestrator = newOrchestrator();
   });
 
@@ -84,7 +84,7 @@ describe('apply and plan against real files', () => {
       variable "greeting" { default = "Hello" }
       resource "local_file" "a" {
         path = "${path.join(dir, 'a.txt')}"
-        content = "\${var.greeting} Miniform!"
+        content = "\${var.greeting} Clay!"
       }
     `;
     await apply(orchestrator, config);
@@ -202,7 +202,7 @@ describe('apply and plan against real files', () => {
       }
     `;
     await fs.mkdir(path.join(dir, 'm'));
-    await fs.writeFile(path.join(dir, 'm', 'main.mf'), moduleConfig);
+    await fs.writeFile(path.join(dir, 'm', 'main.clay'), moduleConfig);
     await apply(orchestrator, rootConfig('one'));
 
     const actions = await changes(rootConfig('two'));
@@ -217,7 +217,7 @@ describe('apply and plan against real files', () => {
 
   it('plans no changes when a resource reads a module output', async () => {
     await fs.mkdir(path.join(dir, 'm'));
-    await fs.writeFile(path.join(dir, 'm', 'main.mf'), 'output "name" { value = "produced" }');
+    await fs.writeFile(path.join(dir, 'm', 'main.clay'), 'output "name" { value = "produced" }');
     const config = `
       module "m" { source = "./m" }
       resource "local_file" "c" {
@@ -242,7 +242,7 @@ describe('apply and plan against real files', () => {
   `;
 
   const writeModule = async () =>
-    fs.writeFile(path.join(dir, 'm', 'main.mf'), `resource "local_file" "inner" { path = "${path.join(dir, 'inner.txt')}" content = "\${var.text}" }`);
+    fs.writeFile(path.join(dir, 'm', 'main.clay'), `resource "local_file" "inner" { path = "${path.join(dir, 'inner.txt')}" content = "\${var.text}" }`);
 
   it('applies a module that reads a resource through its input', async () => {
     await fs.mkdir(path.join(dir, 'm'));
@@ -280,7 +280,7 @@ describe('apply and plan against real files', () => {
 
   it('plans no changes for a module named after a graph node kind', async () => {
     await fs.mkdir(path.join(dir, 'vars'));
-    await fs.writeFile(path.join(dir, 'vars', 'main.mf'), 'output "o" { value = "inner" }');
+    await fs.writeFile(path.join(dir, 'vars', 'main.clay'), 'output "o" { value = "inner" }');
     const config = `
       module "vars" { source = "./vars" }
       resource "local_file" "b" {
@@ -322,7 +322,7 @@ describe('apply and plan against real files', () => {
       output "echo" { value = "\${module.m.echo}" }
     `;
     await fs.mkdir(path.join(dir, 'm'));
-    await fs.writeFile(path.join(dir, 'm', 'main.mf'), `output "echo" { value = "\${var.text}" }`);
+    await fs.writeFile(path.join(dir, 'm', 'main.clay'), `output "echo" { value = "\${var.text}" }`);
 
     await apply(orchestrator, config);
 
@@ -332,7 +332,7 @@ describe('apply and plan against real files', () => {
 
   it('says that modules are read through their outputs', async () => {
     await fs.mkdir(path.join(dir, 'm'));
-    await fs.writeFile(path.join(dir, 'm', 'main.mf'), `resource "local_file" "inner" { path = "${path.join(dir, 'inner.txt')}" content = "x" }`);
+    await fs.writeFile(path.join(dir, 'm', 'main.clay'), `resource "local_file" "inner" { path = "${path.join(dir, 'inner.txt')}" content = "x" }`);
     const config = `
       module "m" { source = "./m" }
       resource "local_file" "c" {
@@ -415,7 +415,7 @@ describe('apply and plan against real files', () => {
       }
     `;
     await fs.mkdir(path.join(dir, 'm'));
-    await fs.writeFile(path.join(dir, 'm', 'main.mf'), moduleConfig);
+    await fs.writeFile(path.join(dir, 'm', 'main.clay'), moduleConfig);
     await apply(orchestrator, 'module "m" { source = "./m" }');
 
     expect(await destroyedNames('')).toEqual(['inner_b', 'inner_a']);
@@ -472,7 +472,7 @@ describe('apply and plan against real files', () => {
     expect(events).toEqual(['planned', 'started a', 'applied a', 'started b', 'failed b']);
   });
 
-  const lockFile = () => path.join(dir, 'miniform.state.json.lock');
+  const lockFile = () => path.join(dir, 'clay.state.json.lock');
 
   it('refuses a second run while one holds the state', async () => {
     const first = orchestrator.run(fileConfig('hello'), dir);

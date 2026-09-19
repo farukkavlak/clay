@@ -1,5 +1,5 @@
 {
-  "name": "@miniform/provider-local",
+  "name": "@clay/provider-local",
   "version": "1.0.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

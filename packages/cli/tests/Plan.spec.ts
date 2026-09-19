@@ -1,12 +1,12 @@
-import { Orchestrator } from '@miniform/orchestrator';
-import { UNKNOWN } from '@miniform/planner';
+import { Orchestrator } from '@clay/orchestrator';
+import { UNKNOWN } from '@clay/planner';
 import fs from 'node:fs/promises';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createPlanCommand } from '../src/commands/plan';
 
 vi.mock('node:fs/promises');
-vi.mock('@miniform/orchestrator');
+vi.mock('@clay/orchestrator');
 vi.mock('chalk', () => ({
   default: {
     blue: vi.fn((m) => m),
@@ -16,8 +16,8 @@ vi.mock('chalk', () => ({
     bold: vi.fn((m) => m),
   },
 }));
-vi.mock('@miniform/planner', async () => {
-  const actual = await vi.importActual('@miniform/planner');
+vi.mock('@clay/planner', async () => {
+  const actual = await vi.importActual('@clay/planner');
   return {
     ...actual,
     serializePlan: vi.fn(() => ({
@@ -34,15 +34,15 @@ describe('CLI: plan command', () => {
     vi.clearAllMocks();
   });
 
-  it('should fail if main.mini does not exist', async () => {
+  it('should fail if main.clay does not exist', async () => {
     vi.mocked(fs.access).mockRejectedValue(new Error('ENOENT'));
 
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    await createPlanCommand().parseAsync(['node', 'miniform', 'plan']);
+    await createPlanCommand().parseAsync(['node', 'clay', 'plan']);
 
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Error: main.mini not found'));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Error: main.clay not found'));
     expect(exitSpy).toHaveBeenCalledWith(1);
 
     exitSpy.mockRestore();
@@ -63,7 +63,7 @@ describe('CLI: plan command', () => {
 
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    await createPlanCommand().parseAsync(['node', 'miniform', 'plan']);
+    await createPlanCommand().parseAsync(['node', 'clay', 'plan']);
 
     expect(planMock).toHaveBeenCalled();
     expect(consoleSpy).toHaveBeenCalledWith('No changes. Your infrastructure matches the configuration.');
@@ -90,9 +90,9 @@ describe('CLI: plan command', () => {
 
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    await createPlanCommand().parseAsync(['node', 'miniform', 'plan']);
+    await createPlanCommand().parseAsync(['node', 'clay', 'plan']);
 
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Miniform will perform the following actions:'));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Clay will perform the following actions:'));
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('+ test.t will be created'));
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Plan: 1 to add, 0 to change, 0 to destroy.'));
 
@@ -122,7 +122,7 @@ describe('CLI: plan command', () => {
 
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    await createPlanCommand().parseAsync(['node', 'miniform', 'plan']);
+    await createPlanCommand().parseAsync(['node', 'clay', 'plan']);
 
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('~ test.t will be updated'));
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Plan: 0 to add, 1 to change, 0 to destroy.'));
@@ -153,7 +153,7 @@ describe('CLI: plan command', () => {
 
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    await createPlanCommand().parseAsync(['node', 'miniform', 'plan']);
+    await createPlanCommand().parseAsync(['node', 'clay', 'plan']);
 
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('path: "/old" -> (known after apply)'));
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('mode: "0644" -> (removed)'));
@@ -185,7 +185,7 @@ describe('CLI: plan command', () => {
 
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    await createPlanCommand().parseAsync(['node', 'miniform', 'plan']);
+    await createPlanCommand().parseAsync(['node', 'clay', 'plan']);
 
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('-+ test.t will be replaced'));
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('path: "/old" -> "/new"'));
@@ -210,7 +210,7 @@ describe('CLI: plan command', () => {
 
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    await createPlanCommand().parseAsync(['node', 'miniform', 'plan']);
+    await createPlanCommand().parseAsync(['node', 'clay', 'plan']);
 
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('- test.t will be destroyd'));
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Plan: 0 to add, 0 to change, 1 to destroy.'));
@@ -232,7 +232,7 @@ describe('CLI: plan command', () => {
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    await createPlanCommand().parseAsync(['node', 'miniform', 'plan']);
+    await createPlanCommand().parseAsync(['node', 'clay', 'plan']);
 
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Planning failed:'), 'Parse error');
     expect(exitSpy).toHaveBeenCalledWith(1);
@@ -257,7 +257,7 @@ describe('CLI: plan command', () => {
 
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    await createPlanCommand().parseAsync(['node', 'miniform', 'plan']);
+    await createPlanCommand().parseAsync(['node', 'clay', 'plan']);
 
     // Should still display the action even with unknown type
     expect(consoleSpy).toHaveBeenCalled();
@@ -282,7 +282,7 @@ describe('CLI: plan command', () => {
 
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    await createPlanCommand().parseAsync(['node', 'miniform', '--out', 'plan.json']);
+    await createPlanCommand().parseAsync(['node', 'clay', '--out', 'plan.json']);
 
     expect(fs.writeFile).toHaveBeenCalledWith('plan.json', expect.any(String), 'utf8');
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Plan saved to: plan.json'));
@@ -306,7 +306,7 @@ describe('CLI: plan command', () => {
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    await createPlanCommand().parseAsync(['node', 'miniform', 'plan']);
+    await createPlanCommand().parseAsync(['node', 'clay', 'plan']);
 
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Planning failed:'), 'String Error');
     expect(exitSpy).toHaveBeenCalledWith(1);

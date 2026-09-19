@@ -1,4 +1,4 @@
-import { Orchestrator } from '@miniform/orchestrator';
+import { Orchestrator } from '@clay/orchestrator';
 import inquirer from 'inquirer';
 import fs from 'node:fs/promises';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,9 +6,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApplyCommand } from '../src/commands/apply';
 
 vi.mock('node:fs/promises');
-vi.mock('@miniform/orchestrator');
-vi.mock('@miniform/planner', async () => {
-  const actual = await vi.importActual('@miniform/planner');
+vi.mock('@clay/orchestrator');
+vi.mock('@clay/planner', async () => {
+  const actual = await vi.importActual('@clay/planner');
   return {
     ...actual,
     validatePlanFile: vi.fn((data) => {
@@ -49,15 +49,15 @@ describe('CLI: apply command', () => {
   });
 
   describe('Config-based apply', () => {
-    it('should abort if main.mini not found', async () => {
+    it('should abort if main.clay not found', async () => {
       vi.mocked(fs.access).mockRejectedValue(new Error('ENOENT'));
 
       const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      await createApplyCommand().parseAsync(['node', 'miniform']);
+      await createApplyCommand().parseAsync(['node', 'clay']);
 
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('main.mini not found'));
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('main.clay not found'));
       expect(exitSpy).toHaveBeenCalledWith(1);
 
       exitSpy.mockRestore();
@@ -86,7 +86,7 @@ describe('CLI: apply command', () => {
 
       vi.mocked(inquirer.prompt).mockResolvedValue({ confirm: true });
 
-      await createApplyCommand().parseAsync(['node', 'miniform']);
+      await createApplyCommand().parseAsync(['node', 'clay']);
 
       expect(planMock).toHaveBeenCalled();
       expect(inquirer.prompt).toHaveBeenCalled();
@@ -114,7 +114,7 @@ describe('CLI: apply command', () => {
 
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-      await createApplyCommand().parseAsync(['node', 'miniform', '--yes']);
+      await createApplyCommand().parseAsync(['node', 'clay', '--yes']);
 
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('+ test.t created'));
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('- test.gone destroyed'));
@@ -138,7 +138,7 @@ describe('CLI: apply command', () => {
         } as Partial<Orchestrator> as Orchestrator;
       });
 
-      await createApplyCommand().parseAsync(['node', 'miniform', '--yes']);
+      await createApplyCommand().parseAsync(['node', 'clay', '--yes']);
 
       expect(inquirer.prompt).not.toHaveBeenCalled();
       expect(runMock).toHaveBeenCalled();
@@ -162,7 +162,7 @@ describe('CLI: apply command', () => {
       vi.mocked(inquirer.prompt).mockResolvedValue({ confirm: false });
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-      await createApplyCommand().parseAsync(['node', 'miniform']);
+      await createApplyCommand().parseAsync(['node', 'clay']);
 
       expect(runMock).not.toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith('Apply cancelled.');
@@ -185,7 +185,7 @@ describe('CLI: apply command', () => {
 
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-      await createApplyCommand().parseAsync(['node', 'miniform']);
+      await createApplyCommand().parseAsync(['node', 'clay']);
 
       expect(consoleSpy).toHaveBeenCalledWith('No changes needed.');
       expect(inquirer.prompt).not.toHaveBeenCalled();
@@ -211,7 +211,7 @@ describe('CLI: apply command', () => {
       vi.mocked(inquirer.prompt).mockResolvedValue({ confirm: true });
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-      await createApplyCommand().parseAsync(['node', 'miniform']);
+      await createApplyCommand().parseAsync(['node', 'clay']);
 
       expect(runMock).toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Outputs:'));
@@ -237,7 +237,7 @@ describe('CLI: apply command', () => {
       vi.mocked(inquirer.prompt).mockResolvedValue({ confirm: true });
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-      await createApplyCommand().parseAsync(['node', 'miniform']);
+      await createApplyCommand().parseAsync(['node', 'clay']);
 
       // Should print action but without specific symbol (default case)
       expect(consoleSpy).toHaveBeenCalled();
@@ -275,7 +275,7 @@ describe('CLI: apply command', () => {
 
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-      await createApplyCommand().parseAsync(['node', 'miniform', 'plan.json']);
+      await createApplyCommand().parseAsync(['node', 'clay', 'plan.json']);
 
       expect(runPlanMock).toHaveBeenCalledWith([{ type: 'CREATE', resourceType: 'test', name: 't' }], 'saved config');
       expect(runMock).not.toHaveBeenCalled();
@@ -310,10 +310,10 @@ describe('CLI: apply command', () => {
 
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-      await createApplyCommand().parseAsync(['node', 'miniform', 'plan.json']);
+      await createApplyCommand().parseAsync(['node', 'clay', 'plan.json']);
 
       expect(runPlanMock).toHaveBeenCalled();
-      expect(vi.mocked(fs.readFile).mock.calls.flat().join(' ')).not.toContain('main.mini');
+      expect(vi.mocked(fs.readFile).mock.calls.flat().join(' ')).not.toContain('main.clay');
 
       consoleSpy.mockRestore();
     });
@@ -343,7 +343,7 @@ describe('CLI: apply command', () => {
 
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-      await createApplyCommand().parseAsync(['node', 'miniform', 'plan.json']);
+      await createApplyCommand().parseAsync(['node', 'clay', 'plan.json']);
 
       expect(runPlanMock).toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Outputs:'));
@@ -357,7 +357,7 @@ describe('CLI: apply command', () => {
       const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      await createApplyCommand().parseAsync(['node', 'miniform', 'invalid.json']);
+      await createApplyCommand().parseAsync(['node', 'clay', 'invalid.json']);
 
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Cannot read this plan file'));
       expect(exitSpy).toHaveBeenCalledWith(1);
@@ -390,7 +390,7 @@ describe('CLI: apply command', () => {
       const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      await createApplyCommand().parseAsync(['node', 'miniform']);
+      await createApplyCommand().parseAsync(['node', 'clay']);
 
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Apply failed:'), 'test.t: disk full');
       expect(exitSpy).toHaveBeenCalledWith(1);
@@ -409,7 +409,7 @@ describe('CLI: apply command', () => {
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    await createApplyCommand().parseAsync(['node', 'miniform']);
+    await createApplyCommand().parseAsync(['node', 'clay']);
 
     // Should use String(error)
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Apply failed:'), 'String Error');
