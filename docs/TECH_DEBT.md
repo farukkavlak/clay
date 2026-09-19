@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-296 tests pass, and so do the type check and the build. Lint shows 23 warnings, and
+298 tests pass, and so do the type check and the build. Lint shows 23 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -49,10 +49,10 @@ In order: the safety net first, then the engine, then the CLI, then the output.
       was written out literally. `processVariables` stored the unwrapped string, so the
       resolver never interpolated it. Every variable now holds its AST value and the state
       gets the resolved one.
-- [ ] A reference into a module (`module.app.local_file.a.content`) is read as an output
-      named `local_file` and fails as undeclared. Reaching inside a module stays
-      unsupported, the way Terraform has it; the message has to say that modules are read
-      through their outputs.
+- [x] A reference into a module (`module.app.local_file.a.content`) was read as an output
+      named `local_file` and failed as undeclared. Reaching inside a module stays
+      unsupported, the way Terraform has it, and the message now says that modules are
+      read through their outputs.
 - [x] `plan` never computed module outputs, so every `${module.x.y}` was unknown and its
       resource showed a change that never settled. Outputs are now given their value on the
       same walk as the resources, and an output fed by a pending resource is unknown.

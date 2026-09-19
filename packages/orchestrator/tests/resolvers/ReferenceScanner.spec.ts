@@ -58,4 +58,10 @@ describe('ReferenceScanner', () => {
 
     expect(scanner.referencesIn(attributes, inModule).map((reference) => reference.key)).toEqual(['module.app.resource.dep']);
   });
+
+  it('should reject a reference that reaches into a module', () => {
+    const attributes = { id: { type: 'Reference', value: ['module', 'app', 'local_file', 'a', 'content'] } };
+
+    expect(() => scanner.referencesIn(attributes, context)).toThrow('Reference "module.app.local_file.a.content" reaches into a module; modules are read through their outputs');
+  });
 });

@@ -45,6 +45,9 @@ export class ReferenceScanner {
 
     if (refType === 'var') references.push({ kind: 'variable', key: variableKey(scope, refParts[1]), name: refParts[1] });
     else if (refType === 'module') {
+      // A module reference is module.<name>.<output> and nothing deeper.
+      if (refParts.length > 3) throw new Error(`Reference "${refParts.join('.')}" reaches into a module; modules are read through their outputs`);
+
       const [, module, name] = refParts;
       const child = childScope(scope, module);
       references.push({ kind: 'output', key: outputKey(child, name), scope: child, module, name });
