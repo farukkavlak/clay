@@ -23,7 +23,8 @@ function getActionTypeColor(actionType: string): string {
   return 'no-op';
 }
 
-function describeValue(value: unknown): string {
+function describeValue(value: unknown, whenAbsent: string): string {
+  if (value === undefined) return whenAbsent;
   return isUnknown(value) ? '(known after apply)' : JSON.stringify(value);
 }
 
@@ -33,7 +34,7 @@ function displayAction(action: PlanAction): void {
   console.log(`  ${symbol} ${action.resourceType}.${action.name} will be ${typeColor}d`);
 
   if ((action.type === 'UPDATE' || action.type === 'REPLACE') && action.changes)
-    for (const [key, change] of Object.entries(action.changes)) console.log(`      ${key}: ${JSON.stringify(change.old)} -> ${describeValue(change.new)}`);
+    for (const [key, change] of Object.entries(action.changes)) console.log(`      ${key}: ${describeValue(change.old, '(none)')} -> ${describeValue(change.new, '(removed)')}`);
 }
 
 function displayPlanSummary(actions: PlanAction[]): void {

@@ -296,7 +296,17 @@
   - [x] Output from modules
   - [x] Nested modules
 
-### 10.2. Lifecycle Management
+### 10.2. Refresh
+
+Terraform reads every resource from its provider before the diff, so a change made by
+hand shows up in the plan. Miniform plans against what it last applied.
+
+- [ ] **Refresh before the diff**
+  - [ ] `read()` on every resource type; today each returns `{}`
+  - [ ] State holds what the provider returns, not only the inputs that were sent
+  - [ ] `plan` refreshes first, `-refresh=false` skips it
+
+### 10.3. Lifecycle Management
 
 - [ ] **Lifecycle Block**
   - [ ] `create_before_destroy`
@@ -307,7 +317,7 @@
   - [ ] Prevent destroy protection
   - [ ] Selective attribute ignoring
 
-### 10.3. Provisioners
+### 10.4. Provisioners
 
 - [ ] **Provisioner Parsing**
   - [ ] `provisioner "type" {}` syntax
@@ -317,7 +327,7 @@
   - [ ] `remote-exec`: Run remote commands
   - [ ] `file`: Copy files
 
-### 10.4. Workspaces
+### 10.5. Workspaces
 
 - [ ] **Workspace Management**
   - [ ] `miniform workspace new <name>`

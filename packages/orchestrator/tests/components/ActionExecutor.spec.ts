@@ -181,15 +181,14 @@ describe('ActionExecutor', () => {
       await expect(executor.executeUpdate(action, mockProvider, mockState)).rejects.toThrow('missing resource ID');
     });
 
-    it('should send the config attributes resolved against the current state', async () => {
+    it('should send only the config attributes and drop the ones the config no longer sets', async () => {
       const key = context.toString();
-      // Setup initial state
       mockState.resources[key] = {
         id: 'existing',
         type: 'Resource',
         resourceType: 'test',
         name: 'main',
-        attributes: { old: 'val', kept: 'val' },
+        attributes: { old: 'val', dropped: 'val' },
       };
 
       const action: PlanAction = {
@@ -202,14 +201,8 @@ describe('ActionExecutor', () => {
 
       await executor.executeUpdate(action, mockProvider, mockState);
 
-      expect(mockProvider.update).toHaveBeenCalledWith(
-        'existing',
-        'test',
-        expect.objectContaining({
-          old: 'updated',
-          kept: 'val',
-        })
-      );
+      expect(mockProvider.update).toHaveBeenCalledWith('existing', 'test', { old: 'updated' });
+      expect(mockState.resources[key].attributes).toEqual({ old: 'updated' });
     });
   });
 

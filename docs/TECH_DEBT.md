@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-303 tests pass, and so do the type check and the build. Lint shows 23 warnings, and
+304 tests pass, and so do the type check and the build. Lint shows 23 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -60,15 +60,16 @@ In order: the safety net first, then the engine, then the CLI, then the output.
       creates ran before deletes, and the delete removed the entry the create had just
       written, so the next plan created it again. A replacement is one `REPLACE` action
       now: delete, create, one state entry.
+- [x] An attribute removed from the config stayed in state. `executeUpdate` spread the old
+      attributes under the new ones, so a key the config dropped survived and every plan
+      wanted to drop it again. State holds what was last applied, nothing older.
+- [ ] A failed action loses the whole run. `apply` writes state only after the last
+      action, so resources already created are left untracked.
+- [ ] `apply` never takes the state lock, so two runs can write the same file.
 - [ ] Resources removed from the config are deleted in state order, not in reverse
       dependency order, so a dependency can go before what still reads it. The graph only
       knows the config; Terraform solves this by writing each resource's dependencies into
       state.
-- [ ] An attribute removed from the config stays in state. `executeUpdate` spreads the old
-      attributes under the new ones, so a key the config dropped survives.
-- [ ] A failed action loses the whole run. `apply` writes state only after the last
-      action, so resources already created are left untracked.
-- [ ] `apply` never takes the state lock, so two runs can write the same file.
 - [ ] `init` overwrites an existing state file.
 - [ ] `apply <plan-file>` makes a new plan instead of running the saved one, and only
       warns when the config has changed.

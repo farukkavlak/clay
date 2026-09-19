@@ -130,7 +130,7 @@ describe('CLI: plan command', () => {
     consoleSpy.mockRestore();
   });
 
-  it('should display a value it cannot know yet as known after apply', async () => {
+  it('should say when a value is not known yet, added or removed', async () => {
     vi.mocked(fs.access).mockResolvedValue(void 0);
     vi.mocked(fs.readFile).mockResolvedValue('resource "test" "t" {}');
 
@@ -139,7 +139,7 @@ describe('CLI: plan command', () => {
         type: 'UPDATE',
         resourceType: 'test',
         name: 't',
-        changes: { path: { old: '/old', new: UNKNOWN } },
+        changes: { path: { old: '/old', new: UNKNOWN }, mode: { old: '0644', new: undefined }, owner: { old: undefined, new: 'me' } },
       },
     ];
     const planMock = vi.fn().mockResolvedValue(actions);
@@ -156,6 +156,8 @@ describe('CLI: plan command', () => {
     await createPlanCommand().parseAsync(['node', 'miniform', 'plan']);
 
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('path: "/old" -> (known after apply)'));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('mode: "0644" -> (removed)'));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('owner: (none) -> "me"'));
 
     consoleSpy.mockRestore();
   });

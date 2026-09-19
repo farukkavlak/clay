@@ -355,4 +355,18 @@ describe('apply and plan against real files', () => {
     expect(state.resources['local_file.a'].id).toBe(path.join(dir, 'moved.txt'));
     expect(await changes(moved)).toEqual([]);
   });
+
+  it('drops an attribute from state when the config drops it', async () => {
+    const withMode = fileConfig('hello').replace('content = "hello"', 'content = "hello"\n      mode = "0644"');
+    await orchestrator.apply(withMode, dir);
+
+    const actions = await changes(fileConfig('hello'));
+    expect(actions[0].changes).toEqual({ mode: { old: '0644', new: undefined } });
+
+    await newOrchestrator().apply(fileConfig('hello'), dir);
+
+    const state = await new LocalBackend(dir).read();
+    expect(state.resources['local_file.a'].attributes).not.toHaveProperty('mode');
+    expect(await changes(fileConfig('hello'))).toEqual([]);
+  });
 });

@@ -102,7 +102,7 @@ export class ActionExecutor {
     if (!currentResource) throw new Error(`Resource "${key}" not found in state for update`);
 
     // The plan resolved these against an older state, so resolve them again here.
-    const inputs = { ...currentResource.attributes, ...this.convertAttributes(action.attributes, currentState, contextAddress) };
+    const inputs = this.convertAttributes(action.attributes, currentState, contextAddress);
 
     await provider.validate(action.resourceType, inputs);
     if (!action.id) throw new Error(`UPDATE action for "${key}" missing resource ID`);
