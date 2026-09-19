@@ -1,6 +1,6 @@
 import { IProvider, ISchema } from '@miniform/contracts';
 import { AttributeValue, Lexer, Parser, Statement } from '@miniform/parser';
-import { DesiredResource, hasChanges, plan, PlanAction, UNKNOWN } from '@miniform/planner';
+import { DesiredResource, hasChanges, isUnknown, plan, PlanAction, UNKNOWN } from '@miniform/planner';
 import { IState, StateManager } from '@miniform/state';
 
 import { Address } from './Address';
@@ -126,7 +126,7 @@ export class Orchestrator {
     const { loadedResources, loadedModules } = await this.loadContext(configContent, rootDir, currentState);
 
     const graph = this.dependencyGraphBuilder.buildExecutionGraph(loadedResources, loadedModules);
-    const desiredResources = this.resolveInDependencyOrder(loadedResources, graph.topologicalSort(), currentState);
+    const desiredResources = this.resolveInDependencyOrder(loadedResources, loadedModules, graph.topologicalSort(), currentState);
 
     const schemas: Record<string, ISchema> = {};
     for (const r of loadedResources)
@@ -185,16 +185,18 @@ export class Orchestrator {
   }
 
   /** Resolves each resource after the ones it reads from, so a value an earlier action will change is UNKNOWN, not stale. */
-  private resolveInDependencyOrder(loadedResources: LoadedResource[], layers: string[][], state: IState): DesiredResource[] {
+  private resolveInDependencyOrder(loadedResources: LoadedResource[], loadedModules: LoadedModule[], layers: string[][], state: IState): DesiredResource[] {
     const byKey = new Map(loadedResources.map((r) => [r.address.toString(), r]));
     const pending = new Set<string>();
     const desired: DesiredResource[] = [];
 
     for (const layer of layers)
       for (const key of layer) {
-        // The graph holds module outputs too; only resources are planned.
         const loaded = byKey.get(key);
-        if (!loaded) continue;
+        if (!loaded) {
+          this.planOutput(key, loadedModules, state, pending);
+          continue;
+        }
 
         const attributes = this.resolveForPlan(loaded.block.attributes, state, loaded.address, pending);
         const current = state.resources[key];
@@ -206,21 +208,41 @@ export class Orchestrator {
     return desired;
   }
 
+  /** Gives an output its value so the resources reading it can be planned; an output fed by a pending resource keeps none. */
+  private planOutput(key: string, loadedModules: LoadedModule[], state: IState, pending: Set<string>): void {
+    const separator = key.lastIndexOf('outputs.');
+    if (separator === -1) return;
+
+    const scope = separator === 0 ? '' : key.slice(0, separator - 1);
+    const name = key.slice(separator + 'outputs.'.length);
+
+    const mod = loadedModules.find((m) => this.scopeManager.getScope(m.address) === scope);
+    const output = mod?.program.find((stmt) => stmt.type === 'Output' && stmt.name === name);
+    if (!mod || !output || output.type !== 'Output') return;
+
+    const value = this.resolveOrUnknown(output.value, state, mod.address, pending);
+    if (isUnknown(value)) pending.add(key);
+    else this.scopeManager.setOutput(scope, name, value);
+  }
+
   /** Resolves config values the way the diff needs them; what an apply has to produce first stays UNKNOWN. */
   private resolveForPlan(attributes: Record<string, AttributeValue>, state: IState, context: Address, pending: Set<string>): Record<string, unknown> {
     const resolved: Record<string, unknown> = {};
 
-    for (const [key, value] of Object.entries(attributes))
-      if (this.referenceScanner.keysIn(value, context).some((target) => pending.has(target))) resolved[key] = UNKNOWN;
-      else
-        try {
-          resolved[key] = this.resolveValue(value, state, context);
-        } catch (error) {
-          if (!(error instanceof UnresolvedReferenceError)) throw error;
-          resolved[key] = UNKNOWN;
-        }
+    for (const [key, value] of Object.entries(attributes)) resolved[key] = this.resolveOrUnknown(value, state, context, pending);
 
     return resolved;
+  }
+
+  private resolveOrUnknown(value: unknown, state: IState, context: Address, pending: Set<string>): unknown {
+    if (this.referenceScanner.keysIn(value, context).some((target) => pending.has(target))) return UNKNOWN;
+
+    try {
+      return this.resolveValue(value, state, context);
+    } catch (error) {
+      if (!(error instanceof UnresolvedReferenceError)) throw error;
+      return UNKNOWN;
+    }
   }
 
   private resolveValue(value: unknown, state: IState, context?: Address): unknown {

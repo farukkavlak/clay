@@ -174,8 +174,39 @@ describe('apply and plan against real files', () => {
     await expect(newOrchestrator().plan(config, dir)).rejects.toThrow('Dependency cycle detected: local_file.a -> local_file.b -> local_file.a');
   });
 
-  // Known bug: `plan` never computes module outputs, so the reference is unknown every time.
-  it.fails('plans no changes when a resource reads a module output', async () => {
+  it('plans an update through a module output when the resource behind it changes', async () => {
+    const moduleConfig = `
+      resource "local_file" "inner" {
+        path = "${path.join(dir, 'inner.txt')}"
+        content = "\${var.text}"
+      }
+      output "text" { value = "\${local_file.inner.content}" }
+    `;
+    const rootConfig = (text: string) => `
+      module "m" {
+        source = "./m"
+        text = "${text}"
+      }
+      resource "local_file" "c" {
+        path = "${path.join(dir, 'c.txt')}"
+        content = "\${module.m.text}"
+      }
+    `;
+    await fs.mkdir(path.join(dir, 'm'));
+    await fs.writeFile(path.join(dir, 'm', 'main.mf'), moduleConfig);
+    await orchestrator.apply(rootConfig('one'), dir);
+
+    const actions = await changes(rootConfig('two'));
+    expect(actions.map((action) => action.name)).toEqual(['inner', 'c']);
+    expect(isUnknown(actions[1].changes!.content.new)).toBe(true);
+
+    await newOrchestrator().apply(rootConfig('two'), dir);
+
+    expect(await fs.readFile(path.join(dir, 'c.txt'), 'utf8')).toBe('two');
+    expect(await changes(rootConfig('two'))).toEqual([]);
+  });
+
+  it('plans no changes when a resource reads a module output', async () => {
     await fs.mkdir(path.join(dir, 'm'));
     await fs.writeFile(path.join(dir, 'm', 'main.mf'), 'output "name" { value = "produced" }');
     const config = `
