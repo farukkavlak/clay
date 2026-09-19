@@ -86,6 +86,19 @@ describe('Graph', () => {
     ]);
   });
 
+  it('should list what a node depends on', () => {
+    const graph = new Graph<string>();
+    graph.addNode('A', '');
+    graph.addNode('B', '');
+    graph.addNode('C', '');
+    graph.addEdge('A', 'C');
+    graph.addEdge('B', 'C');
+
+    expect(graph.dependenciesOf('C').sort()).toEqual(['A', 'B']);
+    expect(graph.dependenciesOf('A')).toEqual([]);
+    expect(() => graph.dependenciesOf('D')).toThrow('Node D does not exist');
+  });
+
   it('should detect self-reference cycle', () => {
     // A -> A
     const graph = new Graph<string>();

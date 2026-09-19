@@ -78,6 +78,17 @@ describe('DependencyGraphBuilder', () => {
     expect(graph.getNode('module.m.vars.text')).toMatchObject({ kind: 'variable', context: root.address });
   });
 
+  it('should list the resources a resource reads from, looking through a module input', () => {
+    const root = module([], [{ type: 'Module', name: 'm', attributes: { source: { type: 'String', value: './m' }, text: reference('resource', 'dep', 'id') } }]);
+    const child = module(['m'], []);
+    const inner = resource('inner', { content: reference('var', 'text'), other: reference('resource', 'peer', 'id') }, ['m']);
+
+    const graph = builder.buildExecutionGraph([resource('dep'), resource('peer', {}, ['m']), inner], [root, child]);
+
+    expect(builder.resourceDependencies(graph, 'module.m.resource.inner')).toEqual(['module.m.resource.peer', 'resource.dep']);
+    expect(builder.resourceDependencies(graph, 'resource.dep')).toEqual([]);
+  });
+
   it('should let the input passed to a module win over the default declared inside it', () => {
     const passed = { type: 'String' as const, value: 'passed' };
     const declared = { type: 'String' as const, value: 'declared' };

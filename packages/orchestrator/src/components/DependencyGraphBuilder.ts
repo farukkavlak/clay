@@ -47,6 +47,24 @@ export class DependencyGraphBuilder {
     return graph;
   }
 
+  /** The resources a resource reads from, looking through the variables and outputs in between. */
+  resourceDependencies(graph: Graph<GraphNode>, key: string): string[] {
+    const found = new Set<string>();
+    const seen = new Set<string>([key]);
+    const queue = [key];
+
+    for (let next = queue.shift(); next !== undefined; next = queue.shift())
+      for (const dependency of graph.dependenciesOf(next)) {
+        if (seen.has(dependency)) continue;
+        seen.add(dependency);
+
+        if (graph.getNode(dependency)!.kind === 'resource') found.add(dependency);
+        else queue.push(dependency);
+      }
+
+    return [...found].sort();
+  }
+
   /** Variables and outputs are nodes of their own: what they read runs before them, and they run before whoever reads them. */
   private valueNodes(loadedModules: LoadedModule[]): Map<string, GraphNode> {
     const nodes = new Map<string, GraphNode>();

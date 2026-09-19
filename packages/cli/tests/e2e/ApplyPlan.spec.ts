@@ -379,6 +379,69 @@ describe('apply and plan against real files', () => {
     expect(await changes(fileConfig('hello'))).toEqual([]);
   });
 
+  const destroyedNames = async (config: string) => {
+    const names: string[] = [];
+    for await (const event of newOrchestrator().run(config, dir)) {
+      if (event.type === 'failed') throw event.error;
+      if (event.type === 'applied' && event.action.type === 'DELETE') names.push(event.action.name);
+    }
+    return names;
+  };
+
+  it('writes down what each resource reads from', async () => {
+    await apply(orchestrator, chained('hello'));
+
+    const state = await new LocalBackend(dir).read();
+    expect(state.resources['local_file.b'].dependencies).toEqual(['local_file.a']);
+    expect(state.resources['local_file.a'].dependencies).toEqual([]);
+  });
+
+  it('deletes a removed resource before the one it read from', async () => {
+    await apply(orchestrator, chained('hello'));
+
+    expect(await destroyedNames('')).toEqual(['b', 'a']);
+  });
+
+  it('deletes the resources of a removed module in reverse dependency order', async () => {
+    const moduleConfig = `
+      resource "local_file" "inner_a" {
+        path = "${path.join(dir, 'inner-a.txt')}"
+        content = "hello"
+      }
+      resource "local_file" "inner_b" {
+        path = "${path.join(dir, 'inner-b.txt')}"
+        content = "\${local_file.inner_a.content}"
+      }
+    `;
+    await fs.mkdir(path.join(dir, 'm'));
+    await fs.writeFile(path.join(dir, 'm', 'main.mf'), moduleConfig);
+    await apply(orchestrator, 'module "m" { source = "./m" }');
+
+    expect(await destroyedNames('')).toEqual(['inner_b', 'inner_a']);
+  });
+
+  it('writes down a new dependency even when no value changes', async () => {
+    const viaVariable = chained('hello').replace(`"\${local_file.a.content}"`, `"\${var.text}"`) + `\nvariable "text" { default = "hello" }`;
+    await apply(orchestrator, viaVariable);
+    const before = await new LocalBackend(dir).read();
+    expect(before.resources['local_file.b'].dependencies).toEqual([]);
+
+    await apply(newOrchestrator(), chained('hello'));
+
+    const state = await new LocalBackend(dir).read();
+    expect(state.resources['local_file.b'].dependencies).toEqual(['local_file.a']);
+  });
+
+  it('deletes a resource whose state predates dependencies', async () => {
+    await apply(orchestrator, chained('hello'));
+    const backend = new LocalBackend(dir);
+    const state = await backend.read();
+    for (const resource of Object.values(state.resources)) delete resource.dependencies;
+    await backend.write(state);
+
+    expect(await destroyedNames('')).toEqual(['a', 'b']);
+  });
+
   // b's path sits under a file, so its create fails after a's has succeeded.
   const secondFails = () => `
     resource "local_file" "a" {
