@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-281 tests pass, and so do the type check and the build. Lint shows 23 warnings, and
+282 tests pass, and so do the type check and the build. Lint shows 23 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -40,11 +40,16 @@ In order: the safety net first, then the engine, then the CLI, then the output.
       apply. The plan now walks the dependency graph: a reference whose target has a
       pending action is unknown, a reference to a resource no config declares is an error,
       and a cycle names the resources in it.
-- [ ] A reference into another module (`module.app.local_file.a.content`) is read as a
-      module output, so it fails as undeclared. The resolver understands the form, the
-      graph does not.
-- [ ] `plan` never computes module outputs, so every `${module.x.y}` is unknown and its
-      resource shows a change that never settles.
+- [ ] A module input that reads a resource (`module "m" { text = "${local_file.a.content}" }`)
+      is not scanned for dependencies, so the first apply fails with the resource missing
+      from state.
+- [ ] A reference into a module (`module.app.local_file.a.content`) is read as an output
+      named `local_file` and fails as undeclared. Reaching inside a module stays
+      unsupported, the way Terraform has it; the message has to say that modules are read
+      through their outputs.
+- [x] `plan` never computed module outputs, so every `${module.x.y}` was unknown and its
+      resource showed a change that never settled. Outputs are now given their value on the
+      same walk as the resources, and an output fed by a pending resource is unknown.
 - [ ] Replacing a resource destroys it. Creates run before deletes, so the delete removes
       the file the create just wrote, and drops it from state.
 - [ ] An attribute removed from the config stays in state. `executeUpdate` spreads the old
