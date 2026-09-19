@@ -1,11 +1,11 @@
-import { LocalBackend, StateManager } from '@miniform/state';
+import { StateManager } from '@miniform/state';
 import chalk from 'chalk';
 import { Command } from 'commander';
-import path from 'node:path';
+
+import { stateBackend } from '../stateFile';
 
 function getStateManager(statePath?: string): StateManager {
-  const targetPath = statePath ? path.resolve(process.cwd(), statePath) : path.join(process.cwd(), '.miniform/state.json');
-  return new StateManager(new LocalBackend(targetPath));
+  return new StateManager(stateBackend(statePath));
 }
 
 export function createStateCommand(): Command {

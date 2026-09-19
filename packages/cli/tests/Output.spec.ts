@@ -1,5 +1,5 @@
-import { StateManager } from '@miniform/state';
-import * as fs from 'node:fs';
+import { LocalBackend, StateManager } from '@miniform/state';
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, Mock, vi } from 'vitest';
 
@@ -8,7 +8,7 @@ import { createOutputCommand } from '../src/commands/output';
 // Mock StateManager
 vi.mock('@miniform/state', () => {
   return {
-    LocalBackend: vi.fn(),
+    LocalBackend: vi.fn(() => ({ path: '/tmp/miniform.state.json' })),
     StateManager: vi.fn().mockImplementation(function () {
       return {
         read: vi.fn().mockResolvedValue({ resources: {}, variables: {} }),
@@ -17,11 +17,8 @@ vi.mock('@miniform/state', () => {
   };
 });
 
-// Mock fs
-vi.mock('node:fs', () => ({
-  existsSync: vi.fn(),
-  // Add other fs methods if needed, but output only uses existsSync directly
-}));
+// The command asks the file system whether a state file is there before reading it.
+vi.mock('node:fs/promises', () => ({ default: { access: vi.fn() } }));
 
 describe('Output Command', () => {
   let consoleLogSpy: ReturnType<typeof vi.spyOn>;
@@ -48,8 +45,10 @@ describe('Output Command', () => {
       } as unknown as StateManager;
     });
 
-    // Setup Mock fs
-    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(LocalBackend).mockImplementation(function () {
+      return { path: testStatePath } as unknown as LocalBackend;
+    });
+    vi.mocked(fs.access).mockResolvedValue(void 0);
   });
 
   afterEach(() => {
@@ -67,7 +66,7 @@ describe('Output Command', () => {
       },
     };
 
-    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.access).mockResolvedValue(void 0);
     readMock.mockResolvedValue(mockState);
 
     const command = createOutputCommand();
@@ -92,7 +91,7 @@ describe('Output Command', () => {
       },
     };
 
-    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.access).mockResolvedValue(void 0);
     readMock.mockResolvedValue(mockState);
 
     const command = createOutputCommand();
@@ -114,7 +113,7 @@ describe('Output Command', () => {
       variables: {},
     };
 
-    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.access).mockResolvedValue(void 0);
     readMock.mockResolvedValue(mockState);
 
     const command = createOutputCommand();
@@ -124,7 +123,7 @@ describe('Output Command', () => {
   });
 
   it('should handle missing state file', async () => {
-    vi.mocked(fs.existsSync).mockReturnValue(false);
+    vi.mocked(fs.access).mockRejectedValue(new Error('ENOENT'));
 
     const command = createOutputCommand();
     await command.parseAsync(['node', 'test', '--state', testStatePath]);
@@ -146,7 +145,7 @@ describe('Output Command', () => {
       },
     };
 
-    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.access).mockResolvedValue(void 0);
     readMock.mockResolvedValue(mockState);
 
     const command = createOutputCommand();
@@ -172,7 +171,7 @@ describe('Output Command', () => {
       },
     };
 
-    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.access).mockResolvedValue(void 0);
     readMock.mockResolvedValue(mockState);
 
     const command = createOutputCommand();
@@ -184,7 +183,7 @@ describe('Output Command', () => {
   });
 
   it('should handle state reading errors', async () => {
-    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.access).mockResolvedValue(void 0);
     readMock.mockRejectedValue(new Error('Corrupt state'));
 
     const command = createOutputCommand();
@@ -204,7 +203,7 @@ describe('Output Command', () => {
       resources: {},
       variables: undefined,
     };
-    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.access).mockResolvedValue(void 0);
     readMock.mockResolvedValue(mockState);
 
     const command = createOutputCommand();
@@ -222,22 +221,21 @@ describe('Output Command', () => {
         },
       },
     };
-    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.access).mockResolvedValue(void 0);
     readMock.mockResolvedValue(mockState);
 
     const command = createOutputCommand();
     // No --state argument
     await command.parseAsync(['node', 'test']);
 
-    // Check if fs.existsSync was called with default path
-    expect(vi.mocked(fs.existsSync)).toHaveBeenCalledWith(expect.stringContaining('.miniform/state.json'));
+    expect(LocalBackend).toHaveBeenCalledWith(process.cwd());
 
     // Check output
     expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('default_out'));
   });
 
   it('should handle non-Error exceptions', async () => {
-    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.access).mockResolvedValue(void 0);
     readMock.mockRejectedValue('String Error');
 
     const command = createOutputCommand();

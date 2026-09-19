@@ -21,6 +21,11 @@ export class LocalBackend implements IStateBackend {
     this.lockFilePath = `${this.filePath}.lock`;
   }
 
+  /** A caller that reports where it looked needs the name this backend settled on. */
+  get path(): string {
+    return this.filePath;
+  }
+
   async read(): Promise<IState> {
     try {
       const content = await fs.readFile(this.filePath);

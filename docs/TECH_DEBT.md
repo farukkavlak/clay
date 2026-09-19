@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-331 tests pass, and so do the type check and the build. Lint shows 22 warnings, and
+336 tests pass, and so do the type check and the build. Lint shows 22 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -90,9 +90,12 @@ In order: the safety net first, then the engine, then the CLI, then the output.
       run changed the state in between, the plan is stale: a resource it plans to create
       may already exist. Terraform catches this with a serial number in state that the plan
       records and the apply checks.
-- [ ] `state` and `output` read a state file nothing writes. Both default to
-      `.miniform/state.json`, the engine writes `miniform.state.json`, and `state` passes
-      that path to `LocalBackend` as a directory.
+- [x] `state` and `output` read a state file nothing writes. Both defaulted to
+      `.miniform/state.json` while the engine writes `miniform.state.json`, and both handed
+      that whole path to `LocalBackend`, which takes a directory and a file name, so even
+      `--state` read the wrong place. One helper now builds the backend for both: the
+      default is the engine's own, and a path on the command line is split into the two
+      parts the backend wants.
 - [ ] `output` prints the variables saved in state as if they were outputs, and state holds
       variables in the first place. State should hold outputs, the way Terraform does, and
       `output` should read those.

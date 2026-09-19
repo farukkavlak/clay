@@ -73,7 +73,7 @@ describe('CLI: state command', () => {
       const command = createStateCommand();
       await command.parseAsync(['node', 'miniform', 'list', '--state', 'custom.json']);
 
-      expect(LocalBackend).toHaveBeenCalledWith(expect.stringContaining('custom.json'));
+      expect(LocalBackend).toHaveBeenCalledWith(process.cwd(), 'custom.json');
       expect(readMock).toHaveBeenCalled();
     });
 
