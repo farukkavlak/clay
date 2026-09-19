@@ -5,7 +5,6 @@ import { LocalBackend, StateManager } from '@miniform/state';
 import chalk from 'chalk';
 import { Command } from 'commander';
 import inquirer from 'inquirer';
-import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -38,12 +37,12 @@ function reportEvent(event: RunEvent): void {
   if (event.type === 'failed') throw new Error(`${event.action.resourceType}.${event.action.name}: ${event.error.message}`);
 }
 
-async function runAndReport(orchestrator: Orchestrator, configContent: string): Promise<void> {
+async function runAndReport(events: AsyncGenerator<RunEvent>): Promise<void> {
   console.log(chalk.blue('\napplying...'));
 
   let applied = 0;
   let outputs: Record<string, unknown> = {};
-  for await (const event of orchestrator.run(configContent)) {
+  for await (const event of events) {
     reportEvent(event);
     if (event.type === 'applied') applied += 1;
     if (event.type === 'done') outputs = event.outputs;
@@ -72,13 +71,16 @@ async function confirmApply(autoConfirm: boolean): Promise<boolean> {
   return confirm;
 }
 
+function newOrchestrator(cwd: string): Orchestrator {
+  const orchestrator = new Orchestrator(new StateManager(new LocalBackend(cwd)));
+  orchestrator.registerProvider(new LocalProvider());
+
+  return orchestrator;
+}
+
 async function executeApply(cwd: string, configPath: string, autoConfirm: boolean): Promise<void> {
   const configContent = await fs.readFile(configPath, 'utf8');
-
-  const backend = new LocalBackend(cwd);
-  const stateManager = new StateManager(backend);
-  const orchestrator = new Orchestrator(stateManager);
-  orchestrator.registerProvider(new LocalProvider());
+  const orchestrator = newOrchestrator(cwd);
 
   // Show plan first
   console.log(chalk.blue('Calculating plan...'));
@@ -97,36 +99,18 @@ async function executeApply(cwd: string, configPath: string, autoConfirm: boolea
     return;
   }
 
-  await runAndReport(orchestrator, configContent);
+  await runAndReport(orchestrator.run(configContent));
 }
 
-async function executeApplyFromPlan(cwd: string, planFile: PlanFile, autoConfirm: boolean): Promise<void> {
-  const backend = new LocalBackend(cwd);
-  const stateManager = new StateManager(backend);
-  const orchestrator = new Orchestrator(stateManager);
-  orchestrator.registerProvider(new LocalProvider());
+async function executeApplyFromPlan(cwd: string, planFile: PlanFile): Promise<void> {
+  const orchestrator = newOrchestrator(cwd);
 
   console.log(chalk.blue('Applying from saved plan...'));
   console.log(chalk.gray(`Plan created: ${planFile.timestamp}`));
 
-  const configPath = path.join(cwd, 'main.mini');
-  const configContent = await fs.readFile(configPath, 'utf8');
-  const currentHash = crypto.createHash('sha256').update(configContent).digest('hex');
-
-  if (currentHash !== planFile.configHash) {
-    console.log(chalk.yellow('\nWarning: Configuration has changed since plan was created.'));
-    console.log(chalk.yellow('The plan may be stale. Consider running `miniform plan` again.'));
-  }
-
   displayActions(planFile.actions);
 
-  const confirmed = await confirmApply(autoConfirm);
-  if (!confirmed) {
-    console.log(chalk.yellow('Apply cancelled.'));
-    return;
-  }
-
-  await runAndReport(orchestrator, configContent);
+  await runAndReport(orchestrator.runPlan(planFile.actions, planFile.config));
 }
 
 export function createApplyCommand() {
@@ -144,11 +128,11 @@ export function createApplyCommand() {
           const planData = JSON.parse(planContent.toString('utf8'));
 
           if (!validatePlanFile(planData)) {
-            console.error(chalk.red('Error: Invalid plan file format.'));
+            console.error(chalk.red('Error: Cannot read this plan file. Run `miniform plan --out <file>` again.'));
             process.exit(1);
           }
 
-          await executeApplyFromPlan(cwd, planData, options.yes);
+          await executeApplyFromPlan(cwd, planData);
         } else {
           const configPath = path.join(cwd, 'main.mini');
 

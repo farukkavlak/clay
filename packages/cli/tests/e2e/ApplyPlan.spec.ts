@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-// CLI commands read process.cwd() and parse on import, so the tests drive the orchestrator.
+// The CLI reads process.cwd() and parses on import, so these tests drive the orchestrator instead.
 describe('apply and plan against real files', () => {
   let dir: string;
   let orchestrator: Orchestrator;

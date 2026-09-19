@@ -249,11 +249,11 @@ describe('CLI: apply command', () => {
   });
 
   describe('Plan file apply', () => {
-    it('should apply from plan file', async () => {
+    it('should run the saved actions against the saved configuration, without asking again', async () => {
       const planFileContent = JSON.stringify({
-        version: '1.0',
+        version: '2.0',
         timestamp: '2024-01-01T00:00:00Z',
-        configHash: 'test-hash',
+        config: 'saved config',
         actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }],
       });
 
@@ -262,31 +262,34 @@ describe('CLI: apply command', () => {
         return 'config content';
       });
 
+      const runPlanMock = vi.fn(doneWith({}));
       const runMock = vi.fn(doneWith({}));
 
       vi.mocked(Orchestrator).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
           run: runMock,
+          runPlan: runPlanMock,
         } as Partial<Orchestrator> as Orchestrator;
       });
 
-      vi.mocked(inquirer.prompt).mockResolvedValue({ confirm: true });
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
       await createApplyCommand().parseAsync(['node', 'miniform', 'plan.json']);
 
-      expect(runMock).toHaveBeenCalled();
+      expect(runPlanMock).toHaveBeenCalledWith([{ type: 'CREATE', resourceType: 'test', name: 't' }], 'saved config');
+      expect(runMock).not.toHaveBeenCalled();
+      expect(inquirer.prompt).not.toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Applying from saved plan'));
 
       consoleSpy.mockRestore();
     });
 
-    it('should abort if confirmation declined', async () => {
+    it('should not read the configuration on disk', async () => {
       const planFileContent = JSON.stringify({
-        version: '1.0',
+        version: '2.0',
         timestamp: '2024-01-01T00:00:00Z',
-        configHash: 'test-hash',
+        config: 'saved config',
         actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }],
       });
 
@@ -295,31 +298,31 @@ describe('CLI: apply command', () => {
         return 'config content';
       });
 
-      const runMock = vi.fn(doneWith({}));
+      const runPlanMock = vi.fn(doneWith({}));
 
       vi.mocked(Orchestrator).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
-          run: runMock,
+          run: vi.fn(),
+          runPlan: runPlanMock,
         } as Partial<Orchestrator> as Orchestrator;
       });
 
-      vi.mocked(inquirer.prompt).mockResolvedValue({ confirm: false });
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
       await createApplyCommand().parseAsync(['node', 'miniform', 'plan.json']);
 
-      expect(runMock).not.toHaveBeenCalled();
-      expect(consoleSpy).toHaveBeenCalledWith('Apply cancelled.');
+      expect(runPlanMock).toHaveBeenCalled();
+      expect(vi.mocked(fs.readFile).mock.calls.flat().join(' ')).not.toContain('main.mini');
 
       consoleSpy.mockRestore();
     });
 
     it('should display outputs when returned from plan apply', async () => {
       const planFileContent = JSON.stringify({
-        version: '1.0',
+        version: '2.0',
         timestamp: '2024-01-01T00:00:00Z',
-        configHash: 'test-hash',
+        config: 'saved config',
         actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }],
       });
 
@@ -328,21 +331,21 @@ describe('CLI: apply command', () => {
         return 'config content';
       });
 
-      const runMock = vi.fn(doneWith({ plan_output: 'value' }));
+      const runPlanMock = vi.fn(doneWith({ planOutput: 'value' }));
 
       vi.mocked(Orchestrator).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
-          run: runMock,
+          run: vi.fn(),
+          runPlan: runPlanMock,
         } as Partial<Orchestrator> as Orchestrator;
       });
 
-      vi.mocked(inquirer.prompt).mockResolvedValue({ confirm: true });
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
       await createApplyCommand().parseAsync(['node', 'miniform', 'plan.json']);
 
-      expect(runMock).toHaveBeenCalled();
+      expect(runPlanMock).toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Outputs:'));
 
       consoleSpy.mockRestore();
@@ -356,7 +359,7 @@ describe('CLI: apply command', () => {
 
       await createApplyCommand().parseAsync(['node', 'miniform', 'invalid.json']);
 
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid plan file'));
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Cannot read this plan file'));
       expect(exitSpy).toHaveBeenCalledWith(1);
 
       exitSpy.mockRestore();

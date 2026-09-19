@@ -1,7 +1,7 @@
 import { IState } from '@miniform/state';
 import { describe, expect, it } from 'vitest';
 
-import { DesiredResource, plan, PlanAction, serializePlan, UNKNOWN, validatePlanFile } from '../src/index';
+import { DesiredResource, plan, PLAN_FILE_VERSION, PlanAction, serializePlan, UNKNOWN, validatePlanFile } from '../src/index';
 
 function desiredResource(name: string, attributes: Record<string, string>, modulePath?: string[]): DesiredResource {
   return {
@@ -141,17 +141,17 @@ describe('Planner', () => {
       const config = 'resource "test" {}';
       const serialized = serializePlan(actions, config);
 
-      expect(serialized.version).toBe('1.0');
+      expect(serialized.version).toBe(PLAN_FILE_VERSION);
       expect(serialized.actions).toEqual(actions);
-      expect(serialized.configHash).toBeDefined();
+      expect(serialized.config).toBe(config);
       expect(serialized.timestamp).toBeDefined();
     });
 
     it('should validate correct plan file', () => {
       const planFile = {
-        version: '1.0',
+        version: PLAN_FILE_VERSION,
         timestamp: new Date().toISOString(),
-        configHash: 'hash',
+        config: 'resource "test" {}',
         actions: [],
       };
 
@@ -162,6 +162,12 @@ describe('Planner', () => {
       expect(validatePlanFile(null)).toBe(false);
       expect(validatePlanFile({})).toBe(false);
       expect(validatePlanFile({ version: 1 })).toBe(false); // wrong type
+    });
+
+    it('should reject a plan file from an older miniform', () => {
+      const old = { version: '1.0', timestamp: new Date().toISOString(), configHash: 'hash', actions: [] };
+
+      expect(validatePlanFile(old)).toBe(false);
     });
   });
 });

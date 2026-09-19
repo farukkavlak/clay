@@ -1,7 +1,6 @@
 import { IResource, ISchema } from '@miniform/contracts';
 import { AttributeValue, ResourceBlock } from '@miniform/parser';
 import { IState } from '@miniform/state';
-import crypto from 'node:crypto';
 
 export type ActionType = 'CREATE' | 'UPDATE' | 'REPLACE' | 'DELETE' | 'NO_OP';
 
@@ -32,20 +31,22 @@ export interface PlanAction {
   dependencies?: string[];
 }
 
+/** Bumped whenever the shape below changes, so a plan file from an older miniform is refused instead of misread. */
+export const PLAN_FILE_VERSION = '2.0';
+
 export interface PlanFile {
   version: string;
   timestamp: string;
-  configHash: string;
+  /** The configuration the plan was made from. A saved plan runs against it, not against whatever is on disk later. */
+  config: string;
   actions: PlanAction[];
 }
 
 export function serializePlan(actions: PlanAction[], configContent: string): PlanFile {
-  const hash = crypto.createHash('sha256').update(configContent).digest('hex');
-
   return {
-    version: '1.0',
+    version: PLAN_FILE_VERSION,
     timestamp: new Date().toISOString(),
-    configHash: hash,
+    config: configContent,
     actions,
   };
 }
@@ -54,7 +55,7 @@ export function validatePlanFile(planFile: unknown): planFile is PlanFile {
   if (!planFile || typeof planFile !== 'object') return false;
 
   const pf = planFile as Partial<PlanFile>;
-  return typeof pf.version === 'string' && typeof pf.timestamp === 'string' && typeof pf.configHash === 'string' && Array.isArray(pf.actions);
+  return pf.version === PLAN_FILE_VERSION && typeof pf.timestamp === 'string' && typeof pf.config === 'string' && Array.isArray(pf.actions);
 }
 
 function valueChanged(oldValue: unknown, newValue: unknown): boolean {
