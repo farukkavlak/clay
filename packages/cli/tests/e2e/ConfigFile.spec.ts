@@ -7,7 +7,7 @@ import { createApplyCommand } from '../../src/commands/apply';
 import { createValidateCommand } from '../../src/commands/validate';
 
 // The commands read the current directory, so they run from a temp one.
-describe('the config file name', () => {
+describe('a config with a module', () => {
   let dir: string;
   let cwd: string;
   let printed: string[];
@@ -44,6 +44,18 @@ describe('the config file name', () => {
     await createApplyCommand().parseAsync(['node', 'clay', '--yes']);
 
     expect(await fs.readFile(path.join(dir, 'a.txt'), 'utf8')).toBe('from the module');
+  });
+
+  // Providers get plain values, so a relative path means relative to cwd.
+  it('leaves a relative path in a module relative to where clay runs', async () => {
+    await fs.mkdir(path.join(dir, 'm'));
+    await fs.writeFile(path.join(dir, 'm', 'main.clay'), 'resource "local_file" "inner" { path = "./inner.txt"  content = "x" }', 'utf8');
+    await fs.writeFile(path.join(dir, 'main.clay'), 'module "m" { source = "./m" }', 'utf8');
+
+    await createApplyCommand().parseAsync(['node', 'clay', '--yes']);
+
+    expect(await fs.readFile(path.join(dir, 'inner.txt'), 'utf8')).toBe('x');
+    await expect(fs.access(path.join(dir, 'm', 'inner.txt'))).rejects.toThrow();
   });
 
   it('is what validate checks when no file is named', async () => {

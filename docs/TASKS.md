@@ -347,6 +347,14 @@ command would remove it the way Terraform's does.
 
 - [ ] `clay force-unlock`
 
+### 10.7. Path Values
+
+A relative path is resolved from the directory `clay` runs in, so a module cannot name a
+file next to itself. Terraform gives the config `path.module`, `path.root` and `path.cwd`
+for that.
+
+- [ ] `path.module`, `path.root`, `path.cwd`
+
 ## 11. Nice to Have
 
 ### 11.1. Remote State

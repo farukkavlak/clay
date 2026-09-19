@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-337 tests pass, and so do the type check and the build. Lint shows 12 warnings, and
+338 tests pass, and so do the type check and the build. Lint shows 12 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -111,8 +111,11 @@ In order: the safety net first, then the engine, then the CLI, then the output.
 - [x] The config file had two names: the CLI read `main.mini`, modules were loaded from
       `main.mf`, and `validate` defaulted to `main.mf`, so a module had to be written under
       a different name than the config that called it. One name now: `main.clay`.
-- [ ] Relative paths in `local_file` resolve against the current directory, not the
-      config's directory.
+- [x] Relative paths in `local_file` resolve against the directory `clay` runs in, not the
+      directory of the config that names them. Kept, on purpose: a provider gets plain
+      values and knows nothing about where the config lives, and Terraform's `local_file`
+      resolves the same way. A module that wants a file next to itself needs `path.module`,
+      which is on the feature list. A test now pins the rule.
 - [ ] `local_file` rejects empty content. `validate` tests the value for truthiness
       instead of its type.
 - [x] The planner matched replacements by type and name only, ignoring the module path. The
