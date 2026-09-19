@@ -1,5 +1,5 @@
-import { IProvider, ISchema } from '@miniform/contracts';
-import { LocalBackend, StateManager } from '@miniform/state';
+import { IProvider, ISchema } from '@clay/contracts';
+import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -109,7 +109,7 @@ describe('Orchestrator: Advanced Features', () => {
     it('should interpolate variables in strings', async () => {
       const config = `
         variable "name" {
-          default = "Miniform"
+          default = "Clay"
         }
 
         variable "version" {
@@ -125,7 +125,7 @@ describe('Orchestrator: Advanced Features', () => {
 
       const created = mockProvider.getCreatedResources();
       const [, inputs] = Array.from(created.entries())[0];
-      expect(inputs.greeting).toBe('Hello Miniform! Version: 1.0.0');
+      expect(inputs.greeting).toBe('Hello Clay! Version: 1.0.0');
     });
 
     it('should handle strings without interpolation', async () => {

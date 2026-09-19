@@ -1,7 +1,8 @@
-import { Orchestrator, RunEvent } from '@miniform/orchestrator';
-import { PlanAction, PlanFile, validatePlanFile } from '@miniform/planner';
-import { LocalProvider } from '@miniform/provider-local';
-import { LocalBackend, StateManager } from '@miniform/state';
+import { Orchestrator, RunEvent } from '@clay/orchestrator';
+import { CONFIG_FILE } from '@clay/parser';
+import { PlanAction, PlanFile, validatePlanFile } from '@clay/planner';
+import { LocalProvider } from '@clay/provider-local';
+import { LocalBackend, StateManager } from '@clay/state';
 import chalk from 'chalk';
 import { Command } from 'commander';
 import inquirer from 'inquirer';
@@ -17,7 +18,7 @@ function getActionSymbol(actionType: string): string {
 }
 
 function displayActions(actions: PlanAction[]): void {
-  console.log(chalk.bold('\nMiniform will perform the following actions:\n'));
+  console.log(chalk.bold('\nClay will perform the following actions:\n'));
   for (const action of actions) {
     if (action.type === 'NO_OP') continue;
     const symbol = getActionSymbol(action.type);
@@ -128,18 +129,18 @@ export function createApplyCommand() {
           const planData = JSON.parse(planContent.toString('utf8'));
 
           if (!validatePlanFile(planData)) {
-            console.error(chalk.red('Error: Cannot read this plan file. Run `miniform plan --out <file>` again.'));
+            console.error(chalk.red('Error: Cannot read this plan file. Run `clay plan --out <file>` again.'));
             process.exit(1);
           }
 
           await executeApplyFromPlan(cwd, planData);
         } else {
-          const configPath = path.join(cwd, 'main.mini');
+          const configPath = path.join(cwd, CONFIG_FILE);
 
           try {
             await fs.access(configPath);
           } catch {
-            console.error(chalk.red('Error: main.mini not found.'));
+            console.error(chalk.red(`Error: ${CONFIG_FILE} not found.`));
             process.exit(1);
           }
 

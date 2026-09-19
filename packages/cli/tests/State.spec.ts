@@ -1,9 +1,9 @@
-import { LocalBackend, StateManager } from '@miniform/state';
+import { LocalBackend, StateManager } from '@clay/state';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createStateCommand } from '../src/commands/state';
 
-vi.mock('@miniform/state');
+vi.mock('@clay/state');
 vi.mock('chalk', () => ({
   default: {
     red: vi.fn((m) => m),
@@ -61,7 +61,7 @@ describe('CLI: state command', () => {
   describe('list', () => {
     it('should list all resources in state', async () => {
       const command = createStateCommand();
-      await command.parseAsync(['node', 'miniform', 'list']);
+      await command.parseAsync(['node', 'clay', 'list']);
 
       expect(readMock).toHaveBeenCalled();
       expect(consoleLogSpy).toHaveBeenCalledWith('test.t1');
@@ -71,7 +71,7 @@ describe('CLI: state command', () => {
 
     it('should use custom state path', async () => {
       const command = createStateCommand();
-      await command.parseAsync(['node', 'miniform', 'list', '--state', 'custom.json']);
+      await command.parseAsync(['node', 'clay', 'list', '--state', 'custom.json']);
 
       expect(LocalBackend).toHaveBeenCalledWith(process.cwd(), 'custom.json');
       expect(readMock).toHaveBeenCalled();
@@ -80,7 +80,7 @@ describe('CLI: state command', () => {
     it('should handle undefined resources in state', async () => {
       readMock.mockResolvedValue({ version: 1 }); // No resources
       const command = createStateCommand();
-      await command.parseAsync(['node', 'miniform', 'list']);
+      await command.parseAsync(['node', 'clay', 'list']);
 
       expect(consoleLogSpy).toHaveBeenCalledWith('The state file is empty.');
       expect(readMock).toHaveBeenCalled();
@@ -89,7 +89,7 @@ describe('CLI: state command', () => {
     it('should handle empty state', async () => {
       readMock.mockResolvedValue({ version: 1, resources: {} });
       const command = createStateCommand();
-      await command.parseAsync(['node', 'miniform', 'list']);
+      await command.parseAsync(['node', 'clay', 'list']);
 
       expect(consoleLogSpy).toHaveBeenCalledWith('The state file is empty.');
     });
@@ -98,7 +98,7 @@ describe('CLI: state command', () => {
       readMock.mockRejectedValue(new Error('List Error'));
       const command = createStateCommand();
       try {
-        await command.parseAsync(['node', 'miniform', 'list']);
+        await command.parseAsync(['node', 'clay', 'list']);
       } catch {
         /* ignore process exit */
       }
@@ -111,7 +111,7 @@ describe('CLI: state command', () => {
   describe('show', () => {
     it('should show details of a resource', async () => {
       const command = createStateCommand();
-      await command.parseAsync(['node', 'miniform', 'show', 'test.t1']);
+      await command.parseAsync(['node', 'clay', 'show', 'test.t1']);
 
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('# test.t1:'));
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('resource "test" "t1" {'));
@@ -127,7 +127,7 @@ describe('CLI: state command', () => {
         },
       });
       const command = createStateCommand();
-      await command.parseAsync(['node', 'miniform', 'show', 'test.noattr']);
+      await command.parseAsync(['node', 'clay', 'show', 'test.noattr']);
 
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('# test.noattr:'));
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('resource "test" "noattr" {'));
@@ -137,7 +137,7 @@ describe('CLI: state command', () => {
     it('should exit with error if resource not found', async () => {
       const command = createStateCommand();
       try {
-        await command.parseAsync(['node', 'miniform', 'show', 'missing.res']);
+        await command.parseAsync(['node', 'clay', 'show', 'missing.res']);
       } catch {
         /* ignore process exit */
       }
@@ -150,7 +150,7 @@ describe('CLI: state command', () => {
   describe('rm', () => {
     it('should remove a resource from state', async () => {
       const command = createStateCommand();
-      await command.parseAsync(['node', 'miniform', 'rm', 'test.t1']);
+      await command.parseAsync(['node', 'clay', 'rm', 'test.t1']);
 
       expect(lockMock).toHaveBeenCalled();
       expect(writeMock).toHaveBeenCalledWith(
@@ -169,7 +169,7 @@ describe('CLI: state command', () => {
 
     it('should handle missing resource gracefully', async () => {
       const command = createStateCommand();
-      await command.parseAsync(['node', 'miniform', 'rm', 'missing.res']);
+      await command.parseAsync(['node', 'clay', 'rm', 'missing.res']);
 
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Resource not found in state'));
       expect(unlockMock).toHaveBeenCalled();
@@ -179,7 +179,7 @@ describe('CLI: state command', () => {
       readMock.mockRejectedValue(new Error('Rm Error'));
       const command = createStateCommand();
       try {
-        await command.parseAsync(['node', 'miniform', 'rm', 'test.t1']);
+        await command.parseAsync(['node', 'clay', 'rm', 'test.t1']);
       } catch {
         /* ignore process exit */
       }
@@ -192,7 +192,7 @@ describe('CLI: state command', () => {
   describe('mv', () => {
     it('should rename a resource in state', async () => {
       const command = createStateCommand();
-      await command.parseAsync(['node', 'miniform', 'mv', 'test.t1', 'test.new']);
+      await command.parseAsync(['node', 'clay', 'mv', 'test.t1', 'test.new']);
 
       expect(lockMock).toHaveBeenCalled();
       expect(writeMock).toHaveBeenCalled();
@@ -209,7 +209,7 @@ describe('CLI: state command', () => {
     it('should fail if source does not exist', async () => {
       const command = createStateCommand();
       try {
-        await command.parseAsync(['node', 'miniform', 'mv', 'missing', 'new']);
+        await command.parseAsync(['node', 'clay', 'mv', 'missing', 'new']);
       } catch {
         /* ignore process exit */
       }
@@ -223,7 +223,7 @@ describe('CLI: state command', () => {
     it('should fail if destination already exists', async () => {
       const command = createStateCommand();
       try {
-        await command.parseAsync(['node', 'miniform', 'mv', 'test.t1', 'test.t2']);
+        await command.parseAsync(['node', 'clay', 'mv', 'test.t1', 'test.t2']);
       } catch {
         /* ignore process exit */
       }

@@ -1,5 +1,5 @@
-import { IProvider, ISchema } from '@miniform/contracts';
-import { LocalBackend, StateManager } from '@miniform/state';
+import { IProvider, ISchema } from '@clay/contracts';
+import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -399,7 +399,7 @@ describe('Orchestrator', () => {
 
       // Create module config with output
       await fs.writeFile(
-        path.join(moduleDir, 'main.mf'),
+        path.join(moduleDir, 'main.clay'),
         `
         output "child_val" {
           value = "hello_module"

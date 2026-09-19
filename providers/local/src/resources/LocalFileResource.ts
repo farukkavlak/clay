@@ -1,4 +1,4 @@
-import { IResourceHandler, ISchema } from '@miniform/contracts';
+import { IResourceHandler, ISchema } from '@clay/contracts';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 

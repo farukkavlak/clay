@@ -1,5 +1,5 @@
-import { Graph } from '@miniform/graph';
-import { AttributeValue, ModuleBlock } from '@miniform/parser';
+import { Graph } from '@clay/graph';
+import { AttributeValue, ModuleBlock } from '@clay/parser';
 
 import { Address } from '../Address';
 import { childScope, outputKey, variableKey } from '../keys';

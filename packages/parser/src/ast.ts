@@ -1,3 +1,6 @@
+/** Every configuration lives under this name, the root one and a module's alike. */
+export const CONFIG_FILE = 'main.clay';
+
 export type AttributeValue =
   | { type: 'String'; value: string }
   | { type: 'Number'; value: number }

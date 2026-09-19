@@ -1,4 +1,4 @@
-import { IResourceHandler, ISchema } from '@miniform/contracts';
+import { IResourceHandler, ISchema } from '@clay/contracts';
 import { exec } from 'node:child_process';
 import crypto from 'node:crypto';
 import { promisify } from 'node:util';

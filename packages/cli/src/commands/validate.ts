@@ -1,6 +1,6 @@
-import { Graph } from '@miniform/graph';
-import { Lexer, Parser, Program } from '@miniform/parser';
-import { LocalProvider } from '@miniform/provider-local';
+import { Graph } from '@clay/graph';
+import { CONFIG_FILE, Lexer, Parser, Program } from '@clay/parser';
+import { LocalProvider } from '@clay/provider-local';
 import chalk from 'chalk';
 import { Command } from 'commander';
 import * as fs from 'node:fs/promises';
@@ -112,7 +112,7 @@ export function createValidateCommand(): Command {
 
   command
     .description('Validate configuration files')
-    .argument('[config]', 'Path to config file', 'main.mf')
+    .argument('[config]', 'Path to config file', CONFIG_FILE)
     .action(async (configPath: string) => {
       try {
         const fullPath = path.resolve(process.cwd(), configPath);

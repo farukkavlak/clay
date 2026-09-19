@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-335 tests pass, and so do the type check and the build. Lint shows 12 warnings, and
+337 tests pass, and so do the type check and the build. Lint shows 12 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -81,9 +81,9 @@ In order: the safety net first, then the engine, then the CLI, then the output.
 - [x] `apply <plan-file>` made a new plan instead of running the saved one, and only warned
       when the config had changed, so what ran could differ from what was approved. A plan
       file now carries the configuration it was made from, the way Terraform's does, and
-      `apply` runs the saved actions against it without reading `main.mini` again and
+      `apply` runs the saved actions against it without reading `main.clay` again and
       without asking again. A plan naming a resource that configuration does not declare
-      stops the run. A plan file from another version of miniform is refused.
+      stops the run. A plan file from another version of Clay is refused.
 - [ ] A saved plan carries the root configuration but its modules are still read from
       disk, so a module file edited after the plan changes what runs.
 - [ ] A saved plan is still run against whatever the state holds at the time. If another
@@ -91,7 +91,7 @@ In order: the safety net first, then the engine, then the CLI, then the output.
       may already exist. Terraform catches this with a serial number in state that the plan
       records and the apply checks.
 - [x] `state` and `output` read a state file nothing writes. Both defaulted to
-      `.miniform/state.json` while the engine writes `miniform.state.json`, and both handed
+      `.clay/state.json` while the engine writes `clay.state.json`, and both handed
       that whole path to `LocalBackend`, which takes a directory and a file name, so even
       `--state` read the wrong place. One helper now builds the backend for both: the
       default is the engine's own, and a path on the command line is split into the two
@@ -102,14 +102,15 @@ In order: the safety net first, then the engine, then the CLI, then the output.
       variables in the first place, so `apply` and `output` answered the same question
       differently. State holds the root module's outputs now, the way Terraform does, and
       nothing else: variables are inputs that come with each run. `output` reads those, and
-      state is written in full, so what an older miniform left behind goes.
+      state is written in full, so what an older version left behind goes.
 - [ ] Outputs in state are only written at the end of an apply that gets there, so they go
       stale. A config that changes nothing but an `output` block plans no actions, and the
       CLI stops at "No changes needed" without running; a run that fails partway leaves the
       previous run's outputs next to the new resources; `state rm` and `state mv` do not
       touch outputs at all, so one can name a resource that is gone.
-- [ ] The config file has two names: the CLI reads `main.mini`, modules are loaded from
-      `main.mf`, and `validate` defaults to `main.mf`.
+- [x] The config file had two names: the CLI read `main.mini`, modules were loaded from
+      `main.mf`, and `validate` defaulted to `main.mf`, so a module had to be written under
+      a different name than the config that called it. One name now: `main.clay`.
 - [ ] Relative paths in `local_file` resolve against the current directory, not the
       config's directory.
 - [ ] `local_file` rejects empty content. `validate` tests the value for truthiness
@@ -126,8 +127,8 @@ In order: the safety net first, then the engine, then the CLI, then the output.
 
 ## 2 — dependencies
 
-- [ ] Each package lists the `@miniform/*` packages it imports. Only the CLI lists any,
-      and it misses `graph`, `parser` and `planner`.
+- [ ] Each package lists the `@clay/*` packages it imports. Only the CLI lists any, and it
+      misses `graph`.
 - [ ] Shared dev tools (typescript, vitest, eslint, esbuild, `@types/node`) are listed
       only in the root. Three packages still ask for vitest 0.34 and eslint 8.
 - [ ] Unused dev dependencies removed: the react, react-hooks and i18next ESLint plugins,
@@ -138,7 +139,7 @@ In order: the safety net first, then the engine, then the CLI, then the output.
       (`util.parseArgs`) and inquirer (`readline/promises`).
 - [ ] `engines.node` is `>=22`, which `util.styleText` needs.
 - [ ] `IState` moves to `contracts`, next to `IResource`. `planner` and `orchestrator`
-      depend on `@miniform/state` only for that type, and the shape state is written in is
+      depend on `@clay/state` only for that type, and the shape state is written in is
       a contract every side has to agree on. Keeping it inside one side is how the planner
       drifted away from it.
 
@@ -173,9 +174,9 @@ In order: the safety net first, then the engine, then the CLI, then the output.
 
 ## 4 — repo
 
-- [ ] `npm run miniform` works; it points at a file that doesn't exist.
-- [ ] Tests write only to temp directories; the committed
-      `packages/orchestrator/miniform.state.json.bak` is gone.
+- [ ] `npm run clay` works; it points at a file that doesn't exist.
+- [ ] Tests write only to temp directories. Something once wrote state files into
+      `packages/orchestrator`; they are deleted, but what wrote them is unknown.
 - [ ] CI runs lint, format check, type check, build and tests on every push and PR.
 - [ ] husky and lint-staged run on commit.
 - [ ] The README describes what exists now, in short, plain English. It still shows

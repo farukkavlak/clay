@@ -9,7 +9,7 @@ import { createValidateCommand } from './commands/validate';
 
 const program = new Command();
 
-program.name('miniform').description('Infrastructure as Code for local resources').version('1.0.0');
+program.name('clay').description('Infrastructure as Code for local resources').version('1.0.0');
 
 program.addCommand(createInitCommand());
 program.addCommand(createPlanCommand());

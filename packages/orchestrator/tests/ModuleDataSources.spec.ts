@@ -1,4 +1,4 @@
-import { plan } from '@miniform/planner';
+import { plan } from '@clay/planner';
 import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
 import os from 'node:os';
@@ -13,7 +13,7 @@ vi.mock('node:fs');
 const readMock = vi.fn().mockResolvedValue({ resources: {}, variables: {}, version: 1 });
 const writeMock = vi.fn().mockResolvedValue(undefined);
 
-vi.mock('@miniform/state', () => ({
+vi.mock('@clay/state', () => ({
   StateManager: vi.fn((backend) => ({
     read: readMock,
     write: writeMock,
@@ -29,8 +29,8 @@ vi.mock('@miniform/state', () => ({
   })),
 }));
 
-vi.mock('@miniform/planner', async () => ({
-  ...(await vi.importActual<object>('@miniform/planner')),
+vi.mock('@clay/planner', async () => ({
+  ...(await vi.importActual<object>('@clay/planner')),
   plan: vi.fn(() => []),
 }));
 
@@ -61,7 +61,7 @@ describe('Orchestrator - Phase 5: Scoped Data Sources', () => {
       getSchema: vi.fn().mockReturnValue({}),
     };
 
-    const { StateManager, LocalBackend } = await import('@miniform/state');
+    const { StateManager, LocalBackend } = await import('@clay/state');
     const backend = new LocalBackend(tmpDir);
     const stateManager = new StateManager(backend);
     orchestrator = new Orchestrator(stateManager);
@@ -91,7 +91,7 @@ module "app" {
 
     (fs.existsSync as Mock).mockReturnValue(true);
     (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
-      if (filePath.endsWith('app/main.mf')) return appConfig;
+      if (filePath.endsWith('app/main.clay')) return appConfig;
       return rootConfig;
     });
 
@@ -128,7 +128,7 @@ module "app" {
 `;
 
     (fs.existsSync as Mock).mockReturnValue(true);
-    (fs.readFileSync as Mock).mockImplementation((f: string) => (f.endsWith('app/main.mf') ? appConfig : rootConfig));
+    (fs.readFileSync as Mock).mockImplementation((f: string) => (f.endsWith('app/main.clay') ? appConfig : rootConfig));
 
     (plan as Mock).mockReturnValue([
       {
@@ -140,10 +140,7 @@ module "app" {
       },
     ]);
 
-    // This should fail because child module shouldn't see root data sources by default in this implementation (strict scoping)
-    // Terraform usually allows seeing root variables IF they are passed, but data sources are usually top-level.
-    // In Miniform, we've implemented strict module-level scoping for simplicity unless we decide otherwise.
-
+    // A module sees what it is passed and nothing else, data sources included.
     await expect(apply(orchestrator, rootConfig, '/root')).rejects.toThrow(/Data source "module.app.aws_ami.root_ami" not found/);
   });
 });

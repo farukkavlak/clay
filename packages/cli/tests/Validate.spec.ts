@@ -1,19 +1,19 @@
-import { Graph } from '@miniform/graph';
-import { LocalProvider } from '@miniform/provider-local';
+import { Graph } from '@clay/graph';
+import { LocalProvider } from '@clay/provider-local';
 import * as fs from 'node:fs/promises';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createValidateCommand } from '../src/commands/validate';
 
 vi.mock('node:fs/promises');
-vi.mock('@miniform/provider-local', () => {
+vi.mock('@clay/provider-local', () => {
   return {
     LocalProvider: vi.fn(),
   };
 });
 
-vi.mock('@miniform/parser', async () => {
-  const actual: any = await vi.importActual('@miniform/parser');
+vi.mock('@clay/parser', async () => {
+  const actual: any = await vi.importActual('@clay/parser');
   return {
     ...actual,
     Lexer: vi.fn().mockImplementation(function (code) {
@@ -64,7 +64,7 @@ resource "local_file" "test" {
     vi.mocked(fs.readFile).mockResolvedValue(validConfig);
 
     const command = createValidateCommand();
-    await command.parseAsync(['node', 'test', '/tmp/test.mf']);
+    await command.parseAsync(['node', 'test', '/tmp/test.clay']);
 
     expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Checking syntax'));
     expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Syntax is valid'));
@@ -88,7 +88,7 @@ resource "local_file" "test" {
 
     const command = createValidateCommand();
     try {
-      await command.parseAsync(['node', 'test', '/tmp/test.mf']);
+      await command.parseAsync(['node', 'test', '/tmp/test.clay']);
     } catch {
       // ignore
     }
@@ -114,7 +114,7 @@ resource "local_file" "test" {
 
     const command = createValidateCommand();
     try {
-      await command.parseAsync(['node', 'test', '/tmp/test.mf']);
+      await command.parseAsync(['node', 'test', '/tmp/test.clay']);
     } catch {
       // ignore
     }
@@ -144,7 +144,7 @@ resource "local_file" "b" {
 
     const command = createValidateCommand();
     try {
-      await command.parseAsync(['node', 'test', '/tmp/test.mf']);
+      await command.parseAsync(['node', 'test', '/tmp/test.clay']);
     } catch {
       // ignore
     }
@@ -160,7 +160,7 @@ resource "local_file" "b" {
 
     const command = createValidateCommand();
     try {
-      await command.parseAsync(['node', 'test', '/tmp/nonexistent.mf']);
+      await command.parseAsync(['node', 'test', '/tmp/nonexistent.clay']);
     } catch (error: unknown) {
       expect((error as Error).message).toBe('ProcessExit');
     }
@@ -186,7 +186,7 @@ resource "local_file" "file2" {
     vi.mocked(fs.readFile).mockResolvedValue(multiResourceConfig);
 
     const command = createValidateCommand();
-    await command.parseAsync(['node', 'test', '/tmp/test.mf']);
+    await command.parseAsync(['node', 'test', '/tmp/test.clay']);
 
     expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('local_file.file1'));
     expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('local_file.file2'));
@@ -204,7 +204,7 @@ resource "local_file" "file2" {
 
     const command = createValidateCommand();
     try {
-      await command.parseAsync(['node', 'test', '/tmp/test.mf']);
+      await command.parseAsync(['node', 'test', '/tmp/test.clay']);
     } catch {
       // ignore
     }
@@ -220,7 +220,7 @@ resource "local_file" "file2" {
 
     const command = createValidateCommand();
     try {
-      await command.parseAsync(['node', 'test', '/tmp/start_error.mf']);
+      await command.parseAsync(['node', 'test', '/tmp/start_error.clay']);
     } catch {
       // ignore
     }
@@ -239,7 +239,7 @@ resource "unknown_type" "test" {
     getSchemaMock.mockResolvedValue(undefined);
 
     const command = createValidateCommand();
-    await command.parseAsync(['node', 'test', '/tmp/test.mf']);
+    await command.parseAsync(['node', 'test', '/tmp/test.clay']);
 
     expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('No schema found for unknown_type'));
     expect(processExitSpy).not.toHaveBeenCalled();
@@ -255,7 +255,7 @@ resource "local_file" "empty" {}
     // getSchemaMock returns valid schema by default
 
     const command = createValidateCommand();
-    await command.parseAsync(['node', 'test', '/tmp/test.mf']);
+    await command.parseAsync(['node', 'test', '/tmp/test.clay']);
 
     // Should skip 'data' block schema validation
     // Should skip 'empty' resource validation logic dependent on attributes if any?
@@ -286,7 +286,7 @@ resource "local_file" "main" {
     vi.mocked(fs.readFile).mockResolvedValue(config);
 
     const command = createValidateCommand();
-    await command.parseAsync(['node', 'test', '/tmp/test.mf']);
+    await command.parseAsync(['node', 'test', '/tmp/test.clay']);
 
     // Validates that dependency tracking logic runs without error
     expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Configuration is valid'));
@@ -295,7 +295,7 @@ resource "local_file" "main" {
   describe('Edge Cases & Error Handling', () => {
     it('should handle string errors in syntax validation', async () => {
       // Mock Lexer to throw a string
-      const { Lexer } = await import('@miniform/parser');
+      const { Lexer } = await import('@clay/parser');
       vi.mocked(Lexer).mockImplementationOnce(function () {
         throw 'String Syntax Error';
       });
@@ -305,7 +305,7 @@ resource "local_file" "main" {
 
       const command = createValidateCommand();
       try {
-        await command.parseAsync(['node', 'test', '/tmp/test.mf']);
+        await command.parseAsync(['node', 'test', '/tmp/test.clay']);
       } catch {
         /* ignore */
       }
@@ -322,7 +322,7 @@ resource "local_file" "main" {
 
       const command = createValidateCommand();
       try {
-        await command.parseAsync(['node', 'test', '/tmp/test.mf']);
+        await command.parseAsync(['node', 'test', '/tmp/test.clay']);
       } catch {
         /* ignore */
       }
@@ -336,14 +336,14 @@ resource "local_file" "main" {
       vi.mocked(fs.readFile).mockResolvedValue('resource "test" "t" {}');
 
       // Mock Graph to throw string
-      const { Graph } = await import('@miniform/graph');
+      const { Graph } = await import('@clay/graph');
       vi.spyOn(Graph.prototype, 'addNode').mockImplementationOnce(() => {
         throw 'String Dependency Error';
       });
 
       const command = createValidateCommand();
       try {
-        await command.parseAsync(['node', 'test', '/tmp/test.mf']);
+        await command.parseAsync(['node', 'test', '/tmp/test.clay']);
       } catch {
         /* ignore */
       }
@@ -361,7 +361,7 @@ resource "local_file" "main" {
 
       const command = createValidateCommand();
       try {
-        await command.parseAsync(['node', 'test', '/tmp/test.mf']);
+        await command.parseAsync(['node', 'test', '/tmp/test.clay']);
       } catch {
         /* ignore */
       }
@@ -389,11 +389,11 @@ resource "test" "t" {
       vi.mocked(fs.readFile).mockResolvedValue(config);
 
       // We spy on Graph.addEdge to ensure it is NOT called
-      const { Graph } = await import('@miniform/graph');
+      const { Graph } = await import('@clay/graph');
       const addEdgeSpy = vi.spyOn(Graph.prototype, 'addEdge');
 
       const command = createValidateCommand();
-      await command.parseAsync(['node', 'test', '/tmp/test.mf']);
+      await command.parseAsync(['node', 'test', '/tmp/test.clay']);
 
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Configuration is valid'));
       // No edges should be added because references are ignored types or invalid length

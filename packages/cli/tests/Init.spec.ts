@@ -1,4 +1,4 @@
-import { StateManager } from '@miniform/state';
+import { StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createInitCommand } from '../src/commands/init';
 
 vi.mock('node:fs/promises');
-vi.mock('@miniform/state');
+vi.mock('@clay/state');
 vi.mock('chalk', () => ({
   default: {
     blue: vi.fn((msg) => msg),
@@ -20,15 +20,15 @@ vi.mock('chalk', () => ({
 
 describe('CLI: init command', () => {
   const cwd = process.cwd();
-  const miniformDir = path.join(cwd, '.miniform');
+  const clayDir = path.join(cwd, '.clay');
 
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('should create .miniform directory and initialize state', async () => {
+  it('should create .clay directory and initialize state', async () => {
     // Mock fs.mkdir to report the directory it made
-    vi.mocked(fs.mkdir).mockResolvedValue(miniformDir);
+    vi.mocked(fs.mkdir).mockResolvedValue(clayDir);
 
     // Mock StateManager
     const writeIfAbsentMock = vi.fn().mockResolvedValue(true);
@@ -42,9 +42,9 @@ describe('CLI: init command', () => {
     });
 
     // Execute command action directly (commander action handler)
-    await createInitCommand().parseAsync(['node', 'miniform', 'init']);
+    await createInitCommand().parseAsync(['node', 'clay', 'init']);
 
-    expect(fs.mkdir).toHaveBeenCalledWith(miniformDir, { recursive: true });
+    expect(fs.mkdir).toHaveBeenCalledWith(clayDir, { recursive: true });
     expect(StateManager).toHaveBeenCalledWith(expect.any(Object));
     expect(writeIfAbsentMock).toHaveBeenCalledWith({ version: 1, resources: {} });
   });
@@ -58,7 +58,7 @@ describe('CLI: init command', () => {
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    await createInitCommand().parseAsync(['node', 'miniform', 'init']);
+    await createInitCommand().parseAsync(['node', 'clay', 'init']);
 
     expect(consoleSpy).toHaveBeenCalledWith('Failed to initialize workspace:', 'Permission denied');
     expect(exitSpy).toHaveBeenCalledWith(1);
@@ -74,7 +74,7 @@ describe('CLI: init command', () => {
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    await createInitCommand().parseAsync(['node', 'miniform', 'init']);
+    await createInitCommand().parseAsync(['node', 'clay', 'init']);
 
     expect(consoleSpy).toHaveBeenCalledWith('Failed to initialize workspace:', 'String error');
     expect(exitSpy).toHaveBeenCalledWith(1);

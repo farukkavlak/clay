@@ -1,4 +1,4 @@
-import { Statement } from '@miniform/parser';
+import { Statement } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
 import { Address } from '../../src/Address';

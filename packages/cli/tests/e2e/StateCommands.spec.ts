@@ -1,6 +1,6 @@
-import { Orchestrator } from '@miniform/orchestrator';
-import { LocalProvider } from '@miniform/provider-local';
-import { LocalBackend, StateManager } from '@miniform/state';
+import { Orchestrator } from '@clay/orchestrator';
+import { LocalProvider } from '@clay/provider-local';
+import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -31,7 +31,7 @@ describe('state and output against a real state file', () => {
   };
 
   beforeEach(async () => {
-    dir = await fs.mkdtemp(path.join(os.tmpdir(), 'miniform-state-cmd-'));
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-state-cmd-'));
     cwd = process.cwd();
     process.chdir(dir);
     printed = [];
@@ -49,7 +49,7 @@ describe('state and output against a real state file', () => {
   it('lists the resources an apply wrote', async () => {
     await applyConfig();
 
-    await createStateCommand().parseAsync(['node', 'miniform', 'list']);
+    await createStateCommand().parseAsync(['node', 'clay', 'list']);
 
     expect(printed).toContain('local_file.a');
   });
@@ -57,16 +57,16 @@ describe('state and output against a real state file', () => {
   it('shows a resource an apply wrote', async () => {
     await applyConfig();
 
-    await createStateCommand().parseAsync(['node', 'miniform', 'show', 'local_file.a']);
+    await createStateCommand().parseAsync(['node', 'clay', 'show', 'local_file.a']);
 
     expect(printed.join('\n')).toContain('content = "hello"');
   });
 
   it('reads the file --state names', async () => {
     await applyConfig();
-    await fs.rename(path.join(dir, 'miniform.state.json'), path.join(dir, 'moved.json'));
+    await fs.rename(path.join(dir, 'clay.state.json'), path.join(dir, 'moved.json'));
 
-    await createStateCommand().parseAsync(['node', 'miniform', 'list', '--state', 'moved.json']);
+    await createStateCommand().parseAsync(['node', 'clay', 'list', '--state', 'moved.json']);
 
     expect(printed).toContain('local_file.a');
   });
@@ -74,7 +74,7 @@ describe('state and output against a real state file', () => {
   it('reads what the engine wrote for output', async () => {
     await applyConfig();
 
-    await createOutputCommand().parseAsync(['node', 'miniform', '--json']);
+    await createOutputCommand().parseAsync(['node', 'clay', '--json']);
 
     expect(JSON.parse(printed.join('\n'))).toEqual({ file: path.join(dir, 'a.txt') });
   });
@@ -85,14 +85,14 @@ describe('state and output against a real state file', () => {
     engine.registerProvider(new LocalProvider());
     for await (const event of engine.run(onlyAVariable, dir)) if (event.type === 'failed') throw event.error;
 
-    await createOutputCommand().parseAsync(['node', 'miniform']);
+    await createOutputCommand().parseAsync(['node', 'clay']);
 
     expect(printed.join('\n')).toContain('No outputs found');
   });
 
   it('says where it looked when there is no state file', async () => {
-    await createOutputCommand().parseAsync(['node', 'miniform']);
+    await createOutputCommand().parseAsync(['node', 'clay']);
 
-    expect(printed.join('\n')).toContain(path.join(process.cwd(), 'miniform.state.json'));
+    expect(printed.join('\n')).toContain(path.join(process.cwd(), 'clay.state.json'));
   });
 });

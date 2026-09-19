@@ -1,11 +1,11 @@
-import { IResource, ISchema } from '@miniform/contracts';
-import { AttributeValue, ResourceBlock } from '@miniform/parser';
-import { IState } from '@miniform/state';
+import { IResource, ISchema } from '@clay/contracts';
+import { AttributeValue, ResourceBlock } from '@clay/parser';
+import { IState } from '@clay/state';
 
 export type ActionType = 'CREATE' | 'UPDATE' | 'REPLACE' | 'DELETE' | 'NO_OP';
 
 /** Stands for a value that only exists once the resources it depends on are created. */
-const UNKNOWN_KEY = '@@miniform/unknown';
+const UNKNOWN_KEY = '@@clay/unknown';
 
 export const UNKNOWN = { [UNKNOWN_KEY]: true } as const;
 
@@ -31,7 +31,7 @@ export interface PlanAction {
   dependencies?: string[];
 }
 
-/** Bumped whenever the shape below changes, so a plan file from an older miniform is refused instead of misread. */
+/** Bumped whenever the shape below changes, so a plan file from an older version is refused instead of misread. */
 export const PLAN_FILE_VERSION = '2.0';
 
 export interface PlanFile {

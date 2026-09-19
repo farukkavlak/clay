@@ -1,4 +1,4 @@
-import { IResourceHandler, ISchema } from '@miniform/contracts';
+import { IResourceHandler, ISchema } from '@clay/contracts';
 import crypto from 'node:crypto';
 
 export class NullResource implements IResourceHandler {

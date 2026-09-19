@@ -1,7 +1,8 @@
-import { Orchestrator } from '@miniform/orchestrator';
-import { isUnknown, PlanAction, serializePlan } from '@miniform/planner';
-import { LocalProvider } from '@miniform/provider-local';
-import { LocalBackend, StateManager } from '@miniform/state';
+import { Orchestrator } from '@clay/orchestrator';
+import { CONFIG_FILE } from '@clay/parser';
+import { isUnknown, PlanAction, serializePlan } from '@clay/planner';
+import { LocalProvider } from '@clay/provider-local';
+import { LocalBackend, StateManager } from '@clay/state';
 import chalk from 'chalk';
 import { Command } from 'commander';
 import fs from 'node:fs/promises';
@@ -38,7 +39,7 @@ function displayAction(action: PlanAction): void {
 }
 
 function displayPlanSummary(actions: PlanAction[]): void {
-  // A replacement counts as one add and one destroy, as Terraform sums it.
+  // A replacement counts once as an add and once as a destroy.
   const replaceCount = actions.filter((a) => a.type === 'REPLACE').length;
   const createCount = actions.filter((a) => a.type === 'CREATE').length + replaceCount;
   const updateCount = actions.filter((a) => a.type === 'UPDATE').length;
@@ -64,7 +65,7 @@ async function executePlan(cwd: string, configPath: string, outFile?: string): P
     return;
   }
 
-  console.log(chalk.bold('\nMiniform will perform the following actions:\n'));
+  console.log(chalk.bold('\nClay will perform the following actions:\n'));
 
   for (const action of actions) {
     if (action.type === 'NO_OP') continue;
@@ -86,12 +87,12 @@ export function createPlanCommand() {
     .option('--out <file>', 'Save plan to file')
     .action(async (options) => {
       const cwd = process.cwd();
-      const configPath = path.join(cwd, 'main.mini');
+      const configPath = path.join(cwd, CONFIG_FILE);
 
       try {
         await fs.access(configPath);
       } catch {
-        console.error(chalk.red('Error: main.mini not found in current directory.'));
+        console.error(chalk.red(`Error: ${CONFIG_FILE} not found in current directory.`));
         process.exit(1);
       }
 

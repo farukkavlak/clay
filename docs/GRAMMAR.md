@@ -1,8 +1,8 @@
-# Miniform Grammar Specification
+# Clay Grammar Specification
 
 ## 1. Basic Structure
 
-Miniform uses a declarative syntax composed of **Blocks** and **Attributes**.
+Clay uses a declarative syntax composed of **Blocks** and **Attributes**.
 
 ```hcl
 resource "type" "name" {
@@ -146,7 +146,7 @@ resource "local_file" "example" {
 ```hcl
 resource "local_file" "welcome" {
   path = "./welcome.txt"
-  content = "Hello Miniform!"
+  content = "Hello Clay!"
 }
 ```
 

@@ -1,4 +1,4 @@
-import { IState } from '@miniform/state';
+import { IState } from '@clay/state';
 import { describe, expect, it } from 'vitest';
 
 import { Address } from '../../src/Address';

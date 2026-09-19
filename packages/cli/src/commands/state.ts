@@ -1,4 +1,4 @@
-import { StateManager } from '@miniform/state';
+import { StateManager } from '@clay/state';
 import chalk from 'chalk';
 import { Command } from 'commander';
 

@@ -1,4 +1,4 @@
-import { IState } from '@miniform/state';
+import { IState } from '@clay/state';
 
 import { Address } from '../Address';
 

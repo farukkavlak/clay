@@ -1,4 +1,4 @@
-import { PlanAction } from '@miniform/planner';
+import { PlanAction } from '@clay/planner';
 
 /** What an apply reports as it goes. State is on disk by the time `applied` or `failed` arrives. */
 export type RunEvent =

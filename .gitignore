@@ -15,8 +15,9 @@ build
 .env
 .npmrc
 
-# Miniform
-miniform.state.json
-*.mini.json
+# Clay
+clay.state.json
+clay.state.json.bak
+clay.state.json.lock
 *.log
 *.tsbuildinfo

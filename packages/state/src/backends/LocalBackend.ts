@@ -16,7 +16,7 @@ export class LocalBackend implements IStateBackend {
   private filePath: string;
   private lockFilePath: string;
 
-  constructor(workingDir: string = process.cwd(), filename: string = 'miniform.state.json') {
+  constructor(workingDir: string = process.cwd(), filename: string = 'clay.state.json') {
     this.filePath = path.join(workingDir, filename);
     this.lockFilePath = `${this.filePath}.lock`;
   }

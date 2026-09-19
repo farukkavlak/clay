@@ -1,4 +1,4 @@
-import { LocalBackend, StateManager } from '@miniform/state';
+import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, Mock, vi } from 'vitest';
@@ -6,9 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, Mock, vi } from 'vitest';
 import { createOutputCommand } from '../src/commands/output';
 
 // Mock StateManager
-vi.mock('@miniform/state', () => {
+vi.mock('@clay/state', () => {
   return {
-    LocalBackend: vi.fn(() => ({ path: '/tmp/miniform.state.json' })),
+    LocalBackend: vi.fn(() => ({ path: '/tmp/clay.state.json' })),
     StateManager: vi.fn().mockImplementation(function () {
       return {
         read: vi.fn().mockResolvedValue({ resources: {}, variables: {} }),
@@ -25,8 +25,8 @@ describe('Output Command', () => {
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
   let processExitSpy: ReturnType<typeof vi.spyOn>;
 
-  const testStateDir = '/tmp/.miniform';
-  const testStatePath = path.join(testStateDir, 'terraform.tfstate');
+  const testStateDir = '/tmp/.clay';
+  const testStatePath = path.join(testStateDir, 'clay.state.json');
 
   let readMock: Mock;
 

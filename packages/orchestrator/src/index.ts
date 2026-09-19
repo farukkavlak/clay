@@ -1,8 +1,8 @@
-import { IProvider, ISchema } from '@miniform/contracts';
-import { Graph } from '@miniform/graph';
-import { AttributeValue, Lexer, Parser, Statement } from '@miniform/parser';
-import { DesiredResource, hasChanges, isUnknown, plan, PlanAction, UNKNOWN } from '@miniform/planner';
-import { IState, StateManager } from '@miniform/state';
+import { IProvider, ISchema } from '@clay/contracts';
+import { Graph } from '@clay/graph';
+import { AttributeValue, Lexer, Parser, Statement } from '@clay/parser';
+import { DesiredResource, hasChanges, isUnknown, plan, PlanAction, UNKNOWN } from '@clay/planner';
+import { IState, StateManager } from '@clay/state';
 
 import { Address } from './Address';
 import { ActionExecutor } from './components/ActionExecutor';
@@ -248,7 +248,7 @@ export class Orchestrator {
     return true;
   }
 
-  /** Named field by field, so a key an older miniform wrote is dropped. A field added to the state belongs here too. */
+  /** Named field by field, so a key an older version wrote is dropped. A field added to the state belongs here too. */
   private async persist(state: IState): Promise<void> {
     await this.stateManager.write({ version: state.version, outputs: state.outputs, resources: state.resources });
   }
