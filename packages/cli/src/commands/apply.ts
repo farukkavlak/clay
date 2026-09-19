@@ -85,7 +85,7 @@ async function executeApply(cwd: string, configPath: string, autoConfirm: boolea
 
   // Show plan first
   console.log(chalk.blue('Calculating plan...'));
-  const actions = await orchestrator.plan(configContent);
+  const { actions } = await orchestrator.plan(configContent);
 
   if (actions.every((a) => a.type === 'NO_OP')) {
     console.log(chalk.green('No changes needed.'));
@@ -111,7 +111,7 @@ async function executeApplyFromPlan(cwd: string, planFile: PlanFile): Promise<vo
 
   displayActions(planFile.actions);
 
-  await runAndReport(orchestrator.runPlan(planFile.actions, planFile.config));
+  await runAndReport(orchestrator.runPlan(planFile, planFile.config));
 }
 
 export function createApplyCommand() {

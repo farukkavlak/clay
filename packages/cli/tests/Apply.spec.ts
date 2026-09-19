@@ -68,12 +68,15 @@ describe('CLI: apply command', () => {
       vi.mocked(fs.access).mockResolvedValue(void 0);
       vi.mocked(fs.readFile).mockResolvedValue('content');
 
-      const planMock = vi.fn().mockResolvedValue([
-        { type: 'CREATE', resourceType: 'test', name: 't1' },
-        { type: 'UPDATE', resourceType: 'test', name: 't2' },
-        { type: 'DELETE', resourceType: 'test', name: 't3' },
-        { type: 'NO_OP', resourceType: 'test', name: 't4' },
-      ]);
+      const planMock = vi.fn().mockResolvedValue({
+        serial: 0,
+        actions: [
+          { type: 'CREATE', resourceType: 'test', name: 't1' },
+          { type: 'UPDATE', resourceType: 'test', name: 't2' },
+          { type: 'DELETE', resourceType: 'test', name: 't3' },
+          { type: 'NO_OP', resourceType: 'test', name: 't4' },
+        ],
+      });
       const runMock = vi.fn(doneWith({}));
 
       vi.mocked(Orchestrator).mockImplementation(function () {
@@ -97,7 +100,7 @@ describe('CLI: apply command', () => {
       vi.mocked(fs.access).mockResolvedValue(void 0);
       vi.mocked(fs.readFile).mockResolvedValue('content');
 
-      const planMock = vi.fn().mockResolvedValue([{ type: 'CREATE', resourceType: 'test', name: 't' }]);
+      const planMock = vi.fn().mockResolvedValue({ serial: 0, actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }] });
       const runMock = vi.fn(async function* () {
         yield { type: 'applied', action: { type: 'CREATE', resourceType: 'test', name: 't' } };
         yield { type: 'applied', action: { type: 'DELETE', resourceType: 'test', name: 'gone' } };
@@ -127,7 +130,7 @@ describe('CLI: apply command', () => {
       vi.mocked(fs.access).mockResolvedValue(void 0);
       vi.mocked(fs.readFile).mockResolvedValue('content');
 
-      const planMock = vi.fn().mockResolvedValue([{ type: 'CREATE', resourceType: 'test', name: 't' }]);
+      const planMock = vi.fn().mockResolvedValue({ serial: 0, actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }] });
       const runMock = vi.fn(doneWith({}));
 
       vi.mocked(Orchestrator).mockImplementation(function () {
@@ -148,7 +151,7 @@ describe('CLI: apply command', () => {
       vi.mocked(fs.access).mockResolvedValue(void 0);
       vi.mocked(fs.readFile).mockResolvedValue('content');
 
-      const planMock = vi.fn().mockResolvedValue([{ type: 'CREATE', resourceType: 'test', name: 't' }]);
+      const planMock = vi.fn().mockResolvedValue({ serial: 0, actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }] });
       const runMock = vi.fn(doneWith({}));
 
       vi.mocked(Orchestrator).mockImplementation(function () {
@@ -174,7 +177,7 @@ describe('CLI: apply command', () => {
       vi.mocked(fs.access).mockResolvedValue(void 0);
       vi.mocked(fs.readFile).mockResolvedValue('content');
 
-      const planMock = vi.fn().mockResolvedValue([{ type: 'NO_OP', resourceType: 'test', name: 't' }]);
+      const planMock = vi.fn().mockResolvedValue({ serial: 0, actions: [{ type: 'NO_OP', resourceType: 'test', name: 't' }] });
 
       vi.mocked(Orchestrator).mockImplementation(function () {
         return {
@@ -197,7 +200,7 @@ describe('CLI: apply command', () => {
       vi.mocked(fs.access).mockResolvedValue(void 0);
       vi.mocked(fs.readFile).mockResolvedValue('content');
 
-      const planMock = vi.fn().mockResolvedValue([{ type: 'CREATE', resourceType: 'test', name: 't' }]);
+      const planMock = vi.fn().mockResolvedValue({ serial: 0, actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }] });
       const runMock = vi.fn(doneWith({ my_output: 'test_value', another_output: 42 }));
 
       vi.mocked(Orchestrator).mockImplementation(function () {
@@ -223,7 +226,7 @@ describe('CLI: apply command', () => {
       vi.mocked(fs.access).mockResolvedValue(void 0);
       vi.mocked(fs.readFile).mockResolvedValue('content');
 
-      const planMock = vi.fn().mockResolvedValue([{ type: 'UNKNOWN', resourceType: 'test', name: 't' }]);
+      const planMock = vi.fn().mockResolvedValue({ serial: 0, actions: [{ type: 'UNKNOWN', resourceType: 'test', name: 't' }] });
       const runMock = vi.fn(doneWith({}));
 
       vi.mocked(Orchestrator).mockImplementation(function () {
@@ -251,10 +254,11 @@ describe('CLI: apply command', () => {
   describe('Plan file apply', () => {
     it('should run the saved actions against the saved configuration, without asking again', async () => {
       const planFileContent = JSON.stringify({
-        version: '3.0',
+        version: '4.0',
         timestamp: '2024-01-01T00:00:00Z',
         config: 'saved config',
         modules: { 'm/main.clay': 'saved module' },
+        serial: 2,
         actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }],
       });
 
@@ -278,7 +282,7 @@ describe('CLI: apply command', () => {
 
       await createApplyCommand().parseAsync(['node', 'clay', 'plan.json']);
 
-      expect(runPlanMock).toHaveBeenCalledWith([{ type: 'CREATE', resourceType: 'test', name: 't' }], 'saved config');
+      expect(runPlanMock).toHaveBeenCalledWith(expect.objectContaining({ serial: 2, actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }] }), 'saved config');
       expect(InMemoryFiles).toHaveBeenCalledWith({ 'm/main.clay': 'saved module' });
       expect(runMock).not.toHaveBeenCalled();
       expect(inquirer.prompt).not.toHaveBeenCalled();
@@ -289,10 +293,11 @@ describe('CLI: apply command', () => {
 
     it('should not read the configuration on disk', async () => {
       const planFileContent = JSON.stringify({
-        version: '3.0',
+        version: '4.0',
         timestamp: '2024-01-01T00:00:00Z',
         config: 'saved config',
         modules: { 'm/main.clay': 'saved module' },
+        serial: 2,
         actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }],
       });
 
@@ -323,10 +328,11 @@ describe('CLI: apply command', () => {
 
     it('should display outputs when returned from plan apply', async () => {
       const planFileContent = JSON.stringify({
-        version: '3.0',
+        version: '4.0',
         timestamp: '2024-01-01T00:00:00Z',
         config: 'saved config',
         modules: { 'm/main.clay': 'saved module' },
+        serial: 2,
         actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }],
       });
 
@@ -376,7 +382,7 @@ describe('CLI: apply command', () => {
       vi.mocked(fs.access).mockResolvedValue(void 0);
       vi.mocked(fs.readFile).mockResolvedValue('content');
 
-      const planMock = vi.fn().mockResolvedValue([{ type: 'CREATE', resourceType: 'test', name: 't' }]);
+      const planMock = vi.fn().mockResolvedValue({ serial: 0, actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }] });
       const runMock = vi.fn(async function* () {
         yield { type: 'failed', action: { type: 'CREATE', resourceType: 'test', name: 't' }, error: new Error('disk full') };
       });

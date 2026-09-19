@@ -18,7 +18,7 @@ export function createInitCommand() {
 
       const backend = new LocalBackend(cwd);
       const stateManager = new StateManager(backend);
-      const wroteState = await stateManager.writeIfAbsent({ version: 1, resources: {} });
+      const wroteState = await stateManager.writeIfAbsent({ version: 1, serial: 0, resources: {} });
       console.log(chalk.green(wroteState ? '✓ Created an empty state' : '✓ Kept the state already here'));
 
       console.log(chalk.bold.green('\nClay initialized successfully! 🚀'));

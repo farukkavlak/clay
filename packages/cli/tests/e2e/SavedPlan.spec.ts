@@ -104,7 +104,7 @@ describe('a plan saved to a file', () => {
     const saved = await save(chained());
     const onlyA = saved.actions.filter((action) => action.name === 'a');
 
-    await drain(newOrchestrator().runPlan(onlyA, saved.config));
+    await drain(newOrchestrator().runPlan({ ...saved, actions: onlyA }, saved.config));
 
     expect(await fs.readFile(path.join(dir, 'a.txt'), 'utf8')).toBe('hello');
     await expect(fs.access(path.join(dir, 'b.txt'))).rejects.toThrow();
@@ -114,16 +114,17 @@ describe('a plan saved to a file', () => {
     const saved = await save(chained());
     const onlyB = saved.actions.filter((action) => action.name === 'b');
 
-    await expect(drain(newOrchestrator().runPlan(onlyB, fileConfig('hello')))).rejects.toThrow('The plan has "local_file.b", which the configuration does not declare');
+    await expect(drain(newOrchestrator().runPlan({ ...saved, actions: onlyB }, fileConfig('hello')))).rejects.toThrow(
+      'The plan has "local_file.b", which the configuration does not declare'
+    );
   });
 
-  it('runs against the configuration it was made from', async () => {
+  it('is refused once another run has written the state', async () => {
     const saved = await save(fileConfig('planned'));
 
-    // The configuration on disk moves on; the saved plan does not.
     await drain(newOrchestrator().run(fileConfig('changed')));
-    await drain(newOrchestrator().runPlan(saved.actions, saved.config));
 
-    expect(await fs.readFile(path.join(dir, 'a.txt'), 'utf8')).toBe('planned');
+    await expect(drain(newOrchestrator().runPlan(saved, saved.config))).rejects.toThrow('The state has changed since the plan was made');
+    expect(await fs.readFile(path.join(dir, 'a.txt'), 'utf8')).toBe('changed');
   });
 });

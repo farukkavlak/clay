@@ -12,6 +12,7 @@ describe('ResourceResolver', () => {
 
   const mockState: IState = {
     version: 1,
+    serial: 0,
     resources: {
       'resource.test': {
         id: 'res-123',

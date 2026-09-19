@@ -20,6 +20,7 @@ function desiredResource(name: string, attributes: Record<string, string>, modul
 function stateWith(name: string, attributes: Record<string, unknown>, id = `mock_resource.${name}`): IState {
   return {
     version: 1,
+    serial: 0,
     resources: {
       [`mock_resource.${name}`]: {
         id,
@@ -34,7 +35,7 @@ function stateWith(name: string, attributes: Record<string, unknown>, id = `mock
 
 describe('Planner', () => {
   it('should plan CREATE for new resources', () => {
-    const actions = plan([desiredResource('test_resource_a', { path: 'x' })], { version: 1, resources: {} });
+    const actions = plan([desiredResource('test_resource_a', { path: 'x' })], { version: 1, serial: 0, resources: {} });
 
     expect(actions).toHaveLength(1);
     expect(actions[0].type).toBe('CREATE');
@@ -44,7 +45,7 @@ describe('Planner', () => {
   });
 
   it('should plan CREATE for nested module resources', () => {
-    const actions = plan([desiredResource('nested_resource', { size: 'large' }, ['app', 'db'])], { version: 1, resources: {} });
+    const actions = plan([desiredResource('nested_resource', { size: 'large' }, ['app', 'db'])], { version: 1, serial: 0, resources: {} });
 
     expect(actions).toHaveLength(1);
     expect(actions[0].type).toBe('CREATE');
@@ -54,7 +55,7 @@ describe('Planner', () => {
   it('should carry the dependencies of a resource on every action but a delete', () => {
     const desired = { ...desiredResource('r', { path: 'x' }), dependencies: ['mock_resource.dep'] };
 
-    expect(plan([desired], { version: 1, resources: {} })[0]).toMatchObject({ type: 'CREATE', dependencies: ['mock_resource.dep'] });
+    expect(plan([desired], { version: 1, serial: 0, resources: {} })[0]).toMatchObject({ type: 'CREATE', dependencies: ['mock_resource.dep'] });
     expect(plan([desired], stateWith('r', { path: 'old' }))[0]).toMatchObject({ type: 'UPDATE', dependencies: ['mock_resource.dep'] });
     expect(plan([desired], stateWith('r', { path: 'x' }))[0]).toMatchObject({ type: 'NO_OP', dependencies: ['mock_resource.dep'] });
     const forcesNew = Object.fromEntries([[desired.block.resourceType, { path: { type: 'string' as const, forceNew: true } }]]);
@@ -121,6 +122,7 @@ describe('Planner', () => {
   it('should tell a replaced resource in a module apart from a removed one', () => {
     const state: IState = {
       version: 1,
+      serial: 0,
       resources: {
         'module.app.mock_resource.same': { id: 'in_module', type: 'Resource', resourceType: 'mock_resource', name: 'same', modulePath: ['app'], attributes: { path: 'old' } },
         'mock_resource.same': { id: 'at_root', type: 'Resource', resourceType: 'mock_resource', name: 'same', attributes: { path: 'old' } },
@@ -139,7 +141,7 @@ describe('Planner', () => {
     it('should serialize plan correctly', () => {
       const actions: PlanAction[] = [];
       const config = 'resource "test" {}';
-      const serialized = serializePlan(actions, config, { 'm/main.clay': 'output "x" { value = "y" }' });
+      const serialized = serializePlan({ serial: 0, actions }, config, { 'm/main.clay': 'output "x" { value = "y" }' });
 
       expect(serialized.version).toBe(PLAN_FILE_VERSION);
       expect(serialized.actions).toEqual(actions);
@@ -154,10 +156,17 @@ describe('Planner', () => {
         timestamp: new Date().toISOString(),
         config: 'resource "test" {}',
         modules: {},
+        serial: 0,
         actions: [],
       };
 
       expect(validatePlanFile(planFile)).toBe(true);
+    });
+
+    it('should reject a plan file without the state serial it was made from', () => {
+      const planFile = { version: PLAN_FILE_VERSION, timestamp: new Date().toISOString(), config: '', modules: {}, actions: [] };
+
+      expect(validatePlanFile(planFile)).toBe(false);
     });
 
     it('should reject invalid plan file', () => {
@@ -169,9 +178,11 @@ describe('Planner', () => {
     it('should reject a plan file from an older version', () => {
       const v1 = { version: '1.0', timestamp: new Date().toISOString(), configHash: 'hash', actions: [] };
       const v2 = { version: '2.0', timestamp: new Date().toISOString(), config: '', actions: [] };
+      const v3 = { version: '3.0', timestamp: new Date().toISOString(), config: '', modules: {}, actions: [] };
 
       expect(validatePlanFile(v1)).toBe(false);
       expect(validatePlanFile(v2)).toBe(false);
+      expect(validatePlanFile(v3)).toBe(false);
     });
   });
 });

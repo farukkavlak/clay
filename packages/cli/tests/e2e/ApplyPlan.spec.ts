@@ -46,7 +46,7 @@ describe('apply and plan against real files', () => {
   };
 
   const changes = async (config: string) => {
-    const actions = await newOrchestrator().plan(config);
+    const { actions } = await newOrchestrator().plan(config);
     return actions.filter((action) => action.type !== 'NO_OP');
   };
 

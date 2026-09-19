@@ -31,27 +31,37 @@ export interface PlanAction {
   dependencies?: string[];
 }
 
-/** Bumped whenever the shape below changes, so a plan file from an older version is refused instead of misread. */
-export const PLAN_FILE_VERSION = '3.0';
+/** The actions to take, and the serial of the state they were planned against. */
+export interface Plan {
+  serial: number;
+  actions: PlanAction[];
+}
 
-export interface PlanFile {
+/** Bumped whenever the shape below changes, so a plan file from an older version is refused instead of misread. */
+export const PLAN_FILE_VERSION = '4.0';
+
+export interface PlanFile extends Plan {
   version: string;
   timestamp: string;
   /** The configuration the plan was made from. A saved plan runs against it, not against whatever is on disk later. */
   config: string;
   /** The module files it read, by path relative to the root configuration. */
   modules: Record<string, string>;
-  actions: PlanAction[];
 }
 
-export function serializePlan(actions: PlanAction[], configContent: string, modules: Record<string, string>): PlanFile {
+export function serializePlan(plan: Plan, configContent: string, modules: Record<string, string>): PlanFile {
   return {
     version: PLAN_FILE_VERSION,
     timestamp: new Date().toISOString(),
     config: configContent,
     modules,
-    actions,
+    serial: plan.serial,
+    actions: plan.actions,
   };
+}
+
+function isModuleFiles(modules: unknown): modules is Record<string, string> {
+  return typeof modules === 'object' && modules !== null && !Array.isArray(modules) && Object.values(modules).every((content) => typeof content === 'string');
 }
 
 export function validatePlanFile(planFile: unknown): planFile is PlanFile {
@@ -62,10 +72,8 @@ export function validatePlanFile(planFile: unknown): planFile is PlanFile {
     pf.version === PLAN_FILE_VERSION &&
     typeof pf.timestamp === 'string' &&
     typeof pf.config === 'string' &&
-    typeof pf.modules === 'object' &&
-    pf.modules !== null &&
-    !Array.isArray(pf.modules) &&
-    Object.values(pf.modules).every((content) => typeof content === 'string') &&
+    isModuleFiles(pf.modules) &&
+    typeof pf.serial === 'number' &&
     Array.isArray(pf.actions)
   );
 }
