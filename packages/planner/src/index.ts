@@ -3,7 +3,7 @@ import { AttributeValue, ResourceBlock } from '@miniform/parser';
 import { IState } from '@miniform/state';
 import crypto from 'node:crypto';
 
-export type ActionType = 'CREATE' | 'UPDATE' | 'DELETE' | 'NO_OP';
+export type ActionType = 'CREATE' | 'UPDATE' | 'REPLACE' | 'DELETE' | 'NO_OP';
 
 /** Stands for a value that only exists once the resources it depends on are created. */
 const UNKNOWN_KEY = '@@miniform/unknown';
@@ -108,33 +108,15 @@ function processExistingResource(actions: PlanAction[], desired: DesiredResource
   const schema = schemas[resource.resourceType] || {};
   const forcesNew = Object.keys(changes).some((attr) => schema[attr]?.forceNew);
 
-  if (forcesNew)
-    actions.push(
-      {
-        type: 'DELETE',
-        resourceType: resource.resourceType,
-        name: resource.name,
-        modulePath: resource.modulePath,
-        id: currentResource.id,
-      },
-      {
-        type: 'CREATE',
-        resourceType: resource.resourceType,
-        name: resource.name,
-        modulePath: resource.modulePath,
-        attributes: resource.attributes,
-      }
-    );
-  else
-    actions.push({
-      type: 'UPDATE',
-      resourceType: resource.resourceType,
-      name: resource.name,
-      modulePath: resource.modulePath,
-      id: currentResource.id,
-      attributes: resource.attributes,
-      changes,
-    });
+  actions.push({
+    type: forcesNew ? 'REPLACE' : 'UPDATE',
+    resourceType: resource.resourceType,
+    name: resource.name,
+    modulePath: resource.modulePath,
+    id: currentResource.id,
+    attributes: resource.attributes,
+    changes,
+  });
 }
 
 export function plan(desiredResources: DesiredResource[], currentState: IState, schemas: Record<string, ISchema> = {}): PlanAction[] {
@@ -160,16 +142,15 @@ export function plan(desiredResources: DesiredResource[], currentState: IState, 
 
   // 2. Check for Delete (In state but not in desired)
   for (const [key, resource] of currentMap.entries()) {
-    // If we already added a DELETE action for this key (due to replacement), skip.
-    const alreadyDeleting = actions.some((a) => a.type === 'DELETE' && a.resourceType === resource.resourceType && a.name === resource.name);
-    if (!desiredMap.has(key) && !alreadyDeleting)
-      actions.push({
-        type: 'DELETE',
-        resourceType: resource.resourceType,
-        name: resource.name,
-        modulePath: resource.modulePath,
-        id: resource.id,
-      });
+    if (desiredMap.has(key)) continue;
+
+    actions.push({
+      type: 'DELETE',
+      resourceType: resource.resourceType,
+      name: resource.name,
+      modulePath: resource.modulePath,
+      id: resource.id,
+    });
   }
 
   return actions;

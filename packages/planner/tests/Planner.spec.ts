@@ -90,20 +90,37 @@ describe('Planner', () => {
     expect(actions[0].changes!.path).toEqual({ old: 'path', new: UNKNOWN });
   });
 
-  it('should plan DELETE + CREATE when forceNew attribute changes', () => {
-    const schemas = {
-      mock_resource: {
-        path: { type: 'string' as const, required: true, forceNew: true },
+  const schemas = {
+    mock_resource: {
+      path: { type: 'string' as const, required: true, forceNew: true },
+    },
+  };
+
+  it('should plan one REPLACE when a forceNew attribute changes', () => {
+    const actions = plan([desiredResource('test_resource_f', { path: 'new_path' })], stateWith('test_resource_f', { path: 'old_path' }, 'mock_id_123'), schemas);
+
+    expect(actions).toHaveLength(1);
+    expect(actions[0].type).toBe('REPLACE');
+    expect(actions[0].id).toBe('mock_id_123');
+    expect(actions[0].attributes).toEqual({ path: { type: 'String', value: 'new_path' } });
+    expect(actions[0].changes).toEqual({ path: { old: 'old_path', new: 'new_path' } });
+  });
+
+  it('should tell a replaced resource in a module apart from a removed one', () => {
+    const state: IState = {
+      version: 1,
+      resources: {
+        'module.app.mock_resource.same': { id: 'in_module', type: 'Resource', resourceType: 'mock_resource', name: 'same', modulePath: ['app'], attributes: { path: 'old' } },
+        'mock_resource.same': { id: 'at_root', type: 'Resource', resourceType: 'mock_resource', name: 'same', attributes: { path: 'old' } },
       },
     };
 
-    const actions = plan([desiredResource('test_resource_f', { path: 'new_path' })], stateWith('test_resource_f', { path: 'old_path' }, 'mock_id_123'), schemas);
+    const actions = plan([desiredResource('same', { path: 'new' }, ['app'])], state, schemas);
 
-    expect(actions).toHaveLength(2);
-    expect(actions[0].type).toBe('DELETE');
-    expect(actions[0].id).toBe('mock_id_123');
-    expect(actions[1].type).toBe('CREATE');
-    expect(actions[1].attributes).toEqual({ path: { type: 'String', value: 'new_path' } });
+    expect(actions.map((action) => [action.type, action.id])).toEqual([
+      ['REPLACE', 'in_module'],
+      ['DELETE', 'at_root'],
+    ]);
   });
 
   describe('Plan Serialization', () => {

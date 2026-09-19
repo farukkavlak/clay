@@ -213,6 +213,22 @@ describe('ActionExecutor', () => {
     });
   });
 
+  describe('REPLACE', () => {
+    it('should delete the old resource, create the new one and keep it in state', async () => {
+      const key = context.toString();
+      mockState.resources[key] = { id: 'old', type: 'Resource', resourceType: 'test', name: 'main', attributes: { path: 'old' } };
+      const action: PlanAction = { type: 'REPLACE', resourceType: 'test', name: 'main', id: 'old', attributes: { path: { type: 'String', value: 'new' } } };
+      const graph = new Graph<GraphNode>();
+      graph.addNode(key, { kind: 'resource' });
+
+      await executor.executeActionsSequentially([action], graph, mockState, []);
+
+      expect(mockProvider.delete).toHaveBeenCalledWith('old', 'test');
+      expect(mockProvider.create).toHaveBeenCalledWith('test', { path: 'new' });
+      expect(mockState.resources[key]).toMatchObject({ id: 'created-id', attributes: { path: 'new' } });
+    });
+  });
+
   describe('executeDelete', () => {
     it('should throw if DELETE action missing id', async () => {
       const action: PlanAction = {

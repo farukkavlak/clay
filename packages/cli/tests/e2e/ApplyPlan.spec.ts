@@ -333,4 +333,26 @@ describe('apply and plan against real files', () => {
 
     await expect(newOrchestrator().plan(config, dir)).rejects.toThrow('modules are read through their outputs');
   });
+
+  it('plans one replacement when a forceNew attribute changes', async () => {
+    await orchestrator.apply(fileConfig('hello'), dir);
+    const moved = fileConfig('hello').replace('a.txt', 'moved.txt');
+
+    const actions = await changes(moved);
+
+    expect(actions.map((action) => action.type)).toEqual(['REPLACE']);
+  });
+
+  it('keeps a replaced resource in state and settles on the next plan', async () => {
+    await orchestrator.apply(fileConfig('hello'), dir);
+    const moved = fileConfig('hello').replace('a.txt', 'moved.txt');
+
+    await newOrchestrator().apply(moved, dir);
+
+    const files = await fs.readdir(dir);
+    expect(files.filter((name) => name.endsWith('.txt'))).toEqual(['moved.txt']);
+    const state = await new LocalBackend(dir).read();
+    expect(state.resources['local_file.a'].id).toBe(path.join(dir, 'moved.txt'));
+    expect(await changes(moved)).toEqual([]);
+  });
 });
