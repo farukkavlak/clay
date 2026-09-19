@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-326 tests pass, and so do the type check and the build. Lint shows 23 warnings, and
+331 tests pass, and so do the type check and the build. Lint shows 22 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -78,8 +78,18 @@ In order: the safety net first, then the engine, then the CLI, then the output.
       had resources left them untracked. It now writes a state only when there is none and
       says which of the two it did. Terraform's `init` is safe to run again, and this one
       is too.
-- [ ] `apply <plan-file>` makes a new plan instead of running the saved one, and only
-      warns when the config has changed.
+- [x] `apply <plan-file>` made a new plan instead of running the saved one, and only warned
+      when the config had changed, so what ran could differ from what was approved. A plan
+      file now carries the configuration it was made from, the way Terraform's does, and
+      `apply` runs the saved actions against it without reading `main.mini` again and
+      without asking again. A plan naming a resource that configuration does not declare
+      stops the run. A plan file from another version of miniform is refused.
+- [ ] A saved plan carries the root configuration but its modules are still read from
+      disk, so a module file edited after the plan changes what runs.
+- [ ] A saved plan is still run against whatever the state holds at the time. If another
+      run changed the state in between, the plan is stale: a resource it plans to create
+      may already exist. Terraform catches this with a serial number in state that the plan
+      records and the apply checks.
 - [ ] `state` and `output` read a state file nothing writes. Both default to
       `.miniform/state.json`, the engine writes `miniform.state.json`, and `state` passes
       that path to `LocalBackend` as a directory.

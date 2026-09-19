@@ -140,23 +140,36 @@ export class Orchestrator {
     return plan(desiredResources, currentState, schemas);
   }
 
-  /** Runs the plan and reports each step; the state file is rewritten after every action, so a failed run loses nothing done before it. */
+  /** Plans and runs it, reporting each step; the state file is rewritten after every action, so a failed run loses nothing done before it. */
   async *run(configContent: string, rootDir: string = process.cwd()): AsyncGenerator<RunEvent> {
+    yield* this.locked(this.planAndApply(configContent, rootDir));
+  }
+
+  /** Runs actions planned earlier, against the configuration they were planned from. */
+  async *runPlan(actions: PlanAction[], configContent: string, rootDir: string = process.cwd()): AsyncGenerator<RunEvent> {
+    yield* this.locked(this.applyActions(actions, configContent, rootDir));
+  }
+
+  private async *locked(run: AsyncGenerator<RunEvent>): AsyncGenerator<RunEvent> {
     await this.stateManager.lock();
 
     // Released on the way out however the run ends: done, failed, thrown, or dropped by the caller.
     try {
-      yield* this.runLocked(configContent, rootDir);
+      yield* run;
     } finally {
       await this.stateManager.unlock();
     }
   }
 
-  private async *runLocked(configContent: string, rootDir: string): AsyncGenerator<RunEvent> {
-    const actions = await this.plan(configContent, rootDir);
+  private async *planAndApply(configContent: string, rootDir: string): AsyncGenerator<RunEvent> {
+    yield* this.applyActions(await this.plan(configContent, rootDir), configContent, rootDir);
+  }
+
+  private async *applyActions(actions: PlanAction[], configContent: string, rootDir: string): AsyncGenerator<RunEvent> {
     const state = await this.stateManager.read();
     const { mainProgram, loadedModules, loadedResources } = await this.loadContext(configContent, rootDir, state);
     const graph = this.dependencyGraphBuilder.buildExecutionGraph(loadedResources, loadedModules);
+    this.checkActionsMatch(actions, graph);
 
     yield { type: 'planned', actions };
 
@@ -165,6 +178,14 @@ export class Orchestrator {
 
     await this.persist(state);
     yield { type: 'done', outputs: this.processOutputs(mainProgram, state, Address.root('', '')) };
+  }
+
+  /** An action with no node would be walked past in silence. A plan made from this configuration has one for each; a saved plan may not. */
+  private checkActionsMatch(actions: PlanAction[], graph: Graph<GraphNode>): void {
+    for (const action of actions) {
+      const key = Address.of(action).toString();
+      if (action.type !== 'DELETE' && !graph.hasNode(key)) throw new Error(`The plan has "${key}", which the configuration does not declare`);
+    }
   }
 
   /** Creates, updates and replacements follow the graph, so a resource runs after what it reads from. */
