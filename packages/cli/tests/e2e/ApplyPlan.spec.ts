@@ -283,4 +283,40 @@ describe('apply and plan against real files', () => {
 
     expect(await changes(config)).toEqual([]);
   });
+
+  it('resolves a variable default that reads a resource', async () => {
+    const config = `
+      variable "id" { default = "\${local_file.a.id}" }
+      resource "local_file" "a" {
+        path = "${path.join(dir, 'a.txt')}"
+        content = "hello"
+      }
+      resource "local_file" "b" {
+        path = "${path.join(dir, 'b.txt')}"
+        content = "\${var.id}"
+      }
+    `;
+
+    await orchestrator.apply(config, dir);
+
+    expect(await fs.readFile(path.join(dir, 'b.txt'), 'utf8')).toBe(path.join(dir, 'a.txt'));
+    expect(await changes(config)).toEqual([]);
+  });
+
+  it('writes resolved values, not syntax, into the state variables', async () => {
+    const config = `
+      variable "greeting" { default = "hello" }
+      module "m" {
+        source = "./m"
+        text = "\${var.greeting}"
+      }
+    `;
+    await fs.mkdir(path.join(dir, 'm'));
+    await fs.writeFile(path.join(dir, 'm', 'main.mf'), `output "echo" { value = "\${var.text}" }`);
+
+    await orchestrator.apply(config, dir);
+
+    const state = await new LocalBackend(dir).read();
+    expect(state.variables).toEqual({ '': { greeting: 'hello' }, 'module.m': { text: 'hello' } });
+  });
 });

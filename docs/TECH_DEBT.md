@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-294 tests pass, and so do the type check and the build. Lint shows 23 warnings, and
+296 tests pass, and so do the type check and the build. Lint shows 23 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -45,9 +45,10 @@ In order: the safety net first, then the engine, then the CLI, then the output.
       from state. Variables are graph nodes now, the way Terraform has them: what a
       variable reads runs before it, and it runs before whoever reads it. A variable fed by
       a pending resource is unknown, and one that is used but never defined is named.
-- [ ] A variable default that reads a resource (`variable "v" { default = "${local_file.a.id}" }`)
-      is written out literally. `processVariables` stores the unwrapped string, so the
-      resolver never interpolates it. Module inputs keep their AST node and work.
+- [x] A variable default that reads a resource (`variable "v" { default = "${local_file.a.id}" }`)
+      was written out literally. `processVariables` stored the unwrapped string, so the
+      resolver never interpolated it. Every variable now holds its AST value and the state
+      gets the resolved one.
 - [ ] A reference into a module (`module.app.local_file.a.content`) is read as an output
       named `local_file` and fails as undeclared. Reaching inside a module stays
       unsupported, the way Terraform has it; the message has to say that modules are read
@@ -68,6 +69,9 @@ In order: the safety net first, then the engine, then the CLI, then the output.
 - [ ] `state` and `output` read a state file nothing writes. Both default to
       `.miniform/state.json`, the engine writes `miniform.state.json`, and `state` passes
       that path to `LocalBackend` as a directory.
+- [ ] `output` prints the variables saved in state as if they were outputs, and state holds
+      variables in the first place. State should hold outputs, the way Terraform does, and
+      `output` should read those.
 - [ ] The config file has two names: the CLI reads `main.mini`, modules are loaded from
       `main.mf`, and `validate` defaults to `main.mf`.
 - [ ] Relative paths in `local_file` resolve against the current directory, not the
