@@ -21,9 +21,10 @@ vi.mock('@clay/planner', async () => {
   return {
     ...actual,
     serializePlan: vi.fn(() => ({
-      version: '2.0',
+      version: '3.0',
       timestamp: 'mock-time',
       config: 'mock config',
+      modules: {},
       actions: [],
     })),
   };

@@ -139,11 +139,12 @@ describe('Planner', () => {
     it('should serialize plan correctly', () => {
       const actions: PlanAction[] = [];
       const config = 'resource "test" {}';
-      const serialized = serializePlan(actions, config);
+      const serialized = serializePlan(actions, config, { 'm/main.clay': 'output "x" { value = "y" }' });
 
       expect(serialized.version).toBe(PLAN_FILE_VERSION);
       expect(serialized.actions).toEqual(actions);
       expect(serialized.config).toBe(config);
+      expect(serialized.modules).toEqual({ 'm/main.clay': 'output "x" { value = "y" }' });
       expect(serialized.timestamp).toBeDefined();
     });
 
@@ -152,6 +153,7 @@ describe('Planner', () => {
         version: PLAN_FILE_VERSION,
         timestamp: new Date().toISOString(),
         config: 'resource "test" {}',
+        modules: {},
         actions: [],
       };
 
@@ -165,9 +167,11 @@ describe('Planner', () => {
     });
 
     it('should reject a plan file from an older version', () => {
-      const old = { version: '1.0', timestamp: new Date().toISOString(), configHash: 'hash', actions: [] };
+      const v1 = { version: '1.0', timestamp: new Date().toISOString(), configHash: 'hash', actions: [] };
+      const v2 = { version: '2.0', timestamp: new Date().toISOString(), config: '', actions: [] };
 
-      expect(validatePlanFile(old)).toBe(false);
+      expect(validatePlanFile(v1)).toBe(false);
+      expect(validatePlanFile(v2)).toBe(false);
     });
   });
 });

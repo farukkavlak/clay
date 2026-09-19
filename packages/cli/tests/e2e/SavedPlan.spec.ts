@@ -1,4 +1,4 @@
-import { Orchestrator } from '@clay/orchestrator';
+import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { serializePlan } from '@clay/planner';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
@@ -8,6 +8,9 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createApplyCommand } from '../../src/commands/apply';
+import { createPlanCommand } from '../../src/commands/plan';
+
+const moduleConfig = (text: string) => `output "text" { value = "${text}" }`;
 
 const drain = async (events: AsyncGenerator<{ type: string; error?: Error }>) => {
   for await (const event of events) if (event.type === 'failed') throw event.error;
@@ -17,7 +20,7 @@ describe('a plan saved to a file', () => {
   let dir: string;
 
   const newOrchestrator = () => {
-    const engine = new Orchestrator(new StateManager(new LocalBackend(dir)));
+    const engine = new Orchestrator(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
     engine.registerProvider(new LocalProvider());
     return engine;
   };
@@ -40,7 +43,7 @@ describe('a plan saved to a file', () => {
     }
   `;
 
-  const save = async (config: string) => serializePlan(await newOrchestrator().plan(config, dir), config);
+  const save = async (config: string) => serializePlan(await newOrchestrator().plan(config), config, {});
 
   beforeEach(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-saved-plan-'));
@@ -72,11 +75,36 @@ describe('a plan saved to a file', () => {
     expect(await fs.readFile(path.join(dir, 'a.txt'), 'utf8')).toBe('planned');
   });
 
+  it('carries its modules, so a module edited or removed later changes nothing', async () => {
+    await fs.mkdir(path.join(dir, 'm'));
+    await fs.writeFile(path.join(dir, 'm', 'main.clay'), moduleConfig('planned'), 'utf8');
+    const fromModule = fileConfig(`\${module.m.text}`);
+    await fs.writeFile(path.join(dir, 'main.clay'), `module "m" { source = "./m" }\n${fromModule}`, 'utf8');
+
+    const cwd = process.cwd();
+    process.chdir(dir);
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
+
+    try {
+      await createPlanCommand().parseAsync(['node', 'clay', '--out', 'plan.json']);
+      await fs.rm(path.join(dir, 'm'), { recursive: true });
+      await createApplyCommand().parseAsync(['node', 'clay', 'plan.json']);
+    } finally {
+      vi.restoreAllMocks();
+      process.chdir(cwd);
+    }
+
+    const saved = JSON.parse(String(await fs.readFile(path.join(dir, 'plan.json'))));
+    expect(saved.modules).toEqual({ 'm/main.clay': moduleConfig('planned') });
+    expect(await fs.readFile(path.join(dir, 'a.txt'), 'utf8')).toBe('planned');
+  });
+
   it('runs the actions it carries instead of planning again', async () => {
     const saved = await save(chained());
     const onlyA = saved.actions.filter((action) => action.name === 'a');
 
-    await drain(newOrchestrator().runPlan(onlyA, saved.config, dir));
+    await drain(newOrchestrator().runPlan(onlyA, saved.config));
 
     expect(await fs.readFile(path.join(dir, 'a.txt'), 'utf8')).toBe('hello');
     await expect(fs.access(path.join(dir, 'b.txt'))).rejects.toThrow();
@@ -86,15 +114,15 @@ describe('a plan saved to a file', () => {
     const saved = await save(chained());
     const onlyB = saved.actions.filter((action) => action.name === 'b');
 
-    await expect(drain(newOrchestrator().runPlan(onlyB, fileConfig('hello'), dir))).rejects.toThrow('The plan has "local_file.b", which the configuration does not declare');
+    await expect(drain(newOrchestrator().runPlan(onlyB, fileConfig('hello')))).rejects.toThrow('The plan has "local_file.b", which the configuration does not declare');
   });
 
   it('runs against the configuration it was made from', async () => {
     const saved = await save(fileConfig('planned'));
 
     // The configuration on disk moves on; the saved plan does not.
-    await drain(newOrchestrator().run(fileConfig('changed'), dir));
-    await drain(newOrchestrator().runPlan(saved.actions, saved.config, dir));
+    await drain(newOrchestrator().run(fileConfig('changed')));
+    await drain(newOrchestrator().runPlan(saved.actions, saved.config));
 
     expect(await fs.readFile(path.join(dir, 'a.txt'), 'utf8')).toBe('planned');
   });

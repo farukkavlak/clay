@@ -5,6 +5,7 @@ import { DesiredResource, hasChanges, isUnknown, plan, PlanAction, UNKNOWN } fro
 import { IState, StateManager } from '@clay/state';
 
 import { Address } from './Address';
+import { ConfigFiles } from './ConfigFiles';
 import { ActionExecutor } from './components/ActionExecutor';
 import { DependencyGraphBuilder, GraphNode, ValueNode } from './components/DependencyGraphBuilder';
 import { LoadedModule, LoadedResource, ModuleLoader } from './components/ModuleLoader';
@@ -15,6 +16,8 @@ import { UnresolvedReferenceError } from './resolvers/UnresolvedReferenceError';
 import { ScopeManager } from './scope/ScopeManager';
 
 export type { RunEvent } from './RunEvent';
+export { DiskFiles, InMemoryFiles, RecordingFiles } from './ConfigFiles';
+export type { ConfigFiles } from './ConfigFiles';
 
 export class Orchestrator {
   private providers: Map<string, IProvider> = new Map();
@@ -27,11 +30,11 @@ export class Orchestrator {
   private dependencyGraphBuilder: DependencyGraphBuilder;
   private referenceScanner: ReferenceScanner;
 
-  constructor(stateManager: StateManager) {
+  constructor(stateManager: StateManager, files: ConfigFiles) {
     this.stateManager = stateManager;
     this.scopeManager = new ScopeManager();
     this.referenceResolver = new ReferenceResolver(this.scopeManager, this.dataSources);
-    this.moduleLoader = new ModuleLoader(this.processVariables.bind(this), this.initializeChildVariables.bind(this), this.getAttributesMap.bind(this));
+    this.moduleLoader = new ModuleLoader(files, this.processVariables.bind(this), this.initializeChildVariables.bind(this), this.getAttributesMap.bind(this));
     this.referenceScanner = new ReferenceScanner(this.scopeManager);
     this.dependencyGraphBuilder = new DependencyGraphBuilder(this.scopeManager, this.referenceScanner);
     this.actionExecutor = new ActionExecutor(this.providers, this.convertAttributes.bind(this));
@@ -98,7 +101,6 @@ export class Orchestrator {
    */
   private async loadContext(
     configContent: string,
-    rootDir: string,
     state: IState
   ): Promise<{
     mainProgram: Statement[];
@@ -112,7 +114,7 @@ export class Orchestrator {
     this.scopeManager.clear();
     this.processVariables(mainProgram, new Address([], '', ''));
 
-    const { resources: loadedResources, modules: loadedModules } = await this.moduleLoader.loadModuleTree(rootDir, mainProgram);
+    const { resources: loadedResources, modules: loadedModules } = await this.moduleLoader.loadModuleTree(mainProgram);
 
     this.dataSources.clear();
     for (const mod of loadedModules) await this.processDataSources(mod.program, state, mod.address);
@@ -123,9 +125,9 @@ export class Orchestrator {
   /**
    * Generate an execution plan without applying it
    */
-  async plan(configContent: string, rootDir: string = process.cwd()): Promise<PlanAction[]> {
+  async plan(configContent: string): Promise<PlanAction[]> {
     const currentState = await this.stateManager.read();
-    const { loadedResources, loadedModules } = await this.loadContext(configContent, rootDir, currentState);
+    const { loadedResources, loadedModules } = await this.loadContext(configContent, currentState);
 
     const graph = this.dependencyGraphBuilder.buildExecutionGraph(loadedResources, loadedModules);
     const desiredResources = this.resolveInDependencyOrder(loadedResources, graph, currentState);
@@ -141,13 +143,13 @@ export class Orchestrator {
   }
 
   /** Plans and runs it, reporting each step; the state file is rewritten after every action, so a failed run loses nothing done before it. */
-  async *run(configContent: string, rootDir: string = process.cwd()): AsyncGenerator<RunEvent> {
-    yield* this.locked(this.planAndApply(configContent, rootDir));
+  async *run(configContent: string): AsyncGenerator<RunEvent> {
+    yield* this.locked(this.planAndApply(configContent));
   }
 
   /** Runs actions planned earlier, against the configuration they were planned from. */
-  async *runPlan(actions: PlanAction[], configContent: string, rootDir: string = process.cwd()): AsyncGenerator<RunEvent> {
-    yield* this.locked(this.applyActions(actions, configContent, rootDir));
+  async *runPlan(actions: PlanAction[], configContent: string): AsyncGenerator<RunEvent> {
+    yield* this.locked(this.applyActions(actions, configContent));
   }
 
   private async *locked(run: AsyncGenerator<RunEvent>): AsyncGenerator<RunEvent> {
@@ -161,13 +163,13 @@ export class Orchestrator {
     }
   }
 
-  private async *planAndApply(configContent: string, rootDir: string): AsyncGenerator<RunEvent> {
-    yield* this.applyActions(await this.plan(configContent, rootDir), configContent, rootDir);
+  private async *planAndApply(configContent: string): AsyncGenerator<RunEvent> {
+    yield* this.applyActions(await this.plan(configContent), configContent);
   }
 
-  private async *applyActions(actions: PlanAction[], configContent: string, rootDir: string): AsyncGenerator<RunEvent> {
+  private async *applyActions(actions: PlanAction[], configContent: string): AsyncGenerator<RunEvent> {
     const state = await this.stateManager.read();
-    const { mainProgram, loadedModules, loadedResources } = await this.loadContext(configContent, rootDir, state);
+    const { mainProgram, loadedModules, loadedResources } = await this.loadContext(configContent, state);
     const graph = this.dependencyGraphBuilder.buildExecutionGraph(loadedResources, loadedModules);
     this.checkActionsMatch(actions, graph);
 

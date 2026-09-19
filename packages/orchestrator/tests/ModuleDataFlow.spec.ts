@@ -1,15 +1,13 @@
 import { plan } from '@clay/planner';
-import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
-import { Orchestrator } from '../src/index';
+import { InMemoryFiles, Orchestrator } from '../src/index';
 import { apply } from './apply';
 
 // Mock fs and path
-vi.mock('node:fs');
 
 const readMock = vi.fn().mockResolvedValue({ resources: {}, variables: {}, version: 1 });
 const writeMock = vi.fn().mockResolvedValue(undefined);
@@ -39,6 +37,7 @@ vi.mock('@clay/planner', async () => ({
 
 describe('Orchestrator - Phase 4: Data Flow', () => {
   let tmpDir: string;
+  let files: Record<string, string>;
   let orchestrator: Orchestrator;
   let mockProvider: {
     resources: string[];
@@ -68,7 +67,8 @@ describe('Orchestrator - Phase 4: Data Flow', () => {
     const { StateManager, LocalBackend } = await import('@clay/state');
     const backend = new LocalBackend(tmpDir);
     const stateManager = new StateManager(backend);
-    orchestrator = new Orchestrator(stateManager);
+    files = {};
+    orchestrator = new Orchestrator(stateManager, new InMemoryFiles(files));
     orchestrator.registerProvider(mockProvider);
 
     // Ensure plan returns empty array by default
@@ -101,9 +101,7 @@ describe('Orchestrator - Phase 4: Data Flow', () => {
       },
     ]);
 
-    (fs.existsSync as Mock).mockReturnValue(true);
-
-    await apply(orchestrator, config, '/root');
+    await apply(orchestrator, config);
 
     expect(writeMock).toHaveBeenCalled();
     const stateArg = writeMock.mock.calls[0][0];
@@ -133,12 +131,7 @@ module "app" {
 }
 `;
 
-    (fs.existsSync as Mock).mockReturnValue(true);
-    (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
-      if (filePath.endsWith('app/main.clay')) return appConfig;
-      if (filePath.includes('root')) return rootConfig;
-      return rootConfig;
-    });
+    files['app/main.clay'] = appConfig;
 
     // Mock Plan
     (plan as Mock).mockReturnValue([
@@ -151,7 +144,7 @@ module "app" {
       },
     ]);
 
-    await apply(orchestrator, rootConfig, '/root');
+    await apply(orchestrator, rootConfig);
 
     expect(writeMock).toHaveBeenCalled();
     const stateArg = writeMock.mock.calls[0][0];
@@ -176,11 +169,7 @@ module "L2" {
 }
 `;
 
-    (fs.existsSync as Mock).mockReturnValue(true);
-    (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
-      if (filePath.endsWith('L2/main.clay')) return l2Config;
-      return rootConfig;
-    });
+    files['L2/main.clay'] = l2Config;
 
     // Mock Plan
     (plan as Mock).mockReturnValue([
@@ -193,7 +182,7 @@ module "L2" {
       },
     ]);
 
-    await apply(orchestrator, rootConfig, '/root');
+    await apply(orchestrator, rootConfig);
 
     const stateArg = writeMock.mock.calls[0][0];
     const resource = stateArg.resources['module.L2.test_resource.child'];
@@ -221,11 +210,7 @@ resource "test_resource" "instance" {
 }
 `;
 
-    (fs.existsSync as Mock).mockReturnValue(true);
-    (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
-      if (filePath.endsWith('db/main.clay')) return dbConfig;
-      return rootConfig;
-    });
+    files['db/main.clay'] = dbConfig;
 
     // Mock Plan
     (plan as Mock).mockReturnValue([
@@ -247,7 +232,7 @@ resource "test_resource" "instance" {
 
     mockProvider.create.mockImplementation(() => 'resource-id');
 
-    await apply(orchestrator, rootConfig, '/root');
+    await apply(orchestrator, rootConfig);
 
     const stateArg = writeMock.mock.calls[0][0];
 

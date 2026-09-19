@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-339 tests pass, and so do the type check and the build. Lint shows 12 warnings, and
+340 tests pass, and so do the type check and the build. Lint shows 12 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -84,8 +84,13 @@ In order: the safety net first, then the engine, then the CLI, then the output.
       `apply` runs the saved actions against it without reading `main.clay` again and
       without asking again. A plan naming a resource that configuration does not declare
       stops the run. A plan file from another version of Clay is refused.
-- [ ] A saved plan carries the root configuration but its modules are still read from
-      disk, so a module file edited after the plan changes what runs.
+- [x] A saved plan carried the root configuration but its modules were still read from
+      disk, so a module file edited after the plan changed what ran. The loader reads
+      modules through a `ConfigFiles` collaborator now: the disk when planning, with every
+      file it read remembered and written into the plan; the plan's own copy when applying
+      one. The engine no longer takes a root directory; where files come from is decided
+      where it is built. The orchestrator tests stopped mocking `node:fs` for the same
+      reason.
 - [ ] A saved plan is still run against whatever the state holds at the time. If another
       run changed the state in between, the plan is stale: a resource it plans to create
       may already exist. Terraform catches this with a serial number in state that the plan
