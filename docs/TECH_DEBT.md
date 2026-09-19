@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-320 tests pass, and so do the type check and the build. Lint shows 23 warnings, and
+326 tests pass, and so do the type check and the build. Lint shows 23 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -74,7 +74,10 @@ In order: the safety net first, then the engine, then the CLI, then the output.
       longer knows a removed resource, so every resource now writes down what it reads
       from, the way Terraform does, and deletes follow that list backwards. The list is
       written on every action, an unchanged one included, so it never goes stale.
-- [ ] `init` overwrites an existing state file.
+- [x] `init` overwrote an existing state file, so running it in a workspace that already
+      had resources left them untracked. It now writes a state only when there is none and
+      says which of the two it did. Terraform's `init` is safe to run again, and this one
+      is too.
 - [ ] `apply <plan-file>` makes a new plan instead of running the saved one, and only
       warns when the config has changed.
 - [ ] `state` and `output` read a state file nothing writes. Both default to
@@ -141,6 +144,10 @@ In order: the safety net first, then the engine, then the CLI, then the output.
       copy of the action list and it says less than `plan`'s: no "will be replaced", no
       diff.
 - [ ] Comments that only restate the code are gone (`// Mock Provider for testing`).
+- [ ] The `I` prefix on type names is gone: `IResource`, `IProvider`, `IResourceHandler`,
+      `ISchemaDefinition`, `ISchema`, `IState`, `IStateBackend` and `IResolver` carry it
+      and the other seventeen types do not. TypeScript does not need the prefix, and half
+      the names that would earn it by any rule (`PlanAction`, `RunEvent`) go without.
 
 ## 4 — repo
 

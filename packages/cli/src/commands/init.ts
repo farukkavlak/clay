@@ -12,16 +12,14 @@ export function createInitCommand() {
     console.log(chalk.blue('Initializing Miniform workspace...'));
 
     try {
-      // 1. Create .miniform directory
-      await fs.mkdir(miniformDir, { recursive: true });
-      console.log(chalk.green(`✓ Created ${miniformDir}`));
+      // mkdir reports the path it made, and nothing when the directory was already there.
+      const madeDir = await fs.mkdir(miniformDir, { recursive: true });
+      console.log(chalk.green(madeDir ? `✓ Created ${miniformDir}` : `✓ Found ${miniformDir}`));
 
-      // 2. Initialize empty state
       const backend = new LocalBackend(cwd);
       const stateManager = new StateManager(backend);
-      // Create empty state
-      await stateManager.write({ version: 1, resources: {} });
-      console.log(chalk.green(`✓ Initialized state.json`));
+      const wroteState = await stateManager.writeIfAbsent({ version: 1, resources: {} });
+      console.log(chalk.green(wroteState ? '✓ Created an empty state' : '✓ Kept the state already here'));
 
       console.log(chalk.bold.green('\nMiniform initialized successfully! 🚀'));
     } catch (error: unknown) {

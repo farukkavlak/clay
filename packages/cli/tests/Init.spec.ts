@@ -27,14 +27,14 @@ describe('CLI: init command', () => {
   });
 
   it('should create .miniform directory and initialize state', async () => {
-    // Mock fs.mkdir to succeed
-    vi.mocked(fs.mkdir).mockResolvedValue(void 0);
+    // Mock fs.mkdir to report the directory it made
+    vi.mocked(fs.mkdir).mockResolvedValue(miniformDir);
 
     // Mock StateManager
-    const writeMock = vi.fn().mockResolvedValue(void 0);
+    const writeIfAbsentMock = vi.fn().mockResolvedValue(true);
     vi.mocked(StateManager).mockImplementation(function () {
       return {
-        write: writeMock,
+        writeIfAbsent: writeIfAbsentMock,
         read: vi.fn(),
         lock: vi.fn(),
         unlock: vi.fn(),
@@ -46,7 +46,7 @@ describe('CLI: init command', () => {
 
     expect(fs.mkdir).toHaveBeenCalledWith(miniformDir, { recursive: true });
     expect(StateManager).toHaveBeenCalledWith(expect.any(Object));
-    expect(writeMock).toHaveBeenCalledWith({ version: 1, resources: {} });
+    expect(writeIfAbsentMock).toHaveBeenCalledWith({ version: 1, resources: {} });
   });
 
   it('should handle errors gracefully', async () => {

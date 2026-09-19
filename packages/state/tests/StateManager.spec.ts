@@ -51,6 +51,29 @@ describe('StateManager', () => {
     expect(readState).toEqual(mockState);
   });
 
+  describe('writeIfAbsent', () => {
+    const empty: IState = { version: 1, resources: {} };
+
+    it('should write the state when none is stored yet', async () => {
+      expect(await stateManager.writeIfAbsent(empty)).toBe(true);
+      expect(await stateManager.read()).toEqual(empty);
+    });
+
+    it('should keep the stored state and say it wrote nothing', async () => {
+      const stored: IState = { version: 1, resources: { 'mock_resource.a': { type: 'Resource', resourceType: 'mock_resource', name: 'a', attributes: {} } } };
+      await stateManager.write(stored);
+
+      expect(await stateManager.writeIfAbsent(empty)).toBe(false);
+      expect(await stateManager.read()).toEqual(stored);
+    });
+
+    it('should throw when the state cannot be written at all', async () => {
+      const missingDir = new StateManager(new LocalBackend(path.join(tmpDir, 'missing'), 'test.state.json'));
+
+      await expect(missingDir.writeIfAbsent(empty)).rejects.toThrow();
+    });
+  });
+
   it('should throw error for non-ENOENT errors', async () => {
     // Create a directory with the same name as the state file
     // This will cause fs.readFile to throw EISDIR (Is a directory)

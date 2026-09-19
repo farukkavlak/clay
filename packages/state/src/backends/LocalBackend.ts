@@ -4,6 +4,10 @@ import path from 'node:path';
 import { IStateBackend } from '../IStateBackend';
 import { IState } from '../StateManager';
 
+function serialize(state: IState): string {
+  return JSON.stringify(state, null, 2);
+}
+
 /**
  * Local file system backend for state storage.
  * Stores state in a JSON file with locking and backup support.
@@ -40,8 +44,19 @@ export class LocalBackend implements IStateBackend {
       // File doesn't exist, no backup needed
     }
 
-    const content = JSON.stringify(state, null, 2);
-    await fs.writeFile(this.filePath, content, 'utf8');
+    await fs.writeFile(this.filePath, serialize(state), 'utf8');
+  }
+
+  /** The file system decides, so nothing can slip in between the check and the write. */
+  async writeIfAbsent(state: IState): Promise<boolean> {
+    try {
+      await fs.writeFile(this.filePath, serialize(state), { encoding: 'utf8', flag: 'wx' });
+      return true;
+    } catch (error) {
+      if ((error as { code?: string }).code === 'EEXIST') return false;
+
+      throw error;
+    }
   }
 
   async lock(): Promise<void> {
