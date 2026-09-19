@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-272 tests pass, and so do the type check and the build. Lint shows 25 warnings, and
+281 tests pass, and so do the type check and the build. Lint shows 23 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -35,12 +35,14 @@ In order: the safety net first, then the engine, then the CLI, then the output.
       resolved values to state and nothing told the planner; a `Record<string, any>` on
       `IResource.attributes` and a cast in the planner kept the compiler quiet, and the
       planner's tests built their own state in the old shape.
-- [ ] A resource that reads a value from a resource changing in the same run is planned
-      against the old state, so it comes out `NO_OP` and keeps its old content until the
-      next apply. Resolve in dependency order: a reference whose target has a pending
-      action is unknown, not the old value. The same graph tells a typo from a value that
-      is not there yet; until then `plan` calls a reference to a resource no config
-      declares "(known after apply)" and only the apply reports it.
+- [x] A resource that reads a value from a resource changing in the same run was planned
+      against the old state, so it came out `NO_OP` and kept its old content until the next
+      apply. The plan now walks the dependency graph: a reference whose target has a
+      pending action is unknown, a reference to a resource no config declares is an error,
+      and a cycle names the resources in it.
+- [ ] A reference into another module (`module.app.local_file.a.content`) is read as a
+      module output, so it fails as undeclared. The resolver understands the form, the
+      graph does not.
 - [ ] `plan` never computes module outputs, so every `${module.x.y}` is unknown and its
       resource shows a change that never settles.
 - [ ] Replacing a resource destroys it. Creates run before deletes, so the delete removes
@@ -91,7 +93,8 @@ In order: the safety net first, then the engine, then the CLI, then the output.
 - [ ] Lint has no warnings, and warnings count as errors.
 - [ ] The ESLint config fits this repo. The current one came from a React project.
 - [ ] The orchestrator's parts get their collaborators passed in, not `bind`-ed callbacks.
-- [ ] `apply` parses the config and reads data sources once, not twice.
+- [ ] `apply` parses the config, reads data sources and builds the dependency graph once,
+      not twice. It calls `plan`, which now does all three, and then does them again.
 - [ ] `apply` and `plan` yield events (resource started, created, failed, done) and the CLI
       only renders them. Do this with the failed-action bug above: writing state as the
       events arrive is the fix, progress becomes visible, and the CLI tests stop spying on

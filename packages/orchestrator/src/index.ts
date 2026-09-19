@@ -1,13 +1,14 @@
 import { IProvider, ISchema } from '@miniform/contracts';
 import { AttributeValue, Lexer, Parser, Statement } from '@miniform/parser';
-import { DesiredResource, plan, PlanAction, UNKNOWN } from '@miniform/planner';
+import { DesiredResource, hasChanges, plan, PlanAction, UNKNOWN } from '@miniform/planner';
 import { IState, StateManager } from '@miniform/state';
 
 import { Address } from './Address';
 import { ActionExecutor } from './components/ActionExecutor';
 import { DependencyGraphBuilder } from './components/DependencyGraphBuilder';
-import { LoadedModule, ModuleLoader } from './components/ModuleLoader';
+import { LoadedModule, LoadedResource, ModuleLoader } from './components/ModuleLoader';
 import { ReferenceResolver } from './resolvers/ReferenceResolver';
+import { ReferenceScanner } from './resolvers/ReferenceScanner';
 import { UnresolvedReferenceError } from './resolvers/UnresolvedReferenceError';
 import { ScopeManager } from './scope/ScopeManager';
 
@@ -20,13 +21,15 @@ export class Orchestrator {
   private moduleLoader: ModuleLoader;
   private actionExecutor: ActionExecutor;
   private dependencyGraphBuilder: DependencyGraphBuilder;
+  private referenceScanner: ReferenceScanner;
 
   constructor(stateManager: StateManager) {
     this.stateManager = stateManager;
     this.scopeManager = new ScopeManager();
     this.referenceResolver = new ReferenceResolver(this.scopeManager, this.dataSources);
     this.moduleLoader = new ModuleLoader(this.processVariables.bind(this), this.initializeChildVariables.bind(this), this.getAttributesMap.bind(this));
-    this.dependencyGraphBuilder = new DependencyGraphBuilder(this.scopeManager);
+    this.referenceScanner = new ReferenceScanner(this.scopeManager);
+    this.dependencyGraphBuilder = new DependencyGraphBuilder(this.scopeManager, this.referenceScanner);
     this.actionExecutor = new ActionExecutor(this.providers, this.convertAttributes.bind(this), this.resolveOutputByKey.bind(this));
   }
 
@@ -120,12 +123,10 @@ export class Orchestrator {
    */
   async plan(configContent: string, rootDir: string = process.cwd()): Promise<PlanAction[]> {
     const currentState = await this.stateManager.read();
-    const { loadedResources } = await this.loadContext(configContent, rootDir, currentState);
+    const { loadedResources, loadedModules } = await this.loadContext(configContent, rootDir, currentState);
 
-    const desiredResources: DesiredResource[] = loadedResources.map((r) => ({
-      block: { ...r.block, modulePath: r.address.modulePath },
-      attributes: this.resolveForPlan(r.block.attributes, currentState, r.address),
-    }));
+    const graph = this.dependencyGraphBuilder.buildExecutionGraph(loadedResources, loadedModules);
+    const desiredResources = this.resolveInDependencyOrder(loadedResources, graph.topologicalSort(), currentState);
 
     const schemas: Record<string, ISchema> = {};
     for (const r of loadedResources)
@@ -183,17 +184,41 @@ export class Orchestrator {
     return outputs;
   }
 
+  /** Resolves each resource after the ones it reads from, so a value an earlier action will change is UNKNOWN, not stale. */
+  private resolveInDependencyOrder(loadedResources: LoadedResource[], layers: string[][], state: IState): DesiredResource[] {
+    const byKey = new Map(loadedResources.map((r) => [r.address.toString(), r]));
+    const pending = new Set<string>();
+    const desired: DesiredResource[] = [];
+
+    for (const layer of layers)
+      for (const key of layer) {
+        // The graph holds module outputs too; only resources are planned.
+        const loaded = byKey.get(key);
+        if (!loaded) continue;
+
+        const attributes = this.resolveForPlan(loaded.block.attributes, state, loaded.address, pending);
+        const current = state.resources[key];
+        if (!current || hasChanges(current.attributes, attributes)) pending.add(key);
+
+        desired.push({ block: { ...loaded.block, modulePath: loaded.address.modulePath }, attributes });
+      }
+
+    return desired;
+  }
+
   /** Resolves config values the way the diff needs them; what an apply has to produce first stays UNKNOWN. */
-  private resolveForPlan(attributes: Record<string, AttributeValue>, state: IState, context: Address): Record<string, unknown> {
+  private resolveForPlan(attributes: Record<string, AttributeValue>, state: IState, context: Address, pending: Set<string>): Record<string, unknown> {
     const resolved: Record<string, unknown> = {};
 
     for (const [key, value] of Object.entries(attributes))
-      try {
-        resolved[key] = this.resolveValue(value, state, context);
-      } catch (error) {
-        if (!(error instanceof UnresolvedReferenceError)) throw error;
-        resolved[key] = UNKNOWN;
-      }
+      if (this.referenceScanner.keysIn(value, context).some((target) => pending.has(target))) resolved[key] = UNKNOWN;
+      else
+        try {
+          resolved[key] = this.resolveValue(value, state, context);
+        } catch (error) {
+          if (!(error instanceof UnresolvedReferenceError)) throw error;
+          resolved[key] = UNKNOWN;
+        }
 
     return resolved;
   }
