@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-261 tests pass, and so do the type check and the build. Lint shows 25 warnings, and
+266 tests pass, and so do the type check and the build. Lint shows 25 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -27,8 +27,8 @@ apply → plan cycle is broken. Running the engine against real files shows it.
 
 In order: the safety net first, then the engine, then the CLI, then the output.
 
-- [ ] End-to-end tests that run the engine with the real provider and a real state file in
-      a temp directory. Every bug below gets one.
+- [x] End-to-end tests that run the engine with the real provider and a real state file in
+      a temp directory. Each fix below brings its own.
 - [ ] A plan right after an apply wants to replace everything. The planner compares
       resolved values in state with raw AST values from the config, so they never match.
       This hides every other planner bug, so it comes first.
