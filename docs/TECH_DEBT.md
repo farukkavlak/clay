@@ -202,6 +202,21 @@ Found by the 2026-09-20 audit, each one reproduced with the built CLI:
       file and renamed over it, as Terraform writes it, so the file on disk is always the
       old state or the new one.
 
+Found by the 2026-09-20 review of this section:
+
+- [ ] `apply` runs a plan nobody saw. It plans without the lock, shows the plan, asks, and
+      then `run` takes the lock and plans again, applying whatever comes out. A run that
+      finishes while the question is open changes what the second plan does. Terraform
+      holds the lock from the plan to the end of the apply. Cheaper here: `apply` hands
+      the plan it showed to `runPlan`, which refuses it once the serial has moved on, and
+      `run` becomes a plan followed by that. The config is then loaded once per apply, not
+      twice.
+- [ ] A state write that fails after a failed action is swallowed: `step` writes with
+      `.catch(() => undefined)`, so a replacement that deleted, failed to create and then
+      could not save leaves a state that still lists the resource, and the user sees only
+      the create error. Terraform reports the failed save as an error of its own. The
+      `failed` event carries it too.
+
 ## 2 — dependencies
 
 - [ ] Each package lists the `@clay/*` packages it imports. Only the CLI lists any, and it
@@ -230,6 +245,9 @@ Found by the 2026-09-20 audit, each one reproduced with the built CLI:
       and `Orchestrator.validate`. `planner` and `orchestrator` depend on `@clay/state`
       only for that type, and the shape state is written in is a contract every side has
       to agree on. Keeping it inside one side is how the planner drifted away from it.
+      `Address` goes the same way: the planner spells the state key by hand in
+      `getResourceKey`, and the orchestrator in `Address.toString`, so the two agree by
+      luck.
 
 ## 3 — code
 
@@ -253,8 +271,15 @@ Found by the 2026-09-20 audit, each one reproduced with the built CLI:
       same config against different sets of pending values.
 - [ ] The CLI commands share their helpers instead of copying them. `apply` has its own
       copy of the action list and it says less than `plan`'s: no "will be replaced", no
-      diff.
-- [ ] Comments that only restate the code are gone (`// Mock Provider for testing`).
+      diff. `newOrchestrator` with the `LocalProvider` registration is copied into `plan`,
+      `apply` and `validate`. A missing provider is reported in three wordings:
+      `No provider handles`, `Provider for data source type ... not registered` and
+      `No provider registered for resource type`.
+- [ ] Comments that only restate the code are gone (`// Mock Provider for testing`), and
+      so are the stale ones: `loadContext` carries two doc blocks, one for `plan`;
+      `IResource` says it comes from the parser when it is a state entry; `StateManager`
+      promises S3 and Azure. `loadContext` also spells `import('./components/ModuleLoader')`
+      inline for a type it already imports.
 - [ ] The parser reads a block's attributes in one place, not four (resource, data,
       variable and module carry the same loop). `LocalProvider` looks its handler up in
       one place, not six. `ModuleOutputResolver` builds a child scope by hand next to
