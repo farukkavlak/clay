@@ -16,17 +16,20 @@ resource "type" "name" {
 
 The Lexer recognizes these tokens:
 
-| Token Type   | Pattern / Example             | Description                              |
-| :----------- | :---------------------------- | :--------------------------------------- |
-| `IDENTIFIER` | `resource`, `path`, `content` | Alphanumeric keywords or variable names. |
-| `STRING`     | `"hello world"`               | Double-quoted strings.                   |
-| `NUMBER`     | `123`, `4.5`                  | Numeric values.                          |
-| `BOOLEAN`    | `true`, `false`               | Boolean values.                          |
-| `LBRACE`     | `{`                           | Start of a block.                        |
-| `RBRACE`     | `}`                           | End of a block.                          |
-| `ASSIGN`     | `=`                           | Assignment operator.                     |
-| `DOT`        | `.`                           | Reference separator.                     |
-| `COMMENT`    | `# ...` or `// ...`           | Ignored by parser.                       |
+| Token Type   | Pattern / Example             | Description            |
+| :----------- | :---------------------------- | :--------------------- |
+| `IDENTIFIER` | `resource`, `path`, `content` | A name.                |
+| `STRING`     | `"hello world"`               | Double-quoted strings. |
+| `NUMBER`     | `123`, `4.5`                  | Numeric values.        |
+| `BOOLEAN`    | `true`, `false`               | Boolean values.        |
+| `LBRACE`     | `{`                           | Start of a block.      |
+| `RBRACE`     | `}`                           | End of a block.        |
+| `ASSIGN`     | `=`                           | Assignment operator.   |
+| `DOT`        | `.`                           | Reference separator.   |
+| `COMMENT`    | `# ...` or `// ...`           | Ignored by parser.     |
+
+There are no keywords. `data = "x"` is an attribute and `data "t" "n" {` is a block; the
+parser tells them apart by position, not by the word.
 
 ## 3. Supported Block Types
 
@@ -187,10 +190,11 @@ resource "local_file" "derived" {
 }
 ```
 
-## 8. Reserved Keywords
+## 8. Words with a meaning
 
-- `resource` - Resource block
-- `var` - Variable reference prefix
+- `resource`, `data`, `variable`, `output`, `module` start a block
+- `var`, `data`, `module` start a reference into variables, data sources and module
+  outputs; any other first part names a resource
 
 ## 9. Limitations
 

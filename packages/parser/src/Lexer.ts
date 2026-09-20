@@ -13,11 +13,6 @@ export class Lexer {
 
   // Regex rules (Order matters!)
   private specs: TokenSpec[] = [
-    { type: TokenType.Resource, regex: /^resource\b/ },
-    { type: TokenType.Variable, regex: /^variable\b/ },
-    { type: TokenType.Data, regex: /^data\b/ },
-    { type: TokenType.Output, regex: /^output\b/ },
-    { type: TokenType.Module, regex: /^module\b/ }, // Added module keyword
     { type: TokenType.Boolean, regex: /^(true|false)\b/ },
     { type: TokenType.Identifier, regex: /^[A-Z_a-z]\w*/ },
     { type: TokenType.String, regex: /^"[^"]*"/ },
@@ -69,8 +64,6 @@ export class Lexer {
         const match = remaining.match(spec.regex);
         if (match) {
           const value = match[0];
-          // Determine actual token type (Identifier vs Keyword overlap is handled by regex order)
-          // But strict keywords like 'resource' are checked first in specs.
 
           // Special handling for String to remove quotes
           let tokenValue = value;
