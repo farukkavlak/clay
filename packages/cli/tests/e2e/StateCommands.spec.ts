@@ -24,18 +24,39 @@ describe('state and output against a real state file', () => {
     output "file" { value = "\${local_file.a.id}" }
   `;
 
-  const applyConfig = async () => {
+  const newOrchestrator = () => {
     const engine = new Orchestrator(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
     engine.registerProvider(new LocalProvider());
-    for await (const event of engine.run(config())) if (event.type === 'failed') throw event.error;
+    return engine;
   };
+
+  const run = async (configContent: string) => {
+    for await (const event of newOrchestrator().run(configContent)) if (event.type === 'failed') throw event.error;
+  };
+
+  const applyConfig = () => run(config());
+
+  const stored = () => new LocalBackend(dir).read();
+
+  const chained = () => `
+    resource "local_file" "a" {
+      path = "${path.join(dir, 'a.txt')}"
+      content = "hello"
+    }
+    resource "local_file" "b" {
+      path = "${path.join(dir, 'b.txt')}"
+      content = "\${local_file.a.content}"
+    }
+  `;
 
   beforeEach(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-state-cmd-'));
     cwd = process.cwd();
     process.chdir(dir);
     printed = [];
-    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => printed.push(args.join(' ')));
+    const record = (...args: unknown[]) => printed.push(args.join(' '));
+    vi.spyOn(console, 'log').mockImplementation(record);
+    vi.spyOn(console, 'error').mockImplementation(record);
     // The commands exit the process when they fail, which would take the test runner with it.
     vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
   });
@@ -88,6 +109,49 @@ describe('state and output against a real state file', () => {
 
     const state = await new LocalBackend(dir).read();
     expect(state.outputs).toBeUndefined();
+  });
+
+  it('moves the whole entry with mv, so a later delete finds it', async () => {
+    await applyConfig();
+
+    await createStateCommand().parseAsync(['node', 'clay', 'mv', 'local_file.a', 'local_file.renamed']);
+
+    const moved = await stored();
+    expect(moved.resources['local_file.renamed']).toMatchObject({ resourceType: 'local_file', name: 'renamed', modulePath: [] });
+
+    // The configuration drops the resource; the delete has to find the moved entry.
+    await run('');
+    const emptied = await stored();
+    expect(emptied.resources).toEqual({});
+    await expect(fs.access(path.join(dir, 'a.txt'))).rejects.toThrow();
+  });
+
+  it('moves a resource into a module with mv', async () => {
+    await applyConfig();
+
+    await createStateCommand().parseAsync(['node', 'clay', 'mv', 'local_file.a', 'module.m.local_file.a']);
+
+    const state = await stored();
+    expect(state.resources['module.m.local_file.a']).toMatchObject({ name: 'a', modulePath: ['m'] });
+  });
+
+  it('renames what other resources read from when mv moves one', async () => {
+    await run(chained());
+
+    await createStateCommand().parseAsync(['node', 'clay', 'mv', 'local_file.a', 'local_file.first']);
+
+    const state = await stored();
+    expect(state.resources['local_file.b'].dependencies).toEqual(['local_file.first']);
+  });
+
+  it('refuses an mv that changes the type', async () => {
+    await applyConfig();
+
+    await createStateCommand().parseAsync(['node', 'clay', 'mv', 'local_file.a', 'random_string.a']);
+
+    expect(printed.join('\n')).toContain('Cannot move local_file.a to random_string.a: the type changes');
+    const state = await stored();
+    expect(state.resources['local_file.a']).toBeDefined();
   });
 
   it('reads what the engine wrote for output', async () => {

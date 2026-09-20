@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-351 tests pass, and so do the type check and the build. Lint shows 11 warnings, and
+355 tests pass, and so do the type check and the build. Lint shows 11 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -166,10 +166,12 @@ Found by the 2026-09-20 audit, each one reproduced with the built CLI:
       instead of a path of its own. Its mocked unit tests, which tested the copy, are
       replaced by end-to-end ones. Data sources are still read while the config loads
       (`TASKS.md` 10.9).
-- [ ] `state mv` moves the key and leaves the entry behind: `name` and `modulePath` inside
-      it still say the old address, and other resources' `dependencies` still name it. A
-      later delete is planned from the entry's own name, so it deletes an address that is
-      not there and the moved resource stays in state for good.
+- [x] `state mv` moved the key and left the entry behind: `name` and `modulePath` inside
+      it still said the old address, and other resources' `dependencies` still named it.
+      A later delete was planned from the entry's own name, so it deleted an address that
+      was not there and the moved resource stayed in state for good. Now the entry and
+      every `dependencies` list take the new address, and a move that changes the type is
+      refused, as in Terraform. `Address` is exported from the orchestrator for the parse.
 - [ ] A file removed by hand cannot be destroyed. `local_file.delete` fails on `ENOENT`
       and the run fails the same way every time; only `state rm` gets out. The provider
       should treat "already gone" as done. Refresh (`TASKS.md` 10.2) is the full answer.

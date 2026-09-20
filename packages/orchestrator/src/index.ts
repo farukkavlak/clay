@@ -16,6 +16,7 @@ import { UnresolvedReferenceError } from './resolvers/UnresolvedReferenceError';
 import { ScopeManager } from './scope/ScopeManager';
 
 export type { RunEvent } from './RunEvent';
+export { Address } from './Address';
 export { DiskFiles, InMemoryFiles, RecordingFiles } from './ConfigFiles';
 export type { ConfigFiles } from './ConfigFiles';
 
