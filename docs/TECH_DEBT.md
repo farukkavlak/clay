@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-373 tests pass, and so do the type check and the build. Lint shows 11 warnings, and
+374 tests pass, and so do the type check and the build. Lint shows 11 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -204,13 +204,13 @@ Found by the 2026-09-20 audit, each one reproduced with the built CLI:
 
 Found by the 2026-09-20 review of this section:
 
-- [ ] `apply` runs a plan nobody saw. It plans without the lock, shows the plan, asks, and
-      then `run` takes the lock and plans again, applying whatever comes out. A run that
-      finishes while the question is open changes what the second plan does. Terraform
-      holds the lock from the plan to the end of the apply. Cheaper here: `apply` hands
-      the plan it showed to `runPlan`, which refuses it once the serial has moved on, and
-      `run` becomes a plan followed by that. The config is then loaded once per apply, not
-      twice.
+- [x] `apply` ran a plan nobody saw. It planned without the lock, showed the plan, asked,
+      and then `run` took the lock and planned again, applying whatever came out. A run
+      that finished while the question was open changed what the second plan did.
+      Terraform holds the lock from the plan to the end of the apply. Cheaper here:
+      `apply` hands the plan it showed to `runPlan`, which refuses it once the serial has
+      moved on, and `run` is gone. The config is loaded twice per apply now, not three
+      times.
 - [ ] A state write that fails after a failed action is swallowed: `step` writes with
       `.catch(() => undefined)`, so a replacement that deleted, failed to create and then
       could not save leaves a state that still lists the resource, and the user sees only
@@ -260,7 +260,8 @@ Found by the 2026-09-20 review of this section:
       into a part of its own; `Orchestrator` grew from 228 to 346 lines through the planner
       fixes.
 - [ ] `apply` parses the config, reads data sources and builds the dependency graph once,
-      not twice. It calls `plan`, which now does all three, and then does them again.
+      not twice. `plan` does all three, and `runPlan` does them again for the plan it is
+      handed.
 - [x] `apply` yields events (planned, started, applied, failed, done) and the CLI only
       renders them. Writing state as each `applied` arrives was the failed-action fix; the
       CLI now prints a line per resource. `plan` stays a plain call: it computes a list and

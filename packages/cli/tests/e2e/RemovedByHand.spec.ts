@@ -6,13 +6,15 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { start } from './start';
+
 describe('a file removed by hand', () => {
   let dir: string;
 
   const run = async (config: string) => {
     const engine = new Orchestrator(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
     engine.registerProvider(new LocalProvider());
-    for await (const event of engine.run(config)) if (event.type === 'failed') throw event.error;
+    for await (const event of start(engine, config)) if (event.type === 'failed') throw event.error;
   };
 
   beforeEach(async () => {

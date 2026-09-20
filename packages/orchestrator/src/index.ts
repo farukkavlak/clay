@@ -168,12 +168,7 @@ export class Orchestrator {
     return schemas;
   }
 
-  /** Plans and runs it, reporting each step; the state file is rewritten after every action, so a failed run loses nothing done before it. */
-  async *run(configContent: string): AsyncGenerator<RunEvent> {
-    yield* this.locked(this.planAndApply(configContent));
-  }
-
-  /** Runs a plan made earlier, against the configuration it was planned from. */
+  /** Runs a plan, reporting each step; the state file is rewritten after every action, so a failed run loses nothing done before it. */
   async *runPlan(saved: Plan, configContent: string): AsyncGenerator<RunEvent> {
     yield* this.locked(this.applySaved(saved, configContent));
   }
@@ -189,11 +184,7 @@ export class Orchestrator {
     }
   }
 
-  private async *planAndApply(configContent: string): AsyncGenerator<RunEvent> {
-    const { actions } = await this.plan(configContent);
-    yield* this.applyActions(actions, configContent, await this.stateManager.read());
-  }
-
+  /** The plan is what the caller saw and approved; a state written since would make it a different plan. */
   private async *applySaved(saved: Plan, configContent: string): AsyncGenerator<RunEvent> {
     const state = await this.stateManager.read();
     if (state.serial !== saved.serial) throw new Error('The state has changed since the plan was made. Plan again.');

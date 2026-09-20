@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createApplyCommand } from '../../src/commands/apply';
 import { createPlanCommand } from '../../src/commands/plan';
+import { start } from './start';
 
 const moduleConfig = (text: string) => `output "text" { value = "${text}" }`;
 
@@ -122,7 +123,7 @@ describe('a plan saved to a file', () => {
   it('is refused once another run has written the state', async () => {
     const saved = await save(fileConfig('planned'));
 
-    await drain(newOrchestrator().run(fileConfig('changed')));
+    await drain(start(newOrchestrator(), fileConfig('changed')));
 
     await expect(drain(newOrchestrator().runPlan(saved, saved.config))).rejects.toThrow('The state has changed since the plan was made');
     expect(await fs.readFile(path.join(dir, 'a.txt'), 'utf8')).toBe('changed');
