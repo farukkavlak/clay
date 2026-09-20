@@ -1,6 +1,13 @@
 import { AttributeValue, DataBlock, ModuleBlock, OutputBlock, Program, ResourceBlock, Statement, VariableBlock } from './ast';
 import { Token, TokenType } from './tokens';
 
+/** A block as the config spells it: `resource "local_file" "a"`, `module "m"`. */
+function spell(statement: Statement): string {
+  if (statement.type === 'Resource') return `resource "${statement.resourceType}" "${statement.name}"`;
+  if (statement.type === 'Data') return `data "${statement.dataSourceType}" "${statement.name}"`;
+  return `${statement.type.toLowerCase()} "${statement.name}"`;
+}
+
 export class Parser {
   private tokens: Token[];
   private current: number = 0;
@@ -11,7 +18,20 @@ export class Parser {
 
   public parse(): Program {
     const program: Program = [];
-    while (!this.isAtEnd()) program.push(this.parseStatement());
+    const declared = new Set<string>();
+
+    while (!this.isAtEnd()) {
+      const start = this.peek();
+      const statement = this.parseStatement();
+
+      // A second block with the same name would replace the first in silence.
+      const label = spell(statement);
+      if (declared.has(label)) throw new Error(`[Line ${start.line}, Column ${start.column}] ${label} is declared twice`);
+      declared.add(label);
+
+      program.push(statement);
+    }
+
     return program;
   }
 

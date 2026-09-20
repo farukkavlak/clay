@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-358 tests pass, and so do the type check and the build. Lint shows 11 warnings, and
+360 tests pass, and so do the type check and the build. Lint shows 11 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -177,9 +177,11 @@ Found by the 2026-09-20 audit, each one reproduced with the built CLI:
       provider now treats a file that is already gone as deleted, the way Terraform's
       providers treat "not found". A file removed by hand that stays in the config is
       still not noticed; that is refresh (`TASKS.md` 10.2).
-- [ ] Two blocks with one name are not caught. Two `module "m"` blocks pass in silence and
-      the second one wins; two `resource "null_resource" "a"` blocks fail with
+- [x] Two blocks with one name were not caught. Two `module "m"` blocks passed in silence
+      and the second one won; two `resource "null_resource" "a"` blocks failed with
       `Node null_resource.a already exists`, a message from the graph, not from the config.
+      The parser now refuses the second block of a kind with a name already used, with its
+      line and column, the way Terraform refuses a duplicate declaration.
 - [ ] An attribute cannot be called `data`, `module`, `variable`, `output` or `resource`:
       the lexer takes the keyword before the identifier, so `data = "x"` is a parse error.
 - [ ] A string that is one interpolation loses its value's type: `"${var.list}"` becomes
@@ -261,6 +263,9 @@ Found by the 2026-09-20 audit, each one reproduced with the built CLI:
       `package.json`; `init` creates a `.clay/` directory nothing uses; `plan` prints
       "Refreshing state..." and refreshes nothing; `state list` says "The state file is
       empty" when there is no file and `output` says where it looked.
+- [ ] A parse error in a module names its line and column but not its file, so
+      `[Line 2, Column 1] ...` from `plan` does not say which `main.clay`. The module
+      loader knows the path and can put it in front.
 - [ ] The lexer slices the rest of the input on every token, so a file lexes in quadratic
       time. A sticky regex reads in place.
 - [ ] The `I` prefix on type names is gone: `IResource`, `IProvider`, `IResourceHandler`,

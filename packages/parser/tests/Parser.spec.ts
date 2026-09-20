@@ -193,6 +193,24 @@ describe('Clay Parser', () => {
   });
 
   describe('Error Cases', () => {
+    it('refuses a second block with the same name, at its position', () => {
+      const twice = {
+        'resource "null_resource" "a"': 'resource "null_resource" "a" {}\nresource "null_resource" "a" {}',
+        'data "local_file" "a"': 'data "local_file" "a" {}\ndata "local_file" "a" {}',
+        'variable "v"': 'variable "v" {}\nvariable "v" {}',
+        'output "o"': 'output "o" { value = "1" }\noutput "o" { value = "2" }',
+        'module "m"': 'module "m" { source = "./m" }\nmodule "m" { source = "./m" }',
+      };
+
+      for (const [label, input] of Object.entries(twice)) expect(() => makeParser(input).parse()).toThrow(`[Line 2, Column 1] ${label} is declared twice`);
+    });
+
+    it('tells blocks of different kinds with one name apart', () => {
+      const input = 'variable "x" {}\noutput "x" { value = "1" }\nmodule "x" { source = "./x" }\nresource "null_resource" "x" {}\nresource "local_file" "x" {}';
+
+      expect(makeParser(input).parse()).toHaveLength(5);
+    });
+
     it('should throw on missing resource type', () => {
       const input = `resource "name" { key = "val" }`;
       // resource (1:1) "name" (1:10) { (1:17) ...
