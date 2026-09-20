@@ -5,25 +5,21 @@ import tsparser from '@typescript-eslint/parser';
 import type { Linter } from 'eslint';
 // @ts-ignore
 import eslintConfigPrettier from 'eslint-config-prettier';
-import i18next from 'eslint-plugin-i18next';
 import importPlugin from 'eslint-plugin-import';
 import noSecrets from 'eslint-plugin-no-secrets';
 // @ts-ignore
 import promise from 'eslint-plugin-promise';
-import react from 'eslint-plugin-react';
-import reactHooks from 'eslint-plugin-react-hooks';
 import unicorn from 'eslint-plugin-unicorn';
 import globals from 'globals';
 
 export default [
   {
-    files: ['**/*.{js,mjs,cjs,ts,jsx,tsx}'],
+    files: ['**/*.{js,mjs,cjs,ts}'],
     languageOptions: {
       parser: tsparser,
       parserOptions: {
         ecmaVersion: 'latest',
         sourceType: 'module',
-        ecmaFeatures: { jsx: true },
       },
       globals: { ...globals.browser, ...globals.node },
     },
@@ -84,54 +80,6 @@ export default [
     plugins: { 'no-secrets': noSecrets },
     rules: {
       'no-secrets/no-secrets': ['warn', { tolerance: 4.5 }],
-    },
-  },
-  {
-    plugins: { react: react, 'react-hooks': reactHooks },
-    rules: {
-      ...react.configs.recommended.rules,
-      'react/destructuring-assignment': 'warn',
-      'react/no-children-prop': 'warn',
-      'react/prop-types': 'off',
-      'react/display-name': 'warn',
-      'react/jsx-key': 'warn',
-      'react/jsx-no-useless-fragment': 'warn',
-      'react/jsx-no-undef': 'warn',
-      'react-hooks/rules-of-hooks': 'warn',
-      'react/hook-use-state': 'warn',
-      'react/function-component-definition': 'warn',
-      'react/iframe-missing-sandbox': 'warn',
-      'react/jsx-boolean-value': 'warn',
-      'react/jsx-child-element-spacing': 'warn',
-      'react/jsx-curly-brace-presence': 'warn',
-      'react/jsx-curly-spacing': 'warn',
-      'react/jsx-fragments': ['warn', 'syntax'],
-      'react/jsx-handler-names': 'off',
-      'react/jsx-max-depth': ['warn', { max: 6 }],
-      'react/jsx-no-comment-textnodes': 'warn',
-      'react/jsx-no-duplicate-props': 'warn',
-      'react/jsx-no-script-url': 'warn',
-      'react/jsx-no-literals': 'off',
-      'react/jsx-no-target-blank': ['warn', { enforceDynamicLinks: 'always' }],
-      'react/jsx-one-expression-per-line': 'warn',
-      'react/jsx-pascal-case': 'warn',
-      'react/jsx-props-no-multi-spaces': 'warn',
-      'react/jsx-props-no-spread-multi': 'warn',
-      'react/jsx-uses-react': 'warn',
-      'react/jsx-uses-vars': 'warn',
-      'react/no-array-index-key': 'warn',
-      'react/no-arrow-function-lifecycle': 'warn',
-      'react/no-danger': 'warn',
-      'react/no-deprecated': 'warn',
-      'react/no-danger-with-children': 'warn',
-      'react/no-direct-mutation-state': 'warn',
-      'react/no-did-update-set-state': 'warn',
-      'react/no-invalid-html-attribute': 'warn',
-      'react/no-string-refs': 'warn',
-      'react/no-typos': 'warn',
-      'react/no-unescaped-entities': 'warn',
-      'react/no-unknown-property': 'warn',
-      'react-hooks/exhaustive-deps': 'warn',
     },
   },
   {
@@ -303,23 +251,6 @@ export default [
   {
     rules: {
       curly: ['warn', 'multi'],
-    },
-  },
-  {
-    plugins: {
-      i18next: i18next,
-    },
-    rules: {
-      'i18next/no-literal-string': [
-        'warn',
-        {
-          ignore: ['data-', 'aria-', 'test-'],
-          ignoreCallee: ['t', 'i18n.t'],
-          ignoreAttribute: ['data-', 'aria-', 'test-'],
-          ignoreProperty: ['data-', 'aria-', 'test-'],
-          ignoreText: ['^[0-9]+$', '^[a-zA-Z0-9_]+$'],
-        },
-      ],
     },
   },
 ] satisfies Linter.Config[];

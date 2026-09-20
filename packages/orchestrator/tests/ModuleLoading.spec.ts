@@ -11,19 +11,23 @@ const readMock = vi.fn().mockResolvedValue({ resources: {}, variables: {}, versi
 const writeMock = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('@clay/state', () => {
-  const StateManager = vi.fn((backend) => ({
-    read: readMock,
-    write: writeMock,
-    lock: vi.fn(),
-    unlock: vi.fn(),
-    backend,
-  }));
-  const LocalBackend = vi.fn(() => ({
-    read: readMock,
-    write: writeMock,
-    lock: vi.fn(),
-    unlock: vi.fn(),
-  }));
+  const StateManager = vi.fn(function (backend) {
+    return {
+      read: readMock,
+      write: writeMock,
+      lock: vi.fn(),
+      unlock: vi.fn(),
+      backend,
+    };
+  });
+  const LocalBackend = vi.fn(function () {
+    return {
+      read: readMock,
+      write: writeMock,
+      lock: vi.fn(),
+      unlock: vi.fn(),
+    };
+  });
   return { StateManager, LocalBackend };
 });
 
