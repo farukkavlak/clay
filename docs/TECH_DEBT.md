@@ -6,7 +6,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 ## Where things stand
 
 376 tests pass, and so do the type check and the build. Lint shows 11 warnings, and
-`npm audit` reports 20 vulnerabilities (2 critical, 11 high).
+`npm audit` reports 9 vulnerabilities (3 moderate, 6 high).
 
 The unit tests mock the provider and the state, so they missed that the real
 apply → plan cycle is broken. Running the engine against real files shows it.
@@ -222,25 +222,28 @@ Found by the 2026-09-20 review of this section:
 - [x] Each package lists the `@clay/*` packages it imports. Only the CLI listed any; the
       orchestrator, the planner, `state` and the local provider resolved theirs through
       the hoisted workspace links, with nothing saying so.
-- [ ] Shared dev tools (typescript, vitest, eslint, esbuild, `@types/node`) are listed
-      only in the root. Three packages still ask for vitest 0.34 and eslint 8.
-- [ ] Unused dev dependencies removed: the react, react-hooks and i18next ESLint plugins,
+- [x] Shared dev tools (typescript, vitest, eslint, esbuild, `@types/node`) are listed
+      only in the root. Three packages asked for vitest 0.34 and eslint 8, so each got a
+      nested copy and ran its tests on a vitest four major versions behind the rest; the
+      copies hid six constructor mocks, written as arrows, that vitest 4 refuses.
+      Everything runs on vitest 5 and esbuild 0.28 now.
+- [x] Unused dev dependencies removed: the react, react-hooks and i18next ESLint plugins,
       and `ts-node`.
 - [ ] `npm audit` is clean.
 - [ ] `orchestrator` and `planner` point `main` at `dist`, not at `src`.
 - [ ] The CLI uses Node built-ins instead of chalk (`util.styleText`), commander
       (`util.parseArgs`) and inquirer (`readline/promises`).
-- [ ] `engines.node` is `>=22`, which `util.styleText` needs.
+- [ ] `engines.node` is `>=22`, which `util.styleText` needs. vitest 5 promises
+      `^22.12 || ^24 || >=26`; the range should not claim more than the tools do.
 - [ ] A package's build does not bundle the `@clay/*` packages it imports. Every `dist` is
       an esbuild bundle, so the CLI carries its own copy of the parser, the planner and the
       rest, and so does the orchestrator. Workspace packages stay external. It also makes
       one `npm run build` unreliable: the CLI is built before the parser in workspace
       order, so its bundle carries the parser's previous `dist`.
 - [ ] `tsconfig.json` fits this repo: `experimentalDecorators` and the `cdk.out` exclude
-      came from another project; esbuild targets `node18` while `engines` will say 22;
-      `vitest` is 0.34 in some packages and 4 in others, `eslint` 8 and 9. `lib` is
-      `es2021`, so `new Error(message, { cause })` does not compile; once it is `es2022`,
-      the plan's provider errors keep the provider's error as their cause.
+      came from another project; esbuild targets `node18` while `engines` will say 22.
+      `lib` is `es2021`, so `new Error(message, { cause })` does not compile; once it is
+      `es2022`, the plan's provider errors keep the provider's error as their cause.
 - [ ] `IState` moves to `contracts`, next to `IResource`, with an `emptyState()` beside it:
       `{ version: 1, serial: 0, resources: {} }` is spelled out in `init`, `LocalBackend`
       and `Orchestrator.validate`. `planner` and `orchestrator` depend on `@clay/state`
@@ -316,7 +319,8 @@ Found by the 2026-09-20 review of this section:
 
 ## 4 — repo
 
-- [ ] `npm run clay` works; it points at a file that doesn't exist.
+- [x] `npm run clay` pointed at a file that doesn't exist. The script is gone with
+      `ts-node`; the CLI is tried with `node packages/cli/bin/clay.js` in a temp directory.
 - [ ] Test fixtures match the state shape: five mocked states still carry a `variables`
       key that state no longer has.
 - [ ] Tests write only to temp directories. Something once wrote state files into
