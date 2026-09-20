@@ -2,10 +2,10 @@ import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { CONFIG_FILE } from '@clay/parser';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
-import chalk from 'chalk';
 import { Command } from 'commander';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { styleText } from 'node:util';
 
 async function executeValidate(cwd: string, configPath: string): Promise<void> {
   const configContent = await fs.readFile(configPath, 'utf8');
@@ -24,16 +24,16 @@ export function createValidateCommand(): Command {
     try {
       await fs.access(configPath);
     } catch {
-      console.error(chalk.red(`Error: ${CONFIG_FILE} not found in current directory.`));
+      console.error(styleText('red', `Error: ${CONFIG_FILE} not found in current directory.`));
       process.exit(1);
     }
 
     try {
       await executeValidate(cwd, configPath);
-      console.log(chalk.green('Configuration is valid.'));
+      console.log(styleText('green', 'Configuration is valid.'));
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error(chalk.red('Validation failed:'), message);
+      console.error(styleText('red', 'Validation failed:'), message);
       process.exit(1);
     }
   });

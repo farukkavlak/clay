@@ -4,14 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createStateCommand } from '../src/commands/state';
 
 vi.mock('@clay/state');
-vi.mock('chalk', () => ({
-  default: {
-    red: vi.fn((m) => m),
-    green: vi.fn((m) => m),
-    yellow: vi.fn((m) => m),
-    bold: vi.fn((m) => m),
-  },
-}));
 
 describe('CLI: state command', () => {
   let consoleLogSpy: ReturnType<typeof vi.spyOn>;

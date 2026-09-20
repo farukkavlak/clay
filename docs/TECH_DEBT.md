@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-376 tests pass, and so do the type check and the build. Lint shows 11 warnings, and
+385 tests pass, and so do the type check and the build. Lint shows 11 warnings, and
 `npm audit` is clean.
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -238,10 +238,17 @@ Found by the 2026-09-20 review of this section:
       them; the CLI's tests had read the orchestrator's source only because `main` said
       so. The root `build` now names the packages in dependency order, since the CLI's
       bundle reads the orchestrator's `dist` and npm's own order is alphabetical.
-- [ ] The CLI uses Node built-ins instead of chalk (`util.styleText`), commander
-      (`util.parseArgs`) and inquirer (`readline/promises`).
-- [ ] `engines.node` is `>=22`, which `util.styleText` needs. vitest 5 promises
-      `^22.12 || ^24 || >=26`; the range should not claim more than the tools do.
+- [x] The CLI uses Node built-ins instead of chalk (`util.styleText`) and inquirer
+      (`readline/promises`); 46 packages left with them. The prompt takes only a plain
+      `yes` now, as Terraform's does, so a stray Enter runs nothing; input that ends
+      first, Ctrl+C included, cancels with exit 0, where Terraform exits with an error.
+      commander stays:
+      `util.parseArgs` reads flags, and the subcommands, the help text and the argument
+      checks it gives would be a hundred lines of our own for a package that has no
+      dependencies of its own.
+- [x] `engines.node` is `>=22.13`: `util.styleText` leaves the colour out on a pipe and
+      under `NO_COLOR` from that version on. vitest 5 promises `^22.12 || ^24 || >=26`;
+      the range should not claim more than the tools do.
 - [ ] A package's build does not bundle the `@clay/*` packages it imports. Every `dist` is
       an esbuild bundle, so the CLI carries its own copy of the parser, the planner and the
       rest, and so does the orchestrator. Workspace packages stay external.

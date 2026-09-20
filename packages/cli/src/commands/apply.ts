@@ -3,26 +3,26 @@ import { CONFIG_FILE } from '@clay/parser';
 import { Plan, PlanAction, PlanFile, validatePlanFile } from '@clay/planner';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
-import chalk from 'chalk';
 import { Command } from 'commander';
-import inquirer from 'inquirer';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { styleText } from 'node:util';
 
+import { confirm } from '../confirm';
 import { changesNothing, displayOutputChanges } from '../outputChanges';
 
 function getActionSymbol(actionType: string): string {
-  if (actionType === 'CREATE') return chalk.green('+');
-  if (actionType === 'UPDATE') return chalk.yellow('~');
-  if (actionType === 'REPLACE') return chalk.red('-') + chalk.green('+');
-  if (actionType === 'DELETE') return chalk.red('-');
+  if (actionType === 'CREATE') return styleText('green', '+');
+  if (actionType === 'UPDATE') return styleText('yellow', '~');
+  if (actionType === 'REPLACE') return styleText('red', '-') + styleText('green', '+');
+  if (actionType === 'DELETE') return styleText('red', '-');
   return ' ';
 }
 
 function displayPlan(plan: Plan): void {
   const changes = plan.actions.filter((action) => action.type !== 'NO_OP');
   if (changes.length > 0) {
-    console.log(chalk.bold('\nClay will perform the following actions:\n'));
+    console.log(styleText('bold', '\nClay will perform the following actions:\n'));
     for (const action of changes) console.log(`  ${getActionSymbol(action.type)} ${Address.of(action).toString()}`);
   }
   displayOutputChanges(plan.outputs);
@@ -46,13 +46,13 @@ function pastTense(actionType: PlanAction['type']): string {
 function reportEvent(event: RunEvent): void {
   if (event.type === 'applied') console.log(`  ${getActionSymbol(event.action.type)} ${Address.of(event.action).toString()} ${pastTense(event.action.type)}`);
   if (event.type === 'failed') {
-    if (event.stateError) console.error(chalk.red('The state could not be saved:'), event.stateError.message);
+    if (event.stateError) console.error(styleText('red', 'The state could not be saved:'), event.stateError.message);
     throw new Error(`${Address.of(event.action).toString()}: ${event.error.message}`);
   }
 }
 
 async function runAndReport(events: AsyncGenerator<RunEvent>): Promise<void> {
-  console.log(chalk.blue('\napplying...'));
+  console.log(styleText('blue', '\napplying...'));
 
   const applied: PlanAction[] = [];
   let outputs: Record<string, unknown> = {};
@@ -62,27 +62,16 @@ async function runAndReport(events: AsyncGenerator<RunEvent>): Promise<void> {
     if (event.type === 'done') outputs = event.outputs;
   }
 
-  console.log(chalk.green(`\nApply complete! Resources: ${summarize(applied)}.`));
+  console.log(styleText('green', `\nApply complete! Resources: ${summarize(applied)}.`));
 
   if (Object.keys(outputs).length > 0) {
-    console.log(chalk.cyan('\nOutputs:'));
-    for (const [key, value] of Object.entries(outputs)) console.log(chalk.white(`  ${key} = ${JSON.stringify(value)}`));
+    console.log(styleText('cyan', '\nOutputs:'));
+    for (const [key, value] of Object.entries(outputs)) console.log(styleText('white', `  ${key} = ${JSON.stringify(value)}`));
   }
 }
 
 async function confirmApply(autoConfirm: boolean): Promise<boolean> {
-  if (autoConfirm) return true;
-
-  const { confirm } = await inquirer.prompt([
-    {
-      type: 'confirm',
-      name: 'confirm',
-      message: 'Do you want to perform these actions?',
-      default: false,
-    },
-  ]);
-
-  return confirm;
+  return autoConfirm || confirm('Do you want to perform these actions?');
 }
 
 function newOrchestrator(cwd: string, files: ConfigFiles): Orchestrator {
@@ -97,11 +86,11 @@ async function executeApply(cwd: string, configPath: string, autoConfirm: boolea
   const orchestrator = newOrchestrator(cwd, new DiskFiles(cwd));
 
   // Show plan first
-  console.log(chalk.blue('Calculating plan...'));
+  console.log(styleText('blue', 'Calculating plan...'));
   const planned = await orchestrator.plan(configContent);
 
   if (changesNothing(planned)) {
-    console.log(chalk.green('No changes needed.'));
+    console.log(styleText('green', 'No changes needed.'));
     return;
   }
 
@@ -109,7 +98,7 @@ async function executeApply(cwd: string, configPath: string, autoConfirm: boolea
 
   const confirmed = await confirmApply(autoConfirm);
   if (!confirmed) {
-    console.log(chalk.yellow('Apply cancelled.'));
+    console.log(styleText('yellow', 'Apply cancelled.'));
     return;
   }
 
@@ -119,8 +108,8 @@ async function executeApply(cwd: string, configPath: string, autoConfirm: boolea
 async function executeApplyFromPlan(cwd: string, planFile: PlanFile): Promise<void> {
   const orchestrator = newOrchestrator(cwd, new InMemoryFiles(planFile.modules));
 
-  console.log(chalk.blue('Applying from saved plan...'));
-  console.log(chalk.gray(`Plan created: ${planFile.timestamp}`));
+  console.log(styleText('blue', 'Applying from saved plan...'));
+  console.log(styleText('gray', `Plan created: ${planFile.timestamp}`));
 
   displayPlan(planFile);
 
@@ -142,7 +131,7 @@ export function createApplyCommand() {
           const planData = JSON.parse(planContent.toString('utf8'));
 
           if (!validatePlanFile(planData)) {
-            console.error(chalk.red('Error: Cannot read this plan file. Run `clay plan --out <file>` again.'));
+            console.error(styleText('red', 'Error: Cannot read this plan file. Run `clay plan --out <file>` again.'));
             process.exit(1);
           }
 
@@ -153,7 +142,7 @@ export function createApplyCommand() {
           try {
             await fs.access(configPath);
           } catch {
-            console.error(chalk.red(`Error: ${CONFIG_FILE} not found.`));
+            console.error(styleText('red', `Error: ${CONFIG_FILE} not found.`));
             process.exit(1);
           }
 
@@ -161,7 +150,7 @@ export function createApplyCommand() {
         }
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
-        console.error(chalk.red('Apply failed:'), message);
+        console.error(styleText('red', 'Apply failed:'), message);
         process.exit(1);
       }
     });

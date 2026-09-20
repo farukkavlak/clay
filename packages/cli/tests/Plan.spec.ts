@@ -19,15 +19,6 @@ vi.mock('@clay/orchestrator', async () => {
     }),
   };
 });
-vi.mock('chalk', () => ({
-  default: {
-    blue: vi.fn((m) => m),
-    green: vi.fn((m) => m),
-    yellow: vi.fn((m) => m),
-    red: vi.fn((m) => m),
-    bold: vi.fn((m) => m),
-  },
-}));
 vi.mock('@clay/planner', async () => {
   const actual = await vi.importActual('@clay/planner');
   return {

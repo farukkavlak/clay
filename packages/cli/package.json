@@ -1,6 +1,9 @@
 {
   "name": "@clay/cli",
   "version": "1.0.0",
+  "engines": {
+    "node": ">=22.13"
+  },
   "main": "dist/index.js",
   "bin": {
     "clay": "bin/clay.js"
@@ -17,11 +20,6 @@
     "@clay/planner": "*",
     "@clay/provider-local": "*",
     "@clay/state": "*",
-    "chalk": "^4.1.2",
-    "commander": "^11.1.0",
-    "inquirer": "^8.2.4"
-  },
-  "devDependencies": {
-    "@types/inquirer": "^8.2.1"
+    "commander": "^11.1.0"
   }
 }

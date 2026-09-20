@@ -1,9 +1,9 @@
 import { InMemoryFiles, Orchestrator } from '@clay/orchestrator';
-import inquirer from 'inquirer';
 import fs from 'node:fs/promises';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createApplyCommand } from '../src/commands/apply';
+import { confirm } from '../src/confirm';
 
 vi.mock('node:fs/promises');
 // The engine is mocked; Address is a plain value type the commands print with, so it stays real.
@@ -28,19 +28,7 @@ vi.mock('@clay/planner', async () => {
     }),
   };
 });
-vi.mock('inquirer');
-vi.mock('chalk', () => ({
-  default: {
-    blue: vi.fn((m) => m),
-    green: vi.fn((m) => m),
-    yellow: vi.fn((m) => m),
-    red: vi.fn((m) => m),
-    cyan: vi.fn((m) => m),
-    white: vi.fn((m) => m),
-    gray: vi.fn((m) => m),
-    bold: vi.fn((m) => m),
-  },
-}));
+vi.mock('../src/confirm');
 vi.mock('node:crypto', () => ({
   default: {
     createHash: vi.fn(() => ({
@@ -101,12 +89,12 @@ describe('CLI: apply command', () => {
         } as Partial<Orchestrator> as Orchestrator;
       });
 
-      vi.mocked(inquirer.prompt).mockResolvedValue({ confirm: true });
+      vi.mocked(confirm).mockResolvedValue(true);
 
       await createApplyCommand().parseAsync(['node', 'clay']);
 
       expect(planMock).toHaveBeenCalled();
-      expect(inquirer.prompt).toHaveBeenCalled();
+      expect(confirm).toHaveBeenCalled();
       expect(runMock).toHaveBeenCalledWith(planned, 'content');
     });
 
@@ -158,7 +146,7 @@ describe('CLI: apply command', () => {
 
       await createApplyCommand().parseAsync(['node', 'clay', '--yes']);
 
-      expect(inquirer.prompt).not.toHaveBeenCalled();
+      expect(confirm).not.toHaveBeenCalled();
       expect(runMock).toHaveBeenCalled();
     });
 
@@ -177,7 +165,7 @@ describe('CLI: apply command', () => {
         } as Partial<Orchestrator> as Orchestrator;
       });
 
-      vi.mocked(inquirer.prompt).mockResolvedValue({ confirm: false });
+      vi.mocked(confirm).mockResolvedValue(false);
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
       await createApplyCommand().parseAsync(['node', 'clay']);
@@ -206,7 +194,7 @@ describe('CLI: apply command', () => {
       await createApplyCommand().parseAsync(['node', 'clay']);
 
       expect(consoleSpy).toHaveBeenCalledWith('No changes needed.');
-      expect(inquirer.prompt).not.toHaveBeenCalled();
+      expect(confirm).not.toHaveBeenCalled();
 
       consoleSpy.mockRestore();
     });
@@ -253,7 +241,7 @@ describe('CLI: apply command', () => {
         } as Partial<Orchestrator> as Orchestrator;
       });
 
-      vi.mocked(inquirer.prompt).mockResolvedValue({ confirm: true });
+      vi.mocked(confirm).mockResolvedValue(true);
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
       await createApplyCommand().parseAsync(['node', 'clay']);
@@ -279,7 +267,7 @@ describe('CLI: apply command', () => {
         } as Partial<Orchestrator> as Orchestrator;
       });
 
-      vi.mocked(inquirer.prompt).mockResolvedValue({ confirm: true });
+      vi.mocked(confirm).mockResolvedValue(true);
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
       await createApplyCommand().parseAsync(['node', 'clay']);
@@ -325,7 +313,7 @@ describe('CLI: apply command', () => {
 
       expect(runPlanMock).toHaveBeenCalledWith(expect.objectContaining({ serial: 2, actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }] }), 'saved config');
       expect(InMemoryFiles).toHaveBeenCalledWith({ 'm/main.clay': 'saved module' });
-      expect(inquirer.prompt).not.toHaveBeenCalled();
+      expect(confirm).not.toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Applying from saved plan'));
 
       consoleSpy.mockRestore();
@@ -435,7 +423,7 @@ describe('CLI: apply command', () => {
         } as Partial<Orchestrator> as Orchestrator;
       });
 
-      vi.mocked(inquirer.prompt).mockResolvedValue({ confirm: true });
+      vi.mocked(confirm).mockResolvedValue(true);
 
       const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});

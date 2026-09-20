@@ -1,7 +1,7 @@
 import { Address } from '@clay/orchestrator';
 import { IState, StateManager } from '@clay/state';
-import chalk from 'chalk';
 import { Command } from 'commander';
+import { styleText } from 'node:util';
 
 import { stateBackend } from '../stateFile';
 
@@ -41,7 +41,7 @@ export function createStateCommand(): Command {
 
         for (const key of Object.keys(state.resources).sort()) console.log(key);
       } catch (error) {
-        console.error(chalk.red('Error listing state:'), error instanceof Error ? error.message : String(error));
+        console.error(styleText('red', 'Error listing state:'), error instanceof Error ? error.message : String(error));
         process.exit(1);
       }
     });
@@ -58,17 +58,17 @@ export function createStateCommand(): Command {
         const resource = state.resources[address];
 
         if (!resource) {
-          console.error(chalk.red(`Resource not found: ${address}`));
+          console.error(styleText('red', `Resource not found: ${address}`));
           process.exit(1);
         }
 
-        console.log(chalk.bold(`# ${address}:`));
+        console.log(styleText('bold', `# ${address}:`));
         console.log(`resource "${resource.resourceType}" "${resource.name}" {`);
         for (const [key, value] of Object.entries(resource.attributes || {})) console.log(`  ${key} = ${JSON.stringify(value)}`);
 
         console.log('}');
       } catch (error) {
-        console.error(chalk.red('Error showing resource:'), error instanceof Error ? error.message : String(error));
+        console.error(styleText('red', 'Error showing resource:'), error instanceof Error ? error.message : String(error));
         process.exit(1);
       }
     });
@@ -91,19 +91,19 @@ export function createStateCommand(): Command {
 
           if (state.resources[destination]) throw new Error(`Destination resource already exists: ${destination}`);
 
-          console.log(chalk.yellow(`Moving ${source} to ${destination}...`));
+          console.log(styleText('yellow', `Moving ${source} to ${destination}...`));
 
           moveResource(state, source, destination);
           // Outputs come from a finished run; the next one writes them again.
           delete state.outputs;
 
           await manager.write(state);
-          console.log(chalk.green('Successfully moved resource.'));
+          console.log(styleText('green', 'Successfully moved resource.'));
         } finally {
           await manager.unlock();
         }
       } catch (error) {
-        console.error(chalk.red('Error moving resource:'), error instanceof Error ? error.message : String(error));
+        console.error(styleText('red', 'Error moving resource:'), error instanceof Error ? error.message : String(error));
         process.exit(1);
       }
     });
@@ -121,21 +121,21 @@ export function createStateCommand(): Command {
           const state = await manager.read();
 
           if (!state.resources[address]) {
-            console.log(chalk.yellow(`Resource not found in state: ${address}`));
+            console.log(styleText('yellow', `Resource not found in state: ${address}`));
             return;
           }
 
-          console.log(chalk.yellow(`Removing ${address}...`));
+          console.log(styleText('yellow', `Removing ${address}...`));
           delete state.resources[address];
           delete state.outputs;
 
           await manager.write(state);
-          console.log(chalk.green('Successfully removed resource.'));
+          console.log(styleText('green', 'Successfully removed resource.'));
         } finally {
           await manager.unlock();
         }
       } catch (error) {
-        console.error(chalk.red('Error removing resource:'), error instanceof Error ? error.message : String(error));
+        console.error(styleText('red', 'Error removing resource:'), error instanceof Error ? error.message : String(error));
         process.exit(1);
       }
     });
