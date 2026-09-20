@@ -14,7 +14,7 @@ import globals from 'globals';
 
 export default [
   {
-    files: ['**/*.{js,mjs,cjs,ts}'],
+    files: ['**/*.{js,mjs,cjs,ts,mts}'],
     languageOptions: {
       parser: tsparser,
       parserOptions: {
