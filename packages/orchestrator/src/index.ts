@@ -57,10 +57,13 @@ export class Orchestrator {
   private processVariables(program: Statement[], address: Address): void {
     const scope = this.scopeManager.getScope(address);
 
-    // A module input set before this wins; a variable with no default stays undefined.
-    for (const stmt of program)
-      if (stmt.type === 'Variable' && !this.scopeManager.getVariable(scope, stmt.name))
-        this.scopeManager.setVariable(scope, stmt.name, { value: stmt.attributes.default, context: address });
+    // A caller's input beats the default; neither one is a missing input, read or not.
+    for (const stmt of program) {
+      if (stmt.type !== 'Variable' || this.scopeManager.getVariable(scope, stmt.name)) continue;
+      if (stmt.attributes.default === undefined) throw new Error(`${scope ? `${scope}: ` : ''}variable "${stmt.name}" has no value`);
+
+      this.scopeManager.setVariable(scope, stmt.name, { value: stmt.attributes.default, context: address });
+    }
   }
 
   private async processDataSources(program: Statement[], state: IState, scopeAddress: Address): Promise<void> {

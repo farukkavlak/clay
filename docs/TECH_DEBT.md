@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-354 tests pass, and so do the type check and the build. Lint shows 12 warnings, and
+357 tests pass, and so do the type check and the build. Lint shows 12 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -151,9 +151,11 @@ Found by the 2026-09-20 audit, each one reproduced with the built CLI:
       stops on both, as Terraform does, and names the resource in the message. A resource
       with a value that is not known yet is skipped and checked in the run, once the value
       is.
-- [ ] A variable with no value turns into an empty string. `variable "name" {}` read as
-      `"hello ${var.name}!"` gives `hello !`; the `?? ''` in `interpolateString` swallows
-      it. Terraform stops with "No value for required variable".
+- [x] A variable with no value turned into an empty string. `variable "name" {}` read as
+      `"hello ${var.name}!"` gave `hello !`; the `?? ''` in `interpolateString` swallowed
+      it. Now a variable with no default and no input stops the load, read or not, the way
+      Terraform treats a variable as the module's input contract, and the error names the
+      module when it is one.
 - [ ] `validate` rejects valid configuration. It hands the raw AST value to the provider,
       so `content = local_file.a.content` fails with "requires content (string)". It also
       knows nothing of modules, variables and outputs, and has a dependency check of its

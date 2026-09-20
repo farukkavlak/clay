@@ -63,7 +63,7 @@ export class ReferenceResolver {
     return value.replace(/\${([^}]+)}/g, (_: string, expr: string) => {
       const pathParts = expr.trim().split('.');
       const resolved = this.resolve(pathParts, state, context);
-      return String(resolved ?? '');
+      return String(resolved);
     });
   }
 }
