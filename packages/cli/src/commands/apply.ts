@@ -110,7 +110,7 @@ async function executeApply(cwd: string, configPath: string, autoConfirm: boolea
     return;
   }
 
-  await runAndReport(orchestrator.run(configContent));
+  await runAndReport(orchestrator.runPlan(planned, configContent));
 }
 
 async function executeApplyFromPlan(cwd: string, planFile: PlanFile): Promise<void> {

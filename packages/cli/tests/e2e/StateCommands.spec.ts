@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createOutputCommand } from '../../src/commands/output';
 import { createStateCommand } from '../../src/commands/state';
+import { start } from './start';
 
 // The commands read the current directory, so they run from a temp one.
 describe('state and output against a real state file', () => {
@@ -31,7 +32,7 @@ describe('state and output against a real state file', () => {
   };
 
   const run = async (configContent: string) => {
-    for await (const event of newOrchestrator().run(configContent)) if (event.type === 'failed') throw event.error;
+    for await (const event of start(newOrchestrator(), configContent)) if (event.type === 'failed') throw event.error;
   };
 
   const applyConfig = () => run(config());
@@ -166,7 +167,7 @@ describe('state and output against a real state file', () => {
     const onlyAVariable = 'variable "greeting" { default = "hi" }';
     const engine = new Orchestrator(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
     engine.registerProvider(new LocalProvider());
-    for await (const event of engine.run(onlyAVariable)) if (event.type === 'failed') throw event.error;
+    for await (const event of start(engine, onlyAVariable)) if (event.type === 'failed') throw event.error;
 
     await createOutputCommand().parseAsync(['node', 'clay']);
 

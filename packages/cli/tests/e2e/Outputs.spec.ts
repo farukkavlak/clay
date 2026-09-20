@@ -8,6 +8,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createApplyCommand } from '../../src/commands/apply';
+import { start } from './start';
 
 describe('outputs in the state file', () => {
   let dir: string;
@@ -40,7 +41,7 @@ describe('outputs in the state file', () => {
   `;
 
   const run = async (config: string) => {
-    for await (const event of newOrchestrator().run(config)) if (event.type === 'failed') return event.error;
+    for await (const event of start(newOrchestrator(), config)) if (event.type === 'failed') return event.error;
     return undefined;
   };
 

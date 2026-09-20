@@ -4,7 +4,8 @@ import { Orchestrator } from '../src/index';
 export async function apply(orchestrator: Orchestrator, configContent: string): Promise<Record<string, unknown>> {
   let outputs: Record<string, unknown> = {};
 
-  for await (const event of orchestrator.run(configContent)) {
+  const planned = await orchestrator.plan(configContent);
+  for await (const event of orchestrator.runPlan(planned, configContent)) {
     if (event.type === 'failed') throw event.error;
     if (event.type === 'done') outputs = event.outputs;
   }

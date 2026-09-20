@@ -7,6 +7,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { start } from './start';
+
 // The CLI reads process.cwd() and parses on import, so these tests drive the orchestrator instead.
 describe('apply and plan against real files', () => {
   let dir: string;
@@ -38,7 +40,7 @@ describe('apply and plan against real files', () => {
 
   const apply = async (engine: Orchestrator, config: string) => {
     let outputs: Record<string, unknown> = {};
-    for await (const event of engine.run(config)) {
+    for await (const event of start(engine, config)) {
       if (event.type === 'failed') throw event.error;
       if (event.type === 'done') outputs = event.outputs;
     }
@@ -382,7 +384,7 @@ describe('apply and plan against real files', () => {
 
   const destroyedNames = async (config: string) => {
     const names: string[] = [];
-    for await (const event of newOrchestrator().run(config)) {
+    for await (const event of start(newOrchestrator(), config)) {
       if (event.type === 'failed') throw event.error;
       if (event.type === 'applied' && event.action.type === 'DELETE') names.push(event.action.name);
     }
@@ -466,7 +468,8 @@ describe('apply and plan against real files', () => {
 
   it('reports each step as it goes and stops at the one that fails', async () => {
     const events: string[] = [];
-    for await (const event of orchestrator.run(secondFails())) events.push(event.type === 'planned' || event.type === 'done' ? event.type : `${event.type} ${event.action.name}`);
+    for await (const event of start(orchestrator, secondFails()))
+      events.push(event.type === 'planned' || event.type === 'done' ? event.type : `${event.type} ${event.action.name}`);
 
     expect(events).toEqual(['planned', 'started a', 'applied a', 'started b', 'failed b']);
   });
@@ -474,7 +477,7 @@ describe('apply and plan against real files', () => {
   const lockFile = () => path.join(dir, 'clay.state.json.lock');
 
   it('refuses a second run while one holds the state', async () => {
-    const first = orchestrator.run(fileConfig('hello'));
+    const first = start(orchestrator, fileConfig('hello'));
     await first.next();
 
     await expect(apply(newOrchestrator(), fileConfig('hello'))).rejects.toThrow('locked by another run');
@@ -495,7 +498,7 @@ describe('apply and plan against real files', () => {
   });
 
   it('holds the lock while running and releases it when the caller stops reading', async () => {
-    const run = orchestrator.run(fileConfig('hello'));
+    const run = start(orchestrator, fileConfig('hello'));
     await run.next();
     await expect(fs.access(lockFile())).resolves.toBeUndefined();
 

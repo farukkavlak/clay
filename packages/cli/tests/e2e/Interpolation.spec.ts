@@ -6,6 +6,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { start } from './start';
+
 describe('a string with an interpolation', () => {
   let dir: string;
 
@@ -16,7 +18,7 @@ describe('a string with an interpolation', () => {
   };
 
   const applied = async (config: string) => {
-    for await (const event of newOrchestrator().run(config)) if (event.type === 'failed') throw event.error;
+    for await (const event of start(newOrchestrator(), config)) if (event.type === 'failed') throw event.error;
     const state = await new LocalBackend(dir).read();
     return state.resources;
   };

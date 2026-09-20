@@ -80,7 +80,7 @@ describe('CLI: apply command', () => {
       vi.mocked(fs.access).mockResolvedValue(void 0);
       vi.mocked(fs.readFile).mockResolvedValue('content');
 
-      const planMock = vi.fn().mockResolvedValue({
+      const planned = {
         serial: 0,
         actions: [
           { type: 'CREATE', resourceType: 'test', name: 't1' },
@@ -89,14 +89,15 @@ describe('CLI: apply command', () => {
           { type: 'NO_OP', resourceType: 'test', name: 't4' },
         ],
         outputs: {},
-      });
+      };
+      const planMock = vi.fn().mockResolvedValue(planned);
       const runMock = vi.fn(doneWith({}));
 
       vi.mocked(Orchestrator).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
           plan: planMock,
-          run: runMock,
+          runPlan: runMock,
         } as Partial<Orchestrator> as Orchestrator;
       });
 
@@ -106,7 +107,7 @@ describe('CLI: apply command', () => {
 
       expect(planMock).toHaveBeenCalled();
       expect(inquirer.prompt).toHaveBeenCalled();
-      expect(runMock).toHaveBeenCalledWith('content');
+      expect(runMock).toHaveBeenCalledWith(planned, 'content');
     });
 
     it('should print each resource as it is applied', async () => {
@@ -125,7 +126,7 @@ describe('CLI: apply command', () => {
         return {
           registerProvider: vi.fn(),
           plan: planMock,
-          run: runMock,
+          runPlan: runMock,
         } as Partial<Orchestrator> as Orchestrator;
       });
 
@@ -151,7 +152,7 @@ describe('CLI: apply command', () => {
         return {
           registerProvider: vi.fn(),
           plan: planMock,
-          run: runMock,
+          runPlan: runMock,
         } as Partial<Orchestrator> as Orchestrator;
       });
 
@@ -172,7 +173,7 @@ describe('CLI: apply command', () => {
         return {
           registerProvider: vi.fn(),
           plan: planMock,
-          run: runMock,
+          runPlan: runMock,
         } as Partial<Orchestrator> as Orchestrator;
       });
 
@@ -223,7 +224,7 @@ describe('CLI: apply command', () => {
         return {
           registerProvider: vi.fn(),
           plan: planMock,
-          run: runMock,
+          runPlan: runMock,
         } as Partial<Orchestrator> as Orchestrator;
       });
 
@@ -248,7 +249,7 @@ describe('CLI: apply command', () => {
         return {
           registerProvider: vi.fn(),
           plan: planMock,
-          run: runMock,
+          runPlan: runMock,
         } as Partial<Orchestrator> as Orchestrator;
       });
 
@@ -274,7 +275,7 @@ describe('CLI: apply command', () => {
         return {
           registerProvider: vi.fn(),
           plan: planMock,
-          run: runMock,
+          runPlan: runMock,
         } as Partial<Orchestrator> as Orchestrator;
       });
 
@@ -310,12 +311,10 @@ describe('CLI: apply command', () => {
       });
 
       const runPlanMock = vi.fn(doneWith({}));
-      const runMock = vi.fn(doneWith({}));
 
       vi.mocked(Orchestrator).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
-          run: runMock,
           runPlan: runPlanMock,
         } as Partial<Orchestrator> as Orchestrator;
       });
@@ -326,7 +325,6 @@ describe('CLI: apply command', () => {
 
       expect(runPlanMock).toHaveBeenCalledWith(expect.objectContaining({ serial: 2, actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }] }), 'saved config');
       expect(InMemoryFiles).toHaveBeenCalledWith({ 'm/main.clay': 'saved module' });
-      expect(runMock).not.toHaveBeenCalled();
       expect(inquirer.prompt).not.toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Applying from saved plan'));
 
@@ -354,7 +352,6 @@ describe('CLI: apply command', () => {
       vi.mocked(Orchestrator).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
-          run: vi.fn(),
           runPlan: runPlanMock,
         } as Partial<Orchestrator> as Orchestrator;
       });
@@ -390,7 +387,6 @@ describe('CLI: apply command', () => {
       vi.mocked(Orchestrator).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
-          run: vi.fn(),
           runPlan: runPlanMock,
         } as Partial<Orchestrator> as Orchestrator;
       });
@@ -435,7 +431,7 @@ describe('CLI: apply command', () => {
         return {
           registerProvider: vi.fn(),
           plan: planMock,
-          run: runMock,
+          runPlan: runMock,
         } as Partial<Orchestrator> as Orchestrator;
       });
 
