@@ -1,7 +1,7 @@
 # Tech debt
 
 What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
-2026-09-19.
+2026-09-19 and 2026-09-20.
 
 ## Where things stand
 
@@ -143,6 +143,44 @@ In order: the safety net first, then the engine, then the CLI, then the output.
 - [x] The plan output said "destroyd" and "no-opd": the verb had a `d` glued on. It says
       "destroyed" now, and a NO_OP is never printed.
 
+Found by the 2026-09-20 audit, each one reproduced with the built CLI:
+
+- [ ] `plan` does not validate. It never calls the provider's `validate`, and a resource
+      type no provider handles plans as "1 to add". `length = "8"` on a `random_string`
+      and `resource "aws_bucket"` both pass `plan` and fail in `apply`. Terraform catches
+      both at plan.
+- [ ] A variable with no value turns into an empty string. `variable "name" {}` read as
+      `"hello ${var.name}!"` gives `hello !`; the `?? ''` in `interpolateString` swallows
+      it. Terraform stops with "No value for required variable".
+- [ ] `validate` rejects valid configuration. It hands the raw AST value to the provider,
+      so `content = local_file.a.content` fails with "requires content (string)". It also
+      knows nothing of modules, variables and outputs, and has a dependency check of its
+      own instead of the engine's graph. It should load the config the way `plan` does,
+      without state.
+- [ ] `state mv` moves the key and leaves the entry behind: `name` and `modulePath` inside
+      it still say the old address, and other resources' `dependencies` still name it. A
+      later delete is planned from the entry's own name, so it deletes an address that is
+      not there and the moved resource stays in state for good.
+- [ ] A file removed by hand cannot be destroyed. `local_file.delete` fails on `ENOENT`
+      and the run fails the same way every time; only `state rm` gets out. The provider
+      should treat "already gone" as done. Refresh (`TASKS.md` 10.2) is the full answer.
+- [ ] Two blocks with one name are not caught. Two `module "m"` blocks pass in silence and
+      the second one wins; two `resource "null_resource" "a"` blocks fail with
+      `Node null_resource.a already exists`, a message from the graph, not from the config.
+- [ ] An attribute cannot be called `data`, `module`, `variable`, `output` or `resource`:
+      the lexer takes the keyword before the identifier, so `data = "x"` is a parse error.
+- [ ] A string that is one interpolation loses its value's type: `"${var.list}"` becomes
+      `[object Object]` and `"${var.n}"` becomes `"8"`. Terraform gives the value itself
+      when the whole string is one interpolation.
+- [ ] The CLI prints a resource without its module: `plan`, `apply` and the applied lines
+      all say `local_file.f` for `module.m.local_file.f`, so two modules with the same
+      resource name are told apart by nothing. `Address.of(action).toString()` has the
+      full name. While there: the apply summary says `Resources: 1 changed` for a create;
+      Terraform counts added, changed and destroyed apart.
+- [ ] The state file is written in place. A run killed halfway through `writeFile` leaves
+      a torn file and the `.bak` is not restored. Writing to a temp file and renaming it
+      makes the write atomic.
+
 ## 2 — dependencies
 
 - [ ] Each package lists the `@clay/*` packages it imports. Only the CLI lists any, and it
@@ -156,6 +194,12 @@ In order: the safety net first, then the engine, then the CLI, then the output.
 - [ ] The CLI uses Node built-ins instead of chalk (`util.styleText`), commander
       (`util.parseArgs`) and inquirer (`readline/promises`).
 - [ ] `engines.node` is `>=22`, which `util.styleText` needs.
+- [ ] A package's build does not bundle the `@clay/*` packages it imports. Every `dist` is
+      an esbuild bundle, so the CLI carries its own copy of the parser, the planner and the
+      rest, and so does the orchestrator. Workspace packages stay external.
+- [ ] `tsconfig.json` fits this repo: `experimentalDecorators` and the `cdk.out` exclude
+      came from another project; esbuild targets `node18` while `engines` will say 22;
+      `vitest` is 0.34 in some packages and 4 in others, `eslint` 8 and 9.
 - [ ] `IState` moves to `contracts`, next to `IResource`. `planner` and `orchestrator`
       depend on `@clay/state` only for that type, and the shape state is written in is
       a contract every side has to agree on. Keeping it inside one side is how the planner
@@ -185,6 +229,25 @@ In order: the safety net first, then the engine, then the CLI, then the output.
       copy of the action list and it says less than `plan`'s: no "will be replaced", no
       diff.
 - [ ] Comments that only restate the code are gone (`// Mock Provider for testing`).
+- [ ] The parser reads a block's attributes in one place, not four (resource, data,
+      variable and module carry the same loop). `LocalProvider` looks its handler up in
+      one place, not six. `ModuleOutputResolver` builds a child scope by hand next to
+      `childScope`, and the data-source key is spelled out in `processDataSources` and
+      again in `DataSourceResolver`.
+- [ ] Dead code is gone: `ReferenceScanner` handles an `Interpolation` node the AST does
+      not have; `parser.parse() || []` guards a value that is never falsy;
+      `ResourceResolver.getResolvedAttribute` unwraps a `{ type, value }` from state, which
+      must never hold one; `ResourceResolver` resolves `module.x.res.attr`, which
+      `ReferenceScanner` refuses; `Address.withParent` and `Address.equals` are only
+      called by tests.
+- [ ] The CLI is consistent with itself: `--state` is on `state` and `output` but not on
+      `plan` and `apply`; `validate` takes a config path and the other commands do not;
+      the version is typed into `index.ts` instead of read from `package.json`; `init`
+      creates a `.clay/` directory nothing uses; `plan` prints "Refreshing state..." and
+      refreshes nothing; `state list` says "The state file is empty" when there is no file
+      and `output` says where it looked.
+- [ ] The lexer slices the rest of the input on every token, so a file lexes in quadratic
+      time. A sticky regex reads in place.
 - [ ] The `I` prefix on type names is gone: `IResource`, `IProvider`, `IResourceHandler`,
       `ISchemaDefinition`, `ISchema`, `IState`, `IStateBackend` and `IResolver` carry it
       and the other seventeen types do not. TypeScript does not need the prefix, and half
@@ -195,6 +258,8 @@ In order: the safety net first, then the engine, then the CLI, then the output.
 ## 4 — repo
 
 - [ ] `npm run clay` works; it points at a file that doesn't exist.
+- [ ] Test fixtures match the state shape: five mocked states still carry a `variables`
+      key that state no longer has.
 - [ ] Tests write only to temp directories. Something once wrote state files into
       `packages/orchestrator`; they are deleted, but what wrote them is unknown.
 - [ ] CI runs lint, format check, type check, build and tests on every push and PR.

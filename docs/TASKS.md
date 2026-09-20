@@ -20,6 +20,10 @@
 - [x] **Lexer:** Implement tokenizer to convert string input -> Tokens
 - [x] **Parser:** Implement parser to convert Tokens -> AST (Abstract Syntax Tree)
 - [x] **Unit Tests:** Verify handling of valid/invalid syntax
+- [ ] **Numbers:** negative numbers and decimals; only `\d+` lexes today
+- [ ] **String escapes:** `\"`, `\n`, `\\` and `$${` for a literal `${`; multi-line strings
+- [ ] **Nested access:** `local_file.a.tags.env` and `var.list[0]`; today the resolver
+      takes the last segment as the attribute and the rest as the address
 
 ## 3. Core Engine Logic
 
@@ -347,7 +351,43 @@ command would remove it the way Terraform's does.
 
 - [ ] `clay force-unlock`
 
-### 10.7. Path Values
+### 10.7. Computed Attributes
+
+`create` returns one string, the id. A `random_string` is read through `.id`, a
+`command_exec` loses its output, and an output that names an attribute the resource does
+not have is only caught after the resource is created. Terraform's providers return the
+whole resource and mark which attributes are computed.
+
+- [ ] **Providers return attributes, not only an id**
+  - [ ] `create` and `update` return the resource's attributes; state holds them
+  - [ ] Schema marks computed attributes, so `plan` can refuse a reference to an attribute
+        that will never exist
+  - [ ] `command_exec` exposes `stdout` and `exit_code`; `random_string` exposes `result`
+
+### 10.8. Schema-driven Validation
+
+`ISchema` carries `type`, `required` and `elemType`, and the engine reads only `forceNew`.
+Every resource validates its inputs by hand.
+
+- [ ] The engine validates inputs against the schema before it asks the provider
+- [ ] Providers keep `validate` for what a schema cannot say
+
+### 10.9. Data Sources in the Graph
+
+Data sources are read while the config loads, before any resource exists, so one that
+reads a resource fails at plan. `plan` and `apply` each read them, so an apply reads twice.
+
+- [ ] Data sources are graph nodes, read in dependency order and once per run
+- [ ] A data source fed by a pending resource is `(known after apply)`
+
+### 10.10. Parallel Apply
+
+The graph sorts into layers that can run in parallel, and `applyInOrder` runs them one at
+a time.
+
+- [ ] Resources in one layer run together; state is written once per layer
+
+### 10.11. Path Values
 
 A relative path is resolved from the directory `clay` runs in, so a module cannot name a
 file next to itself. Terraform gives the config `path.module`, `path.root` and `path.cwd`
