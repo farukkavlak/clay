@@ -14,6 +14,8 @@ const packages = {
 
 // Tests read the other packages' source, so a stale or missing `dist` can neither pass nor fail them.
 export default defineConfig({
+  // The CLI colours its output on a terminal; tests compare plain text.
+  test: { env: { NO_COLOR: '1' } },
   resolve: {
     // The root tsconfig compiles as CommonJS, which has no import.meta.dirname.
     // eslint-disable-next-line unicorn/prefer-module

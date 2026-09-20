@@ -1,16 +1,16 @@
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
-import inquirer from 'inquirer';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import readline from 'node:readline/promises';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createApplyCommand } from '../../src/commands/apply';
 import { start } from './start';
 
-vi.mock('inquirer');
+vi.mock('node:readline/promises');
 
 // apply reads the current directory, so the command runs from the temp one.
 describe('the plan apply showed', () => {
@@ -51,10 +51,12 @@ describe('the plan apply showed', () => {
 
   it('is refused when the state changes while the question is open', async () => {
     await fs.writeFile(path.join(dir, 'main.clay'), fileConfig('mine'), 'utf8');
-    vi.mocked(inquirer.prompt).mockImplementation(async () => {
+    // The answer comes after another run has written the state.
+    const question = vi.fn(async () => {
       await applyElsewhere(fileConfig('theirs'));
-      return { confirm: true };
+      return 'yes';
     });
+    vi.mocked(readline.createInterface).mockReturnValue(Object.assign(new EventTarget(), { question, close: vi.fn() }) as unknown as readline.Interface);
 
     await createApplyCommand().parseAsync(['node', 'clay']);
 

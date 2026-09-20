@@ -1,5 +1,5 @@
 import { Changes, isUnknown, Plan } from '@clay/planner';
-import chalk from 'chalk';
+import { styleText } from 'node:util';
 
 export function changesNothing(plan: Plan): boolean {
   return plan.actions.every((action) => action.type === 'NO_OP') && Object.keys(plan.outputs).length === 0;
@@ -13,11 +13,11 @@ export function displayOutputChanges(outputs: Changes): void {
   const names = Object.keys(outputs);
   if (names.length === 0) return;
 
-  console.log(chalk.bold('\nChanges to outputs:\n'));
+  console.log(styleText('bold', '\nChanges to outputs:\n'));
   for (const name of names) {
     const { old, new: next } = outputs[name];
-    if (old === undefined) console.log(`  ${chalk.green('+')} ${name} = ${show(next)}`);
-    else if (next === undefined) console.log(`  ${chalk.red('-')} ${name}`);
-    else console.log(`  ${chalk.yellow('~')} ${name} = ${show(old)} -> ${show(next)}`);
+    if (old === undefined) console.log(`  ${styleText('green', '+')} ${name} = ${show(next)}`);
+    else if (next === undefined) console.log(`  ${styleText('red', '-')} ${name}`);
+    else console.log(`  ${styleText('yellow', '~')} ${name} = ${show(old)} -> ${show(next)}`);
   }
 }

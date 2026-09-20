@@ -7,16 +7,6 @@ import { createInitCommand } from '../src/commands/init';
 
 vi.mock('node:fs/promises');
 vi.mock('@clay/state');
-vi.mock('chalk', () => ({
-  default: {
-    blue: vi.fn((msg) => msg),
-    green: vi.fn((msg) => msg),
-    red: vi.fn((msg) => msg),
-    bold: {
-      green: vi.fn((msg) => msg),
-    },
-  },
-}));
 
 describe('CLI: init command', () => {
   const cwd = process.cwd();

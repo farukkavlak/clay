@@ -1,7 +1,7 @@
 import { StateManager } from '@clay/state';
-import chalk from 'chalk';
 import { Command } from 'commander';
 import fs from 'node:fs/promises';
+import { styleText } from 'node:util';
 
 import { stateBackend } from '../stateFile';
 
@@ -11,10 +11,10 @@ function displayOutputs(outputs: Record<string, unknown>, json: boolean): void {
     return;
   }
 
-  if (Object.keys(outputs).length === 0) console.log(chalk.yellow('No outputs found in state.'));
+  if (Object.keys(outputs).length === 0) console.log(styleText('yellow', 'No outputs found in state.'));
   else {
-    console.log(chalk.bold('\nOutputs:\n'));
-    for (const [key, value] of Object.entries(outputs)) console.log(`${chalk.cyan(key)} = ${chalk.green(JSON.stringify(value))}`);
+    console.log(styleText('bold', '\nOutputs:\n'));
+    for (const [key, value] of Object.entries(outputs)) console.log(`${styleText('cyan', key)} = ${styleText('green', JSON.stringify(value))}`);
 
     console.log();
   }
@@ -40,7 +40,7 @@ export function createOutputCommand(): Command {
       const backend = stateBackend(options.state);
 
       if (!(await exists(backend.path))) {
-        console.log(chalk.yellow(`No state file found at ${backend.path}`));
+        console.log(styleText('yellow', `No state file found at ${backend.path}`));
         return;
       }
 
@@ -49,7 +49,7 @@ export function createOutputCommand(): Command {
 
         displayOutputs(state.outputs ?? {}, options.json);
       } catch (error) {
-        console.error(chalk.red('Error reading outputs:'), error instanceof Error ? error.message : error);
+        console.error(styleText('red', 'Error reading outputs:'), error instanceof Error ? error.message : error);
         process.exit(1);
       }
     });

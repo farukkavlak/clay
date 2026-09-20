@@ -1,6 +1,9 @@
 {
   "name": "clay",
   "version": "1.0.0",
+  "engines": {
+    "node": ">=22.13"
+  },
   "private": true,
   "description": "Infrastructure-as-Code (IaC) Engine",
   "keywords": [
