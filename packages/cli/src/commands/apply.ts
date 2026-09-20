@@ -1,4 +1,4 @@
-import { ConfigFiles, DiskFiles, InMemoryFiles, Orchestrator, RunEvent } from '@clay/orchestrator';
+import { Address, ConfigFiles, DiskFiles, InMemoryFiles, Orchestrator, RunEvent } from '@clay/orchestrator';
 import { CONFIG_FILE } from '@clay/parser';
 import { Plan, PlanAction, PlanFile, validatePlanFile } from '@clay/planner';
 import { LocalProvider } from '@clay/provider-local';
@@ -23,9 +23,17 @@ function displayPlan(plan: Plan): void {
   const changes = plan.actions.filter((action) => action.type !== 'NO_OP');
   if (changes.length > 0) {
     console.log(chalk.bold('\nClay will perform the following actions:\n'));
-    for (const action of changes) console.log(`  ${getActionSymbol(action.type)} ${action.resourceType}.${action.name}`);
+    for (const action of changes) console.log(`  ${getActionSymbol(action.type)} ${Address.of(action).toString()}`);
   }
   displayOutputChanges(plan.outputs);
+}
+
+/** A replacement counts once as an add and once as a destroy, as the plan summary counts it. */
+function summarize(applied: PlanAction[]): string {
+  const count = (type: PlanAction['type']) => applied.filter((action) => action.type === type).length;
+  const replaced = count('REPLACE');
+
+  return `${count('CREATE') + replaced} added, ${count('UPDATE')} changed, ${count('DELETE') + replaced} destroyed`;
 }
 
 function pastTense(actionType: PlanAction['type']): string {
@@ -36,22 +44,22 @@ function pastTense(actionType: PlanAction['type']): string {
 }
 
 function reportEvent(event: RunEvent): void {
-  if (event.type === 'applied') console.log(`  ${getActionSymbol(event.action.type)} ${event.action.resourceType}.${event.action.name} ${pastTense(event.action.type)}`);
-  if (event.type === 'failed') throw new Error(`${event.action.resourceType}.${event.action.name}: ${event.error.message}`);
+  if (event.type === 'applied') console.log(`  ${getActionSymbol(event.action.type)} ${Address.of(event.action).toString()} ${pastTense(event.action.type)}`);
+  if (event.type === 'failed') throw new Error(`${Address.of(event.action).toString()}: ${event.error.message}`);
 }
 
 async function runAndReport(events: AsyncGenerator<RunEvent>): Promise<void> {
   console.log(chalk.blue('\napplying...'));
 
-  let applied = 0;
+  const applied: PlanAction[] = [];
   let outputs: Record<string, unknown> = {};
   for await (const event of events) {
     reportEvent(event);
-    if (event.type === 'applied') applied += 1;
+    if (event.type === 'applied') applied.push(event.action);
     if (event.type === 'done') outputs = event.outputs;
   }
 
-  console.log(chalk.green(`\nApply complete! Resources: ${applied} changed.`));
+  console.log(chalk.green(`\nApply complete! Resources: ${summarize(applied)}.`));
 
   if (Object.keys(outputs).length > 0) {
     console.log(chalk.cyan('\nOutputs:'));

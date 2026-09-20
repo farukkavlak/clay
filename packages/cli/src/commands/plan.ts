@@ -1,4 +1,4 @@
-import { DiskFiles, Orchestrator, RecordingFiles } from '@clay/orchestrator';
+import { Address, DiskFiles, Orchestrator, RecordingFiles } from '@clay/orchestrator';
 import { CONFIG_FILE } from '@clay/parser';
 import { isUnknown, PlanAction, serializePlan } from '@clay/planner';
 import { LocalProvider } from '@clay/provider-local';
@@ -31,7 +31,7 @@ function describeValue(value: unknown, whenAbsent: string): string {
 }
 
 function displayAction(action: PlanAction): void {
-  console.log(`  ${getActionSymbol(action.type)} ${action.resourceType}.${action.name} will be ${pastTense(action.type)}`);
+  console.log(`  ${getActionSymbol(action.type)} ${Address.of(action).toString()} will be ${pastTense(action.type)}`);
 
   if ((action.type === 'UPDATE' || action.type === 'REPLACE') && action.changes)
     for (const [key, change] of Object.entries(action.changes)) console.log(`      ${key}: ${describeValue(change.old, '(none)')} -> ${describeValue(change.new, '(removed)')}`);

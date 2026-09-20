@@ -6,7 +6,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPlanCommand } from '../src/commands/plan';
 
 vi.mock('node:fs/promises');
-vi.mock('@clay/orchestrator');
+// The engine is mocked; Address is a plain value type the commands print with, so it stays real.
+vi.mock('@clay/orchestrator', async () => {
+  const actual = await vi.importActual<typeof import('@clay/orchestrator')>('@clay/orchestrator');
+  return {
+    ...actual,
+    Orchestrator: vi.fn(),
+    DiskFiles: vi.fn(),
+    InMemoryFiles: vi.fn(),
+    RecordingFiles: vi.fn(function () {
+      return { snapshot: () => ({}) };
+    }),
+  };
+});
 vi.mock('chalk', () => ({
   default: {
     blue: vi.fn((m) => m),

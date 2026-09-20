@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-369 tests pass, and so do the type check and the build. Lint shows 11 warnings, and
+371 tests pass, and so do the type check and the build. Lint shows 11 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -192,11 +192,11 @@ Found by the 2026-09-20 audit, each one reproduced with the built CLI:
       value itself, as in Terraform since 0.12, and text around an interpolation makes a
       string; a list or map in such text is refused instead of printed as
       `[object Object]`.
-- [ ] The CLI prints a resource without its module: `plan`, `apply` and the applied lines
-      all say `local_file.f` for `module.m.local_file.f`, so two modules with the same
-      resource name are told apart by nothing. `Address.of(action).toString()` has the
-      full name. While there: the apply summary says `Resources: 1 changed` for a create;
-      Terraform counts added, changed and destroyed apart.
+- [x] The CLI printed a resource without its module: `plan`, `apply` and the applied
+      lines all said `local_file.f` for `module.m.local_file.f`, so two modules with the
+      same resource name were told apart by nothing. They print the full address now. The
+      apply summary said `Resources: 1 changed` for a create; it counts added, changed and
+      destroyed apart, a replacement once in each, as the plan summary does.
 - [ ] The state file is written in place. A run killed halfway through `writeFile` leaves
       a torn file and the `.bak` is not restored. Writing to a temp file and renaming it
       makes the write atomic.

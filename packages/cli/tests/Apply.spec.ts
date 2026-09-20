@@ -6,7 +6,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApplyCommand } from '../src/commands/apply';
 
 vi.mock('node:fs/promises');
-vi.mock('@clay/orchestrator');
+// The engine is mocked; Address is a plain value type the commands print with, so it stays real.
+vi.mock('@clay/orchestrator', async () => {
+  const actual = await vi.importActual<typeof import('@clay/orchestrator')>('@clay/orchestrator');
+  return {
+    ...actual,
+    Orchestrator: vi.fn(),
+    DiskFiles: vi.fn(),
+    InMemoryFiles: vi.fn(),
+    RecordingFiles: vi.fn(function () {
+      return { snapshot: () => ({}) };
+    }),
+  };
+});
 vi.mock('@clay/planner', async () => {
   const actual = await vi.importActual('@clay/planner');
   return {
@@ -104,7 +116,8 @@ describe('CLI: apply command', () => {
       const planMock = vi.fn().mockResolvedValue({ serial: 0, actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }], outputs: {} });
       const runMock = vi.fn(async function* () {
         yield { type: 'applied', action: { type: 'CREATE', resourceType: 'test', name: 't' } };
-        yield { type: 'applied', action: { type: 'DELETE', resourceType: 'test', name: 'gone' } };
+        yield { type: 'applied', action: { type: 'DELETE', resourceType: 'test', name: 'gone', modulePath: ['m'] } };
+        yield { type: 'applied', action: { type: 'REPLACE', resourceType: 'test', name: 'again' } };
         yield { type: 'done', outputs: {} };
       });
 
@@ -121,8 +134,8 @@ describe('CLI: apply command', () => {
       await createApplyCommand().parseAsync(['node', 'clay', '--yes']);
 
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('+ test.t created'));
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('- test.gone destroyed'));
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Resources: 2 changed'));
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('- module.m.test.gone destroyed'));
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Resources: 2 added, 0 changed, 2 destroyed'));
 
       consoleSpy.mockRestore();
     });
