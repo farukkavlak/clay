@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-357 tests pass, and so do the type check and the build. Lint shows 12 warnings, and
+351 tests pass, and so do the type check and the build. Lint shows 11 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -156,11 +156,16 @@ Found by the 2026-09-20 audit, each one reproduced with the built CLI:
       it. Now a variable with no default and no input stops the load, read or not, the way
       Terraform treats a variable as the module's input contract, and the error names the
       module when it is one.
-- [ ] `validate` rejects valid configuration. It hands the raw AST value to the provider,
-      so `content = local_file.a.content` fails with "requires content (string)". It also
-      knows nothing of modules, variables and outputs, and has a dependency check of its
-      own instead of the engine's graph. It should load the config the way `plan` does,
-      without state.
+- [x] `validate` rejected valid configuration. It handed the raw AST value to the
+      provider, so `content = local_file.a.content` failed with "requires content
+      (string)". It also knew nothing of modules, variables and outputs, and had a
+      dependency check of its own instead of the engine's graph. Now it asks the engine to
+      check the config the way `plan` does, against an empty state, so what a resource
+      would give is unknown and everything else is checked; `validate.ts` went from 142
+      lines to 40. It reads `main.clay` in the current directory like `plan` and `apply`,
+      instead of a path of its own. Its mocked unit tests, which tested the copy, are
+      replaced by end-to-end ones. Data sources are still read while the config loads
+      (`TASKS.md` 10.9).
 - [ ] `state mv` moves the key and leaves the entry behind: `name` and `modulePath` inside
       it still say the old address, and other resources' `dependencies` still name it. A
       later delete is planned from the entry's own name, so it deletes an address that is
@@ -206,10 +211,11 @@ Found by the 2026-09-20 audit, each one reproduced with the built CLI:
       `vitest` is 0.34 in some packages and 4 in others, `eslint` 8 and 9. `lib` is
       `es2021`, so `new Error(message, { cause })` does not compile; once it is `es2022`,
       the plan's provider errors keep the provider's error as their cause.
-- [ ] `IState` moves to `contracts`, next to `IResource`. `planner` and `orchestrator`
-      depend on `@clay/state` only for that type, and the shape state is written in is
-      a contract every side has to agree on. Keeping it inside one side is how the planner
-      drifted away from it.
+- [ ] `IState` moves to `contracts`, next to `IResource`, with an `emptyState()` beside it:
+      `{ version: 1, serial: 0, resources: {} }` is spelled out in `init`, `LocalBackend`
+      and `Orchestrator.validate`. `planner` and `orchestrator` depend on `@clay/state`
+      only for that type, and the shape state is written in is a contract every side has
+      to agree on. Keeping it inside one side is how the planner drifted away from it.
 
 ## 3 — code
 
@@ -247,11 +253,10 @@ Found by the 2026-09-20 audit, each one reproduced with the built CLI:
       `ReferenceScanner` refuses; `Address.withParent` and `Address.equals` are only
       called by tests.
 - [ ] The CLI is consistent with itself: `--state` is on `state` and `output` but not on
-      `plan` and `apply`; `validate` takes a config path and the other commands do not;
-      the version is typed into `index.ts` instead of read from `package.json`; `init`
-      creates a `.clay/` directory nothing uses; `plan` prints "Refreshing state..." and
-      refreshes nothing; `state list` says "The state file is empty" when there is no file
-      and `output` says where it looked.
+      `plan` and `apply`; the version is typed into `index.ts` instead of read from
+      `package.json`; `init` creates a `.clay/` directory nothing uses; `plan` prints
+      "Refreshing state..." and refreshes nothing; `state list` says "The state file is
+      empty" when there is no file and `output` says where it looked.
 - [ ] The lexer slices the rest of the input on every token, so a file lexes in quadratic
       time. A sticky regex reads in place.
 - [ ] The `I` prefix on type names is gone: `IResource`, `IProvider`, `IResourceHandler`,

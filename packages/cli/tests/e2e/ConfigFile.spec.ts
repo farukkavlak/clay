@@ -58,7 +58,7 @@ describe('a config with a module', () => {
     await expect(fs.access(path.join(dir, 'm', 'inner.txt'))).rejects.toThrow();
   });
 
-  it('is what validate checks when no file is named', async () => {
+  it('is what validate checks', async () => {
     await fs.writeFile(path.join(dir, 'main.clay'), 'variable "v" { default = "x" }', 'utf8');
 
     await createValidateCommand().parseAsync(['node', 'clay']);

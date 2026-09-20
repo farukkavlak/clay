@@ -123,14 +123,26 @@ export class Orchestrator {
    */
   async plan(configContent: string): Promise<Plan> {
     const currentState = await this.stateManager.read();
-    const { loadedResources, loadedModules } = await this.loadContext(configContent, currentState);
-
-    const graph = this.dependencyGraphBuilder.buildExecutionGraph(loadedResources, loadedModules);
-    const { resources: desiredResources, outputs } = this.resolveInDependencyOrder(loadedResources, graph, currentState);
-
-    const schemas = await this.checkWithProviders(desiredResources);
+    const { desiredResources, outputs, schemas } = await this.resolveAndCheck(configContent, currentState);
 
     return { serial: currentState.serial, actions: plan(desiredResources, currentState, schemas), outputs: outputChanges(currentState.outputs ?? {}, outputs) };
+  }
+
+  /** Checks the configuration the way a plan would, against an empty state, so a value a resource would give is unknown and everything else is checked. */
+  async validate(configContent: string): Promise<void> {
+    await this.resolveAndCheck(configContent, { version: 1, serial: 0, resources: {} });
+  }
+
+  private async resolveAndCheck(
+    configContent: string,
+    state: IState
+  ): Promise<{ desiredResources: DesiredResource[]; outputs: Record<string, unknown>; schemas: Record<string, ISchema> }> {
+    const { loadedResources, loadedModules } = await this.loadContext(configContent, state);
+
+    const graph = this.dependencyGraphBuilder.buildExecutionGraph(loadedResources, loadedModules);
+    const { resources: desiredResources, outputs } = this.resolveInDependencyOrder(loadedResources, graph, state);
+
+    return { desiredResources, outputs, schemas: await this.checkWithProviders(desiredResources) };
   }
 
   /** What a provider can refuse before anything runs is refused here. A value not known yet is checked once the run knows it. */
