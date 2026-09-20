@@ -218,10 +218,14 @@ describe('Clay Parser', () => {
       expect(attributes.v).toEqual({ type: 'Reference', value: ['module', 'm', 'output'] });
     });
 
-    it('still reads a block by the word that starts it', () => {
-      const program = makeParser('variable "data" { default = "x" }\ndata "local_file" "variable" {}').parse();
+    it('still starts a block with the word, right after an attribute of the same name', () => {
+      const program = makeParser('resource "null_resource" "a" { data = 1 }\ndata "local_file" "b" {}').parse();
 
-      expect(program.map((statement) => statement.type)).toEqual(['Variable', 'Data']);
+      expect(program.map((statement) => statement.type)).toEqual(['Resource', 'Data']);
+    });
+
+    it('takes only "value" in an output block, not any name', () => {
+      expect(() => makeParser('output "o" { data = 1 }').parse()).toThrow("[Line 1, Column 14] Expect 'value' in output block.");
     });
   });
 

@@ -130,7 +130,8 @@ export class Parser {
     const nameToken = this.consume(TokenType.String, "Expect output name string after 'output'.");
 
     this.consume(TokenType.LBrace, "Expect '{' after output name.");
-    this.consume(TokenType.Identifier, "Expect 'value' keyword in output block.");
+    if (!this.check(TokenType.Identifier) || this.peek().value !== 'value') return this.error("Expect 'value' in output block.");
+    this.advance();
     this.consume(TokenType.Assign, "Expect '=' after 'value'.");
 
     const value = this.parseValue();

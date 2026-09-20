@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-365 tests pass, and so do the type check and the build. Lint shows 11 warnings, and
+366 tests pass, and so do the type check and the build. Lint shows 11 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -291,6 +291,9 @@ Found by the 2026-09-20 audit, each one reproduced with the built CLI:
 - [ ] husky and lint-staged run on commit.
 - [ ] The README describes what exists now, in short, plain English. It still shows
       `resource "file"`, which no provider has.
+- [ ] `GRAMMAR.md` matches the parser: it lists `4.5` as a number the lexer does not
+      take, has no `LBRACKET`, `RBRACKET` or `COMMA` in the token table, and leaves `data`
+      and `module` blocks out of the block list and the AST section.
 - [ ] `TASKS.md` matches what is actually done.
 - [ ] Merged and empty branches are deleted (19).
 - [ ] `.editorconfig`, a license file and a changelog are added.

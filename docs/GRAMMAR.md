@@ -28,7 +28,7 @@ The Lexer recognizes these tokens:
 | `DOT`        | `.`                           | Reference separator.   |
 | `COMMENT`    | `# ...` or `// ...`           | Ignored by parser.     |
 
-There are no keywords. `data = "x"` is an attribute and `data "t" "n" {` is a block; the
+There are no keywords apart from the literals `true` and `false`. `data = "x"` is an attribute and `data "t" "n" {` is a block; the
 parser tells them apart by position, not by the word.
 
 ## 3. Supported Block Types
