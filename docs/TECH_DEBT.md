@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-374 tests pass, and so do the type check and the build. Lint shows 11 warnings, and
+376 tests pass, and so do the type check and the build. Lint shows 11 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -211,11 +211,11 @@ Found by the 2026-09-20 review of this section:
       `apply` hands the plan it showed to `runPlan`, which refuses it once the serial has
       moved on, and `run` is gone. The config is loaded twice per apply now, not three
       times.
-- [ ] A state write that fails after a failed action is swallowed: `step` writes with
+- [x] A state write that failed after a failed action was swallowed: `step` wrote with
       `.catch(() => undefined)`, so a replacement that deleted, failed to create and then
-      could not save leaves a state that still lists the resource, and the user sees only
+      could not save left a state that still listed the resource, and the user saw only
       the create error. Terraform reports the failed save as an error of its own. The
-      `failed` event carries it too.
+      `failed` event carries it now, and `apply` prints it before the action's error.
 
 ## 2 — dependencies
 

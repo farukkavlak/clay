@@ -45,7 +45,10 @@ function pastTense(actionType: PlanAction['type']): string {
 
 function reportEvent(event: RunEvent): void {
   if (event.type === 'applied') console.log(`  ${getActionSymbol(event.action.type)} ${Address.of(event.action).toString()} ${pastTense(event.action.type)}`);
-  if (event.type === 'failed') throw new Error(`${Address.of(event.action).toString()}: ${event.error.message}`);
+  if (event.type === 'failed') {
+    if (event.stateError) console.error(chalk.red('The state could not be saved:'), event.stateError.message);
+    throw new Error(`${Address.of(event.action).toString()}: ${event.error.message}`);
+  }
 }
 
 async function runAndReport(events: AsyncGenerator<RunEvent>): Promise<void> {

@@ -20,6 +20,10 @@ export { Address } from './Address';
 export { DiskFiles, InMemoryFiles, RecordingFiles } from './ConfigFiles';
 export type { ConfigFiles } from './ConfigFiles';
 
+function asError(thrown: unknown): Error {
+  return thrown instanceof Error ? thrown : new Error(String(thrown));
+}
+
 export class Orchestrator {
   private providers: Map<string, IProvider> = new Map();
   private dataSources: Map<string, Record<string, unknown>> = new Map();
@@ -263,9 +267,7 @@ export class Orchestrator {
     try {
       await this.actionExecutor.execute(action, state);
     } catch (error) {
-      // A replacement may have deleted before it failed to create; what happened is saved either way.
-      await this.stateManager.write(state).catch(() => undefined);
-      yield { type: 'failed', action, error: error instanceof Error ? error : new Error(String(error)) };
+      yield { type: 'failed', action, error: asError(error), stateError: await this.saveAfterFailure(state) };
       return false;
     }
 
@@ -274,6 +276,16 @@ export class Orchestrator {
     await this.stateManager.write(state);
     yield { type: 'applied', action };
     return true;
+  }
+
+  /** A replacement may have deleted before it failed to create; what happened is saved either way. */
+  private async saveAfterFailure(state: IState): Promise<Error | undefined> {
+    try {
+      await this.stateManager.write(state);
+      return undefined;
+    } catch (error) {
+      return asError(error);
+    }
   }
 
   private processOutputs(program: Statement[], state: IState, context: Address): Record<string, unknown> {
