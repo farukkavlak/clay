@@ -219,8 +219,9 @@ Found by the 2026-09-20 review of this section:
 
 ## 2 — dependencies
 
-- [ ] Each package lists the `@clay/*` packages it imports. Only the CLI lists any, and it
-      misses `graph`.
+- [x] Each package lists the `@clay/*` packages it imports. Only the CLI listed any; the
+      orchestrator, the planner, `state` and the local provider resolved theirs through
+      the hoisted workspace links, with nothing saying so.
 - [ ] Shared dev tools (typescript, vitest, eslint, esbuild, `@types/node`) are listed
       only in the root. Three packages still ask for vitest 0.34 and eslint 8.
 - [ ] Unused dev dependencies removed: the react, react-hooks and i18next ESLint plugins,

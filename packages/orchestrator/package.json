@@ -8,6 +8,13 @@
     "test": "vitest run --coverage",
     "type:check": "tsc --noEmit"
   },
+  "dependencies": {
+    "@clay/contracts": "*",
+    "@clay/graph": "*",
+    "@clay/parser": "*",
+    "@clay/planner": "*",
+    "@clay/state": "*"
+  },
   "devDependencies": {
     "@vitest/coverage-v8": "^0.34.0",
     "eslint": "^8.0.0",
