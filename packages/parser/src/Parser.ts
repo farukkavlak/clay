@@ -35,17 +35,21 @@ export class Parser {
     return program;
   }
 
-  private statementParsers: Record<string, () => Statement> = {
-    [TokenType.Resource]: this.parseResource.bind(this),
-    [TokenType.Variable]: this.parseVariable.bind(this),
-    [TokenType.Data]: this.parseData.bind(this),
-    [TokenType.Output]: this.parseOutput.bind(this),
-    [TokenType.Module]: this.parseModule.bind(this),
-  };
+  // No keywords: a kind is only special at the start of a statement.
+  private blockParsers = new Map<string, () => Statement>([
+    ['resource', this.parseResource.bind(this)],
+    ['variable', this.parseVariable.bind(this)],
+    ['data', this.parseData.bind(this)],
+    ['output', this.parseOutput.bind(this)],
+    ['module', this.parseModule.bind(this)],
+  ]);
 
   private parseStatement(): Statement {
-    for (const [tokenType, handler] of Object.entries(this.statementParsers)) if (this.matchToken(tokenType as TokenType)) return handler();
-    return this.error(`Unexpected token: ${this.peek().value}`);
+    const parseBlock = this.check(TokenType.Identifier) ? this.blockParsers.get(this.peek().value) : undefined;
+    if (!parseBlock) return this.error(`Unexpected token: ${this.peek().value}`);
+
+    this.advance();
+    return parseBlock();
   }
 
   private parseResource(): ResourceBlock {
@@ -126,7 +130,8 @@ export class Parser {
     const nameToken = this.consume(TokenType.String, "Expect output name string after 'output'.");
 
     this.consume(TokenType.LBrace, "Expect '{' after output name.");
-    this.consume(TokenType.Identifier, "Expect 'value' keyword in output block.");
+    if (!this.check(TokenType.Identifier) || this.peek().value !== 'value') return this.error("Expect 'value' in output block.");
+    this.advance();
     this.consume(TokenType.Assign, "Expect '=' after 'value'.");
 
     const value = this.parseValue();
@@ -172,7 +177,7 @@ export class Parser {
     if (this.matchToken(TokenType.LBrace)) return this.parseMap();
 
     // Reference Parsing: identifier.key.subkey
-    if (this.checkAny(TokenType.Identifier, TokenType.Data, TokenType.Module)) return this.parseReference();
+    if (this.check(TokenType.Identifier)) return this.parseReference();
 
     return this.error(`Unexpected value: ${this.peek().value}`);
   }
@@ -205,10 +210,8 @@ export class Parser {
 
     parts.push(this.advance().value);
 
-    const validReferenceTokens = [TokenType.Identifier, TokenType.Data, TokenType.Variable, TokenType.Resource, TokenType.Output, TokenType.Module];
-
     while (this.matchToken(TokenType.Dot))
-      if (this.checkAny(...validReferenceTokens)) parts.push(this.advance().value);
+      if (this.check(TokenType.Identifier)) parts.push(this.advance().value);
       else return this.error('Expect property name after dot.');
 
     return { type: 'Reference', value: parts };
@@ -236,10 +239,6 @@ export class Parser {
   private check(type: TokenType): boolean {
     if (this.isAtEnd()) return false;
     return this.peek().type === type;
-  }
-
-  private checkAny(...types: TokenType[]): boolean {
-    return types.some((type) => this.check(type));
   }
 
   private advance(): Token {

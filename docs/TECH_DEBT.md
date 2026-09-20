@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-360 tests pass, and so do the type check and the build. Lint shows 11 warnings, and
+366 tests pass, and so do the type check and the build. Lint shows 11 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -182,8 +182,11 @@ Found by the 2026-09-20 audit, each one reproduced with the built CLI:
       `Node null_resource.a already exists`, a message from the graph, not from the config.
       The parser now refuses the second block of a kind with a name already used, with its
       line and column, the way Terraform refuses a duplicate declaration.
-- [ ] An attribute cannot be called `data`, `module`, `variable`, `output` or `resource`:
-      the lexer takes the keyword before the identifier, so `data = "x"` is a parse error.
+- [x] An attribute could not be called `data`, `module`, `variable`, `output` or
+      `resource`: the lexer took the keyword before the identifier, so `data = "x"` was a
+      parse error. There are no keywords now, as in HCL and as `GRAMMAR.md` already said:
+      a block kind is an identifier the parser recognises at the start of a statement,
+      and the five keyword tokens are gone with the list of tokens a reference may hold.
 - [ ] A string that is one interpolation loses its value's type: `"${var.list}"` becomes
       `[object Object]` and `"${var.n}"` becomes `"8"`. Terraform gives the value itself
       when the whole string is one interpolation.
@@ -211,7 +214,9 @@ Found by the 2026-09-20 audit, each one reproduced with the built CLI:
 - [ ] `engines.node` is `>=22`, which `util.styleText` needs.
 - [ ] A package's build does not bundle the `@clay/*` packages it imports. Every `dist` is
       an esbuild bundle, so the CLI carries its own copy of the parser, the planner and the
-      rest, and so does the orchestrator. Workspace packages stay external.
+      rest, and so does the orchestrator. Workspace packages stay external. It also makes
+      one `npm run build` unreliable: the CLI is built before the parser in workspace
+      order, so its bundle carries the parser's previous `dist`.
 - [ ] `tsconfig.json` fits this repo: `experimentalDecorators` and the `cdk.out` exclude
       came from another project; esbuild targets `node18` while `engines` will say 22;
       `vitest` is 0.34 in some packages and 4 in others, `eslint` 8 and 9. `lib` is
@@ -286,6 +291,9 @@ Found by the 2026-09-20 audit, each one reproduced with the built CLI:
 - [ ] husky and lint-staged run on commit.
 - [ ] The README describes what exists now, in short, plain English. It still shows
       `resource "file"`, which no provider has.
+- [ ] `GRAMMAR.md` matches the parser: it lists `4.5` as a number the lexer does not
+      take, has no `LBRACKET`, `RBRACKET` or `COMMA` in the token table, and leaves `data`
+      and `module` blocks out of the block list and the AST section.
 - [ ] `TASKS.md` matches what is actually done.
 - [ ] Merged and empty branches are deleted (19).
 - [ ] `.editorconfig`, a license file and a changelog are added.
