@@ -5,7 +5,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "esbuild --sourcemap --bundle --platform=node --target=node18 --outfile=dist/index.js ./src/index.ts && tsc --emitDeclarationOnly --declaration --outDir dist src/index.ts --target ES2020 --moduleResolution node --esModuleInterop",
-    "test": "vitest run --coverage",
+    "test": "vitest run --coverage --config ../../vitest.config.ts",
     "type:check": "tsc --noEmit"
   }
 }

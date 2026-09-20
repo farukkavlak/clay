@@ -232,20 +232,25 @@ Found by the 2026-09-20 review of this section:
 - [x] `npm audit` is clean. The nine left after the tools moved to the root were all
       transitive, under eslint, the unicorn plugin and inquirer; `npm audit fix` took them
       within their ranges, so only the lockfile moved.
-- [ ] `orchestrator` and `planner` point `main` at `dist`, not at `src`.
+- [x] `orchestrator` and `planner` point `main` at `dist`, not at `src`, with `types`
+      beside it like the other six. Tests read every package's source through an alias in
+      the root `vitest.config.ts`, so a stale or missing `dist` can neither pass nor fail
+      them; the CLI's tests had read the orchestrator's source only because `main` said
+      so. The root `build` now names the packages in dependency order, since the CLI's
+      bundle reads the orchestrator's `dist` and npm's own order is alphabetical.
 - [ ] The CLI uses Node built-ins instead of chalk (`util.styleText`), commander
       (`util.parseArgs`) and inquirer (`readline/promises`).
 - [ ] `engines.node` is `>=22`, which `util.styleText` needs. vitest 5 promises
       `^22.12 || ^24 || >=26`; the range should not claim more than the tools do.
 - [ ] A package's build does not bundle the `@clay/*` packages it imports. Every `dist` is
       an esbuild bundle, so the CLI carries its own copy of the parser, the planner and the
-      rest, and so does the orchestrator. Workspace packages stay external. It also makes
-      one `npm run build` unreliable: the CLI is built before the parser in workspace
-      order, so its bundle carries the parser's previous `dist`.
+      rest, and so does the orchestrator. Workspace packages stay external.
 - [ ] `tsconfig.json` fits this repo: `experimentalDecorators` and the `cdk.out` exclude
       came from another project; esbuild targets `node18` while `engines` will say 22.
       `lib` is `es2021`, so `new Error(message, { cause })` does not compile; once it is
       `es2022`, the plan's provider errors keep the provider's error as their cause.
+      `module` is `CommonJS`, so `vitest.config.ts` has to use `__dirname` under a lint
+      exception instead of `import.meta.dirname`.
 - [ ] `IState` moves to `contracts`, next to `IResource`, with an `emptyState()` beside it:
       `{ version: 1, serial: 0, resources: {} }` is spelled out in `init`, `LocalBackend`
       and `Orchestrator.validate`. `planner` and `orchestrator` depend on `@clay/state`
