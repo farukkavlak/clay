@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-351 tests pass, and so do the type check and the build. Lint shows 12 warnings, and
+354 tests pass, and so do the type check and the build. Lint shows 12 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -145,10 +145,12 @@ In order: the safety net first, then the engine, then the CLI, then the output.
 
 Found by the 2026-09-20 audit, each one reproduced with the built CLI:
 
-- [ ] `plan` does not validate. It never calls the provider's `validate`, and a resource
-      type no provider handles plans as "1 to add". `length = "8"` on a `random_string`
-      and `resource "aws_bucket"` both pass `plan` and fail in `apply`. Terraform catches
-      both at plan.
+- [x] `plan` did not validate. It never called the provider's `validate`, and a resource
+      type no provider handled planned as "1 to add". `length = "8"` on a `random_string`
+      and `resource "aws_bucket"` both passed `plan` and failed in `apply`. Now `plan`
+      stops on both, as Terraform does, and names the resource in the message. A resource
+      with a value that is not known yet is skipped and checked in the run, once the value
+      is.
 - [ ] A variable with no value turns into an empty string. `variable "name" {}` read as
       `"hello ${var.name}!"` gives `hello !`; the `?? ''` in `interpolateString` swallows
       it. Terraform stops with "No value for required variable".

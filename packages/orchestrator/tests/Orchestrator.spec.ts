@@ -263,14 +263,14 @@ describe('Orchestrator', () => {
   });
 
   describe('Error Handling', () => {
-    it('should throw error if no provider registered for resource type', async () => {
+    it('stops the plan when no provider handles a resource type', async () => {
       const config = `
         resource "unknown_type" "test" {
           name = "value"
         }
       `;
 
-      await expect(apply(orchestrator, config)).rejects.toThrow('No provider registered');
+      await expect(orchestrator.plan(config)).rejects.toThrow('No provider handles "unknown_type"');
     });
 
     it('should throw error for invalid config syntax', async () => {
