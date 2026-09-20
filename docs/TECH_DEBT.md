@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-366 tests pass, and so do the type check and the build. Lint shows 11 warnings, and
+369 tests pass, and so do the type check and the build. Lint shows 11 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -187,9 +187,11 @@ Found by the 2026-09-20 audit, each one reproduced with the built CLI:
       parse error. There are no keywords now, as in HCL and as `GRAMMAR.md` already said:
       a block kind is an identifier the parser recognises at the start of a statement,
       and the five keyword tokens are gone with the list of tokens a reference may hold.
-- [ ] A string that is one interpolation loses its value's type: `"${var.list}"` becomes
-      `[object Object]` and `"${var.n}"` becomes `"8"`. Terraform gives the value itself
-      when the whole string is one interpolation.
+- [x] A string that was one interpolation lost its value's type: `"${var.list}"` became
+      `a,b` and `"${var.n}"` became `"8"`. Now a string that is one interpolation is the
+      value itself, as in Terraform since 0.12, and text around an interpolation makes a
+      string; a list or map in such text is refused instead of printed as
+      `[object Object]`.
 - [ ] The CLI prints a resource without its module: `plan`, `apply` and the applied lines
       all say `local_file.f` for `module.m.local_file.f`, so two modules with the same
       resource name are told apart by nothing. `Address.of(action).toString()` has the
@@ -268,6 +270,10 @@ Found by the 2026-09-20 audit, each one reproduced with the built CLI:
       `package.json`; `init` creates a `.clay/` directory nothing uses; `plan` prints
       "Refreshing state..." and refreshes nothing; `state list` says "The state file is
       empty" when there is no file and `output` says where it looked.
+- [ ] A resolve error names the reference but not the resource that holds it, so
+      `cannot be joined into a string` leaves the user searching when two resources read
+      the same thing. `planResource` can wrap it with the address, as
+      `checkWithProviders` does.
 - [ ] A parse error in a module names its line and column but not its file, so
       `[Line 2, Column 1] ...` from `plan` does not say which `main.clay`. The module
       loader knows the path and can put it in front.

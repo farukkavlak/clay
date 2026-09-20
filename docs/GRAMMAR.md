@@ -87,6 +87,10 @@ output "greeting" {
 content = "Hello ${var.name}! Version: ${var.version}"
 ```
 
+A string that is one interpolation and nothing else is the value itself, with its type:
+`length = "${var.n}"` is the number `var.n` holds. Text around an interpolation makes a
+string, and a list or map in such text is an error.
+
 **Reference Format:**
 
 ```

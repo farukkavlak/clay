@@ -59,10 +59,16 @@ export class ReferenceResolver {
     return resolvedMap;
   }
 
-  interpolateString(value: string, state: IState, context?: Address): string {
+  /** A string that is one interpolation is the value itself, type and all; text around it makes it a string. */
+  interpolateString(value: string, state: IState, context?: Address): unknown {
+    const whole = value.match(/^\${([^}]+)}$/);
+    if (whole) return this.resolve(whole[1].trim().split('.'), state, context);
+
     return value.replace(/\${([^}]+)}/g, (_: string, expr: string) => {
-      const pathParts = expr.trim().split('.');
-      const resolved = this.resolve(pathParts, state, context);
+      const resolved = this.resolve(expr.trim().split('.'), state, context);
+      if (resolved !== null && typeof resolved === 'object')
+        throw new Error(`"${value}" cannot be joined into a string: ${expr.trim()} is a ${Array.isArray(resolved) ? 'list' : 'map'}`);
+
       return String(resolved);
     });
   }
