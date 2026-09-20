@@ -371,6 +371,9 @@ Every resource validates its inputs by hand.
 
 - [ ] The engine validates inputs against the schema before it asks the provider
 - [ ] Providers keep `validate` for what a schema cannot say
+- [ ] A resource with a value that is not known yet has its known values checked. Today
+      `plan` skips the whole resource, because a provider's `validate` would report a
+      missing required attribute; a schema check knows the attribute is there and unknown
 
 ### 10.9. Data Sources in the Graph
 

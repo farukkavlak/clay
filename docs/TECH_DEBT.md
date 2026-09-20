@@ -201,7 +201,9 @@ Found by the 2026-09-20 audit, each one reproduced with the built CLI:
       rest, and so does the orchestrator. Workspace packages stay external.
 - [ ] `tsconfig.json` fits this repo: `experimentalDecorators` and the `cdk.out` exclude
       came from another project; esbuild targets `node18` while `engines` will say 22;
-      `vitest` is 0.34 in some packages and 4 in others, `eslint` 8 and 9.
+      `vitest` is 0.34 in some packages and 4 in others, `eslint` 8 and 9. `lib` is
+      `es2021`, so `new Error(message, { cause })` does not compile; once it is `es2022`,
+      the plan's provider errors keep the provider's error as their cause.
 - [ ] `IState` moves to `contracts`, next to `IResource`. `planner` and `orchestrator`
       depend on `@clay/state` only for that type, and the shape state is written in is
       a contract every side has to agree on. Keeping it inside one side is how the planner
