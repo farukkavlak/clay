@@ -15,7 +15,7 @@
     "providers/*"
   ],
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
+    "build": "npm run build -w @clay/contracts -w @clay/parser -w @clay/graph -w @clay/state -w @clay/planner -w @clay/orchestrator -w @clay/provider-local -w @clay/cli",
     "format": "prettier --write .",
     "lint": "eslint .",
     "test": "npm run test --workspaces --if-present",

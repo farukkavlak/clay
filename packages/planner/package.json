@@ -1,11 +1,12 @@
 {
   "name": "@clay/planner",
   "version": "1.0.0",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "build": "esbuild --sourcemap --bundle --platform=node --target=node18 --outfile=dist/index.js ./src/index.ts && tsc --emitDeclarationOnly --declaration --outDir dist src/index.ts --target ES2020 --moduleResolution node --esModuleInterop",
     "lint": "eslint .",
-    "test": "vitest run --coverage",
+    "test": "vitest run --coverage --config ../../vitest.config.ts",
     "type:check": "tsc --noEmit"
   },
   "dependencies": {
