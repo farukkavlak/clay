@@ -39,8 +39,10 @@ export class LocalFileResource implements IResourceHandler {
   }
 
   async delete(id: string): Promise<void> {
-    // Delete file
-    await fs.unlink(id);
+    // A file removed by hand is already what a delete asks for.
+    await fs.unlink(id).catch((error: { code?: string }) => {
+      if (error.code !== 'ENOENT') throw error;
+    });
   }
 
   async read(_inputs: Record<string, unknown>): Promise<Record<string, unknown>> {

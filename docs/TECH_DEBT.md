@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-355 tests pass, and so do the type check and the build. Lint shows 11 warnings, and
+358 tests pass, and so do the type check and the build. Lint shows 11 warnings, and
 `npm audit` reports 20 vulnerabilities (2 critical, 11 high).
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -172,9 +172,11 @@ Found by the 2026-09-20 audit, each one reproduced with the built CLI:
       was not there and the moved resource stayed in state for good. Now the entry and
       every `dependencies` list take the new address, and a move that changes the type is
       refused, as in Terraform. `Address` is exported from the orchestrator for the parse.
-- [ ] A file removed by hand cannot be destroyed. `local_file.delete` fails on `ENOENT`
-      and the run fails the same way every time; only `state rm` gets out. The provider
-      should treat "already gone" as done. Refresh (`TASKS.md` 10.2) is the full answer.
+- [x] A file removed by hand could not be destroyed. `local_file.delete` failed on
+      `ENOENT` and the run failed the same way every time; only `state rm` got out. The
+      provider now treats a file that is already gone as deleted, the way Terraform's
+      providers treat "not found". A file removed by hand that stays in the config is
+      still not noticed; that is refresh (`TASKS.md` 10.2).
 - [ ] Two blocks with one name are not caught. Two `module "m"` blocks pass in silence and
       the second one wins; two `resource "null_resource" "a"` blocks fail with
       `Node null_resource.a already exists`, a message from the graph, not from the config.

@@ -144,6 +144,15 @@ describe('LocalProvider', () => {
       // Verify it's gone
       await expect(fs.access(filePath)).rejects.toThrow();
     });
+
+    it('treats a file that is already gone as deleted', async () => {
+      await expect(provider.delete(path.join(tmpDir, 'gone.txt'), 'local_file')).resolves.toBeUndefined();
+    });
+
+    it('still fails when the file cannot be removed for another reason', async () => {
+      // A directory is not a file, so unlink refuses it with something other than ENOENT.
+      await expect(provider.delete(tmpDir, 'local_file')).rejects.toThrow();
+    });
   });
 
   describe('Resources', () => {
