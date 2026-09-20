@@ -51,13 +51,6 @@ export class Orchestrator {
     }
   }
 
-  async getSchema(resourceType: string): Promise<ISchema | undefined> {
-    const provider = this.providers.get(resourceType);
-    if (!provider) return undefined;
-
-    return provider.getSchema(resourceType);
-  }
-
   /**
    * Process variable declarations for a specific scope
    */
@@ -132,14 +125,31 @@ export class Orchestrator {
     const graph = this.dependencyGraphBuilder.buildExecutionGraph(loadedResources, loadedModules);
     const { resources: desiredResources, outputs } = this.resolveInDependencyOrder(loadedResources, graph, currentState);
 
-    const schemas: Record<string, ISchema> = {};
-    for (const r of loadedResources)
-      if (!schemas[r.block.resourceType]) {
-        const schema = await this.getSchema(r.block.resourceType);
-        if (schema) schemas[r.block.resourceType] = schema;
-      }
+    const schemas = await this.checkWithProviders(desiredResources);
 
     return { serial: currentState.serial, actions: plan(desiredResources, currentState, schemas), outputs: outputChanges(currentState.outputs ?? {}, outputs) };
+  }
+
+  /** What a provider can refuse before anything runs is refused here. A value not known yet is checked once the run knows it. */
+  private async checkWithProviders(desired: DesiredResource[]): Promise<Record<string, ISchema>> {
+    const schemas: Record<string, ISchema> = {};
+
+    for (const resource of desired) {
+      const type = resource.block.resourceType;
+      const provider = this.providers.get(type);
+      if (!provider) throw new Error(`No provider handles "${type}"`);
+
+      schemas[type] ??= await provider.getSchema(type);
+      if (Object.values(resource.attributes).some((value) => isUnknown(value))) continue;
+
+      try {
+        await provider.validate(type, resource.attributes);
+      } catch (error) {
+        throw new Error(`${Address.of(resource.block).toString()}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+
+    return schemas;
   }
 
   /** Plans and runs it, reporting each step; the state file is rewritten after every action, so a failed run loses nothing done before it. */
