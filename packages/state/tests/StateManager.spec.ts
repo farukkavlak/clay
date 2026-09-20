@@ -158,4 +158,23 @@ describe('StateManager', () => {
       expect(JSON.parse(currentContent.toString('utf8'))).toEqual(state2);
     });
   });
+
+  describe('a write that fails halfway', () => {
+    it('leaves the state that was there, whole', async () => {
+      const before: IState = { version: 1, serial: 0, resources: { 'mock_resource.a': { type: 'Resource', resourceType: 'mock_resource', name: 'a', attributes: {} } } };
+      await stateManager.write(before);
+
+      // A directory in the way of the temporary file makes the write fail before the state file is touched.
+      await fs.mkdir(path.join(tmpDir, 'test.state.json.tmp'));
+
+      await expect(stateManager.write({ version: 1, serial: 5, resources: {} })).rejects.toThrow();
+      expect(await stateManager.read()).toEqual(before);
+    });
+
+    it('leaves nothing beside the state file when it succeeds', async () => {
+      await stateManager.write({ version: 1, serial: 0, resources: {} });
+
+      expect(await fs.readdir(tmpDir)).toEqual(['test.state.json']);
+    });
+  });
 });

@@ -49,7 +49,10 @@ export class LocalBackend implements IStateBackend {
       // File doesn't exist, no backup needed
     }
 
-    await fs.writeFile(this.filePath, serialize(state), 'utf8');
+    // Rename is atomic, so a run killed mid-write leaves the old state whole.
+    const tmpPath = `${this.filePath}.tmp`;
+    await fs.writeFile(tmpPath, serialize(state), 'utf8');
+    await fs.rename(tmpPath, this.filePath);
   }
 
   /** The file system decides, so nothing can slip in between the check and the write. */

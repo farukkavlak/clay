@@ -19,5 +19,6 @@ build
 clay.state.json
 clay.state.json.bak
 clay.state.json.lock
+clay.state.json.tmp
 *.log
 *.tsbuildinfo
