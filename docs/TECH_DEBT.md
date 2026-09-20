@@ -6,7 +6,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 ## Where things stand
 
 376 tests pass, and so do the type check and the build. Lint shows 11 warnings, and
-`npm audit` reports 9 vulnerabilities (3 moderate, 6 high).
+`npm audit` is clean.
 
 The unit tests mock the provider and the state, so they missed that the real
 apply → plan cycle is broken. Running the engine against real files shows it.
@@ -229,7 +229,9 @@ Found by the 2026-09-20 review of this section:
       Everything runs on vitest 5 and esbuild 0.28 now.
 - [x] Unused dev dependencies removed: the react, react-hooks and i18next ESLint plugins,
       and `ts-node`.
-- [ ] `npm audit` is clean.
+- [x] `npm audit` is clean. The nine left after the tools moved to the root were all
+      transitive, under eslint, the unicorn plugin and inquirer; `npm audit fix` took them
+      within their ranges, so only the lockfile moved.
 - [ ] `orchestrator` and `planner` point `main` at `dist`, not at `src`.
 - [ ] The CLI uses Node built-ins instead of chalk (`util.styleText`), commander
       (`util.parseArgs`) and inquirer (`readline/promises`).
