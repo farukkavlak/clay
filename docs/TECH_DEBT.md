@@ -266,7 +266,7 @@ Found by the 2026-09-20 review of this section:
       `module` to match, and the output stays CommonJS. vitest is an ES module, so its
       config is `vitest.config.mts` and reads `import.meta.dirname` without a lint
       exception.
-- [ ] The plan's provider errors keep the provider's error as their cause. `lib` is
+- [x] The plan's provider errors keep the provider's error as their cause. `lib` is
       `es2022` now, so `new Error(message, { cause })` compiles.
 - [ ] `IState` moves to `contracts`, next to `IResource`, with an `emptyState()` beside it:
       `{ version: 1, serial: 0, resources: {} }` is spelled out in `init`, `LocalBackend`

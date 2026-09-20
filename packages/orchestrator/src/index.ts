@@ -165,7 +165,7 @@ export class Orchestrator {
       try {
         await provider.validate(type, resource.attributes);
       } catch (error) {
-        throw new Error(`${Address.of(resource.block).toString()}: ${error instanceof Error ? error.message : String(error)}`);
+        throw new Error(`${Address.of(resource.block).toString()}: ${asError(error).message}`, { cause: error });
       }
     }
 
