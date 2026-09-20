@@ -1,4 +1,5 @@
-import { StateManager } from '@clay/state';
+import { Address } from '@clay/orchestrator';
+import { IState, StateManager } from '@clay/state';
 import chalk from 'chalk';
 import { Command } from 'commander';
 
@@ -6,6 +7,19 @@ import { stateBackend } from '../stateFile';
 
 function getStateManager(statePath?: string): StateManager {
   return new StateManager(stateBackend(statePath));
+}
+
+/** A resource's address lives in its key, in its entry and in every entry that reads from it. */
+function moveResource(state: IState, source: string, destination: string): void {
+  const from = Address.parse(source);
+  const to = Address.parse(destination);
+  if (from.resourceType !== to.resourceType) throw new Error(`Cannot move ${source} to ${destination}: the type changes`);
+
+  state.resources[destination] = { ...state.resources[source], name: to.name, modulePath: to.modulePath };
+  delete state.resources[source];
+
+  for (const resource of Object.values(state.resources))
+    if (resource.dependencies) resource.dependencies = resource.dependencies.map((dependency) => (dependency === source ? destination : dependency));
 }
 
 export function createStateCommand(): Command {
@@ -79,11 +93,7 @@ export function createStateCommand(): Command {
 
           console.log(chalk.yellow(`Moving ${source} to ${destination}...`));
 
-          // Move resource
-          state.resources[destination] = {
-            ...state.resources[source],
-          };
-          delete state.resources[source];
+          moveResource(state, source, destination);
           // Outputs come from a finished run; the next one writes them again.
           delete state.outputs;
 
