@@ -17,8 +17,6 @@ export default defineConfig({
   // The CLI colours its output on a terminal; tests compare plain text.
   test: { env: { NO_COLOR: '1' } },
   resolve: {
-    // The root tsconfig compiles as CommonJS, which has no import.meta.dirname.
-    // eslint-disable-next-line unicorn/prefer-module
-    alias: Object.fromEntries(Object.entries(packages).map(([name, dir]) => [`@clay/${name}`, path.resolve(__dirname, dir, 'src/index.ts')])),
+    alias: Object.fromEntries(Object.entries(packages).map(([name, dir]) => [`@clay/${name}`, path.resolve(import.meta.dirname, dir, 'src/index.ts')])),
   },
 });

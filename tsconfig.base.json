@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "module": "node16",
+    "moduleResolution": "node16",
+    "target": "ES2022",
+    "lib": ["es2022"],
+    "strict": true,
+    "noImplicitReturns": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "declaration": true,
+    "inlineSourceMap": true,
+    "inlineSources": true
+  }
+}

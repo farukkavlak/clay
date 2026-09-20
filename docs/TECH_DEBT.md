@@ -226,7 +226,7 @@ Found by the 2026-09-20 review of this section:
       only in the root. Three packages asked for vitest 0.34 and eslint 8, so each got a
       nested copy and ran its tests on a vitest four major versions behind the rest; the
       copies hid six constructor mocks, written as arrows, that vitest 4 refuses.
-      Everything runs on vitest 5 and esbuild 0.28 now.
+      Everything runs on vitest 5 now.
 - [x] Unused dev dependencies removed: the react, react-hooks and i18next ESLint plugins,
       and `ts-node`.
 - [x] `npm audit` is clean. The nine left after the tools moved to the root were all
@@ -234,7 +234,7 @@ Found by the 2026-09-20 review of this section:
       within their ranges, so only the lockfile moved.
 - [x] `orchestrator` and `planner` point `main` at `dist`, not at `src`, with `types`
       beside it like the other six. Tests read every package's source through an alias in
-      the root `vitest.config.ts`, so a stale or missing `dist` can neither pass nor fail
+      the root `vitest.config.mts`, so a stale or missing `dist` can neither pass nor fail
       them; the CLI's tests had read the orchestrator's source only because `main` said
       so. The root `build` now names the packages in dependency order, since the CLI's
       bundle reads the orchestrator's `dist` and npm's own order is alphabetical.
@@ -249,15 +249,25 @@ Found by the 2026-09-20 review of this section:
 - [x] `engines.node` is `>=22.13`: `util.styleText` leaves the colour out on a pipe and
       under `NO_COLOR` from that version on. vitest 5 promises `^22.12 || ^24 || >=26`;
       the range should not claim more than the tools do.
-- [ ] A package's build does not bundle the `@clay/*` packages it imports. Every `dist` is
-      an esbuild bundle, so the CLI carries its own copy of the parser, the planner and the
-      rest, and so does the orchestrator. Workspace packages stay external.
-- [ ] `tsconfig.json` fits this repo: `experimentalDecorators` and the `cdk.out` exclude
-      came from another project; esbuild targets `node18` while `engines` will say 22.
-      `lib` is `es2021`, so `new Error(message, { cause })` does not compile; once it is
-      `es2022`, the plan's provider errors keep the provider's error as their cause.
-      `module` is `CommonJS`, so `vitest.config.ts` has to use `__dirname` under a lint
-      exception instead of `import.meta.dirname`.
+- [x] A package's build does not bundle the `@clay/*` packages it imports. Every `dist`
+      was an esbuild bundle, so the CLI carried its own copy of the parser, the planner and
+      the rest, and so did the orchestrator; the planner sat in the CLI's bundle twice.
+      esbuild is gone: `tsc -b` emits each package from its own `tsconfig.json`, whose
+      `references` name the packages it imports, so the build order comes from the graph
+      instead of a list in the root script, and `dist` holds one package's code and
+      nothing else.
+- [x] `tsconfig.json` fits this repo: `experimentalDecorators`, the `cdk.out` exclude and
+      the flags `strict` already implies are gone, and `target` and `lib` are `es2022`.
+      `tsconfig.base.json` holds the options, each package extends it with `rootDir`,
+      `outDir` and its references, `tsconfig.build.json` lists the packages for `tsc -b`,
+      and the root `tsconfig.json` type-checks every source and test against the sources
+      through `paths`, so `type:check` needs no build.
+- [x] `moduleResolution` was `Node`, which TypeScript 6 refuses; it is `node16` now, with
+      `module` to match, and the output stays CommonJS. vitest is an ES module, so its
+      config is `vitest.config.mts` and reads `import.meta.dirname` without a lint
+      exception.
+- [ ] The plan's provider errors keep the provider's error as their cause. `lib` is
+      `es2022` now, so `new Error(message, { cause })` compiles.
 - [ ] `IState` moves to `contracts`, next to `IResource`, with an `emptyState()` beside it:
       `{ version: 1, serial: 0, resources: {} }` is spelled out in `init`, `LocalBackend`
       and `Orchestrator.validate`. `planner` and `orchestrator` depend on `@clay/state`

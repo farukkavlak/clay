@@ -1,25 +1,11 @@
 {
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "module": "CommonJS",
-    "target": "ES2021",
-    "moduleResolution": "Node",
-    "lib": ["es2021"],
-    "declaration": true,
-    "strict": true,
-    "noImplicitAny": true,
-    "strictNullChecks": true,
-    "noImplicitThis": true,
-    "alwaysStrict": true,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": false,
-    "inlineSourceMap": true,
-    "inlineSources": true,
-    "experimentalDecorators": true,
-    "strictPropertyInitialization": false,
-    "esModuleInterop": true,
-    "skipLibCheck": true
+    "noEmit": true,
+    "paths": {
+      "@clay/provider-local": ["./providers/local/src/index.ts"],
+      "@clay/*": ["./packages/*/src/index.ts"]
+    }
   },
-  "exclude": ["node_modules", "cdk.out"]
+  "include": ["packages/*/src", "packages/*/tests", "providers/*/src", "providers/*/tests", "*.ts", "*.mts"]
 }

@@ -1,0 +1,29 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "./packages/contracts"
+    },
+    {
+      "path": "./packages/graph"
+    },
+    {
+      "path": "./packages/parser"
+    },
+    {
+      "path": "./packages/state"
+    },
+    {
+      "path": "./packages/planner"
+    },
+    {
+      "path": "./packages/orchestrator"
+    },
+    {
+      "path": "./providers/local"
+    },
+    {
+      "path": "./packages/cli"
+    }
+  ]
+}
