@@ -283,8 +283,22 @@ Found by the 2026-09-20 review of this section:
       fought the config language and are adjusted: `camelcase` skips quoted keys such as
       `depends_on`, and `no-template-curly-in-string` is off, since `${var.x}` is Clay's
       own syntax. The rest were code and are fixed.
-- [ ] The ESLint config fits this repo. The current one came from a React project. Five
-      `eslint-disable` lines carry no reason.
+- [x] The ESLint config fits this repo. The one from the React project listed 159 rules
+      one by one across 256 lines, with browser globals, an `import` plugin whose two
+      rules were both off and a `no-secrets` plugin whose one finding was a character
+      set. It is 50 lines now: the recommended sets of eslint, typescript-eslint (one
+      package now, in place of its parser and plugin), promise and unicorn, Node globals,
+      and the rules this repo adds or turns off, with a reason on each; the rules this
+      repo adds are at `error`. Of the old list, the rules that catch a bug and are not
+      in a recommended set stay (`array-callback-return`, `no-self-compare`,
+      `no-useless-assignment`, `no-promise-executor-return`, `no-unreachable-loop`,
+      `promise/no-multiple-resolved`), and so does `max-depth`; the style rules and the
+      other `max-*` limits went with the rewrite, `no-template-curly-in-string` needs no
+      line since no recommended set has it, and `curly` sits after prettier's config,
+      which turns it off. The five `eslint-disable` lines with no reason are four fewer:
+      the two `any` casts in a test are typed, one `await` expression has a name, one
+      `no-secrets` went with the plugin, and the one left, on a state write after
+      `create`, says why the write is safe.
 - [ ] The orchestrator's parts get their collaborators passed in, not `bind`-ed callbacks.
       One factory builds the object graph and hands it over. No DI container: at this size
       it buys nothing the factory does not, and it would hide the wiring behind a runtime

@@ -20,7 +20,6 @@ export class RandomStringResource implements IResourceHandler {
     const useSpecial = (inputs.special as boolean) ?? false;
 
     // Character sets
-    // eslint-disable-next-line no-secrets/no-secrets
     const alphanumeric = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     const special = '!@#$%^&*()_+-=[]{}|;:,.<>?';
 

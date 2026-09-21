@@ -179,7 +179,7 @@ describe('LocalProvider', () => {
       const id = await provider.create('random_string', { length: 50, special: true });
       expect(id).toHaveLength(50);
       const specialChars = '!@#$%^&*()_+-=[]{}|;:,.<>?';
-      const hasSpecial = id.split('').some((char) => specialChars.includes(char));
+      const hasSpecial = [...id].some((char) => specialChars.includes(char));
       expect(hasSpecial).toBe(true);
     });
 

@@ -90,7 +90,7 @@ describe('Orchestrator: Advanced Features', () => {
       const created = mockProvider.getCreatedResources();
       expect(created.size).toBe(1);
 
-      const [, inputs] = Array.from(created.entries())[0];
+      const [, inputs] = [...created.entries()][0];
       expect(inputs.message).toBe('Hello World');
     });
 
@@ -124,7 +124,7 @@ describe('Orchestrator: Advanced Features', () => {
       await apply(orchestrator, config);
 
       const created = mockProvider.getCreatedResources();
-      const [, inputs] = Array.from(created.entries())[0];
+      const [, inputs] = [...created.entries()][0];
       expect(inputs.greeting).toBe('Hello Clay! Version: 1.0.0');
     });
 
@@ -138,7 +138,7 @@ describe('Orchestrator: Advanced Features', () => {
       await apply(orchestrator, config);
 
       const created = mockProvider.getCreatedResources();
-      const [, inputs] = Array.from(created.entries())[0];
+      const [, inputs] = [...created.entries()][0];
       expect(inputs.message).toBe('Plain text without interpolation');
     });
   });

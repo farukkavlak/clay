@@ -41,8 +41,9 @@ describe('outputs in the state file', () => {
   `;
 
   const run = async (config: string) => {
-    for await (const event of start(newOrchestrator(), config)) if (event.type === 'failed') return event.error;
-    return undefined;
+    let failed: Error | undefined;
+    for await (const event of start(newOrchestrator(), config)) if (event.type === 'failed') failed = event.error;
+    return failed;
   };
 
   const stored = async () => new LocalBackend(dir).read();

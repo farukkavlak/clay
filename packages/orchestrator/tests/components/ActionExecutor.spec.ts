@@ -1,12 +1,12 @@
 import { Address, IProvider, IState } from '@clay/contracts';
 import { PlanAction } from '@clay/planner';
-import { afterEach, beforeEach, describe, expect, it, Mock, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActionExecutor } from '../../src/components/ActionExecutor';
 
 describe('ActionExecutor', () => {
   let providers: Map<string, IProvider>;
-  let convertAttributes: Mock;
+  let convertAttributes: ConstructorParameters<typeof ActionExecutor>[1];
   let executor: ActionExecutor;
   let mockProvider: IProvider;
 
@@ -22,15 +22,14 @@ describe('ActionExecutor', () => {
     };
 
     providers = new Map([['test', mockProvider]]);
-    convertAttributes = vi.fn((attrs) => {
+    convertAttributes = vi.fn((attrs: Record<string, unknown>) => {
       const resolved: Record<string, unknown> = {};
       for (const [key, val] of Object.entries(attrs)) resolved[key] = val && typeof val === 'object' && 'value' in val ? val.value : val;
 
       return resolved;
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    executor = new ActionExecutor(providers, convertAttributes as any);
+    executor = new ActionExecutor(providers, convertAttributes);
   });
 
   afterEach(() => {
@@ -58,15 +57,15 @@ describe('ActionExecutor', () => {
     });
 
     it('should throw on unknown action type', async () => {
-      const action: PlanAction = {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        type: 'UNKNOWN' as any,
+      const action = {
+        type: 'UNKNOWN',
         resourceType: 'test',
         name: 'main',
         attributes: {},
       };
 
-      await expect(executor.execute(action, mockState)).rejects.toThrow('Unknown action type');
+      // An action type the plan never produces, so the type is forced.
+      await expect(executor.execute(action as unknown as PlanAction, mockState)).rejects.toThrow('Unknown action type');
     });
 
     it('should only refresh the dependencies on a NO_OP action', async () => {

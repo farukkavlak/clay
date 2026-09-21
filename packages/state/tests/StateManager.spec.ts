@@ -101,8 +101,8 @@ describe('StateManager', () => {
     it('should create a lock file', async () => {
       await stateManager.lock();
       const lockPath = path.join(tmpDir, 'test.state.json.lock');
-      // eslint-disable-next-line unicorn/no-await-expression-member
-      expect((await fs.stat(lockPath)).isFile()).toBe(true);
+      const lockFile = await fs.stat(lockPath);
+      expect(lockFile.isFile()).toBe(true);
     });
 
     it('should throw if already locked', async () => {
