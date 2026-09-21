@@ -1,4 +1,4 @@
-import { State } from '@clay/contracts';
+import { Address, State } from '@clay/contracts';
 import { AttributeValue, CONFIG_FILE } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
@@ -8,13 +8,13 @@ import { DesiredResource, plan, PLAN_FILE_VERSION, PlanAction, serializePlan, UN
 const position = { file: CONFIG_FILE, line: 1, column: 1 };
 const str = (value: string): AttributeValue => ({ type: 'String', value, position });
 
-function desiredResource(name: string, attributes: Record<string, string>, modulePath?: string[]): DesiredResource {
+function desiredResource(name: string, attributes: Record<string, string>, modulePath: string[] = []): DesiredResource {
   return {
+    address: new Address(modulePath, 'mock_resource', name),
     block: {
       type: 'Resource',
       resourceType: 'mock_resource',
       name,
-      modulePath,
       attributes: Object.fromEntries(Object.entries(attributes).map(([key, value]) => [key, str(value)])),
       position,
     },

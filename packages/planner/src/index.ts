@@ -12,8 +12,9 @@ export function isUnknown(value: unknown): boolean {
   return typeof value === 'object' && value !== null && (value as Record<string, unknown>)[UNKNOWN_KEY] === true;
 }
 
-/** A resource from the config: the block to execute, and its values with references resolved. */
+/** A resource from the config: where it lives, the block as parsed, and its values with references resolved. */
 export interface DesiredResource {
+  address: Address;
   block: ResourceBlock;
   attributes: Record<string, unknown>;
   dependencies: string[];
@@ -122,6 +123,7 @@ export function hasChanges(currentAttrs: Record<string, unknown>, desiredAttrs: 
 
 function processExistingResource(actions: PlanAction[], desired: DesiredResource, currentResource: Resource, schemas: Record<string, Schema>) {
   const resource = desired.block;
+  const { modulePath } = desired.address;
   const changes = calculateDiff(currentResource.attributes, desired.attributes);
 
   if (!changes) {
@@ -129,7 +131,7 @@ function processExistingResource(actions: PlanAction[], desired: DesiredResource
       type: 'NO_OP',
       resourceType: resource.resourceType,
       name: resource.name,
-      modulePath: resource.modulePath,
+      modulePath,
       id: currentResource.id,
       dependencies: desired.dependencies,
     });
@@ -143,7 +145,7 @@ function processExistingResource(actions: PlanAction[], desired: DesiredResource
     type: forcesNew ? 'REPLACE' : 'UPDATE',
     resourceType: resource.resourceType,
     name: resource.name,
-    modulePath: resource.modulePath,
+    modulePath,
     id: currentResource.id,
     attributes: resource.attributes,
     changes,
@@ -156,7 +158,7 @@ export function plan(desiredResources: DesiredResource[], currentState: State, s
   const currentMap = new Map<string, Resource>(Object.entries(currentState.resources));
   const desiredMap = new Map<string, DesiredResource>();
 
-  for (const desired of desiredResources) desiredMap.set(Address.of(desired.block).toString(), desired);
+  for (const desired of desiredResources) desiredMap.set(desired.address.toString(), desired);
 
   for (const [key, desired] of desiredMap.entries()) {
     const currentResource = currentMap.get(key);
@@ -166,7 +168,7 @@ export function plan(desiredResources: DesiredResource[], currentState: State, s
         type: 'CREATE',
         resourceType: desired.block.resourceType,
         name: desired.block.name,
-        modulePath: desired.block.modulePath,
+        modulePath: desired.address.modulePath,
         attributes: desired.block.attributes,
         dependencies: desired.dependencies,
       });

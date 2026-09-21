@@ -97,8 +97,7 @@ or a second `${...}`, makes a string, and a list or map in such a string is an e
 ## AST
 
 Every node carries the position it was parsed at, so an error about it can point at the
-source. The listing shows what the parser fills; `ResourceBlock` also has an optional
-`modulePath` that the engine sets when it loads a module.
+source.
 
 ```ts
 interface Position {

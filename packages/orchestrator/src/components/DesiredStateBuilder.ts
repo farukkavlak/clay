@@ -49,7 +49,7 @@ export class DesiredStateBuilder {
     const current = state.resources[key];
     if (!current || hasChanges(current.attributes, attributes)) pending.add(key);
 
-    return { block: { ...loaded.block, modulePath: loaded.address.modulePath }, attributes, dependencies: this.graphBuilder.resourceDependencies(graph, key) };
+    return { address: loaded.address, block: loaded.block, attributes, dependencies: this.graphBuilder.resourceDependencies(graph, key) };
   }
 
   /** A variable fed by a pending resource is pending itself, so everything reading it plans against UNKNOWN. */

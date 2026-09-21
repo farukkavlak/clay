@@ -1,4 +1,4 @@
-import { Address, emptyState, Provider, Schema, State } from '@clay/contracts';
+import { emptyState, Provider, Schema, State } from '@clay/contracts';
 import { spell } from '@clay/parser';
 import { DesiredResource, isUnknown, outputChanges, plan, Plan } from '@clay/planner';
 import { StateManager } from '@clay/state';
@@ -109,7 +109,7 @@ export class Orchestrator {
       try {
         await provider.validate(type, resource.attributes);
       } catch (error) {
-        throw withPlace(error, resource.block.position, spell(resource.block), Address.of(resource.block));
+        throw withPlace(error, resource.block.position, spell(resource.block), resource.address);
       }
     }
 

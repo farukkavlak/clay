@@ -21,7 +21,6 @@ export interface ResourceBlock extends Node {
   resourceType: string; // e.g., "provider_resource"
   name: string; // e.g., "my_file"
   attributes: Record<string, AttributeValue>;
-  modulePath?: string[];
 }
 
 export interface VariableBlock extends Node {

@@ -413,11 +413,12 @@ Found by the 2026-09-20 review of this section:
       nothing read. A state file written before still loads, since the key is only
       ignored; an entry the engine writes now does not have it, and an old entry keeps it
       until it is next changed.
-- [ ] `ResourceBlock.modulePath` is an engine note in the parser's type: the parser never
-      sets it, `DesiredStateBuilder` spreads it into the block and the planner reads it
-      back through `Address.of(desired.block)`. `DesiredResource` can carry the address
-      itself, next to the block it was parsed from, and the parser's type loses a field
-      it never fills.
+- [x] `ResourceBlock.modulePath` was an engine note in the parser's type: the parser never
+      set it, `DesiredStateBuilder` spread it into the block and the planner read it back
+      through `Address.of(desired.block)`. `DesiredResource` carries the address itself
+      now, next to the block as parsed, and the parser's type has only what the parser
+      fills. Terraform keeps the module path on the config tree, not on the block, the
+      same way.
 - [x] A map or block attribute named `__proto__` vanished: every record on the way from
       the parser to the state is a plain `{}`, so the assignment set a prototype instead
       of a key. Keeping the name would mean rebuilding five records differently for a
