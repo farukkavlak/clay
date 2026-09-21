@@ -472,5 +472,11 @@ Found by the 2026-09-20 review of this section:
       (numbers, escapes, nested access, backends, refresh, computed attributes, schema
       validation, data sources in the graph, parallel apply, path values) is kept as
       written.
-- [ ] Merged and empty branches are deleted (19).
-- [ ] `.editorconfig`, a license file and a changelog are added.
+- [x] Merged and empty branches are deleted. The 19 on the remote were merged before the
+      repository was set to delete a branch on merge, plus one that was never ahead of
+      `main`; the 48 local ones were their copies, which no setting removes.
+- [x] `.editorconfig`, a license file and a changelog are added. The `.editorconfig`
+      repeats what Prettier already decides, so an editor agrees with it before it runs.
+      The license is ISC, which `package.json` and the README already named. The version
+      was `1.0.0` in all nine `package.json` files, which claims a stable release that
+      never happened; it is `0.1.0`, and the changelog starts there.
