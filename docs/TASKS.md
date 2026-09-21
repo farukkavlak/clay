@@ -382,11 +382,14 @@ reads a resource fails at plan. `plan` and `apply` each read them, so an apply r
 
 - [ ] Data sources are graph nodes, read in dependency order and once per run
 - [ ] A data source fed by a pending resource is `(known after apply)`
+- [ ] Their values travel in the plan, as in Terraform, so `apply` reads none of them
+      again
 
 ### 10.10. Parallel Apply
 
 The graph sorts into layers that can run in parallel, and `applyInOrder` runs them one at
-a time.
+a time. Runs in parallel need a context of their own: one `ScopeManager` and one
+data-source map per engine, cleared on load, serve one run at a time.
 
 - [ ] Resources in one layer run together; state is written once per layer
 

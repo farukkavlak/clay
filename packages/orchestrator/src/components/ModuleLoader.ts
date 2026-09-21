@@ -3,6 +3,7 @@ import { AttributeValue, CONFIG_FILE, Lexer, ModuleBlock, Parser, ResourceBlock,
 import path from 'node:path';
 
 import { ConfigFiles } from '../ConfigFiles';
+import { scopeOf } from '../keys';
 import { ScopeManager } from '../scope/ScopeManager';
 
 export interface LoadedResource {
@@ -81,13 +82,13 @@ export class ModuleLoader {
 
   // An input is read where the module is called, so its context is the parent.
   private declareInputs(childAddress: Address, attributes: Record<string, AttributeValue>, parentAddress: Address): void {
-    const childScope = this.scopeManager.getScope(childAddress);
+    const childScope = scopeOf(childAddress);
 
     for (const [key, value] of Object.entries(attributes)) if (key !== 'source') this.scopeManager.setVariable(childScope, key, { value, context: parentAddress });
   }
 
   private declareVariables(program: Statement[], address: Address): void {
-    const scope = this.scopeManager.getScope(address);
+    const scope = scopeOf(address);
 
     // A caller's input beats the default; neither one is a missing input, read or not.
     for (const stmt of program) {

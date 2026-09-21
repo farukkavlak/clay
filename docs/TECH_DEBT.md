@@ -310,17 +310,29 @@ Found by the 2026-09-20 review of this section:
       `PlanRunner` applies in order and deletes in reverse. `ProviderRegistry` answers
       for a missing provider in one place and one wording, `No provider handles "x"`,
       where three had grown. `Orchestrator` is 117 lines, down from 395.
-- [ ] `apply` parses the config, reads data sources and builds the dependency graph once,
-      not twice. `plan` does all three, and `runPlan` does them again for the plan it is
-      handed.
+- [x] `apply` parses the config, reads data sources and builds the dependency graph twice:
+      `plan` does all three, and `runPlan` does them again for the plan it is handed.
+      Kept, on purpose. `runPlan` has to load on its own, since a saved plan brings its
+      own configuration, and sharing the load with `plan` would mean a cache inside the
+      engine or a loaded context passed through the CLI. Terraform has one flow from load
+      to apply, so it loads once; what matters in its design is that data sources are
+      read at plan and their values travel in the plan, so apply reads nothing again.
+      The parse and the graph cost milliseconds; the second data-source read is the real
+      cost, and it goes when data sources join the graph (`TASKS.md` 10.9).
 - [x] `apply` yields events (planned, started, applied, failed, done) and the CLI only
       renders them. Writing state as each `applied` arrives was the failed-action fix; the
       CLI now prints a line per resource. `plan` stays a plain call: it computes a list and
       has nothing to report along the way. Resources in one layer run one after another
       now, not in parallel.
-- [ ] Resolving works on a context that can be cloned per scope, instead of one mutable
+- [x] Resolving works on a context that can be cloned per scope, instead of one mutable
       `ScopeManager` keyed by scope strings. The dependency-order fix needs to resolve the
-      same config against different sets of pending values.
+      same config against different sets of pending values. The fix keeps its pending set
+      inside `DesiredStateBuilder`, so the reason for the clone went. What stays is one
+      `ScopeManager` per engine, cleared on every load, which is fine for one run at a
+      time and goes with parallel apply (`TASKS.md` 10.10). Done here: `getScope` was a
+      pure function of an address and is `scopeOf` in `keys.ts`, so the scanner, the graph
+      builder and two resolvers no longer take the manager, and `ScopeManager` holds
+      variables and outputs and nothing else.
 - [ ] The CLI commands share their helpers instead of copying them. `apply` has its own
       copy of the action list and it says less than `plan`'s: no "will be replaced", no
       diff. `newOrchestrator` with the `LocalProvider` registration is copied into `plan`,

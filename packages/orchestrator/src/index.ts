@@ -36,8 +36,8 @@ export class Orchestrator {
     const scopes = new ScopeManager();
     const dataSources = new Map<string, Record<string, unknown>>();
     const resolver = new ReferenceResolver(scopes, dataSources);
-    const scanner = new ReferenceScanner(scopes);
-    const graphBuilder = new DependencyGraphBuilder(scopes, scanner);
+    const scanner = new ReferenceScanner();
+    const graphBuilder = new DependencyGraphBuilder(scanner);
 
     return new Orchestrator(
       stateManager,

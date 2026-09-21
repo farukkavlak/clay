@@ -1,4 +1,5 @@
 import { Address, IState } from '@clay/contracts';
+import { scopeOf } from '../keys';
 import { ScopeManager } from '../scope/ScopeManager';
 import { IResolver } from './IResolver';
 
@@ -10,7 +11,7 @@ export class VariableResolver implements IResolver {
 
   resolve(pathParts: string[], context: Address, state: IState): unknown {
     const varName = pathParts[1];
-    const scope = this.scopeManager.getScope(context);
+    const scope = scopeOf(context);
 
     const scopeVars = this.scopeManager.getVariable(scope, varName);
     if (!scopeVars) throw new Error(`variable "${varName}" is not defined`);

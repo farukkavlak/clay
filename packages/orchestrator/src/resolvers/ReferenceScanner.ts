@@ -1,6 +1,5 @@
 import { Address } from '@clay/contracts';
-import { childScope, outputKey, variableKey } from '../keys';
-import { ScopeManager } from '../scope/ScopeManager';
+import { childScope, outputKey, scopeOf, variableKey } from '../keys';
 
 /** What a config value reads from, with the graph key it is addressed by. */
 export type Reference =
@@ -9,8 +8,6 @@ export type Reference =
   | { kind: 'output'; key: string; scope: string; module: string; name: string };
 
 export class ReferenceScanner {
-  constructor(private scopeManager: ScopeManager) {}
-
   referencesIn(value: unknown, context: Address): Reference[] {
     const references: Reference[] = [];
     this.collect(value, context, references);
@@ -41,7 +38,7 @@ export class ReferenceScanner {
     const refType = refParts[0];
     if (refType === 'data') return;
 
-    const scope = this.scopeManager.getScope(context);
+    const scope = scopeOf(context);
 
     if (refType === 'var') references.push({ kind: 'variable', key: variableKey(scope, refParts[1]), name: refParts[1] });
     else if (refType === 'module') {

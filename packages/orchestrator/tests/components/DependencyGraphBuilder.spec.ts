@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 import { DependencyGraphBuilder } from '../../src/components/DependencyGraphBuilder';
 import { LoadedModule, LoadedResource } from '../../src/components/ModuleLoader';
 import { ReferenceScanner } from '../../src/resolvers/ReferenceScanner';
-import { ScopeManager } from '../../src/scope/ScopeManager';
 
 function resource(name: string, attributes: Record<string, unknown> = {}, modulePath: string[] = []): LoadedResource {
   const address = new Address(modulePath, 'resource', name);
@@ -23,8 +22,7 @@ function module(modulePath: string[], program: Statement[]): LoadedModule {
 }
 
 describe('DependencyGraphBuilder', () => {
-  const scopeManager = new ScopeManager();
-  const builder = new DependencyGraphBuilder(scopeManager, new ReferenceScanner(scopeManager));
+  const builder = new DependencyGraphBuilder(new ReferenceScanner());
 
   it('should run a resource after the one it reads from', () => {
     const main = resource('main', { id: { type: 'Reference', value: ['resource', 'dep', 'id'] } });

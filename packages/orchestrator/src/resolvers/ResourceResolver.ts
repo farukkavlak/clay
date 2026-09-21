@@ -1,11 +1,8 @@
 import { Address, IState } from '@clay/contracts';
-import { ScopeManager } from '../scope/ScopeManager';
 import { IResolver } from './IResolver';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 
 export class ResourceResolver implements IResolver {
-  constructor(private scopeManager: ScopeManager) {}
-
   resolve(pathParts: string[], context: Address, state: IState): unknown {
     if (pathParts.length < 3) throw new Error(`Resource reference must include attribute: ${pathParts.join('.')}`);
 

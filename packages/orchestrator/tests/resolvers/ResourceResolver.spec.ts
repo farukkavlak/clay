@@ -2,11 +2,9 @@ import { Address, IState } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { ResourceResolver } from '../../src/resolvers/ResourceResolver';
-import { ScopeManager } from '../../src/scope/ScopeManager';
 
 describe('ResourceResolver', () => {
-  const scopeManager = new ScopeManager();
-  const resolver = new ResourceResolver(scopeManager);
+  const resolver = new ResourceResolver();
   const context = new Address([], 'resource', 'main');
 
   const mockState: IState = {

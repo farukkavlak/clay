@@ -2,10 +2,9 @@ import { Address } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { ReferenceScanner } from '../../src/resolvers/ReferenceScanner';
-import { ScopeManager } from '../../src/scope/ScopeManager';
 
 describe('ReferenceScanner', () => {
-  const scanner = new ReferenceScanner(new ScopeManager());
+  const scanner = new ReferenceScanner();
   const context = new Address([], 'resource', 'main');
   const inModule = new Address(['app'], 'resource', 'main');
 

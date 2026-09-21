@@ -5,6 +5,7 @@ import { PlanAction } from '@clay/planner';
 import { StateManager } from '@clay/state';
 
 import { asError } from '../asError';
+import { scopeOf } from '../keys';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { RunEvent } from '../RunEvent';
 import { ScopeManager } from '../scope/ScopeManager';
@@ -114,7 +115,7 @@ export class PlanRunner {
 
   private resolveOutputs(program: Statement[], state: IState, context: Address): Record<string, unknown> {
     const outputs: Record<string, unknown> = {};
-    const scope = this.scopeManager.getScope(context);
+    const scope = scopeOf(context);
 
     for (const stmt of program)
       if (stmt.type === 'Output') {
@@ -127,7 +128,7 @@ export class PlanRunner {
   }
 
   private resolveOutputsOf(scope: string, loadedModules: LoadedModule[], currentState: IState): void {
-    const mod = loadedModules.find((m) => this.scopeManager.getScope(m.address) === scope);
+    const mod = loadedModules.find((m) => scopeOf(m.address) === scope);
     if (mod) this.resolveOutputs(mod.program, currentState, mod.address);
   }
 }

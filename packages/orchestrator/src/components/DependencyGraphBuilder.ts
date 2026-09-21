@@ -2,9 +2,8 @@ import { Address } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { AttributeValue, ModuleBlock } from '@clay/parser';
 
-import { childScope, outputKey, variableKey } from '../keys';
+import { childScope, outputKey, scopeOf, variableKey } from '../keys';
 import { Reference, ReferenceScanner } from '../resolvers/ReferenceScanner';
-import { ScopeManager } from '../scope/ScopeManager';
 import { LoadedModule, LoadedResource } from './ModuleLoader';
 
 /** A value node carries the expression to evaluate and the address it is evaluated from. */
@@ -29,10 +28,7 @@ function describeMissing(reference: Reference, moduleScopes: Set<string>): strin
 }
 
 export class DependencyGraphBuilder {
-  constructor(
-    private scopeManager: ScopeManager,
-    private scanner: ReferenceScanner
-  ) {}
+  constructor(private scanner: ReferenceScanner) {}
 
   buildExecutionGraph(loadedResources: LoadedResource[], loadedModules: LoadedModule[]): Graph<GraphNode> {
     const graph = new Graph<GraphNode>();
@@ -40,7 +36,7 @@ export class DependencyGraphBuilder {
     for (const { uniqueId } of loadedResources) graph.addNode(uniqueId, { kind: 'resource' });
     for (const [key, node] of this.valueNodes(loadedModules)) graph.addNode(key, node);
 
-    const moduleScopes = new Set(loadedModules.map((mod) => this.scopeManager.getScope(mod.address)));
+    const moduleScopes = new Set(loadedModules.map((mod) => scopeOf(mod.address)));
     for (const [key, node] of graph.entries()) if (node.kind !== 'resource') this.addDependencies(node.value, graph, key, node.context, moduleScopes);
     for (const { address, block } of loadedResources) this.addDependencies(block.attributes, graph, address.toString(), address, moduleScopes);
 
@@ -70,7 +66,7 @@ export class DependencyGraphBuilder {
     const nodes = new Map<string, GraphNode>();
 
     for (const mod of loadedModules) {
-      const scope = this.scopeManager.getScope(mod.address);
+      const scope = scopeOf(mod.address);
 
       for (const stmt of mod.program) {
         if (stmt.type === 'Output') nodes.set(outputKey(scope, stmt.name), { kind: 'output', scope, name: stmt.name, value: stmt.value, context: mod.address });
