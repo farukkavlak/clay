@@ -1,4 +1,4 @@
-import { IState } from '@clay/state';
+import { IState } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { DesiredResource, plan, PLAN_FILE_VERSION, PlanAction, serializePlan, UNKNOWN, validatePlanFile } from '../src/index';

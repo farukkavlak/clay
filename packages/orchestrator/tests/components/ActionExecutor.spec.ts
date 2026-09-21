@@ -1,9 +1,7 @@
-import { IProvider } from '@clay/contracts';
+import { Address, IProvider, IState } from '@clay/contracts';
 import { PlanAction } from '@clay/planner';
-import { IState } from '@clay/state';
 import { afterEach, beforeEach, describe, expect, it, Mock, vi } from 'vitest';
 
-import { Address } from '../../src/Address';
 import { ActionExecutor } from '../../src/components/ActionExecutor';
 
 describe('ActionExecutor', () => {

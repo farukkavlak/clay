@@ -1,10 +1,9 @@
-import { IProvider, ISchema } from '@clay/contracts';
+import { Address, emptyState, IProvider, ISchema, IState } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { AttributeValue, Lexer, Parser, Statement } from '@clay/parser';
 import { DesiredResource, hasChanges, isUnknown, outputChanges, plan, Plan, PlanAction, UNKNOWN } from '@clay/planner';
-import { IState, StateManager } from '@clay/state';
+import { StateManager } from '@clay/state';
 
-import { Address } from './Address';
 import { ConfigFiles } from './ConfigFiles';
 import { ActionExecutor } from './components/ActionExecutor';
 import { DependencyGraphBuilder, GraphNode, ValueNode } from './components/DependencyGraphBuilder';
@@ -16,7 +15,6 @@ import { UnresolvedReferenceError } from './resolvers/UnresolvedReferenceError';
 import { ScopeManager } from './scope/ScopeManager';
 
 export type { RunEvent } from './RunEvent';
-export { Address } from './Address';
 export { DiskFiles, InMemoryFiles, RecordingFiles } from './ConfigFiles';
 export type { ConfigFiles } from './ConfigFiles';
 
@@ -135,7 +133,7 @@ export class Orchestrator {
 
   /** Checks the configuration the way a plan would, against an empty state, so a value a resource would give is unknown and everything else is checked. */
   async validate(configContent: string): Promise<void> {
-    await this.resolveAndCheck(configContent, { version: 1, serial: 0, resources: {} });
+    await this.resolveAndCheck(configContent, emptyState());
   }
 
   private async resolveAndCheck(

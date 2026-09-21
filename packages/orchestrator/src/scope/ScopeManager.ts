@@ -1,4 +1,4 @@
-import { Address } from '../Address';
+import { Address } from '@clay/contracts';
 import { childScope } from '../keys';
 
 export interface VariableValue {

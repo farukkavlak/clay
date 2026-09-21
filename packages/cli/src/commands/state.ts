@@ -1,5 +1,5 @@
-import { Address } from '@clay/orchestrator';
-import { IState, StateManager } from '@clay/state';
+import { Address, IState } from '@clay/contracts';
+import { StateManager } from '@clay/state';
 import { Command } from 'commander';
 import { styleText } from 'node:util';
 

@@ -1,3 +1,4 @@
+import { emptyState } from '@clay/contracts';
 import { LocalBackend, StateManager } from '@clay/state';
 import { Command } from 'commander';
 import fs from 'node:fs/promises';
@@ -18,7 +19,7 @@ export function createInitCommand() {
 
       const backend = new LocalBackend(cwd);
       const stateManager = new StateManager(backend);
-      const wroteState = await stateManager.writeIfAbsent({ version: 1, serial: 0, resources: {} });
+      const wroteState = await stateManager.writeIfAbsent(emptyState());
       console.log(styleText('green', wroteState ? '✓ Created an empty state' : '✓ Kept the state already here'));
 
       console.log(styleText(['bold', 'green'], '\nClay initialized successfully! 🚀'));

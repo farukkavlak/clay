@@ -1,10 +1,12 @@
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import path from 'node:path';
+
+import { IState } from '@clay/contracts';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { LocalBackend } from '../src/backends/LocalBackend';
-import { IState, StateManager } from '../src/StateManager';
+import { StateManager } from '../src/StateManager';
 
 describe('StateManager', () => {
   let tmpDir: string;

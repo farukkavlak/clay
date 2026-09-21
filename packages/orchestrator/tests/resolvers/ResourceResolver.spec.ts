@@ -1,7 +1,6 @@
-import { IState } from '@clay/state';
+import { Address, IState } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { Address } from '../../src/Address';
 import { ResourceResolver } from '../../src/resolvers/ResourceResolver';
 import { ScopeManager } from '../../src/scope/ScopeManager';
 

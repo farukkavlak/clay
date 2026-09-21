@@ -1,4 +1,4 @@
-import { Address } from '../Address';
+import { Address } from '@clay/contracts';
 import { childScope, outputKey, variableKey } from '../keys';
 import { ScopeManager } from '../scope/ScopeManager';
 

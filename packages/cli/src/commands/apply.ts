@@ -1,4 +1,5 @@
-import { Address, ConfigFiles, DiskFiles, InMemoryFiles, Orchestrator, RunEvent } from '@clay/orchestrator';
+import { Address } from '@clay/contracts';
+import { ConfigFiles, DiskFiles, InMemoryFiles, Orchestrator, RunEvent } from '@clay/orchestrator';
 import { CONFIG_FILE } from '@clay/parser';
 import { Plan, PlanAction, PlanFile, validatePlanFile } from '@clay/planner';
 import { LocalProvider } from '@clay/provider-local';

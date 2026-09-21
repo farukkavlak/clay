@@ -268,14 +268,14 @@ Found by the 2026-09-20 review of this section:
       exception.
 - [x] The plan's provider errors keep the provider's error as their cause. `lib` is
       `es2022` now, so `new Error(message, { cause })` compiles.
-- [ ] `IState` moves to `contracts`, next to `IResource`, with an `emptyState()` beside it:
-      `{ version: 1, serial: 0, resources: {} }` is spelled out in `init`, `LocalBackend`
-      and `Orchestrator.validate`. `planner` and `orchestrator` depend on `@clay/state`
-      only for that type, and the shape state is written in is a contract every side has
-      to agree on. Keeping it inside one side is how the planner drifted away from it.
-      `Address` goes the same way: the planner spells the state key by hand in
-      `getResourceKey`, and the orchestrator in `Address.toString`, so the two agree by
-      luck.
+- [x] `IState` moved to `contracts`, next to `IResource`, with `emptyState()` beside it in
+      place of the `{ version: 1, serial: 0, resources: {} }` that `init`, `LocalBackend`
+      and `Orchestrator.validate` each spelled out. `planner` depended on `@clay/state`
+      only for that type and no longer does; the shape state is written in is a contract
+      every side has to agree on, and keeping it inside one side is how the planner
+      drifted away from it. `Address` went the same way: the planner spelled the state
+      key by hand in `getResourceKey` and the orchestrator in `Address.toString`, so the
+      two agreed by luck; the planner uses `Address` now.
 
 ## 3 — code
 

@@ -1,15 +1,6 @@
-import { IResource } from '@clay/contracts';
+import { IState } from '@clay/contracts';
 
 import { IStateBackend } from './IStateBackend';
-
-export interface IState {
-  version: number;
-  /** Counts the writes. A saved plan records it, so a state written after the plan is caught. */
-  serial: number;
-  /** What the root module's outputs came to on the last run. */
-  outputs?: Record<string, unknown>;
-  resources: Record<string, IResource>;
-}
 
 /**
  * StateManager coordinates state operations through a backend.

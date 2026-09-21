@@ -1,7 +1,7 @@
+import { Address } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { AttributeValue, ModuleBlock } from '@clay/parser';
 
-import { Address } from '../Address';
 import { childScope, outputKey, variableKey } from '../keys';
 import { Reference, ReferenceScanner } from '../resolvers/ReferenceScanner';
 import { ScopeManager } from '../scope/ScopeManager';

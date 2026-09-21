@@ -9,7 +9,6 @@
   },
   "dependencies": {
     "@clay/contracts": "*",
-    "@clay/parser": "*",
-    "@clay/state": "*"
+    "@clay/parser": "*"
   }
 }
