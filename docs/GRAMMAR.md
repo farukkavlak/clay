@@ -1,212 +1,174 @@
-# Clay Grammar Specification
+# Grammar
 
-## 1. Basic Structure
+What the parser in `packages/parser` accepts. A configuration is one file, `main.clay`,
+in a directory; a module is another directory with its own `main.clay`.
 
-Clay uses a declarative syntax composed of **Blocks** and **Attributes**.
+## Tokens
 
-```hcl
-resource "type" "name" {
-  key = "value"
-  number = 42
-  boolean = true
-}
+| Token        | Pattern                  | Notes                                                                |
+| ------------ | ------------------------ | -------------------------------------------------------------------- |
+| `IDENTIFIER` | `[A-Za-z_][A-Za-z0-9_]*` | Block kinds, attribute names, reference parts; not `true` or `false` |
+| `STRING`     | `"[^"]*"`                | No escapes; a `"` cannot appear inside; may span lines               |
+| `NUMBER`     | `[0-9]+`                 | Integers only; no sign, no decimal point                             |
+| `BOOLEAN`    | `true`, `false`          |                                                                      |
+| `LBRACE`     | `{`                      |                                                                      |
+| `RBRACE`     | `}`                      |                                                                      |
+| `LBRACKET`   | `[`                      |                                                                      |
+| `RBRACKET`   | `]`                      |                                                                      |
+| `COMMA`      | `,`                      |                                                                      |
+| `ASSIGN`     | `=`                      |                                                                      |
+| `DOT`        | `.`                      |                                                                      |
+| `EOF`        |                          | Ends every token stream                                              |
+
+Whitespace and comments are skipped. A comment runs from `#` or
+`//` to the end of the line. Every token carries the file, line and column it starts at.
+
+There are no keywords. `resource`, `data`, `variable`, `output` and `module` start a
+block only at the top level; anywhere else they are ordinary identifiers, so
+`data = "x"` inside a block is an attribute.
+
+## Blocks
+
+A file is a sequence of blocks. Two blocks of the same kind and name in one file are an
+error. A resource is named by its type and name together, so `resource "a" "x"` and
+`resource "b" "x"` are different resources.
+
+```
+resource "type" "name" { attributes }
+data "type" "name" { attributes }
+variable "name" { attributes }
+output "name" { value = value }
+module "name" { attributes }
 ```
 
-## 2. Token Definitions
+`attributes` is zero or more `name = value` pairs, in any order, without separators.
+`output` takes exactly one attribute and it must be `value`.
 
-The Lexer recognizes these tokens:
+What the engine reads from each:
 
-| Token Type   | Pattern / Example             | Description            |
-| :----------- | :---------------------------- | :--------------------- |
-| `IDENTIFIER` | `resource`, `path`, `content` | A name.                |
-| `STRING`     | `"hello world"`               | Double-quoted strings. |
-| `NUMBER`     | `123`, `4.5`                  | Numeric values.        |
-| `BOOLEAN`    | `true`, `false`               | Boolean values.        |
-| `LBRACE`     | `{`                           | Start of a block.      |
-| `RBRACE`     | `}`                           | End of a block.        |
-| `ASSIGN`     | `=`                           | Assignment operator.   |
-| `DOT`        | `.`                           | Reference separator.   |
-| `COMMENT`    | `# ...` or `// ...`           | Ignored by parser.     |
+| Block      | Reads                                                                                                 |
+| ---------- | ----------------------------------------------------------------------------------------------------- |
+| `resource` | Every attribute goes to the provider                                                                  |
+| `data`     | Every attribute goes to the provider's `read`                                                         |
+| `variable` | `default`; any other attribute is parsed and ignored                                                  |
+| `output`   | `value`                                                                                               |
+| `module`   | `source`, a literal string naming a directory relative to the file; every other attribute is an input |
 
-There are no keywords apart from the literals `true` and `false`. `data = "x"` is an attribute and `data "t" "n" {` is a block; the
-parser tells them apart by position, not by the word.
+## Values
 
-## 3. Supported Block Types
-
-### Resource Block
-
-```hcl
-resource "local_file" "config" {
-  path = "/tmp/config.json"
-  content = "Hello World"
-}
+```
+value   = STRING | NUMBER | BOOLEAN | reference | list | map
+list    = "[" [ value { "," value } [ "," ] ] "]"
+map     = "{" { key "=" value [ "," ] } "}"
+key     = IDENTIFIER | STRING
 ```
 
-### Variable Block
-
-```hcl
-variable "environment" {
-  type = "string"
-  default = "dev"
-}
-```
-
-### Output Block
-
-```hcl
-output "file_path" {
-  value = local_file.config.path
-}
-
-output "greeting" {
-  value = "Hello ${var.environment}!"
-}
-```
-
-## 4. Value Types
-
-### Primitive Types
-
-- **String:** `"hello"`
-- **Number:** `42`, `3.14`
-- **Boolean:** `true`, `false`
-
-### Complex Types
-
-- **List:** `["a", "b", 1, true]`
-- **Map:** `{ key = "value", "quoted_key" = 42 }`
+A list needs a comma between items and may end with one. A map does not need commas.
+A map key may be a bare identifier or a quoted string; a block kind is a fine identifier,
+`true` and `false` are not.
 
 ### References
 
-- **Variable:** `var.region`
-- **Resource:** `local_file.config.path`
-
-### String Interpolation
-
-```hcl
-content = "Hello ${var.name}! Version: ${var.version}"
+```
+reference = IDENTIFIER { "." IDENTIFIER }
 ```
 
-A string that is one interpolation and nothing else is the value itself, with its type:
-`length = "${var.n}"` is the number `var.n` holds. Text around an interpolation makes a
-string, and a list or map in such text is an error.
+A bare reference is a value on its own: `path = var.dir`. Inside a string it is written
+`${...}`. The first part says what it reads:
 
-**Reference Format:**
+| First part | Reads                                                | Example                     |
+| ---------- | ---------------------------------------------------- | --------------------------- |
+| `var`      | A variable or input of the same module               | `var.name`                  |
+| `data`     | An attribute a data source read                      | `data.local_file.f.content` |
+| `module`   | An output of a module called in the same file        | `module.app.url`            |
+| anything   | An attribute of the resource with that type and name | `local_file.a.content`      |
 
-```
-<type>.<name>.<attribute>
-```
+A resource's `id` is what the provider assigned on create. Reaching into a module
+(`module.app.local_file.a`) is refused; a module is read through its outputs.
 
-Examples:
+### Interpolation
 
-- `var.environment` → Variable reference
-- `local_file.base.path` → Resource attribute reference
+A string that is one `${...}` and nothing else is the referenced value itself, with its
+type: `length = "${var.n}"` is a number if `var.n` is one. Anything else, text around it
+or a second `${...}`, makes a string, and a list or map in such a string is an error.
 
-## 5. Abstract Syntax Tree (AST)
+## AST
 
-```typescript
-type Program = Statement[];
+Every node carries the position it was parsed at, so an error about it can point at the
+source. The listing shows what the parser fills; `ResourceBlock` also has an optional
+`modulePath` that the engine sets when it loads a module.
 
-type Statement = ResourceBlock | VariableBlock | OutputBlock;
+```ts
+interface Position {
+  file: string;
+  line: number;
+  column: number;
+}
+
+type AttributeValue =
+  | { type: 'String'; value: string; position: Position }
+  | { type: 'Number'; value: number; position: Position }
+  | { type: 'Boolean'; value: boolean; position: Position }
+  | { type: 'Reference'; value: string[]; position: Position }
+  | { type: 'List'; value: AttributeValue[]; position: Position }
+  | { type: 'Map'; value: Record<string, AttributeValue>; position: Position };
 
 interface ResourceBlock {
   type: 'Resource';
   resourceType: string;
   name: string;
   attributes: Record<string, AttributeValue>;
+  position: Position;
+}
+
+interface DataBlock {
+  type: 'Data';
+  dataSourceType: string;
+  name: string;
+  attributes: Record<string, AttributeValue>;
+  position: Position;
 }
 
 interface VariableBlock {
   type: 'Variable';
   name: string;
   attributes: Record<string, AttributeValue>;
+  position: Position;
 }
 
 interface OutputBlock {
   type: 'Output';
   name: string;
   value: AttributeValue;
+  position: Position;
 }
 
-interface AttributeValue {
-  type: 'String' | 'Number' | 'Boolean' | 'Reference' | 'List' | 'Map';
-  value: string | number | boolean | string[] | AttributeValue[] | Record<string, AttributeValue>;
+interface ModuleBlock {
+  type: 'Module';
+  name: string;
+  attributes: Record<string, AttributeValue>;
+  position: Position;
 }
+
+type Statement = ResourceBlock | DataBlock | VariableBlock | OutputBlock | ModuleBlock;
+type Program = Statement[];
 ```
 
-## 6. Comments
+A `Reference` holds the dotted parts split up: `local_file.a.content` is
+`['local_file', 'a', 'content']`.
 
-```hcl
-# Single line comment
-// Also single line comment
+## Errors
 
-resource "local_file" "example" {
-  path = "/tmp/file.txt"  # Inline comment
-  content = "data"
-}
-```
+A parse error is a `ConfigError` with the message and the position of the token the
+parser stopped on. The lexer throws the same for a character it does not know.
 
-## 7. Example Configurations
+## Not in the language
 
-### Simple File Creation
+- Negative and decimal numbers
+- Escape sequences in strings
+- Expressions, operators and functions; a value is a literal or a reference
+- `count`, `for_each`, `depends_on`, lifecycle blocks, provisioners
+- Nested blocks inside a block
+- Any file other than `main.clay`
 
-```hcl
-resource "local_file" "welcome" {
-  path = "./welcome.txt"
-  content = "Hello Clay!"
-}
-```
-
-### Multiple Resources
-
-```hcl
-resource "local_file" "base" {
-  path = "/tmp/base.txt"
-  content = "Base content"
-}
-
-resource "local_file" "derived" {
-  path = "/tmp/derived.txt"
-  content = "Derived content"
-}
-```
-
-### With Variable References
-
-```hcl
-resource "local_file" "config" {
-  path = var.config_path
-  content = "Environment config"
-}
-```
-
-### With Resource References
-
-```hcl
-resource "local_file" "base" {
-  path = "/tmp/base.txt"
-  content = "Base"
-}
-
-resource "local_file" "derived" {
-  path = local_file.base.path
-  content = "Uses base path"
-}
-```
-
-## 8. Words with a meaning
-
-- `resource`, `data`, `variable`, `output`, `module` start a block
-- `var`, `data`, `module` start a reference into variables, data sources and module
-  outputs; any other first part names a resource
-
-## 9. Limitations
-
-**Not Yet Supported:**
-
-- **Meta-arguments** (`count`, `for_each`, `depends_on`)
-- **Lifecycle blocks** (`create_before_destroy`, etc.)
-- **Provisioners** (`local-exec`, etc.)
-- **Complex Object Schemas** (Deeply nested object validation)
-
-See [TASKS.md](./TASKS.md) for planned features.
+`TASKS.md` lists what is planned.

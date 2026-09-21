@@ -439,9 +439,13 @@ Found by the 2026-09-20 review of this section:
       headings, `npm run clay`, and `resource "file"`, which no provider had. Every claim
       in it was checked against the code; `null_resource` says it does nothing, since
       its `triggers` neither replace nor run anything here.
-- [ ] `GRAMMAR.md` matches the parser: it lists `4.5` as a number the lexer does not
-      take, has no `LBRACKET`, `RBRACKET` or `COMMA` in the token table, and leaves `data`
-      and `module` blocks out of the block list and the AST section.
+- [x] `GRAMMAR.md` matches the parser. It listed `4.5` as a number the lexer does not
+      take, had no `LBRACKET`, `RBRACKET` or `COMMA` in its token table, and left `data`
+      and `module` out of the block list and the AST. It is rewritten from the lexer and
+      the parser: the real token table, the five blocks and what the engine reads from
+      each, the value grammar with the comma rules a list and a map actually have, the
+      reference forms, the AST with `Position` on every node, and a list of what the
+      language does not have. Each claim was tried against the built parser.
 - [ ] `TASKS.md` matches what is actually done.
 - [ ] Merged and empty branches are deleted (19).
 - [ ] `.editorconfig`, a license file and a changelog are added.
