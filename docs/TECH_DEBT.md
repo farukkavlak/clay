@@ -428,7 +428,11 @@ Found by the 2026-09-20 review of this section:
       step each, on the lowest Node `engines` allows. The CLI's `pretest` stays: it is
       there for a fresh clone, where `npm test` runs the built binary, not for CI, and the
       second build it asks for is a no-op under `tsc -b`.
-- [ ] husky and lint-staged run on commit.
+- [x] husky and lint-staged run on commit: eslint and a prettier check on the staged
+      files eslint's config covers (`.js`, `.mjs`, `.cjs`, `.ts`, `.mts`), a prettier
+      check on everything else staged. They check and
+      never write, so nothing lands that the committer did not see. Type check and tests
+      stay with CI, since neither works on a subset of files.
 - [ ] The README describes what exists now, in short, plain English. It still shows
       `resource "file"`, which no provider has.
 - [ ] `GRAMMAR.md` matches the parser: it lists `4.5` as a number the lexer does not

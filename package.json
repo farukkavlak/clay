@@ -23,7 +23,8 @@
     "format:check": "prettier --check .",
     "lint": "eslint . --max-warnings 0",
     "test": "npm run test --workspaces --if-present",
-    "type:check": "tsc --noEmit"
+    "type:check": "tsc --noEmit",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
@@ -34,10 +35,19 @@
     "eslint-plugin-promise": "^7.2.1",
     "eslint-plugin-unicorn": "^56.0.0",
     "globals": "^15.14.0",
+    "husky": "^9.1.7",
     "jiti": "^2.6.1",
+    "lint-staged": "^17.5.1",
     "prettier": "^3.4.0",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.70.0",
     "vitest": "^5.0.1"
+  },
+  "lint-staged": {
+    "*.{js,mjs,cjs,ts,mts}": [
+      "eslint --max-warnings 0",
+      "prettier --check"
+    ],
+    "!*.{js,mjs,cjs,ts,mts}": "prettier --check --ignore-unknown"
   }
 }
