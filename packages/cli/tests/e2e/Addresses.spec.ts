@@ -40,8 +40,21 @@ describe('how the CLI names a resource in a module', () => {
     await createApplyCommand().parseAsync(['node', 'clay', '--yes']);
 
     const output = printed.join('\n');
-    expect(output).toContain('+ module.m.local_file.f\n');
+    expect(output).toContain('+ module.m.local_file.f will be created');
     expect(output).toContain('module.m.local_file.f created');
     expect(output).toContain('Resources: 1 added, 0 changed, 0 destroyed');
+  });
+
+  it('shows what an apply would change, the way plan does', async () => {
+    await createApplyCommand().parseAsync(['node', 'clay', '--yes']);
+    await fs.writeFile(path.join(dir, 'm', 'main.clay'), `resource "local_file" "f" { path = "${path.join(dir, 'f.txt')}" content = "y" }`, 'utf8');
+    printed.length = 0;
+
+    await createApplyCommand().parseAsync(['node', 'clay', '--yes']);
+
+    const output = printed.join('\n');
+    expect(output).toContain('~ module.m.local_file.f will be updated');
+    expect(output).toContain('content: "x" -> "y"');
+    expect(output).toContain('Plan: 0 to add, 1 to change, 0 to destroy.');
   });
 });

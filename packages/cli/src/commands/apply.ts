@@ -1,33 +1,15 @@
 import { Address } from '@clay/contracts';
-import { ConfigFiles, DiskFiles, InMemoryFiles, Orchestrator, RunEvent } from '@clay/orchestrator';
+import { DiskFiles, InMemoryFiles, RunEvent } from '@clay/orchestrator';
 import { CONFIG_FILE } from '@clay/parser';
-import { Plan, PlanAction, PlanFile, validatePlanFile } from '@clay/planner';
-import { LocalProvider } from '@clay/provider-local';
-import { LocalBackend, StateManager } from '@clay/state';
+import { PlanAction, PlanFile, validatePlanFile } from '@clay/planner';
 import { Command } from 'commander';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { styleText } from 'node:util';
 
 import { confirm } from '../confirm';
-import { changesNothing, displayOutputChanges } from '../outputChanges';
-
-function getActionSymbol(actionType: string): string {
-  if (actionType === 'CREATE') return styleText('green', '+');
-  if (actionType === 'UPDATE') return styleText('yellow', '~');
-  if (actionType === 'REPLACE') return styleText('red', '-') + styleText('green', '+');
-  if (actionType === 'DELETE') return styleText('red', '-');
-  return ' ';
-}
-
-function displayPlan(plan: Plan): void {
-  const changes = plan.actions.filter((action) => action.type !== 'NO_OP');
-  if (changes.length > 0) {
-    console.log(styleText('bold', '\nClay will perform the following actions:\n'));
-    for (const action of changes) console.log(`  ${getActionSymbol(action.type)} ${Address.of(action).toString()}`);
-  }
-  displayOutputChanges(plan.outputs);
-}
+import { newOrchestrator } from '../engine';
+import { actionSymbol, changesNothing, displayPlan, pastTense } from '../showPlan';
 
 /** A replacement counts once as an add and once as a destroy, as the plan summary counts it. */
 function summarize(applied: PlanAction[]): string {
@@ -37,15 +19,8 @@ function summarize(applied: PlanAction[]): string {
   return `${count('CREATE') + replaced} added, ${count('UPDATE')} changed, ${count('DELETE') + replaced} destroyed`;
 }
 
-function pastTense(actionType: PlanAction['type']): string {
-  if (actionType === 'CREATE') return 'created';
-  if (actionType === 'UPDATE') return 'updated';
-  if (actionType === 'REPLACE') return 'replaced';
-  return 'destroyed';
-}
-
 function reportEvent(event: RunEvent): void {
-  if (event.type === 'applied') console.log(`  ${getActionSymbol(event.action.type)} ${Address.of(event.action).toString()} ${pastTense(event.action.type)}`);
+  if (event.type === 'applied') console.log(`  ${actionSymbol(event.action.type)} ${Address.of(event.action).toString()} ${pastTense(event.action.type)}`);
   if (event.type === 'failed') {
     if (event.stateError) console.error(styleText('red', 'The state could not be saved:'), event.stateError.message);
     throw new Error(`${Address.of(event.action).toString()}: ${event.error.message}`);
@@ -75,27 +50,15 @@ async function confirmApply(autoConfirm: boolean): Promise<boolean> {
   return autoConfirm || confirm('Do you want to perform these actions?');
 }
 
-function newOrchestrator(cwd: string, files: ConfigFiles): Orchestrator {
-  const orchestrator = Orchestrator.create(new StateManager(new LocalBackend(cwd)), files);
-  orchestrator.registerProvider(new LocalProvider());
-
-  return orchestrator;
-}
-
 async function executeApply(cwd: string, configPath: string, autoConfirm: boolean): Promise<void> {
   const configContent = await fs.readFile(configPath, 'utf8');
   const orchestrator = newOrchestrator(cwd, new DiskFiles(cwd));
 
-  // Show plan first
   console.log(styleText('blue', 'Calculating plan...'));
   const planned = await orchestrator.plan(configContent);
 
-  if (changesNothing(planned)) {
-    console.log(styleText('green', 'No changes needed.'));
-    return;
-  }
-
   displayPlan(planned);
+  if (changesNothing(planned)) return;
 
   const confirmed = await confirmApply(autoConfirm);
   if (!confirmed) {
@@ -113,6 +76,7 @@ async function executeApplyFromPlan(cwd: string, planFile: PlanFile): Promise<vo
   console.log(styleText('gray', `Plan created: ${planFile.timestamp}`));
 
   displayPlan(planFile);
+  if (changesNothing(planFile)) return;
 
   await runAndReport(orchestrator.runPlan(planFile, planFile.config));
 }

@@ -193,7 +193,7 @@ describe('CLI: apply command', () => {
 
       await createApplyCommand().parseAsync(['node', 'clay']);
 
-      expect(consoleSpy).toHaveBeenCalledWith('No changes needed.');
+      expect(consoleSpy).toHaveBeenCalledWith('No changes. Your infrastructure matches the configuration.');
       expect(confirm).not.toHaveBeenCalled();
 
       consoleSpy.mockRestore();
@@ -220,7 +220,7 @@ describe('CLI: apply command', () => {
 
       await createApplyCommand().parseAsync(['node', 'clay', '--yes']);
 
-      expect(consoleSpy).not.toHaveBeenCalledWith('No changes needed.');
+      expect(consoleSpy).not.toHaveBeenCalledWith('No changes. Your infrastructure matches the configuration.');
       expect(runMock).toHaveBeenCalled();
 
       consoleSpy.mockRestore();
