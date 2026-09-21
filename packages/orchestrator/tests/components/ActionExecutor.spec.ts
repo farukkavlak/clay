@@ -1,4 +1,4 @@
-import { Address, Provider, State } from '@clay/contracts';
+import { Address, emptyState, Provider, State } from '@clay/contracts';
 import { PlanAction } from '@clay/planner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -12,8 +12,10 @@ describe('ActionExecutor', () => {
   let providers: ProviderRegistry;
   let executor: ActionExecutor;
   let mockProvider: Provider;
+  let mockState: State;
 
   beforeEach(() => {
+    mockState = emptyState();
     mockProvider = {
       resources: ['test'],
       validate: vi.fn(),
@@ -32,12 +34,6 @@ describe('ActionExecutor', () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
-
-  const mockState: State = {
-    version: 1,
-    serial: 0,
-    resources: {},
-  };
 
   const context = new Address([], 'test', 'main');
 
@@ -78,7 +74,9 @@ describe('ActionExecutor', () => {
       expect(mockState.resources[key].dependencies).toEqual(['test.new']);
     });
 
-    it('should execute a DELETE action', async () => {
+    it('should execute a DELETE action and take the resource out of state', async () => {
+      const key = context.toString();
+      mockState.resources[key] = { id: 'existing-id', resourceType: 'test', name: 'main', attributes: {} };
       const action: PlanAction = {
         type: 'DELETE',
         resourceType: 'test',
@@ -87,7 +85,9 @@ describe('ActionExecutor', () => {
       };
 
       await executor.execute(action, mockState);
+
       expect(mockProvider.delete).toHaveBeenCalledWith('existing-id', 'test');
+      expect(mockState.resources[key]).toBeUndefined();
     });
   });
 
@@ -138,9 +138,6 @@ describe('ActionExecutor', () => {
         id: 'id',
         attributes: {},
       };
-
-      // Ensure state is empty
-      mockState.resources = {};
 
       await expect(executor.executeUpdate(action, mockProvider, mockState)).rejects.toThrow('not found in state');
     });
