@@ -6,13 +6,13 @@ import { StateManager } from '@clay/state';
 
 import { asError } from '../asError';
 import { scopeOf } from '../keys';
+import { tryAt } from '../place';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { RunEvent } from '../RunEvent';
 import { ScopeManager } from '../scope/ScopeManager';
 import { ActionExecutor } from './ActionExecutor';
 import { LoadedConfig } from './ConfigLoader';
-import { GraphNode } from './DependencyGraphBuilder';
-import { LoadedModule } from './ModuleLoader';
+import { GraphNode, ValueNode } from './DependencyGraphBuilder';
 
 /** Runs a plan's actions in dependency order, reporting each step; the state file is rewritten after every action, so a failed run loses nothing done before it. */
 export class PlanRunner {
@@ -30,7 +30,7 @@ export class PlanRunner {
 
     // Outputs belong to a finished run; every write before the last leaves them out.
     delete state.outputs;
-    if (!(yield* this.applyInOrder(actions, graph, config.loadedModules, state))) return;
+    if (!(yield* this.applyInOrder(actions, graph, state))) return;
     if (!(yield* this.applyDeletes(actions, state))) return;
 
     // Outputs are read after the last action, so they never name a half-applied resource.
@@ -48,13 +48,14 @@ export class PlanRunner {
   }
 
   /** Creates, updates and replacements follow the graph, so a resource runs after what it reads from. */
-  private async *applyInOrder(actions: PlanAction[], graph: Graph<GraphNode>, loadedModules: LoadedModule[], state: State): AsyncGenerator<RunEvent, boolean> {
+  private async *applyInOrder(actions: PlanAction[], graph: Graph<GraphNode>, state: State): AsyncGenerator<RunEvent, boolean> {
     const byKey = new Map(actions.map((action) => [Address.of(action).toString(), action]));
 
     for (const layer of graph.topologicalSort())
       for (const key of layer) {
         const node = graph.getNode(key)!;
-        if (node.kind === 'output') this.resolveOutputsOf(node.scope, loadedModules, state);
+        // Only this output: a sibling of it may read a resource a later layer creates.
+        if (node.kind === 'output') this.resolveOutput(node, state);
 
         const action = byKey.get(key);
         if (!action || action.type === 'DELETE') continue;
@@ -127,8 +128,9 @@ export class PlanRunner {
     return outputs;
   }
 
-  private resolveOutputsOf(scope: string, loadedModules: LoadedModule[], currentState: State): void {
-    const mod = loadedModules.find((m) => scopeOf(m.address) === scope);
-    if (mod) this.resolveOutputs(mod.program, currentState, mod.address);
+  private resolveOutput(node: ValueNode, state: State): void {
+    const value = tryAt(node.position, node.declaration, node.context, () => this.resolver.resolveValue(node.value, state, node.context));
+
+    this.scopeManager.setOutput(node.scope, node.name, value);
   }
 }
