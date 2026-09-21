@@ -41,6 +41,7 @@ npm test
 npm run lint
 npm run type:check
 npm run format
+npm run format:check
 ```
 
 Try the CLI in a temp directory, never in the repo: `node packages/cli/bin/clay.js plan`.

@@ -424,8 +424,10 @@ Found by the 2026-09-20 review of this section:
       `packages/orchestrator`: three orchestrator tests called `new LocalBackend()` and its
       directory defaulted to `process.cwd()`, so the test runner's directory got the file.
       The directory is required now; the CLI already passed it.
-- [ ] CI runs lint, format check, type check, build and tests on every push and PR. With
-      build as its own step, the CLI's `pretest` can go.
+- [x] CI runs format check, lint, type check, build and tests on every push and PR, one
+      step each, on the lowest Node `engines` allows. The CLI's `pretest` stays: it is
+      there for a fresh clone, where `npm test` runs the built binary, not for CI, and the
+      second build it asks for is a no-op under `tsc -b`.
 - [ ] husky and lint-staged run on commit.
 - [ ] The README describes what exists now, in short, plain English. It still shows
       `resource "file"`, which no provider has.
