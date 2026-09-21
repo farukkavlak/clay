@@ -95,23 +95,20 @@ function valueChanged(oldValue: unknown, newValue: unknown): boolean {
   return !isDeepStrictEqual(oldValue, newValue);
 }
 
+/** Maps throughout: a name every object answers to would otherwise be read from the side that never set it, and `__proto__` would set a prototype instead of a key. */
 function calculateDiff(oldAttrs: Record<string, unknown>, newAttrs: Record<string, unknown>): Changes | null {
-  const changes: Changes = {};
-  let changed = false;
+  const before = new Map(Object.entries(oldAttrs));
+  const after = new Map(Object.entries(newAttrs));
+  const changes = new Map<string, { old: unknown; new: unknown }>();
 
-  const allKeys = new Set([...Object.keys(oldAttrs), ...Object.keys(newAttrs)]);
+  for (const key of new Set([...before.keys(), ...after.keys()])) {
+    const oldValue = before.get(key);
+    const newValue = after.get(key);
 
-  for (const key of allKeys) {
-    const oldValue = oldAttrs[key];
-    const newValue = newAttrs[key];
-
-    if (valueChanged(oldValue, newValue)) {
-      changes[key] = { old: oldValue, new: newValue };
-      changed = true;
-    }
+    if (valueChanged(oldValue, newValue)) changes.set(key, { old: oldValue, new: newValue });
   }
 
-  return changed ? changes : null;
+  return changes.size > 0 ? Object.fromEntries(changes) : null;
 }
 
 export function outputChanges(current: Record<string, unknown>, desired: Record<string, unknown>): Changes {

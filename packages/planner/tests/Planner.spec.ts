@@ -2,7 +2,7 @@ import { Address, State } from '@clay/contracts';
 import { AttributeValue, CONFIG_FILE } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
-import { DesiredResource, plan, PLAN_FILE_VERSION, PlanAction, serializePlan, UNKNOWN, validatePlanFile } from '../src/index';
+import { DesiredResource, hasChanges, outputChanges, plan, PLAN_FILE_VERSION, PlanAction, serializePlan, UNKNOWN, validatePlanFile } from '../src/index';
 
 /** A plan is built from parsed blocks, and a test that builds one by hand still has to say where they came from. */
 const position = { file: CONFIG_FILE, line: 1, column: 1 };
@@ -107,6 +107,20 @@ describe('Planner', () => {
     expect(actions).toHaveLength(1);
     expect(actions[0].type).toBe('NO_OP');
     expect(actions[0].changes).toBeUndefined();
+  });
+
+  // A name every object answers to used to come back as its inherited function instead of undefined, so an addition read as a change from that function.
+  it('should report an output named after something every object has as an addition', () => {
+    expect(outputChanges({}, { constructor: 'hello' })).toEqual({ constructor: { old: undefined, new: 'hello' } });
+  });
+
+  it('should report an output named that way as a removal when it goes away', () => {
+    expect(outputChanges({ toString: 'bye' }, {})).toEqual({ toString: { old: 'bye', new: undefined } });
+  });
+
+  // A state file can hold `__proto__` as a name of its own, and assigning it into a plain object sets a prototype rather than a key.
+  it('should see a change to an attribute named __proto__, which a state file can carry', () => {
+    expect(hasChanges(JSON.parse('{"__proto__":"old"}'), { __proto__: 'new' })).toBe(true);
   });
 
   it('should treat an unknown value as a change', () => {
