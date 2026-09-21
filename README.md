@@ -9,7 +9,7 @@ It ships with one provider, `local`, whose resources live on the machine that ru
 
 ## Try it
 
-Node 22.13 or newer.
+Node 22.13 or newer, where `util.styleText` drops colour on a pipe and under `NO_COLOR`.
 
 ```sh
 npm ci

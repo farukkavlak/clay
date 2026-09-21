@@ -9,7 +9,7 @@ commit or push. You report.
 
 ## Steps
 
-1. Read `CLAUDE.md` and `docs/TECH_DEBT.md`. Their rules are the standard; where this file
+1. Read `CLAUDE.md` for the rules and `docs/TASKS.md` for what is planned. Where this file
    and `CLAUDE.md` differ, `CLAUDE.md` wins.
 2. Look at the change against `origin/main` (run `git fetch` first):
    `git log --oneline origin/main..HEAD`, `git diff origin/main` (includes uncommitted
@@ -24,8 +24,9 @@ commit or push. You report.
 **Scope**
 
 - Does the change do one thing? Is anything unrelated mixed in?
-- Is it on the tech debt list, or clearly needed by an item on it? No new features.
-- If it fixes an item, is that item ticked in `docs/TECH_DEBT.md`?
+- Is it an item on `docs/TASKS.md`, or a bug found on the way? Anything else, report as a
+  question for the owner; you cannot see what was asked for.
+- If it finishes an item, is that item ticked in `docs/TASKS.md`?
 
 **Correctness**
 

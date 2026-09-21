@@ -64,7 +64,8 @@ anything yet.
 - [ ] Data sources are graph nodes, read in dependency order and once per run
 - [ ] A data source fed by a pending resource is `(known after apply)`
 - [ ] Their values travel in the plan, as in Terraform, so `apply` reads none of them
-      again
+      again. `runPlan` still parses and builds the graph on its own, since a saved plan
+      brings its own configuration; that stays, and only the second read goes
 - [ ] `local_file` as a data source reads the file
 
 ### Parallel apply

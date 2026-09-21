@@ -7,8 +7,8 @@ not a specification to copy.
 
 ## Now
 
-No new features. Work through `docs/TECH_DEBT.md` in order, and tick an item in the same
-change that fixes it. `docs/TASKS.md` is the feature list, and it waits.
+Work through `docs/TASKS.md` in order, and tick an item in the same change that finishes
+it. A bug found on the way is fixed first, in its own change.
 
 ## How we work
 
@@ -65,7 +65,8 @@ Try the CLI in a temp directory, never in the repo: `node packages/cli/bin/clay.
 - A package lists every `@clay/*` package it imports.
 - Shared dev tools live in the root `package.json` only.
 - If Node or a few lines of our own can do it, don't add a package. Ask before adding
-  a runtime dependency.
+  a runtime dependency. The CLI's `commander` is the one there is: `util.parseArgs` reads
+  flags, but subcommands, help and argument checks would be a hundred lines of our own.
 - Remove a dependency in the same change that stops using it.
 - Commit the lockfile with any dependency change.
 
@@ -78,13 +79,13 @@ Try the CLI in a temp directory, never in the repo: `node packages/cli/bin/clay.
   one with the other.
 - Comments only where the code can't say why. One short line; no comment that restates the
   code.
-- Code and comments never point to docs, issues or plans (`see TECH_DEBT.md`, `TODO(PR 2)`).
+- Code and comments never point to docs, issues or plans (`see TASKS.md`, `TODO(PR 2)`).
 
 ## Tests
 
 - A bug fix starts with a failing test.
 - Anything that crosses packages also gets an end-to-end test with real files in a temp
-  directory. Mocks hid the bugs in `TECH_DEBT.md`.
+  directory. Mocks hid the bugs the audit had to find.
 - Tests never write into the repo.
 - Nothing lives in `src` only because a test needs it. A helper a test needs sits next to
   the tests.
