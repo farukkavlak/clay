@@ -5,8 +5,8 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-385 tests pass, and so do the type check and the build. Lint shows 11 warnings, and
-`npm audit` is clean.
+385 tests pass, and so do the type check and the build. Lint is clean, and so is
+`npm audit`.
 
 The unit tests mock the provider and the state, so they missed that the real
 apply → plan cycle is broken. Running the engine against real files shows it.
@@ -279,8 +279,12 @@ Found by the 2026-09-20 review of this section:
 
 ## 3 — code
 
-- [ ] Lint has no warnings, and warnings count as errors.
-- [ ] The ESLint config fits this repo. The current one came from a React project.
+- [x] Lint has no warnings, and warnings count as errors (`--max-warnings 0`). Two rules
+      fought the config language and are adjusted: `camelcase` skips quoted keys such as
+      `depends_on`, and `no-template-curly-in-string` is off, since `${var.x}` is Clay's
+      own syntax. The rest were code and are fixed.
+- [ ] The ESLint config fits this repo. The current one came from a React project. Five
+      `eslint-disable` lines carry no reason.
 - [ ] The orchestrator's parts get their collaborators passed in, not `bind`-ed callbacks.
       One factory builds the object graph and hands it over. No DI container: at this size
       it buys nothing the factory does not, and it would hide the wiring behind a runtime
