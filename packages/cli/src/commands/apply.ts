@@ -1,7 +1,7 @@
 import { Address } from '@clay/contracts';
 import { ConfigFiles, DiskFiles, InMemoryFiles, RunEvent } from '@clay/orchestrator';
 import { CONFIG_FILE } from '@clay/parser';
-import { PlanAction, PlanFile, validatePlanFile } from '@clay/planner';
+import { parsePlanFile, PlanAction, PlanFile } from '@clay/planner';
 import { Command } from 'commander';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -70,6 +70,25 @@ async function executeApply(cwd: string, configPath: string, files: ConfigFiles,
   await runAndReport(orchestrator.runPlan(planned, configContent));
 }
 
+/** A plan file the user names is their file, so what is wrong with it is said with the file's name and what to do about it. */
+async function readPlanFile(planFileArg: string, files: ConfigFiles): Promise<PlanFile> {
+  let content: string;
+
+  try {
+    content = await fs.readFile(planFileArg, 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+
+    throw new Error(`${planFileArg} not found.`, { cause: error });
+  }
+
+  try {
+    return parsePlanFile(content, planFileArg);
+  } catch (error) {
+    throw new Error(`${describeError(error, files)}. Run \`clay plan --out <file>\` again.`, { cause: error });
+  }
+}
+
 /** A saved plan carries the configuration it was made from, so it runs against that and not against whatever is on disk now. */
 function filesInPlan(planFile: PlanFile): ConfigFiles {
   return new InMemoryFiles({ ...planFile.modules, [CONFIG_FILE]: planFile.config });
@@ -98,13 +117,7 @@ export function createApplyCommand() {
 
       try {
         if (planFileArg && !planFileArg.startsWith('-')) {
-          const planContent = await fs.readFile(planFileArg);
-          const planData = JSON.parse(planContent.toString('utf8'));
-
-          if (!validatePlanFile(planData)) {
-            console.error(styleText('red', 'Error: Cannot read this plan file. Run `clay plan --out <file>` again.'));
-            process.exit(1);
-          }
+          const planData = await readPlanFile(planFileArg, files);
 
           files = filesInPlan(planData);
           await executeApplyFromPlan(cwd, planData, files);

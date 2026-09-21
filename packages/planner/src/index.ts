@@ -89,6 +89,30 @@ export function validatePlanFile(planFile: unknown): planFile is PlanFile {
   );
 }
 
+/** A plan file is written by `plan`, never by hand, so the only answer to a broken one is to plan again: the reason it is broken would not help. */
+function planVersion(parsed: unknown): string | undefined {
+  if (!isRecord(parsed) || !Array.isArray(parsed.actions)) return undefined;
+
+  return typeof parsed.version === 'string' ? parsed.version : undefined;
+}
+
+/** `source` names the plan in the error, since the caller knows where it read from and this does not. */
+export function parsePlanFile(content: string, source: string): PlanFile {
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(content);
+  } catch (error) {
+    throw new Error(`${source} is not a plan file: the file is not JSON`, { cause: error });
+  }
+
+  const version = planVersion(parsed);
+  if (version !== undefined && version !== PLAN_FILE_VERSION) throw new Error(`${source} was written by another Clay, plan version ${version}`);
+  if (!validatePlanFile(parsed)) throw new Error(`${source} is not a plan file`);
+
+  return parsed;
+}
+
 /** A map's keys written in another order is not a change. */
 function valueChanged(oldValue: unknown, newValue: unknown): boolean {
   if (isUnknown(newValue)) return true;

@@ -381,7 +381,7 @@ describe('CLI: apply command', () => {
       await createApplyCommand().parseAsync(['node', 'clay', 'invalid.json']);
 
       // The first thing reported has to be the refusal; the stubbed exit lets the run carry on and report more.
-      expect(consoleSpy.mock.calls[0]).toEqual([expect.stringContaining('Cannot read this plan file')]);
+      expect(consoleSpy.mock.calls[0].join(' ')).toContain('invalid.json is not a plan file');
       expect(exitSpy).toHaveBeenCalledWith(1);
 
       exitSpy.mockRestore();
