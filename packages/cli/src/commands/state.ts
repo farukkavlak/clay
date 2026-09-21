@@ -1,4 +1,4 @@
-import { Address, IState } from '@clay/contracts';
+import { Address, State } from '@clay/contracts';
 import { StateManager } from '@clay/state';
 import { Command } from 'commander';
 import { styleText } from 'node:util';
@@ -16,7 +16,7 @@ async function reportEmpty(path: string): Promise<void> {
 }
 
 /** A resource's address lives in its key, in its entry and in every entry that reads from it. */
-function moveResource(state: IState, source: string, destination: string): void {
+function moveResource(state: State, source: string, destination: string): void {
   const from = Address.parse(source);
   const to = Address.parse(destination);
   if (from.resourceType !== to.resourceType) throw new Error(`Cannot move ${source} to ${destination}: the type changes`);

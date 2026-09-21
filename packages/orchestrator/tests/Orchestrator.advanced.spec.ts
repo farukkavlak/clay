@@ -1,4 +1,4 @@
-import { IProvider, ISchema } from '@clay/contracts';
+import { Provider, Schema } from '@clay/contracts';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -9,11 +9,11 @@ import { InMemoryFiles, Orchestrator } from '../src/index';
 import { apply } from './apply';
 
 // Mock Provider for testing
-class MockProvider implements IProvider {
+class MockProvider implements Provider {
   readonly resources = ['mock_resource'];
   private createdResources: Map<string, Record<string, unknown>> = new Map();
 
-  async getSchema(_type: string): Promise<ISchema> {
+  async getSchema(_type: string): Promise<Schema> {
     return {
       message: { type: 'string' },
       greeting: { type: 'string' },

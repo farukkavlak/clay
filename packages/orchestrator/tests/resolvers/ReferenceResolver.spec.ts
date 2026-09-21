@@ -1,4 +1,4 @@
-import { Address, IState } from '@clay/contracts';
+import { Address, State } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { ReferenceResolver } from '../../src/resolvers/ReferenceResolver';
@@ -10,13 +10,12 @@ describe('ReferenceResolver', () => {
   const resolver = new ReferenceResolver(scopeManager, dataSources);
   const context = new Address([], 'resource', 'main');
 
-  const mockState: IState = {
+  const mockState: State = {
     version: 1,
     serial: 0,
     resources: {
       'resource.test': {
         id: 'res-123',
-        type: 'Resource',
         resourceType: 'resource',
         name: 'test',
         attributes: {
@@ -126,12 +125,11 @@ describe('ReferenceResolver', () => {
     // And parses address.
 
     // Let's mock a resource with custom type
-    const customState: IState = {
+    const customState: State = {
       ...mockState,
       resources: {
         'custom.name': {
           id: 'c-1',
-          type: 'Resource',
           resourceType: 'custom',
           name: 'name',
           attributes: { attr: 'ok' },

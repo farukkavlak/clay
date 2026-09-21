@@ -1,4 +1,4 @@
-import { Address, emptyState, IProvider, ISchema, IState } from '@clay/contracts';
+import { Address, emptyState, Provider, Schema, State } from '@clay/contracts';
 import { spell } from '@clay/parser';
 import { DesiredResource, isUnknown, outputChanges, plan, Plan } from '@clay/planner';
 import { StateManager } from '@clay/state';
@@ -50,7 +50,7 @@ export class Orchestrator {
     );
   }
 
-  registerProvider(provider: IProvider): void {
+  registerProvider(provider: Provider): void {
     this.providers.register(provider);
   }
 
@@ -85,8 +85,8 @@ export class Orchestrator {
 
   private async resolveAndCheck(
     configContent: string,
-    state: IState
-  ): Promise<{ desiredResources: DesiredResource[]; outputs: Record<string, unknown>; schemas: Record<string, ISchema> }> {
+    state: State
+  ): Promise<{ desiredResources: DesiredResource[]; outputs: Record<string, unknown>; schemas: Record<string, Schema> }> {
     const { loadedResources, loadedModules } = await this.loader.load(configContent, state);
 
     const graph = this.graphBuilder.buildExecutionGraph(loadedResources, loadedModules);
@@ -96,8 +96,8 @@ export class Orchestrator {
   }
 
   /** What a provider can refuse before anything runs is refused here. A value not known yet is checked once the run knows it. */
-  private async checkWithProviders(desired: DesiredResource[]): Promise<Record<string, ISchema>> {
-    const schemas: Record<string, ISchema> = {};
+  private async checkWithProviders(desired: DesiredResource[]): Promise<Record<string, Schema>> {
+    const schemas: Record<string, Schema> = {};
 
     for (const resource of desired) {
       const type = resource.block.resourceType;

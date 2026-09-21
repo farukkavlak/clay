@@ -1,12 +1,12 @@
-import { IResourceHandler, ISchema } from '@clay/contracts';
+import { ResourceHandler, Schema } from '@clay/contracts';
 import { exec } from 'node:child_process';
 import crypto from 'node:crypto';
 import { promisify } from 'node:util';
 
 const execAsync = promisify(exec);
 
-export class CommandExecResource implements IResourceHandler {
-  async getSchema(): Promise<ISchema> {
+export class CommandExecResource implements ResourceHandler {
+  async getSchema(): Promise<Schema> {
     return {
       command: { type: 'string', required: true, forceNew: false }, // Re-exec allows update
       cwd: { type: 'string', required: false, forceNew: false },

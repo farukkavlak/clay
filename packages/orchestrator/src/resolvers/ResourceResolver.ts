@@ -1,9 +1,9 @@
-import { Address, IState } from '@clay/contracts';
-import { IResolver } from './IResolver';
+import { Address, State } from '@clay/contracts';
+import { Resolver } from './Resolver';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 
-export class ResourceResolver implements IResolver {
-  resolve(pathParts: string[], context: Address, state: IState): unknown {
+export class ResourceResolver implements Resolver {
+  resolve(pathParts: string[], context: Address, state: State): unknown {
     if (pathParts.length < 3) throw new Error(`Resource reference must include attribute: ${pathParts.join('.')}`);
 
     const resourceKey = new Address(context.modulePath, pathParts[0], pathParts[1]).toString();

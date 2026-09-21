@@ -1,8 +1,8 @@
 import { Address } from '@clay/contracts';
 import { dataSourceKey, scopeOf } from '../keys';
-import { IResolver } from './IResolver';
+import { Resolver } from './Resolver';
 
-export class DataSourceResolver implements IResolver {
+export class DataSourceResolver implements Resolver {
   constructor(private dataSources: Map<string, Record<string, unknown>>) {}
 
   resolve(pathParts: string[], context: Address): unknown {

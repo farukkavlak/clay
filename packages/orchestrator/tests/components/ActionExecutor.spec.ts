@@ -1,4 +1,4 @@
-import { Address, IProvider, IState } from '@clay/contracts';
+import { Address, Provider, State } from '@clay/contracts';
 import { PlanAction } from '@clay/planner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -11,7 +11,7 @@ import { str } from '../ast';
 describe('ActionExecutor', () => {
   let providers: ProviderRegistry;
   let executor: ActionExecutor;
-  let mockProvider: IProvider;
+  let mockProvider: Provider;
 
   beforeEach(() => {
     mockProvider = {
@@ -33,7 +33,7 @@ describe('ActionExecutor', () => {
     vi.clearAllMocks();
   });
 
-  const mockState: IState = {
+  const mockState: State = {
     version: 1,
     serial: 0,
     resources: {},
@@ -67,7 +67,7 @@ describe('ActionExecutor', () => {
 
     it('should only refresh the dependencies on a NO_OP action', async () => {
       const key = context.toString();
-      mockState.resources[key] = { id: 'existing', type: 'Resource', resourceType: 'test', name: 'main', attributes: {}, dependencies: ['test.old'] };
+      mockState.resources[key] = { id: 'existing', resourceType: 'test', name: 'main', attributes: {}, dependencies: ['test.old'] };
       const action: PlanAction = { type: 'NO_OP', resourceType: 'test', name: 'main', dependencies: ['test.new'] };
 
       await executor.execute(action, mockState);
@@ -102,12 +102,19 @@ describe('ActionExecutor', () => {
       await expect(executor.executeCreate(action, mockProvider, mockState)).rejects.toThrow('missing attributes');
     });
 
-    it('should write the new resource with its dependencies', async () => {
+    it('should write the new resource whole: its id, values and dependencies, and nothing copied from the ast', async () => {
       const action: PlanAction = { type: 'CREATE', resourceType: 'test', name: 'main', attributes: { path: str('p') }, dependencies: ['test.dep'] };
 
       await executor.executeCreate(action, mockProvider, mockState);
 
-      expect(mockState.resources[context.toString()]).toMatchObject({ id: 'created-id', attributes: { path: 'p' }, dependencies: ['test.dep'] });
+      expect(mockState.resources[context.toString()]).toEqual({
+        id: 'created-id',
+        resourceType: 'test',
+        name: 'main',
+        modulePath: [],
+        attributes: { path: 'p' },
+        dependencies: ['test.dep'],
+      });
     });
   });
 
@@ -142,7 +149,6 @@ describe('ActionExecutor', () => {
       const key = context.toString();
       mockState.resources[key] = {
         id: 'existing',
-        type: 'Resource',
         resourceType: 'test',
         name: 'main',
         attributes: {},
@@ -163,7 +169,6 @@ describe('ActionExecutor', () => {
       const key = context.toString();
       mockState.resources[key] = {
         id: 'existing',
-        type: 'Resource',
         resourceType: 'test',
         name: 'main',
         attributes: { old: 'val', dropped: 'val' },
@@ -185,7 +190,7 @@ describe('ActionExecutor', () => {
 
     it('should write the dependencies the action carries', async () => {
       const key = context.toString();
-      mockState.resources[key] = { id: 'existing', type: 'Resource', resourceType: 'test', name: 'main', attributes: {}, dependencies: ['test.old'] };
+      mockState.resources[key] = { id: 'existing', resourceType: 'test', name: 'main', attributes: {}, dependencies: ['test.old'] };
       const action: PlanAction = { type: 'UPDATE', resourceType: 'test', name: 'main', id: 'existing', attributes: {}, dependencies: ['test.dep'] };
 
       await executor.executeUpdate(action, mockProvider, mockState);
@@ -197,7 +202,7 @@ describe('ActionExecutor', () => {
   describe('REPLACE', () => {
     it('should delete the old resource, create the new one and keep it in state', async () => {
       const key = context.toString();
-      mockState.resources[key] = { id: 'old', type: 'Resource', resourceType: 'test', name: 'main', attributes: { path: 'old' } };
+      mockState.resources[key] = { id: 'old', resourceType: 'test', name: 'main', attributes: { path: 'old' } };
       const action: PlanAction = { type: 'REPLACE', resourceType: 'test', name: 'main', id: 'old', attributes: { path: str('new') } };
 
       await executor.execute(action, mockState);

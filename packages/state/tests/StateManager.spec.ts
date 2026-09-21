@@ -2,7 +2,7 @@ import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import path from 'node:path';
 
-import { IState } from '@clay/contracts';
+import { State } from '@clay/contracts';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { LocalBackend } from '../src/backends/LocalBackend';
@@ -30,12 +30,11 @@ describe('StateManager', () => {
   });
 
   it('should write and read state correctly', async () => {
-    const mockState: IState = {
+    const mockState: State = {
       version: 1,
       serial: 0,
       resources: {
         'mock_resource.test_a': {
-          type: 'Resource',
           resourceType: 'mock_resource',
           name: 'test_a',
           attributes: { filename: 'foo.txt' },
@@ -55,7 +54,7 @@ describe('StateManager', () => {
   });
 
   it('counts every write in the serial, on disk and in the state it was given', async () => {
-    const state: IState = { version: 1, serial: 0, resources: {} };
+    const state: State = { version: 1, serial: 0, resources: {} };
 
     await stateManager.write(state);
     await stateManager.write(state);
@@ -66,7 +65,7 @@ describe('StateManager', () => {
   });
 
   describe('writeIfAbsent', () => {
-    const empty: IState = { version: 1, serial: 0, resources: {} };
+    const empty: State = { version: 1, serial: 0, resources: {} };
 
     it('should write the state when none is stored yet', async () => {
       expect(await stateManager.writeIfAbsent(empty)).toBe(true);
@@ -74,7 +73,7 @@ describe('StateManager', () => {
     });
 
     it('should keep the stored state and say it wrote nothing', async () => {
-      const stored: IState = { version: 1, serial: 0, resources: { 'mock_resource.a': { type: 'Resource', resourceType: 'mock_resource', name: 'a', attributes: {} } } };
+      const stored: State = { version: 1, serial: 0, resources: { 'mock_resource.a': { resourceType: 'mock_resource', name: 'a', attributes: {} } } };
       await stateManager.write(stored);
 
       expect(await stateManager.writeIfAbsent(empty)).toBe(false);
@@ -163,7 +162,7 @@ describe('StateManager', () => {
 
   describe('a write that fails halfway', () => {
     it('leaves the state that was there, whole', async () => {
-      const before: IState = { version: 1, serial: 0, resources: { 'mock_resource.a': { type: 'Resource', resourceType: 'mock_resource', name: 'a', attributes: {} } } };
+      const before: State = { version: 1, serial: 0, resources: { 'mock_resource.a': { resourceType: 'mock_resource', name: 'a', attributes: {} } } };
       await stateManager.write(before);
 
       // A directory in the way of the temporary file makes the write fail before the state file is touched.

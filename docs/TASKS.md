@@ -31,7 +31,7 @@
 
 **Requirement:** A modular system to manage state, resolve dependencies, and execute changes.
 
-- [x] **`@clay/contracts`:** Define shared interfaces (`IResource`, `IProvider`)
+- [x] **`@clay/contracts`:** Define shared interfaces (`Resource`, `Provider`)
 - [x] **`@clay/graph`:** Implement DAG (Directed Acyclic Graph) & Topological Sort
 - [x] **`@clay/state`:** Implement JSON reader/writer & Locking mechanism
 - [x] **`@clay/planner`:** Diff Engine logic (Config vs State)
@@ -106,7 +106,7 @@
   - [ ] Move from Singleton Provider to Instance-based Providers
   - [ ] Support provider aliases (multi-region/account support)
 - [x] **State Management Abstraction**
-  - [x] Interface `IStateBackend` (Remote State support)
+  - [x] Interface `StateBackend` (Remote State support)
   - [x] Decouple `StateManager` from local `fs`
   - [x] Implement `LocalBackend` for file system operations
 - [x] **Orchestrator Refactoring**
@@ -247,7 +247,7 @@
 
 - [x] **Data Source Parsing**
   - [x] `data "type" "name" {}` syntax
-  - [x] Data source provider interface (`read()` method in IProvider)
+  - [x] Data source provider interface (`read()` method in Provider)
 - [x] **Read-Only Operations**
   - [x] Query existing resources (via provider.read())
   - [x] Use in other resources (via `data.type.name.attribute` references)
@@ -366,7 +366,7 @@ whole resource and mark which attributes are computed.
 
 ### 10.8. Schema-driven Validation
 
-`ISchema` carries `type`, `required` and `elemType`, and the engine reads only `forceNew`.
+`Schema` carries `type`, `required` and `elemType`, and the engine reads only `forceNew`.
 Every resource validates its inputs by hand.
 
 - [ ] The engine validates inputs against the schema before it asks the provider
@@ -409,7 +409,7 @@ Terraform has it since backends replaced `-state`.
 
 - [ ] A `clay { backend "local" { path = "..." } }` block in the configuration
 - [ ] `init` reads it, checks the backend answers, and remembers the choice
-- [ ] A factory builds the backend from the block; `IStateBackend` is the contract it
+- [ ] A factory builds the backend from the block; `StateBackend` is the contract it
       already has to meet
 - [ ] An HTTP backend, since it needs no SDK: read, write, lock and unlock over four
       requests

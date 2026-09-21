@@ -401,12 +401,15 @@ Found by the 2026-09-20 review of this section:
       the end-of-file special case with it: a file ending in a comment now puts its end
       after the comment, as after any other token, where the old case left it at the
       comment's first character. The same 3.4 MB lexes in 130 ms.
-- [ ] The `I` prefix on type names is gone: `IResource`, `IProvider`, `IResourceHandler`,
-      `ISchemaDefinition`, `ISchema`, `IState`, `IStateBackend` and `IResolver` carry it
-      and the other seventeen types do not. TypeScript does not need the prefix, and half
-      the names that would earn it by any rule (`PlanAction`, `RunEvent`) go without. While
-      there: `IResource.type` is always `Resource`, an AST label copied into state that
-      nothing reads; it goes.
+- [x] The `I` prefix on type names is gone: `IResource`, `IProvider`, `IResourceHandler`,
+      `ISchemaDefinition`, `ISchema`, `IState`, `IStateBackend` and `IResolver` carried it
+      and the other seventeen types did not. TypeScript does not need the prefix, and half
+      the names that would earn it by any rule (`PlanAction`, `RunEvent`) went without.
+      None of the bare names was taken, so it was a rename and nothing else. With it,
+      `Resource.type` went: it was always `Resource`, an AST label copied into state that
+      nothing read. A state file written before still loads, since the key is only
+      ignored; an entry the engine writes now does not have it, and an old entry keeps it
+      until it is next changed.
 
 ## 4 — repo
 

@@ -1,4 +1,4 @@
-import { Address, IState } from '@clay/contracts';
+import { Address, State } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { ResourceBlock, spell } from '@clay/parser';
 import { DesiredResource, hasChanges, isUnknown, UNKNOWN } from '@clay/planner';
@@ -26,7 +26,7 @@ export class DesiredStateBuilder {
     private graphBuilder: DependencyGraphBuilder
   ) {}
 
-  build(loadedResources: LoadedResource[], graph: Graph<GraphNode>, state: IState): DesiredState {
+  build(loadedResources: LoadedResource[], graph: Graph<GraphNode>, state: State): DesiredState {
     const byKey = new Map(loadedResources.map((r) => [r.address.toString(), r]));
     const pending = new Set<string>();
     const resources: DesiredResource[] = [];
@@ -44,7 +44,7 @@ export class DesiredStateBuilder {
     return { resources, outputs };
   }
 
-  private planResource(key: string, loaded: LoadedResource, graph: Graph<GraphNode>, state: IState, pending: Set<string>): DesiredResource {
+  private planResource(key: string, loaded: LoadedResource, graph: Graph<GraphNode>, state: State, pending: Set<string>): DesiredResource {
     const attributes = this.resolveForPlan(loaded.block, state, loaded.address, pending);
     const current = state.resources[key];
     if (!current || hasChanges(current.attributes, attributes)) pending.add(key);
@@ -53,12 +53,12 @@ export class DesiredStateBuilder {
   }
 
   /** A variable fed by a pending resource is pending itself, so everything reading it plans against UNKNOWN. */
-  private planVariable(key: string, node: ValueNode, state: IState, pending: Set<string>): void {
+  private planVariable(key: string, node: ValueNode, state: State, pending: Set<string>): void {
     if (node.value !== undefined && isUnknown(this.resolveNode(node, state, pending))) pending.add(key);
   }
 
   /** Gives an output its value so the resources reading it can be planned; an output fed by a pending resource keeps none. */
-  private planOutput(key: string, node: ValueNode, state: IState, pending: Set<string>, rootOutputs: Record<string, unknown>): void {
+  private planOutput(key: string, node: ValueNode, state: State, pending: Set<string>, rootOutputs: Record<string, unknown>): void {
     const value = this.resolveNode(node, state, pending);
     if (isUnknown(value)) pending.add(key);
     else this.scopeManager.setOutput(node.scope, node.name, value);
@@ -67,7 +67,7 @@ export class DesiredStateBuilder {
   }
 
   /** Resolves config values the way the diff needs them; what an apply has to produce first stays UNKNOWN. */
-  private resolveForPlan(block: ResourceBlock, state: IState, context: Address, pending: Set<string>): Record<string, unknown> {
+  private resolveForPlan(block: ResourceBlock, state: State, context: Address, pending: Set<string>): Record<string, unknown> {
     const resolved: Record<string, unknown> = {};
     const declaration = spell(block);
 
@@ -77,11 +77,11 @@ export class DesiredStateBuilder {
     return resolved;
   }
 
-  private resolveNode(node: ValueNode, state: IState, pending: Set<string>): unknown {
+  private resolveNode(node: ValueNode, state: State, pending: Set<string>): unknown {
     return tryAt(node.position, node.declaration, node.context, () => this.resolveOrUnknown(node.value, state, node.context, pending));
   }
 
-  private resolveOrUnknown(value: unknown, state: IState, context: Address, pending: Set<string>): unknown {
+  private resolveOrUnknown(value: unknown, state: State, context: Address, pending: Set<string>): unknown {
     if (this.scanner.referencesIn(value, context).some((reference) => pending.has(reference.key))) return UNKNOWN;
 
     try {

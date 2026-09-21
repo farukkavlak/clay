@@ -1,4 +1,4 @@
-import { IState } from '@clay/contracts';
+import { State } from '@clay/contracts';
 import { AttributeValue, CONFIG_FILE } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
@@ -23,14 +23,13 @@ function desiredResource(name: string, attributes: Record<string, string>, modul
   };
 }
 
-function stateWith(name: string, attributes: Record<string, unknown>, id = `mock_resource.${name}`): IState {
+function stateWith(name: string, attributes: Record<string, unknown>, id = `mock_resource.${name}`): State {
   return {
     version: 1,
     serial: 0,
     resources: {
       [`mock_resource.${name}`]: {
         id,
-        type: 'Resource',
         resourceType: 'mock_resource',
         name,
         attributes,
@@ -126,12 +125,12 @@ describe('Planner', () => {
   });
 
   it('should tell a replaced resource in a module apart from a removed one', () => {
-    const state: IState = {
+    const state: State = {
       version: 1,
       serial: 0,
       resources: {
-        'module.app.mock_resource.same': { id: 'in_module', type: 'Resource', resourceType: 'mock_resource', name: 'same', modulePath: ['app'], attributes: { path: 'old' } },
-        'mock_resource.same': { id: 'at_root', type: 'Resource', resourceType: 'mock_resource', name: 'same', attributes: { path: 'old' } },
+        'module.app.mock_resource.same': { id: 'in_module', resourceType: 'mock_resource', name: 'same', modulePath: ['app'], attributes: { path: 'old' } },
+        'mock_resource.same': { id: 'at_root', resourceType: 'mock_resource', name: 'same', attributes: { path: 'old' } },
       },
     };
 

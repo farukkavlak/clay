@@ -1,9 +1,9 @@
-import { IResourceHandler, ISchema } from '@clay/contracts';
+import { ResourceHandler, Schema } from '@clay/contracts';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-export class LocalFileResource implements IResourceHandler {
-  async getSchema(): Promise<ISchema> {
+export class LocalFileResource implements ResourceHandler {
+  async getSchema(): Promise<Schema> {
     return {
       path: { type: 'string', required: true, forceNew: true }, // Changing path means new file
       content: { type: 'string', required: true, forceNew: false }, // Changing content is update

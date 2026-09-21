@@ -1,4 +1,4 @@
-import { Address, IProvider, IState } from '@clay/contracts';
+import { Address, Provider, State } from '@clay/contracts';
 import { PlanAction } from '@clay/planner';
 
 import { ProviderRegistry } from '../ProviderRegistry';
@@ -10,7 +10,7 @@ export class ActionExecutor {
     private resolver: ReferenceResolver
   ) {}
 
-  async execute(action: PlanAction, currentState: IState): Promise<void> {
+  async execute(action: PlanAction, currentState: State): Promise<void> {
     // An unchanged resource only refreshes what it reads from, so it needs no provider.
     if (action.type === 'NO_OP') {
       this.recordDependencies(action, currentState);
@@ -43,7 +43,7 @@ export class ActionExecutor {
     }
   }
 
-  async executeCreate(action: PlanAction, provider: IProvider, currentState: IState): Promise<void> {
+  async executeCreate(action: PlanAction, provider: Provider, currentState: State): Promise<void> {
     if (!action.attributes) throw new Error('CREATE action missing attributes');
 
     const contextAddress = Address.of(action);
@@ -57,7 +57,6 @@ export class ActionExecutor {
     // eslint-disable-next-line require-atomic-updates
     currentState.resources[key] = {
       id,
-      type: 'Resource',
       resourceType: action.resourceType,
       name: contextAddress.name,
       modulePath: contextAddress.modulePath,
@@ -66,7 +65,7 @@ export class ActionExecutor {
     };
   }
 
-  async executeUpdate(action: PlanAction, provider: IProvider, currentState: IState): Promise<void> {
+  async executeUpdate(action: PlanAction, provider: Provider, currentState: State): Promise<void> {
     if (!action.attributes) throw new Error('UPDATE action missing attributes');
 
     const contextAddress = Address.of(action);
@@ -87,7 +86,7 @@ export class ActionExecutor {
   }
 
   /** What a resource reads from can change while its values do not, so an unchanged resource still refreshes its list. */
-  private recordDependencies(action: PlanAction, currentState: IState): void {
+  private recordDependencies(action: PlanAction, currentState: State): void {
     const key = Address.of(action).toString();
     const currentResource = currentState.resources[key];
     if (!currentResource) throw new Error(`Resource "${key}" not found in state`);
@@ -95,7 +94,7 @@ export class ActionExecutor {
     currentResource.dependencies = action.dependencies ?? [];
   }
 
-  async executeDelete(action: PlanAction, provider: IProvider, currentState: IState): Promise<void> {
+  async executeDelete(action: PlanAction, provider: Provider, currentState: State): Promise<void> {
     if (!action.id) throw new Error(`${action.type} action missing id`);
 
     const contextAddress = Address.of(action);

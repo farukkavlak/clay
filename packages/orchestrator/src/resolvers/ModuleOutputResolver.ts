@@ -1,10 +1,10 @@
 import { Address } from '@clay/contracts';
 import { childScope, scopeOf } from '../keys';
 import { ScopeManager } from '../scope/ScopeManager';
-import { IResolver } from './IResolver';
+import { Resolver } from './Resolver';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 
-export class ModuleOutputResolver implements IResolver {
+export class ModuleOutputResolver implements Resolver {
   constructor(private scopeManager: ScopeManager) {}
 
   resolve(pathParts: string[], context: Address): unknown {

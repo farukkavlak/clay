@@ -1,4 +1,4 @@
-import { Address, IState } from '@clay/contracts';
+import { Address, State } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { Statement } from '@clay/parser';
 import { PlanAction } from '@clay/planner';
@@ -23,7 +23,7 @@ export class PlanRunner {
     private resolver: ReferenceResolver
   ) {}
 
-  async *run(actions: PlanAction[], config: LoadedConfig, graph: Graph<GraphNode>, state: IState): AsyncGenerator<RunEvent> {
+  async *run(actions: PlanAction[], config: LoadedConfig, graph: Graph<GraphNode>, state: State): AsyncGenerator<RunEvent> {
     this.checkActionsMatch(actions, graph);
 
     yield { type: 'planned', actions };
@@ -48,7 +48,7 @@ export class PlanRunner {
   }
 
   /** Creates, updates and replacements follow the graph, so a resource runs after what it reads from. */
-  private async *applyInOrder(actions: PlanAction[], graph: Graph<GraphNode>, loadedModules: LoadedModule[], state: IState): AsyncGenerator<RunEvent, boolean> {
+  private async *applyInOrder(actions: PlanAction[], graph: Graph<GraphNode>, loadedModules: LoadedModule[], state: State): AsyncGenerator<RunEvent, boolean> {
     const byKey = new Map(actions.map((action) => [Address.of(action).toString(), action]));
 
     for (const layer of graph.topologicalSort())
@@ -65,7 +65,7 @@ export class PlanRunner {
   }
 
   /** The config no longer knows a removed resource, so its dependencies come from state: a resource goes before what it reads from. */
-  private async *applyDeletes(actions: PlanAction[], state: IState): AsyncGenerator<RunEvent, boolean> {
+  private async *applyDeletes(actions: PlanAction[], state: State): AsyncGenerator<RunEvent, boolean> {
     const deletes = new Map(actions.filter((action) => action.type === 'DELETE').map((action) => [Address.of(action).toString(), action]));
     const graph = this.deleteGraph(deletes, state);
 
@@ -74,7 +74,7 @@ export class PlanRunner {
     return true;
   }
 
-  private deleteGraph(deletes: Map<string, PlanAction>, state: IState): Graph<PlanAction> {
+  private deleteGraph(deletes: Map<string, PlanAction>, state: State): Graph<PlanAction> {
     const graph = new Graph<PlanAction>();
 
     for (const [key, action] of deletes) graph.addNode(key, action);
@@ -84,7 +84,7 @@ export class PlanRunner {
     return graph;
   }
 
-  private async *step(action: PlanAction, state: IState): AsyncGenerator<RunEvent, boolean> {
+  private async *step(action: PlanAction, state: State): AsyncGenerator<RunEvent, boolean> {
     // An unchanged resource has nothing to report; it only refreshes what it reads from, and the write that ends the run saves that.
     const quiet = action.type === 'NO_OP';
     if (!quiet) yield { type: 'started', action };
@@ -104,7 +104,7 @@ export class PlanRunner {
   }
 
   /** A replacement may have deleted before it failed to create; what happened is saved either way. */
-  private async saveAfterFailure(state: IState): Promise<Error | undefined> {
+  private async saveAfterFailure(state: State): Promise<Error | undefined> {
     try {
       await this.stateManager.write(state);
       return undefined;
@@ -113,7 +113,7 @@ export class PlanRunner {
     }
   }
 
-  private resolveOutputs(program: Statement[], state: IState, context: Address): Record<string, unknown> {
+  private resolveOutputs(program: Statement[], state: State, context: Address): Record<string, unknown> {
     const outputs: Record<string, unknown> = {};
     const scope = scopeOf(context);
 
@@ -127,7 +127,7 @@ export class PlanRunner {
     return outputs;
   }
 
-  private resolveOutputsOf(scope: string, loadedModules: LoadedModule[], currentState: IState): void {
+  private resolveOutputsOf(scope: string, loadedModules: LoadedModule[], currentState: State): void {
     const mod = loadedModules.find((m) => scopeOf(m.address) === scope);
     if (mod) this.resolveOutputs(mod.program, currentState, mod.address);
   }

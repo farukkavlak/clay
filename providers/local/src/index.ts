@@ -1,13 +1,13 @@
-import { IProvider, IResourceHandler, ISchema } from '@clay/contracts';
+import { Provider, ResourceHandler, Schema } from '@clay/contracts';
 
 import { CommandExecResource } from './resources/CommandExecResource';
 import { LocalFileResource } from './resources/LocalFileResource';
 import { NullResource } from './resources/NullResource';
 import { RandomStringResource } from './resources/RandomStringResource';
 
-export class LocalProvider implements IProvider {
+export class LocalProvider implements Provider {
   readonly resources = ['local_file', 'random_string', 'null_resource', 'command_exec'];
-  private handlers: Map<string, IResourceHandler> = new Map();
+  private handlers: Map<string, ResourceHandler> = new Map();
 
   constructor() {
     this.handlers.set('local_file', new LocalFileResource());
@@ -16,14 +16,14 @@ export class LocalProvider implements IProvider {
     this.handlers.set('command_exec', new CommandExecResource());
   }
 
-  private handler(type: string): IResourceHandler {
+  private handler(type: string): ResourceHandler {
     const handler = this.handlers.get(type);
     if (!handler) throw new Error(`Unsupported resource type: ${type}`);
 
     return handler;
   }
 
-  async getSchema(type: string): Promise<ISchema> {
+  async getSchema(type: string): Promise<Schema> {
     return await this.handler(type).getSchema();
   }
 
