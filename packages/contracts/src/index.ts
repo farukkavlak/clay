@@ -21,8 +21,11 @@ export interface State {
   resources: Record<string, Resource>;
 }
 
+/** The shape this version of Clay writes. A state that names a higher one was written by a Clay that knows something this one does not. */
+export const STATE_VERSION = 1;
+
 export function emptyState(): State {
-  return { version: 1, serial: 0, resources: {} };
+  return { version: STATE_VERSION, serial: 0, resources: {} };
 }
 
 export type SchemaType = 'string' | 'number' | 'boolean' | 'list' | 'map' | 'object';

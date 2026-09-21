@@ -4,10 +4,7 @@ import path from 'node:path';
 import { emptyState, State } from '@clay/contracts';
 
 import { StateBackend } from '../StateBackend';
-
-function serialize(state: State): string {
-  return JSON.stringify(state, null, 2);
-}
+import { parseState, serializeState } from '../stateFile';
 
 export class LocalBackend implements StateBackend {
   private filePath: string;
@@ -26,7 +23,7 @@ export class LocalBackend implements StateBackend {
   async read(): Promise<State> {
     try {
       const content = await fs.readFile(this.filePath);
-      return JSON.parse(content.toString('utf8')) as State;
+      return parseState(content.toString('utf8'), this.filePath);
     } catch (error) {
       const err = error as { code?: string };
       if (err.code === 'ENOENT') return emptyState();
@@ -45,14 +42,14 @@ export class LocalBackend implements StateBackend {
 
     // Rename is atomic, so a run killed mid-write leaves the old state whole.
     const tmpPath = `${this.filePath}.tmp`;
-    await fs.writeFile(tmpPath, serialize(state), 'utf8');
+    await fs.writeFile(tmpPath, serializeState(state), 'utf8');
     await fs.rename(tmpPath, this.filePath);
   }
 
   /** The file system decides, so nothing can slip in between the check and the write. */
   async writeIfAbsent(state: State): Promise<boolean> {
     try {
-      await fs.writeFile(this.filePath, serialize(state), { encoding: 'utf8', flag: 'wx' });
+      await fs.writeFile(this.filePath, serializeState(state), { encoding: 'utf8', flag: 'wx' });
       return true;
     } catch (error) {
       if ((error as { code?: string }).code === 'EEXIST') return false;
