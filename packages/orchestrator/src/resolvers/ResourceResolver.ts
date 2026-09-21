@@ -16,7 +16,8 @@ export class ResourceResolver implements Resolver {
   }
 
   private getResolvedAttribute(resource: { id?: string; attributes: Record<string, unknown> }, attributeName: string, fullPath: string): unknown {
-    let attrValue: unknown = resource.attributes[attributeName];
+    // Plain indexing would find inherited names like `toString`.
+    let attrValue: unknown = Object.hasOwn(resource.attributes, attributeName) ? resource.attributes[attributeName] : undefined;
     if (attrValue === undefined && attributeName === 'id') attrValue = resource.id;
 
     if (attrValue === undefined) throw new UnresolvedReferenceError(`Invalid resource reference "${fullPath}": Attribute "${attributeName}" not found on resource`);

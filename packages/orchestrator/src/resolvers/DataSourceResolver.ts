@@ -14,7 +14,8 @@ export class DataSourceResolver implements Resolver {
     const dataAttributes = this.dataSources.get(key);
     if (!dataAttributes) throw new Error(`Data source "${key}" not found (or not resolved yet)`);
 
-    const attrValue = dataAttributes[attrName];
+    // Plain indexing would find inherited names like `toString`.
+    const attrValue = Object.hasOwn(dataAttributes, attrName) ? dataAttributes[attrName] : undefined;
     if (attrValue === undefined) throw new Error(`Attribute "${attrName}" not found on data source "${key}"`);
 
     return attrValue;

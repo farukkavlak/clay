@@ -97,6 +97,22 @@ describe('Orchestrator - Data Sources', () => {
     expect(resource.attributes.contact).toBe('test@example.com');
   });
 
+  it('should refuse an attribute a data source only inherited', async () => {
+    mockProvider.setMockData('user-123', { username: 'testuser' });
+
+    const config = `
+      data "mock_data" "user" {
+        id = "user-123"
+      }
+
+      resource "mock_resource" "app" {
+        owner = data.mock_data.user.toString
+      }
+    `;
+
+    await expect(apply(orchestrator, config)).rejects.toThrow('Attribute "toString" not found on data source');
+  });
+
   it('should throw error if data source provider is not registered', async () => {
     const config = `
       data "really_unknown_provider" "test" {

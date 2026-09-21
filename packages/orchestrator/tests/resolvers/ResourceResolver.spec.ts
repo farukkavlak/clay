@@ -2,6 +2,7 @@ import { Address, State } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { ResourceResolver } from '../../src/resolvers/ResourceResolver';
+import { UnresolvedReferenceError } from '../../src/resolvers/UnresolvedReferenceError';
 
 describe('ResourceResolver', () => {
   const resolver = new ResourceResolver();
@@ -44,6 +45,11 @@ describe('ResourceResolver', () => {
 
   it('should throw if resource not found', () => {
     expect(() => resolver.resolve(['resource', 'missing', 'id'], context, mockState)).toThrow(/Resource "resource.missing" not found/);
+  });
+
+  it.each(['toString', 'constructor', 'hasOwnProperty'])('should throw if the attribute is only inherited, like %s', (name) => {
+    expect(() => resolver.resolve(['resource', 'test', name], context, mockState)).toThrow(UnresolvedReferenceError);
+    expect(() => resolver.resolve(['resource', 'test', name], context, mockState)).toThrow(`Attribute "${name}" not found`);
   });
 
   it('should throw if attribute not found', () => {
