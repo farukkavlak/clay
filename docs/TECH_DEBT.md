@@ -324,9 +324,15 @@ Found by the 2026-09-20 review of this section:
       CLI now prints a line per resource. `plan` stays a plain call: it computes a list and
       has nothing to report along the way. Resources in one layer run one after another
       now, not in parallel.
-- [ ] Resolving works on a context that can be cloned per scope, instead of one mutable
+- [x] Resolving works on a context that can be cloned per scope, instead of one mutable
       `ScopeManager` keyed by scope strings. The dependency-order fix needs to resolve the
-      same config against different sets of pending values.
+      same config against different sets of pending values. The fix keeps its pending set
+      inside `DesiredStateBuilder`, so the reason for the clone went. What stays is one
+      `ScopeManager` per engine, cleared on every load, which is fine for one run at a
+      time and goes with parallel apply (`TASKS.md` 10.10). Done here: `getScope` was a
+      pure function of an address and is `scopeOf` in `keys.ts`, so the scanner, the graph
+      builder and two resolvers no longer take the manager, and `ScopeManager` holds
+      variables and outputs and nothing else.
 - [ ] The CLI commands share their helpers instead of copying them. `apply` has its own
       copy of the action list and it says less than `plan`'s: no "will be replaced", no
       diff. `newOrchestrator` with the `LocalProvider` registration is copied into `plan`,

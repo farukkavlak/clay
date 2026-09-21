@@ -1,5 +1,4 @@
 import { Address } from '@clay/contracts';
-import { childScope } from '../keys';
 
 export interface VariableValue {
   value: unknown;
@@ -9,11 +8,6 @@ export interface VariableValue {
 export class ScopeManager {
   private variables: Map<string, Map<string, VariableValue>> = new Map();
   private outputs: Map<string, Map<string, unknown>> = new Map();
-
-  getScope(address?: Address): string {
-    if (!address) return '';
-    return address.modulePath.reduce((scope, moduleName) => childScope(scope, moduleName), '');
-  }
 
   setVariable(scope: string, name: string, value: VariableValue): void {
     if (!this.variables.has(scope)) this.variables.set(scope, new Map());

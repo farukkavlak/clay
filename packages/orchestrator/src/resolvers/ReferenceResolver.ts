@@ -11,9 +11,9 @@ export class ReferenceResolver {
 
   constructor(scopeManager: ScopeManager, dataSources: Map<string, Record<string, unknown>>) {
     this.resolvers.set('var', new VariableResolver(scopeManager, this));
-    this.resolvers.set('data', new DataSourceResolver(dataSources, scopeManager));
+    this.resolvers.set('data', new DataSourceResolver(dataSources));
     this.resolvers.set('module', new ModuleOutputResolver(scopeManager));
-    this.resolvers.set('_resource', new ResourceResolver(scopeManager));
+    this.resolvers.set('_resource', new ResourceResolver());
   }
 
   resolve(pathParts: string[], state: IState, context?: Address): unknown {

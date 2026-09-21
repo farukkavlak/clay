@@ -1,18 +1,15 @@
 import { Address } from '@clay/contracts';
-import { ScopeManager } from '../scope/ScopeManager';
+import { scopeOf } from '../keys';
 import { IResolver } from './IResolver';
 
 export class DataSourceResolver implements IResolver {
-  constructor(
-    private dataSources: Map<string, Record<string, unknown>>,
-    private scopeManager: ScopeManager
-  ) {}
+  constructor(private dataSources: Map<string, Record<string, unknown>>) {}
 
   resolve(pathParts: string[], context: Address): unknown {
     if (pathParts.length < 4) throw new Error(`Data source reference must include attribute: ${pathParts.join('.')}`);
 
     const [, dataSourceType, dataSourceName, attrName] = pathParts;
-    const scope = this.scopeManager.getScope(context);
+    const scope = scopeOf(context);
     const key = scope ? `${scope}.${dataSourceType}.${dataSourceName}` : `${dataSourceType}.${dataSourceName}`;
 
     const dataAttributes = this.dataSources.get(key);

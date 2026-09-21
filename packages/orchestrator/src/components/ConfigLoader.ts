@@ -2,6 +2,7 @@ import { Address, IState } from '@clay/contracts';
 import { Lexer, Parser, Statement } from '@clay/parser';
 
 import { ProviderRegistry } from '../ProviderRegistry';
+import { scopeOf } from '../keys';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { ScopeManager } from '../scope/ScopeManager';
 import { LoadedModule, LoadedResource, ModuleLoader } from './ModuleLoader';
@@ -35,7 +36,7 @@ export class ConfigLoader {
   }
 
   private async readDataSources(program: Statement[], state: IState, scopeAddress: Address): Promise<void> {
-    const scope = this.scopeManager.getScope(scopeAddress);
+    const scope = scopeOf(scopeAddress);
 
     for (const stmt of program)
       if (stmt.type === 'Data') {

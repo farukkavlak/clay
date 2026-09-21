@@ -1,4 +1,5 @@
 import { Address } from '@clay/contracts';
+import { scopeOf } from '../keys';
 import { ScopeManager } from '../scope/ScopeManager';
 import { IResolver } from './IResolver';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
@@ -10,7 +11,7 @@ export class ModuleOutputResolver implements IResolver {
     if (pathParts.length < 3) throw new Error(`Module output reference must include output name: ${pathParts.join('.')}`);
 
     const [, moduleName, outputName] = pathParts;
-    const currentScope = this.scopeManager.getScope(context);
+    const currentScope = scopeOf(context);
     const childScope = currentScope ? `${currentScope}.module.${moduleName}` : `module.${moduleName}`;
 
     const output = this.scopeManager.getOutput(childScope, outputName);
