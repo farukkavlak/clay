@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-384 tests pass, and so do the type check and the build. Lint is clean, and so is
+385 tests pass, and so do the type check and the build. Lint is clean, and so is
 `npm audit`.
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -367,9 +367,11 @@ Found by the 2026-09-20 review of this section:
       refreshed yet; `state list` says where it looked, as `output` does; and a reader
       that closes the pipe early (`clay plan | head`) gets nothing instead of a Node
       stack trace for `EPIPE`.
-- [ ] `ReferenceResolver.resolveValue` unwraps any object with `type` and `value` in its
-      last branch. It sees AST nodes only, so it is not a bug today, but it is the shape
-      that made a map read back as its `value`; a check for a real AST node would say so.
+- [x] `ReferenceResolver.resolveValue` unwrapped any object with `type` and `value` in
+      its last branch. It sees AST nodes only, so nothing broke, but it was the shape
+      that made a map read back as its `value` elsewhere. It names the kinds it unwraps
+      now, `Number` and `Boolean` beside the four that had their own branch, and anything
+      else comes back as it is.
 - [ ] A resolve error names the reference but not the resource that holds it, so
       `cannot be joined into a string` leaves the user searching when two resources read
       the same thing. `planResource` can wrap it with the address, as

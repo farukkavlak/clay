@@ -96,13 +96,15 @@ describe('ReferenceResolver', () => {
     expect(resolver.resolveValue(val, mockState, context)).toBe('Var: var_value, Res: resolved');
   });
 
-  it('should return value property if object has type and value but not Reference/String', () => {
-    // E.g. Number, Boolean types from parser
-    const val = {
-      type: 'Number',
-      value: 42,
-    };
-    expect(resolver.resolveValue(val, mockState, context)).toBe(42);
+  it('should unwrap a number or a boolean node', () => {
+    expect(resolver.resolveValue({ type: 'Number', value: 42 }, mockState, context)).toBe(42);
+    expect(resolver.resolveValue({ type: 'Boolean', value: true }, mockState, context)).toBe(true);
+  });
+
+  it('should leave a map that happens to have type and value keys alone', () => {
+    const settings = { type: 'a', value: 'b' };
+
+    expect(resolver.resolveValue(settings, mockState, context)).toBe(settings);
   });
 
   it('should resolve variable reference', () => {

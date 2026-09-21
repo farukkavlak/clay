@@ -49,8 +49,13 @@ export class ReferenceResolver {
       case 'Map': {
         return this.resolveMap(node, state, context);
       }
+      case 'Number':
+      case 'Boolean': {
+        return node.value;
+      }
+      // A map whose keys are type and value is a value, not a node.
       default: {
-        return 'type' in node && 'value' in node ? node.value : value;
+        return value;
       }
     }
   }
