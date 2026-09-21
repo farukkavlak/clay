@@ -29,7 +29,7 @@ describe('CLI: state command', () => {
       throw new Error('ProcessExit');
     }) as never);
 
-    readMock = vi.fn().mockResolvedValue(JSON.parse(JSON.stringify(mockState)));
+    readMock = vi.fn().mockResolvedValue(structuredClone(mockState));
     writeMock = vi.fn().mockResolvedValue(undefined);
     lockMock = vi.fn().mockResolvedValue(undefined);
     unlockMock = vi.fn().mockResolvedValue(undefined);

@@ -28,19 +28,25 @@ export class ReferenceResolver {
   resolveValue(value: unknown, state: IState, context?: Address): unknown {
     if (!value || typeof value !== 'object') return value;
 
-    const valueObj = value as { type?: string; value?: unknown };
+    const node = value as { type?: string; value?: unknown };
 
-    if (valueObj.type === 'Reference' && Array.isArray(valueObj.value)) return this.resolve(valueObj.value as string[], state, context);
-
-    if (valueObj.type === 'String' && typeof valueObj.value === 'string') return this.interpolateString(valueObj.value, state, context);
-
-    if (valueObj.type === 'List') return this.resolveList(valueObj, state, context);
-
-    if (valueObj.type === 'Map') return this.resolveMap(valueObj, state, context);
-
-    if ('type' in valueObj && 'value' in valueObj) return valueObj.value;
-
-    return value;
+    switch (node.type) {
+      case 'Reference': {
+        return this.resolve(node.value as string[], state, context);
+      }
+      case 'String': {
+        return this.interpolateString(node.value as string, state, context);
+      }
+      case 'List': {
+        return this.resolveList(node, state, context);
+      }
+      case 'Map': {
+        return this.resolveMap(node, state, context);
+      }
+      default: {
+        return 'type' in node && 'value' in node ? node.value : value;
+      }
+    }
   }
 
   private resolveList(valueObj: { value?: unknown }, state: IState, context?: Address): unknown[] {

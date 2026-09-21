@@ -35,7 +35,8 @@ export default [
       'no-unused-vars': 'off',
       'no-undef': 'warn',
       'no-unsafe-optional-chaining': 'warn',
-      camelcase: 'warn',
+      // Config attribute and resource names are snake_case, and tests spell them as keys.
+      camelcase: ['warn', { properties: 'never' }],
       'array-callback-return': 'warn',
       'no-await-in-loop': 'off',
       'no-constructor-return': 'warn',
@@ -43,7 +44,6 @@ export default [
       'no-inner-declarations': 'warn',
       'no-promise-executor-return': 'warn',
       'no-self-compare': 'warn',
-      'no-template-curly-in-string': 'warn',
       'no-unmodified-loop-condition': 'warn',
       'no-unreachable-loop': 'warn',
       'no-use-before-define': 'warn',

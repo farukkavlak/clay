@@ -40,7 +40,6 @@ describe('ReferenceScanner', () => {
   });
 
   it('should find every reference in an interpolated string', () => {
-    // eslint-disable-next-line no-template-curly-in-string -- Mini's own interpolation syntax, not a JS template
     const value = '${resource.db.endpoint} and ${resource.kv.id}';
     const attributes = { line: { type: 'String', value } };
 
