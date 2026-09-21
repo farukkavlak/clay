@@ -15,7 +15,7 @@ describe('apply and plan against real files', () => {
   let orchestrator: Orchestrator;
 
   const newOrchestrator = () => {
-    const engine = new Orchestrator(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
+    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
     engine.registerProvider(new LocalProvider());
     return engine;
   };

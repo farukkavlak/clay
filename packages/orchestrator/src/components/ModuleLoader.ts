@@ -76,7 +76,7 @@ export class ModuleLoader {
     if (moduleContent === undefined) throw new Error(`Module source not found at: ${moduleFile}`);
 
     const parser = new Parser(new Lexer(moduleContent).tokenize());
-    return parser.parse() || [];
+    return parser.parse();
   }
 
   // An input is read where the module is called, so its context is the parent.

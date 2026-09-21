@@ -72,7 +72,7 @@ describe('Orchestrator - Phase 4: Data Flow', () => {
     const backend = new LocalBackend(tmpDir);
     const stateManager = new StateManager(backend);
     files = {};
-    orchestrator = new Orchestrator(stateManager, new InMemoryFiles(files));
+    orchestrator = Orchestrator.create(stateManager, new InMemoryFiles(files));
     orchestrator.registerProvider(mockProvider);
 
     // Ensure plan returns empty array by default

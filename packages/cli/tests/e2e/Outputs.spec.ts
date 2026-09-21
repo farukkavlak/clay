@@ -14,7 +14,7 @@ describe('outputs in the state file', () => {
   let dir: string;
 
   const newOrchestrator = () => {
-    const engine = new Orchestrator(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
+    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
     engine.registerProvider(new LocalProvider());
     return engine;
   };

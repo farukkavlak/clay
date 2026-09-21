@@ -76,7 +76,7 @@ async function confirmApply(autoConfirm: boolean): Promise<boolean> {
 }
 
 function newOrchestrator(cwd: string, files: ConfigFiles): Orchestrator {
-  const orchestrator = new Orchestrator(new StateManager(new LocalBackend(cwd)), files);
+  const orchestrator = Orchestrator.create(new StateManager(new LocalBackend(cwd)), files);
   orchestrator.registerProvider(new LocalProvider());
 
   return orchestrator;

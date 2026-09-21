@@ -64,7 +64,7 @@ describe('Orchestrator: Advanced Features', () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'orchestrator-test-'));
     const backend = new LocalBackend(tmpDir);
     const stateManager = new StateManager(backend);
-    orchestrator = new Orchestrator(stateManager, new InMemoryFiles({}));
+    orchestrator = Orchestrator.create(stateManager, new InMemoryFiles({}));
     mockProvider = new MockProvider();
     orchestrator.registerProvider(mockProvider);
   });
