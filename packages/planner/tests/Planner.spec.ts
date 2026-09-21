@@ -99,6 +99,16 @@ describe('Planner', () => {
     expect(actions[0].changes).toBeUndefined();
   });
 
+  it('should plan NO_OP when a map holds the same values in another order', () => {
+    const desired = desiredResource('test_resource_g', { path: 'path' });
+
+    const actions = plan([{ ...desired, attributes: { triggers: { b: '2', a: '1' } } }], stateWith('test_resource_g', { triggers: { a: '1', b: '2' } }));
+
+    expect(actions).toHaveLength(1);
+    expect(actions[0].type).toBe('NO_OP');
+    expect(actions[0].changes).toBeUndefined();
+  });
+
   it('should treat an unknown value as a change', () => {
     const desired = desiredResource('test_resource_e', { path: 'path' });
     const actions = plan([{ ...desired, attributes: { path: UNKNOWN } }], stateWith('test_resource_e', { path: 'path' }));

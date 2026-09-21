@@ -1,5 +1,6 @@
 import { Address, Resource, Schema, State } from '@clay/contracts';
 import { AttributeValue, ResourceBlock } from '@clay/parser';
+import { isDeepStrictEqual } from 'node:util';
 
 export type ActionType = 'CREATE' | 'UPDATE' | 'REPLACE' | 'DELETE' | 'NO_OP';
 
@@ -88,9 +89,10 @@ export function validatePlanFile(planFile: unknown): planFile is PlanFile {
   );
 }
 
+/** A map's keys written in another order is not a change. */
 function valueChanged(oldValue: unknown, newValue: unknown): boolean {
   if (isUnknown(newValue)) return true;
-  return JSON.stringify(oldValue) !== JSON.stringify(newValue);
+  return !isDeepStrictEqual(oldValue, newValue);
 }
 
 function calculateDiff(oldAttrs: Record<string, unknown>, newAttrs: Record<string, unknown>): Changes | null {
