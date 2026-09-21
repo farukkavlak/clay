@@ -415,8 +415,11 @@ Found by the 2026-09-20 review of this section:
 
 - [x] `npm run clay` pointed at a file that doesn't exist. The script is gone with
       `ts-node`; the CLI is tried with `node packages/cli/bin/clay.js` in a temp directory.
-- [ ] Test fixtures match the state shape: five mocked states still carry a `variables`
-      key that state no longer has.
+- [x] Test fixtures match the state shape: five mocked states carried a `variables` key
+      that state no longer has, seven more lacked `serial` or `version`, and one resource
+      still had the `type` key section 3 removed. A `vi.fn()` is untyped, so the compiler
+      never saw them. Every mocked state starts from `emptyState()` now, so the shape has
+      one owner.
 - [ ] Tests write only to temp directories. Something once wrote state files into
       `packages/orchestrator`; they are deleted, but what wrote them is unknown.
 - [ ] CI runs lint, format check, type check, build and tests on every push and PR. With

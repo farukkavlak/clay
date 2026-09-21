@@ -1,3 +1,4 @@
+import { emptyState } from '@clay/contracts';
 import { plan } from '@clay/planner';
 import fsPromises from 'node:fs/promises';
 import os from 'node:os';
@@ -9,7 +10,7 @@ import { apply } from './apply';
 
 // Mock fs and path
 
-const readMock = vi.fn().mockResolvedValue({ resources: {}, variables: {}, version: 1 });
+const readMock = vi.fn().mockResolvedValue(emptyState());
 const writeMock = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('@clay/state', () => {

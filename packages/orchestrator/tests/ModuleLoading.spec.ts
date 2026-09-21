@@ -1,3 +1,4 @@
+import { emptyState } from '@clay/contracts';
 import { plan } from '@clay/planner';
 import fsPromises from 'node:fs/promises';
 import os from 'node:os';
@@ -7,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vite
 import { InMemoryFiles, Orchestrator } from '../src/index';
 import { apply } from './apply';
 
-const readMock = vi.fn().mockResolvedValue({ resources: {}, variables: {}, version: 1 });
+const readMock = vi.fn().mockResolvedValue(emptyState());
 const writeMock = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('@clay/state', () => {

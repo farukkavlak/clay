@@ -1,3 +1,4 @@
+import { emptyState } from '@clay/contracts';
 import { StateManager } from '@clay/state';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -15,7 +16,7 @@ describe('CLI: state command', () => {
   let unlockMock: ReturnType<typeof vi.fn>;
 
   const mockState = {
-    version: 1,
+    ...emptyState(),
     resources: {
       'test.t1': { resourceType: 'test', name: 't1', attributes: { id: '1', val: 'foo' } },
       'test.t2': { resourceType: 'test', name: 't2', attributes: { id: '2', val: 'bar' } },
@@ -87,12 +88,7 @@ describe('CLI: state command', () => {
     });
 
     it('should handle resource without attributes', async () => {
-      readMock.mockResolvedValue({
-        version: 1,
-        resources: {
-          'test.noattr': { resourceType: 'test', name: 'noattr' },
-        },
-      });
+      readMock.mockResolvedValue({ ...emptyState(), resources: { 'test.noattr': { resourceType: 'test', name: 'noattr' } } });
       const command = createStateCommand();
       await command.parseAsync(['node', 'clay', 'show', 'test.noattr']);
 

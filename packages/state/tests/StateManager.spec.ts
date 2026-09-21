@@ -141,7 +141,7 @@ describe('StateManager', () => {
 
   describe('Backup', () => {
     it('should create a backup file before writing if state exists', async () => {
-      const state1 = { version: 1, serial: 0, resources: { a: { type: 't', resourceType: 'rt', name: 'n', attributes: {} } } };
+      const state1 = { version: 1, serial: 0, resources: { a: { resourceType: 'rt', name: 'n', attributes: {} } } };
       const state2 = { version: 2, serial: 0, resources: {} };
 
       // First write (no backup expected)

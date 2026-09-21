@@ -1,3 +1,4 @@
+import { emptyState } from '@clay/contracts';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -11,7 +12,7 @@ vi.mock('@clay/state', () => {
     LocalBackend: vi.fn(() => ({ path: '/tmp/clay.state.json' })),
     StateManager: vi.fn().mockImplementation(function () {
       return {
-        read: vi.fn().mockResolvedValue({ resources: {}, variables: {} }),
+        read: vi.fn().mockResolvedValue(emptyState()),
       } as unknown as StateManager;
     }),
   };
@@ -38,7 +39,7 @@ describe('Output Command', () => {
     vi.clearAllMocks();
 
     // Setup Mock StateManager
-    readMock = vi.fn().mockResolvedValue({ resources: {}, variables: {} });
+    readMock = vi.fn().mockResolvedValue(emptyState());
     vi.mocked(StateManager).mockImplementation(function () {
       return {
         read: readMock,
@@ -56,10 +57,7 @@ describe('Output Command', () => {
   });
 
   it('should display outputs from state in formatted table', async () => {
-    const mockState = {
-      resources: {},
-      outputs: { myOutput: 'test_value', anotherOutput: 42 },
-    };
+    const mockState = { ...emptyState(), outputs: { myOutput: 'test_value', anotherOutput: 42 } };
 
     vi.mocked(fs.access).mockResolvedValue(void 0);
     readMock.mockResolvedValue(mockState);
@@ -76,10 +74,7 @@ describe('Output Command', () => {
   });
 
   it('should output JSON format with --json flag', async () => {
-    const mockState = {
-      resources: {},
-      outputs: { myOutput: 'test_value', numberOutput: 123 },
-    };
+    const mockState = { ...emptyState(), outputs: { myOutput: 'test_value', numberOutput: 123 } };
 
     vi.mocked(fs.access).mockResolvedValue(void 0);
     readMock.mockResolvedValue(mockState);
@@ -98,10 +93,7 @@ describe('Output Command', () => {
   });
 
   it('should handle empty state gracefully', async () => {
-    const mockState = {
-      resources: {},
-      outputs: {},
-    };
+    const mockState = { ...emptyState(), outputs: {} };
 
     vi.mocked(fs.access).mockResolvedValue(void 0);
     readMock.mockResolvedValue(mockState);
@@ -139,10 +131,7 @@ describe('Output Command', () => {
   });
 
   it('should handle state with no outputs at all', async () => {
-    const mockState = {
-      resources: {},
-      outputs: undefined,
-    };
+    const mockState = emptyState();
     vi.mocked(fs.access).mockResolvedValue(void 0);
     readMock.mockResolvedValue(mockState);
 
@@ -153,10 +142,7 @@ describe('Output Command', () => {
   });
 
   it('should read the state next to the working directory', async () => {
-    const mockState = {
-      resources: {},
-      outputs: { defaultOut: 'default' },
-    };
+    const mockState = { ...emptyState(), outputs: { defaultOut: 'default' } };
     vi.mocked(fs.access).mockResolvedValue(void 0);
     readMock.mockResolvedValue(mockState);
 
