@@ -420,8 +420,10 @@ Found by the 2026-09-20 review of this section:
       still had the `type` key section 3 removed. A `vi.fn()` is untyped, so the compiler
       never saw them. Every mocked state starts from `emptyState()` now, so the shape has
       one owner.
-- [ ] Tests write only to temp directories. Something once wrote state files into
-      `packages/orchestrator`; they are deleted, but what wrote them is unknown.
+- [x] Tests write only to temp directories. Something once wrote state files into
+      `packages/orchestrator`: three orchestrator tests called `new LocalBackend()` and its
+      directory defaulted to `process.cwd()`, so the test runner's directory got the file.
+      The directory is required now; the CLI already passed it.
 - [ ] CI runs lint, format check, type check, build and tests on every push and PR. With
       build as its own step, the CLI's `pretest` can go.
 - [ ] husky and lint-staged run on commit.
