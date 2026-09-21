@@ -1,5 +1,5 @@
 import { Address } from '@clay/contracts';
-import { scopeOf } from '../keys';
+import { dataSourceKey, scopeOf } from '../keys';
 import { IResolver } from './IResolver';
 
 export class DataSourceResolver implements IResolver {
@@ -9,8 +9,7 @@ export class DataSourceResolver implements IResolver {
     if (pathParts.length < 4) throw new Error(`Data source reference must include attribute: ${pathParts.join('.')}`);
 
     const [, dataSourceType, dataSourceName, attrName] = pathParts;
-    const scope = scopeOf(context);
-    const key = scope ? `${scope}.${dataSourceType}.${dataSourceName}` : `${dataSourceType}.${dataSourceName}`;
+    const key = dataSourceKey(scopeOf(context), dataSourceType, dataSourceName);
 
     const dataAttributes = this.dataSources.get(key);
     if (!dataAttributes) throw new Error(`Data source "${key}" not found (or not resolved yet)`);

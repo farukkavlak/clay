@@ -343,11 +343,12 @@ Found by the 2026-09-20 review of this section:
       `// Skip Whitespace`), and so are the stale ones: `StateManager` promised S3 and
       Azure. What stays says why: a backup that has nothing to copy, a lexer whose rule
       order matters, a random string whose value is its id.
-- [ ] The parser reads a block's attributes in one place, not four (resource, data,
-      variable and module carry the same loop). `LocalProvider` looks its handler up in
-      one place, not six. `ModuleOutputResolver` builds a child scope by hand next to
-      `childScope`, and the data-source key is spelled out in `ConfigLoader.readDataSources` and
-      again in `DataSourceResolver`.
+- [x] The parser reads a block's attributes in one place, not four (resource, data,
+      variable and module carried the same loop; it is `parseAttributes`). `LocalProvider`
+      looks its handler up in one place, not six. `ModuleOutputResolver` uses
+      `childScope` instead of building the scope by hand, and the data-source key is
+      `dataSourceKey` in `keys.ts`, where `ConfigLoader` and `DataSourceResolver` both
+      take it from.
 - [ ] Dead code is gone: `ReferenceScanner` handles an `Interpolation` node the AST does
       not have;
       `ResourceResolver.getResolvedAttribute` unwraps a `{ type, value }` from state, which

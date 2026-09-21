@@ -2,7 +2,7 @@ import { Address, IState } from '@clay/contracts';
 import { Lexer, Parser, Statement } from '@clay/parser';
 
 import { ProviderRegistry } from '../ProviderRegistry';
-import { scopeOf } from '../keys';
+import { dataSourceKey, scopeOf } from '../keys';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { ScopeManager } from '../scope/ScopeManager';
 import { LoadedModule, LoadedResource, ModuleLoader } from './ModuleLoader';
@@ -46,8 +46,7 @@ export class ConfigLoader {
         await provider.validate(stmt.dataSourceType, inputs);
         const attributes = await provider.read(stmt.dataSourceType, inputs);
 
-        const key = scope ? `${scope}.${stmt.dataSourceType}.${stmt.name}` : `${stmt.dataSourceType}.${stmt.name}`;
-        this.dataSources.set(key, attributes);
+        this.dataSources.set(dataSourceKey(scope, stmt.dataSourceType, stmt.name), attributes);
       }
   }
 }

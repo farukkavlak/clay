@@ -56,17 +56,7 @@ export class Parser {
     const typeToken = this.consume(TokenType.String, "Expect resource type string after 'resource'.");
     const nameToken = this.consume(TokenType.String, 'Expect resource name string after resource type.');
 
-    this.consume(TokenType.LBrace, "Expect '{' after resource name.");
-
-    const attributes: Record<string, AttributeValue> = {};
-    while (!this.check(TokenType.RBrace) && !this.isAtEnd()) {
-      const key = this.consume(TokenType.Identifier, 'Expect attribute name.').value;
-      this.consume(TokenType.Assign, "Expect '=' after attribute name.");
-      const value = this.parseValue();
-      attributes[key] = value;
-    }
-
-    this.consume(TokenType.RBrace, "Expect '}' after block body.");
+    const attributes = this.parseAttributes('resource');
 
     return {
       type: 'Resource',
@@ -80,17 +70,7 @@ export class Parser {
     const typeToken = this.consume(TokenType.String, "Expect data source type string after 'data'.");
     const nameToken = this.consume(TokenType.String, 'Expect data source name string after data source type.');
 
-    this.consume(TokenType.LBrace, "Expect '{' after data source name.");
-
-    const attributes: Record<string, AttributeValue> = {};
-    while (!this.check(TokenType.RBrace) && !this.isAtEnd()) {
-      const key = this.consume(TokenType.Identifier, 'Expect attribute name.').value;
-      this.consume(TokenType.Assign, "Expect '=' after attribute name.");
-      const value = this.parseValue();
-      attributes[key] = value;
-    }
-
-    this.consume(TokenType.RBrace, "Expect '}' after block body.");
+    const attributes = this.parseAttributes('data source');
 
     return {
       type: 'Data',
@@ -103,17 +83,7 @@ export class Parser {
   private parseVariable(): VariableBlock {
     const nameToken = this.consume(TokenType.String, "Expect variable name string after 'variable'.");
 
-    this.consume(TokenType.LBrace, "Expect '{' after variable name.");
-
-    const attributes: Record<string, AttributeValue> = {};
-    while (!this.check(TokenType.RBrace) && !this.isAtEnd()) {
-      const key = this.consume(TokenType.Identifier, 'Expect attribute name.').value;
-      this.consume(TokenType.Assign, "Expect '=' after attribute name.");
-      const value = this.parseValue();
-      attributes[key] = value;
-    }
-
-    this.consume(TokenType.RBrace, "Expect '}' after block body.");
+    const attributes = this.parseAttributes('variable');
 
     return {
       type: 'Variable',
@@ -144,23 +114,28 @@ export class Parser {
   private parseModule(): ModuleBlock {
     const nameToken = this.consume(TokenType.String, "Expect module name string after 'module'.");
 
-    this.consume(TokenType.LBrace, "Expect '{' after module name.");
-
-    const attributes: Record<string, AttributeValue> = {};
-    while (!this.check(TokenType.RBrace) && !this.isAtEnd()) {
-      const key = this.consume(TokenType.Identifier, 'Expect attribute name.').value;
-      this.consume(TokenType.Assign, "Expect '=' after attribute name.");
-      const value = this.parseValue();
-      attributes[key] = value;
-    }
-
-    this.consume(TokenType.RBrace, "Expect '}' after block body.");
+    const attributes = this.parseAttributes('module');
 
     return {
       type: 'Module',
       name: nameToken.value,
       attributes,
     };
+  }
+
+  /** The `{ name = value ... }` body every block but output has. */
+  private parseAttributes(block: string): Record<string, AttributeValue> {
+    this.consume(TokenType.LBrace, `Expect '{' after ${block} name.`);
+
+    const attributes: Record<string, AttributeValue> = {};
+    while (!this.check(TokenType.RBrace) && !this.isAtEnd()) {
+      const key = this.consume(TokenType.Identifier, 'Expect attribute name.').value;
+      this.consume(TokenType.Assign, "Expect '=' after attribute name.");
+      attributes[key] = this.parseValue();
+    }
+
+    this.consume(TokenType.RBrace, "Expect '}' after block body.");
+    return attributes;
   }
 
   private parseValue(): AttributeValue {

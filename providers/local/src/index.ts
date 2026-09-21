@@ -16,46 +16,35 @@ export class LocalProvider implements IProvider {
     this.handlers.set('command_exec', new CommandExecResource());
   }
 
-  async getSchema(type: string): Promise<ISchema> {
+  private handler(type: string): IResourceHandler {
     const handler = this.handlers.get(type);
     if (!handler) throw new Error(`Unsupported resource type: ${type}`);
 
-    return await handler.getSchema();
+    return handler;
+  }
+
+  async getSchema(type: string): Promise<ISchema> {
+    return await this.handler(type).getSchema();
   }
 
   async validate(type: string, inputs: Record<string, unknown>): Promise<void> {
-    const handler = this.handlers.get(type);
-    if (!handler) throw new Error(`Unsupported resource type: ${type}`);
-
-    await handler.validate(inputs);
+    await this.handler(type).validate(inputs);
   }
 
   async create(type: string, inputs: Record<string, unknown>): Promise<string> {
-    const handler = this.handlers.get(type);
-    if (!handler) throw new Error(`Unsupported resource type: ${type}`);
-
-    return await handler.create(inputs);
+    return await this.handler(type).create(inputs);
   }
 
   async update(id: string, type: string, inputs: Record<string, unknown>): Promise<void> {
-    const handler = this.handlers.get(type);
-    if (!handler) throw new Error(`Unsupported resource type: ${type}`);
-
-    await handler.update(id, inputs);
+    await this.handler(type).update(id, inputs);
   }
 
   async delete(id: string, type: string): Promise<void> {
-    const handler = this.handlers.get(type);
-    if (!handler) throw new Error(`Unsupported resource type: ${type}`);
-
-    await handler.delete(id);
+    await this.handler(type).delete(id);
   }
 
   async read(type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const handler = this.handlers.get(type);
-    if (!handler) throw new Error(`Unsupported resource type: ${type}`);
-
-    return await handler.read(inputs);
+    return await this.handler(type).read(inputs);
   }
 }
 
