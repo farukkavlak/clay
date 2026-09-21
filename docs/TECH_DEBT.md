@@ -165,7 +165,7 @@ Found by the 2026-09-20 audit, each one reproduced with the built CLI:
       lines to 40. It reads `main.clay` in the current directory like `plan` and `apply`,
       instead of a path of its own. Its mocked unit tests, which tested the copy, are
       replaced by end-to-end ones. Data sources are still read while the config loads
-      (`TASKS.md` 10.9).
+      (`TASKS.md`, "Data sources in the graph").
 - [x] `state mv` moved the key and left the entry behind: `name` and `modulePath` inside
       it still said the old address, and other resources' `dependencies` still named it.
       A later delete was planned from the entry's own name, so it deleted an address that
@@ -176,7 +176,7 @@ Found by the 2026-09-20 audit, each one reproduced with the built CLI:
       `ENOENT` and the run failed the same way every time; only `state rm` got out. The
       provider now treats a file that is already gone as deleted, the way Terraform's
       providers treat "not found". A file removed by hand that stays in the config is
-      still not noticed; that is refresh (`TASKS.md` 10.2).
+      still not noticed; that is refresh (`TASKS.md`, "Refresh").
 - [x] Two blocks with one name were not caught. Two `module "m"` blocks passed in silence
       and the second one won; two `resource "null_resource" "a"` blocks failed with
       `Node null_resource.a already exists`, a message from the graph, not from the config.
@@ -322,7 +322,8 @@ Found by the 2026-09-20 review of this section:
       to apply, so it loads once; what matters in its design is that data sources are
       read at plan and their values travel in the plan, so apply reads nothing again.
       The parse and the graph cost milliseconds; the second data-source read is the real
-      cost, and it goes when data sources join the graph (`TASKS.md` 10.9).
+      cost, and it goes when data sources join the graph (`TASKS.md`, "Data sources in
+      the graph").
 - [x] `apply` yields events (planned, started, applied, failed, done) and the CLI only
       renders them. Writing state as each `applied` arrives was the failed-action fix; the
       CLI now prints a line per resource. `plan` stays a plain call: it computes a list and
@@ -333,10 +334,10 @@ Found by the 2026-09-20 review of this section:
       same config against different sets of pending values. The fix keeps its pending set
       inside `DesiredStateBuilder`, so the reason for the clone went. What stays is one
       `ScopeManager` per engine, cleared on every load, which is fine for one run at a
-      time and goes with parallel apply (`TASKS.md` 10.10). Done here: `getScope` was a
-      pure function of an address and is `scopeOf` in `keys.ts`, so the scanner, the graph
-      builder and two resolvers no longer take the manager, and `ScopeManager` holds
-      variables and outputs and nothing else.
+      time and goes with parallel apply (`TASKS.md`, "Parallel apply"). Done here:
+      `getScope` was a pure function of an address and is `scopeOf` in `keys.ts`, so the
+      scanner, the graph builder and two resolvers no longer take the manager, and
+      `ScopeManager` holds variables and outputs and nothing else.
 - [x] The CLI commands share their helpers instead of copying them. `apply` had its own
       copy of the action list and it said less than `plan`'s: no "will be replaced", no
       diff. `showPlan.ts` shows a plan one way, whether it was just made, is about to
@@ -364,7 +365,7 @@ Found by the 2026-09-20 review of this section:
       rather than added to `plan` and `apply`: where the state lives belongs to the
       workspace, not to one command, and a path per call is how two states are born.
       Terraform deprecated its own `-state` for that reason and answers with backends,
-      which Clay will too (`TASKS.md` 10.12). The version is read from `package.json`
+      which Clay will too (`TASKS.md`, "Backends"). The version is read from `package.json`
       instead of typed in again; `init` no longer creates a `.clay/` directory nothing
       uses; `plan` says "Planning..." rather than "Refreshing state...", since nothing is
       refreshed yet; `state list` says where it looked, as `output` does; and a reader
@@ -460,6 +461,16 @@ Found by the 2026-09-20 review of this section:
       each, the value grammar with the comma rules a list and a map actually have, the
       reference forms, the AST with `Position` on every node, and a list of what the
       language does not have. Each claim was tried against the built parser.
-- [ ] `TASKS.md` matches what is actually done.
+- [x] `TASKS.md` matches what is actually done. It was a 477-line checklist: three
+      sections claimed parallel execution the runner does not do, a `require-atomic-updates`
+      fix that is still an `eslint-disable`, data sources that query when every `read`
+      returns `{}`, and a plan "hash check" that is a serial; three things it listed as
+      open were done (the source line under an error, the end-to-end tests, multi-line
+      strings); the test counts and line counts were stale; section numbers repeated. It
+      is what comes next now, in order of worth, with what shipped in a `Done` section at
+      the end, one line per area and no counts to go stale. What this file sent there
+      (numbers, escapes, nested access, backends, refresh, computed attributes, schema
+      validation, data sources in the graph, parallel apply, path values) is kept as
+      written.
 - [ ] Merged and empty branches are deleted (19).
 - [ ] `.editorconfig`, a license file and a changelog are added.
