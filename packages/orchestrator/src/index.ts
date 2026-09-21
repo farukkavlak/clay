@@ -86,7 +86,7 @@ export class Orchestrator {
   private async resolveAndCheck(
     configContent: string,
     state: State
-  ): Promise<{ desiredResources: DesiredResource[]; outputs: Record<string, unknown>; schemas: Record<string, Schema> }> {
+  ): Promise<{ desiredResources: DesiredResource[]; outputs: Record<string, unknown>; schemas: Map<string, Schema> }> {
     const { loadedResources, loadedModules } = await this.loader.load(configContent, state);
 
     const graph = this.graphBuilder.buildExecutionGraph(loadedResources, loadedModules);
@@ -96,14 +96,15 @@ export class Orchestrator {
   }
 
   /** What a provider can refuse before anything runs is refused here. A value not known yet is checked once the run knows it. */
-  private async checkWithProviders(desired: DesiredResource[]): Promise<Record<string, Schema>> {
-    const schemas: Record<string, Schema> = {};
+  private async checkWithProviders(desired: DesiredResource[]): Promise<Map<string, Schema>> {
+    // A Map because a resource type may be named `constructor`: an object would already hold a value there, and the real schema would be dropped.
+    const schemas = new Map<string, Schema>();
 
     for (const resource of desired) {
       const type = resource.block.resourceType;
       const provider = this.providers.get(type);
 
-      schemas[type] ??= await provider.getSchema(type);
+      if (!schemas.has(type)) schemas.set(type, await provider.getSchema(type));
       if (Object.values(resource.attributes).some((value) => isUnknown(value))) continue;
 
       try {

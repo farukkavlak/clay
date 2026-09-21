@@ -123,7 +123,7 @@ export function hasChanges(currentAttrs: Record<string, unknown>, desiredAttrs: 
   return calculateDiff(currentAttrs, desiredAttrs) !== null;
 }
 
-function processExistingResource(actions: PlanAction[], desired: DesiredResource, currentResource: Resource, schemas: Record<string, Schema>) {
+function processExistingResource(actions: PlanAction[], desired: DesiredResource, currentResource: Resource, schemas: Map<string, Schema>) {
   const resource = desired.block;
   const { modulePath } = desired.address;
   const changes = calculateDiff(currentResource.attributes, desired.attributes);
@@ -140,7 +140,7 @@ function processExistingResource(actions: PlanAction[], desired: DesiredResource
     return;
   }
 
-  const schema = schemas[resource.resourceType] || {};
+  const schema = schemas.get(resource.resourceType) ?? {};
   const forcesNew = Object.keys(changes).some((attr) => schema[attr]?.forceNew);
 
   actions.push({
@@ -155,7 +155,7 @@ function processExistingResource(actions: PlanAction[], desired: DesiredResource
   });
 }
 
-export function plan(desiredResources: DesiredResource[], currentState: State, schemas: Record<string, Schema> = {}): PlanAction[] {
+export function plan(desiredResources: DesiredResource[], currentState: State, schemas: Map<string, Schema> = new Map()): PlanAction[] {
   const actions: PlanAction[] = [];
   const currentMap = new Map<string, Resource>(Object.entries(currentState.resources));
   const desiredMap = new Map<string, DesiredResource>();

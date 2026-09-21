@@ -63,7 +63,7 @@ describe('Planner', () => {
     expect(plan([desired], { version: 1, serial: 0, resources: {} })[0]).toMatchObject({ type: 'CREATE', dependencies: ['mock_resource.dep'] });
     expect(plan([desired], stateWith('r', { path: 'old' }))[0]).toMatchObject({ type: 'UPDATE', dependencies: ['mock_resource.dep'] });
     expect(plan([desired], stateWith('r', { path: 'x' }))[0]).toMatchObject({ type: 'NO_OP', dependencies: ['mock_resource.dep'] });
-    const forcesNew = Object.fromEntries([[desired.block.resourceType, { path: { type: 'string' as const, forceNew: true } }]]);
+    const forcesNew = new Map([[desired.block.resourceType, { path: { type: 'string' as const, forceNew: true } }]]);
     expect(plan([desired], stateWith('r', { path: 'old' }), forcesNew)[0]).toMatchObject({ type: 'REPLACE', dependencies: ['mock_resource.dep'] });
     expect(plan([], stateWith('r', { path: 'x' }))[0]).not.toHaveProperty('dependencies');
   });
@@ -118,11 +118,7 @@ describe('Planner', () => {
     expect(actions[0].changes!.path).toEqual({ old: 'path', new: UNKNOWN });
   });
 
-  const schemas = {
-    mock_resource: {
-      path: { type: 'string' as const, required: true, forceNew: true },
-    },
-  };
+  const schemas = new Map([['mock_resource', { path: { type: 'string' as const, required: true, forceNew: true } }]]);
 
   it('should plan one REPLACE when a forceNew attribute changes', () => {
     const actions = plan([desiredResource('test_resource_f', { path: 'new_path' })], stateWith('test_resource_f', { path: 'old_path' }, 'mock_id_123'), schemas);
