@@ -284,6 +284,17 @@ describe('Clay Parser', () => {
       }
     });
 
+    // The second would replace the first in silence, the way a second block once did.
+    it.each([
+      ['an attribute', 'resource "null_resource" "a" { v = 1 v = 2 }', 'v is set twice', at(1, 38)],
+      ['a map key', 'resource "null_resource" "a" { m = { k = 1, k = 2 } }', 'k is set twice', at(1, 45)],
+    ])('refuses %s given twice, at the second one', (_, input, message, position) => {
+      const error = errorOf(input);
+
+      expect(error.message).toBe(message);
+      expect(error.position).toEqual(position);
+    });
+
     it('tells blocks of different kinds with one name apart', () => {
       const input = 'variable "x" {}\noutput "x" { value = "1" }\nmodule "x" { source = "./x" }\nresource "null_resource" "x" {}\nresource "local_file" "x" {}';
 

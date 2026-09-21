@@ -41,7 +41,8 @@ output "name" { value = value }
 module "name" { attributes }
 ```
 
-`attributes` is zero or more `name = value` pairs, in any order, without separators.
+`attributes` is zero or more `name = value` pairs, in any order, without separators, and
+no name twice.
 `output` takes exactly one attribute and it must be `value`.
 
 What the engine reads from each:
@@ -64,8 +65,8 @@ key     = IDENTIFIER | STRING
 ```
 
 A list needs a comma between items and may end with one. A map does not need commas.
-A map key may be a bare identifier or a quoted string; a block kind is a fine identifier,
-`true` and `false` are not.
+A map key may be a bare identifier or a quoted string, and appears once; a block kind is
+a fine identifier, `true` and `false` are not.
 
 ### References
 

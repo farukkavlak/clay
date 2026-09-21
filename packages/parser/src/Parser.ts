@@ -128,9 +128,10 @@ export class Parser {
 
     const attributes: Record<string, AttributeValue> = {};
     while (!this.check(TokenType.RBrace) && !this.isAtEnd()) {
-      const key = this.consume(TokenType.Identifier, 'Expect attribute name.').value;
+      const key = this.consume(TokenType.Identifier, 'Expect attribute name.');
+      this.refuseSecond(attributes, key);
       this.consume(TokenType.Assign, "Expect '=' after attribute name.");
-      attributes[key] = this.parseValue();
+      attributes[key.value] = this.parseValue();
     }
 
     this.consume(TokenType.RBrace, "Expect '}' after block body.");
@@ -165,14 +166,20 @@ export class Parser {
   private parseMap(position: Position): AttributeValue {
     const map: Record<string, AttributeValue> = {};
     while (!this.check(TokenType.RBrace) && !this.isAtEnd()) {
-      const key = this.matchToken(TokenType.String) ? this.previous().value : this.consume(TokenType.Identifier, 'Expect key in map.').value;
+      const key = this.matchToken(TokenType.String) ? this.previous() : this.consume(TokenType.Identifier, 'Expect key in map.');
+      this.refuseSecond(map, key);
 
       this.consume(TokenType.Assign, "Expect '=' after key in map.");
-      map[key] = this.parseValue();
+      map[key.value] = this.parseValue();
       this.matchToken(TokenType.Comma);
     }
     this.consume(TokenType.RBrace, "Expect '}' after map.");
     return { type: 'Map', value: map, position };
+  }
+
+  // A second value under one name would replace the first in silence.
+  private refuseSecond(entries: Record<string, AttributeValue>, key: Token): void {
+    if (Object.hasOwn(entries, key.value)) throw new ConfigError(`${key.value} is set twice`, key.position);
   }
 
   private parseReference(position: Position): AttributeValue {

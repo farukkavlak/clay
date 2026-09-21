@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-399 tests pass, and so do the type check and the build. Lint is clean, and so is
+401 tests pass, and so do the type check and the build. Lint is clean, and so is
 `npm audit`.
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -216,6 +216,9 @@ Found by the 2026-09-20 review of this section:
       could not save left a state that still listed the resource, and the user saw only
       the create error. Terraform reports the failed save as an error of its own. The
       `failed` event carries it now, and `apply` prints it before the action's error.
+- [x] An attribute or a map key written twice in one block kept the second value and
+      said nothing, the same silence a second block with one name once had. The parser
+      refuses it now, at the second one: `v is set twice`.
 
 ## 2 — dependencies
 
