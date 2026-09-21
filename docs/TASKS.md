@@ -1,372 +1,51 @@
-# Clay Execution Checklist
+# Tasks
 
-## 0. Architectural Standards
+What Clay does today is in the README. This is what comes next, in the order it is
+worth doing. Terraform is named where it has solved the same problem.
 
-**Constraint:** Zero Runtime Dependencies (Only devDependencies allowed).
+## 1. Language
 
-## 1. Project Initialization
+The parser takes integers, plain strings and one level of attribute access. A real
+configuration hits each of these early.
 
-**Requirement:** Setup a TypeScript Node.js environment.
+- [ ] Negative and decimal numbers; only `[0-9]+` lexes today
+- [ ] String escapes: `\"`, `\n`, `\\`, and `$${` for a literal `${`
+- [ ] Nested access: `local_file.a.tags.env` and `var.list[0]`; today `[` after a
+      reference is a parse error, and the resolver reads the first two segments as the
+      address and the last as the attribute, dropping what lies between
+- [ ] `count` and `for_each`, with `[0]` and `each.key` access; addresses grow an instance
+      key, the way Terraform's `addrs.AbsResourceInstance` does
+- [ ] `path.module`, `path.root` and `path.cwd`, so a module can name a file next to
+      itself; a relative path is resolved from where `clay` runs today
 
-- [x] Initialize `package.json`
-- [x] Configure `tsconfig.json` for strict typing
-- [x] Add linting tools (ESLint/Prettier)
+## 2. Engine
 
-## 2. Syntax & Parsing (The DSL)
-
-**Requirement:** A custom, clean syntax for defining resources.
-
-- [x] **Grammar Design:** Define allowed tokens and structure
-- [x] **Lexer:** Implement tokenizer to convert string input -> Tokens
-- [x] **Parser:** Implement parser to convert Tokens -> AST (Abstract Syntax Tree)
-- [x] **Unit Tests:** Verify handling of valid/invalid syntax
-- [ ] **Numbers:** negative numbers and decimals; only `\d+` lexes today
-- [ ] **String escapes:** `\"`, `\n`, `\\` and `$${` for a literal `${`; multi-line strings
-- [ ] **Nested access:** `local_file.a.tags.env` and `var.list[0]`; today the resolver
-      takes the last segment as the attribute and the rest as the address
-
-## 3. Core Engine Logic
-
-**Requirement:** A system to manage state, resolve dependencies, and execute changes.
-
-**Requirement:** A modular system to manage state, resolve dependencies, and execute changes.
-
-- [x] **`@clay/contracts`:** Define shared interfaces (`Resource`, `Provider`)
-- [x] **`@clay/graph`:** Implement DAG (Directed Acyclic Graph) & Topological Sort
-- [x] **`@clay/state`:** Implement JSON reader/writer & Locking mechanism
-- [x] **`@clay/planner`:** Diff Engine logic (Config vs State)
-- [x] **`@clay/orchestrator`:** The Orchestrator that binds everything together
-  - [x] Provider Registry
-  - [x] Config Parsing Integration
-  - [x] Dependency Graph Building
-  - [x] Plan Execution (CREATE/UPDATE/DELETE/NO_OP)
-  - [x] Parallel Execution (Layer-based)
-  - [x] State Management (Atomic writes)
-  - [x] Comprehensive Tests (16 tests, 100% statement coverage)
-- [x] **Integration Tests:** Verify simple apply/plan cycles
-  - [x] Implement Schema Validation (Runtime type checking)
-  - [x] Implement DAG & Topological Sort (No deps)
-  - [x] Implement Parallel Execution (Batch-wise layers)
-  - [x] Basic State Manager (JSON I/O)
-  - [x] Implement Locking & Backup (Reliability)
-  - [x] Implement Variables Support (`var.name` references)
-  - [x] Implement Diff Engine (Plan logic)
-  - [x] Implement Orchestrator (Runner)
-
-## 4. Providers & Resource Coverage
-
-**Requirement:** Implement specific resource types to prove the engine works.
-
-### 4.1. Local Provider
-
-- [x] **`@clay/provider-local`:** Local file system provider
-  - [x] `local_file` resource (create/update/delete files)
-  - [x] Modular resource handler architecture
-  - [x] Validation logic
-  - [x] Comprehensive tests (11 tests, 100% statement coverage)
-
-### 4.2. Future Resources
-
-- [x] **`random_string`:** Generate random strings (good for testing state persistence)
-  - Inputs: `length`, `special` (bool)
-- [x] **`null_resource`:** Do nothing (good for testing dependency chains)
-  - Inputs: `triggers` (map)
-- [x] **`command_exec`:** Execute shell commands
-  - Inputs: `command`, `cwd`
-
-## 5. CLI Implementation
-
-**Requirement:** Command-line interface for user interaction.
-
-- [x] **`@clay/cli`:** User-facing commands
-  - [x] `clay init`: Workspace setup (initialize state)
-  - [x] `clay plan`: Dry-run (show diffs without applying)
-  - [x] `clay apply`: Execute changes (calls Orchestrator.apply())
-  - [x] Pretty output formatting (colored diffs, progress indicators)
-
-## 6. Future Scope: Scalable Provider Architecture
-
-**Requirement:** Design the engine to support any provider (AWS, Azure, GitHub), not just local files.
-
-- [ ] **Provider Interface:** Design a generic interface (Connection, CRUD methods).
-- [ ] **Plugin System:** Way to load external providers (even if hardcoded initially).
-- [ ] **AWS Provider (Future):**
-  - `aws_s3_bucket`
-  - `aws_instance`
-- [ ] **Multi-Provider Support:** Handle `provider "aws" { ... }` and `provider "local" { ... }` in the same graph.
-
-## 7. Technical Debt (Missings)
-
-**Requirement:** List of identified gaps to be addressed in future iterations.
-
-- [x] **State Locking:** Race condition protection (lock file).
-- [x] **State Backup:** Atomic writes with backup (.bak) generation.
-- [x] **Parser Error Reporting:** Detailed line/column error messages.
-- [ ] **Provider Architecture Refactor**
-  - [ ] Move from Singleton Provider to Instance-based Providers
-  - [ ] Support provider aliases (multi-region/account support)
-- [x] **State Management Abstraction**
-  - [x] Interface `StateBackend` (Remote State support)
-  - [x] Decouple `StateManager` from local `fs`
-  - [x] Implement `LocalBackend` for file system operations
-- [x] **Orchestrator Refactoring**
-  - [x] Extract `ReferenceResolver` with Strategy pattern
-  - [x] Extract `ModuleLoader` component
-  - [x] Extract `ActionExecutor` component
-  - [x] Extract `DependencyGraphBuilder` component
-  - [x] Reduce Orchestrator from 535 to 325 lines (-39%)
-- [x] **Resource Addressing (Modules)**
-  - [x] Implement hierarchical addressing (tree structure)
-  - [x] Refactor resource map to support nested modules
-- [x] **Scoped Data Sources**
-  - [x] Implement module-level data source scoping
-  - [x] Resolve data source references within modules
-- [x] **Type System Enhancement**
-  - [x] Support List, Map, and Object types in Schema
-  - [x] Improve planner diffing for complex types
-- [x] **Variables Support:** Support for usage of `var.name`.
-- [x] **Parallel Graph Execution:** Execute independent nodes in parallel.
-- [x] **String Interpolation:** `${var.x}` support (requires Lexer templates).
-- [x] **Variable Blocks:** `variable "env" { default = "dev" }` parsing.
-- [x] **Reference Resolution:** Planner logic to resolve `Reference` nodes to values.
-- [x] **Output Blocks:** `output "name" { value = ... }` for displaying values after apply.
-- [x] **Technical Debt (Phase 5: Modules)**
-  - [x] **Complexity:** Refactored `Orchestrator` to reduce cyclomatic complexity (all methods <= 10).
-  - [x] **Lint Warnings:** Resolved all complexity and quality warnings (0 warnings).
-  - [x] **Concurrency:** Fixed `require-atomic-updates` via local caching.
-  - [x] **Type Safety:** Resolved type errors and removed `any` from core engine helpers.
-  - [ ] **Provisioner Performance:** Resources are applied serially within layers; could be fully concurrent.
-
----
-
-## 8. Differentiation Features
-
-### 8.1. TypeScript Config Support
-
-- [ ] **Config File Support**
-  - [ ] Parse `clay.config.ts` files
-  - [ ] `defineConfig` helper function
-  - [ ] Type definitions for resources
-  - [ ] Compile-time validation
-- [ ] **Type Safety**
-  - [ ] Provider type definitions
-  - [ ] Resource attribute types
-  - [ ] IDE autocomplete support
-
-### 8.2. Programmatic API
-
-- [ ] **Core API**
-  - [ ] Export `Clay` class
-  - [ ] `plan()` method
-  - [ ] `apply()` method
-  - [ ] `destroy()` method
-- [ ] **Event System**
-  - [ ] Progress events
-  - [ ] Error events
-  - [ ] Completion events
-- [ ] **Structured Results**
-  - [ ] Return plan details
-  - [ ] Return apply results
-  - [ ] Resource metadata
-
-### 8.3. Unique Features
-
-- [ ] **Resource Snapshots**
-  - [ ] `clay snapshot create`
-  - [ ] `clay snapshot rollback`
-  - [ ] `clay snapshot list`
-  - [ ] Snapshot diff
-- [ ] **Visual Diff**
-  - [ ] HTML diff generation
-  - [ ] Syntax highlighting
-  - [ ] Interactive UI
-  - [ ] Export functionality
-- [ ] **Cost Estimation**
-  - [ ] Cost provider interface
-  - [ ] AWS cost data
-  - [ ] Azure cost data
-  - [ ] Cost calculation
-  - [ ] Cost diff
-
----
-
-## 9. Core Features
-
-### 9.1. Reference Resolution & Dependencies
-
-- [x] **Reference Resolution in Planner**
-  - [x] Resolve `local_file.config.path` to actual values
-  - [x] Resolve `var.region` to variable values
-  - [x] Detect circular references
-- [x] **Dependency Detection from References**
-  - [x] Parse references in attribute values
-  - [x] Add graph edges based on references
-  - [x] Validate dependency chains
-- [x] **String Interpolation**
-  - [x] Lexer support for `${...}` syntax
-  - [x] Parser support for template strings
-  - [x] Runtime interpolation in Orchestrator
-
-### 8.2. Plan Command
-
-- [x] **`clay plan` Command**
-  - [x] Show changes
-  - [x] Colored output (+, ~, -)
-  - [x] Resource count summary
-- [x] **Plan File Support**
-  - [x] Save plan to file (`-out` flag)
-  - [x] Apply from saved plan (`clay apply [plan-file]`)
-  - [x] Plan validation and hash check
-
-### 8.3. Output Values
-
-- [x] **Output Block Parsing**
-  - [x] Parse `output "name" { value = ... }` syntax
-  - [x] Store outputs in state
-- [x] **Output Display**
-  - [x] Show outputs after apply
-  - [x] `clay output` command
-  - [x] JSON output format
-
-### 8.4. Better Error Messages
-
-- [x] **Contextual Errors**
-  - [x] Show file/line/column in config
-  - [ ] Highlight problematic code
-  - [ ] Suggest fixes ("did you mean?")
-- [ ] **Provider Errors**
-  - [ ] Better error messages from providers
-  - [ ] Retry suggestions
-  - [ ] Troubleshooting links
-
----
-
-## 9. High Priority Features
-
-### 9.1. Data Sources
-
-- [x] **Data Source Parsing**
-  - [x] `data "type" "name" {}` syntax
-  - [x] Data source provider interface (`read()` method in Provider)
-- [x] **Read-Only Operations**
-  - [x] Query existing resources (via provider.read())
-  - [x] Use in other resources (via `data.type.name.attribute` references)
-
-### 9.2. State Management Commands
-
-- [x] **State Inspection**
-  - [x] `clay state list`
-  - [x] `clay state show <resource>`
-- [x] **State Manipulation**
-  - [x] `clay state rm <resource>`
-  - [x] `clay state mv <old> <new>`
-- [ ] **State Import/Export**
-  - [ ] Import existing resources
-  - [ ] Export state to JSON
-
-### 9.3. Validation
-
-- [x] **Config Validation**
-  - [x] `clay validate` command
-  - [x] Syntax validation
-  - [x] Provider schema validation
-- [x] **Dependency Validation**
-  - [x] Detect circular dependencies
-  - [x] Validate reference paths
-  - [x] Check resource existence
-
-### 9.4. Count & For Each
-
-- [ ] **Count Meta-Argument**
-  - [ ] Parse `count = N`
-  - [ ] Create N instances
-  - [ ] Index access `[0]`, `[1]`, etc.
-- [ ] **For Each Meta-Argument**
-  - [ ] Parse `for_each = {...}`
-  - [ ] Iterate over maps/sets
-  - [ ] Key access `each.key`, `each.value`
-
----
-
-## 10. Medium Priority Features
-
-### 10.1. Modules
-
-- [x] **Module Parsing**
-  - [x] `module "name" { source = "..." }` syntax
-  - [x] Module loading from filesystem
-- [x] **Module Execution**
-  - [x] Variable passing to modules
-  - [x] Output from modules
-  - [x] Nested modules
-
-### 10.2. Refresh
+### Refresh
 
 Terraform reads every resource from its provider before the diff, so a change made by
 hand shows up in the plan. Clay plans against what it last applied.
 
-- [ ] **Refresh before the diff**
-  - [ ] `read()` on every resource type; today each returns `{}`
-  - [ ] State holds what the provider returns, not only the inputs that were sent
-  - [ ] `plan` refreshes first, `-refresh=false` skips it; a plan that writes state has to
-        take the lock, as `apply` does
+- [ ] `read()` on every resource type; today each returns `{}`
+- [ ] State holds what the provider returns, not only the inputs that were sent
+- [ ] `plan` refreshes first, `-refresh=false` skips it; a plan that writes state has to
+      take the lock, as `apply` does
 
-### 10.3. Lifecycle Management
-
-- [ ] **Lifecycle Block**
-  - [ ] `create_before_destroy`
-  - [ ] `prevent_destroy`
-  - [ ] `ignore_changes`
-- [ ] **Lifecycle Execution**
-  - [ ] Implement create-before-destroy logic
-  - [ ] Prevent destroy protection
-  - [ ] Selective attribute ignoring
-
-### 10.4. Provisioners
-
-- [ ] **Provisioner Parsing**
-  - [ ] `provisioner "type" {}` syntax
-  - [ ] Multiple provisioners per resource
-- [ ] **Provisioner Types**
-  - [ ] `local-exec`: Run local commands
-  - [ ] `remote-exec`: Run remote commands
-  - [ ] `file`: Copy files
-
-### 10.5. Workspaces
-
-- [ ] **Workspace Management**
-  - [ ] `clay workspace new <name>`
-  - [ ] `clay workspace select <name>`
-  - [ ] `clay workspace list`
-- [ ] **Workspace Isolation**
-  - [ ] Separate state per workspace
-  - [ ] Workspace-specific variables
-
----
-
-### 10.6. Force Unlock
-
-A run that dies leaves its lock behind. The error names the file; a `force-unlock`
-command would remove it the way Terraform's does.
-
-- [ ] `clay force-unlock`
-
-### 10.7. Computed Attributes
+### Computed attributes
 
 `create` returns one string, the id. A `random_string` is read through `.id`, a
 `command_exec` loses its output, and an output that names an attribute the resource does
 not have is only caught after the resource is created. Terraform's providers return the
 whole resource and mark which attributes are computed.
 
-- [ ] **Providers return attributes, not only an id**
-  - [ ] `create` and `update` return the resource's attributes; state holds them
-  - [ ] Schema marks computed attributes, so `plan` can refuse a reference to an attribute
-        that will never exist
-  - [ ] `command_exec` exposes `stdout` and `exit_code`; `random_string` exposes `result`
+- [ ] `create` and `update` return the resource's attributes; state holds them
+- [ ] Schema marks computed attributes, so `plan` can refuse a reference to an attribute
+      that will never exist
+- [ ] `command_exec` exposes `stdout` and `exit_code`; `random_string` exposes `result`
 
-### 10.8. Schema-driven Validation
+### Schema-driven validation
 
-`Schema` carries `type`, `required` and `elemType`, and the engine reads only `forceNew`.
+`SchemaDefinition` carries `type`, `required`, `elemType` and `schema`, and the engine
+reads only `forceNew`.
 Every resource validates its inputs by hand.
 
 - [ ] The engine validates inputs against the schema before it asks the provider
@@ -375,33 +54,44 @@ Every resource validates its inputs by hand.
       `plan` skips the whole resource, because a provider's `validate` would report a
       missing required attribute; a schema check knows the attribute is there and unknown
 
-### 10.9. Data Sources in the Graph
+### Data sources in the graph
 
 Data sources are read while the config loads, before any resource exists, so one that
-reads a resource fails at plan. `plan` and `apply` each read them, so an apply reads twice.
+reads a resource fails at plan. `plan` and `apply` each read them, so an apply reads
+twice. The local provider's `read` returns `{}` for every type, so no data source reads
+anything yet.
 
 - [ ] Data sources are graph nodes, read in dependency order and once per run
 - [ ] A data source fed by a pending resource is `(known after apply)`
 - [ ] Their values travel in the plan, as in Terraform, so `apply` reads none of them
       again
+- [ ] `local_file` as a data source reads the file
 
-### 10.10. Parallel Apply
+### Parallel apply
 
-The graph sorts into layers that can run in parallel, and `applyInOrder` runs them one at
-a time. Runs in parallel need a context of their own: one `ScopeManager` and one
+The graph sorts into layers that can run in parallel, and the runner takes them one at a
+time. Runs in parallel need a context of their own: one `ScopeManager` and one
 data-source map per engine, cleared on load, serve one run at a time.
 
 - [ ] Resources in one layer run together; state is written once per layer
 
-### 10.11. Path Values
+### Lifecycle
 
-A relative path is resolved from the directory `clay` runs in, so a module cannot name a
-file next to itself. Terraform gives the config `path.module`, `path.root` and `path.cwd`
-for that.
+- [ ] `lifecycle { create_before_destroy = true }`: today a replacement deletes first
+- [ ] `prevent_destroy`: the plan refuses to delete the resource
+- [ ] `ignore_changes`: named attributes do not count as a change
 
-- [ ] `path.module`, `path.root`, `path.cwd`
+### Provisioners
 
-### 10.12. State Backends
+`command_exec` is a resource, so a command has state of its own. Terraform's provisioners
+run as a step of another resource instead.
+
+- [ ] `provisioner "local-exec" { command = "..." }` inside a resource, run after create
+- [ ] `remote-exec` and `file`, once a resource can carry a connection
+
+## 3. State
+
+### Backends
 
 The state is always the file `clay.state.json` next to the configuration. Where it lives
 should be the workspace's choice, written once and read by every command, the way
@@ -415,63 +105,69 @@ Terraform has it since backends replaced `-state`.
       requests
 - [ ] `init` offers to move the state when the block names a different backend than the
       one in use
+- [ ] An S3 backend, with the lock a second run has to wait for; an Azure Blob backend
 
-## 11. Nice to Have
+### Commands
 
-### 11.1. Remote State
+- [ ] `clay force-unlock`: a run that dies leaves its lock behind, and the error names
+      the file; this removes it, the way Terraform's does
+- [ ] `clay import <address> <id>`: take over a resource that exists but is not in state
+- [ ] `clay state pull`: print the state as JSON, for a script or a backup
+- [ ] Workspaces: `clay workspace new | select | list`, one state per workspace
 
-The backend the configuration names (10.12), kept somewhere other than this machine.
+## 4. Providers
 
-- [ ] An S3 backend, with the lock a second run has to wait for
-- [ ] An Azure Blob backend
+The CLI imports the one provider, `local`, and registers it; the registry keys providers
+by resource type, and no `provider` block exists yet.
 
-### 11.2. Graph Visualization
+- [ ] Provider instances with configuration: `provider "aws" { region = "..." }`, and
+      aliases for a second instance of the same provider
+- [ ] Loading a provider from a package instead of a hard-coded import
+- [ ] A first remote provider to prove the shape, small enough to keep tests real: an
+      HTTP or GitHub provider before an AWS one
 
-- [ ] **Graph Generation**
-  - [ ] Generate DOT format
-  - [ ] `clay graph` command
-- [ ] **Visualization**
-  - [ ] SVG output
-  - [ ] Interactive HTML
+## 5. Errors and tooling
 
-### 11.3. Auto-formatting
+- [ ] "Did you mean": a reference to a name one edit away from a declared one says so
+- [ ] Provider errors carry what to do next, not only what went wrong
+- [ ] `clay graph`: the dependency graph in DOT
+- [ ] `clay fmt`: one layout for every file, so diffs show changes and not style
 
-- [ ] **Format Command**
-  - [ ] `clay fmt` command
-  - [ ] Consistent indentation
-  - [ ] Sort attributes alphabetically
+## 6. Later
 
-### 11.4. Language Server (LSP)
+Ideas that need the sections above first.
 
-- [ ] **LSP Implementation**
-  - [ ] Autocomplete
-  - [ ] Go to definition
-  - [ ] Hover documentation
-- [ ] **IDE Integration**
-  - [ ] VSCode extension
-  - [ ] Syntax highlighting
+- A programmatic API: `plan()`, `apply()`, `destroy()` with events, for use from a script
+- Configuration in TypeScript, `clay.config.ts` with `defineConfig`, typed per provider
+- Snapshots of state with rollback
+- A plan as an HTML page, with the diff highlighted
+- Cost estimation: a provider says what a resource costs, the plan sums the change
+- A language server: completion, go to definition, hover; a VS Code extension on top
+- Benchmarks on large configurations, and fuzzing the parser and the state reader
 
----
+## Done
 
-## 12. Performance & Quality
+What shipped, by area. The README says how each works today.
 
-### 12.1. Performance
-
-- [ ] **Optimization**
-  - [ ] Lazy state loading
-  - [ ] Incremental parsing
-  - [ ] Cache provider validations
-- [ ] **Benchmarks**
-  - [ ] Performance benchmarks
-  - [ ] Memory profiling
-  - [ ] Large config handling
-
-### 12.2. Testing
-
-- [ ] **Integration Tests**
-  - [ ] End-to-end tests
-  - [ ] Real provider tests
-  - [ ] Multi-resource scenarios
-- [ ] **Fuzz Testing**
-  - [ ] Parser fuzz testing
-        [ ] State corruption testing
+- [x] Language: `resource`, `data`, `variable`, `output` and `module` blocks; strings,
+      integers, booleans, lists and maps; references and `${...}` interpolation; comments;
+      block kinds usable as attribute and map names; a duplicate block, attribute or key
+      refused
+- [x] Parser errors and resolve errors carry the file, line and column, the block and
+      the module instance, and the CLI prints the source line with a caret
+- [x] Dependency graph with cycle detection, sorted into layers; variables and outputs
+      are nodes, so a value is resolved after what it reads
+- [x] Planner: create, update, replace, delete and no-op from config against state;
+      `forceNew` decides replace; a value fed by a pending resource is unknown
+- [x] Modules: loaded from a directory, nested, inputs from the caller, outputs to the
+      caller; reaching inside one is refused
+- [x] Data sources: `data` blocks read through the provider's `read`, scoped per module
+- [x] State: JSON file with a serial, atomic write, backup, lock; written after every
+      change; dependencies recorded so deletes run in reverse order
+- [x] Saved plans: `plan --out` writes the plan with its configuration and modules;
+      `apply <file>` runs it and refuses it if the state moved on
+- [x] CLI: `init`, `validate`, `plan`, `apply`, `output`, `state list | show | mv | rm`
+- [x] Local provider: `local_file`, `random_string`, `null_resource`, `command_exec`
+- [x] Tests: unit tests per package and end-to-end tests that run the engine with the
+      real provider in a temp directory; CI on every push and pull request; eslint and
+      prettier on commit
