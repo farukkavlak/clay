@@ -295,6 +295,18 @@ describe('Clay Parser', () => {
       expect(error.position).toEqual(position);
     });
 
+    // A plain object takes `__proto__` as its prototype, so the value would vanish in silence downstream.
+    it.each([
+      ['an attribute', 'resource "null_resource" "a" { __proto__ = 1 }', at(1, 32)],
+      ['a map key', 'resource "null_resource" "a" { m = { __proto__ = 1 } }', at(1, 38)],
+      ['a quoted map key', 'resource "null_resource" "a" { m = { "__proto__" = 1 } }', at(1, 38)],
+    ])('refuses __proto__ as %s name', (_, input, position) => {
+      const error = errorOf(input);
+
+      expect(error.message).toBe('__proto__ cannot be a name');
+      expect(error.position).toEqual(position);
+    });
+
     it('tells blocks of different kinds with one name apart', () => {
       const input = 'variable "x" {}\noutput "x" { value = "1" }\nmodule "x" { source = "./x" }\nresource "null_resource" "x" {}\nresource "local_file" "x" {}';
 

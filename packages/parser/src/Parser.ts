@@ -129,7 +129,7 @@ export class Parser {
     const attributes: Record<string, AttributeValue> = {};
     while (!this.check(TokenType.RBrace) && !this.isAtEnd()) {
       const key = this.consume(TokenType.Identifier, 'Expect attribute name.');
-      this.refuseSecond(attributes, key);
+      this.checkKey(attributes, key);
       this.consume(TokenType.Assign, "Expect '=' after attribute name.");
       attributes[key.value] = this.parseValue();
     }
@@ -167,7 +167,7 @@ export class Parser {
     const map: Record<string, AttributeValue> = {};
     while (!this.check(TokenType.RBrace) && !this.isAtEnd()) {
       const key = this.matchToken(TokenType.String) ? this.previous() : this.consume(TokenType.Identifier, 'Expect key in map.');
-      this.refuseSecond(map, key);
+      this.checkKey(map, key);
 
       this.consume(TokenType.Assign, "Expect '=' after key in map.");
       map[key.value] = this.parseValue();
@@ -177,8 +177,9 @@ export class Parser {
     return { type: 'Map', value: map, position };
   }
 
-  // A second value under one name would replace the first in silence.
-  private refuseSecond(entries: Record<string, AttributeValue>, key: Token): void {
+  // A second value under one name would replace the first in silence, and `__proto__` would set a prototype, not a key.
+  private checkKey(entries: Record<string, AttributeValue>, key: Token): void {
+    if (key.value === '__proto__') throw new ConfigError('__proto__ cannot be a name', key.position);
     if (Object.hasOwn(entries, key.value)) throw new ConfigError(`${key.value} is set twice`, key.position);
   }
 

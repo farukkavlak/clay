@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-401 tests pass, and so do the type check and the build. Lint is clean, and so is
+404 tests pass, and so do the type check and the build. Lint is clean, and so is
 `npm audit`.
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -418,9 +418,11 @@ Found by the 2026-09-20 review of this section:
       back through `Address.of(desired.block)`. `DesiredResource` can carry the address
       itself, next to the block it was parsed from, and the parser's type loses a field
       it never fills.
-- [ ] A map or block attribute named `__proto__` vanishes: the parser collects keys into
-      a plain `{}`, so the assignment sets the prototype instead of a key, and
-      `Object.hasOwn` never sees it. `Object.create(null)` for the two records fixes it.
+- [x] A map or block attribute named `__proto__` vanished: every record on the way from
+      the parser to the state is a plain `{}`, so the assignment set a prototype instead
+      of a key. Keeping the name would mean rebuilding five records differently for a
+      name no configuration has a reason to use, so the parser refuses it instead, with
+      `__proto__ cannot be a name` at the key.
 
 ## 4 — repo
 

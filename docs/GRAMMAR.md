@@ -66,7 +66,8 @@ key     = IDENTIFIER | STRING
 
 A list needs a comma between items and may end with one. A map does not need commas.
 A map key may be a bare identifier or a quoted string, and appears once; a block kind is
-a fine identifier, `true` and `false` are not.
+a fine identifier, `true` and `false` are not, and neither is `__proto__`, for an attribute
+name either.
 
 ### References
 
