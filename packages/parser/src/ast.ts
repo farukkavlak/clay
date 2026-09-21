@@ -1,11 +1,11 @@
-import { Range } from './Range';
+import { Position } from './Position';
 
 /** Every configuration lives under this name, the root one and a module's alike. */
 export const CONFIG_FILE = 'main.clay';
 
 /** Every node remembers where it was written, so an error about it can point at the source. */
 interface Node {
-  range: Range;
+  position: Position;
 }
 
 export type AttributeValue =
@@ -51,3 +51,10 @@ export interface ModuleBlock extends Node {
 
 export type Statement = ResourceBlock | VariableBlock | OutputBlock | DataBlock | ModuleBlock;
 export type Program = Statement[];
+
+/** A block as the config spells it: `resource "local_file" "a"`, `module "m"`. */
+export function spell(statement: Statement): string {
+  if (statement.type === 'Resource') return `resource "${statement.resourceType}" "${statement.name}"`;
+  if (statement.type === 'Data') return `data "${statement.dataSourceType}" "${statement.name}"`;
+  return `${statement.type.toLowerCase()} "${statement.name}"`;
+}

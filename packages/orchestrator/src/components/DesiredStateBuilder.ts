@@ -3,7 +3,7 @@ import { Graph } from '@clay/graph';
 import { ResourceBlock, spell } from '@clay/parser';
 import { DesiredResource, hasChanges, isUnknown, UNKNOWN } from '@clay/planner';
 
-import { locate } from '../configError';
+import { tryAt } from '../place';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { ReferenceScanner } from '../resolvers/ReferenceScanner';
 import { UnresolvedReferenceError } from '../resolvers/UnresolvedReferenceError';
@@ -54,14 +54,12 @@ export class DesiredStateBuilder {
 
   /** A variable fed by a pending resource is pending itself, so everything reading it plans against UNKNOWN. */
   private planVariable(key: string, node: ValueNode, state: IState, pending: Set<string>): void {
-    if (node.value === undefined) return;
-
-    if (isUnknown(locate(node.range, node.declaration, node.context, () => this.resolveOrUnknown(node.value, state, node.context, pending)))) pending.add(key);
+    if (node.value !== undefined && isUnknown(this.resolveNode(node, state, pending))) pending.add(key);
   }
 
   /** Gives an output its value so the resources reading it can be planned; an output fed by a pending resource keeps none. */
   private planOutput(key: string, node: ValueNode, state: IState, pending: Set<string>, rootOutputs: Record<string, unknown>): void {
-    const value = locate(node.range, node.declaration, node.context, () => this.resolveOrUnknown(node.value, state, node.context, pending));
+    const value = this.resolveNode(node, state, pending);
     if (isUnknown(value)) pending.add(key);
     else this.scopeManager.setOutput(node.scope, node.name, value);
 
@@ -74,9 +72,13 @@ export class DesiredStateBuilder {
     const declaration = spell(block);
 
     for (const [key, value] of Object.entries(block.attributes))
-      resolved[key] = locate(value.range, declaration, context, () => this.resolveOrUnknown(value, state, context, pending));
+      resolved[key] = tryAt(value.position, declaration, context, () => this.resolveOrUnknown(value, state, context, pending));
 
     return resolved;
+  }
+
+  private resolveNode(node: ValueNode, state: IState, pending: Set<string>): unknown {
+    return tryAt(node.position, node.declaration, node.context, () => this.resolveOrUnknown(node.value, state, node.context, pending));
   }
 
   private resolveOrUnknown(value: unknown, state: IState, context: Address, pending: Set<string>): unknown {

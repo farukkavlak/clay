@@ -5,8 +5,8 @@ import { describe, expect, it } from 'vitest';
 import { DesiredResource, plan, PLAN_FILE_VERSION, PlanAction, serializePlan, UNKNOWN, validatePlanFile } from '../src/index';
 
 /** A plan is built from parsed blocks, and a test that builds one by hand still has to say where they came from. */
-const range = { file: CONFIG_FILE, line: 1, column: 1 };
-const str = (value: string): AttributeValue => ({ type: 'String', value, range });
+const position = { file: CONFIG_FILE, line: 1, column: 1 };
+const str = (value: string): AttributeValue => ({ type: 'String', value, position });
 
 function desiredResource(name: string, attributes: Record<string, string>, modulePath?: string[]): DesiredResource {
   return {
@@ -16,7 +16,7 @@ function desiredResource(name: string, attributes: Record<string, string>, modul
       name,
       modulePath,
       attributes: Object.fromEntries(Object.entries(attributes).map(([key, value]) => [key, str(value)])),
-      range,
+      position,
     },
     attributes,
     dependencies: [],

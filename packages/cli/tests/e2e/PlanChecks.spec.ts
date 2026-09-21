@@ -32,8 +32,8 @@ describe('what plan refuses before anything runs', () => {
 
     await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
       message: refused,
-      context: 'resource "random_string" "pw"',
-      range: { file: CONFIG_FILE, line: 1, column: 1 },
+      block: 'resource "random_string" "pw"',
+      position: { file: CONFIG_FILE, line: 1, column: 1 },
       cause: { message: refused },
     });
   });

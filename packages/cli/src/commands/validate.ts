@@ -6,7 +6,7 @@ import path from 'node:path';
 import { styleText } from 'node:util';
 
 import { newOrchestrator } from '../engine';
-import { describeError } from '../showError';
+import { describeError } from '../describeError';
 
 async function executeValidate(cwd: string, configPath: string): Promise<void> {
   const configContent = await fs.readFile(configPath, 'utf8');

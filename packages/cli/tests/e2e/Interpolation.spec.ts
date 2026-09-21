@@ -85,8 +85,8 @@ describe('a string with an interpolation', () => {
     await expect(planned).rejects.toBeInstanceOf(ConfigError);
     await expect(planned).rejects.toMatchObject({
       message: '"tags: ${var.tags}" cannot be joined into a string: var.tags is a list',
-      context: declaration,
-      range: { file: CONFIG_FILE, line: 2, column },
+      block: declaration,
+      position: { file: CONFIG_FILE, line: 2, column },
     });
   });
 });

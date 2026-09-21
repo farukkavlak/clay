@@ -3,4 +3,4 @@ export * from './tokens';
 export * from './ast';
 export * from './Parser';
 export * from './ConfigError';
-export * from './Range';
+export * from './Position';

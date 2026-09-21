@@ -1,5 +1,5 @@
 import { ConfigError } from './ConfigError';
-import { Range } from './Range';
+import { Position } from './Position';
 import { Token, TokenType } from './tokens';
 
 interface TokenSpec {
@@ -63,7 +63,7 @@ export class Lexer {
       tokens.push(token);
     }
 
-    tokens.push({ type: TokenType.EOF, value: '', range: this.here() });
+    tokens.push({ type: TokenType.EOF, value: '', position: this.here() });
     return tokens;
   }
 
@@ -73,7 +73,7 @@ export class Lexer {
       if (!match) continue;
 
       const text = match[0];
-      const token = { type: spec.type, value: spec.type === TokenType.String ? text.slice(1, -1) : text, range: this.here() };
+      const token = { type: spec.type, value: spec.type === TokenType.String ? text.slice(1, -1) : text, position: this.here() };
 
       this.advance(text);
       return token;
@@ -82,7 +82,7 @@ export class Lexer {
     return undefined;
   }
 
-  private here(): Range {
+  private here(): Position {
     return { file: this.file, line: this.line, column: this.column };
   }
 

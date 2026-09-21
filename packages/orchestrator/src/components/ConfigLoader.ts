@@ -3,7 +3,7 @@ import { CONFIG_FILE, DataBlock, Lexer, Parser, spell, Statement } from '@clay/p
 
 import { ProviderRegistry } from '../ProviderRegistry';
 import { dataSourceKey, scopeOf } from '../keys';
-import { locate } from '../configError';
+import { tryAt } from '../place';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { ScopeManager } from '../scope/ScopeManager';
 import { LoadedModule, LoadedResource, ModuleLoader } from './ModuleLoader';
@@ -57,7 +57,7 @@ export class ConfigLoader {
     const inputs: Record<string, unknown> = {};
 
     for (const [key, value] of Object.entries(stmt.attributes))
-      inputs[key] = locate(value.range, declaration, scopeAddress, () => this.resolver.resolveValue(value, state, scopeAddress));
+      inputs[key] = tryAt(value.position, declaration, scopeAddress, () => this.resolver.resolveValue(value, state, scopeAddress));
 
     return inputs;
   }

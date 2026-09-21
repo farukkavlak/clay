@@ -9,7 +9,7 @@ import { styleText } from 'node:util';
 
 import { confirm } from '../confirm';
 import { newOrchestrator } from '../engine';
-import { describeError } from '../showError';
+import { describeError } from '../describeError';
 import { actionSymbol, changesNothing, displayPlan, pastTense } from '../showPlan';
 
 /** A replacement counts once as an add and once as a destroy, as the plan summary counts it. */
@@ -51,9 +51,9 @@ async function confirmApply(autoConfirm: boolean): Promise<boolean> {
   return autoConfirm || confirm('Do you want to perform these actions?');
 }
 
-async function executeApply(cwd: string, configPath: string, autoConfirm: boolean): Promise<void> {
+async function executeApply(cwd: string, configPath: string, files: ConfigFiles, autoConfirm: boolean): Promise<void> {
   const configContent = await fs.readFile(configPath, 'utf8');
-  const orchestrator = newOrchestrator(cwd, new DiskFiles(cwd));
+  const orchestrator = newOrchestrator(cwd, files);
 
   console.log(styleText('blue', 'Calculating plan...'));
   const planned = await orchestrator.plan(configContent);
@@ -75,8 +75,8 @@ function filesInPlan(planFile: PlanFile): ConfigFiles {
   return new InMemoryFiles({ ...planFile.modules, [CONFIG_FILE]: planFile.config });
 }
 
-async function executeApplyFromPlan(cwd: string, planFile: PlanFile): Promise<void> {
-  const orchestrator = newOrchestrator(cwd, filesInPlan(planFile));
+async function executeApplyFromPlan(cwd: string, planFile: PlanFile, files: ConfigFiles): Promise<void> {
+  const orchestrator = newOrchestrator(cwd, files);
 
   console.log(styleText('blue', 'Applying from saved plan...'));
   console.log(styleText('gray', `Plan created: ${planFile.timestamp}`));
@@ -107,7 +107,7 @@ export function createApplyCommand() {
           }
 
           files = filesInPlan(planData);
-          await executeApplyFromPlan(cwd, planData);
+          await executeApplyFromPlan(cwd, planData, files);
         } else {
           const configPath = path.join(cwd, CONFIG_FILE);
 
@@ -118,7 +118,7 @@ export function createApplyCommand() {
             process.exit(1);
           }
 
-          await executeApply(cwd, configPath, options.yes);
+          await executeApply(cwd, configPath, files, options.yes);
         }
       } catch (error: unknown) {
         console.error(styleText('red', 'Apply failed:'), describeError(error, files));

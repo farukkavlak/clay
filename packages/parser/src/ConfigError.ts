@@ -1,26 +1,26 @@
-import { Range } from './Range';
+import { Position } from './Position';
 
 interface Place {
   /** The block the problem was found in, as the config spells it: `resource "local_file" "a"`. */
-  context?: string;
+  block?: string;
   /** The module instance that block belongs to, `module.a`, when it is not the root one. */
   module?: string;
-  cause?: unknown;
 }
 
 /** A problem in a configuration file, at the place that caused it. */
 export class ConfigError extends Error {
-  readonly context?: string;
+  readonly block?: string;
   readonly module?: string;
 
   constructor(
     message: string,
-    readonly range: Range,
-    place: Place = {}
+    readonly position: Position,
+    place: Place = {},
+    options?: ErrorOptions
   ) {
-    super(message, { cause: place.cause });
+    super(message, options);
     this.name = 'ConfigError';
-    this.context = place.context;
+    this.block = place.block;
     this.module = place.module;
   }
 }

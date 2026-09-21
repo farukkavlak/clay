@@ -374,8 +374,8 @@ Found by the 2026-09-20 review of this section:
       else comes back as it is.
 - [x] A resolve error names the reference but not the resource that holds it, so
       `cannot be joined into a string` left the user searching when two resources read the
-      same thing. Every node carries a `Range` now, the file, line and column it was
-      written at, the way HCL keeps one on every node it parses. `DesiredStateBuilder`
+      same thing. Every node carries a `Position` now, the file, line and column it was
+      written at, the way HCL keeps a range on every node it parses. `DesiredStateBuilder`
       wraps whatever resolving a resource, a variable, an output or a module input threw
       in a `ConfigError` with that place and the block that holds it, and `ConfigLoader`
       does the same for a data source. `checkWithProviders` said the address and nothing

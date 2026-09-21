@@ -238,14 +238,14 @@ describe('Clay Parser', () => {
       const error = errorOf('output "o" { data = 1 }');
 
       expect(error.message).toBe("Expect 'value' in output block.");
-      expect(error.range).toEqual(at(1, 14));
+      expect(error.position).toEqual(at(1, 14));
     });
   });
 
   it('writes the place a value was parsed at onto the value itself', () => {
     const attributes = attributesOf('resource "null_resource" "a" { v = "x" }');
 
-    expect(attributes.v).toEqual({ type: 'String', value: 'x', range: at(1, 36) });
+    expect(attributes.v).toEqual({ type: 'String', value: 'x', position: at(1, 36) });
   });
 
   describe('Error Cases', () => {
@@ -262,7 +262,7 @@ describe('Clay Parser', () => {
         const error = errorOf(input);
 
         expect(error.message).toBe(`${label} is declared twice`);
-        expect(error.range).toEqual(at(2, 1));
+        expect(error.position).toEqual(at(2, 1));
       }
     });
 
@@ -284,11 +284,11 @@ describe('Clay Parser', () => {
       ['a word that starts no block', 'random_token "type" "name" {}', 'Unexpected token: random_token', at(1, 1)],
       ['a reference that ends on a dot', 'resource "type" "name" { ref = foo. }', 'Expect property name after dot', at(1, 37)],
       ['a character the lexer knows nothing about', '@', 'Unexpected character: "@"', at(1, 1)],
-    ])('says what is wrong with %s and where', (_, input, message, range) => {
+    ])('says what is wrong with %s and where', (_, input, message, position) => {
       const error = errorOf(input);
 
       expect(error.message).toContain(message);
-      expect(error.range).toEqual(range);
+      expect(error.position).toEqual(position);
     });
 
     it('refuses a top-level word that is not a block kind, even one an object has by birth', () => {
@@ -298,7 +298,7 @@ describe('Clay Parser', () => {
     it('names the file the error was written in', () => {
       const error = errorOf('resource "type" "name" { key = = }', 'modules/app/main.clay');
 
-      expect(error.range.file).toBe('modules/app/main.clay');
+      expect(error.position.file).toBe('modules/app/main.clay');
     });
   });
 

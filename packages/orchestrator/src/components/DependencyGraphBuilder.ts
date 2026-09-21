@@ -1,18 +1,18 @@
 import { Address } from '@clay/contracts';
 import { Graph } from '@clay/graph';
-import { AttributeValue, ModuleBlock, Range, spell } from '@clay/parser';
+import { AttributeValue, ModuleBlock, Position, spell } from '@clay/parser';
 
 import { childScope, outputKey, scopeOf, variableKey } from '../keys';
 import { Reference, ReferenceScanner } from '../resolvers/ReferenceScanner';
 import { LoadedModule, LoadedResource } from './ModuleLoader';
 
-/** A value node carries the expression to evaluate, the address it is evaluated from, and where it was written. */
+/** `context` is the module that reads the value, not the one that declares it: a module input is read where the module is called. */
 export interface ValueNode {
   scope: string;
   name: string;
   value: AttributeValue | undefined;
   context: Address;
-  range: Range;
+  position: Position;
   declaration: string;
 }
 
@@ -80,7 +80,7 @@ export class DependencyGraphBuilder {
             name: stmt.name,
             value: stmt.value,
             context: mod.address,
-            range: stmt.value.range,
+            position: stmt.value.position,
             declaration,
           });
         if (stmt.type === 'Variable' && !nodes.has(variableKey(scope, stmt.name)))
@@ -90,7 +90,7 @@ export class DependencyGraphBuilder {
             name: stmt.name,
             value: stmt.attributes.default,
             context: mod.address,
-            range: stmt.attributes.default?.range ?? stmt.range,
+            position: stmt.attributes.default?.position ?? stmt.position,
             declaration,
           });
         if (stmt.type === 'Module') this.setInputNodes(stmt, nodes, scope, mod.address);
@@ -112,7 +112,7 @@ export class DependencyGraphBuilder {
         name,
         value: stmt.attributes[name],
         context,
-        range: stmt.attributes[name].range,
+        position: stmt.attributes[name].position,
         declaration,
       });
   }

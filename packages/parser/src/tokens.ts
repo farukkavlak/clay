@@ -1,4 +1,4 @@
-import { Range } from './Range';
+import { Position } from './Position';
 
 export enum TokenType {
   Identifier = 'IDENTIFIER', // Block kinds, attribute names, reference parts
@@ -18,5 +18,5 @@ export enum TokenType {
 export interface Token {
   type: TokenType;
   value: string;
-  range: Range;
+  position: Position;
 }

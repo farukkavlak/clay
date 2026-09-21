@@ -7,7 +7,7 @@ import path from 'node:path';
 import { styleText } from 'node:util';
 
 import { newOrchestrator } from '../engine';
-import { describeError } from '../showError';
+import { describeError } from '../describeError';
 import { displayPlan } from '../showPlan';
 
 async function executePlan(cwd: string, configPath: string, outFile?: string): Promise<void> {

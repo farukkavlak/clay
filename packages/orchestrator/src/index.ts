@@ -9,7 +9,7 @@ import { DependencyGraphBuilder } from './components/DependencyGraphBuilder';
 import { DesiredStateBuilder } from './components/DesiredStateBuilder';
 import { ModuleLoader } from './components/ModuleLoader';
 import { PlanRunner } from './components/PlanRunner';
-import { configError } from './configError';
+import { withPlace } from './place';
 import { ConfigFiles } from './ConfigFiles';
 import { ProviderRegistry } from './ProviderRegistry';
 import { ReferenceResolver } from './resolvers/ReferenceResolver';
@@ -109,7 +109,7 @@ export class Orchestrator {
       try {
         await provider.validate(type, resource.attributes);
       } catch (error) {
-        throw configError(error, resource.block.range, spell(resource.block), Address.of(resource.block));
+        throw withPlace(error, resource.block.position, spell(resource.block), Address.of(resource.block));
       }
     }
 
