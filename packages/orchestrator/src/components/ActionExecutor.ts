@@ -57,7 +57,6 @@ export class ActionExecutor {
     // eslint-disable-next-line require-atomic-updates
     currentState.resources[key] = {
       id,
-      type: 'Resource',
       resourceType: action.resourceType,
       name: contextAddress.name,
       modulePath: contextAddress.modulePath,

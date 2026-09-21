@@ -16,7 +16,7 @@ describe('init against real files', () => {
   const stateWithResource = {
     version: 1,
     serial: 0,
-    resources: { 'local_file.a': { id: 'a.txt', type: 'Resource', resourceType: 'local_file', name: 'a', attributes: { content: 'hello' } } },
+    resources: { 'local_file.a': { id: 'a.txt', resourceType: 'local_file', name: 'a', attributes: { content: 'hello' } } },
   };
 
   beforeEach(async () => {

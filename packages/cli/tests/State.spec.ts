@@ -17,8 +17,8 @@ describe('CLI: state command', () => {
   const mockState = {
     version: 1,
     resources: {
-      'test.t1': { type: 'Resource', resourceType: 'test', name: 't1', attributes: { id: '1', val: 'foo' } },
-      'test.t2': { type: 'Resource', resourceType: 'test', name: 't2', attributes: { id: '2', val: 'bar' } },
+      'test.t1': { resourceType: 'test', name: 't1', attributes: { id: '1', val: 'foo' } },
+      'test.t2': { resourceType: 'test', name: 't2', attributes: { id: '2', val: 'bar' } },
     },
   };
 
@@ -90,7 +90,7 @@ describe('CLI: state command', () => {
       readMock.mockResolvedValue({
         version: 1,
         resources: {
-          'test.noattr': { type: 'Resource', resourceType: 'test', name: 'noattr' }, // No attributes
+          'test.noattr': { resourceType: 'test', name: 'noattr' },
         },
       });
       const command = createStateCommand();

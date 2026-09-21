@@ -16,7 +16,6 @@ describe('ReferenceResolver', () => {
     resources: {
       'resource.test': {
         id: 'res-123',
-        type: 'Resource',
         resourceType: 'resource',
         name: 'test',
         attributes: {
@@ -131,7 +130,6 @@ describe('ReferenceResolver', () => {
       resources: {
         'custom.name': {
           id: 'c-1',
-          type: 'Resource',
           resourceType: 'custom',
           name: 'name',
           attributes: { attr: 'ok' },

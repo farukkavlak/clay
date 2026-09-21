@@ -30,7 +30,6 @@ function stateWith(name: string, attributes: Record<string, unknown>, id = `mock
     resources: {
       [`mock_resource.${name}`]: {
         id,
-        type: 'Resource',
         resourceType: 'mock_resource',
         name,
         attributes,
@@ -130,8 +129,8 @@ describe('Planner', () => {
       version: 1,
       serial: 0,
       resources: {
-        'module.app.mock_resource.same': { id: 'in_module', type: 'Resource', resourceType: 'mock_resource', name: 'same', modulePath: ['app'], attributes: { path: 'old' } },
-        'mock_resource.same': { id: 'at_root', type: 'Resource', resourceType: 'mock_resource', name: 'same', attributes: { path: 'old' } },
+        'module.app.mock_resource.same': { id: 'in_module', resourceType: 'mock_resource', name: 'same', modulePath: ['app'], attributes: { path: 'old' } },
+        'mock_resource.same': { id: 'at_root', resourceType: 'mock_resource', name: 'same', attributes: { path: 'old' } },
       },
     };
 

@@ -3,7 +3,6 @@ export { Address } from './Address';
 /** A resource as state records it. */
 export interface Resource {
   id?: string;
-  type: string;
   resourceType: string;
   name: string;
   modulePath?: string[];

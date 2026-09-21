@@ -13,7 +13,6 @@ describe('ResourceResolver', () => {
     resources: {
       'resource.test': {
         id: 'res-123',
-        type: 'Resource',
         resourceType: 'resource',
         name: 'test',
         attributes: {

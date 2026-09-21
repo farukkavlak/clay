@@ -35,7 +35,6 @@ describe('StateManager', () => {
       serial: 0,
       resources: {
         'mock_resource.test_a': {
-          type: 'Resource',
           resourceType: 'mock_resource',
           name: 'test_a',
           attributes: { filename: 'foo.txt' },
@@ -74,7 +73,7 @@ describe('StateManager', () => {
     });
 
     it('should keep the stored state and say it wrote nothing', async () => {
-      const stored: State = { version: 1, serial: 0, resources: { 'mock_resource.a': { type: 'Resource', resourceType: 'mock_resource', name: 'a', attributes: {} } } };
+      const stored: State = { version: 1, serial: 0, resources: { 'mock_resource.a': { resourceType: 'mock_resource', name: 'a', attributes: {} } } };
       await stateManager.write(stored);
 
       expect(await stateManager.writeIfAbsent(empty)).toBe(false);
@@ -163,7 +162,7 @@ describe('StateManager', () => {
 
   describe('a write that fails halfway', () => {
     it('leaves the state that was there, whole', async () => {
-      const before: State = { version: 1, serial: 0, resources: { 'mock_resource.a': { type: 'Resource', resourceType: 'mock_resource', name: 'a', attributes: {} } } };
+      const before: State = { version: 1, serial: 0, resources: { 'mock_resource.a': { resourceType: 'mock_resource', name: 'a', attributes: {} } } };
       await stateManager.write(before);
 
       // A directory in the way of the temporary file makes the write fail before the state file is touched.
