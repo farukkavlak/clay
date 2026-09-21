@@ -1,15 +1,15 @@
 import * as fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { emptyState, IState } from '@clay/contracts';
+import { emptyState, State } from '@clay/contracts';
 
-import { IStateBackend } from '../IStateBackend';
+import { StateBackend } from '../StateBackend';
 
-function serialize(state: IState): string {
+function serialize(state: State): string {
   return JSON.stringify(state, null, 2);
 }
 
-export class LocalBackend implements IStateBackend {
+export class LocalBackend implements StateBackend {
   private filePath: string;
   private lockFilePath: string;
 
@@ -23,10 +23,10 @@ export class LocalBackend implements IStateBackend {
     return this.filePath;
   }
 
-  async read(): Promise<IState> {
+  async read(): Promise<State> {
     try {
       const content = await fs.readFile(this.filePath);
-      return JSON.parse(content.toString('utf8')) as IState;
+      return JSON.parse(content.toString('utf8')) as State;
     } catch (error) {
       const err = error as { code?: string };
       if (err.code === 'ENOENT') return emptyState();
@@ -35,7 +35,7 @@ export class LocalBackend implements IStateBackend {
     }
   }
 
-  async write(state: IState): Promise<void> {
+  async write(state: State): Promise<void> {
     try {
       await fs.access(this.filePath);
       await fs.copyFile(this.filePath, `${this.filePath}.bak`);
@@ -50,7 +50,7 @@ export class LocalBackend implements IStateBackend {
   }
 
   /** The file system decides, so nothing can slip in between the check and the write. */
-  async writeIfAbsent(state: IState): Promise<boolean> {
+  async writeIfAbsent(state: State): Promise<boolean> {
     try {
       await fs.writeFile(this.filePath, serialize(state), { encoding: 'utf8', flag: 'wx' });
       return true;

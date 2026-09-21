@@ -1,3 +1,3 @@
 export * from './StateManager';
-export * from './IStateBackend';
+export * from './StateBackend';
 export * from './backends/LocalBackend';

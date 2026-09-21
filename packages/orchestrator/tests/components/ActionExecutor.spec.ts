@@ -1,4 +1,4 @@
-import { Address, IProvider, IState } from '@clay/contracts';
+import { Address, Provider, State } from '@clay/contracts';
 import { PlanAction } from '@clay/planner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -11,7 +11,7 @@ import { str } from '../ast';
 describe('ActionExecutor', () => {
   let providers: ProviderRegistry;
   let executor: ActionExecutor;
-  let mockProvider: IProvider;
+  let mockProvider: Provider;
 
   beforeEach(() => {
     mockProvider = {
@@ -33,7 +33,7 @@ describe('ActionExecutor', () => {
     vi.clearAllMocks();
   });
 
-  const mockState: IState = {
+  const mockState: State = {
     version: 1,
     serial: 0,
     resources: {},

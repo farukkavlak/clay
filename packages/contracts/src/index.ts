@@ -1,7 +1,7 @@
 export { Address } from './Address';
 
 /** A resource as state records it. */
-export interface IResource {
+export interface Resource {
   id?: string;
   type: string;
   resourceType: string;
@@ -13,37 +13,37 @@ export interface IResource {
 }
 
 /** The state file. */
-export interface IState {
+export interface State {
   version: number;
   /** Counts the writes. A saved plan records it, so a state written after the plan is caught. */
   serial: number;
   /** What the root module's outputs came to on the last run. */
   outputs?: Record<string, unknown>;
-  resources: Record<string, IResource>;
+  resources: Record<string, Resource>;
 }
 
-export function emptyState(): IState {
+export function emptyState(): State {
   return { version: 1, serial: 0, resources: {} };
 }
 
 export type SchemaType = 'string' | 'number' | 'boolean' | 'list' | 'map' | 'object';
 
-export interface ISchemaDefinition {
+export interface SchemaDefinition {
   type: SchemaType;
   required?: boolean;
   forceNew?: boolean; // If true, a change to this attribute forces replacement (Delete -> Create)
   elemType?: SchemaType; // For 'list' and 'map'
-  schema?: ISchema; // For 'object'
+  schema?: Schema; // For 'object'
 }
 
-export type ISchema = Record<string, ISchemaDefinition>;
+export type Schema = Record<string, SchemaDefinition>;
 
 /** The engine's contract with a provider. */
-export interface IProvider {
+export interface Provider {
   /** The resource types it handles. */
   readonly resources: string[];
 
-  getSchema(type: string): Promise<ISchema>;
+  getSchema(type: string): Promise<Schema>;
 
   /** Throws when the inputs would not make a valid resource. */
   validate(type: string, inputs: Record<string, unknown>): Promise<void>;
@@ -56,8 +56,8 @@ export interface IProvider {
 }
 
 /** One resource type's side of a provider. */
-export interface IResourceHandler {
-  getSchema(): Promise<ISchema>;
+export interface ResourceHandler {
+  getSchema(): Promise<Schema>;
 
   validate(inputs: Record<string, unknown>): Promise<void>;
 

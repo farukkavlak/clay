@@ -1,8 +1,8 @@
-import { IResourceHandler, ISchema } from '@clay/contracts';
+import { ResourceHandler, Schema } from '@clay/contracts';
 import crypto from 'node:crypto';
 
-export class NullResource implements IResourceHandler {
-  async getSchema(): Promise<ISchema> {
+export class NullResource implements ResourceHandler {
+  async getSchema(): Promise<Schema> {
     return {
       triggers: { type: 'map', elemType: 'string', required: false },
     };

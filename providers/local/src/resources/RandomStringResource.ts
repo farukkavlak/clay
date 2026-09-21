@@ -1,8 +1,8 @@
-import { IResourceHandler, ISchema } from '@clay/contracts';
+import { ResourceHandler, Schema } from '@clay/contracts';
 import crypto from 'node:crypto';
 
-export class RandomStringResource implements IResourceHandler {
-  async getSchema(): Promise<ISchema> {
+export class RandomStringResource implements ResourceHandler {
+  async getSchema(): Promise<Schema> {
     return {
       length: { type: 'number', required: true, forceNew: true },
       special: { type: 'boolean', required: false, forceNew: true },

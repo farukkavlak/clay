@@ -1,4 +1,4 @@
-import { Address, IState } from '@clay/contracts';
+import { Address, State } from '@clay/contracts';
 import { CONFIG_FILE, DataBlock, Lexer, Parser, spell, Statement } from '@clay/parser';
 
 import { ProviderRegistry } from '../ProviderRegistry';
@@ -24,7 +24,7 @@ export class ConfigLoader {
     private providers: ProviderRegistry
   ) {}
 
-  async load(configContent: string, state: IState): Promise<LoadedConfig> {
+  async load(configContent: string, state: State): Promise<LoadedConfig> {
     const mainProgram = new Parser(new Lexer(configContent, CONFIG_FILE).tokenize()).parse();
 
     this.scopeManager.clear();
@@ -36,7 +36,7 @@ export class ConfigLoader {
     return { mainProgram, loadedResources, loadedModules };
   }
 
-  private async readDataSources(program: Statement[], state: IState, scopeAddress: Address): Promise<void> {
+  private async readDataSources(program: Statement[], state: State, scopeAddress: Address): Promise<void> {
     const scope = scopeOf(scopeAddress);
 
     for (const stmt of program)
@@ -52,7 +52,7 @@ export class ConfigLoader {
   }
 
   /** One value at a time, so an error points at the value that caused it and not at the block around it. */
-  private resolveInputs(stmt: DataBlock, state: IState, scopeAddress: Address): Record<string, unknown> {
+  private resolveInputs(stmt: DataBlock, state: State, scopeAddress: Address): Record<string, unknown> {
     const declaration = spell(stmt);
     const inputs: Record<string, unknown> = {};
 

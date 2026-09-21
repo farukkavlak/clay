@@ -1,15 +1,15 @@
-import { Address, IState } from '@clay/contracts';
+import { Address, State } from '@clay/contracts';
 import { scopeOf } from '../keys';
 import { ScopeManager } from '../scope/ScopeManager';
-import { IResolver } from './IResolver';
+import { Resolver } from './Resolver';
 
-export class VariableResolver implements IResolver {
+export class VariableResolver implements Resolver {
   constructor(
     private scopeManager: ScopeManager,
-    private referenceResolver: { resolveValue: (value: unknown, state: IState, context?: Address) => unknown }
+    private referenceResolver: { resolveValue: (value: unknown, state: State, context?: Address) => unknown }
   ) {}
 
-  resolve(pathParts: string[], context: Address, state: IState): unknown {
+  resolve(pathParts: string[], context: Address, state: State): unknown {
     const varName = pathParts[1];
     const scope = scopeOf(context);
 

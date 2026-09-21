@@ -1,4 +1,4 @@
-import { Address, IResource, ISchema, IState } from '@clay/contracts';
+import { Address, Resource, Schema, State } from '@clay/contracts';
 import { AttributeValue, ResourceBlock } from '@clay/parser';
 
 export type ActionType = 'CREATE' | 'UPDATE' | 'REPLACE' | 'DELETE' | 'NO_OP';
@@ -120,7 +120,7 @@ export function hasChanges(currentAttrs: Record<string, unknown>, desiredAttrs: 
   return calculateDiff(currentAttrs, desiredAttrs) !== null;
 }
 
-function processExistingResource(actions: PlanAction[], desired: DesiredResource, currentResource: IResource, schemas: Record<string, ISchema>) {
+function processExistingResource(actions: PlanAction[], desired: DesiredResource, currentResource: Resource, schemas: Record<string, Schema>) {
   const resource = desired.block;
   const changes = calculateDiff(currentResource.attributes, desired.attributes);
 
@@ -151,9 +151,9 @@ function processExistingResource(actions: PlanAction[], desired: DesiredResource
   });
 }
 
-export function plan(desiredResources: DesiredResource[], currentState: IState, schemas: Record<string, ISchema> = {}): PlanAction[] {
+export function plan(desiredResources: DesiredResource[], currentState: State, schemas: Record<string, Schema> = {}): PlanAction[] {
   const actions: PlanAction[] = [];
-  const currentMap = new Map<string, IResource>(Object.entries(currentState.resources));
+  const currentMap = new Map<string, Resource>(Object.entries(currentState.resources));
   const desiredMap = new Map<string, DesiredResource>();
 
   for (const desired of desiredResources) desiredMap.set(Address.of(desired.block).toString(), desired);

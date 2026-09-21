@@ -1,4 +1,4 @@
-import { IState } from '@clay/contracts';
+import { State } from '@clay/contracts';
 import { AttributeValue, CONFIG_FILE } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
@@ -23,7 +23,7 @@ function desiredResource(name: string, attributes: Record<string, string>, modul
   };
 }
 
-function stateWith(name: string, attributes: Record<string, unknown>, id = `mock_resource.${name}`): IState {
+function stateWith(name: string, attributes: Record<string, unknown>, id = `mock_resource.${name}`): State {
   return {
     version: 1,
     serial: 0,
@@ -126,7 +126,7 @@ describe('Planner', () => {
   });
 
   it('should tell a replaced resource in a module apart from a removed one', () => {
-    const state: IState = {
+    const state: State = {
       version: 1,
       serial: 0,
       resources: {
