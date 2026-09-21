@@ -76,6 +76,28 @@ describe('a plan saved to a file', () => {
     expect(await fs.readFile(path.join(dir, 'a.txt'), 'utf8')).toBe('planned');
   });
 
+  it('reads the line a broken configuration was written on out of the plan, not off the disk', async () => {
+    const saved = { ...(await save(fileConfig('planned'))), config: 'resource "local_file" {' };
+    await fs.writeFile(path.join(dir, 'plan.json'), JSON.stringify(saved), 'utf8');
+
+    const printed: string[] = [];
+    const cwd = process.cwd();
+    process.chdir(dir);
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => printed.push(args.join(' ')));
+    vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
+
+    try {
+      await createApplyCommand().parseAsync(['node', 'clay', 'plan.json']);
+    } finally {
+      vi.restoreAllMocks();
+      process.chdir(cwd);
+    }
+
+    expect(await fs.readdir(dir)).toEqual(['plan.json']);
+    expect(printed.join('\n')).toContain('\n  1: resource "local_file" {\n                           ^');
+  });
+
   it('carries its modules, so a module edited or removed later changes nothing', async () => {
     await fs.mkdir(path.join(dir, 'm'));
     await fs.writeFile(path.join(dir, 'm', 'main.clay'), moduleConfig('planned'), 'utf8');

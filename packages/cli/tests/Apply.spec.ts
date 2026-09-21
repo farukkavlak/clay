@@ -312,7 +312,7 @@ describe('CLI: apply command', () => {
       await createApplyCommand().parseAsync(['node', 'clay', 'plan.json']);
 
       expect(runPlanMock).toHaveBeenCalledWith(expect.objectContaining({ serial: 2, actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }] }), 'saved config');
-      expect(InMemoryFiles).toHaveBeenCalledWith({ 'm/main.clay': 'saved module' });
+      expect(InMemoryFiles).toHaveBeenCalledWith({ 'm/main.clay': 'saved module', 'main.clay': 'saved config' });
       expect(confirm).not.toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Applying from saved plan'));
 

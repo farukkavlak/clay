@@ -1,4 +1,5 @@
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
+import { CONFIG_FILE } from '@clay/parser';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
@@ -25,11 +26,16 @@ describe('what plan refuses before anything runs', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
-  it("a value the provider will not take, named by its resource, with the provider's error as the cause", async () => {
+  it("a value the provider will not take, placed in its block, with the provider's error as the cause", async () => {
     const config = 'resource "random_string" "pw" { length = "8" }';
     const refused = 'random_string requires "length" attribute (number > 0)';
 
-    await expect(newOrchestrator().plan(config)).rejects.toMatchObject({ message: `random_string.pw: ${refused}`, cause: { message: refused } });
+    await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
+      message: refused,
+      context: 'resource "random_string" "pw"',
+      range: { file: CONFIG_FILE, line: 1, column: 1 },
+      cause: { message: refused },
+    });
   });
 
   it('a resource type no provider handles', async () => {

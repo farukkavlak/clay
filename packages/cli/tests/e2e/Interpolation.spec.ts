@@ -1,4 +1,5 @@
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
+import { ConfigError, CONFIG_FILE } from '@clay/parser';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
@@ -67,12 +68,25 @@ describe('a string with an interpolation', () => {
     expect(resources['local_file.f'].attributes.content).toBe('n=8');
   });
 
-  it('refuses to join a list into text', async () => {
-    const config = `
-      variable "tags" { default = ["a", "b"] }
-      resource "null_resource" "t" { label = "tags: \${var.tags}" }
-    `;
+  // The same list, read from five places: each error has to name the block that reads it and point at the line.
+  it.each([
+    ['a resource', 'resource "null_resource" "t" { label = "tags: ${var.tags}" }', 'resource "null_resource" "t"', 40],
+    ['a variable default', 'variable "v" { default = "tags: ${var.tags}" }', 'variable "v"', 26],
+    ['an output', 'output "o" { value = "tags: ${var.tags}" }', 'output "o"', 22],
+    ['a module input', 'module "m" { source = "./m" text = "tags: ${var.tags}" }', 'module "m"', 36],
+    ['a data source', 'data "local_file" "f" { path = "tags: ${var.tags}" }', 'data "local_file" "f"', 32],
+  ])('refuses to join a list into text in %s, and says which block reads it', async (_, block, declaration, column) => {
+    await fs.mkdir(path.join(dir, 'm'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'm', 'main.clay'), 'variable "text" {}', 'utf8');
+    const config = `variable "tags" { default = ["a", "b"] }\n${block}`;
 
-    await expect(newOrchestrator().plan(config)).rejects.toThrow(`"tags: \${var.tags}" cannot be joined into a string: var.tags is a list`);
+    const planned = newOrchestrator().plan(config);
+
+    await expect(planned).rejects.toBeInstanceOf(ConfigError);
+    await expect(planned).rejects.toMatchObject({
+      message: '"tags: ${var.tags}" cannot be joined into a string: var.tags is a list',
+      context: declaration,
+      range: { file: CONFIG_FILE, line: 2, column },
+    });
   });
 });

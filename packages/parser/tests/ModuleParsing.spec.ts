@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { ModuleBlock } from '../src/ast';
+import { CONFIG_FILE, ModuleBlock } from '../src/ast';
 import { Lexer } from '../src/Lexer';
 import { Parser } from '../src/Parser';
 
 function makeParser(input: string): Parser {
-  const lexer = new Lexer(input);
+  const lexer = new Lexer(input, CONFIG_FILE);
   return new Parser(lexer.tokenize());
 }
 
@@ -42,7 +42,7 @@ describe('Clay Parser - Modules', () => {
     const parser = makeParser(input);
     const result = parser.parse();
 
-    expect((result[0] as ModuleBlock).attributes).toEqual({
+    expect((result[0] as ModuleBlock).attributes).toMatchObject({
       source: { type: 'String', value: './modules/app' },
       instances: { type: 'Number', value: 3 },
       enabled: { type: 'Boolean', value: true },
@@ -59,7 +59,7 @@ describe('Clay Parser - Modules', () => {
     const parser = makeParser(input);
     const result = parser.parse();
 
-    expect((result[0] as ModuleBlock).attributes.vpc_id).toEqual({
+    expect((result[0] as ModuleBlock).attributes.vpc_id).toMatchObject({
       type: 'Reference',
       value: ['module', 'vpc', 'id'],
     });

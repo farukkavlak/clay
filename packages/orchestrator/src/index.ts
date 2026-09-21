@@ -1,14 +1,15 @@
 import { Address, emptyState, IProvider, ISchema, IState } from '@clay/contracts';
+import { spell } from '@clay/parser';
 import { DesiredResource, isUnknown, outputChanges, plan, Plan } from '@clay/planner';
 import { StateManager } from '@clay/state';
 
-import { asError } from './asError';
 import { ActionExecutor } from './components/ActionExecutor';
 import { ConfigLoader } from './components/ConfigLoader';
 import { DependencyGraphBuilder } from './components/DependencyGraphBuilder';
 import { DesiredStateBuilder } from './components/DesiredStateBuilder';
 import { ModuleLoader } from './components/ModuleLoader';
 import { PlanRunner } from './components/PlanRunner';
+import { configError } from './configError';
 import { ConfigFiles } from './ConfigFiles';
 import { ProviderRegistry } from './ProviderRegistry';
 import { ReferenceResolver } from './resolvers/ReferenceResolver';
@@ -108,7 +109,7 @@ export class Orchestrator {
       try {
         await provider.validate(type, resource.attributes);
       } catch (error) {
-        throw new Error(`${Address.of(resource.block).toString()}: ${asError(error).message}`, { cause: error });
+        throw configError(error, resource.block.range, spell(resource.block), Address.of(resource.block));
       }
     }
 

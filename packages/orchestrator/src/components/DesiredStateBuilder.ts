@@ -1,8 +1,9 @@
 import { Address, IState } from '@clay/contracts';
 import { Graph } from '@clay/graph';
-import { AttributeValue } from '@clay/parser';
+import { ResourceBlock, spell } from '@clay/parser';
 import { DesiredResource, hasChanges, isUnknown, UNKNOWN } from '@clay/planner';
 
+import { locate } from '../configError';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { ReferenceScanner } from '../resolvers/ReferenceScanner';
 import { UnresolvedReferenceError } from '../resolvers/UnresolvedReferenceError';
@@ -44,7 +45,7 @@ export class DesiredStateBuilder {
   }
 
   private planResource(key: string, loaded: LoadedResource, graph: Graph<GraphNode>, state: IState, pending: Set<string>): DesiredResource {
-    const attributes = this.resolveForPlan(loaded.block.attributes, state, loaded.address, pending);
+    const attributes = this.resolveForPlan(loaded.block, state, loaded.address, pending);
     const current = state.resources[key];
     if (!current || hasChanges(current.attributes, attributes)) pending.add(key);
 
@@ -53,12 +54,14 @@ export class DesiredStateBuilder {
 
   /** A variable fed by a pending resource is pending itself, so everything reading it plans against UNKNOWN. */
   private planVariable(key: string, node: ValueNode, state: IState, pending: Set<string>): void {
-    if (node.value !== undefined && isUnknown(this.resolveOrUnknown(node.value, state, node.context, pending))) pending.add(key);
+    if (node.value === undefined) return;
+
+    if (isUnknown(locate(node.range, node.declaration, node.context, () => this.resolveOrUnknown(node.value, state, node.context, pending)))) pending.add(key);
   }
 
   /** Gives an output its value so the resources reading it can be planned; an output fed by a pending resource keeps none. */
   private planOutput(key: string, node: ValueNode, state: IState, pending: Set<string>, rootOutputs: Record<string, unknown>): void {
-    const value = this.resolveOrUnknown(node.value, state, node.context, pending);
+    const value = locate(node.range, node.declaration, node.context, () => this.resolveOrUnknown(node.value, state, node.context, pending));
     if (isUnknown(value)) pending.add(key);
     else this.scopeManager.setOutput(node.scope, node.name, value);
 
@@ -66,10 +69,12 @@ export class DesiredStateBuilder {
   }
 
   /** Resolves config values the way the diff needs them; what an apply has to produce first stays UNKNOWN. */
-  private resolveForPlan(attributes: Record<string, AttributeValue>, state: IState, context: Address, pending: Set<string>): Record<string, unknown> {
+  private resolveForPlan(block: ResourceBlock, state: IState, context: Address, pending: Set<string>): Record<string, unknown> {
     const resolved: Record<string, unknown> = {};
+    const declaration = spell(block);
 
-    for (const [key, value] of Object.entries(attributes)) resolved[key] = this.resolveOrUnknown(value, state, context, pending);
+    for (const [key, value] of Object.entries(block.attributes))
+      resolved[key] = locate(value.range, declaration, context, () => this.resolveOrUnknown(value, state, context, pending));
 
     return resolved;
   }

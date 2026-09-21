@@ -1,17 +1,19 @@
 import { Address } from '@clay/contracts';
 import { Graph } from '@clay/graph';
-import { AttributeValue, ModuleBlock } from '@clay/parser';
+import { AttributeValue, ModuleBlock, Range, spell } from '@clay/parser';
 
 import { childScope, outputKey, scopeOf, variableKey } from '../keys';
 import { Reference, ReferenceScanner } from '../resolvers/ReferenceScanner';
 import { LoadedModule, LoadedResource } from './ModuleLoader';
 
-/** A value node carries the expression to evaluate and the address it is evaluated from. */
+/** A value node carries the expression to evaluate, the address it is evaluated from, and where it was written. */
 export interface ValueNode {
   scope: string;
   name: string;
   value: AttributeValue | undefined;
   context: Address;
+  range: Range;
+  declaration: string;
 }
 
 export type GraphNode = { kind: 'resource' } | ({ kind: 'variable' } & ValueNode) | ({ kind: 'output' } & ValueNode);
@@ -69,9 +71,28 @@ export class DependencyGraphBuilder {
       const scope = scopeOf(mod.address);
 
       for (const stmt of mod.program) {
-        if (stmt.type === 'Output') nodes.set(outputKey(scope, stmt.name), { kind: 'output', scope, name: stmt.name, value: stmt.value, context: mod.address });
+        const declaration = spell(stmt);
+
+        if (stmt.type === 'Output')
+          nodes.set(outputKey(scope, stmt.name), {
+            kind: 'output',
+            scope,
+            name: stmt.name,
+            value: stmt.value,
+            context: mod.address,
+            range: stmt.value.range,
+            declaration,
+          });
         if (stmt.type === 'Variable' && !nodes.has(variableKey(scope, stmt.name)))
-          nodes.set(variableKey(scope, stmt.name), { kind: 'variable', scope, name: stmt.name, value: stmt.attributes.default, context: mod.address });
+          nodes.set(variableKey(scope, stmt.name), {
+            kind: 'variable',
+            scope,
+            name: stmt.name,
+            value: stmt.attributes.default,
+            context: mod.address,
+            range: stmt.attributes.default?.range ?? stmt.range,
+            declaration,
+          });
         if (stmt.type === 'Module') this.setInputNodes(stmt, nodes, scope, mod.address);
       }
     }
@@ -82,7 +103,18 @@ export class DependencyGraphBuilder {
   // An input is read where the module is called, so its context is the parent, and it wins over the default inside.
   private setInputNodes(stmt: ModuleBlock, nodes: Map<string, GraphNode>, scope: string, context: Address): void {
     const child = childScope(scope, stmt.name);
-    for (const name of inputNames(stmt.attributes)) nodes.set(variableKey(child, name), { kind: 'variable', scope: child, name, value: stmt.attributes[name], context });
+    const declaration = spell(stmt);
+
+    for (const name of inputNames(stmt.attributes))
+      nodes.set(variableKey(child, name), {
+        kind: 'variable',
+        scope: child,
+        name,
+        value: stmt.attributes[name],
+        context,
+        range: stmt.attributes[name].range,
+        declaration,
+      });
   }
 
   private addDependencies(value: unknown, graph: Graph<GraphNode>, dependentKey: string, context: Address, moduleScopes: Set<string>): void {

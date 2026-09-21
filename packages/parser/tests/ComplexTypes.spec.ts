@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ResourceBlock } from '../src/ast';
+import { CONFIG_FILE, ResourceBlock } from '../src/ast';
 import { Lexer } from '../src/Lexer';
 import { Parser } from '../src/Parser';
 
@@ -11,7 +11,7 @@ describe('Complex Types Parsing', () => {
         items = ["a", "b", "c"]
       }
     `;
-    const lexer = new Lexer(input);
+    const lexer = new Lexer(input, CONFIG_FILE);
     const tokens = lexer.tokenize();
     const parser = new Parser(tokens);
     const ast = parser.parse();
@@ -22,7 +22,7 @@ describe('Complex Types Parsing', () => {
 
     expect(items.type).toBe('List');
     if (items.type === 'List')
-      expect(items.value).toEqual([
+      expect(items.value).toMatchObject([
         { type: 'String', value: 'a' },
         { type: 'String', value: 'b' },
         { type: 'String', value: 'c' },
@@ -35,7 +35,7 @@ describe('Complex Types Parsing', () => {
         items = ["a", 1, true]
       }
     `;
-    const lexer = new Lexer(input);
+    const lexer = new Lexer(input, CONFIG_FILE);
     const tokens = lexer.tokenize();
     const parser = new Parser(tokens);
     const ast = parser.parse();
@@ -46,7 +46,7 @@ describe('Complex Types Parsing', () => {
     expect(items.type).toBe('List');
     if (items.type === 'List') {
       expect(items.value).toHaveLength(3);
-      expect(items.value[1]).toEqual({ type: 'Number', value: 1 });
+      expect(items.value[1]).toMatchObject({ type: 'Number', value: 1 });
     }
   });
 
@@ -60,7 +60,7 @@ describe('Complex Types Parsing', () => {
         }
       }
     `;
-    const lexer = new Lexer(input);
+    const lexer = new Lexer(input, CONFIG_FILE);
     const tokens = lexer.tokenize();
     const parser = new Parser(tokens);
     const ast = parser.parse();
@@ -70,9 +70,9 @@ describe('Complex Types Parsing', () => {
 
     expect(config.type).toBe('Map');
     if (config.type === 'Map') {
-      expect(config.value.debug).toEqual({ type: 'Boolean', value: true });
-      expect(config.value.count).toEqual({ type: 'Number', value: 42 });
-      expect(config.value.version).toEqual({ type: 'String', value: '1.0' });
+      expect(config.value.debug).toMatchObject({ type: 'Boolean', value: true });
+      expect(config.value.count).toMatchObject({ type: 'Number', value: 42 });
+      expect(config.value.version).toMatchObject({ type: 'String', value: '1.0' });
     }
   });
 
@@ -91,7 +91,7 @@ describe('Complex Types Parsing', () => {
         }
       }
     `;
-    const lexer = new Lexer(input);
+    const lexer = new Lexer(input, CONFIG_FILE);
     const tokens = lexer.tokenize();
     const parser = new Parser(tokens);
     const ast = parser.parse();
@@ -104,7 +104,7 @@ describe('Complex Types Parsing', () => {
     if (matrix.type === 'List') {
       const firstRow = matrix.value[0];
       expect(firstRow.type).toBe('List');
-      if (firstRow.type === 'List') expect(firstRow.value[0]).toEqual({ type: 'Number', value: 1 });
+      if (firstRow.type === 'List') expect(firstRow.value[0]).toMatchObject({ type: 'Number', value: 1 });
     }
 
     // Check nested map
@@ -113,7 +113,7 @@ describe('Complex Types Parsing', () => {
     if (meta.type === 'Map') {
       expect(meta.value.tags.type).toBe('List');
       expect(meta.value.owner.type).toBe('Map');
-      if (meta.value.owner.type === 'Map') expect(meta.value.owner.value.name).toEqual({ type: 'String', value: 'admin' });
+      if (meta.value.owner.type === 'Map') expect(meta.value.owner.value.name).toMatchObject({ type: 'String', value: 'admin' });
     }
   });
 });

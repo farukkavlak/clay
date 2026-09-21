@@ -6,6 +6,7 @@ import path from 'node:path';
 import { styleText } from 'node:util';
 
 import { newOrchestrator } from '../engine';
+import { describeError } from '../showError';
 
 async function executeValidate(cwd: string, configPath: string): Promise<void> {
   const configContent = await fs.readFile(configPath, 'utf8');
@@ -31,8 +32,7 @@ export function createValidateCommand(): Command {
       await executeValidate(cwd, configPath);
       console.log(styleText('green', 'Configuration is valid.'));
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(styleText('red', 'Validation failed:'), message);
+      console.error(styleText('red', 'Validation failed:'), describeError(error, new DiskFiles(cwd)));
       process.exit(1);
     }
   });

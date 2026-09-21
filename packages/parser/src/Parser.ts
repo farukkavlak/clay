@@ -1,8 +1,10 @@
 import { AttributeValue, DataBlock, ModuleBlock, OutputBlock, Program, ResourceBlock, Statement, VariableBlock } from './ast';
+import { ConfigError } from './ConfigError';
+import { Range } from './Range';
 import { Token, TokenType } from './tokens';
 
 /** A block as the config spells it: `resource "local_file" "a"`, `module "m"`. */
-function spell(statement: Statement): string {
+export function spell(statement: Statement): string {
   if (statement.type === 'Resource') return `resource "${statement.resourceType}" "${statement.name}"`;
   if (statement.type === 'Data') return `data "${statement.dataSourceType}" "${statement.name}"`;
   return `${statement.type.toLowerCase()} "${statement.name}"`;
@@ -26,7 +28,7 @@ export class Parser {
 
       // A second block with the same name would replace the first in silence.
       const label = spell(statement);
-      if (declared.has(label)) throw new Error(`[Line ${start.line}, Column ${start.column}] ${label} is declared twice`);
+      if (declared.has(label)) throw new ConfigError(`${label} is declared twice`, start.range);
       declared.add(label);
 
       program.push(statement);
@@ -36,7 +38,7 @@ export class Parser {
   }
 
   // No keywords: a kind is only special at the start of a statement.
-  private blockParsers = new Map<string, () => Statement>([
+  private blockParsers = new Map<string, (range: Range) => Statement>([
     ['resource', this.parseResource.bind(this)],
     ['variable', this.parseVariable.bind(this)],
     ['data', this.parseData.bind(this)],
@@ -48,11 +50,10 @@ export class Parser {
     const parseBlock = this.check(TokenType.Identifier) ? this.blockParsers.get(this.peek().value) : undefined;
     if (!parseBlock) return this.error(`Unexpected token: ${this.peek().value}`);
 
-    this.advance();
-    return parseBlock();
+    return parseBlock(this.advance().range);
   }
 
-  private parseResource(): ResourceBlock {
+  private parseResource(range: Range): ResourceBlock {
     const typeToken = this.consume(TokenType.String, "Expect resource type string after 'resource'.");
     const nameToken = this.consume(TokenType.String, 'Expect resource name string after resource type.');
 
@@ -63,10 +64,11 @@ export class Parser {
       resourceType: typeToken.value,
       name: nameToken.value,
       attributes,
+      range,
     };
   }
 
-  private parseData(): DataBlock {
+  private parseData(range: Range): DataBlock {
     const typeToken = this.consume(TokenType.String, "Expect data source type string after 'data'.");
     const nameToken = this.consume(TokenType.String, 'Expect data source name string after data source type.');
 
@@ -77,10 +79,11 @@ export class Parser {
       dataSourceType: typeToken.value,
       name: nameToken.value,
       attributes,
+      range,
     };
   }
 
-  private parseVariable(): VariableBlock {
+  private parseVariable(range: Range): VariableBlock {
     const nameToken = this.consume(TokenType.String, "Expect variable name string after 'variable'.");
 
     const attributes = this.parseAttributes('variable');
@@ -89,10 +92,11 @@ export class Parser {
       type: 'Variable',
       name: nameToken.value,
       attributes,
+      range,
     };
   }
 
-  private parseOutput(): OutputBlock {
+  private parseOutput(range: Range): OutputBlock {
     const nameToken = this.consume(TokenType.String, "Expect output name string after 'output'.");
 
     this.consume(TokenType.LBrace, "Expect '{' after output name.");
@@ -108,10 +112,11 @@ export class Parser {
       type: 'Output',
       name: nameToken.value,
       value,
+      range,
     };
   }
 
-  private parseModule(): ModuleBlock {
+  private parseModule(range: Range): ModuleBlock {
     const nameToken = this.consume(TokenType.String, "Expect module name string after 'module'.");
 
     const attributes = this.parseAttributes('module');
@@ -120,6 +125,7 @@ export class Parser {
       type: 'Module',
       name: nameToken.value,
       attributes,
+      range,
     };
   }
 
@@ -139,29 +145,31 @@ export class Parser {
   }
 
   private parseValue(): AttributeValue {
-    if (this.matchToken(TokenType.String)) return { type: 'String', value: this.previous().value };
-    if (this.matchToken(TokenType.Number)) return { type: 'Number', value: Number(this.previous().value) };
-    if (this.matchToken(TokenType.Boolean)) return { type: 'Boolean', value: this.previous().value === 'true' };
+    const range = this.peek().range;
 
-    if (this.matchToken(TokenType.LBracket)) return this.parseList();
-    if (this.matchToken(TokenType.LBrace)) return this.parseMap();
+    if (this.matchToken(TokenType.String)) return { type: 'String', value: this.previous().value, range };
+    if (this.matchToken(TokenType.Number)) return { type: 'Number', value: Number(this.previous().value), range };
+    if (this.matchToken(TokenType.Boolean)) return { type: 'Boolean', value: this.previous().value === 'true', range };
 
-    if (this.check(TokenType.Identifier)) return this.parseReference();
+    if (this.matchToken(TokenType.LBracket)) return this.parseList(range);
+    if (this.matchToken(TokenType.LBrace)) return this.parseMap(range);
+
+    if (this.check(TokenType.Identifier)) return this.parseReference(range);
 
     return this.error(`Unexpected value: ${this.peek().value}`);
   }
 
-  private parseList(): AttributeValue {
+  private parseList(range: Range): AttributeValue {
     const values: AttributeValue[] = [];
     while (!this.check(TokenType.RBracket) && !this.isAtEnd()) {
       values.push(this.parseValue());
       if (!this.matchToken(TokenType.Comma)) break;
     }
     this.consume(TokenType.RBracket, "Expect ']' after list.");
-    return { type: 'List', value: values };
+    return { type: 'List', value: values, range };
   }
 
-  private parseMap(): AttributeValue {
+  private parseMap(range: Range): AttributeValue {
     const map: Record<string, AttributeValue> = {};
     while (!this.check(TokenType.RBrace) && !this.isAtEnd()) {
       const key = this.matchToken(TokenType.String) ? this.previous().value : this.consume(TokenType.Identifier, 'Expect key in map.').value;
@@ -171,10 +179,10 @@ export class Parser {
       this.matchToken(TokenType.Comma);
     }
     this.consume(TokenType.RBrace, "Expect '}' after map.");
-    return { type: 'Map', value: map };
+    return { type: 'Map', value: map, range };
   }
 
-  private parseReference(): AttributeValue {
+  private parseReference(range: Range): AttributeValue {
     const parts: string[] = [];
 
     parts.push(this.advance().value);
@@ -183,7 +191,7 @@ export class Parser {
       if (this.check(TokenType.Identifier)) parts.push(this.advance().value);
       else return this.error('Expect property name after dot.');
 
-    return { type: 'Reference', value: parts };
+    return { type: 'Reference', value: parts, range };
   }
 
   private matchToken(...types: TokenType[]): boolean {
@@ -201,8 +209,7 @@ export class Parser {
   }
 
   private error(message: string): never {
-    const token = this.peek();
-    throw new Error(`[Line ${token.line}, Column ${token.column}] ${message}`);
+    throw new ConfigError(message, this.peek().range);
   }
 
   private check(type: TokenType): boolean {

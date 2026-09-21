@@ -64,8 +64,27 @@ describe('validate against real files', () => {
     expect(await validate('variable "name" {}')).toContain('variable "name" has no value');
   });
 
-  it('refuses a value the provider will not take', async () => {
-    expect(await validate('resource "random_string" "pw" { length = "8" }')).toContain('random_string.pw: random_string requires "length"');
+  it('refuses a value the provider will not take, and points at the block', async () => {
+    const output = await validate('resource "random_string" "pw" { length = "8" }');
+
+    expect(output).toContain('random_string requires "length"');
+    expect(output).toContain('on main.clay line 1, in resource "random_string" "pw":');
+  });
+
+  it('names the module instance an error came from, since one module file serves every call of it', async () => {
+    await fs.mkdir(path.join(dir, 'm'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'm', 'main.clay'), 'resource "random_string" "pw" { length = "8" }', 'utf8');
+
+    const output = await validate('module "a" { source = "./m" }\nmodule "b" { source = "./m" }');
+
+    expect(output).toContain('on m/main.clay line 1, in resource "random_string" "pw":');
+    expect(output).toContain('\n  in module.a');
+  });
+
+  it('says nothing about a module when the error is in the root configuration', async () => {
+    const output = await validate('resource "random_string" "pw" { length = "8" }');
+
+    expect(output).not.toContain('in module.');
   });
 
   it('refuses a reference to a resource the configuration does not declare', async () => {
@@ -81,8 +100,20 @@ describe('validate against real files', () => {
     expect(await validate(config)).toContain('Dependency cycle detected');
   });
 
-  it('refuses a syntax error with its position', async () => {
-    expect(await validate('resource "local_file" {')).toContain('[Line 1, Column 23]');
+  it('refuses a syntax error and shows the line it is on', async () => {
+    const output = await validate('resource "local_file" {');
+
+    expect(output).toContain('on main.clay line 1:');
+    expect(output).toContain('\n  1: resource "local_file" {\n                           ^');
+  });
+
+  it('names the module file a syntax error is in, not the root one', async () => {
+    await fs.mkdir(path.join(dir, 'mod'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'mod', 'main.clay'), 'resource "local_file" {\n', 'utf8');
+
+    const output = await validate('module "m" { source = "./mod" }');
+
+    expect(output).toContain('on mod/main.clay line 1:');
   });
 
   it('says so when there is no configuration', async () => {

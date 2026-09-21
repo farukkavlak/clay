@@ -1,12 +1,27 @@
 import { describe, expect, it } from 'vitest';
 
-import { ResourceBlock, VariableBlock } from '../src/ast';
+import { CONFIG_FILE, ResourceBlock, VariableBlock } from '../src/ast';
+import { ConfigError } from '../src/ConfigError';
 import { Lexer } from '../src/Lexer';
 import { Parser } from '../src/Parser';
 
-function makeParser(input: string): Parser {
-  const lexer = new Lexer(input);
-  return new Parser(lexer.tokenize());
+function makeParser(input: string, file: string = CONFIG_FILE): Parser {
+  return new Parser(new Lexer(input, file).tokenize());
+}
+
+const at = (line: number, column: number) => ({ file: CONFIG_FILE, line, column });
+
+/** The error a bad configuration throws, so a test can pin both what it says and where it points. */
+function errorOf(input: string, file: string = CONFIG_FILE): ConfigError {
+  try {
+    makeParser(input, file).parse();
+  } catch (error) {
+    if (error instanceof ConfigError) return error;
+
+    throw error;
+  }
+
+  throw new Error(`Expected an error from: ${input}`);
 }
 
 const attributesOf = (input: string) => (makeParser(input).parse()[0] as ResourceBlock).attributes;
@@ -45,7 +60,7 @@ describe('Clay Parser', () => {
       const result = parser.parse();
 
       expect(result).toHaveLength(1);
-      expect((result[0] as ResourceBlock).attributes.enabled).toEqual({ type: 'Boolean', value: false });
+      expect((result[0] as ResourceBlock).attributes.enabled).toMatchObject({ type: 'Boolean', value: false });
     });
 
     it('should parse multiple resources', () => {
@@ -93,7 +108,7 @@ describe('Clay Parser', () => {
       const parser = makeParser(input);
       const ast = parser.parse();
 
-      expect((ast[0] as ResourceBlock).attributes.ref).toEqual({
+      expect((ast[0] as ResourceBlock).attributes.ref).toMatchObject({
         type: 'Reference',
         value: ['other_resource', 'field'],
       });
@@ -104,7 +119,7 @@ describe('Clay Parser', () => {
       const parser = makeParser(input);
       const ast = parser.parse();
 
-      expect((ast[0] as ResourceBlock).attributes.ref).toEqual({
+      expect((ast[0] as ResourceBlock).attributes.ref).toMatchObject({
         type: 'Reference',
         value: ['a', 'b', 'c', 'd'],
       });
@@ -142,7 +157,7 @@ describe('Clay Parser', () => {
       const result = parser.parse();
 
       expect(result).toHaveLength(1);
-      expect((result[0] as VariableBlock).attributes.default).toEqual({ type: 'Number', value: 8080 });
+      expect((result[0] as VariableBlock).attributes.default).toMatchObject({ type: 'Number', value: 8080 });
     });
 
     it('should parse variable with boolean default', () => {
@@ -155,7 +170,7 @@ describe('Clay Parser', () => {
       const result = parser.parse();
 
       expect(result).toHaveLength(1);
-      expect((result[0] as VariableBlock).attributes.default).toEqual({ type: 'Boolean', value: true });
+      expect((result[0] as VariableBlock).attributes.default).toMatchObject({ type: 'Boolean', value: true });
     });
 
     it('should parse multiple variables and resources', () => {
@@ -190,7 +205,7 @@ describe('Clay Parser', () => {
       const parser = makeParser(input);
       const result = parser.parse();
 
-      expect((result[0] as VariableBlock).attributes.description).toEqual({ type: 'String', value: 'AWS region' });
+      expect((result[0] as VariableBlock).attributes.description).toMatchObject({ type: 'String', value: 'AWS region' });
     });
   });
 
@@ -204,18 +219,13 @@ describe('Clay Parser', () => {
     it('takes a block kind as a map key', () => {
       const attributes = attributesOf('resource "null_resource" "a" { m = { data = "x", output = "y" } }');
 
-      expect(attributes.m).toEqual({ type: 'Map', value: { data: { type: 'String', value: 'x' }, output: { type: 'String', value: 'y' } } });
-    });
-
-    it('refuses a top-level word that is not a block kind, even one an object has by birth', () => {
-      for (const word of ['bogus', 'constructor', 'toString', '__proto__'])
-        expect(() => makeParser(`${word} "x" {}`).parse()).toThrow(`[Line 1, Column 1] Unexpected token: ${word}`);
+      expect(attributes.m).toMatchObject({ type: 'Map', value: { data: { type: 'String', value: 'x' }, output: { type: 'String', value: 'y' } } });
     });
 
     it('keeps a block kind in a reference', () => {
       const attributes = attributesOf('resource "null_resource" "a" { v = module.m.output }');
 
-      expect(attributes.v).toEqual({ type: 'Reference', value: ['module', 'm', 'output'] });
+      expect(attributes.v).toMatchObject({ type: 'Reference', value: ['module', 'm', 'output'] });
     });
 
     it('still starts a block with the word, right after an attribute of the same name', () => {
@@ -225,8 +235,17 @@ describe('Clay Parser', () => {
     });
 
     it('takes only "value" in an output block, not any name', () => {
-      expect(() => makeParser('output "o" { data = 1 }').parse()).toThrow("[Line 1, Column 14] Expect 'value' in output block.");
+      const error = errorOf('output "o" { data = 1 }');
+
+      expect(error.message).toBe("Expect 'value' in output block.");
+      expect(error.range).toEqual(at(1, 14));
     });
+  });
+
+  it('writes the place a value was parsed at onto the value itself', () => {
+    const attributes = attributesOf('resource "null_resource" "a" { v = "x" }');
+
+    expect(attributes.v).toEqual({ type: 'String', value: 'x', range: at(1, 36) });
   });
 
   describe('Error Cases', () => {
@@ -239,7 +258,12 @@ describe('Clay Parser', () => {
         'module "m"': 'module "m" { source = "./m" }\nmodule "m" { source = "./m" }',
       };
 
-      for (const [label, input] of Object.entries(twice)) expect(() => makeParser(input).parse()).toThrow(`[Line 2, Column 1] ${label} is declared twice`);
+      for (const [label, input] of Object.entries(twice)) {
+        const error = errorOf(input);
+
+        expect(error.message).toBe(`${label} is declared twice`);
+        expect(error.range).toEqual(at(2, 1));
+      }
     });
 
     it('tells blocks of different kinds with one name apart', () => {
@@ -248,81 +272,33 @@ describe('Clay Parser', () => {
       expect(makeParser(input).parse()).toHaveLength(5);
     });
 
-    it('should throw on missing resource type', () => {
-      const input = `resource "name" { key = "val" }`;
-      // resource (1:1) "name" (1:10) { (1:17) ...
-      // Consumes "name" as type. Then sees {. Expects string (name).
-      // Token at { is Line 1, Column 17.
-      const parser = makeParser(input);
-      expect(() => parser.parse()).toThrow('[Line 1, Column 17] Expect resource name string');
+    // Each case points at the token the parser stopped on, not at the block it was reading.
+    it.each([
+      ['a resource with only one label', 'resource "name" { key = "val" }', 'Expect resource name string', at(1, 17)],
+      ['a resource with no name', 'resource "type" { key = "val" }', 'Expect resource name string', at(1, 17)],
+      ['a block body that never opens', 'resource "type" "name" key = "val"', "Expect '{'", at(1, 24)],
+      ['a block body that never closes', 'resource "type" "name" { key = "val"', "Expect '}'", at(1, 37)],
+      ['an attribute with no "="', 'resource "type" "name" { key "val" }', "Expect '='", at(1, 30)],
+      ['an attribute named by a string', 'resource "type" "name" { "key" = "val" }', 'Expect attribute name', at(1, 26)],
+      ['a value that is not one', 'resource "type" "name" { key = = }', 'Unexpected value: =', at(1, 32)],
+      ['a word that starts no block', 'random_token "type" "name" {}', 'Unexpected token: random_token', at(1, 1)],
+      ['a reference that ends on a dot', 'resource "type" "name" { ref = foo. }', 'Expect property name after dot', at(1, 37)],
+      ['a character the lexer knows nothing about', '@', 'Unexpected character: "@"', at(1, 1)],
+    ])('says what is wrong with %s and where', (_, input, message, range) => {
+      const error = errorOf(input);
+
+      expect(error.message).toContain(message);
+      expect(error.range).toEqual(range);
     });
 
-    it('should throw on missing resource name', () => {
-      const input = `resource "type" { key = "val" }`;
-      // resource (1:1) "type" (1:10) { (1:17)
-      // Consumes "type". Next is {. Expects name string.
-      // Token at { is Line 1, Column 17.
-      const parser = makeParser(input);
-      expect(() => parser.parse()).toThrow('[Line 1, Column 17] Expect resource name string');
+    it('refuses a top-level word that is not a block kind, even one an object has by birth', () => {
+      for (const word of ['bogus', 'constructor', 'toString', '__proto__']) expect(errorOf(`${word} "x" {}`).message).toBe(`Unexpected token: ${word}`);
     });
 
-    it('should throw on missing opening brace', () => {
-      const input = `resource "type" "name" key = "val"`;
-      // resource "type" "name" key (1:24)
-      // Expects {. Got key (Identifier).
-      const parser = makeParser(input);
-      expect(() => parser.parse()).toThrow("[Line 1, Column 24] Expect '{'");
-    });
+    it('names the file the error was written in', () => {
+      const error = errorOf('resource "type" "name" { key = = }', 'modules/app/main.clay');
 
-    it('should throw on missing closing brace', () => {
-      const input = `resource "type" "name" { key = "val"`;
-      // EOF is next.
-      // resource "type" "name" { key = "val" <EOF>
-      // Lexer puts EOF at end.
-      // Line 1. Column 37 (length is 36, so 37)
-      const parser = makeParser(input);
-      expect(() => parser.parse()).toThrow("[Line 1, Column 37] Expect '}'");
-    });
-
-    it('should throw on invalid attribute syntax (missing =)', () => {
-      const input = `resource "type" "name" { key "val" }`;
-      // key (1:26), "val" (1:30)
-      // Expects =. Got "val" (String).
-      const parser = makeParser(input);
-      expect(() => parser.parse()).toThrow("[Line 1, Column 30] Expect '='");
-    });
-
-    it('should throw on invalid attribute key (not identifier)', () => {
-      const input = `resource "type" "name" { "key" = "val" }`;
-      // "key" is String at 1:26. Expect identifier.
-      const parser = makeParser(input);
-      expect(() => parser.parse()).toThrow('[Line 1, Column 26] Expect attribute name');
-    });
-
-    it('should throw on something that is not a value after =', () => {
-      const input = `resource "type" "name" { key = = }`;
-      const parser = makeParser(input);
-      expect(() => parser.parse()).toThrow('[Line 1, Column 32] Unexpected value: =');
-    });
-
-    it('should throw on unexpected tokens at top level', () => {
-      const input = `random_token "type" "name" {}`;
-      // random_token is Identifier at 1:1.
-      const parser = makeParser(input);
-      expect(() => parser.parse()).toThrow('[Line 1, Column 1] Unexpected token: random_token');
-    });
-
-    it('should throw on invalid character in Lexer', () => {
-      const input = `@`;
-      // Lexer throws its own error format.
-      // "Unexpected token at line 1, column 1: "@""
-      expect(() => makeParser(input)).toThrow('Unexpected token at line 1, column 1: "@"');
-    });
-
-    it('should throw on invalid reference (missing property after dot)', () => {
-      const input = `resource "type" "name" { ref = foo. }`;
-      const parser = makeParser(input);
-      expect(() => parser.parse()).toThrow('Expect property name after dot');
+      expect(error.range.file).toBe('modules/app/main.clay');
     });
   });
 
