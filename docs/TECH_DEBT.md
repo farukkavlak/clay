@@ -310,9 +310,15 @@ Found by the 2026-09-20 review of this section:
       `PlanRunner` applies in order and deletes in reverse. `ProviderRegistry` answers
       for a missing provider in one place and one wording, `No provider handles "x"`,
       where three had grown. `Orchestrator` is 117 lines, down from 395.
-- [ ] `apply` parses the config, reads data sources and builds the dependency graph once,
-      not twice. `plan` does all three, and `runPlan` does them again for the plan it is
-      handed.
+- [x] `apply` parses the config, reads data sources and builds the dependency graph twice:
+      `plan` does all three, and `runPlan` does them again for the plan it is handed.
+      Kept, on purpose. `runPlan` has to load on its own, since a saved plan brings its
+      own configuration, and sharing the load with `plan` would mean a cache inside the
+      engine or a loaded context passed through the CLI. Terraform has one flow from load
+      to apply, so it loads once; what matters in its design is that data sources are
+      read at plan and their values travel in the plan, so apply reads nothing again.
+      The parse and the graph cost milliseconds; the second data-source read is the real
+      cost, and it goes when data sources join the graph (`TASKS.md` 10.9).
 - [x] `apply` yields events (planned, started, applied, failed, done) and the CLI only
       renders them. Writing state as each `applied` arrives was the failed-action fix; the
       CLI now prints a line per resource. `plan` stays a plain call: it computes a list and
