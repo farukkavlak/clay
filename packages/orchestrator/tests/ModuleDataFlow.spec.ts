@@ -8,9 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vite
 import { InMemoryFiles, Orchestrator } from '../src/index';
 import { apply } from './apply';
 
-// Mock fs and path
-
-const readMock = vi.fn().mockResolvedValue(emptyState());
+/** Fresh per test: apply writes into whatever this returns, so one shared object would carry a test's resources into the next. */
+const readMock = vi.fn();
 const writeMock = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('@clay/state', () => {
@@ -56,6 +55,7 @@ describe('Orchestrator - Phase 4: Data Flow', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    readMock.mockResolvedValue(emptyState());
     tmpDir = await fsPromises.mkdtemp(path.join(os.tmpdir(), 'orchestrator-dataflow-test-'));
 
     // Setup mock provider
