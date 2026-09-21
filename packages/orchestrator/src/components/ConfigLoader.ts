@@ -1,8 +1,9 @@
 import { Address, IState } from '@clay/contracts';
-import { Lexer, Parser, Statement } from '@clay/parser';
+import { CONFIG_FILE, DataBlock, Lexer, Parser, spell, Statement } from '@clay/parser';
 
 import { ProviderRegistry } from '../ProviderRegistry';
 import { dataSourceKey, scopeOf } from '../keys';
+import { tryAt } from '../place';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { ScopeManager } from '../scope/ScopeManager';
 import { LoadedModule, LoadedResource, ModuleLoader } from './ModuleLoader';
@@ -24,7 +25,7 @@ export class ConfigLoader {
   ) {}
 
   async load(configContent: string, state: IState): Promise<LoadedConfig> {
-    const mainProgram = new Parser(new Lexer(configContent).tokenize()).parse();
+    const mainProgram = new Parser(new Lexer(configContent, CONFIG_FILE).tokenize()).parse();
 
     this.scopeManager.clear();
     const { resources: loadedResources, modules: loadedModules } = await this.moduleLoader.loadModuleTree(mainProgram);
@@ -41,12 +42,23 @@ export class ConfigLoader {
     for (const stmt of program)
       if (stmt.type === 'Data') {
         const provider = this.providers.get(stmt.dataSourceType);
-        const inputs = this.resolver.resolveAttributes(stmt.attributes, state, scopeAddress);
+        const inputs = this.resolveInputs(stmt, state, scopeAddress);
 
         await provider.validate(stmt.dataSourceType, inputs);
         const attributes = await provider.read(stmt.dataSourceType, inputs);
 
         this.dataSources.set(dataSourceKey(scope, stmt.dataSourceType, stmt.name), attributes);
       }
+  }
+
+  /** One value at a time, so an error points at the value that caused it and not at the block around it. */
+  private resolveInputs(stmt: DataBlock, state: IState, scopeAddress: Address): Record<string, unknown> {
+    const declaration = spell(stmt);
+    const inputs: Record<string, unknown> = {};
+
+    for (const [key, value] of Object.entries(stmt.attributes))
+      inputs[key] = tryAt(value.position, declaration, scopeAddress, () => this.resolver.resolveValue(value, state, scopeAddress));
+
+    return inputs;
   }
 }

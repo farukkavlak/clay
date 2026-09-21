@@ -1,5 +1,5 @@
 import { Address } from '@clay/contracts';
-import { DiskFiles, InMemoryFiles, RunEvent } from '@clay/orchestrator';
+import { ConfigFiles, DiskFiles, InMemoryFiles, RunEvent } from '@clay/orchestrator';
 import { CONFIG_FILE } from '@clay/parser';
 import { PlanAction, PlanFile, validatePlanFile } from '@clay/planner';
 import { Command } from 'commander';
@@ -9,6 +9,7 @@ import { styleText } from 'node:util';
 
 import { confirm } from '../confirm';
 import { newOrchestrator } from '../engine';
+import { describeError } from '../describeError';
 import { actionSymbol, changesNothing, displayPlan, pastTense } from '../showPlan';
 
 /** A replacement counts once as an add and once as a destroy, as the plan summary counts it. */
@@ -50,9 +51,9 @@ async function confirmApply(autoConfirm: boolean): Promise<boolean> {
   return autoConfirm || confirm('Do you want to perform these actions?');
 }
 
-async function executeApply(cwd: string, configPath: string, autoConfirm: boolean): Promise<void> {
+async function executeApply(cwd: string, configPath: string, files: ConfigFiles, autoConfirm: boolean): Promise<void> {
   const configContent = await fs.readFile(configPath, 'utf8');
-  const orchestrator = newOrchestrator(cwd, new DiskFiles(cwd));
+  const orchestrator = newOrchestrator(cwd, files);
 
   console.log(styleText('blue', 'Calculating plan...'));
   const planned = await orchestrator.plan(configContent);
@@ -69,8 +70,13 @@ async function executeApply(cwd: string, configPath: string, autoConfirm: boolea
   await runAndReport(orchestrator.runPlan(planned, configContent));
 }
 
-async function executeApplyFromPlan(cwd: string, planFile: PlanFile): Promise<void> {
-  const orchestrator = newOrchestrator(cwd, new InMemoryFiles(planFile.modules));
+/** A saved plan carries the configuration it was made from, so it runs against that and not against whatever is on disk now. */
+function filesInPlan(planFile: PlanFile): ConfigFiles {
+  return new InMemoryFiles({ ...planFile.modules, [CONFIG_FILE]: planFile.config });
+}
+
+async function executeApplyFromPlan(cwd: string, planFile: PlanFile, files: ConfigFiles): Promise<void> {
+  const orchestrator = newOrchestrator(cwd, files);
 
   console.log(styleText('blue', 'Applying from saved plan...'));
   console.log(styleText('gray', `Plan created: ${planFile.timestamp}`));
@@ -88,6 +94,7 @@ export function createApplyCommand() {
     .argument('[plan-file]', 'Plan file to apply (optional)')
     .action(async (planFileArg: string | undefined, options) => {
       const cwd = process.cwd();
+      let files: ConfigFiles = new DiskFiles(cwd);
 
       try {
         if (planFileArg && !planFileArg.startsWith('-')) {
@@ -99,7 +106,8 @@ export function createApplyCommand() {
             process.exit(1);
           }
 
-          await executeApplyFromPlan(cwd, planData);
+          files = filesInPlan(planData);
+          await executeApplyFromPlan(cwd, planData, files);
         } else {
           const configPath = path.join(cwd, CONFIG_FILE);
 
@@ -110,11 +118,10 @@ export function createApplyCommand() {
             process.exit(1);
           }
 
-          await executeApply(cwd, configPath, options.yes);
+          await executeApply(cwd, configPath, files, options.yes);
         }
       } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.error(styleText('red', 'Apply failed:'), message);
+        console.error(styleText('red', 'Apply failed:'), describeError(error, files));
         process.exit(1);
       }
     });

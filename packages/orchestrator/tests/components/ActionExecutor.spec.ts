@@ -6,6 +6,7 @@ import { ActionExecutor } from '../../src/components/ActionExecutor';
 import { ProviderRegistry } from '../../src/ProviderRegistry';
 import { ReferenceResolver } from '../../src/resolvers/ReferenceResolver';
 import { ScopeManager } from '../../src/scope/ScopeManager';
+import { str } from '../ast';
 
 describe('ActionExecutor', () => {
   let providers: ProviderRegistry;
@@ -102,7 +103,7 @@ describe('ActionExecutor', () => {
     });
 
     it('should write the new resource with its dependencies', async () => {
-      const action: PlanAction = { type: 'CREATE', resourceType: 'test', name: 'main', attributes: { path: { type: 'String', value: 'p' } }, dependencies: ['test.dep'] };
+      const action: PlanAction = { type: 'CREATE', resourceType: 'test', name: 'main', attributes: { path: str('p') }, dependencies: ['test.dep'] };
 
       await executor.executeCreate(action, mockProvider, mockState);
 
@@ -173,7 +174,7 @@ describe('ActionExecutor', () => {
         resourceType: 'test',
         name: 'main',
         id: 'existing',
-        attributes: { old: { type: 'String', value: 'updated' } },
+        attributes: { old: str('updated') },
       };
 
       await executor.executeUpdate(action, mockProvider, mockState);
@@ -197,7 +198,7 @@ describe('ActionExecutor', () => {
     it('should delete the old resource, create the new one and keep it in state', async () => {
       const key = context.toString();
       mockState.resources[key] = { id: 'old', type: 'Resource', resourceType: 'test', name: 'main', attributes: { path: 'old' } };
-      const action: PlanAction = { type: 'REPLACE', resourceType: 'test', name: 'main', id: 'old', attributes: { path: { type: 'String', value: 'new' } } };
+      const action: PlanAction = { type: 'REPLACE', resourceType: 'test', name: 'main', id: 'old', attributes: { path: str('new') } };
 
       await executor.execute(action, mockState);
 

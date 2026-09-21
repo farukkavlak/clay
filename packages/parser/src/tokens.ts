@@ -1,3 +1,5 @@
+import { Position } from './Position';
+
 export enum TokenType {
   Identifier = 'IDENTIFIER', // Block kinds, attribute names, reference parts
   String = 'STRING', // "value"
@@ -16,6 +18,5 @@ export enum TokenType {
 export interface Token {
   type: TokenType;
   value: string;
-  line: number;
-  column: number;
+  position: Position;
 }

@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-385 tests pass, and so do the type check and the build. Lint is clean, and so is
+395 tests pass, and so do the type check and the build. Lint is clean, and so is
 `npm audit`.
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -372,13 +372,27 @@ Found by the 2026-09-20 review of this section:
       that made a map read back as its `value` elsewhere. It names the kinds it unwraps
       now, `Number` and `Boolean` beside the four that had their own branch, and anything
       else comes back as it is.
-- [ ] A resolve error names the reference but not the resource that holds it, so
-      `cannot be joined into a string` leaves the user searching when two resources read
-      the same thing. `planResource` can wrap it with the address, as
-      `checkWithProviders` does.
-- [ ] A parse error in a module names its line and column but not its file, so
-      `[Line 2, Column 1] ...` from `plan` does not say which `main.clay`. The module
-      loader knows the path and can put it in front.
+- [x] A resolve error names the reference but not the resource that holds it, so
+      `cannot be joined into a string` left the user searching when two resources read the
+      same thing. Every node carries a `Position` now, the file, line and column it was
+      written at, the way HCL keeps a range on every node it parses. `DesiredStateBuilder`
+      wraps whatever resolving a resource, a variable, an output or a module input threw
+      in a `ConfigError` with that place and the block that holds it, and `ConfigLoader`
+      does the same for a data source. `checkWithProviders` said the address and nothing
+      else; it says the place now too. One module file serves every call of that module,
+      so the error names the instance it ran in as well, `in module.a`. What a run refuses
+      before it resolves anything — a missing module file, a variable with no value, a
+      reference to nothing, a cycle — still says only what is wrong, since no one node is
+      to blame for it, and so does a value an apply resolves for the first time, which no
+      plan could reach.
+- [x] A parse error in a module named its line and column but not its file, so
+      `[Line 2, Column 1] ...` did not say which `main.clay`. The lexer takes the file name
+      and puts it on every token, so the parser and the lexer both name it without the
+      module loader wrapping anything. The position left the message string with it: the
+      `ConfigError` carries the place, and one place decides how it reads. The CLI prints
+      what went wrong, then `on mod/main.clay line 1, in resource "x" "y":`, then the line
+      itself with a caret under the column. An apply from a saved plan reads those lines
+      back out of the plan, which carries the configuration it was made from.
 - [ ] The lexer slices the rest of the input on every token, so a file lexes in quadratic
       time. A sticky regex reads in place.
 - [ ] The `I` prefix on type names is gone: `IResource`, `IProvider`, `IResourceHandler`,

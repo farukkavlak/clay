@@ -7,6 +7,7 @@ import path from 'node:path';
 import { styleText } from 'node:util';
 
 import { newOrchestrator } from '../engine';
+import { describeError } from '../describeError';
 import { displayPlan } from '../showPlan';
 
 async function executePlan(cwd: string, configPath: string, outFile?: string): Promise<void> {
@@ -45,8 +46,7 @@ export function createPlanCommand() {
       try {
         await executePlan(cwd, configPath, options.out);
       } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.error(styleText('red', 'Planning failed:'), message);
+        console.error(styleText('red', 'Planning failed:'), describeError(error, new DiskFiles(cwd)));
         process.exit(1);
       }
     });

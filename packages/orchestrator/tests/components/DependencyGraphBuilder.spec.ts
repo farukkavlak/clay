@@ -1,21 +1,16 @@
 import { Address } from '@clay/contracts';
-import { Statement } from '@clay/parser';
+import { AttributeValue, Statement } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
 import { DependencyGraphBuilder } from '../../src/components/DependencyGraphBuilder';
 import { LoadedModule, LoadedResource } from '../../src/components/ModuleLoader';
 import { ReferenceScanner } from '../../src/resolvers/ReferenceScanner';
+import { moduleBlock, ref, resourceBlock, str, variableBlock } from '../ast';
 
-function resource(name: string, attributes: Record<string, unknown> = {}, modulePath: string[] = []): LoadedResource {
+function resource(name: string, attributes: Record<string, AttributeValue> = {}, modulePath: string[] = []): LoadedResource {
   const address = new Address(modulePath, 'resource', name);
-  return {
-    uniqueId: address.toString(),
-    address,
-    block: { type: 'Resource', resourceType: 'resource', name, attributes },
-  } as LoadedResource;
+  return { uniqueId: address.toString(), address, block: resourceBlock('resource', name, attributes) };
 }
-
-const reference = (...parts: string[]) => ({ type: 'Reference' as const, value: parts });
 
 function module(modulePath: string[], program: Statement[]): LoadedModule {
   return { address: new Address(modulePath, '', ''), program };
@@ -25,7 +20,7 @@ describe('DependencyGraphBuilder', () => {
   const builder = new DependencyGraphBuilder(new ReferenceScanner());
 
   it('should run a resource after the one it reads from', () => {
-    const main = resource('main', { id: { type: 'Reference', value: ['resource', 'dep', 'id'] } });
+    const main = resource('main', { id: ref('resource', 'dep', 'id') });
 
     const graph = builder.buildExecutionGraph([main, resource('dep')], []);
 
@@ -52,13 +47,13 @@ describe('DependencyGraphBuilder', () => {
   });
 
   it('should reject a reference to a resource the config does not declare', () => {
-    const main = resource('main', { id: { type: 'Reference', value: ['resource', 'typo', 'id'] } });
+    const main = resource('main', { id: ref('resource', 'typo', 'id') });
 
     expect(() => builder.buildExecutionGraph([main], [])).toThrow('"resource.typo" is not declared in the configuration');
   });
 
   it('should run a variable after the resource its default reads', () => {
-    const root = module([], [{ type: 'Variable', name: 'id', attributes: { default: reference('resource', 'dep', 'id') } }]);
+    const root = module([], [variableBlock('id', { default: ref('resource', 'dep', 'id') })]);
 
     const graph = builder.buildExecutionGraph([resource('dep')], [root]);
 
@@ -66,9 +61,9 @@ describe('DependencyGraphBuilder', () => {
   });
 
   it('should read a module input where the module is called and hand it to the resource inside', () => {
-    const root = module([], [{ type: 'Module', name: 'm', attributes: { source: { type: 'String', value: './m' }, text: reference('resource', 'dep', 'id') } }]);
+    const root = module([], [moduleBlock('m', { source: str('./m'), text: ref('resource', 'dep', 'id') })]);
     const child = module(['m'], []);
-    const inner = resource('inner', { content: reference('var', 'text') }, ['m']);
+    const inner = resource('inner', { content: ref('var', 'text') }, ['m']);
 
     const graph = builder.buildExecutionGraph([resource('dep'), inner], [root, child]);
 
@@ -77,9 +72,9 @@ describe('DependencyGraphBuilder', () => {
   });
 
   it('should list the resources a resource reads from, looking through a module input', () => {
-    const root = module([], [{ type: 'Module', name: 'm', attributes: { source: { type: 'String', value: './m' }, text: reference('resource', 'dep', 'id') } }]);
+    const root = module([], [moduleBlock('m', { source: str('./m'), text: ref('resource', 'dep', 'id') })]);
     const child = module(['m'], []);
-    const inner = resource('inner', { content: reference('var', 'text'), other: reference('resource', 'peer', 'id') }, ['m']);
+    const inner = resource('inner', { content: ref('var', 'text'), other: ref('resource', 'peer', 'id') }, ['m']);
 
     const graph = builder.buildExecutionGraph([resource('dep'), resource('peer', {}, ['m']), inner], [root, child]);
 
@@ -88,10 +83,10 @@ describe('DependencyGraphBuilder', () => {
   });
 
   it('should let the input passed to a module win over the default declared inside it', () => {
-    const passed = { type: 'String' as const, value: 'passed' };
-    const declared = { type: 'String' as const, value: 'declared' };
-    const child = module(['m'], [{ type: 'Variable', name: 'text', attributes: { default: declared } }]);
-    const root = module([], [{ type: 'Module', name: 'm', attributes: { source: { type: 'String', value: './m' }, text: passed } }]);
+    const passed = str('passed');
+    const declared = str('declared');
+    const child = module(['m'], [variableBlock('text', { default: declared })]);
+    const root = module([], [moduleBlock('m', { source: str('./m'), text: passed })]);
 
     const graph = builder.buildExecutionGraph([], [child, root]);
 
@@ -99,13 +94,13 @@ describe('DependencyGraphBuilder', () => {
   });
 
   it('should name the module and the output when the output does not exist', () => {
-    const main = resource('main', { id: reference('module', 'vars', 'missing') });
+    const main = resource('main', { id: ref('module', 'vars', 'missing') });
 
     expect(() => builder.buildExecutionGraph([main], [module([], []), module(['vars'], [])])).toThrow('module "vars" has no output "missing"');
   });
 
   it('should say when the module itself is not declared', () => {
-    const main = resource('main', { id: reference('module', 'nope', 'o') });
+    const main = resource('main', { id: ref('module', 'nope', 'o') });
 
     expect(() => builder.buildExecutionGraph([main], [module([], [])])).toThrow('module "nope" is not declared');
   });

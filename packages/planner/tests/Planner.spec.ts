@@ -1,7 +1,12 @@
 import { IState } from '@clay/contracts';
+import { AttributeValue, CONFIG_FILE } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
 import { DesiredResource, plan, PLAN_FILE_VERSION, PlanAction, serializePlan, UNKNOWN, validatePlanFile } from '../src/index';
+
+/** A plan is built from parsed blocks, and a test that builds one by hand still has to say where they came from. */
+const position = { file: CONFIG_FILE, line: 1, column: 1 };
+const str = (value: string): AttributeValue => ({ type: 'String', value, position });
 
 function desiredResource(name: string, attributes: Record<string, string>, modulePath?: string[]): DesiredResource {
   return {
@@ -10,7 +15,8 @@ function desiredResource(name: string, attributes: Record<string, string>, modul
       resourceType: 'mock_resource',
       name,
       modulePath,
-      attributes: Object.fromEntries(Object.entries(attributes).map(([key, value]) => [key, { type: 'String' as const, value }])),
+      attributes: Object.fromEntries(Object.entries(attributes).map(([key, value]) => [key, str(value)])),
+      position,
     },
     attributes,
     dependencies: [],
@@ -41,7 +47,7 @@ describe('Planner', () => {
     expect(actions[0].type).toBe('CREATE');
     expect(actions[0].resourceType).toBe('mock_resource');
     expect(actions[0].name).toBe('test_resource_a');
-    expect(actions[0].attributes!.path).toEqual({ type: 'String', value: 'x' });
+    expect(actions[0].attributes!.path).toEqual(str('x'));
   });
 
   it('should plan CREATE for nested module resources', () => {
@@ -83,7 +89,7 @@ describe('Planner', () => {
   it('should keep the config attributes on an UPDATE so the apply can resolve them again', () => {
     const actions = plan([desiredResource('test_resource_c', { path: 'new_path' })], stateWith('test_resource_c', { path: 'old_path' }));
 
-    expect(actions[0].attributes).toEqual({ path: { type: 'String', value: 'new_path' } });
+    expect(actions[0].attributes).toEqual({ path: str('new_path') });
   });
 
   it('should plan NO_OP when the resolved values match the state', () => {
@@ -115,7 +121,7 @@ describe('Planner', () => {
     expect(actions).toHaveLength(1);
     expect(actions[0].type).toBe('REPLACE');
     expect(actions[0].id).toBe('mock_id_123');
-    expect(actions[0].attributes).toEqual({ path: { type: 'String', value: 'new_path' } });
+    expect(actions[0].attributes).toEqual({ path: str('new_path') });
     expect(actions[0].changes).toEqual({ path: { old: 'old_path', new: 'new_path' } });
   });
 

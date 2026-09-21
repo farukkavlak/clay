@@ -1,3 +1,5 @@
+import { ConfigError } from './ConfigError';
+import { Position } from './Position';
 import { Token, TokenType } from './tokens';
 
 interface TokenSpec {
@@ -6,7 +8,6 @@ interface TokenSpec {
 }
 
 export class Lexer {
-  private input: string = '';
   private cursor: number = 0;
   private line: number = 1;
   private column: number = 1;
@@ -26,9 +27,10 @@ export class Lexer {
     { type: TokenType.Assign, regex: /^=/ },
   ];
 
-  constructor(input: string) {
-    this.input = input;
-  }
+  constructor(
+    private input: string,
+    private file: string
+  ) {}
 
   tokenize(): Token[] {
     const tokens: Token[] = [];
@@ -55,33 +57,33 @@ export class Lexer {
         continue;
       }
 
-      let matched = false;
-      for (const spec of this.specs) {
-        const match = remaining.match(spec.regex);
-        if (match) {
-          const value = match[0];
+      const token = this.nextToken(remaining);
+      if (!token) throw new ConfigError(`Unexpected character: "${remaining[0]}"`, this.here());
 
-          let tokenValue = value;
-          if (spec.type === TokenType.String) tokenValue = value.slice(1, -1);
-
-          tokens.push({
-            type: spec.type,
-            value: tokenValue,
-            line: this.line,
-            column: this.column,
-          });
-
-          this.advance(value);
-          matched = true;
-          break;
-        }
-      }
-
-      if (!matched) throw new Error(`Unexpected token at line ${this.line}, column ${this.column}: "${remaining[0]}"`);
+      tokens.push(token);
     }
 
-    tokens.push({ type: TokenType.EOF, value: '', line: this.line, column: this.column });
+    tokens.push({ type: TokenType.EOF, value: '', position: this.here() });
     return tokens;
+  }
+
+  private nextToken(remaining: string): Token | undefined {
+    for (const spec of this.specs) {
+      const match = remaining.match(spec.regex);
+      if (!match) continue;
+
+      const text = match[0];
+      const token = { type: spec.type, value: spec.type === TokenType.String ? text.slice(1, -1) : text, position: this.here() };
+
+      this.advance(text);
+      return token;
+    }
+
+    return undefined;
+  }
+
+  private here(): Position {
+    return { file: this.file, line: this.line, column: this.column };
   }
 
   private advance(text: string) {
