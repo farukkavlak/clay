@@ -1,11 +1,12 @@
 import { Address, IProvider, IState } from '@clay/contracts';
 import { PlanAction } from '@clay/planner';
 
+import { ProviderRegistry } from '../ProviderRegistry';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 
 export class ActionExecutor {
   constructor(
-    private providers: Map<string, IProvider>,
+    private providers: ProviderRegistry,
     private resolver: ReferenceResolver
   ) {}
 
@@ -17,7 +18,6 @@ export class ActionExecutor {
     }
 
     const provider = this.providers.get(action.resourceType);
-    if (!provider) throw new Error(`No provider registered for resource type "${action.resourceType}"`);
 
     switch (action.type) {
       case 'CREATE': {

@@ -11,7 +11,7 @@ vi.mock('@clay/orchestrator', async () => {
   const actual = await vi.importActual<typeof import('@clay/orchestrator')>('@clay/orchestrator');
   return {
     ...actual,
-    Orchestrator: vi.fn(),
+    Orchestrator: { create: vi.fn() },
     DiskFiles: vi.fn(),
     InMemoryFiles: vi.fn(),
     RecordingFiles: vi.fn(function () {
@@ -81,7 +81,7 @@ describe('CLI: apply command', () => {
       const planMock = vi.fn().mockResolvedValue(planned);
       const runMock = vi.fn(doneWith({}));
 
-      vi.mocked(Orchestrator).mockImplementation(function () {
+      vi.mocked(Orchestrator.create).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
           plan: planMock,
@@ -110,7 +110,7 @@ describe('CLI: apply command', () => {
         yield { type: 'done', outputs: {} };
       });
 
-      vi.mocked(Orchestrator).mockImplementation(function () {
+      vi.mocked(Orchestrator.create).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
           plan: planMock,
@@ -136,7 +136,7 @@ describe('CLI: apply command', () => {
       const planMock = vi.fn().mockResolvedValue({ serial: 0, actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }], outputs: {} });
       const runMock = vi.fn(doneWith({}));
 
-      vi.mocked(Orchestrator).mockImplementation(function () {
+      vi.mocked(Orchestrator.create).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
           plan: planMock,
@@ -157,7 +157,7 @@ describe('CLI: apply command', () => {
       const planMock = vi.fn().mockResolvedValue({ serial: 0, actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }], outputs: {} });
       const runMock = vi.fn(doneWith({}));
 
-      vi.mocked(Orchestrator).mockImplementation(function () {
+      vi.mocked(Orchestrator.create).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
           plan: planMock,
@@ -182,7 +182,7 @@ describe('CLI: apply command', () => {
 
       const planMock = vi.fn().mockResolvedValue({ serial: 0, actions: [{ type: 'NO_OP', resourceType: 'test', name: 't' }], outputs: {} });
 
-      vi.mocked(Orchestrator).mockImplementation(function () {
+      vi.mocked(Orchestrator.create).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
           plan: planMock,
@@ -208,7 +208,7 @@ describe('CLI: apply command', () => {
         .mockResolvedValue({ serial: 0, actions: [{ type: 'NO_OP', resourceType: 'test', name: 't' }], outputs: { greeting: { old: undefined, new: 'hi' } } });
       const runMock = vi.fn(doneWith({ greeting: 'hi' }));
 
-      vi.mocked(Orchestrator).mockImplementation(function () {
+      vi.mocked(Orchestrator.create).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
           plan: planMock,
@@ -233,7 +233,7 @@ describe('CLI: apply command', () => {
       const planMock = vi.fn().mockResolvedValue({ serial: 0, actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }], outputs: {} });
       const runMock = vi.fn(doneWith({ my_output: 'test_value', another_output: 42 }));
 
-      vi.mocked(Orchestrator).mockImplementation(function () {
+      vi.mocked(Orchestrator.create).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
           plan: planMock,
@@ -259,7 +259,7 @@ describe('CLI: apply command', () => {
       const planMock = vi.fn().mockResolvedValue({ serial: 0, actions: [{ type: 'UNKNOWN', resourceType: 'test', name: 't' }], outputs: {} });
       const runMock = vi.fn(doneWith({}));
 
-      vi.mocked(Orchestrator).mockImplementation(function () {
+      vi.mocked(Orchestrator.create).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
           plan: planMock,
@@ -300,7 +300,7 @@ describe('CLI: apply command', () => {
 
       const runPlanMock = vi.fn(doneWith({}));
 
-      vi.mocked(Orchestrator).mockImplementation(function () {
+      vi.mocked(Orchestrator.create).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
           runPlan: runPlanMock,
@@ -337,7 +337,7 @@ describe('CLI: apply command', () => {
 
       const runPlanMock = vi.fn(doneWith({}));
 
-      vi.mocked(Orchestrator).mockImplementation(function () {
+      vi.mocked(Orchestrator.create).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
           runPlan: runPlanMock,
@@ -372,7 +372,7 @@ describe('CLI: apply command', () => {
 
       const runPlanMock = vi.fn(doneWith({ planOutput: 'value' }));
 
-      vi.mocked(Orchestrator).mockImplementation(function () {
+      vi.mocked(Orchestrator.create).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
           runPlan: runPlanMock,
@@ -415,7 +415,7 @@ describe('CLI: apply command', () => {
         yield { type: 'failed', action: { type: 'CREATE', resourceType: 'test', name: 't' }, error: new Error('disk full') };
       });
 
-      vi.mocked(Orchestrator).mockImplementation(function () {
+      vi.mocked(Orchestrator.create).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
           plan: planMock,

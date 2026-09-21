@@ -52,7 +52,7 @@ async function executePlan(cwd: string, configPath: string, outFile?: string): P
   const configContent = await fs.readFile(configPath, 'utf8');
 
   const files = new RecordingFiles(new DiskFiles(cwd));
-  const orchestrator = new Orchestrator(new StateManager(new LocalBackend(cwd)), files);
+  const orchestrator = Orchestrator.create(new StateManager(new LocalBackend(cwd)), files);
   orchestrator.registerProvider(new LocalProvider());
 
   console.log(styleText('blue', 'Refreshing state...'));

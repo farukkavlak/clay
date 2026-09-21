@@ -26,7 +26,7 @@ describe('state and output against a real state file', () => {
   `;
 
   const newOrchestrator = () => {
-    const engine = new Orchestrator(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
+    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
     engine.registerProvider(new LocalProvider());
     return engine;
   };
@@ -165,7 +165,7 @@ describe('state and output against a real state file', () => {
 
   it('does not take a variable for an output', async () => {
     const onlyAVariable = 'variable "greeting" { default = "hi" }';
-    const engine = new Orchestrator(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
+    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
     engine.registerProvider(new LocalProvider());
     for await (const event of start(engine, onlyAVariable)) if (event.type === 'failed') throw event.error;
 

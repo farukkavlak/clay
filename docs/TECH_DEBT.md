@@ -299,16 +299,17 @@ Found by the 2026-09-20 review of this section:
       the two `any` casts in a test are typed, one `await` expression has a name, one
       `no-secrets` went with the plugin, and the one left, on a state write after
       `create`, says why the write is safe.
-- [ ] The orchestrator's parts get their collaborators passed in, not `bind`-ed callbacks.
-      One factory builds the object graph and hands it over. No DI container: at this size
-      it buys nothing the factory does not, and it would hide the wiring behind a runtime
-      dependency. The plan walk (graph order, the pending set, resolve-or-unknown) moves
-      into a part of its own; `Orchestrator` grew from 228 to 346 lines through the planner
-      fixes. Done so far: `ModuleLoader` takes the `ScopeManager` and declares variables
-      and module inputs itself, and `ActionExecutor` takes the `ReferenceResolver`, so
-      the four callbacks are gone; the plan walk is `DesiredStateBuilder`, with the
-      scope manager, the scanner, the resolver and the graph builder passed in. Left: the
-      apply walk and the factory.
+- [x] The orchestrator's parts get their collaborators passed in, not `bind`-ed callbacks.
+      `Orchestrator.create` builds the object graph and hands it over; the constructor
+      takes the six parts. No DI container: at this size it buys nothing the factory does
+      not, and it would hide the wiring behind a runtime dependency. The four callbacks
+      are gone: `ModuleLoader` takes the `ScopeManager` and declares variables and module
+      inputs itself, and `ActionExecutor` takes the `ReferenceResolver`. Each walk is a
+      part of its own: `ConfigLoader` parses, loads modules and reads data sources,
+      `DesiredStateBuilder` resolves in dependency order with the pending set, and
+      `PlanRunner` applies in order and deletes in reverse. `ProviderRegistry` answers
+      for a missing provider in one place and one wording, `No provider handles "x"`,
+      where three had grown. `Orchestrator` is 117 lines, down from 395.
 - [ ] `apply` parses the config, reads data sources and builds the dependency graph once,
       not twice. `plan` does all three, and `runPlan` does them again for the plan it is
       handed.
@@ -323,21 +324,16 @@ Found by the 2026-09-20 review of this section:
 - [ ] The CLI commands share their helpers instead of copying them. `apply` has its own
       copy of the action list and it says less than `plan`'s: no "will be replaced", no
       diff. `newOrchestrator` with the `LocalProvider` registration is copied into `plan`,
-      `apply` and `validate`. A missing provider is reported in three wordings:
-      `No provider handles`, `Provider for data source type ... not registered` and
-      `No provider registered for resource type`.
+      `apply` and `validate`.
 - [ ] Comments that only restate the code are gone (`// Mock Provider for testing`), and
-      so are the stale ones: `loadContext` carries two doc blocks, one for `plan`;
-      `IResource` says it comes from the parser when it is a state entry; `StateManager`
-      promises S3 and Azure. `loadContext` also spells `import('./components/ModuleLoader')`
-      inline for a type it already imports.
+      so are the stale ones: `StateManager` promises S3 and Azure.
 - [ ] The parser reads a block's attributes in one place, not four (resource, data,
       variable and module carry the same loop). `LocalProvider` looks its handler up in
       one place, not six. `ModuleOutputResolver` builds a child scope by hand next to
-      `childScope`, and the data-source key is spelled out in `processDataSources` and
+      `childScope`, and the data-source key is spelled out in `ConfigLoader.readDataSources` and
       again in `DataSourceResolver`.
 - [ ] Dead code is gone: `ReferenceScanner` handles an `Interpolation` node the AST does
-      not have; `parser.parse() || []` guards a value that is never falsy;
+      not have;
       `ResourceResolver.getResolvedAttribute` unwraps a `{ type, value }` from state, which
       must never hold one; `ResourceResolver` resolves `module.x.res.attr`, which
       `ReferenceScanner` refuses; `Address.withParent` and `Address.equals` are only

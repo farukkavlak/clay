@@ -69,7 +69,7 @@ describe('Orchestrator - Module Loading', () => {
     const backend = new LocalBackend(tmpDir);
     const stateManager = new StateManager(backend);
     files = {};
-    orchestrator = new Orchestrator(stateManager, new InMemoryFiles(files));
+    orchestrator = Orchestrator.create(stateManager, new InMemoryFiles(files));
     orchestrator.registerProvider(mockProvider);
 
     (plan as Mock).mockReturnValue([]);

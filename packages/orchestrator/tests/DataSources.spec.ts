@@ -55,7 +55,7 @@ describe('Orchestrator - Data Sources', () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'orchestrator-data-test-'));
     const backend = new LocalBackend(tmpDir);
     const stateManager = new StateManager(backend);
-    orchestrator = new Orchestrator(stateManager, new InMemoryFiles({}));
+    orchestrator = Orchestrator.create(stateManager, new InMemoryFiles({}));
     mockProvider = new MockDataProvider();
     orchestrator.registerProvider(mockProvider);
   });
@@ -104,7 +104,7 @@ describe('Orchestrator - Data Sources', () => {
       }
     `;
     // 'really_unknown_provider' is NOT in MockDataProvider.resources
-    await expect(apply(orchestrator, config)).rejects.toThrow('Provider for data source type "really_unknown_provider" not registered');
+    await expect(apply(orchestrator, config)).rejects.toThrow('No provider handles "really_unknown_provider"');
   });
 
   it('should throw error if data source not found', async () => {

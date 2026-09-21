@@ -40,7 +40,7 @@ describe('a state that cannot be saved after a failed action', () => {
   });
 
   it('is reported by the engine next to the action that failed', async () => {
-    const engine = new Orchestrator(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
+    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
     engine.registerProvider(new LocalProvider());
 
     const events: RunEvent[] = [];

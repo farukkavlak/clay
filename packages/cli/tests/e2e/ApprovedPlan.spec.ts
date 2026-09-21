@@ -26,7 +26,7 @@ describe('the plan apply showed', () => {
   `;
 
   const applyElsewhere = async (config: string) => {
-    const engine = new Orchestrator(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
+    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
     engine.registerProvider(new LocalProvider());
     for await (const event of start(engine, config)) if (event.type === 'failed') throw event.error;
   };

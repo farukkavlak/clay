@@ -10,7 +10,7 @@ import { styleText } from 'node:util';
 async function executeValidate(cwd: string, configPath: string): Promise<void> {
   const configContent = await fs.readFile(configPath, 'utf8');
 
-  const orchestrator = new Orchestrator(new StateManager(new LocalBackend(cwd)), new DiskFiles(cwd));
+  const orchestrator = Orchestrator.create(new StateManager(new LocalBackend(cwd)), new DiskFiles(cwd));
   orchestrator.registerProvider(new LocalProvider());
 
   await orchestrator.validate(configContent);

@@ -3,11 +3,12 @@ import { PlanAction } from '@clay/planner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActionExecutor } from '../../src/components/ActionExecutor';
+import { ProviderRegistry } from '../../src/ProviderRegistry';
 import { ReferenceResolver } from '../../src/resolvers/ReferenceResolver';
 import { ScopeManager } from '../../src/scope/ScopeManager';
 
 describe('ActionExecutor', () => {
-  let providers: Map<string, IProvider>;
+  let providers: ProviderRegistry;
   let executor: ActionExecutor;
   let mockProvider: IProvider;
 
@@ -22,7 +23,8 @@ describe('ActionExecutor', () => {
       getSchema: vi.fn(),
     };
 
-    providers = new Map([['test', mockProvider]]);
+    providers = new ProviderRegistry();
+    providers.register(mockProvider);
     executor = new ActionExecutor(providers, new ReferenceResolver(new ScopeManager(), new Map()));
   });
 
@@ -47,7 +49,7 @@ describe('ActionExecutor', () => {
         attributes: {},
       };
 
-      await expect(executor.execute(action, mockState)).rejects.toThrow('No provider registered');
+      await expect(executor.execute(action, mockState)).rejects.toThrow('No provider handles');
     });
 
     it('should throw on unknown action type', async () => {
