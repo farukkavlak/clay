@@ -65,7 +65,7 @@ describe('Output Command', () => {
     readMock.mockResolvedValue(mockState);
 
     const command = createOutputCommand();
-    await command.parseAsync(['node', 'test', '--state', testStatePath]);
+    await command.parseAsync(['node', 'test']);
 
     const allCalls = consoleLogSpy.mock.calls.map((call: unknown[]) => call[0]).join('\n');
     expect(allCalls).toContain('Outputs:');
@@ -85,7 +85,7 @@ describe('Output Command', () => {
     readMock.mockResolvedValue(mockState);
 
     const command = createOutputCommand();
-    await command.parseAsync(['node', 'test', '--json', '--state', testStatePath]);
+    await command.parseAsync(['node', 'test', '--json']);
 
     const calls = consoleLogSpy.mock.calls;
     // Find the call that is JSON (starts with {)
@@ -107,7 +107,7 @@ describe('Output Command', () => {
     readMock.mockResolvedValue(mockState);
 
     const command = createOutputCommand();
-    await command.parseAsync(['node', 'test', '--state', testStatePath]);
+    await command.parseAsync(['node', 'test']);
 
     expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('No outputs found'));
   });
@@ -116,7 +116,7 @@ describe('Output Command', () => {
     vi.mocked(fs.access).mockRejectedValue(new Error('ENOENT'));
 
     const command = createOutputCommand();
-    await command.parseAsync(['node', 'test', '--state', testStatePath]);
+    await command.parseAsync(['node', 'test']);
 
     expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('No state file found'));
     // processExitSpy might or might not be called depending on impl, check logs
@@ -128,7 +128,7 @@ describe('Output Command', () => {
 
     const command = createOutputCommand();
     try {
-      await command.parseAsync(['node', 'test', '--state', testStatePath]);
+      await command.parseAsync(['node', 'test']);
     } catch {
       // ignore
     }
@@ -147,12 +147,12 @@ describe('Output Command', () => {
     readMock.mockResolvedValue(mockState);
 
     const command = createOutputCommand();
-    await command.parseAsync(['node', 'test', '--state', testStatePath]);
+    await command.parseAsync(['node', 'test']);
 
     expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('No outputs found'));
   });
 
-  it('should use default state path if not specified', async () => {
+  it('should read the state next to the working directory', async () => {
     const mockState = {
       resources: {},
       outputs: { defaultOut: 'default' },
@@ -161,7 +161,6 @@ describe('Output Command', () => {
     readMock.mockResolvedValue(mockState);
 
     const command = createOutputCommand();
-    // No --state argument
     await command.parseAsync(['node', 'test']);
 
     expect(LocalBackend).toHaveBeenCalledWith(process.cwd());
@@ -176,7 +175,7 @@ describe('Output Command', () => {
 
     const command = createOutputCommand();
     try {
-      await command.parseAsync(['node', 'test', '--state', testStatePath]);
+      await command.parseAsync(['node', 'test']);
     } catch {
       // ignore
     }

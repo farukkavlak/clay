@@ -15,7 +15,7 @@ async function executePlan(cwd: string, configPath: string, outFile?: string): P
   const files = new RecordingFiles(new DiskFiles(cwd));
   const orchestrator = newOrchestrator(cwd, files);
 
-  console.log(styleText('blue', 'Refreshing state...'));
+  console.log(styleText('blue', 'Planning...'));
 
   const planned = await orchestrator.plan(configContent);
   displayPlan(planned);

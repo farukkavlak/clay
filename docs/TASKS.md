@@ -79,7 +79,7 @@
 **Requirement:** Command-line interface for user interaction.
 
 - [x] **`@clay/cli`:** User-facing commands
-  - [x] `clay init`: Workspace setup (create .clay/, initialize state)
+  - [x] `clay init`: Workspace setup (initialize state)
   - [x] `clay plan`: Dry-run (show diffs without applying)
   - [x] `clay apply`: Execute changes (calls Orchestrator.apply())
   - [x] Pretty output formatting (colored diffs, progress indicators)
@@ -401,17 +401,29 @@ for that.
 
 - [ ] `path.module`, `path.root`, `path.cwd`
 
+### 10.12. State Backends
+
+The state is always the file `clay.state.json` next to the configuration. Where it lives
+should be the workspace's choice, written once and read by every command, the way
+Terraform has it since backends replaced `-state`.
+
+- [ ] A `clay { backend "local" { path = "..." } }` block in the configuration
+- [ ] `init` reads it, checks the backend answers, and remembers the choice
+- [ ] A factory builds the backend from the block; `IStateBackend` is the contract it
+      already has to meet
+- [ ] An HTTP backend, since it needs no SDK: read, write, lock and unlock over four
+      requests
+- [ ] `init` offers to move the state when the block names a different backend than the
+      one in use
+
 ## 11. Nice to Have
 
 ### 11.1. Remote State
 
-- [ ] **Backend Interface**
-  - [ ] Generic backend interface
-  - [ ] State locking for remote
-- [ ] **Backend Implementations**
-  - [ ] S3 backend
-  - [ ] Azure Blob backend
-  - [ ] Local backend (default)
+The backend the configuration names (10.12), kept somewhere other than this machine.
+
+- [ ] An S3 backend, with the lock a second run has to wait for
+- [ ] An Azure Blob backend
 
 ### 11.2. Graph Visualization
 

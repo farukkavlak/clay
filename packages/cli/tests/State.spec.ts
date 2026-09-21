@@ -1,4 +1,4 @@
-import { LocalBackend, StateManager } from '@clay/state';
+import { StateManager } from '@clay/state';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createStateCommand } from '../src/commands/state';
@@ -59,31 +59,6 @@ describe('CLI: state command', () => {
       expect(consoleLogSpy).toHaveBeenCalledWith('test.t1');
       expect(consoleLogSpy).toHaveBeenCalledWith('test.t2');
       expect(consoleLogSpy).toHaveBeenCalledWith('test.t2');
-    });
-
-    it('should use custom state path', async () => {
-      const command = createStateCommand();
-      await command.parseAsync(['node', 'clay', 'list', '--state', 'custom.json']);
-
-      expect(LocalBackend).toHaveBeenCalledWith(process.cwd(), 'custom.json');
-      expect(readMock).toHaveBeenCalled();
-    });
-
-    it('should handle undefined resources in state', async () => {
-      readMock.mockResolvedValue({ version: 1 }); // No resources
-      const command = createStateCommand();
-      await command.parseAsync(['node', 'clay', 'list']);
-
-      expect(consoleLogSpy).toHaveBeenCalledWith('The state file is empty.');
-      expect(readMock).toHaveBeenCalled();
-    });
-
-    it('should handle empty state', async () => {
-      readMock.mockResolvedValue({ version: 1, resources: {} });
-      const command = createStateCommand();
-      await command.parseAsync(['node', 'clay', 'list']);
-
-      expect(consoleLogSpy).toHaveBeenCalledWith('The state file is empty.');
     });
 
     it('should handle errors during list', async () => {

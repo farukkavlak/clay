@@ -1,25 +1,16 @@
 import { StateManager } from '@clay/state';
-import fs from 'node:fs/promises';
-import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createInitCommand } from '../src/commands/init';
 
-vi.mock('node:fs/promises');
 vi.mock('@clay/state');
 
 describe('CLI: init command', () => {
-  const cwd = process.cwd();
-  const clayDir = path.join(cwd, '.clay');
-
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('should create .clay directory and initialize state', async () => {
-    // Mock fs.mkdir to report the directory it made
-    vi.mocked(fs.mkdir).mockResolvedValue(clayDir);
-
+  it('should initialize state', async () => {
     // Mock StateManager
     const writeIfAbsentMock = vi.fn().mockResolvedValue(true);
     vi.mocked(StateManager).mockImplementation(function () {
@@ -34,15 +25,14 @@ describe('CLI: init command', () => {
     // Execute command action directly (commander action handler)
     await createInitCommand().parseAsync(['node', 'clay', 'init']);
 
-    expect(fs.mkdir).toHaveBeenCalledWith(clayDir, { recursive: true });
     expect(StateManager).toHaveBeenCalledWith(expect.any(Object));
     expect(writeIfAbsentMock).toHaveBeenCalledWith({ version: 1, serial: 0, resources: {} });
   });
 
   it('should handle errors gracefully', async () => {
-    // Mock fs.mkdir to throw
-    const error = new Error('Permission denied');
-    vi.mocked(fs.mkdir).mockRejectedValue(error);
+    vi.mocked(StateManager).mockImplementation(function () {
+      return { writeIfAbsent: vi.fn().mockRejectedValue(new Error('Permission denied')) } as Partial<StateManager> as StateManager;
+    });
 
     // Mock process.exit to prevent test exit
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
@@ -58,8 +48,9 @@ describe('CLI: init command', () => {
   });
 
   it('should handle non-Error exceptions', async () => {
-    // Mock fs.mkdir to throw a string
-    vi.mocked(fs.mkdir).mockRejectedValue('String error');
+    vi.mocked(StateManager).mockImplementation(function () {
+      return { writeIfAbsent: vi.fn().mockRejectedValue('String error') } as Partial<StateManager> as StateManager;
+    });
 
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
