@@ -23,7 +23,7 @@ export class ReferenceScanner {
 
   private collectFromObject(obj: Record<string, unknown>, context: Address, references: Reference[]): void {
     if (obj.type === 'Reference' && Array.isArray(obj.value)) this.addReference(obj.value as string[], context, references);
-    else if ((obj.type === 'Interpolation' || obj.type === 'String') && typeof obj.value === 'string') this.addInterpolations(obj.value, context, references);
+    else if (obj.type === 'String' && typeof obj.value === 'string') this.addInterpolations(obj.value, context, references);
     else for (const item of Object.values(obj)) this.collect(item, context, references);
   }
 

@@ -45,6 +45,17 @@ describe('a string with an interpolation', () => {
     expect(resources['null_resource.t'].attributes.tags).toEqual(['a', 'b']);
   });
 
+  it('passes a map from state through whole, keys named type and value included', async () => {
+    const config = `
+      resource "null_resource" "a" { settings = { type = "a", value = "b" } }
+      resource "null_resource" "b" { copied = "\${null_resource.a.settings}" }
+    `;
+
+    const resources = await applied(config);
+
+    expect(resources['null_resource.b'].attributes.copied).toEqual({ type: 'a', value: 'b' });
+  });
+
   it('is text when there is text around the interpolation', async () => {
     const config = `
       variable "n" { default = 8 }

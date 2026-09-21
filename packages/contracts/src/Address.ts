@@ -46,12 +46,4 @@ export class Address {
     const suffix = `${this.resourceType}.${this.name}`;
     return prefix ? `${prefix}.${suffix}` : suffix;
   }
-
-  equals(other: Address): boolean {
-    return this.toString() === other.toString();
-  }
-
-  withParent(moduleName: string): Address {
-    return new Address([moduleName, ...this.modulePath], this.resourceType, this.name);
-  }
 }

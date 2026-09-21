@@ -47,22 +47,4 @@ describe('Address', () => {
       expect(() => Address.parse('module.vpc')).toThrow(); // missing type.name
     });
   });
-
-  describe('utils', () => {
-    it('should check equality', () => {
-      const a1 = Address.parse('module.x.r.n');
-      const a2 = new Address(['x'], 'r', 'n');
-      expect(a1.equals(a2)).toBe(true);
-    });
-
-    it('should create child address with parent', () => {
-      // withParent prepends: the leaf is inside the module.
-      const leaf = Address.root('res', 'name');
-      const inModule = leaf.withParent('db');
-      expect(inModule.toString()).toBe('module.db.res.name');
-
-      const inNested = inModule.withParent('app');
-      expect(inNested.toString()).toBe('module.app.module.db.res.name');
-    });
-  });
 });

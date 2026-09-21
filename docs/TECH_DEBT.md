@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-386 tests pass, and so do the type check and the build. Lint is clean, and so is
+384 tests pass, and so do the type check and the build. Lint is clean, and so is
 `npm audit`.
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -349,18 +349,22 @@ Found by the 2026-09-20 review of this section:
       `childScope` instead of building the scope by hand, and the data-source key is
       `dataSourceKey` in `keys.ts`, where `ConfigLoader` and `DataSourceResolver` both
       take it from.
-- [ ] Dead code is gone: `ReferenceScanner` handles an `Interpolation` node the AST does
-      not have;
-      `ResourceResolver.getResolvedAttribute` unwraps a `{ type, value }` from state, which
-      must never hold one; `ResourceResolver` resolves `module.x.res.attr`, which
-      `ReferenceScanner` refuses; `Address.withParent` and `Address.equals` are only
-      called by tests.
+- [x] Dead code is gone: `ReferenceScanner` handled an `Interpolation` node the AST does
+      not have; `ResourceResolver` resolved `module.x.res.attr`, which `ReferenceScanner`
+      refuses; `Address.withParent` and `Address.equals` were only called by tests.
+      `ResourceResolver.getResolvedAttribute` unwrapped a `{ type, value }` from state,
+      which never holds an AST node but can hold a map with those two keys, so
+      `settings = { type = "a", value = "b" }` read back as `"b"`; a map comes through
+      whole now, and a test pins it.
 - [ ] The CLI is consistent with itself: `--state` is on `state` and `output` but not on
       `plan` and `apply`; the version is typed into `index.ts` instead of read from
       `package.json`; `init` creates a `.clay/` directory nothing uses; `plan` prints
       "Refreshing state..." and refreshes nothing; `state list` says "The state file is
       empty" when there is no file and `output` says where it looked. A reader that
       closes the pipe early (`clay apply | head`) gets a Node stack trace for `EPIPE`.
+- [ ] `ReferenceResolver.resolveValue` unwraps any object with `type` and `value` in its
+      last branch. It sees AST nodes only, so it is not a bug today, but it is the shape
+      that made a map read back as its `value`; a check for a real AST node would say so.
 - [ ] A resolve error names the reference but not the resource that holds it, so
       `cannot be joined into a string` leaves the user searching when two resources read
       the same thing. `planResource` can wrap it with the address, as
