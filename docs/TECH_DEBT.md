@@ -433,8 +433,12 @@ Found by the 2026-09-20 review of this section:
       check on everything else staged. They check and
       never write, so nothing lands that the committer did not see. Type check and tests
       stay with CI, since neither works on a subset of files.
-- [ ] The README describes what exists now, in short, plain English. It still shows
-      `resource "file"`, which no provider has.
+- [x] The README describes what exists now, in short, plain English: what a run does,
+      the blocks and references the language has, the six commands, the four resources
+      with what they take, how a run goes, and the packages. Gone with it: the emoji
+      headings, `npm run clay`, and `resource "file"`, which no provider had. Every claim
+      in it was checked against the code; `null_resource` says it does nothing, since
+      its `triggers` neither replace nor run anything here.
 - [ ] `GRAMMAR.md` matches the parser: it lists `4.5` as a number the lexer does not
       take, has no `LBRACKET`, `RBRACKET` or `COMMA` in the token table, and leaves `data`
       and `module` blocks out of the block list and the AST section.
