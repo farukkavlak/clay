@@ -1,4 +1,5 @@
 import { InMemoryFiles, Orchestrator } from '@clay/orchestrator';
+import { PLAN_FILE_VERSION } from '@clay/planner';
 import fs from 'node:fs/promises';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -19,24 +20,7 @@ vi.mock('@clay/orchestrator', async () => {
     }),
   };
 });
-vi.mock('@clay/planner', async () => {
-  const actual = await vi.importActual('@clay/planner');
-  return {
-    ...actual,
-    validatePlanFile: vi.fn((data) => {
-      return data && data.version && data.actions;
-    }),
-  };
-});
 vi.mock('../src/confirm');
-vi.mock('node:crypto', () => ({
-  default: {
-    createHash: vi.fn(() => ({
-      update: vi.fn().mockReturnThis(),
-      digest: vi.fn(() => 'test-hash'),
-    })),
-  },
-}));
 
 const doneWith = (outputs: Record<string, unknown>) =>
   async function* () {
@@ -272,9 +256,8 @@ describe('CLI: apply command', () => {
 
       await createApplyCommand().parseAsync(['node', 'clay']);
 
-      // Should print action but without specific symbol (default case)
-      expect(consoleSpy).toHaveBeenCalled();
-      // Should invoke apply
+      // A kind the CLI does not know gets a blank where the symbol goes, and the tense it falls back to.
+      expect(consoleSpy.mock.calls.flat().join('\n')).toMatch(/ {2}test\.t will be .*destroyed/);
       expect(runMock).toHaveBeenCalled();
 
       consoleSpy.mockRestore();
@@ -284,7 +267,7 @@ describe('CLI: apply command', () => {
   describe('Plan file apply', () => {
     it('should run the saved actions against the saved configuration, without asking again', async () => {
       const planFileContent = JSON.stringify({
-        version: '5.0',
+        version: PLAN_FILE_VERSION,
         timestamp: '2024-01-01T00:00:00Z',
         config: 'saved config',
         modules: { 'm/main.clay': 'saved module' },
@@ -321,7 +304,7 @@ describe('CLI: apply command', () => {
 
     it('should not read the configuration on disk', async () => {
       const planFileContent = JSON.stringify({
-        version: '5.0',
+        version: PLAN_FILE_VERSION,
         timestamp: '2024-01-01T00:00:00Z',
         config: 'saved config',
         modules: { 'm/main.clay': 'saved module' },
@@ -356,7 +339,7 @@ describe('CLI: apply command', () => {
 
     it('should display outputs when returned from plan apply', async () => {
       const planFileContent = JSON.stringify({
-        version: '5.0',
+        version: PLAN_FILE_VERSION,
         timestamp: '2024-01-01T00:00:00Z',
         config: 'saved config',
         modules: { 'm/main.clay': 'saved module' },
@@ -397,7 +380,8 @@ describe('CLI: apply command', () => {
 
       await createApplyCommand().parseAsync(['node', 'clay', 'invalid.json']);
 
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Cannot read this plan file'));
+      // The first thing reported has to be the refusal; the stubbed exit lets the run carry on and report more.
+      expect(consoleSpy.mock.calls[0]).toEqual([expect.stringContaining('Cannot read this plan file')]);
       expect(exitSpy).toHaveBeenCalledWith(1);
 
       exitSpy.mockRestore();
