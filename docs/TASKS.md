@@ -3,6 +3,36 @@
 What Clay does today is in the README. This is what comes next, in the order it is
 worth doing. Terraform is named where it has solved the same problem.
 
+## Bugs
+
+Wrong behaviour, each seen and reproduced. These come before everything below, one
+change each.
+
+- [ ] A module that names itself, or two that name each other, overflow the stack.
+      `ModuleLoader` keeps no record of the directories on the path it is loading, so a
+      `source` cycle recurses until Node dies. The graph refuses a reference cycle by
+      name; a module cycle should be refused the same way
+- [ ] A module input the module never declares is accepted, and a misspelled one falls
+      back to the default in silence. `declareInputs` sets every attribute of the
+      `module` block as a variable, and nothing checks the module has a `variable` of
+      that name; `contnet = "x"` applies the default and says nothing. Terraform: "An
+      argument named "contnet" is not expected here"
+- [ ] A resource named `a.b` is created and can never be addressed again. The parser
+      takes any string as a name, `Address.toString` joins with dots and `Address.parse`
+      splits on them, so `state show`, `state rm` and a reference all fail on the key an
+      apply wrote. The same for a type or name spelled `module`. A name is an identifier,
+      as in Terraform
+- [ ] `LocalBackend.write` swallows every backup failure, not only "nothing to back up".
+      The `catch` around `access` and `copyFile` is bare, so when the backup cannot be
+      written the old state is replaced anyway, with no backup and no message. Only
+      `ENOENT` on `access` means a first write
+- [ ] A map key can impersonate the unknown value. `UNKNOWN` is a plain object with the
+      key `@@clay/unknown`, so `triggers = { "@@clay/unknown" = true }` is unknown to the
+      planner and plans an update forever. A sentinel is something a configuration cannot
+      spell
+- [ ] An integer above 2^53 is rounded in silence: `12345678901234567890` plans as
+      `12345678901234567000`. A literal `Number.isSafeInteger` refuses is refused
+
 ## 1. Language
 
 The parser takes integers, plain strings and one level of attribute access. A real
@@ -198,6 +228,62 @@ Nothing here changes what Clay does. Each is a place the next change has to work
 - [ ] The CLI rebuilds the module file layout that `RecordingFiles` already snapshotted
 - [ ] A `state show` test feeds a resource with no `attributes`, which `parseState` now
       refuses to read; the branch it covers may be unreachable
+- [ ] `ActionExecutor.executeUpdate` says "the plan resolved these against an older
+      state", but `action.attributes` is the parsed block and was never resolved;
+      `executeCreate` does the same resolve with no comment
+- [ ] `LoadedResource.uniqueId` is `address.toString()` under a second name
+- [ ] Comments that restate the code: the `// e.g., "my_file"` trailers in `ast.ts`, the
+      `// {` and `// }` trailers in `tokens.ts`, the `forceNew` explanations in the local
+      provider, the scanning notes in `Address.parse`
+
+### Test health
+
+- [ ] `ReferenceResolver.spec.ts` has a test titled "resolve Array of References
+      recursively" that asserts the array comes back unresolved, under a 28-line
+      transcript of someone reading the code, naming an `Orchestrator.convertAttributes`
+      that does not exist. It feeds a raw array, which the resolver is never handed;
+      attributes arrive as a `List` node
+- [ ] Two `Orchestrator.advanced` tests are titled for dependency order and for a
+      reference to another resource, and each asserts only that two resources were
+      created; both pass with every graph edge removed
+- [ ] Comments in `ModuleLoading.spec.ts` and `ModuleDataFlow.spec.ts` name
+      `Orchestrator.run` and `Orchestrator.ts`, which do not exist, and ask questions
+      rather than state reasons
+- [ ] `describe` titles say "Phase 4" and "Phase 5", which mean nothing in the repo
+- [ ] `ApplyPlan.spec.ts` says the CLI cannot be driven from a test, and four
+      neighbouring specs drive it
+- [ ] `Graph.spec.ts` hedges that a sort "depends on implementation details" and asserts
+      the flattened list, where the layers are deterministic and should be asserted
+- [ ] Regression tests explain what used to happen; a comment says what the test pins
+- [ ] Test comments of the `// Setup`, `// Verify`, `// Mock X` kind restate the line
+      below them, across `Orchestrator.spec.ts`, `StateManager.spec.ts`, `Graph.spec.ts`
+      and others
+- [ ] No test puts a reference inside a list: `tags = [local_file.a.id]`. With
+      `resolveList` passing a `Reference` node through unresolved, all 452 tests pass
+- [ ] No test has a delete fail. With `PlanRunner` ignoring a failed delete and going on
+      to write outputs, all 452 tests pass; the `failed` event, the kept state entry and
+      the released lock on that path are unpinned. A replace whose create fails after
+      the delete is untested the same way
+- [ ] Data sources have no end-to-end test; the only `data` block in `e2e` is an error
+      case, since `LocalProvider.read` returns `{}`
+- [ ] The two `command_exec` "execute" tests assert only that an id came back; they pass
+      with the command never run and with `cwd` ignored
+- [ ] `Orchestrator.spec.ts` "should register a provider" asserts only `not.toThrow`,
+      and passes with registration removed
+- [ ] `ModuleDataSources.spec.ts` still hands one `emptyState()` to every test; its two
+      siblings were fixed and it was missed. `ModuleOutputResolver.spec.ts` shares one
+      `ScopeManager` the same way, and its "not found" test passes only because no
+      earlier test set that key
+- [ ] `ModuleLoading`, `ModuleDataFlow` and `ModuleDataSources` stub `plan` and hand-write
+      the actions, `modulePath` included, so the module address they appear to test is
+      their own fixture: with every resource given a root address, all 11 pass and ten
+      e2e tests fail. Rewrite them against a real `StateManager` in a temp directory, as
+      `Orchestrator.spec.ts` is; what they alone pin is a missing `source`, nesting deeper
+      than one level, and per-module data-source scope
+- [ ] Unit tests an e2e already covers for real: `Init.spec` "should initialize state";
+      `Apply.spec` `--yes`, both plan-file applies, the rejected plan file and the failed
+      apply. The rest of each file pins what an e2e cannot see and stays
+- [ ] `ModuleLoading.spec.ts` asserts `toHaveProperty(expectedKey)` twice in a row
 
 ## 6. Later
 

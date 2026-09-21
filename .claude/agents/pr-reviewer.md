@@ -32,6 +32,9 @@ commit or push. You report.
 
 - Does the code do what the branch says? Look for missed cases, wrong conditions, state
   left half-written, errors swallowed.
+- Is the bug a class? Search the repo for the same shape elsewhere. A fix that closes
+  one site of many is not ready.
+- A `catch` with no condition swallows errors it was not written for.
 - AST values (`{ type, value }`) and resolved values must not be mixed.
 
 **Tests**
@@ -40,6 +43,9 @@ commit or push. You report.
 - Behavior that crosses packages has an end-to-end test with real files in a temp
   directory. Mocks alone are not enough.
 - Tests assert the behavior their name claims.
+- For each new or changed test, break the line it should pin and confirm it fails.
+  Report the edit you made and restore it.
+- Every failure branch the change adds has a test that reaches it.
 - Tests write nothing into the repo and clean up their temp directories.
 - `it.fails` is used only for a known bug, and the fix turns it back into `it`.
 
@@ -59,6 +65,8 @@ commit or push. You report.
 **Comments and docs**
 
 - No comment that restates the code. A comment says why, in one short line.
+- Read each comment against the line under it. One that describes what the code no
+  longer does is blocking.
 - Code and comments never point to docs, issues or plans.
 - Docs are short, plain English: no filler, no marketing words, no emoji, no headings
   restated as sentences.

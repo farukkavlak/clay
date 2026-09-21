@@ -59,6 +59,8 @@ Try the CLI in a temp directory, never in the repo: `node packages/cli/bin/clay.
 - Build, tests, type check and lint pass before a commit.
 - Before giving the PR commands, run the `pr-reviewer` agent on the branch, fix what it
   finds, and tell the owner what it found.
+- Before a tag, review the whole tree, not only the diff. A diff review never sees what
+  was already there.
 
 ## Dependencies
 
@@ -80,6 +82,14 @@ Try the CLI in a temp directory, never in the repo: `node packages/cli/bin/clay.
 - Comments only where the code can't say why. One short line; no comment that restates the
   code.
 - Code and comments never point to docs, issues or plans (`see TASKS.md`, `TODO(PR 2)`).
+- A `catch` names the error it expects and rethrows the rest.
+- A name or value from the configuration is checked where it enters. A wrong one is
+  refused with its position, never carried on.
+
+## Bugs
+
+A bug is a class, not a line. Before the fix is done, search for every other place the
+same mistake could be, and fix them in the same change.
 
 ## Tests
 
@@ -89,6 +99,9 @@ Try the CLI in a temp directory, never in the repo: `node packages/cli/bin/clay.
 - Tests never write into the repo.
 - Nothing lives in `src` only because a test needs it. A helper a test needs sits next to
   the tests.
+- Every test can fail, and the change says which line breaks it. `toBeDefined`,
+  `not.toThrow` and a count alone pin nothing.
+- A failure path gets a test that takes it.
 
 ## Docs
 
