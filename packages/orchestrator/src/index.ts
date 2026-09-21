@@ -1,17 +1,17 @@
 import { Address, emptyState, IProvider, ISchema, IState } from '@clay/contracts';
 import { Graph } from '@clay/graph';
-import { AttributeValue, Lexer, Parser, Statement } from '@clay/parser';
-import { DesiredResource, hasChanges, isUnknown, outputChanges, plan, Plan, PlanAction, UNKNOWN } from '@clay/planner';
+import { Lexer, Parser, Statement } from '@clay/parser';
+import { DesiredResource, isUnknown, outputChanges, plan, Plan, PlanAction } from '@clay/planner';
 import { StateManager } from '@clay/state';
 
 import { ConfigFiles } from './ConfigFiles';
 import { ActionExecutor } from './components/ActionExecutor';
-import { DependencyGraphBuilder, GraphNode, ValueNode } from './components/DependencyGraphBuilder';
-import { LoadedModule, LoadedResource, ModuleLoader } from './components/ModuleLoader';
+import { DependencyGraphBuilder, GraphNode } from './components/DependencyGraphBuilder';
+import { DesiredStateBuilder } from './components/DesiredStateBuilder';
+import { LoadedModule, ModuleLoader } from './components/ModuleLoader';
 import { ReferenceResolver } from './resolvers/ReferenceResolver';
 import { RunEvent } from './RunEvent';
 import { ReferenceScanner } from './resolvers/ReferenceScanner';
-import { UnresolvedReferenceError } from './resolvers/UnresolvedReferenceError';
 import { ScopeManager } from './scope/ScopeManager';
 
 export type { RunEvent } from './RunEvent';
@@ -32,6 +32,7 @@ export class Orchestrator {
   private actionExecutor: ActionExecutor;
   private dependencyGraphBuilder: DependencyGraphBuilder;
   private referenceScanner: ReferenceScanner;
+  private desiredStateBuilder: DesiredStateBuilder;
 
   constructor(stateManager: StateManager, files: ConfigFiles) {
     this.stateManager = stateManager;
@@ -40,6 +41,7 @@ export class Orchestrator {
     this.moduleLoader = new ModuleLoader(files, this.scopeManager);
     this.referenceScanner = new ReferenceScanner(this.scopeManager);
     this.dependencyGraphBuilder = new DependencyGraphBuilder(this.scopeManager, this.referenceScanner);
+    this.desiredStateBuilder = new DesiredStateBuilder(this.scopeManager, this.referenceScanner, this.referenceResolver, this.dependencyGraphBuilder);
     this.actionExecutor = new ActionExecutor(this.providers, this.referenceResolver);
   }
 
@@ -126,7 +128,7 @@ export class Orchestrator {
     const { loadedResources, loadedModules } = await this.loadContext(configContent, state);
 
     const graph = this.dependencyGraphBuilder.buildExecutionGraph(loadedResources, loadedModules);
-    const { resources: desiredResources, outputs } = this.resolveInDependencyOrder(loadedResources, graph, state);
+    const { resources: desiredResources, outputs } = this.desiredStateBuilder.build(loadedResources, graph, state);
 
     return { desiredResources, outputs, schemas: await this.checkWithProviders(desiredResources) };
   }
@@ -275,77 +277,12 @@ export class Orchestrator {
 
     for (const stmt of program)
       if (stmt.type === 'Output') {
-        const resolved = this.resolveValue(stmt.value, state, context);
+        const resolved = this.referenceResolver.resolveValue(stmt.value, state, context);
         outputs[stmt.name] = resolved;
         this.scopeManager.setOutput(scope, stmt.name, resolved);
       }
 
     return outputs;
-  }
-
-  /** Resolves each resource after the ones it reads from, so a value an earlier action will change is UNKNOWN, not stale. */
-  private resolveInDependencyOrder(loadedResources: LoadedResource[], graph: Graph<GraphNode>, state: IState): { resources: DesiredResource[]; outputs: Record<string, unknown> } {
-    const byKey = new Map(loadedResources.map((r) => [r.address.toString(), r]));
-    const pending = new Set<string>();
-    const resources: DesiredResource[] = [];
-    const outputs: Record<string, unknown> = {};
-
-    for (const layer of graph.topologicalSort())
-      for (const key of layer) {
-        const node = graph.getNode(key)!;
-
-        if (node.kind === 'variable') this.planVariable(key, node, state, pending);
-        else if (node.kind === 'output') this.planOutput(key, node, state, pending, outputs);
-        else resources.push(this.planResource(key, byKey.get(key)!, graph, state, pending));
-      }
-
-    return { resources, outputs };
-  }
-
-  private planResource(key: string, loaded: LoadedResource, graph: Graph<GraphNode>, state: IState, pending: Set<string>): DesiredResource {
-    const attributes = this.resolveForPlan(loaded.block.attributes, state, loaded.address, pending);
-    const current = state.resources[key];
-    if (!current || hasChanges(current.attributes, attributes)) pending.add(key);
-
-    return { block: { ...loaded.block, modulePath: loaded.address.modulePath }, attributes, dependencies: this.dependencyGraphBuilder.resourceDependencies(graph, key) };
-  }
-
-  /** A variable fed by a pending resource is pending itself, so everything reading it plans against UNKNOWN. */
-  private planVariable(key: string, node: ValueNode, state: IState, pending: Set<string>): void {
-    if (node.value !== undefined && isUnknown(this.resolveOrUnknown(node.value, state, node.context, pending))) pending.add(key);
-  }
-
-  /** Gives an output its value so the resources reading it can be planned; an output fed by a pending resource keeps none. */
-  private planOutput(key: string, node: ValueNode, state: IState, pending: Set<string>, rootOutputs: Record<string, unknown>): void {
-    const value = this.resolveOrUnknown(node.value, state, node.context, pending);
-    if (isUnknown(value)) pending.add(key);
-    else this.scopeManager.setOutput(node.scope, node.name, value);
-
-    if (node.context.modulePath.length === 0) rootOutputs[node.name] = value;
-  }
-
-  /** Resolves config values the way the diff needs them; what an apply has to produce first stays UNKNOWN. */
-  private resolveForPlan(attributes: Record<string, AttributeValue>, state: IState, context: Address, pending: Set<string>): Record<string, unknown> {
-    const resolved: Record<string, unknown> = {};
-
-    for (const [key, value] of Object.entries(attributes)) resolved[key] = this.resolveOrUnknown(value, state, context, pending);
-
-    return resolved;
-  }
-
-  private resolveOrUnknown(value: unknown, state: IState, context: Address, pending: Set<string>): unknown {
-    if (this.referenceScanner.referencesIn(value, context).some((reference) => pending.has(reference.key))) return UNKNOWN;
-
-    try {
-      return this.resolveValue(value, state, context);
-    } catch (error) {
-      if (!(error instanceof UnresolvedReferenceError)) throw error;
-      return UNKNOWN;
-    }
-  }
-
-  private resolveValue(value: unknown, state: IState, context?: Address): unknown {
-    return this.referenceResolver.resolveValue(value, state, context);
   }
 
   private resolveOutputsOf(scope: string, loadedModules: LoadedModule[], currentState: IState): void {

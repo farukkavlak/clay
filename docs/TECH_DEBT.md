@@ -306,7 +306,9 @@ Found by the 2026-09-20 review of this section:
       into a part of its own; `Orchestrator` grew from 228 to 346 lines through the planner
       fixes. Done so far: `ModuleLoader` takes the `ScopeManager` and declares variables
       and module inputs itself, and `ActionExecutor` takes the `ReferenceResolver`, so
-      the four callbacks are gone. Left: the plan walk, the apply walk, and the factory.
+      the four callbacks are gone; the plan walk is `DesiredStateBuilder`, with the
+      scope manager, the scanner, the resolver and the graph builder passed in. Left: the
+      apply walk and the factory.
 - [ ] `apply` parses the config, reads data sources and builds the dependency graph once,
       not twice. `plan` does all three, and `runPlan` does them again for the plan it is
       handed.
