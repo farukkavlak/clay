@@ -1,4 +1,4 @@
-import { Address } from '../Address';
+import { Address } from '@clay/contracts';
 import { ScopeManager } from '../scope/ScopeManager';
 import { IResolver } from './IResolver';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';

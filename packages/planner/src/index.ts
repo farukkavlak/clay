@@ -1,6 +1,5 @@
-import { IResource, ISchema } from '@clay/contracts';
+import { Address, IResource, ISchema, IState } from '@clay/contracts';
 import { AttributeValue, ResourceBlock } from '@clay/parser';
-import { IState } from '@clay/state';
 
 export type ActionType = 'CREATE' | 'UPDATE' | 'REPLACE' | 'DELETE' | 'NO_OP';
 
@@ -121,12 +120,6 @@ export function hasChanges(currentAttrs: Record<string, unknown>, desiredAttrs: 
   return calculateDiff(currentAttrs, desiredAttrs) !== null;
 }
 
-function getResourceKey(resource: ResourceBlock): string {
-  const prefix = (resource.modulePath || []).map((m: string) => `module.${m}`).join('.');
-  const suffix = `${resource.resourceType}.${resource.name}`;
-  return prefix ? `${prefix}.${suffix}` : suffix;
-}
-
 function processExistingResource(actions: PlanAction[], desired: DesiredResource, currentResource: IResource, schemas: Record<string, ISchema>) {
   const resource = desired.block;
   const changes = calculateDiff(currentResource.attributes, desired.attributes);
@@ -163,7 +156,7 @@ export function plan(desiredResources: DesiredResource[], currentState: IState, 
   const currentMap = new Map<string, IResource>(Object.entries(currentState.resources));
   const desiredMap = new Map<string, DesiredResource>();
 
-  for (const desired of desiredResources) desiredMap.set(getResourceKey(desired.block), desired);
+  for (const desired of desiredResources) desiredMap.set(Address.of(desired.block).toString(), desired);
 
   // 1. Check for Create, Update, or Replace
   for (const [key, desired] of desiredMap.entries()) {

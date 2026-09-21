@@ -1,8 +1,9 @@
 import * as fs from 'node:fs/promises';
 import path from 'node:path';
 
+import { emptyState, IState } from '@clay/contracts';
+
 import { IStateBackend } from '../IStateBackend';
-import { IState } from '../StateManager';
 
 function serialize(state: IState): string {
   return JSON.stringify(state, null, 2);
@@ -34,7 +35,7 @@ export class LocalBackend implements IStateBackend {
       const err = error as { code?: string };
       if (err.code === 'ENOENT')
         // Return empty state if file doesn't exist
-        return { version: 1, serial: 0, resources: {} };
+        return emptyState();
 
       throw error;
     }

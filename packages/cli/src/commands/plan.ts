@@ -1,4 +1,5 @@
-import { Address, DiskFiles, Orchestrator, RecordingFiles } from '@clay/orchestrator';
+import { Address } from '@clay/contracts';
+import { DiskFiles, Orchestrator, RecordingFiles } from '@clay/orchestrator';
 import { CONFIG_FILE } from '@clay/parser';
 import { isUnknown, PlanAction, serializePlan } from '@clay/planner';
 import { LocalProvider } from '@clay/provider-local';

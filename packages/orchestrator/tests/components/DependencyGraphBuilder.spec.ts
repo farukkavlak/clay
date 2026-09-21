@@ -1,7 +1,7 @@
+import { Address } from '@clay/contracts';
 import { Statement } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
-import { Address } from '../../src/Address';
 import { DependencyGraphBuilder } from '../../src/components/DependencyGraphBuilder';
 import { LoadedModule, LoadedResource } from '../../src/components/ModuleLoader';
 import { ReferenceScanner } from '../../src/resolvers/ReferenceScanner';

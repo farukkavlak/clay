@@ -1,4 +1,4 @@
-import { IState } from './StateManager';
+import { IState } from '@clay/contracts';
 
 /**
  * Interface for state backend implementations.

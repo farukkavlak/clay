@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { Address } from '../src/Address';
+import { Address } from '../src/index';
 
 describe('Address', () => {
   describe('toString', () => {
@@ -56,13 +56,7 @@ describe('Address', () => {
     });
 
     it('should create child address with parent', () => {
-      // parent is "app"
-      // final: module.app.module.db.res.name
-      // Wait, withParent adds to the BEGINNING?
-      // "withParent" usually means "I am inside a module, what is my full address from root?"
-      // So if I am "res.name" inside "module.db", calls withParent("db").
-      // -> module.db.res.name.
-
+      // withParent prepends: the leaf is inside the module.
       const leaf = Address.root('res', 'name');
       const inModule = leaf.withParent('db');
       expect(inModule.toString()).toBe('module.db.res.name');

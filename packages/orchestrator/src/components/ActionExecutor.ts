@@ -1,8 +1,5 @@
-import { IProvider } from '@clay/contracts';
+import { Address, IProvider, IState } from '@clay/contracts';
 import { PlanAction } from '@clay/planner';
-import { IState } from '@clay/state';
-
-import { Address } from '../Address';
 
 export class ActionExecutor {
   constructor(

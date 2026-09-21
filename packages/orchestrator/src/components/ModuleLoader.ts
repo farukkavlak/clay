@@ -1,7 +1,7 @@
+import { Address } from '@clay/contracts';
 import { AttributeValue, CONFIG_FILE, Lexer, Parser, ResourceBlock, Statement } from '@clay/parser';
 import path from 'node:path';
 
-import { Address } from '../Address';
 import { ConfigFiles } from '../ConfigFiles';
 
 export interface LoadedResource {

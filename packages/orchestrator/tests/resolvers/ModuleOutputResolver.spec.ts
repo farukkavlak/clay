@@ -1,6 +1,6 @@
+import { Address } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { Address } from '../../src/Address';
 import { ModuleOutputResolver } from '../../src/resolvers/ModuleOutputResolver';
 import { ScopeManager } from '../../src/scope/ScopeManager';
 
