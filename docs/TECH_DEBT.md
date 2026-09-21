@@ -413,6 +413,14 @@ Found by the 2026-09-20 review of this section:
       nothing read. A state file written before still loads, since the key is only
       ignored; an entry the engine writes now does not have it, and an old entry keeps it
       until it is next changed.
+- [ ] `ResourceBlock.modulePath` is an engine note in the parser's type: the parser never
+      sets it, `DesiredStateBuilder` spreads it into the block and the planner reads it
+      back through `Address.of(desired.block)`. `DesiredResource` can carry the address
+      itself, next to the block it was parsed from, and the parser's type loses a field
+      it never fills.
+- [ ] A map or block attribute named `__proto__` vanishes: the parser collects keys into
+      a plain `{}`, so the assignment sets the prototype instead of a key, and
+      `Object.hasOwn` never sees it. `Object.create(null)` for the two records fixes it.
 
 ## 4 — repo
 
