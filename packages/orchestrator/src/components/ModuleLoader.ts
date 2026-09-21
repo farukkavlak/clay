@@ -1,8 +1,9 @@
 import { Address } from '@clay/contracts';
-import { AttributeValue, CONFIG_FILE, Lexer, Parser, ResourceBlock, Statement } from '@clay/parser';
+import { AttributeValue, CONFIG_FILE, Lexer, ModuleBlock, Parser, ResourceBlock, Statement } from '@clay/parser';
 import path from 'node:path';
 
 import { ConfigFiles } from '../ConfigFiles';
+import { ScopeManager } from '../scope/ScopeManager';
 
 export interface LoadedResource {
   uniqueId: string;
@@ -18,9 +19,7 @@ export interface LoadedModule {
 export class ModuleLoader {
   constructor(
     private files: ConfigFiles,
-    private processVariables: (program: Statement[], address: Address) => void,
-    private initializeChildVariables: (childAddress: Address, attributesMap: Record<string, unknown>, parentAddress: Address) => void,
-    private getAttributesMap: (attributes: Record<string, AttributeValue> | undefined) => Record<string, unknown>
+    private scopeManager: ScopeManager
   ) {}
 
   async loadModuleTree(rootProgram: Statement[]): Promise<{ resources: LoadedResource[]; modules: LoadedModule[] }> {
@@ -29,7 +28,7 @@ export class ModuleLoader {
 
     const parentAddress = new Address([], '', '');
     loadedModules.push({ address: parentAddress, program: rootProgram });
-    this.processVariables(rootProgram, parentAddress);
+    this.declareVariables(rootProgram, parentAddress);
 
     for (const stmt of rootProgram)
       if (stmt.type === 'Resource') {
@@ -43,23 +42,20 @@ export class ModuleLoader {
     return { resources: loadedResources, modules: loadedModules };
   }
 
-  private async loadChildModule(stmt: Statement, parentDir: string, parentAddress: Address, moduleAccumulator: LoadedModule[]): Promise<LoadedResource[]> {
-    if (stmt.type !== 'Module') return [];
-
+  private async loadChildModule(stmt: ModuleBlock, parentDir: string, parentAddress: Address, moduleAccumulator: LoadedModule[]): Promise<LoadedResource[]> {
     const moduleName = stmt.name;
-    const attributesMap = this.getAttributesMap(stmt.attributes);
 
-    const sourceValue = (attributesMap.source as { value: unknown } | undefined)?.value;
+    const sourceValue = stmt.attributes.source?.value;
     if (typeof sourceValue !== 'string') throw new Error(`Module "${moduleName}" is missing a valid "source" attribute.`);
 
     const moduleDir = path.posix.join(parentDir, sourceValue);
     const moduleProgram = this.parseModuleFile(moduleDir);
 
     const childAddress = new Address([...parentAddress.modulePath, moduleName], '', '');
-    this.initializeChildVariables(childAddress, attributesMap, parentAddress);
+    this.declareInputs(childAddress, stmt.attributes, parentAddress);
 
     moduleAccumulator.push({ address: childAddress, program: moduleProgram });
-    this.processVariables(moduleProgram, childAddress);
+    this.declareVariables(moduleProgram, childAddress);
 
     const childResources: LoadedResource[] = [];
     for (const childStmt of moduleProgram)
@@ -81,5 +77,24 @@ export class ModuleLoader {
 
     const parser = new Parser(new Lexer(moduleContent).tokenize());
     return parser.parse() || [];
+  }
+
+  // An input is read where the module is called, so its context is the parent.
+  private declareInputs(childAddress: Address, attributes: Record<string, AttributeValue>, parentAddress: Address): void {
+    const childScope = this.scopeManager.getScope(childAddress);
+
+    for (const [key, value] of Object.entries(attributes)) if (key !== 'source') this.scopeManager.setVariable(childScope, key, { value, context: parentAddress });
+  }
+
+  private declareVariables(program: Statement[], address: Address): void {
+    const scope = this.scopeManager.getScope(address);
+
+    // A caller's input beats the default; neither one is a missing input, read or not.
+    for (const stmt of program) {
+      if (stmt.type !== 'Variable' || this.scopeManager.getVariable(scope, stmt.name)) continue;
+      if (stmt.attributes.default === undefined) throw new Error(`${scope ? `${scope}: ` : ''}variable "${stmt.name}" has no value`);
+
+      this.scopeManager.setVariable(scope, stmt.name, { value: stmt.attributes.default, context: address });
+    }
   }
 }

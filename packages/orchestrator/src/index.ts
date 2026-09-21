@@ -37,10 +37,10 @@ export class Orchestrator {
     this.stateManager = stateManager;
     this.scopeManager = new ScopeManager();
     this.referenceResolver = new ReferenceResolver(this.scopeManager, this.dataSources);
-    this.moduleLoader = new ModuleLoader(files, this.processVariables.bind(this), this.initializeChildVariables.bind(this), this.getAttributesMap.bind(this));
+    this.moduleLoader = new ModuleLoader(files, this.scopeManager);
     this.referenceScanner = new ReferenceScanner(this.scopeManager);
     this.dependencyGraphBuilder = new DependencyGraphBuilder(this.scopeManager, this.referenceScanner);
-    this.actionExecutor = new ActionExecutor(this.providers, this.convertAttributes.bind(this));
+    this.actionExecutor = new ActionExecutor(this.providers, this.referenceResolver);
   }
 
   /**
@@ -54,21 +54,6 @@ export class Orchestrator {
     }
   }
 
-  /**
-   * Process variable declarations for a specific scope
-   */
-  private processVariables(program: Statement[], address: Address): void {
-    const scope = this.scopeManager.getScope(address);
-
-    // A caller's input beats the default; neither one is a missing input, read or not.
-    for (const stmt of program) {
-      if (stmt.type !== 'Variable' || this.scopeManager.getVariable(scope, stmt.name)) continue;
-      if (stmt.attributes.default === undefined) throw new Error(`${scope ? `${scope}: ` : ''}variable "${stmt.name}" has no value`);
-
-      this.scopeManager.setVariable(scope, stmt.name, { value: stmt.attributes.default, context: address });
-    }
-  }
-
   private async processDataSources(program: Statement[], state: IState, scopeAddress: Address): Promise<void> {
     const scope = this.scopeManager.getScope(scopeAddress);
 
@@ -78,7 +63,7 @@ export class Orchestrator {
         if (!provider) throw new Error(`Provider for data source type "${stmt.dataSourceType}" not registered`);
 
         // Resolve inputs (attributes)
-        const inputs = this.convertAttributes(stmt.attributes, state, scopeAddress);
+        const inputs = this.referenceResolver.resolveAttributes(stmt.attributes, state, scopeAddress);
 
         // Validate inputs
         await provider.validate(stmt.dataSourceType, inputs);
@@ -111,8 +96,6 @@ export class Orchestrator {
     const mainProgram = parser.parse() || [];
 
     this.scopeManager.clear();
-    this.processVariables(mainProgram, new Address([], '', ''));
-
     const { resources: loadedResources, modules: loadedModules } = await this.moduleLoader.loadModuleTree(mainProgram);
 
     this.dataSources.clear();
@@ -365,31 +348,8 @@ export class Orchestrator {
     return this.referenceResolver.resolveValue(value, state, context);
   }
 
-  private convertAttributes(attributes: Record<string, unknown>, state: IState, context?: Address): Record<string, unknown> {
-    const result: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(attributes)) result[key] = this.resolveValue(value, state, context);
-    return result;
-  }
-
   private resolveOutputsOf(scope: string, loadedModules: LoadedModule[], currentState: IState): void {
     const mod = loadedModules.find((m) => this.scopeManager.getScope(m.address) === scope);
     if (mod) this.processOutputs(mod.program, currentState, mod.address);
-  }
-
-  private getAttributesMap(attributes: Record<string, AttributeValue> | undefined): Record<string, unknown> {
-    const attributesMap: Record<string, unknown> = {};
-    if (attributes) Object.assign(attributesMap, attributes);
-    return attributesMap;
-  }
-
-  private initializeChildVariables(childAddress: Address, attributesMap: Record<string, unknown>, parentAddress: Address): void {
-    const childScope = this.scopeManager.getScope(childAddress);
-
-    for (const [key, attr] of Object.entries(attributesMap))
-      if (key !== 'source')
-        this.scopeManager.setVariable(childScope, key, {
-          value: attr,
-          context: parentAddress,
-        });
   }
 }

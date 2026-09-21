@@ -304,7 +304,9 @@ Found by the 2026-09-20 review of this section:
       it buys nothing the factory does not, and it would hide the wiring behind a runtime
       dependency. The plan walk (graph order, the pending set, resolve-or-unknown) moves
       into a part of its own; `Orchestrator` grew from 228 to 346 lines through the planner
-      fixes.
+      fixes. Done so far: `ModuleLoader` takes the `ScopeManager` and declares variables
+      and module inputs itself, and `ActionExecutor` takes the `ReferenceResolver`, so
+      the four callbacks are gone. Left: the plan walk, the apply walk, and the factory.
 - [ ] `apply` parses the config, reads data sources and builds the dependency graph once,
       not twice. `plan` does all three, and `runPlan` does them again for the plan it is
       handed.
