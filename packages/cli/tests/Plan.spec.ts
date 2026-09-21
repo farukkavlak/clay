@@ -293,8 +293,8 @@ describe('CLI: plan command', () => {
 
     await createPlanCommand().parseAsync(['node', 'clay', 'plan']);
 
-    // Should still display the action even with unknown type
-    expect(consoleSpy).toHaveBeenCalled();
+    // A kind the CLI does not know gets a blank where the symbol goes, and the tense it falls back to.
+    expect(consoleSpy.mock.calls.flat().join('\n')).toMatch(/ {2}test\.t will be .*destroyed/);
 
     consoleSpy.mockRestore();
   });
