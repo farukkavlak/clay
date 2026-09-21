@@ -7,8 +7,11 @@ const aPlanFile = () => serializePlan({ serial: 0, actions: [], outputs: {} }, '
 const read = (content: unknown) => () => parsePlanFile(typeof content === 'string' ? content : JSON.stringify(content), 'tfplan.json');
 
 describe('reading a plan file', () => {
+  // Built once: `serializePlan` stamps the time, so two calls disagree whenever the clock ticks between them.
   it('reads back what it wrote', () => {
-    expect(parsePlanFile(JSON.stringify(aPlanFile()), 'tfplan.json')).toEqual(aPlanFile());
+    const written = aPlanFile();
+
+    expect(parsePlanFile(JSON.stringify(written), 'tfplan.json')).toEqual(written);
   });
 
   it('names the file when the text is not json', () => {

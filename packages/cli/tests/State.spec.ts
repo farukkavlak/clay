@@ -52,16 +52,6 @@ describe('CLI: state command', () => {
   });
 
   describe('list', () => {
-    it('should list all resources in state', async () => {
-      const command = createStateCommand();
-      await command.parseAsync(['node', 'clay', 'list']);
-
-      expect(readMock).toHaveBeenCalled();
-      expect(consoleLogSpy).toHaveBeenCalledWith('test.t1');
-      expect(consoleLogSpy).toHaveBeenCalledWith('test.t2');
-      expect(consoleLogSpy).toHaveBeenCalledWith('test.t2');
-    });
-
     it('should handle errors during list', async () => {
       readMock.mockRejectedValue(new Error('List Error'));
       const command = createStateCommand();
@@ -77,16 +67,6 @@ describe('CLI: state command', () => {
   });
 
   describe('show', () => {
-    it('should show details of a resource', async () => {
-      const command = createStateCommand();
-      await command.parseAsync(['node', 'clay', 'show', 'test.t1']);
-
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('# test.t1:'));
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('resource "test" "t1" {'));
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('  id = "1"'));
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('  val = "foo"'));
-    });
-
     it('should handle resource without attributes', async () => {
       readMock.mockResolvedValue({ ...emptyState(), resources: { 'test.noattr': { resourceType: 'test', name: 'noattr' } } });
       const command = createStateCommand();

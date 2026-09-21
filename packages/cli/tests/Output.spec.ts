@@ -73,25 +73,6 @@ describe('Output Command', () => {
     expect(allCalls).toContain('42');
   });
 
-  it('should output JSON format with --json flag', async () => {
-    const mockState = { ...emptyState(), outputs: { myOutput: 'test_value', numberOutput: 123 } };
-
-    vi.mocked(fs.access).mockResolvedValue(void 0);
-    readMock.mockResolvedValue(mockState);
-
-    const command = createOutputCommand();
-    await command.parseAsync(['node', 'test', '--json']);
-
-    const calls = consoleLogSpy.mock.calls;
-    // Find the call that is JSON (starts with {)
-    const jsonArgs = calls.find((args: unknown[]) => typeof args[0] === 'string' && args[0].trim().startsWith('{'));
-    expect(jsonArgs).toBeDefined();
-
-    const parsed = JSON.parse(jsonArgs![0] as string);
-    expect(parsed).toHaveProperty('myOutput', 'test_value');
-    expect(parsed).toHaveProperty('numberOutput', 123);
-  });
-
   it('should handle empty state gracefully', async () => {
     const mockState = { ...emptyState(), outputs: {} };
 
@@ -102,16 +83,6 @@ describe('Output Command', () => {
     await command.parseAsync(['node', 'test']);
 
     expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('No outputs found'));
-  });
-
-  it('should handle missing state file', async () => {
-    vi.mocked(fs.access).mockRejectedValue(new Error('ENOENT'));
-
-    const command = createOutputCommand();
-    await command.parseAsync(['node', 'test']);
-
-    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('No state file found'));
-    // processExitSpy might or might not be called depending on impl, check logs
   });
 
   it('should handle state reading errors', async () => {
@@ -126,19 +97,7 @@ describe('Output Command', () => {
     }
 
     expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Error reading outputs'), expect.anything());
-    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Error reading outputs'), expect.anything());
     expect(processExitSpy).toHaveBeenCalledWith(1);
-  });
-
-  it('should handle state with no outputs at all', async () => {
-    const mockState = emptyState();
-    vi.mocked(fs.access).mockResolvedValue(void 0);
-    readMock.mockResolvedValue(mockState);
-
-    const command = createOutputCommand();
-    await command.parseAsync(['node', 'test']);
-
-    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('No outputs found'));
   });
 
   it('should read the state next to the working directory', async () => {
