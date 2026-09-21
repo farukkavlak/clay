@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-395 tests pass, and so do the type check and the build. Lint is clean, and so is
+399 tests pass, and so do the type check and the build. Lint is clean, and so is
 `npm audit`.
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -393,8 +393,14 @@ Found by the 2026-09-20 review of this section:
       what went wrong, then `on mod/main.clay line 1, in resource "x" "y":`, then the line
       itself with a caret under the column. An apply from a saved plan reads those lines
       back out of the plan, which carries the configuration it was made from.
-- [ ] The lexer slices the rest of the input on every token, so a file lexes in quadratic
-      time. A sticky regex reads in place.
+- [x] The lexer sliced the rest of the input on every token, which reads as quadratic
+      time. Measured, it was not: V8 slices a string without copying and tries an anchored
+      regex once, so 3.4 MB lexed in 400 ms and doubling the input doubled the time.
+      Every regex is sticky now and reads at the cursor, so the lexer no longer leans on
+      the engine for that; whitespace and both comment forms are one pattern, which took
+      the end-of-file special case with it: a file ending in a comment now puts its end
+      after the comment, as after any other token, where the old case left it at the
+      comment's first character. The same 3.4 MB lexes in 130 ms.
 - [ ] The `I` prefix on type names is gone: `IResource`, `IProvider`, `IResourceHandler`,
       `ISchemaDefinition`, `ISchema`, `IState`, `IStateBackend` and `IResolver` carry it
       and the other seventeen types do not. TypeScript does not need the prefix, and half

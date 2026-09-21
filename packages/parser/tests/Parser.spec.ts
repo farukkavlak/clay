@@ -248,6 +248,24 @@ describe('Clay Parser', () => {
     expect(attributes.v).toEqual({ type: 'String', value: 'x', position: at(1, 36) });
   });
 
+  // Comments are skipped, but the lines and columns they take up still count.
+  it.each([
+    ['a line comment', '# first\nresource "null_resource" "a" { v = "x" }', at(2, 36)],
+    ['a comment ending the line before', 'resource "null_resource" "a" { // here\n v = "x" }', at(2, 6)],
+  ])('keeps the position right after %s', (_, input, position) => {
+    expect(attributesOf(input).v).toMatchObject({ value: 'x', position });
+  });
+
+  it('keeps a comment marker inside a string as part of the string', () => {
+    expect(attributesOf('resource "null_resource" "a" { v = "a # b // c" }').v).toMatchObject({ value: 'a # b // c' });
+  });
+
+  it('puts the end of the file after a trailing comment, as after any other token', () => {
+    const input = 'resource "null_resource" "a" { v = "x" # tail';
+
+    expect(errorOf(input).position).toEqual(at(1, input.length + 1));
+  });
+
   describe('Error Cases', () => {
     it('refuses a second block with the same name, at its position', () => {
       const twice = {
