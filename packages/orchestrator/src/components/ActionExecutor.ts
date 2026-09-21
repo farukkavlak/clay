@@ -51,6 +51,7 @@ export class ActionExecutor {
     const id = await provider.create(action.resourceType, inputs);
 
     const key = contextAddress.toString();
+    // Actions run one at a time, so nothing else writes this entry across the await.
     // eslint-disable-next-line require-atomic-updates
     currentState.resources[key] = {
       id,

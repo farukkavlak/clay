@@ -94,7 +94,7 @@ describe('Orchestrator', () => {
       const created = mockProvider.getCreatedResources();
       expect(created.size).toBe(1);
 
-      const [id, inputs] = Array.from(created.entries())[0];
+      const [id, inputs] = [...created.entries()][0];
       expect(id).toMatch(/^mock_/);
       expect(inputs).toEqual({ name: 'test_value' });
     });
@@ -146,7 +146,7 @@ describe('Orchestrator', () => {
       await apply(orchestrator, config);
 
       const created = mockProvider.getCreatedResources();
-      const [, inputs] = Array.from(created.entries())[0];
+      const [, inputs] = [...created.entries()][0];
 
       // All values should be extracted from AttributeValue format
       expect(inputs).toEqual({
@@ -186,7 +186,7 @@ describe('Orchestrator', () => {
       await apply(orchestrator, createConfig);
 
       const originalCreated = mockProvider.getCreatedResources();
-      const [originalId] = Array.from(originalCreated.keys());
+      const [originalId] = [...originalCreated.keys()];
 
       // Now update it
       const updateConfig = `
@@ -358,7 +358,7 @@ describe('Orchestrator', () => {
       const updated = mockProvider.getCreatedResources();
       expect(updated.size).toBe(1);
 
-      const [, inputs] = Array.from(updated.entries())[0];
+      const [, inputs] = [...updated.entries()][0];
       expect(inputs).toEqual({
         name: 'updated',
         count: 10,
@@ -386,7 +386,7 @@ describe('Orchestrator', () => {
       const created = mockProvider.getCreatedResources();
       expect(created.size).toBe(1);
 
-      const [, inputs] = Array.from(created.entries())[0];
+      const [, inputs] = [...created.entries()][0];
       expect(inputs).toEqual({});
     });
   });

@@ -68,7 +68,7 @@ export class ReferenceResolver {
     const whole = value.match(/^\${([^}]+)}$/);
     if (whole) return this.resolve(whole[1].trim().split('.'), state, context);
 
-    return value.replace(/\${([^}]+)}/g, (_: string, expr: string) => {
+    return value.replaceAll(/\${([^}]+)}/g, (_: string, expr: string) => {
       const resolved = this.resolve(expr.trim().split('.'), state, context);
       if (resolved !== null && typeof resolved === 'object')
         throw new Error(`"${value}" cannot be joined into a string: ${expr.trim()} is a ${Array.isArray(resolved) ? 'list' : 'map'}`);
