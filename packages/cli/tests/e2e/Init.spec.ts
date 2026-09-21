@@ -32,10 +32,11 @@ describe('init against real files', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
-  it('starts an empty state in a new workspace', async () => {
+  it('starts an empty state in a new workspace and leaves nothing else behind', async () => {
     await init();
 
     expect(await new LocalBackend(dir).read()).toEqual({ version: 1, serial: 0, resources: {} });
+    expect(await fs.readdir(dir)).toEqual(['clay.state.json']);
   });
 
   it('says what it found when it runs again', async () => {
@@ -43,7 +44,6 @@ describe('init against real files', () => {
     await init();
 
     const printed = vi.mocked(console.log).mock.calls.flat().join('\n');
-    expect(printed).toContain(`Found ${path.join(process.cwd(), '.clay')}`);
     expect(printed).toContain('Kept the state already here');
   });
 

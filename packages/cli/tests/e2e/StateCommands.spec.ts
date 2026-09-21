@@ -85,13 +85,20 @@ describe('state and output against a real state file', () => {
     expect(printed.join('\n')).toContain('content = "hello"');
   });
 
-  it('reads the file --state names', async () => {
+  it('says the state has no resources once rm takes the last one out', async () => {
     await applyConfig();
-    await fs.rename(path.join(dir, 'clay.state.json'), path.join(dir, 'moved.json'));
 
-    await createStateCommand().parseAsync(['node', 'clay', 'list', '--state', 'moved.json']);
+    await createStateCommand().parseAsync(['node', 'clay', 'rm', 'local_file.a']);
+    printed.length = 0;
+    await createStateCommand().parseAsync(['node', 'clay', 'list']);
 
-    expect(printed).toContain('local_file.a');
+    expect(printed.join('\n')).toContain(`No resources in ${path.join(process.cwd(), 'clay.state.json')}`);
+  });
+
+  it('says where state list looked when there is no state file', async () => {
+    await createStateCommand().parseAsync(['node', 'clay', 'list']);
+
+    expect(printed.join('\n')).toContain(`No state file found at ${path.join(process.cwd(), 'clay.state.json')}`);
   });
 
   it('drops the outputs when rm takes a resource out', async () => {
@@ -174,9 +181,9 @@ describe('state and output against a real state file', () => {
     expect(printed.join('\n')).toContain('No outputs found');
   });
 
-  it('says where it looked when there is no state file', async () => {
+  it('says where output looked when there is no state file', async () => {
     await createOutputCommand().parseAsync(['node', 'clay']);
 
-    expect(printed.join('\n')).toContain(path.join(process.cwd(), 'clay.state.json'));
+    expect(printed.join('\n')).toContain(`No state file found at ${path.join(process.cwd(), 'clay.state.json')}`);
   });
 });

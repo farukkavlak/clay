@@ -3,10 +3,16 @@ import { StateManager } from '@clay/state';
 import { Command } from 'commander';
 import { styleText } from 'node:util';
 
-import { stateBackend } from '../stateFile';
+import { exists, stateFile } from '../stateFile';
 
-function getStateManager(statePath?: string): StateManager {
-  return new StateManager(stateBackend(statePath));
+function getStateManager(backend = stateFile()): StateManager {
+  return new StateManager(backend);
+}
+
+async function reportEmpty(path: string): Promise<void> {
+  const found = await exists(path);
+
+  console.log(styleText('yellow', found ? `No resources in ${path}` : `No state file found at ${path}`));
 }
 
 /** A resource's address lives in its key, in its entry and in every entry that reads from it. */
@@ -28,14 +34,13 @@ export function createStateCommand(): Command {
   command
     .command('list')
     .description('List resources in the state')
-    .option('--state <path>', 'Path to state file')
-    .action(async (options) => {
+    .action(async () => {
       try {
-        const manager = getStateManager(options.state);
-        const state = await manager.read();
+        const backend = stateFile();
+        const state = await getStateManager(backend).read();
 
-        if (!state.resources || Object.keys(state.resources).length === 0) {
-          console.log('The state file is empty.');
+        if (Object.keys(state.resources).length === 0) {
+          await reportEmpty(backend.path);
           return;
         }
 
@@ -50,10 +55,9 @@ export function createStateCommand(): Command {
     .command('show')
     .description('Show a resource in the state')
     .argument('<address>', 'Resource address')
-    .option('--state <path>', 'Path to state file')
-    .action(async (address, options) => {
+    .action(async (address) => {
       try {
-        const manager = getStateManager(options.state);
+        const manager = getStateManager();
         const state = await manager.read();
         const resource = state.resources[address];
 
@@ -78,10 +82,9 @@ export function createStateCommand(): Command {
     .description('Move an item in the state')
     .argument('<source>', 'Source address')
     .argument('<destination>', 'Destination address')
-    .option('--state <path>', 'Path to state file')
-    .action(async (source, destination, options) => {
+    .action(async (source, destination) => {
       try {
-        const manager = getStateManager(options.state);
+        const manager = getStateManager();
         await manager.lock();
         try {
           const state = await manager.read();
@@ -111,10 +114,9 @@ export function createStateCommand(): Command {
     .command('rm')
     .description('Remove instances from the state')
     .argument('<address>', 'Resource address')
-    .option('--state <path>', 'Path to state file')
-    .action(async (address, options) => {
+    .action(async (address) => {
       try {
-        const manager = getStateManager(options.state);
+        const manager = getStateManager();
         await manager.lock();
         try {
           const state = await manager.read();

@@ -1,9 +1,8 @@
 import { StateManager } from '@clay/state';
 import { Command } from 'commander';
-import fs from 'node:fs/promises';
 import { styleText } from 'node:util';
 
-import { stateBackend } from '../stateFile';
+import { exists, stateFile } from '../stateFile';
 
 function displayOutputs(outputs: Record<string, unknown>, json: boolean): void {
   if (json) {
@@ -20,24 +19,14 @@ function displayOutputs(outputs: Record<string, unknown>, json: boolean): void {
   }
 }
 
-async function exists(file: string): Promise<boolean> {
-  try {
-    await fs.access(file);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export function createOutputCommand(): Command {
   const command = new Command('output');
 
   command
     .description('Show output values from the current state')
     .option('--json', 'Output in JSON format')
-    .option('--state <path>', 'Path to state file')
     .action(async (options) => {
-      const backend = stateBackend(options.state);
+      const backend = stateFile();
 
       if (!(await exists(backend.path))) {
         console.log(styleText('yellow', `No state file found at ${backend.path}`));

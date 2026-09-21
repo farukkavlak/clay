@@ -234,8 +234,9 @@ Found by the 2026-09-20 review of this section:
       within their ranges, so only the lockfile moved.
 - [x] `orchestrator` and `planner` point `main` at `dist`, not at `src`, with `types`
       beside it like the other six. Tests read every package's source through an alias in
-      the root `vitest.config.mts`, so a stale or missing `dist` can neither pass nor fail
-      them; the CLI's tests had read the orchestrator's source only because `main` said
+      the root `vitest.config.mts`, so a stale or missing `dist` can neither pass nor
+      fail them; the one spec that runs the built binary builds first, from the CLI's
+      `pretest`; the CLI's tests had read the orchestrator's source only because `main` said
       so. The root `build` now names the packages in dependency order, since the CLI's
       bundle reads the orchestrator's `dist` and npm's own order is alphabetical.
 - [x] The CLI uses Node built-ins instead of chalk (`util.styleText`) and inquirer
@@ -356,12 +357,16 @@ Found by the 2026-09-20 review of this section:
       which never holds an AST node but can hold a map with those two keys, so
       `settings = { type = "a", value = "b" }` read back as `"b"`; a map comes through
       whole now, and a test pins it.
-- [ ] The CLI is consistent with itself: `--state` is on `state` and `output` but not on
-      `plan` and `apply`; the version is typed into `index.ts` instead of read from
-      `package.json`; `init` creates a `.clay/` directory nothing uses; `plan` prints
-      "Refreshing state..." and refreshes nothing; `state list` says "The state file is
-      empty" when there is no file and `output` says where it looked. A reader that
-      closes the pipe early (`clay apply | head`) gets a Node stack trace for `EPIPE`.
+- [x] The CLI is consistent with itself. `--state` is gone from `state` and `output`
+      rather than added to `plan` and `apply`: where the state lives belongs to the
+      workspace, not to one command, and a path per call is how two states are born.
+      Terraform deprecated its own `-state` for that reason and answers with backends,
+      which Clay will too (`TASKS.md` 10.12). The version is read from `package.json`
+      instead of typed in again; `init` no longer creates a `.clay/` directory nothing
+      uses; `plan` says "Planning..." rather than "Refreshing state...", since nothing is
+      refreshed yet; `state list` says where it looked, as `output` does; and a reader
+      that closes the pipe early (`clay plan | head`) gets nothing instead of a Node
+      stack trace for `EPIPE`.
 - [ ] `ReferenceResolver.resolveValue` unwraps any object with `type` and `value` in its
       last branch. It sees AST nodes only, so it is not a bug today, but it is the shape
       that made a map read back as its `value`; a check for a real AST node would say so.
@@ -389,7 +394,8 @@ Found by the 2026-09-20 review of this section:
       key that state no longer has.
 - [ ] Tests write only to temp directories. Something once wrote state files into
       `packages/orchestrator`; they are deleted, but what wrote them is unknown.
-- [ ] CI runs lint, format check, type check, build and tests on every push and PR.
+- [ ] CI runs lint, format check, type check, build and tests on every push and PR. With
+      build as its own step, the CLI's `pretest` can go.
 - [ ] husky and lint-staged run on commit.
 - [ ] The README describes what exists now, in short, plain English. It still shows
       `resource "file"`, which no provider has.
