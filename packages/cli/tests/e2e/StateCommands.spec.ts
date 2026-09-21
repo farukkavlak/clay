@@ -152,6 +152,39 @@ describe('state and output against a real state file', () => {
     expect(state.resources['local_file.b'].dependencies).toEqual(['local_file.first']);
   });
 
+  it('forgets what other resources read from it when rm takes one out', async () => {
+    await run(chained());
+
+    await createStateCommand().parseAsync(['node', 'clay', 'rm', 'local_file.a']);
+
+    const state = await stored();
+    expect(state.resources['local_file.b'].dependencies).toEqual([]);
+  });
+
+  it.each(['show', 'rm'])('refuses a name every object has, rather than reading one off the prototype, for %s', async (command) => {
+    await applyConfig();
+
+    await createStateCommand().parseAsync(['node', 'clay', command, 'constructor']);
+
+    const state = await stored();
+    expect(printed.join('\n')).toContain('Invalid address format: constructor');
+    expect(printed.join('\n')).not.toContain('resource "undefined"');
+    expect(state.resources['local_file.a']).toBeDefined();
+  });
+
+  it.each([
+    ['a source', ['constructor', 'local_file.z'], 'Invalid address format: constructor'],
+    ['a destination', ['local_file.a', 'constructor'], 'Invalid address format: constructor'],
+  ])('refuses %s that is a name every object has, for mv', async (_, addresses, message) => {
+    await applyConfig();
+
+    await createStateCommand().parseAsync(['node', 'clay', 'mv', ...addresses]);
+
+    const state = await stored();
+    expect(printed.join('\n')).toContain(message);
+    expect(Object.keys(state.resources)).toEqual(['local_file.a']);
+  });
+
   it('refuses an mv that changes the type', async () => {
     await applyConfig();
 

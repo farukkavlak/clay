@@ -172,12 +172,12 @@ describe('CLI: state command', () => {
     it('should fail if source does not exist', async () => {
       const command = createStateCommand();
       try {
-        await command.parseAsync(['node', 'clay', 'mv', 'missing', 'new']);
+        await command.parseAsync(['node', 'clay', 'mv', 'test.missing', 'test.new']);
       } catch {
         /* ignore process exit */
       }
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.anything(), expect.stringContaining('Source resource not found: missing'));
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.anything(), expect.stringContaining('Source resource not found: test.missing'));
       expect(processExitSpy).toHaveBeenCalledWith(1);
       expect(writeMock).not.toHaveBeenCalled();
       expect(unlockMock).toHaveBeenCalled(); // Should unlock even on error
