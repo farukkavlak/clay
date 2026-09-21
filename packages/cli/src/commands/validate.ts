@@ -1,17 +1,16 @@
-import { DiskFiles, Orchestrator } from '@clay/orchestrator';
+import { DiskFiles } from '@clay/orchestrator';
 import { CONFIG_FILE } from '@clay/parser';
-import { LocalProvider } from '@clay/provider-local';
-import { LocalBackend, StateManager } from '@clay/state';
 import { Command } from 'commander';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { styleText } from 'node:util';
 
+import { newOrchestrator } from '../engine';
+
 async function executeValidate(cwd: string, configPath: string): Promise<void> {
   const configContent = await fs.readFile(configPath, 'utf8');
 
-  const orchestrator = Orchestrator.create(new StateManager(new LocalBackend(cwd)), new DiskFiles(cwd));
-  orchestrator.registerProvider(new LocalProvider());
+  const orchestrator = newOrchestrator(cwd, new DiskFiles(cwd));
 
   await orchestrator.validate(configContent);
 }

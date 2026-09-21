@@ -1,76 +1,24 @@
-import { Address } from '@clay/contracts';
-import { DiskFiles, Orchestrator, RecordingFiles } from '@clay/orchestrator';
+import { DiskFiles, RecordingFiles } from '@clay/orchestrator';
 import { CONFIG_FILE } from '@clay/parser';
-import { isUnknown, PlanAction, serializePlan } from '@clay/planner';
-import { LocalProvider } from '@clay/provider-local';
-import { LocalBackend, StateManager } from '@clay/state';
+import { serializePlan } from '@clay/planner';
 import { Command } from 'commander';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { styleText } from 'node:util';
 
-import { changesNothing, displayOutputChanges } from '../outputChanges';
-
-function getActionSymbol(actionType: string): string {
-  if (actionType === 'CREATE') return styleText('green', '+');
-  if (actionType === 'UPDATE') return styleText('yellow', '~');
-  if (actionType === 'REPLACE') return styleText('red', '-') + styleText('green', '+');
-  if (actionType === 'DELETE') return styleText('red', '-');
-  return ' ';
-}
-
-function pastTense(actionType: PlanAction['type']): string {
-  if (actionType === 'CREATE') return styleText('green', 'created');
-  if (actionType === 'UPDATE') return styleText('yellow', 'updated');
-  if (actionType === 'REPLACE') return styleText('red', 'replaced');
-  return styleText('red', 'destroyed');
-}
-
-function describeValue(value: unknown, whenAbsent: string): string {
-  if (value === undefined) return whenAbsent;
-  return isUnknown(value) ? '(known after apply)' : JSON.stringify(value);
-}
-
-function displayAction(action: PlanAction): void {
-  console.log(`  ${getActionSymbol(action.type)} ${Address.of(action).toString()} will be ${pastTense(action.type)}`);
-
-  if ((action.type === 'UPDATE' || action.type === 'REPLACE') && action.changes)
-    for (const [key, change] of Object.entries(action.changes)) console.log(`      ${key}: ${describeValue(change.old, '(none)')} -> ${describeValue(change.new, '(removed)')}`);
-}
-
-function displayPlanSummary(actions: PlanAction[]): void {
-  // A replacement counts once as an add and once as a destroy.
-  const replaceCount = actions.filter((a) => a.type === 'REPLACE').length;
-  const createCount = actions.filter((a) => a.type === 'CREATE').length + replaceCount;
-  const updateCount = actions.filter((a) => a.type === 'UPDATE').length;
-  const deleteCount = actions.filter((a) => a.type === 'DELETE').length + replaceCount;
-
-  console.log(styleText('bold', `\nPlan: ${createCount} to add, ${updateCount} to change, ${deleteCount} to destroy.`));
-}
+import { newOrchestrator } from '../engine';
+import { displayPlan } from '../showPlan';
 
 async function executePlan(cwd: string, configPath: string, outFile?: string): Promise<void> {
   const configContent = await fs.readFile(configPath, 'utf8');
 
   const files = new RecordingFiles(new DiskFiles(cwd));
-  const orchestrator = Orchestrator.create(new StateManager(new LocalBackend(cwd)), files);
-  orchestrator.registerProvider(new LocalProvider());
+  const orchestrator = newOrchestrator(cwd, files);
 
   console.log(styleText('blue', 'Refreshing state...'));
 
   const planned = await orchestrator.plan(configContent);
-  const { actions, outputs } = planned;
-  const changes = actions.filter((action) => action.type !== 'NO_OP');
-
-  if (changesNothing(planned)) console.log(styleText('green', 'No changes. Your infrastructure matches the configuration.'));
-  else {
-    if (changes.length > 0) {
-      console.log(styleText('bold', '\nClay will perform the following actions:\n'));
-      for (const action of changes) displayAction(action);
-    }
-    displayOutputChanges(outputs);
-    if (changes.length > 0) displayPlanSummary(actions);
-    else console.log(styleText('bold', '\nAn apply would only update the outputs in state.'));
-  }
+  displayPlan(planned);
 
   if (outFile) {
     const planFile = serializePlan(planned, configContent, files.snapshot());

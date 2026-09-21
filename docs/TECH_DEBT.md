@@ -5,7 +5,7 @@ What has to be fixed before any new feature. Audited on 2026-09-17, rechecked on
 
 ## Where things stand
 
-385 tests pass, and so do the type check and the build. Lint is clean, and so is
+386 tests pass, and so do the type check and the build. Lint is clean, and so is
 `npm audit`.
 
 The unit tests mock the provider and the state, so they missed that the real
@@ -333,10 +333,12 @@ Found by the 2026-09-20 review of this section:
       pure function of an address and is `scopeOf` in `keys.ts`, so the scanner, the graph
       builder and two resolvers no longer take the manager, and `ScopeManager` holds
       variables and outputs and nothing else.
-- [ ] The CLI commands share their helpers instead of copying them. `apply` has its own
-      copy of the action list and it says less than `plan`'s: no "will be replaced", no
-      diff. `newOrchestrator` with the `LocalProvider` registration is copied into `plan`,
-      `apply` and `validate`.
+- [x] The CLI commands share their helpers instead of copying them. `apply` had its own
+      copy of the action list and it said less than `plan`'s: no "will be replaced", no
+      diff. `showPlan.ts` shows a plan one way, whether it was just made, is about to
+      run or came from a file, and `apply` says the same "No changes" as `plan`.
+      `engine.ts` builds the orchestrator with the one provider for `plan`, `apply` and
+      `validate`.
 - [ ] Comments that only restate the code are gone (`// Mock Provider for testing`), and
       so are the stale ones: `StateManager` promises S3 and Azure.
 - [ ] The parser reads a block's attributes in one place, not four (resource, data,
@@ -354,7 +356,8 @@ Found by the 2026-09-20 review of this section:
       `plan` and `apply`; the version is typed into `index.ts` instead of read from
       `package.json`; `init` creates a `.clay/` directory nothing uses; `plan` prints
       "Refreshing state..." and refreshes nothing; `state list` says "The state file is
-      empty" when there is no file and `output` says where it looked.
+      empty" when there is no file and `output` says where it looked. A reader that
+      closes the pipe early (`clay apply | head`) gets a Node stack trace for `EPIPE`.
 - [ ] A resolve error names the reference but not the resource that holds it, so
       `cannot be joined into a string` leaves the user searching when two resources read
       the same thing. `planResource` can wrap it with the address, as
