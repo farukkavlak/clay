@@ -3,10 +3,11 @@ import { PlanAction } from '@clay/planner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActionExecutor } from '../../src/components/ActionExecutor';
+import { ReferenceResolver } from '../../src/resolvers/ReferenceResolver';
+import { ScopeManager } from '../../src/scope/ScopeManager';
 
 describe('ActionExecutor', () => {
   let providers: Map<string, IProvider>;
-  let convertAttributes: ConstructorParameters<typeof ActionExecutor>[1];
   let executor: ActionExecutor;
   let mockProvider: IProvider;
 
@@ -22,14 +23,7 @@ describe('ActionExecutor', () => {
     };
 
     providers = new Map([['test', mockProvider]]);
-    convertAttributes = vi.fn((attrs: Record<string, unknown>) => {
-      const resolved: Record<string, unknown> = {};
-      for (const [key, val] of Object.entries(attrs)) resolved[key] = val && typeof val === 'object' && 'value' in val ? val.value : val;
-
-      return resolved;
-    });
-
-    executor = new ActionExecutor(providers, convertAttributes);
+    executor = new ActionExecutor(providers, new ReferenceResolver(new ScopeManager(), new Map()));
   });
 
   afterEach(() => {

@@ -25,6 +25,12 @@ export class ReferenceResolver {
     return resourceResolver.resolve(pathParts, context || new Address([], '', ''), state);
   }
 
+  resolveAttributes(attributes: Record<string, unknown>, state: IState, context?: Address): Record<string, unknown> {
+    const resolved: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(attributes)) resolved[key] = this.resolveValue(value, state, context);
+    return resolved;
+  }
+
   resolveValue(value: unknown, state: IState, context?: Address): unknown {
     if (!value || typeof value !== 'object') return value;
 

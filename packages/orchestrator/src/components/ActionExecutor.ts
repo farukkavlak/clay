@@ -1,10 +1,12 @@
 import { Address, IProvider, IState } from '@clay/contracts';
 import { PlanAction } from '@clay/planner';
 
+import { ReferenceResolver } from '../resolvers/ReferenceResolver';
+
 export class ActionExecutor {
   constructor(
     private providers: Map<string, IProvider>,
-    private convertAttributes: (attributes: Record<string, unknown>, state: IState, context?: Address) => Record<string, unknown>
+    private resolver: ReferenceResolver
   ) {}
 
   async execute(action: PlanAction, currentState: IState): Promise<void> {
@@ -45,7 +47,7 @@ export class ActionExecutor {
     if (!action.attributes) throw new Error('CREATE action missing attributes');
 
     const contextAddress = Address.of(action);
-    const inputs = this.convertAttributes(action.attributes, currentState, contextAddress);
+    const inputs = this.resolver.resolveAttributes(action.attributes, currentState, contextAddress);
 
     await provider.validate(action.resourceType, inputs);
     const id = await provider.create(action.resourceType, inputs);
@@ -74,7 +76,7 @@ export class ActionExecutor {
     if (!currentResource) throw new Error(`Resource "${key}" not found in state for update`);
 
     // The plan resolved these against an older state, so resolve them again here.
-    const inputs = this.convertAttributes(action.attributes, currentState, contextAddress);
+    const inputs = this.resolver.resolveAttributes(action.attributes, currentState, contextAddress);
 
     await provider.validate(action.resourceType, inputs);
     if (!action.id) throw new Error(`UPDATE action for "${key}" missing resource ID`);
