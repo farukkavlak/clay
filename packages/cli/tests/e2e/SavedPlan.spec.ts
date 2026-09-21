@@ -1,5 +1,5 @@
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
-import { serializePlan } from '@clay/planner';
+import { parsePlanFile, serializePlan } from '@clay/planner';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
@@ -96,6 +96,29 @@ describe('a plan saved to a file', () => {
 
     expect(await fs.readdir(dir)).toEqual(['plan.json']);
     expect(printed.join('\n')).toContain('\n  1: resource "local_file" {\n                           ^');
+  });
+
+  // What `serializePlan` really writes has to be what `parsePlanFile` really reads; a stub for either would agree with itself and prove nothing.
+  it('writes a file the apply side can read back, and says where it put it', async () => {
+    await fs.writeFile(path.join(dir, 'main.clay'), fileConfig('planned'), 'utf8');
+
+    const printed: string[] = [];
+    const cwd = process.cwd();
+    process.chdir(dir);
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => void printed.push(args.join(' ')));
+    vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
+
+    try {
+      await createPlanCommand().parseAsync(['node', 'clay', '--out', 'plan.json']);
+    } finally {
+      vi.restoreAllMocks();
+      process.chdir(cwd);
+    }
+
+    const written = await fs.readFile(path.join(dir, 'plan.json'), 'utf8');
+
+    expect(printed.join('\n')).toContain('Plan saved to: plan.json');
+    expect(parsePlanFile(written, 'plan.json').actions.map((action) => action.name)).toEqual(['a']);
   });
 
   it('carries its modules, so a module edited or removed later changes nothing', async () => {

@@ -19,21 +19,6 @@ vi.mock('@clay/orchestrator', async () => {
     }),
   };
 });
-vi.mock('@clay/planner', async () => {
-  const actual = await vi.importActual('@clay/planner');
-  return {
-    ...actual,
-    serializePlan: vi.fn(() => ({
-      version: '5.0',
-      timestamp: 'mock-time',
-      config: 'mock config',
-      modules: {},
-      serial: 0,
-      actions: [],
-      outputs: {},
-    })),
-  };
-});
 
 describe('CLI: plan command', () => {
   beforeEach(() => {
@@ -295,33 +280,6 @@ describe('CLI: plan command', () => {
 
     // A kind the CLI does not know gets a blank where the symbol goes, and the tense it falls back to.
     expect(consoleSpy.mock.calls.flat().join('\n')).toMatch(/ {2}test\.t will be .*destroyed/);
-
-    consoleSpy.mockRestore();
-  });
-
-  it('should save plan to file when -out option is provided', async () => {
-    vi.mocked(fs.access).mockResolvedValue(void 0);
-    vi.mocked(fs.readFile).mockResolvedValue('content');
-    vi.mocked(fs.writeFile).mockResolvedValue(void 0);
-
-    const actions = [{ type: 'CREATE', resourceType: 'test', name: 't', attributes: {} }];
-    const planMock = vi.fn().mockResolvedValue({ serial: 0, actions, outputs: {} });
-
-    vi.mocked(Orchestrator.create).mockImplementation(function () {
-      return {
-        registerProvider: vi.fn(),
-        plan: planMock,
-      } as Partial<Orchestrator> as Orchestrator;
-    });
-
-    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-
-    await createPlanCommand().parseAsync(['node', 'clay', '--out', 'plan.json']);
-
-    expect(fs.writeFile).toHaveBeenCalledWith('plan.json', expect.any(String), 'utf8');
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Plan saved to: plan.json'));
-
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Plan saved to: plan.json'));
 
     consoleSpy.mockRestore();
   });
