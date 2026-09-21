@@ -339,8 +339,10 @@ Found by the 2026-09-20 review of this section:
       run or came from a file, and `apply` says the same "No changes" as `plan`.
       `engine.ts` builds the orchestrator with the one provider for `plan`, `apply` and
       `validate`.
-- [ ] Comments that only restate the code are gone (`// Mock Provider for testing`), and
-      so are the stale ones: `StateManager` promises S3 and Azure.
+- [x] Comments that only restate the code are gone (`// Write file`, `// No-op`,
+      `// Skip Whitespace`), and so are the stale ones: `StateManager` promised S3 and
+      Azure. What stays says why: a backup that has nothing to copy, a lexer whose rule
+      order matters, a random string whose value is its id.
 - [ ] The parser reads a block's attributes in one place, not four (resource, data,
       variable and module carry the same loop). `LocalProvider` looks its handler up in
       one place, not six. `ModuleOutputResolver` builds a child scope by hand next to

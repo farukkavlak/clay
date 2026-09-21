@@ -38,20 +38,16 @@ export interface ISchemaDefinition {
 
 export type ISchema = Record<string, ISchemaDefinition>;
 
-/** The contract that ALL providers must implement */
+/** The engine's contract with a provider. */
 export interface IProvider {
-  /** Resource types handled by this provider (e.g., ['custom_resource', 'another_type']) */
+  /** The resource types it handles. */
   readonly resources: string[];
 
-  /** Returns the schema for a specific resource type */
   getSchema(type: string): Promise<ISchema>;
 
-  /** Validates inputs against the resource schema. Throws validation error if invalid. */
+  /** Throws when the inputs would not make a valid resource. */
   validate(type: string, inputs: Record<string, unknown>): Promise<void>;
 
-  /**
-   * Read a data source
-   */
   read(type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>>;
 
   create(type: string, inputs: Record<string, unknown>): Promise<string>;
@@ -59,39 +55,18 @@ export interface IProvider {
   delete(id: string, type: string): Promise<void>;
 }
 
-/**
- * Resource Handler Interface
- * Each resource type (e.g., local_file, aws_s3_bucket) implements this interface
- */
+/** One resource type's side of a provider. */
 export interface IResourceHandler {
-  /**
-   * Returns the schema for this resource
-   */
   getSchema(): Promise<ISchema>;
 
-  /**
-   * Validate resource inputs before creation/update
-   */
   validate(inputs: Record<string, unknown>): Promise<void>;
 
-  /**
-   * Read a data source
-   */
   read(inputs: Record<string, unknown>): Promise<Record<string, unknown>>;
 
-  /**
-   * Create a new resource
-   * @returns Resource ID (e.g., file path, AWS ARN)
-   */
+  /** Returns the id the resource is known by from now on. */
   create(inputs: Record<string, unknown>): Promise<string>;
 
-  /**
-   * Update an existing resource
-   */
   update(id: string, inputs: Record<string, unknown>): Promise<void>;
 
-  /**
-   * Delete a resource
-   */
   delete(id: string): Promise<void>;
 }

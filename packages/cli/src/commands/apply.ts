@@ -90,7 +90,6 @@ export function createApplyCommand() {
       const cwd = process.cwd();
 
       try {
-        // Check if argument is a plan file (must be a string that doesn't start with -)
         if (planFileArg && !planFileArg.startsWith('-')) {
           const planContent = await fs.readFile(planFileArg);
           const planData = JSON.parse(planContent.toString('utf8'));

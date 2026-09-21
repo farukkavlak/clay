@@ -34,10 +34,7 @@ export class Graph<T> {
     return [...this.adjacencyList.entries()].filter(([, neighbors]) => neighbors.has(id)).map(([from]) => from);
   }
 
-  /*
-   * Returns nodes in topological order, grouped by layers for parallel execution.
-   * Format: [['A', 'B'], ['C']] -> A and B can run in parallel, then C.
-   */
+  /** Layers in dependency order: a layer depends only on earlier layers, so it could run in parallel. */
   topologicalSort(): string[][] {
     const inDegree = this.calculateInDegrees();
     const result: string[][] = [];

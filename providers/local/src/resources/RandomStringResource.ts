@@ -19,7 +19,6 @@ export class RandomStringResource implements IResourceHandler {
     const length = inputs.length as number;
     const useSpecial = (inputs.special as boolean) ?? false;
 
-    // Character sets
     const alphanumeric = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     const special = '!@#$%^&*()_+-=[]{}|;:,.<>?';
 
@@ -36,14 +35,10 @@ export class RandomStringResource implements IResourceHandler {
   }
 
   async update(_id: string, _inputs: Record<string, unknown>): Promise<void> {
-    // RandomString is immutable. If inputs change (e.g., length), logic dictates
-    // the resource should be recreated (Destroy -> Create) by the Orchestrator.
-    // We cannot update the ID (which represents the value) in-place here.
+    // The value is the id, so changed inputs mean a replacement, not an update.
   }
 
-  async delete(_id: string): Promise<void> {
-    // No-op
-  }
+  async delete(_id: string): Promise<void> {}
 
   async read(_inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
     return {};

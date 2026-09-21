@@ -20,21 +20,17 @@ export class LocalFileResource implements IResourceHandler {
     const filePath = inputs.path as string;
     const content = inputs.content as string;
 
-    // Ensure parent directory exists
     const dir = path.dirname(filePath);
     await fs.mkdir(dir, { recursive: true });
 
-    // Write file
     await fs.writeFile(filePath, content, 'utf8');
 
-    // Return absolute path as ID
     return path.resolve(filePath);
   }
 
   async update(id: string, inputs: Record<string, unknown>): Promise<void> {
     const content = inputs.content as string;
 
-    // Update file content
     await fs.writeFile(id, content, 'utf8');
   }
 

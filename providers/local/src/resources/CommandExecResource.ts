@@ -33,9 +33,7 @@ export class CommandExecResource implements IResourceHandler {
     await execAsync(command, { cwd });
   }
 
-  async delete(_id: string): Promise<void> {
-    // No-op
-  }
+  async delete(_id: string): Promise<void> {}
 
   async read(_inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
     return {};

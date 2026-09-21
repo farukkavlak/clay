@@ -82,7 +82,6 @@ export function createStateCommand(): Command {
     .action(async (source, destination, options) => {
       try {
         const manager = getStateManager(options.state);
-        // Lock state before modification
         await manager.lock();
         try {
           const state = await manager.read();

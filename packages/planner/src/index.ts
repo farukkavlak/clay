@@ -158,7 +158,6 @@ export function plan(desiredResources: DesiredResource[], currentState: IState, 
 
   for (const desired of desiredResources) desiredMap.set(Address.of(desired.block).toString(), desired);
 
-  // 1. Check for Create, Update, or Replace
   for (const [key, desired] of desiredMap.entries()) {
     const currentResource = currentMap.get(key);
     if (currentResource) processExistingResource(actions, desired, currentResource, schemas);
@@ -173,7 +172,6 @@ export function plan(desiredResources: DesiredResource[], currentState: IState, 
       });
   }
 
-  // 2. Check for Delete (In state but not in desired)
   for (const [key, resource] of currentMap.entries()) {
     if (desiredMap.has(key)) continue;
 

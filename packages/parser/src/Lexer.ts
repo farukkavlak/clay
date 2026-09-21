@@ -11,7 +11,7 @@ export class Lexer {
   private line: number = 1;
   private column: number = 1;
 
-  // Regex rules (Order matters!)
+  // Boolean sits before Identifier, or true and false would lex as identifiers.
   private specs: TokenSpec[] = [
     { type: TokenType.Boolean, regex: /^(true|false)\b/ },
     { type: TokenType.Identifier, regex: /^[A-Z_a-z]\w*/ },
@@ -39,18 +39,15 @@ export class Lexer {
     while (this.cursor < this.input.length) {
       const remaining = this.input.slice(this.cursor);
 
-      // 1. Skip Whitespace
       const whitespaceMatch = remaining.match(/^\s+/);
       if (whitespaceMatch) {
         this.advance(whitespaceMatch[0]);
         continue;
       }
 
-      // 2. Skip Comments (# or //)
       if (remaining.startsWith('#') || remaining.startsWith('//')) {
         const lineEndIndex = remaining.indexOf('\n');
         if (lineEndIndex === -1) {
-          // Comment goes to end of file
           this.cursor = this.input.length;
           break;
         }
@@ -58,14 +55,12 @@ export class Lexer {
         continue;
       }
 
-      // 3. Match Token
       let matched = false;
       for (const spec of this.specs) {
         const match = remaining.match(spec.regex);
         if (match) {
           const value = match[0];
 
-          // Special handling for String to remove quotes
           let tokenValue = value;
           if (spec.type === TokenType.String) tokenValue = value.slice(1, -1);
 

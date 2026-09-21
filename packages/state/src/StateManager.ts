@@ -2,10 +2,6 @@ import { IState } from '@clay/contracts';
 
 import { IStateBackend } from './IStateBackend';
 
-/**
- * StateManager coordinates state operations through a backend.
- * This abstraction enables support for different storage backends (local, S3, Azure, etc.)
- */
 export class StateManager {
   private backend: IStateBackend;
 

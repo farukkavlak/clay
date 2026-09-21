@@ -53,7 +53,6 @@ export class Parser {
   }
 
   private parseResource(): ResourceBlock {
-    // resource "type" "name" { ... }
     const typeToken = this.consume(TokenType.String, "Expect resource type string after 'resource'.");
     const nameToken = this.consume(TokenType.String, 'Expect resource name string after resource type.');
 
@@ -78,7 +77,6 @@ export class Parser {
   }
 
   private parseData(): DataBlock {
-    // data "type" "name" { ... }
     const typeToken = this.consume(TokenType.String, "Expect data source type string after 'data'.");
     const nameToken = this.consume(TokenType.String, 'Expect data source name string after data source type.');
 
@@ -103,7 +101,6 @@ export class Parser {
   }
 
   private parseVariable(): VariableBlock {
-    // variable "name" { ... }
     const nameToken = this.consume(TokenType.String, "Expect variable name string after 'variable'.");
 
     this.consume(TokenType.LBrace, "Expect '{' after variable name.");
@@ -126,7 +123,6 @@ export class Parser {
   }
 
   private parseOutput(): OutputBlock {
-    // output "name" { value = ... }
     const nameToken = this.consume(TokenType.String, "Expect output name string after 'output'.");
 
     this.consume(TokenType.LBrace, "Expect '{' after output name.");
@@ -146,7 +142,6 @@ export class Parser {
   }
 
   private parseModule(): ModuleBlock {
-    // module "name" { ... }
     const nameToken = this.consume(TokenType.String, "Expect module name string after 'module'.");
 
     this.consume(TokenType.LBrace, "Expect '{' after module name.");
@@ -176,7 +171,6 @@ export class Parser {
     if (this.matchToken(TokenType.LBracket)) return this.parseList();
     if (this.matchToken(TokenType.LBrace)) return this.parseMap();
 
-    // Reference Parsing: identifier.key.subkey
     if (this.check(TokenType.Identifier)) return this.parseReference();
 
     return this.error(`Unexpected value: ${this.peek().value}`);
