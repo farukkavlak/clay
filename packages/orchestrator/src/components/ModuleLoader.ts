@@ -36,20 +36,23 @@ export class ModuleLoader {
         const address = new Address([], stmt.resourceType, stmt.name);
         loadedResources.push({ uniqueId: address.toString(), address, block: stmt });
       } else if (stmt.type === 'Module') {
-        const childResources = await this.loadChildModule(stmt, '', parentAddress, loadedModules);
+        const childResources = await this.loadChildModule(stmt, '.', parentAddress, loadedModules, ['.']);
         loadedResources.push(...childResources);
       }
 
     return { resources: loadedResources, modules: loadedModules };
   }
 
-  private async loadChildModule(stmt: ModuleBlock, parentDir: string, parentAddress: Address, moduleAccumulator: LoadedModule[]): Promise<LoadedResource[]> {
+  private async loadChildModule(stmt: ModuleBlock, parentDir: string, parentAddress: Address, moduleAccumulator: LoadedModule[], loadingDirs: string[]): Promise<LoadedResource[]> {
     const moduleName = stmt.name;
 
     const sourceValue = stmt.attributes.source?.value;
     if (typeof sourceValue !== 'string') throw new Error(`Module "${moduleName}" is missing a valid "source" attribute.`);
 
-    const moduleDir = path.posix.join(parentDir, sourceValue);
+    // The trailing "." leaves one spelling per directory, so a cycle is seen on the hop that closes it.
+    const moduleDir = path.posix.join(parentDir, sourceValue, '.');
+    if (loadingDirs.includes(moduleDir)) throw new Error(`Module source cycle detected: ${[...loadingDirs, moduleDir].join(' -> ')}`);
+
     const moduleProgram = this.parseModuleFile(moduleDir);
 
     const childAddress = new Address([...parentAddress.modulePath, moduleName], '', '');
@@ -64,7 +67,7 @@ export class ModuleLoader {
         const resourceAddress = new Address(childAddress.modulePath, childStmt.resourceType, childStmt.name);
         childResources.push({ uniqueId: resourceAddress.toString(), address: resourceAddress, block: childStmt });
       } else if (childStmt.type === 'Module') {
-        const nestedResources = await this.loadChildModule(childStmt, moduleDir, childAddress, moduleAccumulator);
+        const nestedResources = await this.loadChildModule(childStmt, moduleDir, childAddress, moduleAccumulator, [...loadingDirs, moduleDir]);
         childResources.push(...nestedResources);
       }
 

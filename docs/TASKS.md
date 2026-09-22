@@ -8,7 +8,7 @@ worth doing. Terraform is named where it has solved the same problem.
 Wrong behaviour, each seen and reproduced. These come before everything below, one
 change each.
 
-- [ ] A module that names itself, or two that name each other, overflow the stack.
+- [x] A module that names itself, or two that name each other, overflow the stack.
       `ModuleLoader` keeps no record of the directories on the path it is loading, so a
       `source` cycle recurses until Node dies. The graph refuses a reference cycle by
       name; a module cycle should be refused the same way

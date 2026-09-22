@@ -208,4 +208,27 @@ describe('Orchestrator - Module Loading', () => {
 
     await expect(apply(orchestrator, rootConfig)).rejects.toThrow('Module source not found at: missing/main.clay');
   });
+
+  it('refuses a root module whose source is the configuration it was called from', async () => {
+    await expect(apply(orchestrator, `module "self" { source = "." }`)).rejects.toThrow(/Module source cycle detected: \. -> \.$/);
+  });
+
+  it('refuses a module whose source is the directory it was loaded from', async () => {
+    files['a/main.clay'] = `module "self" { source = "." }`;
+
+    await expect(apply(orchestrator, `module "a" { source = "./a" }`)).rejects.toThrow(/Module source cycle detected: \. -> a -> a$/);
+  });
+
+  it('refuses a source that spells the directory it was loaded from with a trailing slash', async () => {
+    files['a/main.clay'] = `module "self" { source = "./" }`;
+
+    await expect(apply(orchestrator, `module "a" { source = "./a" }`)).rejects.toThrow(/Module source cycle detected: \. -> a -> a$/);
+  });
+
+  it('refuses two modules whose sources reach each other', async () => {
+    files['a/main.clay'] = `module "b" { source = "../b" }`;
+    files['b/main.clay'] = `module "a" { source = "../a" }`;
+
+    await expect(apply(orchestrator, `module "a" { source = "./a" }`)).rejects.toThrow(/Module source cycle detected: \. -> a -> b -> a$/);
+  });
 });
