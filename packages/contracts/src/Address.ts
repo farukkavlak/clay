@@ -20,25 +20,27 @@ export class Address {
 
   static parse(input: string): Address {
     const parts = input.split('.');
+    const refuse = (reason: string): never => {
+      throw new Error(`Invalid address "${input}": ${reason}`);
+    };
+
+    if (parts.includes('')) refuse('a part of it is empty');
 
     const modulePath: string[] = [];
-    let i = 0;
+    let read = 0;
 
-    // Scan for module segments: module.<name>
-    while (i < parts.length)
-      if (parts[i] === 'module') {
-        if (i + 1 >= parts.length) throw new Error(`Invalid address format: ${input} (incomplete module path)`);
-        modulePath.push(parts[i + 1]);
-        i += 2;
-      } else break;
+    while (parts[read] === 'module') {
+      if (read + 1 >= parts.length) refuse('a module needs a name after "module"');
 
-    // After scanning modules, we MUST have exactly 2 parts left: type and name
-    if (i + 2 !== parts.length) throw new Error(`Invalid address format: ${input} (expected type.name at end, got ${parts.length - i} parts)`);
+      modulePath.push(parts[read + 1]);
+      read += 2;
+    }
 
-    const resourceType = parts[i];
-    const name = parts[i + 1];
+    const rest = parts.slice(read);
+    if (rest.length < 2) refuse('an address ends with a type and a name');
+    if (rest.length > 2) refuse(`nothing may follow the name "${rest[1]}"`);
 
-    return new Address(modulePath, resourceType, name);
+    return new Address(modulePath, rest[0], rest[1]);
   }
 
   toString(): string {

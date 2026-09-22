@@ -67,6 +67,8 @@ function resourceReference(parts: string[], spelled: string, position?: Position
 export function parseReference(parts: string[], position?: Position): ParsedReference {
   const spelled = parts.join('.');
 
+  if (parts.includes('')) refuse(`Reference "${spelled}" has a part that is empty`, position);
+
   if (parts[0] === 'var') return variableReference(parts, spelled, position);
   if (parts[0] === 'data') return dataReference(parts, spelled, position);
   if (parts[0] === 'module') return moduleOutputReference(parts, spelled, position);

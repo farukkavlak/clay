@@ -229,7 +229,7 @@ by resource type, and no `provider` block exists yet.
       where that name sets a prototype instead of a key, so the output disappears
 - [ ] `apply` says a missing file is missing the same way twice. A missing plan file and a
       missing configuration are reported with different prefixes today
-- [ ] `Address.parse` says `got 1 parts` when it refuses an address
+- [x] `Address.parse` says `got 1 parts` when it refuses an address
 - [ ] `clay graph`: the dependency graph in DOT
 - [ ] `clay fmt`: one layout for every file, so diffs show changes and not style
 
@@ -256,7 +256,7 @@ Nothing here changes what Clay does. Each is a place the next change has to work
 - [ ] `LoadedResource.uniqueId` is `address.toString()` under a second name
 - [ ] Comments that restate the code: the `// e.g., "my_file"` trailers in `ast.ts`, the
       `// {` and `// }` trailers in `tokens.ts`, the `forceNew` explanations in the local
-      provider, the scanning notes in `Address.parse`
+      provider
 
 ### Test health
 

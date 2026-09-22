@@ -123,6 +123,13 @@ resource "local_file" "b" {
     expect(await validate('variable "v" { default = "x" }\noutput "o" { value = "${var.v.bogus}" }')).toContain('Reference "var.v.bogus" reads deeper than the variable "v"');
   });
 
+  it('refuses a reference with an empty part, rather than naming a target nobody wrote', async () => {
+    const output = await validate('resource "local_file" "b" { content = "${local_file..id}" }');
+
+    expect(output).toContain('Reference "local_file..id" has a part that is empty');
+    expect(output).not.toContain('is not declared');
+  });
+
   it('refuses a reference that names no variable', async () => {
     expect(await validate('output "o" { value = "${var}" }')).toContain('Variable reference must include a name: var');
   });

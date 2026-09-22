@@ -42,6 +42,8 @@ describe('a reference read into a value', () => {
     ['module.app', 'Module output reference must include output name: module.app'],
     ['module.app.local_file.a', 'reaches into a module'],
     ['local_file.a', 'Resource reference must include attribute: local_file.a'],
+    ['local_file..id', 'Reference "local_file..id" has a part that is empty'],
+    ['var..name', 'Reference "var..name" has a part that is empty'],
     ['var.text.deeper', 'Reference "var.text.deeper" reads deeper than the variable "text"'],
     ['local_file.a.tags.env', 'Reference "local_file.a.tags.env" reads deeper than the attribute "tags"'],
     ['data.local_file.f.tags.env', 'Reference "data.local_file.f.tags.env" reads deeper than the attribute "tags"'],
