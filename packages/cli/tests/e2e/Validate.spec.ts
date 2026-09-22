@@ -107,6 +107,22 @@ describe('validate against real files', () => {
     expect(output).toContain('\n  3:   content = "${var.missing}"\n                 ^');
   });
 
+  it('refuses a reference that reads deeper than the attribute it names', async () => {
+    const config = `resource "local_file" "a" { path = "a.txt" content = "hi" }
+resource "local_file" "b" {
+  content = "\${local_file.a.tags.content}"
+}`;
+
+    const output = await validate(config);
+
+    expect(output).toContain('Reference "local_file.a.tags.content" reads deeper than the attribute "tags"');
+    expect(output).toContain('on main.clay line 3, in resource "local_file" "b":');
+  });
+
+  it('refuses a reference that reads deeper than the variable it names', async () => {
+    expect(await validate('variable "v" { default = "x" }\noutput "o" { value = "${var.v.bogus}" }')).toContain('Reference "var.v.bogus" reads deeper than the variable "v"');
+  });
+
   it('refuses a reference that names no variable', async () => {
     expect(await validate('output "o" { value = "${var}" }')).toContain('Variable reference must include a name: var');
   });

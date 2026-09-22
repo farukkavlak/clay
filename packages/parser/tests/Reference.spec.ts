@@ -22,13 +22,11 @@ const errorOf = (spelled: string): ConfigError => {
 
 describe('a reference read into a value', () => {
   it.each([
-    ['var.text', { kind: 'variable', name: 'text', path: [] }],
-    ['data.local_file.f.content', { kind: 'data', type: 'local_file', name: 'f', path: ['content'] }],
+    ['var.text', { kind: 'variable', name: 'text' }],
+    ['data.local_file.f.content', { kind: 'data', type: 'local_file', name: 'f', attribute: 'content' }],
     ['module.app.url', { kind: 'module', module: 'app', output: 'url' }],
-    ['local_file.a.content', { kind: 'resource', type: 'local_file', name: 'a', path: ['content'] }],
-    ['local_file.a.tags.env', { kind: 'resource', type: 'local_file', name: 'a', path: ['tags', 'env'] }],
-    ['var.list.0', { kind: 'variable', name: 'list', path: ['0'] }],
-  ])('reads %s as what it names and the path on it', (spelled, expected) => {
+    ['local_file.a.content', { kind: 'resource', type: 'local_file', name: 'a', attribute: 'content' }],
+  ])('reads %s as what it names and what it reads on it', (spelled, expected) => {
     expect(parse(spelled)).toEqual(expected);
   });
 
@@ -44,6 +42,9 @@ describe('a reference read into a value', () => {
     ['module.app', 'Module output reference must include output name: module.app'],
     ['module.app.local_file.a', 'reaches into a module'],
     ['local_file.a', 'Resource reference must include attribute: local_file.a'],
+    ['var.text.deeper', 'Reference "var.text.deeper" reads deeper than the variable "text"'],
+    ['local_file.a.tags.env', 'Reference "local_file.a.tags.env" reads deeper than the attribute "tags"'],
+    ['data.local_file.f.tags.env', 'Reference "data.local_file.f.tags.env" reads deeper than the attribute "tags"'],
   ])('refuses %s', (spelled, message) => {
     const error = errorOf(spelled);
 

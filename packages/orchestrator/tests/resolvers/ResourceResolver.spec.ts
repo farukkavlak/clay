@@ -42,11 +42,6 @@ describe('ResourceResolver', () => {
     expect(result).toBe('res-123');
   });
 
-  // Nothing reads what lies between the name and the attribute yet, so the last part is the attribute.
-  it('reads the last part of a deeper path as the attribute', () => {
-    expect(resolver.resolve(ref('resource.test.settings.simple'), context, mockState)).toBe('value');
-  });
-
   it('should throw if resource not found', () => {
     expect(() => resolver.resolve(ref('resource.missing.id'), context, mockState)).toThrow(/Resource "resource.missing" not found/);
   });

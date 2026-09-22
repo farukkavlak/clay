@@ -89,8 +89,10 @@ A bare reference is a value on its own: `path = var.dir`. Inside a string it is 
 | `module`   | An output of a module called in the same file        | `module.app.url`            |
 | anything   | An attribute of the resource with that type and name | `local_file.a.content`      |
 
-A resource's `id` is what the provider assigned on create. Reaching into a module
-(`module.app.local_file.a`) is refused; a module is read through its outputs.
+A resource's `id` is what the provider assigned on create. A reference reads one
+attribute and no deeper, so `local_file.a.tags.env` and `var.v.bogus` are refused.
+Reaching into a module (`module.app.local_file.a`) is refused too; a module is read
+through its outputs.
 
 ### Interpolation
 

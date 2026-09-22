@@ -17,6 +17,10 @@ change each.
       `module` block as a variable, and nothing checks the module has a `variable` of
       that name; `contnet = "x"` applies the default and says nothing. Terraform: "An
       argument named "contnet" is not expected here"
+- [x] A reference that reads deeper than what it names drops the parts in between in
+      silence: `var.v.bogus` gives the variable, and `local_file.a.tags.content` reads the
+      `content` attribute as if `tags` were never written. Both were seen in a plan that
+      said nothing. A reference reads one attribute until nested access lands
 - [ ] An attribute a `variable` block does not use is accepted in silence.
       `declareVariables` reads `default` and nothing else, so `descriptoin = "x"` is
       dropped and `defualt = "x"` is reported as `variable "v" has no value`, which names
@@ -54,8 +58,8 @@ configuration hits each of these early.
       settle
 - [ ] String escapes: `\"`, `\n`, `\\`, and `$${` for a literal `${`
 - [ ] Nested access: `local_file.a.tags.env` and `var.list[0]`; today `[` after a
-      reference is a parse error, and the resolver reads the first two segments as the
-      address and the last as the attribute, dropping what lies between
+      reference is a parse error, and a reference that reads deeper than one attribute is
+      refused where it is read
 - [x] A reference is a type, not a string. Today it travels as `string[]` and four places
       split it on dots to read a part back. An instance key cannot be added to a shape
       that thin, so this comes before `count`

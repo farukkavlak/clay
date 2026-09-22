@@ -7,7 +7,7 @@ export class DataSourceResolver {
 
   resolve(reference: DataReference, context: Address): unknown {
     const key = dataSourceKey(scopeOf(context), reference.type, reference.name);
-    const attrName = reference.path[0];
+    const attrName = reference.attribute;
 
     const dataAttributes = this.dataSources.get(key);
     if (!dataAttributes) throw new Error(`Data source "${key}" not found (or not resolved yet)`);

@@ -7,13 +7,10 @@ export class ResourceResolver {
     const resourceKey = new Address(context.modulePath, reference.type, reference.name).toString();
     const resource = state.resources[resourceKey];
 
-    const spelled = [reference.type, reference.name, ...reference.path].join('.');
+    const spelled = [reference.type, reference.name, reference.attribute].join('.');
     if (!resource) throw new UnresolvedReferenceError(`Invalid resource reference "${spelled}": Resource "${resourceKey}" not found in state`);
 
-    // What lies between the name and the attribute is read by nobody yet.
-    const [attribute] = reference.path.slice(-1);
-
-    return this.getResolvedAttribute(resource, attribute, spelled);
+    return this.getResolvedAttribute(resource, reference.attribute, spelled);
   }
 
   private getResolvedAttribute(resource: { id?: string; attributes: Record<string, unknown> }, attributeName: string, fullPath: string): unknown {
