@@ -3,6 +3,12 @@ import { ConfigError } from './ConfigError';
 import { Position } from './Position';
 import { Token, TokenType } from './tokens';
 
+/** What a reference can spell, so a declared name can always be read back. */
+const NAME = /^[A-Za-z_][A-Za-z0-9_-]*$/;
+
+/** Words a reference already spells: `var.x`, `data.t.n`, `module.m`. */
+const RESERVED_TYPES = new Set(['module', 'var', 'data']);
+
 export class Parser {
   private tokens: Token[];
   private current: number = 0;
@@ -47,8 +53,8 @@ export class Parser {
   }
 
   private parseResource(position: Position): ResourceBlock {
-    const typeToken = this.consume(TokenType.String, "Expect resource type string after 'resource'.");
-    const nameToken = this.consume(TokenType.String, 'Expect resource name string after resource type.');
+    const typeToken = this.consumeType("Expect resource type string after 'resource'.");
+    const nameToken = this.consumeName('Expect resource name string after resource type.');
 
     const attributes = this.parseAttributes('resource');
 
@@ -62,8 +68,8 @@ export class Parser {
   }
 
   private parseData(position: Position): DataBlock {
-    const typeToken = this.consume(TokenType.String, "Expect data source type string after 'data'.");
-    const nameToken = this.consume(TokenType.String, 'Expect data source name string after data source type.');
+    const typeToken = this.consumeType("Expect data source type string after 'data'.");
+    const nameToken = this.consumeName('Expect data source name string after data source type.');
 
     const attributes = this.parseAttributes('data source');
 
@@ -77,7 +83,7 @@ export class Parser {
   }
 
   private parseVariable(position: Position): VariableBlock {
-    const nameToken = this.consume(TokenType.String, "Expect variable name string after 'variable'.");
+    const nameToken = this.consumeName("Expect variable name string after 'variable'.");
 
     const attributes = this.parseAttributes('variable');
 
@@ -90,7 +96,7 @@ export class Parser {
   }
 
   private parseOutput(position: Position): OutputBlock {
-    const nameToken = this.consume(TokenType.String, "Expect output name string after 'output'.");
+    const nameToken = this.consumeName("Expect output name string after 'output'.");
 
     this.consume(TokenType.LBrace, "Expect '{' after output name.");
     if (!this.check(TokenType.Identifier) || this.peek().value !== 'value') return this.error("Expect 'value' in output block.");
@@ -110,7 +116,7 @@ export class Parser {
   }
 
   private parseModule(position: Position): ModuleBlock {
-    const nameToken = this.consume(TokenType.String, "Expect module name string after 'module'.");
+    const nameToken = this.consumeName("Expect module name string after 'module'.");
 
     const attributes = this.parseAttributes('module');
 
@@ -202,6 +208,23 @@ export class Parser {
         return true;
       }
     return false;
+  }
+
+  /** A name travels into an address, which reads "." as a separator, so a name is an identifier, as a reference to it has to be. */
+  private consumeName(message: string, word: 'name' | 'type' = 'name'): Token {
+    const token = this.consume(TokenType.String, message);
+    if (!NAME.test(token.value) || token.value === 'true' || token.value === 'false')
+      throw new ConfigError(`Invalid ${word} "${token.value}": a ${word} starts with a letter or underscore, then letters, digits, underscores and dashes.`, token.position);
+
+    return token;
+  }
+
+  /** A type shares the name rule, and cannot be a word a reference already spells. */
+  private consumeType(message: string): Token {
+    const token = this.consumeName(message, 'type');
+    if (RESERVED_TYPES.has(token.value)) throw new ConfigError(`"${token.value}" cannot be a type: a reference reads "${token.value}." as something else.`, token.position);
+
+    return token;
   }
 
   private consume(type: TokenType, message: string): Token {

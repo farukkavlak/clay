@@ -43,7 +43,7 @@ describe('DependencyGraphBuilder', () => {
 
     const graph = builder.buildExecutionGraph([resource('instance', {}, ['app'])], modules);
 
-    expect(graph.topologicalSort()).toEqual([['module.app.resource.instance'], ['module.app.outputs.ip']]);
+    expect(graph.topologicalSort()).toEqual([['module.app.resource.instance'], ['module.app.outputs:ip']]);
   });
 
   it('should reject a reference to a resource the config does not declare', () => {
@@ -57,7 +57,24 @@ describe('DependencyGraphBuilder', () => {
 
     const graph = builder.buildExecutionGraph([resource('dep')], [root]);
 
-    expect(graph.topologicalSort()).toEqual([['resource.dep'], ['vars.id']]);
+    expect(graph.topologicalSort()).toEqual([['resource.dep'], ['vars:id']]);
+  });
+
+  // A resource's key is its address, so a variable named like one would take its node if both spelled their kind the same way.
+  it('keeps a variable and a resource whose address reads like one apart', () => {
+    const address = new Address([], 'vars', 'x');
+    const named: LoadedResource = { uniqueId: address.toString(), address, block: resourceBlock('vars', 'x', {}) };
+    const root = module([], [variableBlock('x', { default: str('1') })]);
+
+    const graph = builder.buildExecutionGraph([named], [root]);
+
+    const kinds = graph
+      .topologicalSort()
+      .flat()
+      .map((key) => graph.getNode(key)!.kind)
+      .sort();
+
+    expect(kinds).toEqual(['resource', 'variable']);
   });
 
   it('should read a module input where the module is called and hand it to the resource inside', () => {
@@ -67,8 +84,8 @@ describe('DependencyGraphBuilder', () => {
 
     const graph = builder.buildExecutionGraph([resource('dep'), inner], [root, child]);
 
-    expect(graph.topologicalSort()).toEqual([['resource.dep'], ['module.m.vars.text'], ['module.m.resource.inner']]);
-    expect(graph.getNode('module.m.vars.text')).toMatchObject({ kind: 'variable', context: root.address });
+    expect(graph.topologicalSort()).toEqual([['resource.dep'], ['module.m.vars:text'], ['module.m.resource.inner']]);
+    expect(graph.getNode('module.m.vars:text')).toMatchObject({ kind: 'variable', context: root.address });
   });
 
   it('should list the resources a resource reads from, looking through a module input', () => {
@@ -90,7 +107,7 @@ describe('DependencyGraphBuilder', () => {
 
     const graph = builder.buildExecutionGraph([], [child, root]);
 
-    expect(graph.getNode('module.m.vars.text')).toMatchObject({ value: passed });
+    expect(graph.getNode('module.m.vars:text')).toMatchObject({ value: passed });
   });
 
   it('should name the module and the output when the output does not exist', () => {

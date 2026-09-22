@@ -23,13 +23,13 @@ describe('ReferenceScanner', () => {
   it('should point a variable reference at the variable node', () => {
     const attributes = { name: { type: 'Reference', value: ['var', 'name'] } };
 
-    expect(scanner.referencesIn(attributes, context)).toEqual([{ kind: 'variable', key: 'vars.name', name: 'name' }]);
+    expect(scanner.referencesIn(attributes, context)).toEqual([{ kind: 'variable', key: 'vars:name', name: 'name' }]);
   });
 
   it('should read a variable in the scope of the module it sits in', () => {
     const attributes = { name: { type: 'Reference', value: ['var', 'name'] } };
 
-    expect(scanner.referencesIn(attributes, inModule)).toEqual([{ kind: 'variable', key: 'module.app.vars.name', name: 'name' }]);
+    expect(scanner.referencesIn(attributes, inModule)).toEqual([{ kind: 'variable', key: 'module.app.vars:name', name: 'name' }]);
   });
 
   it('should find references inside lists', () => {
@@ -48,7 +48,7 @@ describe('ReferenceScanner', () => {
   it('should point a module reference at the output node', () => {
     const attributes = { subnet: { type: 'Reference', value: ['module', 'vpc', 'subnet_id'] } };
 
-    expect(scanner.referencesIn(attributes, context)).toEqual([{ kind: 'output', key: 'module.vpc.outputs.subnet_id', scope: 'module.vpc', module: 'vpc', name: 'subnet_id' }]);
+    expect(scanner.referencesIn(attributes, context)).toEqual([{ kind: 'output', key: 'module.vpc.outputs:subnet_id', scope: 'module.vpc', module: 'vpc', name: 'subnet_id' }]);
   });
 
   it('should read a reference in the scope of the module it sits in', () => {

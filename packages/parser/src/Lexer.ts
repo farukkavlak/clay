@@ -17,8 +17,8 @@ export class Lexer {
 
   // Boolean sits before Identifier, or true and false would lex as identifiers.
   private specs: TokenSpec[] = [
-    { type: TokenType.Boolean, regex: /(true|false)\b/y },
-    { type: TokenType.Identifier, regex: /[A-Z_a-z]\w*/y },
+    { type: TokenType.Boolean, regex: /(true|false)(?![\w-])/y },
+    { type: TokenType.Identifier, regex: /[A-Z_a-z][\w-]*/y },
     { type: TokenType.String, regex: /"[^"]*"/y },
     { type: TokenType.Number, regex: /\d+/y },
     { type: TokenType.LBrace, regex: /{/y },

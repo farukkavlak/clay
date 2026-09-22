@@ -72,6 +72,13 @@ describe('validate against real files', () => {
     expect(output).toContain('\n  3:   contnet = "typo"\n                 ^');
   });
 
+  it('refuses a name an address could never read back, and points at it', async () => {
+    const output = await validate('resource "local_file" "a.b" { path = "a.txt" content = "hi" }');
+
+    expect(output).toContain('Invalid name "a.b"');
+    expect(output).toContain('\n  1: resource "local_file" "a.b" { path = "a.txt" content = "hi" }\n                           ^');
+  });
+
   it('refuses a variable with no value', async () => {
     expect(await validate('variable "name" {}')).toContain('variable "name" has no value');
   });

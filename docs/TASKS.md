@@ -28,7 +28,7 @@ change each.
       `module.m: variable "source" has no value`, which names the caller's input as
       missing when it was written. Terraform reserves the name and refuses the
       declaration
-- [ ] A resource named `a.b` is created and can never be addressed again. The parser
+- [x] A resource named `a.b` is created and can never be addressed again. The parser
       takes any string as a name, `Address.toString` joins with dots and `Address.parse`
       splits on them, so `state show`, `state rm` and a reference all fail on the key an
       apply wrote. The same for a type or name spelled `module`. A name is an identifier,
@@ -213,7 +213,8 @@ by resource type, and no `provider` block exists yet.
 - [ ] Errors about a configuration that carry no position. Each is thrown where the
       position is at hand, and each prints as one bare line: a `module` block with no
       `source`, a `source` that names no file, a `source` cycle, a `variable` with no
-      value, and the graph's dependency cycle, which knows the node but not the line
+      value, and the graph's dependency cycle, which knows the node but not the line and
+      prints the graph's own key, `vars:a`, for a variable the configuration spells `var.a`
 - [ ] An attribute name has no position of its own. Only its value is a node, so an
       error about the name points a caret at the value next to it
 - [ ] "Did you mean": a reference to a name one edit away from a declared one says so

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { CONFIG_FILE, ResourceBlock, VariableBlock } from '../src/ast';
+import { CONFIG_FILE, ModuleBlock, ResourceBlock, VariableBlock } from '../src/ast';
 import { ConfigError } from '../src/ConfigError';
 import { Lexer } from '../src/Lexer';
 import { Parser } from '../src/Parser';
@@ -210,6 +210,27 @@ describe('Clay Parser', () => {
   });
 
   describe('Block kinds are names, not keywords', () => {
+    it('takes a dash in a name, and in the reference that reads it', () => {
+      const input = 'resource "local_file" "a-b" { content = local_file.a-b.id }';
+
+      const block = makeParser(input).parse()[0] as ResourceBlock;
+
+      expect(block.name).toBe('a-b');
+      expect(block.attributes.content).toEqual({ type: 'Reference', value: ['local_file', 'a-b', 'id'], position: at(1, 41) });
+    });
+
+    it('takes a dash in an attribute name and in a map key, as the same identifier rule does', () => {
+      const attributes = attributesOf('resource "local_file" "a" { my-attr = { my-key = 1 } }');
+
+      expect(attributes['my-attr']).toEqual({ type: 'Map', value: { 'my-key': { type: 'Number', value: 1, position: at(1, 50) } }, position: at(1, 39) });
+    });
+
+    it('takes a word a reference spells as a name, which an address reads without doubt', () => {
+      const block = makeParser('module "module" { source = "./m" }').parse()[0] as ModuleBlock;
+
+      expect(block.name).toBe('module');
+    });
+
     it('takes a block kind as an attribute name', () => {
       const attributes = attributesOf('resource "null_resource" "a" { data = "x" module = 1 variable = true output = "y" resource = "z" }');
 
@@ -304,6 +325,36 @@ describe('Clay Parser', () => {
       const error = errorOf(input);
 
       expect(error.message).toBe('__proto__ cannot be a name');
+      expect(error.position).toEqual(position);
+    });
+
+    // A name travels into an address, which reads "." as a separator.
+    it.each([
+      ['a resource name', 'resource "local_file" "a.b" {}', 'Invalid name "a.b"', at(1, 23)],
+      ['a resource type', 'resource "local.file" "a" {}', 'Invalid type "local.file"', at(1, 10)],
+      ['a data source name', 'data "local_file" "a.b" {}', 'Invalid name "a.b"', at(1, 19)],
+      ['a variable name', 'variable "a.b" {}', 'Invalid name "a.b"', at(1, 10)],
+      ['an output name', 'output "a.b" { value = "1" }', 'Invalid name "a.b"', at(1, 8)],
+      ['a module name', 'module "a.b" { source = "./m" }', 'Invalid name "a.b"', at(1, 8)],
+      ['an empty name', 'resource "local_file" "" {}', 'Invalid name ""', at(1, 23)],
+      ['a name that starts with a digit', 'resource "local_file" "1a" {}', 'Invalid name "1a"', at(1, 23)],
+      ['a name a reference would read as a boolean', 'resource "local_file" "true" {}', 'Invalid name "true"', at(1, 23)],
+    ])('refuses %s that is no identifier', (_, input, message, position) => {
+      const error = errorOf(input);
+
+      expect(error.message).toContain(message);
+      expect(error.position).toEqual(position);
+    });
+
+    // A reference reads these words as a variable, a data source or a module, never as a resource type.
+    it.each([
+      ['module', 'resource "module" "a" {}', at(1, 10)],
+      ['var', 'resource "var" "a" {}', at(1, 10)],
+      ['data', 'data "data" "a" {}', at(1, 6)],
+    ])('refuses "%s" as a type, which a reference reads as something else', (word, input, position) => {
+      const error = errorOf(input);
+
+      expect(error.message).toContain(`"${word}" cannot be a type`);
       expect(error.position).toEqual(position);
     });
 
