@@ -60,6 +60,18 @@ describe('validate against real files', () => {
     expect(await validate('module "m" { source = "./missing" }')).toContain('Module source not found at: missing/main.clay');
   });
 
+  it('refuses an input the module has no variable for, and points at the line it is written on', async () => {
+    await fs.mkdir(path.join(dir, 'm'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'm', 'main.clay'), echoModule, 'utf8');
+
+    const output = await validate('module "m" {\n  source = "./m"\n  contnet = "typo"\n}');
+
+    expect(output).toContain('module "m" has no variable "contnet"');
+    expect(output).toContain('on main.clay line 3, in module "m":');
+    // The caret sits under the value: an attribute name has no position of its own in the AST.
+    expect(output).toContain('\n  3:   contnet = "typo"\n                 ^');
+  });
+
   it('refuses a variable with no value', async () => {
     expect(await validate('variable "name" {}')).toContain('variable "name" has no value');
   });

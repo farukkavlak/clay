@@ -12,11 +12,22 @@ change each.
       `ModuleLoader` keeps no record of the directories on the path it is loading, so a
       `source` cycle recurses until Node dies. The graph refuses a reference cycle by
       name; a module cycle should be refused the same way
-- [ ] A module input the module never declares is accepted, and a misspelled one falls
+- [x] A module input the module never declares is accepted, and a misspelled one falls
       back to the default in silence. `declareInputs` sets every attribute of the
       `module` block as a variable, and nothing checks the module has a `variable` of
       that name; `contnet = "x"` applies the default and says nothing. Terraform: "An
       argument named "contnet" is not expected here"
+- [ ] An attribute a `variable` block does not use is accepted in silence.
+      `declareVariables` reads `default` and nothing else, so `descriptoin = "x"` is
+      dropped and `defualt = "x"` is reported as `variable "v" has no value`, which names
+      the wrong problem. `type` and `description` are read by nobody either, so what a
+      `variable` block may hold is the call the fix makes
+- [ ] A module that declares `variable "source"` can never be given one. `declareInputs`
+      skips the key, because the caller's `source` is the module's path, so a declaration
+      with a default falls back to it in silence and one without fails with
+      `module.m: variable "source" has no value`, which names the caller's input as
+      missing when it was written. Terraform reserves the name and refuses the
+      declaration
 - [ ] A resource named `a.b` is created and can never be addressed again. The parser
       takes any string as a name, `Address.toString` joins with dots and `Address.parse`
       splits on them, so `state show`, `state rm` and a reference all fail on the key an
@@ -199,6 +210,12 @@ by resource type, and no `provider` block exists yet.
 
 ## 5. Errors and tooling
 
+- [ ] Errors about a configuration that carry no position. Each is thrown where the
+      position is at hand, and each prints as one bare line: a `module` block with no
+      `source`, a `source` that names no file, a `source` cycle, a `variable` with no
+      value, and the graph's dependency cycle, which knows the node but not the line
+- [ ] An attribute name has no position of its own. Only its value is a node, so an
+      error about the name points a caret at the value next to it
 - [ ] "Did you mean": a reference to a name one edit away from a declared one says so
 - [ ] Provider errors carry what to do next, not only what went wrong
 - [ ] An output that fails to resolve reports a failure. `resolveOutput` runs outside the

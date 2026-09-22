@@ -225,6 +225,18 @@ describe('Orchestrator - Module Loading', () => {
     await expect(apply(orchestrator, `module "a" { source = "./a" }`)).rejects.toThrow(/Module source cycle detected: \. -> a -> a$/);
   });
 
+  it('refuses an input the module declares no variable for', async () => {
+    files['m/main.clay'] = `variable "content" { default = "fallback" }`;
+
+    await expect(apply(orchestrator, `module "m" { source = "./m" contnet = "typo" }`)).rejects.toThrow('module "m" has no variable "contnet"');
+  });
+
+  it('refuses an input to a module that declares no variable at all', async () => {
+    files['m/main.clay'] = `resource "test_resource" "one" {}`;
+
+    await expect(apply(orchestrator, `module "m" { source = "./m" content = "x" }`)).rejects.toThrow('module "m" has no variable "content"');
+  });
+
   it('refuses two modules whose sources reach each other', async () => {
     files['a/main.clay'] = `module "b" { source = "../b" }`;
     files['b/main.clay'] = `module "a" { source = "../a" }`;

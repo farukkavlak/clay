@@ -1,5 +1,5 @@
 import { Address } from '@clay/contracts';
-import { AttributeValue, CONFIG_FILE, Lexer, ModuleBlock, Parser, ResourceBlock, Statement } from '@clay/parser';
+import { CONFIG_FILE, ConfigError, Lexer, ModuleBlock, Parser, ResourceBlock, Statement, spell } from '@clay/parser';
 import path from 'node:path';
 
 import { ConfigFiles } from '../ConfigFiles';
@@ -56,7 +56,7 @@ export class ModuleLoader {
     const moduleProgram = this.parseModuleFile(moduleDir);
 
     const childAddress = new Address([...parentAddress.modulePath, moduleName], '', '');
-    this.declareInputs(childAddress, stmt.attributes, parentAddress);
+    this.declareInputs(stmt, moduleProgram, childAddress, parentAddress);
 
     moduleAccumulator.push({ address: childAddress, program: moduleProgram });
     this.declareVariables(moduleProgram, childAddress);
@@ -83,10 +83,17 @@ export class ModuleLoader {
   }
 
   // An input is read where the module is called, so its context is the parent.
-  private declareInputs(childAddress: Address, attributes: Record<string, AttributeValue>, parentAddress: Address): void {
+  private declareInputs(stmt: ModuleBlock, program: Statement[], childAddress: Address, parentAddress: Address): void {
+    const declared = new Set(program.filter((moduleStmt) => moduleStmt.type === 'Variable').map((variable) => variable.name));
     const childScope = scopeOf(childAddress);
 
-    for (const [key, value] of Object.entries(attributes)) if (key !== 'source') this.scopeManager.setVariable(childScope, key, { value, context: parentAddress });
+    for (const [key, value] of Object.entries(stmt.attributes)) {
+      if (key === 'source') continue;
+      if (!declared.has(key))
+        throw new ConfigError(`module "${stmt.name}" has no variable "${key}"`, value.position, { block: spell(stmt), module: scopeOf(parentAddress) || undefined });
+
+      this.scopeManager.setVariable(childScope, key, { value, context: parentAddress });
+    }
   }
 
   private declareVariables(program: Statement[], address: Address): void {

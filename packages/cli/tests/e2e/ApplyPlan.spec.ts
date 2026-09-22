@@ -187,6 +187,7 @@ describe('apply and plan against real files', () => {
 
   it('plans an update through a module output when the resource behind it changes', async () => {
     const moduleConfig = `
+      variable "text" {}
       resource "local_file" "inner" {
         path = "${path.join(dir, 'inner.txt')}"
         content = "\${var.text}"
@@ -244,7 +245,7 @@ describe('apply and plan against real files', () => {
   `;
 
   const writeModule = async () =>
-    fs.writeFile(path.join(dir, 'm', 'main.clay'), `resource "local_file" "inner" { path = "${path.join(dir, 'inner.txt')}" content = "\${var.text}" }`);
+    fs.writeFile(path.join(dir, 'm', 'main.clay'), `variable "text" {} resource "local_file" "inner" { path = "${path.join(dir, 'inner.txt')}" content = "\${var.text}" }`);
 
   it('applies a module that reads a resource through its input', async () => {
     await fs.mkdir(path.join(dir, 'm'));
@@ -324,7 +325,7 @@ describe('apply and plan against real files', () => {
       output "echo" { value = "\${module.m.echo}" }
     `;
     await fs.mkdir(path.join(dir, 'm'));
-    await fs.writeFile(path.join(dir, 'm', 'main.clay'), `output "echo" { value = "\${var.text}" }`);
+    await fs.writeFile(path.join(dir, 'm', 'main.clay'), `variable "text" {} output "echo" { value = "\${var.text}" }`);
 
     await apply(orchestrator, config);
 
