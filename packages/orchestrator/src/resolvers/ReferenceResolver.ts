@@ -1,28 +1,33 @@
 import { Address, State } from '@clay/contracts';
+import { parseReference } from '@clay/parser';
 import { ScopeManager } from '../scope/ScopeManager';
 import { DataSourceResolver } from './DataSourceResolver';
-import { Resolver } from './Resolver';
 import { ModuleOutputResolver } from './ModuleOutputResolver';
 import { ResourceResolver } from './ResourceResolver';
 import { VariableResolver } from './VariableResolver';
 
 export class ReferenceResolver {
-  private resolvers: Map<string, Resolver> = new Map();
+  private variables: VariableResolver;
+  private dataSources: DataSourceResolver;
+  private moduleOutputs: ModuleOutputResolver;
+  private resources: ResourceResolver;
 
   constructor(scopeManager: ScopeManager, dataSources: Map<string, Record<string, unknown>>) {
-    this.resolvers.set('var', new VariableResolver(scopeManager, this));
-    this.resolvers.set('data', new DataSourceResolver(dataSources));
-    this.resolvers.set('module', new ModuleOutputResolver(scopeManager));
-    this.resolvers.set('_resource', new ResourceResolver());
+    this.variables = new VariableResolver(scopeManager, this);
+    this.dataSources = new DataSourceResolver(dataSources);
+    this.moduleOutputs = new ModuleOutputResolver(scopeManager);
+    this.resources = new ResourceResolver();
   }
 
   resolve(pathParts: string[], state: State, context?: Address): unknown {
-    const refType = pathParts[0];
-    const resolver = this.resolvers.get(refType);
-    if (resolver) return resolver.resolve(pathParts, context || new Address([], '', ''), state);
+    const reference = parseReference(pathParts);
+    const where = context || new Address([], '', '');
 
-    const resourceResolver = this.resolvers.get('_resource')!;
-    return resourceResolver.resolve(pathParts, context || new Address([], '', ''), state);
+    if (reference.kind === 'variable') return this.variables.resolve(reference, where, state);
+    if (reference.kind === 'data') return this.dataSources.resolve(reference, where);
+    if (reference.kind === 'module') return this.moduleOutputs.resolve(reference, where);
+
+    return this.resources.resolve(reference, where, state);
   }
 
   resolveAttributes(attributes: Record<string, unknown>, state: State, context?: Address): Record<string, unknown> {

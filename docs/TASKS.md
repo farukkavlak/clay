@@ -56,7 +56,7 @@ configuration hits each of these early.
 - [ ] Nested access: `local_file.a.tags.env` and `var.list[0]`; today `[` after a
       reference is a parse error, and the resolver reads the first two segments as the
       address and the last as the attribute, dropping what lies between
-- [ ] A reference is a type, not a string. Today it travels as `string[]` and four places
+- [x] A reference is a type, not a string. Today it travels as `string[]` and four places
       split it on dots to read a part back. An instance key cannot be added to a shape
       that thin, so this comes before `count`
 - [ ] `count` and `for_each`, with `[0]` and `each.key` access; addresses grow an instance

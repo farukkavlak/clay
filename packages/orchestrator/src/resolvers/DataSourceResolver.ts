@@ -1,15 +1,13 @@
 import { Address } from '@clay/contracts';
+import { DataReference } from '@clay/parser';
 import { dataSourceKey, scopeOf } from '../keys';
-import { Resolver } from './Resolver';
 
-export class DataSourceResolver implements Resolver {
+export class DataSourceResolver {
   constructor(private dataSources: Map<string, Record<string, unknown>>) {}
 
-  resolve(pathParts: string[], context: Address): unknown {
-    if (pathParts.length < 4) throw new Error(`Data source reference must include attribute: ${pathParts.join('.')}`);
-
-    const [, dataSourceType, dataSourceName, attrName] = pathParts;
-    const key = dataSourceKey(scopeOf(context), dataSourceType, dataSourceName);
+  resolve(reference: DataReference, context: Address): unknown {
+    const key = dataSourceKey(scopeOf(context), reference.type, reference.name);
+    const attrName = reference.path[0];
 
     const dataAttributes = this.dataSources.get(key);
     if (!dataAttributes) throw new Error(`Data source "${key}" not found (or not resolved yet)`);

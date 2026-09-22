@@ -79,6 +79,38 @@ describe('validate against real files', () => {
     expect(output).toContain('\n  1: resource "local_file" "a.b" { path = "a.txt" content = "hi" }\n                           ^');
   });
 
+  it('refuses a reference with no attribute, and points at the value it is written in', async () => {
+    const output = await validate('resource "local_file" "f" {\n  path = "a.txt"\n  content = "${local_file.other}"\n}');
+
+    expect(output).toContain('Resource reference must include attribute: local_file.other');
+    expect(output).toContain('on main.clay line 3, in resource "local_file" "f":');
+    expect(output).toContain('\n  3:   content = "${local_file.other}"\n                 ^');
+  });
+
+  // A data source is read as the configuration loads, so its values reach no scanner; the rule holds for them all the same.
+  it('refuses a reference that reaches into a module from a data source', async () => {
+    await fs.mkdir(path.join(dir, 'm'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'm', 'main.clay'), echoModule, 'utf8');
+
+    const output = await validate('module "m" { source = "./m" text = "hi" }\ndata "local_file" "d" { path = "${module.m.echo.deeper}" }');
+
+    expect(output).toContain('reaches into a module; modules are read through their outputs');
+    expect(output).toContain('on main.clay line 2, in data "local_file" "d":');
+  });
+
+  // The graph knows the name is missing; the place comes from the attribute that reads it, not from the block around it.
+  it('points at the attribute that reads a name the configuration never declares', async () => {
+    const output = await validate('resource "local_file" "f" {\n  path    = "a.txt"\n  content = "${var.missing}"\n}');
+
+    expect(output).toContain('Invalid reference in "local_file.f": variable "missing" is not defined');
+    expect(output).toContain('on main.clay line 3, in resource "local_file" "f":');
+    expect(output).toContain('\n  3:   content = "${var.missing}"\n                 ^');
+  });
+
+  it('refuses a reference that names no variable', async () => {
+    expect(await validate('output "o" { value = "${var}" }')).toContain('Variable reference must include a name: var');
+  });
+
   it('refuses a variable with no value', async () => {
     expect(await validate('variable "name" {}')).toContain('variable "name" has no value');
   });
