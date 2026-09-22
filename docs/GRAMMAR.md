@@ -5,20 +5,20 @@ in a directory; a module is another directory with its own `main.clay`.
 
 ## Tokens
 
-| Token        | Pattern                  | Notes                                                                |
-| ------------ | ------------------------ | -------------------------------------------------------------------- |
-| `IDENTIFIER` | `[A-Za-z_][A-Za-z0-9_]*` | Block kinds, attribute names, reference parts; not `true` or `false` |
-| `STRING`     | `"[^"]*"`                | No escapes; a `"` cannot appear inside; may span lines               |
-| `NUMBER`     | `[0-9]+`                 | Integers only; no sign, no decimal point                             |
-| `BOOLEAN`    | `true`, `false`          |                                                                      |
-| `LBRACE`     | `{`                      |                                                                      |
-| `RBRACE`     | `}`                      |                                                                      |
-| `LBRACKET`   | `[`                      |                                                                      |
-| `RBRACKET`   | `]`                      |                                                                      |
-| `COMMA`      | `,`                      |                                                                      |
-| `ASSIGN`     | `=`                      |                                                                      |
-| `DOT`        | `.`                      |                                                                      |
-| `EOF`        |                          | Ends every token stream                                              |
+| Token        | Pattern                   | Notes                                                                |
+| ------------ | ------------------------- | -------------------------------------------------------------------- |
+| `IDENTIFIER` | `[A-Za-z_][A-Za-z0-9_-]*` | Block kinds, attribute names, reference parts; not `true` or `false` |
+| `STRING`     | `"[^"]*"`                 | No escapes; a `"` cannot appear inside; may span lines               |
+| `NUMBER`     | `[0-9]+`                  | Integers only; no sign, no decimal point                             |
+| `BOOLEAN`    | `true`, `false`           |                                                                      |
+| `LBRACE`     | `{`                       |                                                                      |
+| `RBRACE`     | `}`                       |                                                                      |
+| `LBRACKET`   | `[`                       |                                                                      |
+| `RBRACKET`   | `]`                       |                                                                      |
+| `COMMA`      | `,`                       |                                                                      |
+| `ASSIGN`     | `=`                       |                                                                      |
+| `DOT`        | `.`                       |                                                                      |
+| `EOF`        |                           | Ends every token stream                                              |
 
 Whitespace and comments are skipped. A comment runs from `#` or
 `//` to the end of the line. Every token carries the file, line and column it starts at.
@@ -40,6 +40,10 @@ variable "name" { attributes }
 output "name" { value = value }
 module "name" { attributes }
 ```
+
+A `type` and a `name` are written as strings, and each has to spell an `IDENTIFIER`, since
+an address joins them with `.` and a reference reads them back. A `type` cannot be `var`,
+`data` or `module`, the three words a reference reads as something other than a type.
 
 `attributes` is zero or more `name = value` pairs, in any order, without separators, and
 no name twice.
