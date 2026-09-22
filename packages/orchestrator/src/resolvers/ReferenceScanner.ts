@@ -1,5 +1,14 @@
 import { Address } from '@clay/contracts';
+import { parseReference, Position } from '@clay/parser';
 import { childScope, outputKey, scopeOf, variableKey } from '../keys';
+
+/** Every AST node carries one, but this walks plain objects too, so a value of another shape is no position. */
+function positionOf(value: unknown): Position | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const candidate = value as Partial<Position>;
+
+  return typeof candidate.file === 'string' && typeof candidate.line === 'number' && typeof candidate.column === 'number' ? (candidate as Position) : undefined;
+}
 
 /** What a config value reads from, with the graph key it is addressed by. */
 export type Reference =
@@ -22,34 +31,33 @@ export class ReferenceScanner {
   }
 
   private collectFromObject(obj: Record<string, unknown>, context: Address, references: Reference[]): void {
-    if (obj.type === 'Reference' && Array.isArray(obj.value)) this.addReference(obj.value as string[], context, references);
-    else if (obj.type === 'String' && typeof obj.value === 'string') this.addInterpolations(obj.value, context, references);
+    const position = positionOf(obj.position);
+
+    if (obj.type === 'Reference' && Array.isArray(obj.value)) this.addReference(obj.value as string[], context, references, position);
+    else if (obj.type === 'String' && typeof obj.value === 'string') this.addInterpolations(obj.value, context, references, position);
     else for (const item of Object.values(obj)) this.collect(item, context, references);
   }
 
-  private addInterpolations(content: string, context: Address, references: Reference[]): void {
+  private addInterpolations(content: string, context: Address, references: Reference[], position?: Position): void {
     const regex = /\${([^}]+)}/g;
     let match: RegExpExecArray | null;
 
-    while ((match = regex.exec(content)) !== null) this.addReference(match[1].trim().split('.'), context, references);
+    while ((match = regex.exec(content)) !== null) this.addReference(match[1].trim().split('.'), context, references, position);
   }
 
-  private addReference(refParts: string[], context: Address, references: Reference[]): void {
-    const refType = refParts[0];
-    if (refType === 'data') return;
-
+  private addReference(refParts: string[], context: Address, references: Reference[], position?: Position): void {
+    const reference = parseReference(refParts, position);
     const scope = scopeOf(context);
 
-    if (refType === 'var') references.push({ kind: 'variable', key: variableKey(scope, refParts[1]), name: refParts[1] });
-    else if (refType === 'module') {
-      // A module reference is module.<name>.<output> and nothing deeper.
-      if (refParts.length > 3) throw new Error(`Reference "${refParts.join('.')}" reaches into a module; modules are read through their outputs`);
+    // A data source is read where the config loads, so it is no node of its own.
+    if (reference.kind === 'data') return;
 
-      const [, module, name] = refParts;
-      const child = childScope(scope, module);
-      references.push({ kind: 'output', key: outputKey(child, name), scope: child, module, name });
+    if (reference.kind === 'variable') references.push({ kind: 'variable', key: variableKey(scope, reference.name), name: reference.name });
+    else if (reference.kind === 'module') {
+      const child = childScope(scope, reference.module);
+      references.push({ kind: 'output', key: outputKey(child, reference.output), scope: child, module: reference.module, name: reference.output });
     } else {
-      const address = new Address(context.modulePath, refParts[0], refParts[1]).toString();
+      const address = new Address(context.modulePath, reference.type, reference.name).toString();
       references.push({ kind: 'resource', key: address, address });
     }
   }

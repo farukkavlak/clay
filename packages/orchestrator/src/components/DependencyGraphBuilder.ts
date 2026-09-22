@@ -3,6 +3,7 @@ import { Graph } from '@clay/graph';
 import { AttributeValue, ModuleBlock, Position, spell } from '@clay/parser';
 
 import { childScope, outputKey, scopeOf, variableKey } from '../keys';
+import { tryAt } from '../place';
 import { Reference, ReferenceScanner } from '../resolvers/ReferenceScanner';
 import { LoadedModule, LoadedResource } from './ModuleLoader';
 
@@ -39,8 +40,12 @@ export class DependencyGraphBuilder {
     for (const [key, node] of this.valueNodes(loadedModules)) graph.addNode(key, node);
 
     const moduleScopes = new Set(loadedModules.map((mod) => scopeOf(mod.address)));
-    for (const [key, node] of graph.entries()) if (node.kind !== 'resource') this.addDependencies(node.value, graph, key, node.context, moduleScopes);
-    for (const { address, block } of loadedResources) this.addDependencies(block.attributes, graph, address.toString(), address, moduleScopes);
+    for (const [key, node] of graph.entries())
+      if (node.kind !== 'resource') tryAt(node.position, node.declaration, node.context, () => this.addDependencies(node.value, graph, key, node.context, moduleScopes));
+    // One attribute at a time, so an error points at the value that reads, not at the block it sits in.
+    for (const { address, block } of loadedResources)
+      for (const value of Object.values(block.attributes))
+        tryAt(value.position, spell(block), address, () => this.addDependencies(value, graph, address.toString(), address, moduleScopes));
 
     return graph;
   }

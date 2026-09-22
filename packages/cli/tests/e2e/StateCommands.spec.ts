@@ -162,20 +162,31 @@ describe('state and output against a real state file', () => {
     expect(state.resources['local_file.b'].dependencies).toEqual([]);
   });
 
+  it.each(['show', 'rm'])('refuses an address with an empty part, for %s', async (command) => {
+    await applyConfig();
+
+    await createStateCommand().parseAsync(['node', 'clay', command, 'local_file.']);
+
+    const state = await stored();
+
+    expect(printed.join('\n')).toContain('Invalid address "local_file.": a part of it is empty');
+    expect(Object.keys(state.resources)).toEqual(['local_file.a']);
+  });
+
   it.each(['show', 'rm'])('refuses a name every object has, rather than reading one off the prototype, for %s', async (command) => {
     await applyConfig();
 
     await createStateCommand().parseAsync(['node', 'clay', command, 'constructor']);
 
     const state = await stored();
-    expect(printed.join('\n')).toContain('Invalid address format: constructor');
+    expect(printed.join('\n')).toContain('Invalid address "constructor": an address ends with a type and a name');
     expect(printed.join('\n')).not.toContain('resource "undefined"');
     expect(state.resources['local_file.a']).toBeDefined();
   });
 
   it.each([
-    ['a source', ['constructor', 'local_file.z'], 'Invalid address format: constructor'],
-    ['a destination', ['local_file.a', 'constructor'], 'Invalid address format: constructor'],
+    ['a source', ['constructor', 'local_file.z'], 'Invalid address "constructor": an address ends with a type and a name'],
+    ['a destination', ['local_file.a', 'constructor'], 'Invalid address "constructor": an address ends with a type and a name'],
   ])('refuses %s that is a name every object has, for mv', async (_, addresses, message) => {
     await applyConfig();
 

@@ -42,9 +42,18 @@ describe('Address', () => {
       expect(addr.name).toBe('main');
     });
 
-    it('should throw on invalid format', () => {
-      expect(() => Address.parse('invalid')).toThrow();
-      expect(() => Address.parse('module.vpc')).toThrow(); // missing type.name
+    it.each([
+      ['invalid', 'Invalid address "invalid": an address ends with a type and a name'],
+      ['module.vpc', 'Invalid address "module.vpc": an address ends with a type and a name'],
+      ['module', 'Invalid address "module": a module needs a name after "module"'],
+      ['local_file.a.b', 'Invalid address "local_file.a.b": nothing may follow the name "a"'],
+      ['module.vpc.local_file.a.b', 'Invalid address "module.vpc.local_file.a.b": nothing may follow the name "a"'],
+      ['local_file.', 'Invalid address "local_file.": a part of it is empty'],
+      ['.a', 'Invalid address ".a": a part of it is empty'],
+      ['module..local_file.a', 'Invalid address "module..local_file.a": a part of it is empty'],
+      ['', 'Invalid address "": a part of it is empty'],
+    ])('refuses %s and says what is wrong', (input, message) => {
+      expect(() => Address.parse(input)).toThrow(message);
     });
   });
 });
