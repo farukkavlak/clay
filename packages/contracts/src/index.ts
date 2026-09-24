@@ -1,4 +1,5 @@
 export { Address } from './Address';
+export { ExactNumber } from './ExactNumber';
 
 /** A resource as state records it. */
 export interface Resource {
