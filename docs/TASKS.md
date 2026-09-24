@@ -41,7 +41,7 @@ change each.
       The `catch` around `access` and `copyFile` is bare, so when the backup cannot be
       written the old state is replaced anyway, with no backup and no message. Only
       `ENOENT` on `access` means a first write
-- [ ] A map key can impersonate the unknown value. `UNKNOWN` is a plain object with the
+- [x] A map key can impersonate the unknown value. `UNKNOWN` is a plain object with the
       key `@@clay/unknown`, so `triggers = { "@@clay/unknown" = true }` is unknown to the
       planner and plans an update forever. A sentinel is something a configuration cannot
       spell

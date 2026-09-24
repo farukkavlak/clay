@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { PLAN_FILE_VERSION } from '@clay/planner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createApplyCommand } from '../../src/commands/apply';
@@ -39,7 +40,7 @@ describe('a plan file that cannot be read', () => {
   // Each of these reached the user as whatever Node threw: a JSON parser message, or an ENOENT.
   it.each([
     ['text that is not json', '{oops', 'tfplan.json is not a plan file: the file is not JSON'],
-    ['json of the wrong shape', '{"version":"5.0"}', 'tfplan.json is not a plan file'],
+    ['json of the wrong shape', JSON.stringify({ version: PLAN_FILE_VERSION, actions: [] }), 'tfplan.json is not a plan file'],
     ['a plan another version wrote', '{"version":"4.0","actions":[]}', 'tfplan.json was written by another Clay, plan version 4.0'],
   ])('says what is wrong with %s, and what to do about it', async (_, content, reason) => {
     await fs.writeFile(path.join(dir, 'tfplan.json'), content, 'utf8');

@@ -2,7 +2,7 @@ import { Address, State } from '@clay/contracts';
 import { AttributeValue, CONFIG_FILE } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
-import { DesiredResource, hasChanges, outputChanges, plan, PLAN_FILE_VERSION, PlanAction, serializePlan, UNKNOWN, validatePlanFile } from '../src/index';
+import { DesiredResource, hasChanges, isUnknown, outputChanges, plan, PLAN_FILE_VERSION, PlanAction, serializePlan, UNKNOWN, validatePlanFile } from '../src/index';
 
 /** A plan is built from parsed blocks, and a test that builds one by hand still has to say where they came from. */
 const position = { file: CONFIG_FILE, line: 1, column: 1 };
@@ -132,6 +132,14 @@ describe('Planner', () => {
     expect(actions[0].changes!.path).toEqual({ old: 'path', new: UNKNOWN });
   });
 
+  // Only the engine can make the marker; a value the configuration spells, whatever its keys, is a value.
+  it('plans no change for a map that only looks like the unknown marker', () => {
+    const lookalike = { '@@clay/unknown': true };
+
+    expect(isUnknown(lookalike)).toBe(false);
+    expect(hasChanges({ triggers: lookalike }, { triggers: { ...lookalike } })).toBe(false);
+  });
+
   const schemas = new Map([['mock_resource', { path: { type: 'string' as const, required: true, forceNew: true } }]]);
 
   it('should plan one REPLACE when a forceNew attribute changes', () => {
@@ -166,7 +174,7 @@ describe('Planner', () => {
     it('should serialize plan correctly', () => {
       const actions: PlanAction[] = [];
       const config = 'resource "test" {}';
-      const serialized = serializePlan({ serial: 0, actions, outputs: {} }, config, { 'm/main.clay': 'output "x" { value = "y" }' });
+      const serialized = JSON.parse(serializePlan({ serial: 0, actions, outputs: {} }, config, { 'm/main.clay': 'output "x" { value = "y" }' }));
 
       expect(serialized.version).toBe(PLAN_FILE_VERSION);
       expect(serialized.actions).toEqual(actions);

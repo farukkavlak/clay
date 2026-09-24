@@ -44,7 +44,8 @@ describe('a plan saved to a file', () => {
     }
   `;
 
-  const save = async (config: string) => serializePlan(await newOrchestrator().plan(config), config, {});
+  const written = async (config: string) => serializePlan(await newOrchestrator().plan(config), config, {});
+  const save = async (config: string) => parsePlanFile(await written(config), 'plan.json');
 
   beforeEach(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-saved-plan-'));
@@ -56,8 +57,7 @@ describe('a plan saved to a file', () => {
 
   // apply reads the current directory, so the command runs from the temp one.
   it('is applied by the CLI without reading the configuration on disk', async () => {
-    const saved = await save(fileConfig('planned'));
-    await fs.writeFile(path.join(dir, 'plan.json'), JSON.stringify(saved), 'utf8');
+    await fs.writeFile(path.join(dir, 'plan.json'), await written(fileConfig('planned')), 'utf8');
     await fs.writeFile(path.join(dir, 'main.clay'), fileConfig('changed'), 'utf8');
 
     const cwd = process.cwd();
@@ -77,7 +77,7 @@ describe('a plan saved to a file', () => {
   });
 
   it('reads the line a broken configuration was written on out of the plan, not off the disk', async () => {
-    const saved = { ...(await save(fileConfig('planned'))), config: 'resource "local_file" {' };
+    const saved = { ...JSON.parse(await written(fileConfig('planned'))), config: 'resource "local_file" {' };
     await fs.writeFile(path.join(dir, 'plan.json'), JSON.stringify(saved), 'utf8');
 
     const printed: string[] = [];
@@ -119,6 +119,33 @@ describe('a plan saved to a file', () => {
 
     expect(printed.join('\n')).toContain('Plan saved to: plan.json');
     expect(parsePlanFile(written, 'plan.json').actions.map((action) => action.name)).toEqual(['a']);
+  });
+
+  // An output that reads a resource not created yet is unknown in the plan; the file has to carry that, since a symbol has no JSON form.
+  it('shows a value not known yet as one when the plan is applied from its file', async () => {
+    const config = `
+      resource "local_file" "a" { path = "${path.join(dir, 'a.txt')}" content = "hi" }
+      output "id" { value = "\${local_file.a.id}" }
+    `;
+    await fs.writeFile(path.join(dir, 'main.clay'), config, 'utf8');
+
+    const printed: string[] = [];
+    const cwd = process.cwd();
+    process.chdir(dir);
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => void printed.push(args.join(' ')));
+    vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
+
+    try {
+      await createPlanCommand().parseAsync(['node', 'clay', '--out', 'plan.json']);
+      printed.length = 0;
+      await createApplyCommand().parseAsync(['node', 'clay', 'plan.json']);
+    } finally {
+      vi.restoreAllMocks();
+      process.chdir(cwd);
+    }
+
+    expect(printed.join('\n')).toContain('Applying from saved plan');
+    expect(printed.join('\n')).toContain('id = (known after apply)');
   });
 
   it('carries its modules, so a module edited or removed later changes nothing', async () => {

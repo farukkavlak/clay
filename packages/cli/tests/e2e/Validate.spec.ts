@@ -151,6 +151,13 @@ resource "local_file" "b" {
     expect(output).toContain('on m/main.clay line 1:');
   });
 
+  // Only the engine makes the unknown marker, so a map spelled like it is checked like any other value.
+  it('checks a resource that holds a map spelled like the unknown marker', async () => {
+    const output = await validate('resource "random_string" "pw" {\n  length   = "8"\n  triggers = { "@@clay/unknown" = true }\n}');
+
+    expect(output).toContain('random_string requires "length"');
+  });
+
   it('refuses a variable with no value', async () => {
     expect(await validate('variable "name" {}')).toContain('variable "name" has no value');
   });

@@ -23,8 +23,7 @@ async function executePlan(cwd: string, configPath: string, outFile?: string): P
   displayPlan(planned);
 
   if (outFile) {
-    const planFile = serializePlan(planned, configContent, files.snapshot());
-    await fs.writeFile(outFile, JSON.stringify(planFile, null, 2), 'utf8');
+    await fs.writeFile(outFile, serializePlan(planned, configContent, files.snapshot()), 'utf8');
     console.log(styleText('green', `\nPlan saved to: ${outFile}`));
   }
 }

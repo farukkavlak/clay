@@ -4,13 +4,11 @@ import { isDeepStrictEqual } from 'node:util';
 
 export type ActionType = 'CREATE' | 'UPDATE' | 'REPLACE' | 'DELETE' | 'NO_OP';
 
-/** Stands for a value that only exists once the resources it depends on are created. */
-const UNKNOWN_KEY = '@@clay/unknown';
-
-export const UNKNOWN = { [UNKNOWN_KEY]: true } as const;
+/** Stands for a value that only exists once the resources it depends on are created. A symbol, so no value a configuration or a file holds can pass for it. */
+export const UNKNOWN: unique symbol = Symbol('unknown');
 
 export function isUnknown(value: unknown): boolean {
-  return typeof value === 'object' && value !== null && (value as Record<string, unknown>)[UNKNOWN_KEY] === true;
+  return value === UNKNOWN;
 }
 
 /** A resource from the config: where it lives, the block as parsed, and its values with references resolved. */
@@ -43,7 +41,7 @@ export interface Plan {
 }
 
 /** Bumped whenever the shape below changes, so a plan file from an older version is refused instead of misread. */
-export const PLAN_FILE_VERSION = '5.0';
+export const PLAN_FILE_VERSION = '6.0';
 
 export interface PlanFile extends Plan {
   version: string;
@@ -54,20 +52,46 @@ export interface PlanFile extends Plan {
   modules: Record<string, string>;
 }
 
-export function serializePlan(plan: Plan, configContent: string, modules: Record<string, string>): PlanFile {
-  return {
+/** A value not known yet has no form in JSON, so a saved change says so beside `old` instead of holding one. */
+function saveChanges(changes: Changes): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(changes).map(([name, change]) => [name, isUnknown(change.new) ? { old: change.old, unknown: true } : change]));
+}
+
+function readChanges(saved: Record<string, { old?: unknown; new?: unknown; unknown?: unknown }>): Changes {
+  return Object.fromEntries(Object.entries(saved).map(([name, change]) => [name, { old: change.old, new: change.unknown === true ? UNKNOWN : change.new }]));
+}
+
+/** The plan file's text, as `plan --out` writes it and `parsePlanFile` reads it. */
+export function serializePlan(plan: Plan, configContent: string, modules: Record<string, string>): string {
+  const file = {
     version: PLAN_FILE_VERSION,
     timestamp: new Date().toISOString(),
     config: configContent,
     modules,
     serial: plan.serial,
-    actions: plan.actions,
-    outputs: plan.outputs,
+    actions: plan.actions.map((action) => (action.changes ? { ...action, changes: saveChanges(action.changes) } : action)),
+    outputs: saveChanges(plan.outputs),
   };
+
+  // Anywhere but a whole change, JSON has no form for a value not known yet and would write something else without a word.
+  return JSON.stringify(
+    file,
+    (_, value: unknown) => {
+      if (isUnknown(value)) throw new Error('A value not known yet sits inside another value, where a plan file cannot hold it');
+
+      return value;
+    },
+    2
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** Each change is read for what it held, so one that is not a record would fail far from the file it came from. */
+function isChanges(changes: unknown): boolean {
+  return isRecord(changes) && Object.values(changes).every((change) => isRecord(change));
 }
 
 function isModuleFiles(modules: unknown): modules is Record<string, string> {
@@ -85,7 +109,8 @@ export function validatePlanFile(planFile: unknown): planFile is PlanFile {
     isModuleFiles(pf.modules) &&
     typeof pf.serial === 'number' &&
     Array.isArray(pf.actions) &&
-    isRecord(pf.outputs)
+    pf.actions.every((action) => isRecord(action) && (action.changes === undefined || isChanges(action.changes))) &&
+    isChanges(pf.outputs)
   );
 }
 
@@ -110,7 +135,11 @@ export function parsePlanFile(content: string, source: string): PlanFile {
   if (version !== undefined && version !== PLAN_FILE_VERSION) throw new Error(`${source} was written by another Clay, plan version ${version}`);
   if (!validatePlanFile(parsed)) throw new Error(`${source} is not a plan file`);
 
-  return parsed;
+  return {
+    ...parsed,
+    actions: parsed.actions.map((action) => (action.changes ? { ...action, changes: readChanges(action.changes) } : action)),
+    outputs: readChanges(parsed.outputs),
+  };
 }
 
 /** A map's keys written in another order is not a change. */
