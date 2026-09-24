@@ -84,6 +84,7 @@ export class Parser {
 
   private parseVariable(position: Position): VariableBlock {
     const nameToken = this.consumeName("Expect variable name string after 'variable'.");
+    if (nameToken.value === 'source') throw new ConfigError('"source" cannot be a variable name: a module call reads it as the module\'s path.', nameToken.position);
 
     const attributes = this.parseAttributes('variable');
 

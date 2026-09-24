@@ -26,7 +26,7 @@ change each.
       dropped and `defualt = "x"` is reported as `variable "v" has no value`, which names
       the wrong problem. `type` and `description` are read by nobody either, so what a
       `variable` block may hold is the call the fix makes
-- [ ] A module that declares `variable "source"` can never be given one. `declareInputs`
+- [x] A module that declares `variable "source"` can never be given one. `declareInputs`
       skips the key, because the caller's `source` is the module's path, so a declaration
       with a default falls back to it in silence and one without fails with
       `module.m: variable "source" has no value`, which names the caller's input as

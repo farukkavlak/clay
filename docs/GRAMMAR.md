@@ -43,7 +43,8 @@ module "name" { attributes }
 
 A `type` and a `name` are written as strings, and each has to spell an `IDENTIFIER`, since
 an address joins them with `.` and a reference reads them back. A `type` cannot be `var`,
-`data` or `module`, the three words a reference reads as something other than a type.
+`data` or `module`, the three words a reference reads as something other than a type. A
+variable cannot be named `source`, since a module call reads that as the module's path.
 
 `attributes` is zero or more `name = value` pairs, in any order, without separators, and
 no name twice.

@@ -141,6 +141,16 @@ resource "local_file" "b" {
     expect(output).toContain('\n  3:   descriptoin = "typo"\n                     ^');
   });
 
+  it('refuses a module that declares a variable its caller could never set, and points into the module', async () => {
+    await fs.mkdir(path.join(dir, 'm'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'm', 'main.clay'), 'variable "source" { default = "x" }', 'utf8');
+
+    const output = await validate('module "m" { source = "./m" }');
+
+    expect(output).toContain('"source" cannot be a variable name');
+    expect(output).toContain('on m/main.clay line 1:');
+  });
+
   it('refuses a variable with no value', async () => {
     expect(await validate('variable "name" {}')).toContain('variable "name" has no value');
   });

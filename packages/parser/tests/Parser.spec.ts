@@ -348,6 +348,13 @@ describe('Clay Parser', () => {
       expect(error.position).toEqual(position);
     });
 
+    it('refuses a variable named "source", which a module call reads as its path', () => {
+      const error = errorOf('variable "source" { default = "x" }');
+
+      expect(error.message).toBe('"source" cannot be a variable name: a module call reads it as the module\'s path.');
+      expect(error.position).toEqual(at(1, 10));
+    });
+
     it('tells blocks of different kinds with one name apart', () => {
       const input = 'variable "x" {}\noutput "x" { value = "1" }\nmodule "x" { source = "./x" }\nresource "null_resource" "x" {}\nresource "local_file" "x" {}';
 
