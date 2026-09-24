@@ -55,7 +55,7 @@ What the engine reads from each:
 | ---------- | ----------------------------------------------------------------------------------------------------- |
 | `resource` | Every attribute goes to the provider                                                                  |
 | `data`     | Every attribute goes to the provider's `read`                                                         |
-| `variable` | `default`; any other attribute is parsed and ignored                                                  |
+| `variable` | `default`, and nothing else; another attribute is refused where it is written                         |
 | `output`   | `value`                                                                                               |
 | `module`   | `source`, a literal string naming a directory relative to the file; every other attribute is an input |
 

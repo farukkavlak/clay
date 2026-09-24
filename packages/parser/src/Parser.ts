@@ -87,6 +87,10 @@ export class Parser {
 
     const attributes = this.parseAttributes('variable');
 
+    // `default` is the whole of what a variable is read for, so another name would be parsed and never read.
+    for (const [key, value] of Object.entries(attributes))
+      if (key !== 'default') throw new ConfigError(`Variable "${nameToken.value}" takes only "default", not "${key}".`, value.position);
+
     return {
       type: 'Variable',
       name: nameToken.value,

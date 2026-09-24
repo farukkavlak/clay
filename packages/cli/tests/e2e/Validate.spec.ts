@@ -134,6 +134,13 @@ resource "local_file" "b" {
     expect(await validate('output "o" { value = "${var}" }')).toContain('Variable reference must include a name: var');
   });
 
+  it('refuses an attribute a variable block is never read for, and points at it', async () => {
+    const output = await validate('variable "v" {\n  default     = "a"\n  descriptoin = "typo"\n}');
+
+    expect(output).toContain('Variable "v" takes only "default", not "descriptoin".');
+    expect(output).toContain('\n  3:   descriptoin = "typo"\n                     ^');
+  });
+
   it('refuses a variable with no value', async () => {
     expect(await validate('variable "name" {}')).toContain('variable "name" has no value');
   });

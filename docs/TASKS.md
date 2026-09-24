@@ -21,7 +21,7 @@ change each.
       silence: `var.v.bogus` gives the variable, and `local_file.a.tags.content` reads the
       `content` attribute as if `tags` were never written. Both were seen in a plan that
       said nothing. A reference reads one attribute until nested access lands
-- [ ] An attribute a `variable` block does not use is accepted in silence.
+- [x] An attribute a `variable` block does not use is accepted in silence.
       `declareVariables` reads `default` and nothing else, so `descriptoin = "x"` is
       dropped and `defualt = "x"` is reported as `variable "v" has no value`, which names
       the wrong problem. `type` and `description` are read by nobody either, so what a

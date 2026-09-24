@@ -128,7 +128,6 @@ describe('Clay Parser', () => {
     it('should parse a simple variable block', () => {
       const input = `
         variable "environment" {
-          type = "string"
           default = "dev"
         }
       `;
@@ -140,21 +139,15 @@ describe('Clay Parser', () => {
         type: 'Variable',
         name: 'environment',
         attributes: {
-          type: { type: 'String', value: 'string' },
           default: { type: 'String', value: 'dev' },
         },
       });
     });
 
     it('should parse variable with number default', () => {
-      const input = `
-        variable "port" {
-          type = "number"
-          default = 8080
-        }
-      `;
-      const parser = makeParser(input);
-      const result = parser.parse();
+      const input = 'variable "port" { default = 8080 }';
+
+      const result = makeParser(input).parse();
 
       expect(result).toHaveLength(1);
       expect((result[0] as VariableBlock).attributes.default).toMatchObject({ type: 'Number', value: 8080 });
@@ -192,20 +185,6 @@ describe('Clay Parser', () => {
       expect(result[0].type).toBe('Variable');
       expect(result[1].type).toBe('Resource');
       expect(result[2].type).toBe('Variable');
-    });
-
-    it('should parse variable with description', () => {
-      const input = `
-        variable "region" {
-          type = "string"
-          default = "us-east-1"
-          description = "AWS region"
-        }
-      `;
-      const parser = makeParser(input);
-      const result = parser.parse();
-
-      expect((result[0] as VariableBlock).attributes.description).toMatchObject({ type: 'String', value: 'AWS region' });
     });
   });
 
@@ -355,6 +334,17 @@ describe('Clay Parser', () => {
       const error = errorOf(input);
 
       expect(error.message).toContain(`"${word}" cannot be a type`);
+      expect(error.position).toEqual(position);
+    });
+
+    it.each([
+      ['a misspelled default', 'variable "v" { defualt = "a" }', 'defualt', at(1, 26)],
+      ['a type it does not check', 'variable "v" { default = "a" type = "string" }', 'type', at(1, 37)],
+      ['a description it does not keep', 'variable "v" { default = "a" description = "why" }', 'description', at(1, 44)],
+    ])('refuses %s in a variable block', (_, input, attribute, position) => {
+      const error = errorOf(input);
+
+      expect(error.message).toBe(`Variable "v" takes only "default", not "${attribute}".`);
       expect(error.position).toEqual(position);
     });
 

@@ -26,7 +26,7 @@ export interface ResourceBlock extends Node {
 export interface VariableBlock extends Node {
   type: 'Variable';
   name: string; // e.g., "environment"
-  attributes: Record<string, AttributeValue>; // type, default, description
+  attributes: Record<string, AttributeValue>;
 }
 
 export interface OutputBlock extends Node {
