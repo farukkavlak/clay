@@ -1,9 +1,20 @@
 import { ConfigFiles } from '@clay/orchestrator';
 import { ConfigError, Position } from '@clay/parser';
 
-/** The line the error points at, with a caret under the column. Nothing if the file cannot be read any more. */
+/** What the file holds now, or nothing if it cannot be read any more; the error being reported matters more than the line. */
+function currentContent(file: string, files: ConfigFiles): string | undefined {
+  try {
+    return files.read(file);
+  } catch (error) {
+    if (typeof (error as NodeJS.ErrnoException).code === 'string') return undefined;
+
+    throw error;
+  }
+}
+
+/** The line the error points at, with a caret under the column. */
 function sourceLine(position: Position, files: ConfigFiles): string | undefined {
-  const line = files.read(position.file)?.split('\n')[position.line - 1];
+  const line = currentContent(position.file, files)?.split('\n')[position.line - 1];
   if (line === undefined) return undefined;
 
   const gutter = `  ${position.line}: `;

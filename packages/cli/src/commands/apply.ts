@@ -11,6 +11,7 @@ import { confirm } from '../confirm';
 import { newOrchestrator } from '../engine';
 import { describeError } from '../describeError';
 import { actionSymbol, changesNothing, displayPlan, pastTense } from '../showPlan';
+import { exists } from '../exists';
 
 /** A replacement counts once as an add and once as a destroy, as the plan summary counts it. */
 function summarize(applied: PlanAction[]): string {
@@ -124,9 +125,7 @@ export function createApplyCommand() {
         } else {
           const configPath = path.join(cwd, CONFIG_FILE);
 
-          try {
-            await fs.access(configPath);
-          } catch {
+          if (!(await exists(configPath))) {
             console.error(styleText('red', `Error: ${CONFIG_FILE} not found.`));
             process.exit(1);
           }

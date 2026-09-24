@@ -37,7 +37,7 @@ change each.
       splits on them, so `state show`, `state rm` and a reference all fail on the key an
       apply wrote. The same for a type or name spelled `module`. A name is an identifier,
       as in Terraform
-- [ ] `LocalBackend.write` swallows every backup failure, not only "nothing to back up".
+- [x] `LocalBackend.write` swallows every backup failure, not only "nothing to back up".
       The `catch` around `access` and `copyFile` is bare, so when the backup cannot be
       written the old state is replaced anyway, with no backup and no message. Only
       `ENOENT` on `access` means a first write

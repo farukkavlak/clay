@@ -11,9 +11,14 @@ export class DiskFiles implements ConfigFiles {
   constructor(private rootDir: string) {}
 
   read(file: string): string | undefined {
-    const fullPath = path.resolve(this.rootDir, file);
+    try {
+      return fs.readFileSync(path.resolve(this.rootDir, file), 'utf8');
+    } catch (error) {
+      // Only a file that is not there is missing; one that is there and cannot be opened is reported as it is.
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
 
-    return fs.existsSync(fullPath) ? fs.readFileSync(fullPath, 'utf8') : undefined;
+      throw error;
+    }
   }
 }
 

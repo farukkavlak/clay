@@ -34,10 +34,11 @@ export class LocalBackend implements StateBackend {
 
   async write(state: State): Promise<void> {
     try {
-      await fs.access(this.filePath);
       await fs.copyFile(this.filePath, `${this.filePath}.bak`);
-    } catch {
-      // The first write has nothing to back up.
+    } catch (error) {
+      // A missing state file is a first write, with nothing to back up; any other failure would leave no way back.
+      const { code, message } = error as NodeJS.ErrnoException;
+      if (code !== 'ENOENT') throw new Error(`Could not back up ${this.filePath} to ${this.filePath}.bak (${code ?? message}); the state was not written`, { cause: error });
     }
 
     // Rename is atomic, so a run killed mid-write leaves the old state whole.

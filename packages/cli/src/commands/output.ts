@@ -2,7 +2,8 @@ import { StateManager } from '@clay/state';
 import { Command } from 'commander';
 import { styleText } from 'node:util';
 
-import { exists, stateFile } from '../stateFile';
+import { exists } from '../exists';
+import { stateFile } from '../stateFile';
 
 function displayOutputs(outputs: Record<string, unknown>, json: boolean): void {
   if (json) {
@@ -28,12 +29,12 @@ export function createOutputCommand(): Command {
     .action(async (options) => {
       const backend = stateFile();
 
-      if (!(await exists(backend.path))) {
-        console.log(styleText('yellow', `No state file found at ${backend.path}`));
-        return;
-      }
-
       try {
+        if (!(await exists(backend.path))) {
+          console.log(styleText('yellow', `No state file found at ${backend.path}`));
+          return;
+        }
+
         const state = await new StateManager(backend).read();
 
         displayOutputs(state.outputs ?? {}, options.json);

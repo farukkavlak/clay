@@ -9,6 +9,7 @@ import { styleText } from 'node:util';
 import { newOrchestrator } from '../engine';
 import { describeError } from '../describeError';
 import { displayPlan } from '../showPlan';
+import { exists } from '../exists';
 
 async function executePlan(cwd: string, configPath: string, outFile?: string): Promise<void> {
   const configContent = await fs.readFile(configPath, 'utf8');
@@ -37,13 +38,11 @@ export function createPlanCommand() {
       const configPath = path.join(cwd, CONFIG_FILE);
 
       try {
-        await fs.access(configPath);
-      } catch {
-        console.error(styleText('red', `Error: ${CONFIG_FILE} not found in current directory.`));
-        process.exit(1);
-      }
+        if (!(await exists(configPath))) {
+          console.error(styleText('red', `Error: ${CONFIG_FILE} not found in current directory.`));
+          process.exit(1);
+        }
 
-      try {
         await executePlan(cwd, configPath, options.out);
       } catch (error: unknown) {
         console.error(styleText('red', 'Planning failed:'), describeError(error, new DiskFiles(cwd)));

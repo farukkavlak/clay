@@ -160,6 +160,26 @@ describe('StateManager', () => {
     });
   });
 
+  describe('a backup that cannot be written', () => {
+    it('stops the write and leaves the state as it was', async () => {
+      const first: State = { version: 1, serial: 1, resources: {} };
+      const second: State = { version: 1, serial: 2, resources: {} };
+      await stateManager.write(first);
+      await stateManager.write(second);
+
+      // A directory where the backup goes makes the copy fail for a reason other than a first write.
+      const bakPath = path.join(tmpDir, 'test.state.json.bak');
+      await fs.rm(bakPath);
+      await fs.mkdir(bakPath);
+
+      const statePath = path.join(tmpDir, 'test.state.json');
+      await expect(stateManager.write({ version: 1, serial: 3, resources: {} })).rejects.toThrow(
+        `Could not back up ${statePath} to ${statePath}.bak (EISDIR); the state was not written`
+      );
+      expect(await stateManager.read()).toEqual(second);
+    });
+  });
+
   describe('a write that fails halfway', () => {
     it('leaves the state that was there, whole', async () => {
       const before: State = { version: 1, serial: 0, resources: { 'mock_resource.a': { resourceType: 'mock_resource', name: 'a', attributes: {} } } };

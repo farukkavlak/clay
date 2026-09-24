@@ -3,7 +3,8 @@ import { StateManager } from '@clay/state';
 import { Command } from 'commander';
 import { styleText } from 'node:util';
 
-import { exists, stateFile } from '../stateFile';
+import { exists } from '../exists';
+import { stateFile } from '../stateFile';
 
 function getStateManager(backend = stateFile()): StateManager {
   return new StateManager(backend);

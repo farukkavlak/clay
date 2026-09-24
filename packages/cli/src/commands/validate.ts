@@ -7,6 +7,7 @@ import { styleText } from 'node:util';
 
 import { newOrchestrator } from '../engine';
 import { describeError } from '../describeError';
+import { exists } from '../exists';
 
 async function executeValidate(cwd: string, configPath: string): Promise<void> {
   const configContent = await fs.readFile(configPath, 'utf8');
@@ -22,13 +23,11 @@ export function createValidateCommand(): Command {
     const configPath = path.join(cwd, CONFIG_FILE);
 
     try {
-      await fs.access(configPath);
-    } catch {
-      console.error(styleText('red', `Error: ${CONFIG_FILE} not found in current directory.`));
-      process.exit(1);
-    }
+      if (!(await exists(configPath))) {
+        console.error(styleText('red', `Error: ${CONFIG_FILE} not found in current directory.`));
+        process.exit(1);
+      }
 
-    try {
       await executeValidate(cwd, configPath);
       console.log(styleText('green', 'Configuration is valid.'));
     } catch (error: unknown) {

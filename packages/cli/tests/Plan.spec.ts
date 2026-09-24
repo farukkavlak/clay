@@ -26,7 +26,7 @@ describe('CLI: plan command', () => {
   });
 
   it('should fail if main.clay does not exist', async () => {
-    vi.mocked(fs.access).mockRejectedValue(new Error('ENOENT'));
+    vi.mocked(fs.access).mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
 
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
