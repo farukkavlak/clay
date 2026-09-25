@@ -69,6 +69,15 @@ describe('a string with an interpolation', () => {
     expect(resources['local_file.f'].attributes.content).toBe('n=8');
   });
 
+  // `$${` is text by the time the engine sees the string, so nothing reads it as a reference.
+  it('writes an escape as what it stands for, and $${ as text', async () => {
+    const config = `resource "local_file" "f" { path = "${path.join(dir, 'f.txt')}" content = "a\\tb\\nprice $\${price}" }`;
+
+    await applied(config);
+
+    expect(await fs.readFile(path.join(dir, 'f.txt'), 'utf8')).toBe('a\tb\nprice ${price}');
+  });
+
   // The same list, read from five places: each error has to name the block that reads it and point at the reference.
   it.each([
     ['a resource', 'resource "null_resource" "t" { label = "tags: ${var.tags}" }', 'resource "null_resource" "t"', 49],

@@ -19,7 +19,8 @@ export class Lexer {
   private specs: TokenSpec[] = [
     { type: TokenType.Boolean, regex: /(true|false)(?![\w-])/y },
     { type: TokenType.Identifier, regex: /[A-Z_a-z][\w-]*/y },
-    { type: TokenType.String, regex: /"[^"]*"/y },
+    // A backslash takes the character after it along, so `\"` does not end the string; the parser reads what it means.
+    { type: TokenType.String, regex: /"(?:[^"\\]|\\[\s\S])*"/y },
     // Looser than a number, so `1.` and `1e` come whole to the parser and are refused as what they are.
     { type: TokenType.Number, regex: /\d+(?:\.\d*)?(?:[Ee][+-]?\d*)?/y },
     // Its own token, as in HCL, so a number never swallows the minus of a subtraction.

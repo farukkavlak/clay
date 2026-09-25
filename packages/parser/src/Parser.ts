@@ -218,9 +218,7 @@ export class Parser {
   private parseMap(position: Position): AttributeValue {
     const map: Record<string, AttributeValue> = {};
     while (!this.check(TokenType.RBrace) && !this.isAtEnd()) {
-      const key = this.matchToken(TokenType.String) ? this.previous() : this.consume(TokenType.Identifier, 'Expect key in map.');
-      if (key.type === TokenType.String && this.piecesOf(key).some((piece) => piece.kind === 'interpolation'))
-        throw new ConfigError('A map key is plain text; it cannot hold an interpolation', key.position);
+      const key = this.matchToken(TokenType.String) ? this.stringKey(this.previous()) : this.consume(TokenType.Identifier, 'Expect key in map.');
       this.checkKey(map, key);
 
       this.consume(TokenType.Assign, "Expect '=' after key in map.");
@@ -229,6 +227,14 @@ export class Parser {
     }
     this.consume(TokenType.RBrace, "Expect '}' after map.");
     return { type: 'Map', value: map, position };
+  }
+
+  /** A quoted key is the text its escapes stand for, so one key spelled two ways is still one key. */
+  private stringKey(token: Token): Token {
+    const pieces = this.piecesOf(token);
+    if (pieces.some((piece) => piece.kind === 'interpolation')) throw new ConfigError('A map key is plain text; it cannot hold an interpolation', token.position);
+
+    return { ...token, value: pieces.map((piece) => piece.text).join('') };
   }
 
   // A second value under one name would replace the first in silence, and `__proto__` would set a prototype, not a key.

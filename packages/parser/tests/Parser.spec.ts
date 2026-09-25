@@ -311,6 +311,68 @@ describe('Clay Parser', () => {
     });
   });
 
+  describe('Escapes', () => {
+    it.each([
+      ['a quote', String.raw`"a\"b"`, 'a"b'],
+      ['a line break', String.raw`"a\nb"`, 'a\nb'],
+      ['a carriage return', String.raw`"a\rb"`, 'a\rb'],
+      ['a tab', String.raw`"a\tb"`, 'a\tb'],
+      ['a backslash', String.raw`"a\\b"`, String.raw`a\b`],
+      // eslint-disable-next-line unicorn/prefer-string-raw -- the test transform reads a valid \u escape inside String.raw as the character itself
+      ['a character by four hex digits', '"caf\\u00e9"', 'café'],
+      ['a character by eight hex digits', String.raw`"\U0001F600"`, '😀'],
+      ['an interpolation written as text', '"$${var.x}"', '${var.x}'],
+      ['two dollars before no brace', '"$$x"', '$$x'],
+    ])('reads %s', (_, written, value) => {
+      expect(valueOf(written)).toEqual({ type: 'String', value, position: at(1, 24) });
+    });
+
+    // An escaped backslash is done with, so the `${` after it opens an interpolation.
+    it('reads an interpolation after an escaped backslash', () => {
+      expect(valueOf('"\\\\${var.x}"')).toEqual({ type: 'Template', value: ['\\', reference(['var', 'x'], 29)], position: at(1, 24) });
+    });
+
+    it('places a reference by what was written, not by what an escape stands for', () => {
+      expect(valueOf('"\\"${var.x}"')).toEqual({ type: 'Template', value: ['"', reference(['var', 'x'], 29)], position: at(1, 24) });
+    });
+
+    it('reads a map key with an escape in it as the text it stands for', () => {
+      expect(attributesOf(String.raw`resource "t" "n" { m = { "a\"b" = 1 } }`).m).toMatchObject({ type: 'Map', value: { 'a"b': { value: ExactNumber.parse('1') } } });
+    });
+
+    it('finds a key set twice when one of the two is spelled with an escape', () => {
+      // eslint-disable-next-line unicorn/prefer-string-raw -- the test transform reads a valid \u escape inside String.raw as the character itself
+      const error = errorOf('resource "t" "n" { m = { "a" = 1, "\\u0061" = 2 } }');
+
+      expect(error.message).toBe('a is set twice');
+      expect(error.position).toEqual(at(1, 35));
+    });
+
+    // A label travels into an address, which has no escapes, so one is refused rather than read.
+    it('refuses an escape in a block label', () => {
+      const error = errorOf(String.raw`resource "local_file" "a\"b" {}`);
+
+      expect(error.message).toContain('Invalid name');
+      expect(error.position).toEqual(at(1, 23));
+    });
+
+    it.each([
+      ['an escape the language does not know', String.raw`"a\qb"`, String.raw`Unknown escape "\q"`, at(1, 26)],
+      ['a backslash at the end of a line', '"a\\\nb"', 'A backslash ends the line;', at(1, 26)],
+      ['a backslash at the end of a line that ends in a carriage return', '"a\\\r\nb"', 'A backslash ends the line;', at(1, 26)],
+      ['a backslash before a character JavaScript writes in two', String.raw`"a\😀"`, String.raw`Unknown escape "\😀"`, at(1, 26)],
+      ['a character with too few hex digits', String.raw`"\u12"`, String.raw`"\u12" is not a character`, at(1, 25)],
+      ['a character with a digit that is not hex', String.raw`"\u00zz"`, String.raw`"\u00zz" is not a character`, at(1, 25)],
+      ['half of a character JavaScript writes in two', String.raw`"\uD800"`, String.raw`"\uD800" is not a character`, at(1, 25)],
+      ['a character past the last one Unicode has', String.raw`"\U00110000"`, String.raw`"\U00110000" is not a character`, at(1, 25)],
+    ])('refuses %s where it is written', (_, written, message, position) => {
+      const error = errorOf(`resource "t" "n" { v = ${written} }`);
+
+      expect(error.message).toContain(message);
+      expect(error.position).toEqual(position);
+    });
+  });
+
   describe('Interpolation', () => {
     it('reads a string with an interpolation as its text and the reference, each where it was written', () => {
       expect(valueOf('"a ${var.x} b"')).toEqual({ type: 'Template', value: ['a ', reference(['var', 'x'], 29), ' b'], position: at(1, 24) });

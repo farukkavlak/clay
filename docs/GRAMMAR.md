@@ -8,7 +8,7 @@ in a directory; a module is another directory with its own `main.clay`.
 | Token        | Pattern                               | Notes                                                                |
 | ------------ | ------------------------------------- | -------------------------------------------------------------------- |
 | `IDENTIFIER` | `[A-Za-z_][A-Za-z0-9_-]*`             | Block kinds, attribute names, reference parts; not `true` or `false` |
-| `STRING`     | `"[^"]*"`                             | No escapes; a `"` cannot appear inside; may span lines               |
+| `STRING`     | `"([^"\\]\|\\[\s\S])*"`               | Escapes below; may span lines                                        |
 | `NUMBER`     | `[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?` | No sign; `007` is `7`; at most 1000 places either side of the point  |
 | `MINUS`      | `-`                                   | Only before a number                                                 |
 | `BOOLEAN`    | `true`, `false`                       |                                                                      |
@@ -69,6 +69,11 @@ list    = "[" [ value { "," value } [ "," ] ] "]"
 map     = "{" { key "=" value [ "," ] } "}"
 key     = IDENTIFIER | STRING
 ```
+
+A string reads `\n`, `\r`, `\t`, `\"` and `\\`, a character by number as `\uNNNN` or
+`\UNNNNNNNN`, and `$${` as the text `${`. Any other escape is refused where it is written.
+An escape is read in a string's text, not inside a `${...}`; a quoted map key reads them
+too, and a block label never holds one.
 
 A minus may stand apart from its number: `- 5` is `-5`. A name keeps its dash, so
 `a-1` is one identifier, not `a` minus `1`.
@@ -186,7 +191,6 @@ throws the same for a character it does not know.
 
 ## Not in the language
 
-- Escape sequences in strings
 - Expressions, operators and functions; a value is a literal or a reference
 - `count`, `for_each`, `depends_on`, lifecycle blocks, provisioners
 - Nested blocks inside a block

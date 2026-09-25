@@ -56,7 +56,10 @@ configuration hits each of these early.
 
 - [x] Negative and decimal numbers, with an exponent, as HCL writes them; the minus is a
       token of its own, so a number never swallows the minus of a subtraction
-- [ ] String escapes: `\"`, `\n`, `\\`, and `$${` for a literal `${`
+- [x] String escapes: `\"`, `\n`, `\r`, `\t`, `\\`, `\uNNNN`, `\UNNNNNNNN`, and `$${` for a
+      literal `${`, as HCL reads them; any other escape is refused
+- [ ] Refuse a raw line break in a quoted string, as HCL does, once heredocs exist to take
+      its place; `\n` is the other way to write one
 - [ ] Nested access: `local_file.a.tags.env` and `var.list[0]`; today `[` after a
       reference is a parse error, and a reference that reads deeper than one attribute is
       refused where it is read
