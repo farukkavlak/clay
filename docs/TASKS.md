@@ -51,11 +51,11 @@ change each.
 
 ## 1. Language
 
-The parser takes integers, plain strings and one level of attribute access. A real
+The parser takes plain strings and one level of attribute access. A real
 configuration hits each of these early.
 
-- [ ] Negative and decimal numbers; only `[0-9]+` lexes today. `ExactNumber` already
-      holds both, and reads `-0` as `0`, so what is left is the lexer and the grammar
+- [x] Negative and decimal numbers, with an exponent, as HCL writes them; the minus is a
+      token of its own, so a number never swallows the minus of a subtraction
 - [ ] String escapes: `\"`, `\n`, `\\`, and `$${` for a literal `${`
 - [ ] Nested access: `local_file.a.tags.env` and `var.list[0]`; today `[` after a
       reference is a parse error, and a reference that reads deeper than one attribute is

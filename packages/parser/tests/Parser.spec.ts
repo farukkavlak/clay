@@ -267,6 +267,48 @@ describe('Clay Parser', () => {
     expect(errorOf(input).position).toEqual(at(1, input.length + 1));
   });
 
+  describe('Numbers', () => {
+    it.each([
+      ['-3', '-3'],
+      ['1.5', '1.5'],
+      ['-0.25', '-0.25'],
+      ['1e3', '1000'],
+      ['2.5E-3', '0.0025'],
+      ['1e+2', '100'],
+      ['-0', '0'],
+      ['- 5', '-5'],
+    ])('reads %s as %s, placed where it starts', (written, value) => {
+      expect(attributesOf(`resource "t" "n" { v = ${written} }`).v).toEqual({ type: 'Number', value: ExactNumber.parse(value), position: at(1, 24) });
+    });
+
+    it('reads a negative number inside a list and a map', () => {
+      const attributes = attributesOf('resource "t" "n" { l = [-1, 2.5] m = { k = -1.5 } }');
+
+      expect(attributes.l).toMatchObject({ type: 'List', value: [{ value: ExactNumber.parse('-1'), position: at(1, 25) }, { value: ExactNumber.parse('2.5') }] });
+      expect(attributes.m).toMatchObject({ type: 'Map', value: { k: { value: ExactNumber.parse('-1.5'), position: at(1, 44) } } });
+    });
+
+    it('keeps a dash inside a name as part of the name', () => {
+      expect(attributesOf('resource "t" "n" { v = a-1 }').v).toMatchObject({ type: 'Reference', value: ['a-1'] });
+    });
+
+    it.each([
+      ['a point with no digit after it', '1.', '"1." is not a number', at(1, 24)],
+      ['an exponent with no digit', '1e', '"1e" is not a number', at(1, 24)],
+      ['an exponent sign with no digit', '1e+', '"1e+" is not a number', at(1, 24)],
+      ['a point with no digit before it', '.5', 'Unexpected value: .', at(1, 24)],
+      ['a minus before a reference', '-var.x', "Expect a number after '-'", at(1, 25)],
+      ['two minuses', '--1', "Expect a number after '-'", at(1, 25)],
+      ['a minus before a brace', '-', "Expect a number after '-'", at(1, 26)],
+      ['a negative number out of range', '-1e5000', '"-1e5000" is out of range', at(1, 24)],
+    ])('refuses %s where it is written', (_, written, message, position) => {
+      const error = errorOf(`resource "t" "n" { v = ${written} }`);
+
+      expect(error.message).toContain(message);
+      expect(error.position).toEqual(position);
+    });
+  });
+
   describe('Error Cases', () => {
     it('refuses a second block with the same name, at its position', () => {
       const twice = {

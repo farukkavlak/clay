@@ -154,7 +154,8 @@ export class Parser {
     const position = this.peek().position;
 
     if (this.matchToken(TokenType.String)) return { type: 'String', value: this.previous().value, position };
-    if (this.matchToken(TokenType.Number)) return { type: 'Number', value: this.exactNumber(this.previous()), position };
+    if (this.matchToken(TokenType.Number)) return { type: 'Number', value: this.exactNumber(this.previous().value, position), position };
+    if (this.matchToken(TokenType.Minus)) return this.parseNegative(position);
     if (this.matchToken(TokenType.Boolean)) return { type: 'Boolean', value: this.previous().value === 'true', position };
 
     if (this.matchToken(TokenType.LBracket)) return this.parseList(position);
@@ -163,6 +164,12 @@ export class Parser {
     if (this.check(TokenType.Identifier)) return this.parseReference(position);
 
     return this.error(`Unexpected value: ${this.peek().value}`);
+  }
+
+  private parseNegative(position: Position): AttributeValue {
+    const number = this.consume(TokenType.Number, "Expect a number after '-'.");
+
+    return { type: 'Number', value: this.exactNumber(`-${number.value}`, position), position };
   }
 
   private parseList(position: Position): AttributeValue {
@@ -233,12 +240,12 @@ export class Parser {
     return token;
   }
 
-  /** A literal past what a number can hold is the configuration's mistake, so it is refused where it was written. */
-  private exactNumber(token: Token): ExactNumber {
+  /** A literal that is no number, or past what one can hold, is the configuration's mistake, so it is refused where it was written. */
+  private exactNumber(text: string, position: Position): ExactNumber {
     try {
-      return ExactNumber.parse(token.value);
+      return ExactNumber.parse(text);
     } catch (error) {
-      if (error instanceof NumberError) throw new ConfigError(error.message, token.position, {}, { cause: error });
+      if (error instanceof NumberError) throw new ConfigError(error.message, position, {}, { cause: error });
 
       throw error;
     }

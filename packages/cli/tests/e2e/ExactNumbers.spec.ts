@@ -64,6 +64,19 @@ describe('a number past what JavaScript holds exactly', () => {
     expect(actions.map((action) => action.type)).toEqual(['UPDATE']);
   });
 
+  // -0.10000000000000000001 is -0.1 to JavaScript; state has to keep every digit.
+  it('keeps a negative decimal as it was written, and plans no change for it once applied', async () => {
+    const config = `resource "null_resource" "a" { triggers = { d = -0.10000000000000000001, e = 2.5e-3 } }`;
+    await apply(config);
+
+    const written = await fs.readFile(path.join(dir, 'clay.state.json'), 'utf8');
+    const { actions } = await newOrchestrator().plan(config);
+
+    expect(written).toContain('"d": -0.10000000000000000001');
+    expect(written).toContain('"e": 0.0025');
+    expect(actions.map((action) => action.type)).toEqual(['NO_OP']);
+  });
+
   it('is joined into a string as it was written', async () => {
     await apply(`
       resource "local_file" "a" { path = "${path.join(dir, 'a.txt')}" content = "id \${var.id}" }

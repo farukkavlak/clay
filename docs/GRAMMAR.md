@@ -5,20 +5,21 @@ in a directory; a module is another directory with its own `main.clay`.
 
 ## Tokens
 
-| Token        | Pattern                   | Notes                                                                |
-| ------------ | ------------------------- | -------------------------------------------------------------------- |
-| `IDENTIFIER` | `[A-Za-z_][A-Za-z0-9_-]*` | Block kinds, attribute names, reference parts; not `true` or `false` |
-| `STRING`     | `"[^"]*"`                 | No escapes; a `"` cannot appear inside; may span lines               |
-| `NUMBER`     | `[0-9]+`                  | Integers only; no sign, no decimal point; at most 1000 digits        |
-| `BOOLEAN`    | `true`, `false`           |                                                                      |
-| `LBRACE`     | `{`                       |                                                                      |
-| `RBRACE`     | `}`                       |                                                                      |
-| `LBRACKET`   | `[`                       |                                                                      |
-| `RBRACKET`   | `]`                       |                                                                      |
-| `COMMA`      | `,`                       |                                                                      |
-| `ASSIGN`     | `=`                       |                                                                      |
-| `DOT`        | `.`                       |                                                                      |
-| `EOF`        |                           | Ends every token stream                                              |
+| Token        | Pattern                               | Notes                                                                |
+| ------------ | ------------------------------------- | -------------------------------------------------------------------- |
+| `IDENTIFIER` | `[A-Za-z_][A-Za-z0-9_-]*`             | Block kinds, attribute names, reference parts; not `true` or `false` |
+| `STRING`     | `"[^"]*"`                             | No escapes; a `"` cannot appear inside; may span lines               |
+| `NUMBER`     | `[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?` | No sign; `007` is `7`; at most 1000 places either side of the point  |
+| `MINUS`      | `-`                                   | Only before a number                                                 |
+| `BOOLEAN`    | `true`, `false`                       |                                                                      |
+| `LBRACE`     | `{`                                   |                                                                      |
+| `RBRACE`     | `}`                                   |                                                                      |
+| `LBRACKET`   | `[`                                   |                                                                      |
+| `RBRACKET`   | `]`                                   |                                                                      |
+| `COMMA`      | `,`                                   |                                                                      |
+| `ASSIGN`     | `=`                                   |                                                                      |
+| `DOT`        | `.`                                   |                                                                      |
+| `EOF`        |                                       | Ends every token stream                                              |
 
 Whitespace and comments are skipped. A comment runs from `#` or
 `//` to the end of the line. Every token carries the file, line and column it starts at.
@@ -63,11 +64,14 @@ What the engine reads from each:
 ## Values
 
 ```
-value   = STRING | NUMBER | BOOLEAN | reference | list | map
+value   = STRING | [ "-" ] NUMBER | BOOLEAN | reference | list | map
 list    = "[" [ value { "," value } [ "," ] ] "]"
 map     = "{" { key "=" value [ "," ] } "}"
 key     = IDENTIFIER | STRING
 ```
+
+A minus may stand apart from its number: `- 5` is `-5`. A name keeps its dash, so
+`a-1` is one identifier, not `a` minus `1`.
 
 A list needs a comma between items and may end with one. A map does not need commas.
 A map key may be a bare identifier or a quoted string, and appears once; a block kind is
@@ -172,7 +176,6 @@ parser stopped on. The lexer throws the same for a character it does not know.
 
 ## Not in the language
 
-- Negative and decimal numbers
 - Escape sequences in strings
 - Expressions, operators and functions; a value is a literal or a reference
 - `count`, `for_each`, `depends_on`, lifecycle blocks, provisioners

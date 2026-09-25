@@ -3,7 +3,8 @@ import { Position } from './Position';
 export enum TokenType {
   Identifier = 'IDENTIFIER', // Block kinds, attribute names, reference parts
   String = 'STRING', // "value"
-  Number = 'NUMBER', // 123
+  Number = 'NUMBER', // 123, 1.5, 1e3
+  Minus = 'MINUS', // - (before a number)
   Boolean = 'BOOLEAN', // true, false
   LBrace = 'LBRACE', // {
   RBrace = 'RBRACE', // }
