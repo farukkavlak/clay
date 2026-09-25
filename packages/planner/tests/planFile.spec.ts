@@ -62,6 +62,7 @@ describe('reading a plan file', () => {
           attributes: {
             id: { type: 'Number', value: ExactNumber.parse('12345678901234567890'), position: at },
             tags: { type: 'List', value: [{ type: 'Map', value: { n: { type: 'Number', value: ExactNumber.parse('1'), position: at } }, position: at }], position: at },
+            label: { type: 'Template', value: ['id ', { type: 'Reference', value: ['var', 'id'], position: at }], position: at },
           },
         },
       ],

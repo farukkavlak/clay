@@ -107,12 +107,12 @@ the plan if the state has changed since.
 An error says where it was written:
 
 ```
-Planning failed: "tags: ${var.tags}" cannot be joined into a string: var.tags is a list
+Planning failed: var.tags is a list and cannot be joined into a string
 
   on modules/app/main.clay line 4, in resource "local_file" "a":
 
   4:   content = "tags: ${var.tags}"
-                 ^
+                          ^
 
   in module.app
 ```

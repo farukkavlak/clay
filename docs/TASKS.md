@@ -221,6 +221,9 @@ by resource type, and no `provider` block exists yet.
       prints the graph's own key, `vars:a`, for a variable the configuration spells `var.a`
 - [ ] An attribute name has no position of its own. Only its value is a node, so an
       error about the name points a caret at the value next to it
+- [ ] A reference in a string that fails as it is resolved points at the string, not at
+      the reference. The parse and the graph point at the reference; a resolver throws
+      plain errors, and one of them means "not in state yet", so it cannot be wrapped blindly
 - [ ] "Did you mean": a reference to a name one edit away from a declared one says so
 - [ ] Provider errors carry what to do next, not only what went wrong
 - [ ] An output that fails to resolve reports a failure. `resolveOutput` runs outside the

@@ -9,11 +9,17 @@ interface Node {
   position: Position;
 }
 
+export type ReferenceNode = Node & { type: 'Reference'; value: string[] }; // e.g., ["resource_type", "resource_name", "attribute"]
+
+/** A piece of a string with `${ … }` in it: text, or the reference an interpolation reads. */
+export type TemplatePart = string | ReferenceNode;
+
 export type AttributeValue =
   | (Node & { type: 'String'; value: string })
+  | (Node & { type: 'Template'; value: TemplatePart[] })
   | (Node & { type: 'Number'; value: ExactNumber })
   | (Node & { type: 'Boolean'; value: boolean })
-  | (Node & { type: 'Reference'; value: string[] }) // e.g., ["resource_type", "resource_name", "attribute"]
+  | ReferenceNode
   | (Node & { type: 'List'; value: AttributeValue[] })
   | (Node & { type: 'Map'; value: Record<string, AttributeValue> });
 
