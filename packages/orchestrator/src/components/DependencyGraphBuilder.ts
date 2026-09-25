@@ -1,6 +1,6 @@
 import { Address } from '@clay/contracts';
 import { Graph } from '@clay/graph';
-import { AttributeValue, ModuleBlock, Position, spell } from '@clay/parser';
+import { AttributeValue, ConfigError, ModuleBlock, Position, spell } from '@clay/parser';
 
 import { childScope, outputKey, scopeOf, variableKey } from '../keys';
 import { tryAt } from '../place';
@@ -124,7 +124,11 @@ export class DependencyGraphBuilder {
 
   private addDependencies(value: unknown, graph: Graph<GraphNode>, dependentKey: string, context: Address, moduleScopes: Set<string>): void {
     for (const reference of this.scanner.referencesIn(value, context)) {
-      if (!graph.hasNode(reference.key)) throw new Error(`Invalid reference in "${dependentKey}": ${describeMissing(reference, moduleScopes)}`);
+      if (!graph.hasNode(reference.key)) {
+        const message = `Invalid reference in "${dependentKey}": ${describeMissing(reference, moduleScopes)}`;
+        // A string may hold several references, so the one missing is a closer place than the value it sits in.
+        throw reference.position ? new ConfigError(message, reference.position) : new Error(message);
+      }
 
       graph.addEdge(reference.key, dependentKey);
     }

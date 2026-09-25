@@ -1,7 +1,9 @@
 import { ExactNumber, NumberError } from '@clay/contracts';
-import { AttributeValue, DataBlock, ModuleBlock, OutputBlock, Program, ResourceBlock, spell, Statement, VariableBlock } from './ast';
+import { AttributeValue, DataBlock, ModuleBlock, OutputBlock, Program, ReferenceNode, ResourceBlock, spell, Statement, VariableBlock } from './ast';
 import { ConfigError } from './ConfigError';
-import { Position } from './Position';
+import { Lexer } from './Lexer';
+import { advanced, Position } from './Position';
+import { Piece, splitTemplate } from './template';
 import { Token, TokenType } from './tokens';
 
 /** What a reference can spell, so a declared name can always be read back. */
@@ -153,7 +155,7 @@ export class Parser {
   private parseValue(): AttributeValue {
     const position = this.peek().position;
 
-    if (this.matchToken(TokenType.String)) return { type: 'String', value: this.previous().value, position };
+    if (this.matchToken(TokenType.String)) return this.parseString(this.previous());
     if (this.matchToken(TokenType.Number)) return { type: 'Number', value: this.exactNumber(this.previous().value, position), position };
     if (this.matchToken(TokenType.Minus)) return this.parseNegative(position);
     if (this.matchToken(TokenType.Boolean)) return { type: 'Boolean', value: this.previous().value === 'true', position };
@@ -172,6 +174,37 @@ export class Parser {
     return { type: 'Number', value: this.exactNumber(`-${number.value}`, position), position };
   }
 
+  /** A string with `${ … }` in it is a template: its text, and the references read into it, each where it was written. */
+  private parseString(token: Token): AttributeValue {
+    const pieces = this.piecesOf(token);
+    const texts = pieces.filter((piece) => piece.kind === 'text');
+    if (texts.length === pieces.length) return { type: 'String', value: texts.map((piece) => piece.text).join(''), position: token.position };
+
+    return { type: 'Template', value: pieces.map((piece) => (piece.kind === 'text' ? piece.text : this.interpolation(piece))), position: token.position };
+  }
+
+  private piecesOf(token: Token): Piece[] {
+    return splitTemplate(token.value, advanced(token.position, '"'));
+  }
+
+  private interpolation(piece: Piece & { kind: 'interpolation' }): ReferenceNode {
+    // The lexer would skip a comment, and the reference would read as if the comment were not there.
+    const comment = /#|\/\//.exec(piece.text);
+    if (comment) throw new ConfigError("A comment cannot sit inside '${'", advanced(piece.position, piece.text.slice(0, comment.index)));
+
+    return new Parser(new Lexer(piece.text, piece.position.file, piece.position).tokenize()).parseInterpolation();
+  }
+
+  /** What one `${ … }` holds, lexed on its own: a reference and nothing else. */
+  private parseInterpolation(): ReferenceNode {
+    if (!this.check(TokenType.Identifier)) return this.error("Expect a reference inside '${'.");
+
+    const reference = this.parseReference(this.peek().position);
+    if (!this.isAtEnd()) return this.error("Expect '}' after the reference.");
+
+    return reference;
+  }
+
   private parseList(position: Position): AttributeValue {
     const values: AttributeValue[] = [];
     while (!this.check(TokenType.RBracket) && !this.isAtEnd()) {
@@ -186,6 +219,8 @@ export class Parser {
     const map: Record<string, AttributeValue> = {};
     while (!this.check(TokenType.RBrace) && !this.isAtEnd()) {
       const key = this.matchToken(TokenType.String) ? this.previous() : this.consume(TokenType.Identifier, 'Expect key in map.');
+      if (key.type === TokenType.String && this.piecesOf(key).some((piece) => piece.kind === 'interpolation'))
+        throw new ConfigError('A map key is plain text; it cannot hold an interpolation', key.position);
       this.checkKey(map, key);
 
       this.consume(TokenType.Assign, "Expect '=' after key in map.");
@@ -202,7 +237,7 @@ export class Parser {
     if (Object.hasOwn(entries, key.value)) throw new ConfigError(`${key.value} is set twice`, key.position);
   }
 
-  private parseReference(position: Position): AttributeValue {
+  private parseReference(position: Position): ReferenceNode {
     const parts: string[] = [];
 
     parts.push(this.advance().value);

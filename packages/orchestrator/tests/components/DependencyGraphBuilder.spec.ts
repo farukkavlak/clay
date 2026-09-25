@@ -1,5 +1,5 @@
 import { Address } from '@clay/contracts';
-import { AttributeValue, Statement } from '@clay/parser';
+import { AttributeValue, ReferenceNode, Statement } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
 import { DependencyGraphBuilder } from '../../src/components/DependencyGraphBuilder';
@@ -50,6 +50,23 @@ describe('DependencyGraphBuilder', () => {
     const main = resource('main', { id: ref('resource', 'typo', 'id') });
 
     expect(() => builder.buildExecutionGraph([main], [])).toThrow('"resource.typo" is not declared in the configuration');
+  });
+
+  // A string may hold several references, so an error has to name the place of the one that is missing.
+  it('should point at the missing reference, not at the template it sits in', () => {
+    const typo: ReferenceNode = { type: 'Reference', value: ['resource', 'typo', 'id'], position: { file: 'main.clay', line: 3, column: 9 } };
+    const main = resource('main', { line: { type: 'Template', value: ['id ', typo], position: { file: 'main.clay', line: 3, column: 1 } } });
+
+    expect(() => builder.buildExecutionGraph([main], [])).toThrow(expect.objectContaining({ position: typo.position }));
+  });
+
+  // A value built by hand may carry no position of its own; the value it sits in still places it.
+  it('should place a missing reference with no position at the value it sits in', () => {
+    const at = { file: 'main.clay', line: 3, column: 1 };
+    const typo = { type: 'Reference', value: ['resource', 'typo', 'id'] } as ReferenceNode;
+    const main = resource('main', { line: { type: 'Template', value: ['id ', typo], position: at } });
+
+    expect(() => builder.buildExecutionGraph([main], [])).toThrow(expect.objectContaining({ position: at }));
   });
 
   it('should run a variable after the resource its default reads', () => {

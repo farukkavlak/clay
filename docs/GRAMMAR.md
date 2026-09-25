@@ -101,6 +101,12 @@ through its outputs.
 
 ### Interpolation
 
+A `${...}` in a string holds one reference and nothing else, and is read as the file is
+parsed: one that never closes, is empty or holds anything else is refused where it is
+written. A string with one is a `Template` node, its text and its references in order, and
+each reference keeps its own position. A comment cannot sit inside one, and a map key is
+plain text and cannot hold one.
+
 A string that is one `${...}` and nothing else is the referenced value itself, with its
 type: `length = "${var.n}"` is a number if `var.n` is one. Anything else, text around it
 or a second `${...}`, makes a string, and a list or map in such a string is an error.
@@ -119,11 +125,14 @@ interface Position {
 
 type AttributeValue =
   | { type: 'String'; value: string; position: Position }
+  | { type: 'Template'; value: (string | Reference)[]; position: Position }
   | { type: 'Number'; value: ExactNumber; position: Position }
   | { type: 'Boolean'; value: boolean; position: Position }
-  | { type: 'Reference'; value: string[]; position: Position }
+  | Reference
   | { type: 'List'; value: AttributeValue[]; position: Position }
   | { type: 'Map'; value: Record<string, AttributeValue>; position: Position };
+
+type Reference = { type: 'Reference'; value: string[]; position: Position };
 
 interface ResourceBlock {
   type: 'Resource';
@@ -171,8 +180,9 @@ A `Reference` holds the dotted parts split up: `local_file.a.content` is
 
 ## Errors
 
-A parse error is a `ConfigError` with the message and the position of the token the
-parser stopped on. The lexer throws the same for a character it does not know.
+A parse error is a `ConfigError` with the message and the position where it went wrong:
+the token the parser stopped on, or the place inside a string a `${...}` breaks. The lexer
+throws the same for a character it does not know.
 
 ## Not in the language
 

@@ -79,12 +79,12 @@ describe('validate against real files', () => {
     expect(output).toContain('\n  1: resource "local_file" "a.b" { path = "a.txt" content = "hi" }\n                           ^');
   });
 
-  it('refuses a reference with no attribute, and points at the value it is written in', async () => {
+  it('refuses a reference with no attribute, and points at it', async () => {
     const output = await validate('resource "local_file" "f" {\n  path = "a.txt"\n  content = "${local_file.other}"\n}');
 
     expect(output).toContain('Resource reference must include attribute: local_file.other');
     expect(output).toContain('on main.clay line 3, in resource "local_file" "f":');
-    expect(output).toContain('\n  3:   content = "${local_file.other}"\n                 ^');
+    expect(output).toContain('\n  3:   content = "${local_file.other}"\n                    ^');
   });
 
   // A data source is read as the configuration loads, so its values reach no scanner; the rule holds for them all the same.
@@ -99,12 +99,12 @@ describe('validate against real files', () => {
   });
 
   // The graph knows the name is missing; the place comes from the attribute that reads it, not from the block around it.
-  it('points at the attribute that reads a name the configuration never declares', async () => {
+  it('points at a reference to a name the configuration never declares', async () => {
     const output = await validate('resource "local_file" "f" {\n  path    = "a.txt"\n  content = "${var.missing}"\n}');
 
     expect(output).toContain('Invalid reference in "local_file.f": variable "missing" is not defined');
     expect(output).toContain('on main.clay line 3, in resource "local_file" "f":');
-    expect(output).toContain('\n  3:   content = "${var.missing}"\n                 ^');
+    expect(output).toContain('\n  3:   content = "${var.missing}"\n                    ^');
   });
 
   it('refuses a reference that reads deeper than the attribute it names', async () => {
@@ -126,7 +126,7 @@ resource "local_file" "b" {
   it('refuses a reference with an empty part, rather than naming a target nobody wrote', async () => {
     const output = await validate('resource "local_file" "b" { content = "${local_file..id}" }');
 
-    expect(output).toContain('Reference "local_file..id" has a part that is empty');
+    expect(output).toContain('Expect property name after dot.');
     expect(output).not.toContain('is not declared');
   });
 

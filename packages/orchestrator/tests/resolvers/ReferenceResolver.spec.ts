@@ -1,4 +1,4 @@
-import { Address, State } from '@clay/contracts';
+import { Address, ExactNumber, State } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { ReferenceResolver } from '../../src/resolvers/ReferenceResolver';
@@ -79,20 +79,21 @@ describe('ReferenceResolver', () => {
     expect(result).toEqual(arr);
   });
 
-  it('should resolve String interpolation', () => {
-    const val = {
-      type: 'String',
-      value: 'Value is ${resource.test.val}',
-    };
-    expect(resolver.resolveValue(val, mockState, context)).toBe('Value is resolved');
+  it('should join a template into text', () => {
+    const template = { type: 'Template', value: ['Var: ', { type: 'Reference', value: ['var', 'my_var'] }, ', Res: ', { type: 'Reference', value: ['resource', 'test', 'val'] }] };
+
+    expect(resolver.resolveValue(template, mockState, context)).toBe('Var: var_value, Res: resolved');
   });
 
-  it('should resolve nested interpolation', () => {
-    const val = {
-      type: 'String',
-      value: 'Var: ${var.my_var}, Res: ${resource.test.val}',
-    };
-    expect(resolver.resolveValue(val, mockState, context)).toBe('Var: var_value, Res: resolved');
+  it('should give a template of one reference as the value itself', () => {
+    scopeManager.setVariable('', 'n', { value: ExactNumber.parse('8'), context: new Address([], '', '') });
+
+    expect(resolver.resolveValue({ type: 'Template', value: [{ type: 'Reference', value: ['var', 'n'] }] }, mockState, context)).toEqual(ExactNumber.parse('8'));
+  });
+
+  // The parser has already read every interpolation out of a string, so what is left is text, whatever it spells.
+  it('should leave a string that spells an interpolation as text', () => {
+    expect(resolver.resolveValue({ type: 'String', value: 'Value is ${resource.test.val}' }, mockState, context)).toBe('Value is ${resource.test.val}');
   });
 
   it('should unwrap a number or a boolean node', () => {

@@ -38,11 +38,18 @@ describe('ReferenceScanner', () => {
     expect(scanner.referencesIn(attributes, context).map((reference) => reference.key)).toEqual(['resource.dep']);
   });
 
-  it('should find every reference in an interpolated string', () => {
-    const value = '${resource.db.endpoint} and ${resource.kv.id}';
-    const attributes = { line: { type: 'String', value } };
+  it('should find every reference in a template', () => {
+    const attributes = {
+      line: { type: 'Template', value: [{ type: 'Reference', value: ['resource', 'db', 'endpoint'] }, ' and ', { type: 'Reference', value: ['resource', 'kv', 'id'] }] },
+    };
 
     expect(scanner.referencesIn(attributes, context).map((reference) => reference.key)).toEqual(['resource.db', 'resource.kv']);
+  });
+
+  it('should find no reference in a string that spells one', () => {
+    const attributes = { line: { type: 'String', value: '${resource.db.endpoint}' } };
+
+    expect(scanner.referencesIn(attributes, context)).toEqual([]);
   });
 
   it('should point a module reference at the output node', () => {

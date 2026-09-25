@@ -10,11 +10,12 @@ function positionOf(value: unknown): Position | undefined {
   return typeof candidate.file === 'string' && typeof candidate.line === 'number' && typeof candidate.column === 'number' ? (candidate as Position) : undefined;
 }
 
-/** What a config value reads from, with the graph key it is addressed by. */
-export type Reference =
+/** What a config value reads from, with the graph key it is addressed by, and where it was written. */
+export type Reference = (
   | { kind: 'resource'; key: string; address: string }
   | { kind: 'variable'; key: string; name: string }
-  | { kind: 'output'; key: string; scope: string; module: string; name: string };
+  | { kind: 'output'; key: string; scope: string; module: string; name: string }
+) & { position?: Position };
 
 export class ReferenceScanner {
   referencesIn(value: unknown, context: Address): Reference[] {
@@ -34,15 +35,7 @@ export class ReferenceScanner {
     const position = positionOf(obj.position);
 
     if (obj.type === 'Reference' && Array.isArray(obj.value)) this.addReference(obj.value as string[], context, references, position);
-    else if (obj.type === 'String' && typeof obj.value === 'string') this.addInterpolations(obj.value, context, references, position);
     else for (const item of Object.values(obj)) this.collect(item, context, references);
-  }
-
-  private addInterpolations(content: string, context: Address, references: Reference[], position?: Position): void {
-    const regex = /\${([^}]+)}/g;
-    let match: RegExpExecArray | null;
-
-    while ((match = regex.exec(content)) !== null) this.addReference(match[1].trim().split('.'), context, references, position);
   }
 
   private addReference(refParts: string[], context: Address, references: Reference[], position?: Position): void {
@@ -52,13 +45,13 @@ export class ReferenceScanner {
     // A data source is read where the config loads, so it is no node of its own.
     if (reference.kind === 'data') return;
 
-    if (reference.kind === 'variable') references.push({ kind: 'variable', key: variableKey(scope, reference.name), name: reference.name });
+    if (reference.kind === 'variable') references.push({ kind: 'variable', key: variableKey(scope, reference.name), name: reference.name, position });
     else if (reference.kind === 'module') {
       const child = childScope(scope, reference.module);
-      references.push({ kind: 'output', key: outputKey(child, reference.output), scope: child, module: reference.module, name: reference.output });
+      references.push({ kind: 'output', key: outputKey(child, reference.output), scope: child, module: reference.module, name: reference.output, position });
     } else {
       const address = new Address(context.modulePath, reference.type, reference.name).toString();
-      references.push({ kind: 'resource', key: address, address });
+      references.push({ kind: 'resource', key: address, address, position });
     }
   }
 }

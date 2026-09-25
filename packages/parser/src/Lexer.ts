@@ -1,5 +1,5 @@
 import { ConfigError } from './ConfigError';
-import { Position } from './Position';
+import { advanced, Position } from './Position';
 import { Token, TokenType } from './tokens';
 
 interface TokenSpec {
@@ -33,16 +33,18 @@ export class Lexer {
     { type: TokenType.Assign, regex: /=/y },
   ];
 
+  /** `start` is where the input begins in its file, for a piece of a file lexed on its own. */
   constructor(
     private input: string,
-    private file: string
+    private file: string,
+    private start = { line: 1, column: 1 }
   ) {}
 
   tokenize(): Token[] {
     const tokens: Token[] = [];
     this.cursor = 0;
-    this.line = 1;
-    this.column = 1;
+    this.line = this.start.line;
+    this.column = this.start.column;
 
     while (this.cursor < this.input.length) {
       const skipped = this.matchHere(this.skip);
@@ -85,11 +87,7 @@ export class Lexer {
   }
 
   private advance(text: string) {
-    for (const char of text)
-      if (char === '\n') {
-        this.line++;
-        this.column = 1;
-      } else this.column++;
+    ({ line: this.line, column: this.column } = advanced(this.here(), text));
     this.cursor += text.length;
   }
 }

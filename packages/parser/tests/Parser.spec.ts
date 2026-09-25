@@ -26,6 +26,8 @@ function errorOf(input: string, file: string = CONFIG_FILE): ConfigError {
 }
 
 const attributesOf = (input: string) => (makeParser(input).parse()[0] as ResourceBlock).attributes;
+const valueOf = (written: string) => attributesOf(`resource "t" "n" { v = ${written} }`).v;
+const reference = (parts: string[], column: number, line = 1) => ({ type: 'Reference', value: parts, position: at(line, column) });
 
 describe('Clay Parser', () => {
   describe('Valid Cases', () => {
@@ -306,6 +308,48 @@ describe('Clay Parser', () => {
 
       expect(error.message).toContain(message);
       expect(error.position).toEqual(position);
+    });
+  });
+
+  describe('Interpolation', () => {
+    it('reads a string with an interpolation as its text and the reference, each where it was written', () => {
+      expect(valueOf('"a ${var.x} b"')).toEqual({ type: 'Template', value: ['a ', reference(['var', 'x'], 29), ' b'], position: at(1, 24) });
+    });
+
+    it('reads a string that is one interpolation as the reference alone', () => {
+      expect(valueOf('"${ var.x }"')).toEqual({ type: 'Template', value: [reference(['var', 'x'], 28)], position: at(1, 24) });
+    });
+
+    it('places a reference on the line it was written on, in a string over two lines', () => {
+      expect(valueOf('"a\n  ${local_file.f.id}"')).toEqual({ type: 'Template', value: ['a\n  ', reference(['local_file', 'f', 'id'], 5, 2)], position: at(1, 24) });
+    });
+
+    it('keeps a string with no interpolation a string', () => {
+      expect(valueOf('"$ { } $x"')).toEqual({ type: 'String', value: '$ { } $x', position: at(1, 24) });
+    });
+
+    it.each([
+      ['one that is never closed', '"a ${var.x"', "This '${' is never closed with '}'", at(1, 27)],
+      ['one that is empty', '"${}"', "Expect a reference inside '${'", at(1, 27)],
+      ['one that holds no reference', '"${1}"', "Expect a reference inside '${'", at(1, 27)],
+      ['one with more than a reference', '"${var.x y}"', "Expect '}' after the reference", at(1, 33)],
+      ['one whose reference ends on a dot', '"${var.}"', 'Expect property name after dot', at(1, 31)],
+      ['one holding a character the lexer knows nothing about', '"${a+b}"', 'Unexpected character: "+"', at(1, 28)],
+      ['one holding a comment', '"${var.x # note}"', "A comment cannot sit inside '${'", at(1, 33)],
+      ['one holding a comment of the other kind', '"${var.x // note}"', "A comment cannot sit inside '${'", at(1, 33)],
+    ])('refuses %s where it is written', (_, written, message, position) => {
+      const error = errorOf(`resource "t" "n" { v = ${written} }`);
+
+      expect(error.message).toContain(message);
+      expect(error.position).toEqual(position);
+    });
+
+    // A key is read as it is written, so an interpolation in one would be text that looks like a reference.
+    it('refuses an interpolation in a map key', () => {
+      const error = errorOf('resource "t" "n" { m = { "${var.k}" = 1 } }');
+
+      expect(error.message).toBe('A map key is plain text; it cannot hold an interpolation');
+      expect(error.position).toEqual(at(1, 26));
     });
   });
 

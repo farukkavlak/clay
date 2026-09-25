@@ -1,5 +1,5 @@
 import { Address, ExactNumber, State } from '@clay/contracts';
-import { parseReference } from '@clay/parser';
+import { ConfigError, parseReference, ReferenceNode, TemplatePart } from '@clay/parser';
 import { ScopeManager } from '../scope/ScopeManager';
 import { DataSourceResolver } from './DataSourceResolver';
 import { ModuleOutputResolver } from './ModuleOutputResolver';
@@ -45,8 +45,8 @@ export class ReferenceResolver {
       case 'Reference': {
         return this.resolve(node.value as string[], state, context);
       }
-      case 'String': {
-        return this.interpolateString(node.value as string, state, context);
+      case 'Template': {
+        return this.resolveTemplate(node.value as TemplatePart[], state, context);
       }
       case 'List': {
         return this.resolveList(node, state, context);
@@ -54,6 +54,7 @@ export class ReferenceResolver {
       case 'Map': {
         return this.resolveMap(node, state, context);
       }
+      case 'String':
       case 'Number':
       case 'Boolean': {
         return node.value;
@@ -79,17 +80,19 @@ export class ReferenceResolver {
     return resolvedMap;
   }
 
-  /** A string that is one interpolation is the value itself, type and all; text around it makes it a string. */
-  interpolateString(value: string, state: State, context?: Address): unknown {
-    const whole = value.match(/^\${([^}]+)}$/);
-    if (whole) return this.resolve(whole[1].trim().split('.'), state, context);
+  /** A template that is one interpolation is the value itself, type and all; text around it makes it a string. */
+  private resolveTemplate(parts: TemplatePart[], state: State, context?: Address): unknown {
+    const [first] = parts;
+    if (parts.length === 1 && typeof first !== 'string') return this.resolve(first.value, state, context);
 
-    return value.replaceAll(/\${([^}]+)}/g, (_: string, expr: string) => {
-      const resolved = this.resolve(expr.trim().split('.'), state, context);
-      if (resolved !== null && typeof resolved === 'object' && !(resolved instanceof ExactNumber))
-        throw new Error(`"${value}" cannot be joined into a string: ${expr.trim()} is a ${Array.isArray(resolved) ? 'list' : 'map'}`);
+    return parts.map((part) => (typeof part === 'string' ? part : this.joined(part, state, context))).join('');
+  }
 
-      return String(resolved);
-    });
+  private joined(reference: ReferenceNode, state: State, context?: Address): string {
+    const resolved = this.resolve(reference.value, state, context);
+    if (resolved !== null && typeof resolved === 'object' && !(resolved instanceof ExactNumber))
+      throw new ConfigError(`${reference.value.join('.')} is a ${Array.isArray(resolved) ? 'list' : 'map'} and cannot be joined into a string`, reference.position);
+
+    return String(resolved);
   }
 }
