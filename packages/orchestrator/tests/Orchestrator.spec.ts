@@ -1,4 +1,4 @@
-import { Provider, Schema } from '@clay/contracts';
+import { ExactNumber, Provider, Schema } from '@clay/contracts';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -151,7 +151,7 @@ describe('Orchestrator', () => {
       // All values should be extracted from AttributeValue format
       expect(inputs).toEqual({
         name: 'test',
-        count: 42,
+        count: ExactNumber.parse('42'),
         enabled: true,
       });
     });
@@ -361,7 +361,7 @@ describe('Orchestrator', () => {
       const [, inputs] = [...updated.entries()][0];
       expect(inputs).toEqual({
         name: 'updated',
-        count: 10,
+        count: ExactNumber.parse('10'),
         enabled: false,
       });
     });

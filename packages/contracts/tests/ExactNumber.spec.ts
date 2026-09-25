@@ -1,7 +1,7 @@
 import { isDeepStrictEqual } from 'node:util';
 import { describe, expect, it } from 'vitest';
 
-import { ExactNumber } from '../src/ExactNumber';
+import { ExactNumber, NumberError } from '../src/ExactNumber';
 
 const digits = (count: number) => '9'.repeat(count);
 
@@ -51,18 +51,34 @@ describe('ExactNumber', () => {
     });
 
     it.each([
-      ['a whole number of a thousand and one digits', digits(1001)],
-      ['a power of ten a thousand and one places up', '1e1000'],
-      ['a fraction a thousand and one places down', '1e-1001'],
-      ['an exponent JavaScript would round', '1e9007199254740993'],
-      ['an exponent JavaScript would call infinite', `1e${digits(400)}`],
-    ])('refuses %s', (_, text) => {
-      expect(() => ExactNumber.parse(text)).toThrow(`"${text}" is out of range: a number reaches at most 1000 places either side of the point`);
+      ['a whole number of a thousand and one digits', digits(1001), `"${digits(20)}…" (1001 characters)`],
+      ['a power of ten a thousand and one places up', '1e1000', '"1e1000"'],
+      ['a fraction a thousand and one places down', '1e-1001', '"1e-1001"'],
+      ['an exponent JavaScript would round', '1e9007199254740993', '"1e9007199254740993"'],
+      ['an exponent JavaScript would call infinite', `1e${digits(400)}`, `"1e${digits(18)}…" (402 characters)`],
+    ])('refuses %s', (_, text, quoted) => {
+      expect(() => ExactNumber.parse(text)).toThrow(`${quoted} is out of range: a number reaches at most 1000 places either side of the point`);
     });
+  });
+
+  // A caller catches this class and lets any other failure through, so every refusal has to be one.
+  it.each([
+    ['a text that is no number', () => ExactNumber.parse('abc')],
+    ['a number out of range', () => ExactNumber.parse('1e1000')],
+    ['a fraction as an integer', () => ExactNumber.parse('1.5').toSafeInteger()],
+    ['a number past 2^53 as an integer', () => ExactNumber.parse('9007199254740993').toSafeInteger()],
+  ])('refuses %s with a NumberError', (_, refused) => {
+    expect(refused).toThrow(NumberError);
   });
 
   it('is written into JSON as the number it is, not rounded', () => {
     expect(JSON.stringify({ id: ExactNumber.parse('12345678901234567890'), list: [ExactNumber.parse('1.50')] })).toBe('{"id":12345678901234567890,"list":[1.5]}');
+  });
+
+  it('reads every number in JSON text exactly, however deep', () => {
+    const read = ExactNumber.readJSON('{"id": 12345678901234567890, "list": [1.50, {"n": 9007199254740993}], "text": "42"}');
+
+    expect(JSON.stringify(read)).toBe('{"id":12345678901234567890,"list":[1.5,{"n":9007199254740993}],"text":"42"}');
   });
 
   describe('as a JavaScript integer', () => {
@@ -76,11 +92,20 @@ describe('ExactNumber', () => {
     });
 
     it.each(['9007199254740992', '-9007199254740992'])('refuses %s, which JavaScript would round', (text) => {
-      expect(() => ExactNumber.parse(text).toSafeInteger()).toThrow(`${text} is outside the range a whole number can have here, -9007199254740991 to 9007199254740991`);
+      expect(() => ExactNumber.parse(text).toSafeInteger()).toThrow(`${text} is outside the range -9007199254740991 to 9007199254740991`);
     });
 
     it('refuses a number that is not whole', () => {
       expect(() => ExactNumber.parse('1.5').toSafeInteger()).toThrow('1.5 is not a whole number');
+    });
+
+    // The caller knows what the number is for, and the refusal is read far from where it was written.
+    it('names what the number is, when told', () => {
+      expect(() => ExactNumber.parse('1.5').toSafeInteger('its serial')).toThrow('its serial: 1.5 is not a whole number');
+    });
+
+    it('does not write a long number out in full when refusing it', () => {
+      expect(() => ExactNumber.parse(digits(900)).toSafeInteger()).toThrow(`${digits(20)}… (900 characters) is outside the range -9007199254740991 to 9007199254740991`);
     });
   });
 });

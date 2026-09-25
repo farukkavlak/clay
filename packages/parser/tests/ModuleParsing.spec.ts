@@ -1,3 +1,4 @@
+import { ExactNumber } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { CONFIG_FILE, ModuleBlock } from '../src/ast';
@@ -44,7 +45,7 @@ describe('Clay Parser - Modules', () => {
 
     expect((result[0] as ModuleBlock).attributes).toMatchObject({
       source: { type: 'String', value: './modules/app' },
-      instances: { type: 'Number', value: 3 },
+      instances: { type: 'Number', value: ExactNumber.parse('3') },
       enabled: { type: 'Boolean', value: true },
     });
   });

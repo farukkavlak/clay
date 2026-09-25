@@ -1,3 +1,4 @@
+import { ExactNumber } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { CONFIG_FILE, ResourceBlock } from '../src/ast';
@@ -46,7 +47,7 @@ describe('Complex Types Parsing', () => {
     expect(items.type).toBe('List');
     if (items.type === 'List') {
       expect(items.value).toHaveLength(3);
-      expect(items.value[1]).toMatchObject({ type: 'Number', value: 1 });
+      expect(items.value[1]).toMatchObject({ type: 'Number', value: ExactNumber.parse('1') });
     }
   });
 
@@ -71,7 +72,7 @@ describe('Complex Types Parsing', () => {
     expect(config.type).toBe('Map');
     if (config.type === 'Map') {
       expect(config.value.debug).toMatchObject({ type: 'Boolean', value: true });
-      expect(config.value.count).toMatchObject({ type: 'Number', value: 42 });
+      expect(config.value.count).toMatchObject({ type: 'Number', value: ExactNumber.parse('42') });
       expect(config.value.version).toMatchObject({ type: 'String', value: '1.0' });
     }
   });
@@ -104,7 +105,7 @@ describe('Complex Types Parsing', () => {
     if (matrix.type === 'List') {
       const firstRow = matrix.value[0];
       expect(firstRow.type).toBe('List');
-      if (firstRow.type === 'List') expect(firstRow.value[0]).toMatchObject({ type: 'Number', value: 1 });
+      if (firstRow.type === 'List') expect(firstRow.value[0]).toMatchObject({ type: 'Number', value: ExactNumber.parse('1') });
     }
 
     // Check nested map

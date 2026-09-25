@@ -1,4 +1,4 @@
-import { Address, State } from '@clay/contracts';
+import { Address, ExactNumber, State } from '@clay/contracts';
 import { parseReference } from '@clay/parser';
 import { ScopeManager } from '../scope/ScopeManager';
 import { DataSourceResolver } from './DataSourceResolver';
@@ -86,7 +86,7 @@ export class ReferenceResolver {
 
     return value.replaceAll(/\${([^}]+)}/g, (_: string, expr: string) => {
       const resolved = this.resolve(expr.trim().split('.'), state, context);
-      if (resolved !== null && typeof resolved === 'object')
+      if (resolved !== null && typeof resolved === 'object' && !(resolved instanceof ExactNumber))
         throw new Error(`"${value}" cannot be joined into a string: ${expr.trim()} is a ${Array.isArray(resolved) ? 'list' : 'map'}`);
 
       return String(resolved);

@@ -1,3 +1,4 @@
+import { ExactNumber } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { CONFIG_FILE, DataBlock } from '../src/ast';
@@ -44,7 +45,7 @@ describe('Parser - Data Blocks', () => {
     expect(block.dataSourceType).to.equal('local_file');
     expect(block.name).to.equal('foo');
     expect(block.attributes.filename).toMatchObject({ type: 'String', value: '/tmp/foo.txt' });
-    expect(block.attributes.id).toMatchObject({ type: 'Number', value: 123 });
+    expect(block.attributes.id).toMatchObject({ type: 'Number', value: ExactNumber.parse('123') });
   });
 
   it('should parse multiple data blocks', () => {

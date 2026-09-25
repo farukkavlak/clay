@@ -9,7 +9,7 @@ in a directory; a module is another directory with its own `main.clay`.
 | ------------ | ------------------------- | -------------------------------------------------------------------- |
 | `IDENTIFIER` | `[A-Za-z_][A-Za-z0-9_-]*` | Block kinds, attribute names, reference parts; not `true` or `false` |
 | `STRING`     | `"[^"]*"`                 | No escapes; a `"` cannot appear inside; may span lines               |
-| `NUMBER`     | `[0-9]+`                  | Integers only; no sign, no decimal point                             |
+| `NUMBER`     | `[0-9]+`                  | Integers only; no sign, no decimal point; at most 1000 digits        |
 | `BOOLEAN`    | `true`, `false`           |                                                                      |
 | `LBRACE`     | `{`                       |                                                                      |
 | `RBRACE`     | `}`                       |                                                                      |
@@ -115,7 +115,7 @@ interface Position {
 
 type AttributeValue =
   | { type: 'String'; value: string; position: Position }
-  | { type: 'Number'; value: number; position: Position }
+  | { type: 'Number'; value: ExactNumber; position: Position }
   | { type: 'Boolean'; value: boolean; position: Position }
   | { type: 'Reference'; value: string[]; position: Position }
   | { type: 'List'; value: AttributeValue[]; position: Position }

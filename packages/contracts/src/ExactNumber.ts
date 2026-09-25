@@ -1,7 +1,8 @@
-// Node 22.13, the engines floor, has JSON.rawJSON; the es2022 lib typings do not.
+// Node 22.13, the engines floor, has JSON.rawJSON and hands a reviver each value's source; the es2022 lib typings have neither.
 declare global {
   interface JSON {
     rawJSON(text: string): unknown;
+    parse(text: string, reviver: (this: unknown, key: string, value: unknown, context: { source?: string }) => unknown): unknown;
   }
 }
 
@@ -10,6 +11,16 @@ const NUMERAL = /^(-)?(\d+)(?:\.(\d+))?(?:[Ee]([+-]?\d+))?$/;
 
 /** Bounds the exponent, which would round past 2^53, and the length of the plain form. */
 const MAX_PLACES = 1000;
+
+/** A text or a value `ExactNumber` refuses; its own class, so a caller can catch it and let any other failure through. */
+export class NumberError extends Error {
+  override name = 'NumberError';
+}
+
+/** A refused text is shown back, but a number of a thousand digits is not worth reading twice. */
+function shown(text: string, quote = ''): string {
+  return text.length <= 40 ? `${quote}${text}${quote}` : `${quote}${text.slice(0, 20)}…${quote} (${text.length} characters)`;
+}
 
 /**
  * A number kept exactly as it was written. JavaScript's own numbers round past 2^53 and in most decimals.
@@ -24,13 +35,13 @@ export class ExactNumber {
 
   static parse(text: string): ExactNumber {
     const match = NUMERAL.exec(text);
-    if (!match) throw new Error(`"${text}" is not a number`);
+    if (!match) throw new NumberError(`${shown(text, '"')} is not a number`);
 
     const [, sign, whole, fraction = '', exponent = '0'] = match;
     const number = ExactNumber.normalized(sign === '-', whole + fraction, Number(exponent) - fraction.length);
 
     if (number.digits.length + number.exponent > MAX_PLACES || -number.exponent > MAX_PLACES)
-      throw new Error(`"${text}" is out of range: a number reaches at most ${MAX_PLACES} places either side of the point`);
+      throw new NumberError(`${shown(text, '"')} is out of range: a number reaches at most ${MAX_PLACES} places either side of the point`);
 
     return number;
   }
@@ -56,12 +67,13 @@ export class ExactNumber {
     return point > 0 ? `${this.digits.slice(0, point)}.${this.digits.slice(point)}` : `0.${'0'.repeat(-point)}${this.digits}`;
   }
 
-  /** For whoever needs a JavaScript number, as a provider sizing something does; refused rather than rounded. */
-  toSafeInteger(): number {
-    if (this.exponent < 0) throw new Error(`${this} is not a whole number`);
+  /** For whoever needs a JavaScript number, as a provider sizing something does; refused rather than rounded. `name` says what the number is. */
+  toSafeInteger(name?: string): number {
+    const refused = (problem: string) => new NumberError(`${name ? `${name}: ` : ''}${shown(this.toString())} ${problem}`);
+    if (this.exponent < 0) throw refused('is not a whole number');
 
     const value = Number(this.toString());
-    if (!Number.isSafeInteger(value)) throw new Error(`${this} is outside the range a whole number can have here, -${Number.MAX_SAFE_INTEGER} to ${Number.MAX_SAFE_INTEGER}`);
+    if (!Number.isSafeInteger(value)) throw refused(`is outside the range -${Number.MAX_SAFE_INTEGER} to ${Number.MAX_SAFE_INTEGER}`);
 
     return value;
   }
@@ -69,5 +81,11 @@ export class ExactNumber {
   /** Written into JSON as the number it is, so a state or a plan file keeps it exactly. */
   toJSON(): unknown {
     return JSON.rawJSON(this.toString());
+  }
+
+  /** JSON text with every number in it kept exactly; a file that holds numbers of its own turns those back itself. */
+  static readJSON(text: string): unknown {
+    // A number is a primitive, and a primitive always comes with its source.
+    return JSON.parse(text, (_, value, context) => (typeof value === 'number' ? ExactNumber.parse(context.source as string) : value));
   }
 }

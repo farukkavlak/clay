@@ -45,17 +45,17 @@ change each.
       key `@@clay/unknown`, so `triggers = { "@@clay/unknown" = true }` is unknown to the
       planner and plans an update forever. A sentinel is something a configuration cannot
       spell
-- [ ] An integer above 2^53 is rounded in silence: `12345678901234567890` plans as
-      `12345678901234567000`. A literal `Number.isSafeInteger` refuses is refused
+- [x] An integer above 2^53 is rounded in silence: `12345678901234567890` plans as
+      `12345678901234567000`. A number is kept exactly from the configuration to state,
+      a plan file and a provider, as Terraform keeps it
 
 ## 1. Language
 
 The parser takes integers, plain strings and one level of attribute access. A real
 configuration hits each of these early.
 
-- [ ] Negative and decimal numbers; only `[0-9]+` lexes today. A `-0` read back from
-      state would then differ from a `0` in the configuration, which the diff has to
-      settle
+- [ ] Negative and decimal numbers; only `[0-9]+` lexes today. `ExactNumber` already
+      holds both, and reads `-0` as `0`, so what is left is the lexer and the grammar
 - [ ] String escapes: `\"`, `\n`, `\\`, and `$${` for a literal `${`
 - [ ] Nested access: `local_file.a.tags.env` and `var.list[0]`; today `[` after a
       reference is a parse error, and a reference that reads deeper than one attribute is

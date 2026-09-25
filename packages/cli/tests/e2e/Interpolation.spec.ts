@@ -1,3 +1,4 @@
+import { ExactNumber } from '@clay/contracts';
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { ConfigError, CONFIG_FILE } from '@clay/parser';
 import { LocalProvider } from '@clay/provider-local';
@@ -42,7 +43,7 @@ describe('a string with an interpolation', () => {
 
     const resources = await applied(config);
 
-    expect(resources['random_string.s'].attributes.length).toBe(8);
+    expect(resources['random_string.s'].attributes.length).toEqual(ExactNumber.parse('8'));
     expect(resources['null_resource.t'].attributes.tags).toEqual(['a', 'b']);
   });
 

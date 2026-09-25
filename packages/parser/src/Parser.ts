@@ -1,3 +1,4 @@
+import { ExactNumber, NumberError } from '@clay/contracts';
 import { AttributeValue, DataBlock, ModuleBlock, OutputBlock, Program, ResourceBlock, spell, Statement, VariableBlock } from './ast';
 import { ConfigError } from './ConfigError';
 import { Position } from './Position';
@@ -153,7 +154,7 @@ export class Parser {
     const position = this.peek().position;
 
     if (this.matchToken(TokenType.String)) return { type: 'String', value: this.previous().value, position };
-    if (this.matchToken(TokenType.Number)) return { type: 'Number', value: Number(this.previous().value), position };
+    if (this.matchToken(TokenType.Number)) return { type: 'Number', value: this.exactNumber(this.previous()), position };
     if (this.matchToken(TokenType.Boolean)) return { type: 'Boolean', value: this.previous().value === 'true', position };
 
     if (this.matchToken(TokenType.LBracket)) return this.parseList(position);
@@ -230,6 +231,17 @@ export class Parser {
     if (RESERVED_TYPES.has(token.value)) throw new ConfigError(`"${token.value}" cannot be a type: a reference reads "${token.value}." as something else.`, token.position);
 
     return token;
+  }
+
+  /** A literal past what a number can hold is the configuration's mistake, so it is refused where it was written. */
+  private exactNumber(token: Token): ExactNumber {
+    try {
+      return ExactNumber.parse(token.value);
+    } catch (error) {
+      if (error instanceof NumberError) throw new ConfigError(error.message, token.position, {}, { cause: error });
+
+      throw error;
+    }
   }
 
   private consume(type: TokenType, message: string): Token {
