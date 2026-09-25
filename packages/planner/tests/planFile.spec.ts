@@ -1,3 +1,4 @@
+import { ExactNumber } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { isUnknown, parsePlanFile, Plan, serializePlan, UNKNOWN } from '../src/index';
@@ -48,6 +49,31 @@ describe('reading a plan file', () => {
     expect(change.new).toEqual(lookalike);
   });
 
+  // A saved action carries its attributes as parsed; a value in them is exact, while where it was written stays a JavaScript number.
+  it('reads the positions in saved attributes as numbers, and the values in them exactly, however deep', () => {
+    const at = { file: 'main.clay', line: 3, column: 7 };
+    const plan: Plan = {
+      serial: 4,
+      actions: [
+        {
+          type: 'CREATE',
+          resourceType: 'null_resource',
+          name: 'a',
+          attributes: {
+            id: { type: 'Number', value: ExactNumber.parse('12345678901234567890'), position: at },
+            tags: { type: 'List', value: [{ type: 'Map', value: { n: { type: 'Number', value: ExactNumber.parse('1'), position: at } }, position: at }], position: at },
+          },
+        },
+      ],
+      outputs: {},
+    };
+
+    const read = parsePlanFile(aPlanFile(plan), 'tfplan.json');
+
+    expect(read.serial).toBe(4);
+    expect(read.actions[0].attributes).toEqual(plan.actions[0].attributes);
+  });
+
   it('refuses to write a value not known yet from inside another value, rather than drop it', () => {
     const plan: Plan = { serial: 0, actions: [], outputs: { tags: { old: undefined, new: { env: UNKNOWN } } } };
 
@@ -61,6 +87,30 @@ describe('reading a plan file', () => {
 
     expect(Object.keys(outputs)).toEqual(['__proto__']);
     expect(Object.getPrototypeOf(outputs)).toBe(Object.prototype);
+  });
+
+  it('names a number out of range, rather than calling the file something other than JSON', () => {
+    const text = aPlanFile().replace('"outputs": {}', '"outputs": {"o": {"old": 1e5000}}');
+
+    expect(() => parsePlanFile(text, 'tfplan.json')).toThrow(
+      'tfplan.json is not a plan file: "1e5000" is out of range: a number reaches at most 1000 places either side of the point'
+    );
+  });
+
+  it('names a serial that is not whole', () => {
+    expect(read({ ...fields(), serial: 1.5 })).toThrow('tfplan.json is not a plan file: its serial: 1.5 is not a whole number');
+  });
+
+  it('names a position that is not whole', () => {
+    const text = aPlanFile({
+      serial: 0,
+      actions: [
+        { type: 'CREATE', resourceType: 'null_resource', name: 'a', attributes: { n: { type: 'String', value: 'x', position: { file: 'main.clay', line: 1, column: 1 } } } },
+      ],
+      outputs: {},
+    }).replace('"line": 1', '"line": 1.5');
+
+    expect(() => parsePlanFile(text, 'tfplan.json')).toThrow("tfplan.json is not a plan file: a position's line: 1.5 is not a whole number");
   });
 
   it('names the file when the text is not json', () => {

@@ -1,4 +1,5 @@
 export { Address } from './Address';
+export { ExactNumber, NumberError } from './ExactNumber';
 
 /** A resource as state records it. */
 export interface Resource {
@@ -40,7 +41,7 @@ export interface SchemaDefinition {
 
 export type Schema = Record<string, SchemaDefinition>;
 
-/** The engine's contract with a provider. */
+/** The engine's contract with a provider. A number in the inputs it is given arrives as an `ExactNumber`, never rounded. */
 export interface Provider {
   /** The resource types it handles. */
   readonly resources: string[];

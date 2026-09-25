@@ -1,4 +1,4 @@
-import { Address, Resource, Schema, State } from '@clay/contracts';
+import { Address, ExactNumber, NumberError, Resource, Schema, State } from '@clay/contracts';
 import { AttributeValue, ResourceBlock } from '@clay/parser';
 import { isDeepStrictEqual } from 'node:util';
 
@@ -85,8 +85,13 @@ export function serializePlan(plan: Plan, configContent: string, modules: Record
   );
 }
 
+/** A plain object, as JSON makes one: a number read from a file is an ExactNumber, which is no record. */
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  if (typeof value !== 'object' || value === null) return false;
+
+  const prototype: unknown = Object.getPrototypeOf(value);
+
+  return prototype === Object.prototype || prototype === null;
 }
 
 /** Each change is read for what it held, so one that is not a record would fail far from the file it came from. */
@@ -121,14 +126,51 @@ function planVersion(parsed: unknown): string | undefined {
   return typeof parsed.version === 'string' ? parsed.version : undefined;
 }
 
+/** A position says where a value was written and is no value itself, so its line and column read back as JavaScript numbers. */
+function readPosition(position: unknown): void {
+  if (!isRecord(position)) return;
+
+  for (const field of ['line', 'column']) if (position[field] instanceof ExactNumber) position[field] = position[field].toSafeInteger(`a position's ${field}`);
+}
+
+function childrenOf(node: Record<string, unknown>): unknown[] {
+  if (node.type === 'List' && Array.isArray(node.value)) return node.value;
+  if (node.type === 'Map' && isRecord(node.value)) return Object.values(node.value);
+
+  return [];
+}
+
+function readPositions(node: unknown): void {
+  if (!isRecord(node)) return;
+
+  readPosition(node.position);
+  for (const child of childrenOf(node)) readPositions(child);
+}
+
+/** The plan's serial and the positions in its parsed attributes are the file's own numbers; every other number in it is a value, kept exactly. */
+function readPlan(content: string): unknown {
+  const read = ExactNumber.readJSON(content);
+  if (!isRecord(read)) return read;
+
+  if (read.serial instanceof ExactNumber) read.serial = read.serial.toSafeInteger('its serial');
+  if (Array.isArray(read.actions))
+    for (const action of read.actions) if (isRecord(action) && isRecord(action.attributes)) for (const node of Object.values(action.attributes)) readPositions(node);
+
+  return read;
+}
+
 /** `source` names the plan in the error, since the caller knows where it read from and this does not. */
 export function parsePlanFile(content: string, source: string): PlanFile {
   let parsed: unknown;
 
   try {
-    parsed = JSON.parse(content);
+    parsed = readPlan(content);
   } catch (error) {
-    throw new Error(`${source} is not a plan file: the file is not JSON`, { cause: error });
+    if (error instanceof SyntaxError) throw new Error(`${source} is not a plan file: the file is not JSON`, { cause: error });
+
+    if (error instanceof NumberError) throw new Error(`${source} is not a plan file: ${error.message}`, { cause: error });
+
+    throw error;
   }
 
   const version = planVersion(parsed);

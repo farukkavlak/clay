@@ -1,5 +1,18 @@
-import { ResourceHandler, Schema } from '@clay/contracts';
+import { ExactNumber, ResourceHandler, Schema } from '@clay/contracts';
 import crypto from 'node:crypto';
+
+const LENGTH_REQUIRED = 'random_string requires "length" attribute (number > 0)';
+
+/** A number reaches a provider exactly; a length has to be a whole one a JavaScript array can be made with. */
+function lengthOf(inputs: Record<string, unknown>): number {
+  const { length } = inputs;
+  if (!(length instanceof ExactNumber)) throw new Error(LENGTH_REQUIRED);
+
+  const value = length.toSafeInteger('random_string "length"');
+  if (value <= 0) throw new Error(LENGTH_REQUIRED);
+
+  return value;
+}
 
 export class RandomStringResource implements ResourceHandler {
   async getSchema(): Promise<Schema> {
@@ -10,13 +23,13 @@ export class RandomStringResource implements ResourceHandler {
   }
 
   async validate(inputs: Record<string, unknown>): Promise<void> {
-    if (inputs.length === undefined || typeof inputs.length !== 'number' || inputs.length <= 0) throw new Error('random_string requires "length" attribute (number > 0)');
+    lengthOf(inputs);
 
     if (inputs.special !== undefined && typeof inputs.special !== 'boolean') throw new Error('random_string "special" attribute must be a boolean');
   }
 
   async create(inputs: Record<string, unknown>): Promise<string> {
-    const length = inputs.length as number;
+    const length = lengthOf(inputs);
     const useSpecial = (inputs.special as boolean) ?? false;
 
     const alphanumeric = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';

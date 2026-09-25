@@ -1,4 +1,4 @@
-import { Provider, Schema } from '@clay/contracts';
+import { ExactNumber, Provider, Schema } from '@clay/contracts';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -215,7 +215,7 @@ describe('Orchestrator: Advanced Features', () => {
 
       expect(outputs).toEqual({
         my_string: 'test_value',
-        my_number: 42,
+        my_number: ExactNumber.parse('42'),
       });
     });
 

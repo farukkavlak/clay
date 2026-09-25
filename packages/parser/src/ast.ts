@@ -1,3 +1,4 @@
+import { ExactNumber } from '@clay/contracts';
 import { Position } from './Position';
 
 /** Every configuration lives under this name, the root one and a module's alike. */
@@ -10,7 +11,7 @@ interface Node {
 
 export type AttributeValue =
   | (Node & { type: 'String'; value: string })
-  | (Node & { type: 'Number'; value: number })
+  | (Node & { type: 'Number'; value: ExactNumber })
   | (Node & { type: 'Boolean'; value: boolean })
   | (Node & { type: 'Reference'; value: string[] }) // e.g., ["resource_type", "resource_name", "attribute"]
   | (Node & { type: 'List'; value: AttributeValue[] })

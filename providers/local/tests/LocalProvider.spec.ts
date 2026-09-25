@@ -1,3 +1,4 @@
+import { ExactNumber } from '@clay/contracts';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -163,20 +164,33 @@ describe('LocalProvider', () => {
 
   describe('random_string', () => {
     it('should validate length', async () => {
-      await expect(provider.validate('random_string', { length: 10 })).resolves.not.toThrow();
+      await expect(provider.validate('random_string', { length: ExactNumber.parse('10') })).resolves.not.toThrow();
       await expect(provider.validate('random_string', {})).rejects.toThrow();
-      await expect(provider.validate('random_string', { length: 0 })).rejects.toThrow();
-      await expect(provider.validate('random_string', { length: -5 })).rejects.toThrow();
+      await expect(provider.validate('random_string', { length: ExactNumber.parse('0') })).rejects.toThrow();
+      await expect(provider.validate('random_string', { length: ExactNumber.parse('-5') })).rejects.toThrow();
+    });
+
+    // A number reaches a provider exactly, and a length is refused rather than rounded or cut to fit.
+    it.each([
+      ['a length that is not whole', ExactNumber.parse('1.5'), 'random_string "length": 1.5 is not a whole number'],
+      [
+        'a length JavaScript would round',
+        ExactNumber.parse('9007199254740993'),
+        'random_string "length": 9007199254740993 is outside the range -9007199254740991 to 9007199254740991',
+      ],
+      ['a length that is a JavaScript number', 10, 'random_string requires "length" attribute (number > 0)'],
+    ])('refuses %s', async (_, length, message) => {
+      await expect(provider.validate('random_string', { length })).rejects.toThrow(message);
     });
 
     it('should create a random string of specified length', async () => {
-      const id = await provider.create('random_string', { length: 16 });
+      const id = await provider.create('random_string', { length: ExactNumber.parse('16') });
       expect(typeof id).toBe('string');
       expect(id).toHaveLength(16);
     });
 
     it('should create a random string with special characters', async () => {
-      const id = await provider.create('random_string', { length: 50, special: true });
+      const id = await provider.create('random_string', { length: ExactNumber.parse('50'), special: true });
       expect(id).toHaveLength(50);
       const specialChars = '!@#$%^&*()_+-=[]{}|;:,.<>?';
       const hasSpecial = [...id].some((char) => specialChars.includes(char));
@@ -185,7 +199,7 @@ describe('LocalProvider', () => {
 
     it('should not update (no-op)', async () => {
       // Just ensure it doesn't throw
-      await expect(provider.update('any-id', 'random_string', { length: 10 })).resolves.not.toThrow();
+      await expect(provider.update('any-id', 'random_string', { length: ExactNumber.parse('10') })).resolves.not.toThrow();
     });
   });
 

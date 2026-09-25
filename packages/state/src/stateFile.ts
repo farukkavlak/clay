@@ -1,7 +1,12 @@
-import { Resource, State, STATE_VERSION } from '@clay/contracts';
+import { ExactNumber, NumberError, Resource, State, STATE_VERSION } from '@clay/contracts';
 
+/** A plain object, as JSON makes one: a number read from a file is an ExactNumber, which is no record. */
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  if (typeof value !== 'object' || value === null) return false;
+
+  const prototype: unknown = Object.getPrototypeOf(value);
+
+  return prototype === Object.prototype || prototype === null;
 }
 
 /** What the engine goes on to read without asking: the planner walks `attributes`, and the runner walks `dependencies`. */
@@ -38,14 +43,27 @@ export function serializeState(state: State): string {
   return JSON.stringify(state, null, 2);
 }
 
+/** The state's own counters are JavaScript numbers; every other number in it is a value, kept exactly. */
+function readState(content: string): unknown {
+  const read = ExactNumber.readJSON(content);
+
+  if (isRecord(read)) for (const field of ['version', 'serial']) if (read[field] instanceof ExactNumber) read[field] = read[field].toSafeInteger(`its ${field}`);
+
+  return read;
+}
+
 /** `source` names the state in the error, since a backend knows where it read from and this does not. */
 export function parseState(content: string, source: string): State {
   let parsed: unknown;
 
   try {
-    parsed = JSON.parse(content);
+    parsed = readState(content);
   } catch (error) {
-    throw new Error(`${source} is not valid state: the file is not JSON`, { cause: error });
+    if (error instanceof SyntaxError) throw new Error(`${source} is not valid state: the file is not JSON`, { cause: error });
+
+    if (error instanceof NumberError) throw new Error(`${source} is not valid state: ${error.message}`, { cause: error });
+
+    throw error;
   }
 
   check(parsed, source);

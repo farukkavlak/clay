@@ -1,3 +1,4 @@
+import { ExactNumber } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { CONFIG_FILE, ModuleBlock, ResourceBlock, VariableBlock } from '../src/ast';
@@ -45,7 +46,7 @@ describe('Clay Parser', () => {
         name: 'test',
         attributes: {
           name: { type: 'String', value: 'value' },
-          count: { type: 'Number', value: 42 },
+          count: { type: 'Number', value: ExactNumber.parse('42') },
         },
       });
     });
@@ -150,7 +151,7 @@ describe('Clay Parser', () => {
       const result = makeParser(input).parse();
 
       expect(result).toHaveLength(1);
-      expect((result[0] as VariableBlock).attributes.default).toMatchObject({ type: 'Number', value: 8080 });
+      expect((result[0] as VariableBlock).attributes.default).toMatchObject({ type: 'Number', value: ExactNumber.parse('8080') });
     });
 
     it('should parse variable with boolean default', () => {
@@ -201,7 +202,7 @@ describe('Clay Parser', () => {
     it('takes a dash in an attribute name and in a map key, as the same identifier rule does', () => {
       const attributes = attributesOf('resource "local_file" "a" { my-attr = { my-key = 1 } }');
 
-      expect(attributes['my-attr']).toEqual({ type: 'Map', value: { 'my-key': { type: 'Number', value: 1, position: at(1, 50) } }, position: at(1, 39) });
+      expect(attributes['my-attr']).toEqual({ type: 'Map', value: { 'my-key': { type: 'Number', value: ExactNumber.parse('1'), position: at(1, 50) } }, position: at(1, 39) });
     });
 
     it('takes a word a reference spells as a name, which an address reads without doubt', () => {
@@ -355,6 +356,13 @@ describe('Clay Parser', () => {
       expect(error.position).toEqual(at(1, 10));
     });
 
+    it('refuses a number out of range where it is written, without writing all of it out again', () => {
+      const error = errorOf(`output "o" { value = ${'1'.repeat(1001)} }`);
+
+      expect(error.message).toBe('"11111111111111111111…" (1001 characters) is out of range: a number reaches at most 1000 places either side of the point');
+      expect(error.position).toEqual(at(1, 22));
+    });
+
     it('tells blocks of different kinds with one name apart', () => {
       const input = 'variable "x" {}\noutput "x" { value = "1" }\nmodule "x" { source = "./x" }\nresource "null_resource" "x" {}\nresource "local_file" "x" {}';
 
@@ -417,7 +425,7 @@ describe('Clay Parser', () => {
       expect(result[0]).toMatchObject({
         type: 'Output',
         name: 'count',
-        value: { type: 'Number', value: 42 },
+        value: { type: 'Number', value: ExactNumber.parse('42') },
       });
     });
 
