@@ -2,6 +2,7 @@ import { ExactNumber, NumberError } from '@clay/contracts';
 import { AttributeValue, DataBlock, ModuleBlock, OutputBlock, Program, ReferenceNode, ResourceBlock, spell, Statement, TemplatePart, VariableBlock } from './ast';
 import { ConfigError } from './ConfigError';
 import { readEscapes } from './escapes';
+import { flushed } from './heredoc';
 import { Position } from './Position';
 import { NAME, Step } from './reference';
 import { Token, TokenType } from './tokens';
@@ -153,6 +154,7 @@ export class Parser {
     const position = this.peek().position;
 
     if (this.matchToken(TokenType.OQuote)) return this.parseString(position);
+    if (this.matchToken(TokenType.OHeredoc)) return this.parseHeredoc(position);
     if (this.matchToken(TokenType.Number)) return { type: 'Number', value: this.exactNumber(this.previous().value, position), position };
     if (this.matchToken(TokenType.Minus)) return this.parseNegative(position);
     if (this.matchToken(TokenType.Boolean)) return { type: 'Boolean', value: this.previous().value === 'true', position };
@@ -179,9 +181,35 @@ export class Parser {
       if (this.matchToken(TokenType.QuotedLit)) parts.push(readEscapes(this.previous().value, this.previous().position));
       else parts.push(this.parseInterpolation());
 
-    if (parts.every((part) => typeof part === 'string')) return { type: 'String', value: parts.join(''), position };
+    return this.template(parts, position);
+  }
 
-    return { type: 'Template', value: parts, position };
+  /** A heredoc's text is read as written but for `$${`; `<<-` takes off the indent its lines share. */
+  private parseHeredoc(position: Position): AttributeValue {
+    const flush = this.previous().value.startsWith('<<-');
+    const parts: TemplatePart[] = [];
+
+    while (!this.matchToken(TokenType.CHeredoc))
+      if (this.matchToken(TokenType.StringLit)) parts.push(this.previous().value);
+      else parts.push(this.parseInterpolation());
+
+    const text = (flush ? flushed(parts) : parts).map((part) => (typeof part === 'string' ? part.split('$${').join('${') : part));
+    return this.template(text, position);
+  }
+
+  /** Text next to text is one piece, and a string with no reference in it is a `String`. */
+  private template(parts: TemplatePart[], position: Position): AttributeValue {
+    const joined: TemplatePart[] = [];
+
+    for (const part of parts) {
+      const last = joined.at(-1);
+      if (typeof part === 'string' && typeof last === 'string') joined[joined.length - 1] = last + part;
+      else if (part !== '') joined.push(part);
+    }
+
+    if (joined.every((part) => typeof part === 'string')) return { type: 'String', value: joined.join(''), position };
+
+    return { type: 'Template', value: joined, position };
   }
 
   /** What one `${ … }` holds: a reference and nothing else. The lexer has put `${` next. */

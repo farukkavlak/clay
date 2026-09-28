@@ -47,7 +47,8 @@ in place.
 ## The language
 
 A file is a list of blocks. Values are strings, numbers, booleans, lists and maps, and a
-string can read other values with `${...}`.
+string can read other values with `${...}`. A string over many lines is a heredoc:
+`<<-EOT`, the lines, then `EOT`.
 
 | Block                            | Does                                                           |
 | -------------------------------- | -------------------------------------------------------------- |

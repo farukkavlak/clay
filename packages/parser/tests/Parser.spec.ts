@@ -471,6 +471,94 @@ describe('Clay Parser', () => {
     });
   });
 
+  describe('Heredoc', () => {
+    const string = (value: string) => ({ type: 'String', value, position: at(1, 24) });
+
+    it.each([
+      ['its lines, the last line break with them', '<<EOT\nline 1\nline 2\nEOT\n', 'line 1\nline 2\n'],
+      ['an empty one', '<<EOT\nEOT\n', ''],
+      ['its text as written: no escapes, no comments, quotes and all', '<<EOT\n\\n "say" # not a comment\nEOT\n', '\\n "say" # not a comment\n'],
+      ['$${ as the text ${', '<<EOT\n$${x} $$${y}\nEOT\n', '${x} $${y}\n'],
+      ['a closing line with spaces before the name', '<<EOT\n  hi\n  EOT\n', '  hi\n'],
+      ['a closing line with a tab before the name and spaces after it', '<<EOT\nhi\n\tEOT \t\n', 'hi\n'],
+      ['its name inside the text, where it is not a line of its own', '<<END\nEOT\nx END\nENDING\nEND\n', 'EOT\nx END\nENDING\n'],
+      ['lines that end in a carriage return', '<<EOT\r\nhi\r\nEOT\r\n', 'hi\r\n'],
+      ['with <<-, the lines less the indent they share', '<<-EOT\n    a\n      b\n    EOT\n', 'a\n  b\n'],
+      ['with <<-, a blank line as its line break alone, whatever its spaces', '<<-EOT\n    a\n\n  \n      \n    b\n  EOT\n', 'a\n\n\n\nb\n'],
+      ['with <<-, blank lines alone as their line breaks', '<<-EOT\n  \n\t\n  EOT\n', '\n\n'],
+      ['with <<-, blank lines that end in a carriage return', '<<-EOT\r\n  a\r\n \r\n  EOT\r\n', 'a\r\n\r\n'],
+      ['with <<EOT, a blank line as written', '<<EOT\n  \nEOT\n', '  \n'],
+      ['with <<-, tabs counted as characters', '<<-EOT\n\t\ta\n\tb\nEOT\n', '\ta\nb\n'],
+    ])('reads %s', (_, written, value) => {
+      expect(valueOf(written)).toEqual(string(value));
+    });
+
+    it('reads an interpolation in it, placed where it is written', () => {
+      expect(valueOf('<<EOT\na ${var.x} b\nEOT\n')).toEqual({ type: 'Template', value: ['a ', reference(['var', 'x'], 5, 2), ' b\n'], position: at(1, 24) });
+    });
+
+    it('reads its name right after an interpolation as text, since the line did not start there', () => {
+      expect(valueOf('<<EOT\n${var.x}EOT\nEOT\n')).toEqual({ type: 'Template', value: [reference(['var', 'x'], 3, 2), 'EOT\n'], position: at(1, 24) });
+    });
+
+    it('reads a quoted key in an interpolation in it', () => {
+      expect(valueOf('<<EOT\n${var.m["a b"]}\nEOT\n')).toEqual({ type: 'Template', value: [reference(['var', 'm', 'a b'], 3, 2), '\n'], position: at(1, 24) });
+    });
+
+    it('takes the indent off text before an interpolation, with <<-', () => {
+      expect(valueOf('<<-EOT\n  ${var.x}\n    b\n  EOT\n')).toEqual({ type: 'Template', value: [reference(['var', 'x'], 5, 2), '\n  b\n'], position: at(1, 24) });
+    });
+
+    it('takes no indent off when a line starts with an interpolation, with <<-', () => {
+      expect(valueOf('<<-EOT\n${var.x}\n  b\nEOT\n')).toEqual({ type: 'Template', value: [reference(['var', 'x'], 3, 2), '\n  b\n'], position: at(1, 24) });
+    });
+
+    // One call given every indent at once would overflow the stack on a long heredoc.
+    it('reads a long one with <<-', () => {
+      const lines = '  a\n'.repeat(200_000);
+
+      expect(valueOf(`<<-EOT\n${lines}  EOT\n`)).toEqual(string('a\n'.repeat(200_000)));
+    });
+
+    it('reads one as an item of a list and a value in a map', () => {
+      const attributes = attributesOf('resource "t" "n" {\n  l = [<<EOT\na\nEOT\n, "b"]\n  m = { k = <<-EOT\n    c\n    EOT\n  }\n}');
+
+      expect(attributes.l).toMatchObject({
+        type: 'List',
+        value: [
+          { type: 'String', value: 'a\n' },
+          { type: 'String', value: 'b' },
+        ],
+      });
+      expect(attributes.m).toMatchObject({ type: 'Map', value: { k: { type: 'String', value: 'c\n' } } });
+    });
+
+    it.each([
+      ['one never closed', '<<EOT\nhi\n', 'This heredoc is never closed with a line holding only EOT', at(1, 24)],
+      ['one whose closing line holds more than its name', '<<EOT\nhi\nEOTX\nEOT x\n', 'This heredoc is never closed with a line holding only EOT', at(1, 24)],
+      ['one with no name', '<< EOT\nhi\nEOT\n', 'A heredoc opens with <<NAME or <<-NAME at the end of a line', at(1, 24)],
+      ['one with text after its name', '<<EOT x\nhi\nEOT\n', 'A heredoc opens with <<NAME or <<-NAME at the end of a line', at(1, 24)],
+      ['one as a map key', '{ <<EOT\nk\nEOT\n = 1 }', 'Expect key in map', at(1, 26)],
+    ])('refuses %s where it is written', (_, written, message, position) => {
+      const error = errorOf(`resource "t" "n" { v = ${written} }`);
+
+      expect(error.message).toContain(message);
+      expect(error.position).toEqual(position);
+    });
+
+    // The block around a heredoc still has to close, so the error names the brace, not the heredoc.
+    it('closes one on the last line of the file, with no line break after it', () => {
+      const error = errorOf('resource "t" "n" {\n  v = <<EOT\nhi\nEOT');
+
+      expect(error.message).toBe("Expect '}' after block body.");
+      expect(error.position).toEqual(at(4, 4));
+    });
+
+    it('refuses one as a block label', () => {
+      expect(errorOf('resource "t" <<EOT\nn\nEOT\n {}').message).toContain('Expect resource name string');
+    });
+  });
+
   describe('Nested access', () => {
     it.each([
       ['an index', 'var.l[0]', ['var', 'l', 0]],

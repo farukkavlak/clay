@@ -7,6 +7,9 @@ export enum TokenType {
   TemplateInterp = 'TEMPLATE_INTERP',
   TemplateEnd = 'TEMPLATE_END',
   CQuote = 'CQUOTE',
+  OHeredoc = 'OHEREDOC',
+  StringLit = 'STRING_LIT', // no escapes
+  CHeredoc = 'CHEREDOC',
   Number = 'NUMBER', // 123, 1.5, 1e3
   Minus = 'MINUS', // - (before a number)
   Boolean = 'BOOLEAN', // true, false
