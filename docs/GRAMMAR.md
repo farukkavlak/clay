@@ -29,8 +29,10 @@ Whitespace and comments are skipped. A comment runs from `#` or
 `//` to the end of the line. Every token carries the file, line and column it starts at.
 
 Inside quotes the lexer reads text until `"` or `${`. A `${` reads tokens as outside
-quotes until its `}`, and a comment or a quote there is refused. A string or a `${`
-still open at the end of the file is refused where it opens.
+quotes until its `}`: a quote there opens a string of its own, so `"${var.tags["a.b"]}"`
+reads a key, and a comment there is refused. A string still open at the end of the file
+is refused where it opens; when a `${` is open too, the first open `${` is named, since
+a `}` left out makes the quotes after it pair up to the end.
 
 There are no keywords. `resource`, `data`, `variable`, `output` and `module` start a
 block only at the top level; anywhere else they are ordinary identifiers, so
@@ -122,8 +124,6 @@ The parts before that name what is read, so each is a name even when it is quote
 
 A module is read through its outputs, so `module.app.local_file.a` names an output
 called `local_file`, and is refused when the module has none.
-
-Inside `${...}` a key is written with a dot, since a quote there ends the string.
 
 ### Interpolation
 

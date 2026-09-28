@@ -63,7 +63,7 @@ hits each of these early.
 - [x] Nested access: `local_file.a.tags.env` and `var.list[0]`; today `[` after a
       reference is a parse error, and a reference that reads deeper than one attribute is
       refused where it is read
-- [ ] A quoted key inside `${...}`: `"${var.tags["a.b"]}"`. The lexer ends a string at the
+- [x] A quoted key inside `${...}`: `"${var.tags["a.b"]}"`. The lexer ends a string at the
       first unescaped quote, so the quote inside the interpolation ends it. HCL reads a
       `${...}` to its closing brace, quotes and all
 - [x] A reference is a type, not a string. Today it travels as `string[]` and four places

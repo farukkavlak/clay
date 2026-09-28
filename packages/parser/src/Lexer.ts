@@ -85,7 +85,6 @@ export class Lexer {
   private switchMode(token: Token): Token {
     const inside = this.mode();
 
-    if (inside && token.type === TokenType.OQuote) throw this.neverClosed(inside);
     if (token.type === TokenType.OQuote) this.modes.push({ kind: 'string', opened: token.position });
 
     if (inside && token.type === TokenType.RBrace) {
@@ -118,10 +117,10 @@ export class Lexer {
     return { type: TokenType.QuotedLit, value: text, position };
   }
 
-  /** The input ended inside quotes; the innermost thing still open is the one to name. */
+  /** A `}` left out pairs the quotes after it up to the end, so the first open `${` is named. */
   private checkClosed(): void {
-    const inside = this.mode();
-    if (inside) throw this.neverClosed(inside);
+    const open = this.modes.find((mode) => mode.kind === 'interpolation') ?? this.mode();
+    if (open) throw this.neverClosed(open);
   }
 
   private neverClosed(mode: Mode): ConfigError {

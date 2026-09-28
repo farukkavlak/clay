@@ -63,13 +63,15 @@ describe('a reference that reads into a list or a map', () => {
   it('reads an item of a list and a key of a map, bare and inside a string', async () => {
     await apply(`
       variable "names" { default = ["ana", "bo"] }
-      variable "tags" { default = { team = "core" } }
+      variable "tags" { default = { team = "core", "a.b" = "dotted" } }
       ${file('bare', 'var.tags["team"]')}
       ${file('joined', '"${var.names[1]}-${var.tags.team}"')}
+      ${file('quoted', '"key ${var.tags["a.b"]}"')}
     `);
 
     expect(await written('bare.txt')).toBe('core');
     expect(await written('joined.txt')).toBe('bo-core');
+    expect(await written('quoted.txt')).toBe('key dotted');
   });
 
   it('reads into what a module gives back', async () => {
