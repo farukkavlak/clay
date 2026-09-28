@@ -37,7 +37,7 @@ describe('Clay Parser', () => {
       const input = `
       resource "mock_resource" "test" {
         name = "value"
-        count = 42
+        size = 42
       }
     `;
       const parser = makeParser(input);
@@ -50,7 +50,7 @@ describe('Clay Parser', () => {
         name: 'test',
         attributes: {
           name: { type: 'String', value: 'value' },
-          count: { type: 'Number', value: ExactNumber.parse('42') },
+          size: { type: 'Number', value: ExactNumber.parse('42') },
         },
       });
     });
@@ -670,6 +670,7 @@ describe('Clay Parser', () => {
       ['module', 'resource "module" "a" {}', at(1, 10)],
       ['var', 'resource "var" "a" {}', at(1, 10)],
       ['data', 'data "data" "a" {}', at(1, 6)],
+      ['count', 'resource "count" "a" {}', at(1, 10)],
     ])('refuses "%s" as a type, which a reference reads as something else', (word, input, position) => {
       const error = errorOf(input);
 
@@ -692,6 +693,13 @@ describe('Clay Parser', () => {
       const error = errorOf('variable "source" { default = "x" }');
 
       expect(error.message).toBe('"source" cannot be a variable name: a module call reads it as the module\'s path.');
+      expect(error.position).toEqual(at(1, 10));
+    });
+
+    it('refuses a variable named "count", which a module call keeps for itself', () => {
+      const error = errorOf('variable "count" { default = 2 }');
+
+      expect(error.message).toBe('"count" cannot be a variable name: a module call keeps it for itself.');
       expect(error.position).toEqual(at(1, 10));
     });
 
@@ -735,6 +743,35 @@ describe('Clay Parser', () => {
       const error = errorOf('resource "type" "name" { key = = }', 'modules/app/main.clay');
 
       expect(error.position.file).toBe('modules/app/main.clay');
+    });
+  });
+
+  describe('Count', () => {
+    it('keeps count apart from the attributes a provider is sent', () => {
+      const [block] = makeParser('resource "local_file" "a" { count = 2 path = "a" }').parse() as ResourceBlock[];
+
+      expect(block.count).toEqual({ type: 'Number', value: ExactNumber.parse('2'), position: at(1, 37) });
+      expect(block.attributes).toEqual({ path: { type: 'String', value: 'a', position: at(1, 46) } });
+    });
+
+    it('leaves count out of a resource that has none', () => {
+      const [block] = makeParser('resource "local_file" "a" { path = "a" }').parse() as ResourceBlock[];
+
+      expect(block).not.toHaveProperty('count');
+    });
+
+    it('reads count.index as a reference', () => {
+      expect(valueOf('"${count.index}"')).toEqual({ type: 'Template', value: [reference(['count', 'index'], 27)], position: at(1, 24) });
+    });
+
+    it.each([
+      ['a data source', 'data "local_file" "a" { count = 2 }', 'data "local_file" "a" cannot have count yet', at(1, 33)],
+      ['a module', 'module "m" { source = "./m" count = 2 }', 'module "m" cannot have count yet', at(1, 37)],
+    ])('refuses count on %s, where it is written', (_, input, message, position) => {
+      const error = errorOf(input);
+
+      expect(error.message).toBe(message);
+      expect(error.position).toEqual(position);
     });
   });
 

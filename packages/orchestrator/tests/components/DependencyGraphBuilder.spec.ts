@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { DependencyGraphBuilder } from '../../src/components/DependencyGraphBuilder';
 import { LoadedModule, LoadedResource } from '../../src/components/ModuleLoader';
+import { Instances } from '../../src/Instances';
 import { ReferenceScanner } from '../../src/resolvers/ReferenceScanner';
 import { moduleBlock, ref, resourceBlock, str, variableBlock } from '../ast';
 
@@ -17,7 +18,8 @@ function module(modulePath: string[], program: Statement[]): LoadedModule {
 }
 
 describe('DependencyGraphBuilder', () => {
-  const builder = new DependencyGraphBuilder(new ReferenceScanner());
+  const instances = new Instances();
+  const builder = new DependencyGraphBuilder(new ReferenceScanner(instances), instances);
 
   it('should run a resource after the one it reads from', () => {
     const main = resource('main', { id: ref('resource', 'dep', 'id') });

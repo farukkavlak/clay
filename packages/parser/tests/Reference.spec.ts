@@ -25,13 +25,20 @@ describe('a reference read into a value', () => {
     ['var.text', { kind: 'variable', name: 'text', path: [] }],
     ['data.local_file.f.content', { kind: 'data', type: 'local_file', name: 'f', attribute: 'content', path: [] }],
     ['module.app.url', { kind: 'module', module: 'app', output: 'url', path: [] }],
-    ['local_file.a.content', { kind: 'resource', type: 'local_file', name: 'a', attribute: 'content', path: [] }],
+    ['local_file.a.content', { kind: 'resource', type: 'local_file', name: 'a', path: ['content'] }],
+    ['count.index', { kind: 'count', path: [] }],
     ['var.tags.env', { kind: 'variable', name: 'tags', path: ['env'] }],
     ['data.local_file.f.tags.env', { kind: 'data', type: 'local_file', name: 'f', attribute: 'tags', path: ['env'] }],
     ['module.app.tags.env', { kind: 'module', module: 'app', output: 'tags', path: ['env'] }],
-    ['local_file.a.tags.env.name', { kind: 'resource', type: 'local_file', name: 'a', attribute: 'tags', path: ['env', 'name'] }],
+    ['local_file.a.tags.env.name', { kind: 'resource', type: 'local_file', name: 'a', path: ['tags', 'env', 'name'] }],
   ])('reads %s as what it names, what it reads on it, and the steps into that value', (spelled, expected) => {
     expect(parse(spelled)).toEqual(expected);
+  });
+
+  // Whether a resource's first step is an instance key or an attribute depends on its block, which only the engine knows.
+  it('reads what follows a resource name as steps, an index and all', () => {
+    expect(parseReference(['local_file', 'a', 0, 'content'], position)).toEqual({ kind: 'resource', type: 'local_file', name: 'a', path: [0, 'content'] });
+    expect(parseReference(['local_file', 'a', 'tags.env'], position)).toEqual({ kind: 'resource', type: 'local_file', name: 'a', path: ['tags.env'] });
   });
 
   it('reads an index as a step into the value', () => {
@@ -61,11 +68,12 @@ describe('a reference read into a value', () => {
     [['module', 'a.module.b', 'secret'], 'Reference "module["a.module.b"].secret" has "a.module.b" where it needs a name'],
     [['data', 'module.m.local_file', 'd', 'content'], 'Reference "data["module.m.local_file"].d.content" has "module.m.local_file" where it needs a name'],
     [['local_file', 'x.y', 'id'], 'Reference "local_file["x.y"].id" has "x.y" where it needs a name'],
-    [['local_file', 'a', 'tags.env'], 'Reference "local_file.a["tags.env"]" has "tags.env" where it needs a name'],
     [['var', 0], 'Reference "var[0]" has an index where it needs a name'],
     [['data', 'local_file', 0, 'content'], 'Reference "data.local_file[0].content" has an index where it needs a name'],
     [['module', 'app', 0], 'Reference "module.app[0]" has an index where it needs a name'],
-    [['local_file', 'a', 0], 'Reference "local_file.a[0]" has an index where it needs a name'],
+    [['count'], 'Reference "count" names nothing: count.index is the index of an instance'],
+    [['count', 'id'], 'Reference "count.id" names nothing: count.index is the index of an instance'],
+    [['count', 0], 'Reference "count[0]" has an index where it needs a name'],
     [[0, 'a', 'id'], 'Reference "[0].a.id" has an index where it needs a name'],
   ])('refuses %j', (parts, message) => {
     const error = errorOf(parts);

@@ -57,6 +57,10 @@ string can read other values with `${...}`. A string over many lines is a heredo
 | `output "name" { value = }`      | A value the file gives back; a module's caller reads it        |
 | `module "name" { source = }`     | Another directory with its own `main.clay`, called with inputs |
 
+A resource with `count = 3` makes three instances, `type.name[0]` to `type.name[2]`, and
+`count.index` inside the block is the index of the one being made. Another value reads
+one of them: `local_file.logs[0].content`.
+
 References: `var.name`, `local_file.a.content`, `module.m.out`, and `random_string.s.id`
 for what the provider assigned. A reference reads into a map or a list with `.key`,
 `["key"]` and `[0]`: `var.tags.env`, `var.names[0]`. A value read from a resource that has

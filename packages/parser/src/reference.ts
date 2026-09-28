@@ -26,16 +26,22 @@ export interface ModuleOutputReference {
   path: Step[];
 }
 
+/** Whether the first step is an instance key or an attribute depends on the block, which the engine reads. */
 export interface ResourceReference {
   kind: 'resource';
   type: string;
   name: string;
-  attribute: string;
+  path: Step[];
+}
+
+/** `count.index`, the index of the instance being made. */
+export interface CountReference {
+  kind: 'count';
   path: Step[];
 }
 
 /** A reference as the language reads it: what it names, and the steps into the value it names. */
-export type ParsedReference = VariableReference | DataReference | ModuleOutputReference | ResourceReference;
+export type ParsedReference = VariableReference | DataReference | ModuleOutputReference | ResourceReference | CountReference;
 
 /** What a reference can spell after a dot, so a declared name can always be read back. */
 export const NAME = /^[A-Za-z_][A-Za-z0-9_-]*$/;
@@ -93,9 +99,16 @@ function moduleOutputReference(parts: Step[], position?: Position): ModuleOutput
 
 function resourceReference(parts: Step[], position?: Position): ResourceReference {
   if (parts.length < 3) refuse(`Resource reference must include attribute: ${spellReference(parts)}`, position);
-  const { names, path } = split(parts, 3, position);
+  const { names, path } = split(parts, 2, position);
 
-  return { kind: 'resource', type: names[0], name: names[1], attribute: names[2], path };
+  return { kind: 'resource', type: names[0], name: names[1], path };
+}
+
+function countReference(parts: Step[], position?: Position): CountReference {
+  const { names, path } = split(parts, 2, position);
+  if (names[1] !== 'index') refuse(`Reference "${spellReference(parts)}" names nothing: count.index is the index of an instance`, position);
+
+  return { kind: 'count', path };
 }
 
 /** The one place that says what a reference's parts mean: which name its target, and which read into the target's value. */
@@ -103,6 +116,7 @@ export function parseReference(parts: Step[], position?: Position): ParsedRefere
   if (parts[0] === 'var') return variableReference(parts, position);
   if (parts[0] === 'data') return dataReference(parts, position);
   if (parts[0] === 'module') return moduleOutputReference(parts, position);
+  if (parts[0] === 'count') return countReference(parts, position);
 
   return resourceReference(parts, position);
 }

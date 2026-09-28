@@ -1,16 +1,25 @@
 import { Address, State } from '@clay/contracts';
-import { ResourceReference, spellReference } from '@clay/parser';
+import { Position, ResourceReference, spellReference, Step } from '@clay/parser';
+
+import { Instances } from '../Instances';
+import { readInstance } from './instance';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 
 export class ResourceResolver {
-  resolve(reference: ResourceReference, context: Address, state: State): unknown {
-    const resourceKey = new Address(context.modulePath, reference.type, reference.name).toString();
+  constructor(private instances: Instances) {}
+
+  /** The attribute the reference reads, and the steps still to take into it. */
+  resolve(reference: ResourceReference, context: Address, state: State, position?: Position): { value: unknown; path: Step[] } {
+    const block = new Address(context.modulePath, reference.type, reference.name).toString();
+    const { key, attribute, path } = readInstance(reference, this.instances.isCounted(block), position);
+
+    const resourceKey = new Address(context.modulePath, reference.type, reference.name, key).toString();
     const resource = state.resources[resourceKey];
 
-    const spelled = spellReference([reference.type, reference.name, reference.attribute]);
+    const spelled = spellReference([reference.type, reference.name, ...(key === undefined ? [] : [key]), attribute]);
     if (!resource) throw new UnresolvedReferenceError(`Invalid resource reference "${spelled}": Resource "${resourceKey}" not found in state`);
 
-    return this.getResolvedAttribute(resource, reference.attribute, spelled);
+    return { value: this.getResolvedAttribute(resource, attribute, spelled), path };
   }
 
   private getResolvedAttribute(resource: { id?: string; attributes: Record<string, unknown> }, attributeName: string, fullPath: string): unknown {

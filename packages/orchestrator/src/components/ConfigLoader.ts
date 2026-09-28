@@ -1,6 +1,7 @@
 import { Address, State } from '@clay/contracts';
 import { CONFIG_FILE, DataBlock, Lexer, Parser, spell, Statement } from '@clay/parser';
 
+import { Instances } from '../Instances';
 import { ProviderRegistry } from '../ProviderRegistry';
 import { dataSourceKey, scopeOf } from '../keys';
 import { tryAt } from '../place';
@@ -21,7 +22,8 @@ export class ConfigLoader {
     private scopeManager: ScopeManager,
     private dataSources: Map<string, Record<string, unknown>>,
     private resolver: ReferenceResolver,
-    private providers: ProviderRegistry
+    private providers: ProviderRegistry,
+    private instances: Instances
   ) {}
 
   async load(configContent: string, state: State): Promise<LoadedConfig> {
@@ -29,6 +31,9 @@ export class ConfigLoader {
 
     this.scopeManager.clear();
     const { resources: loadedResources, modules: loadedModules } = await this.moduleLoader.loadModuleTree(mainProgram);
+
+    this.instances.clear();
+    for (const { uniqueId, block } of loadedResources) if (block.count) this.instances.declare(uniqueId);
 
     this.dataSources.clear();
     for (const mod of loadedModules) await this.readDataSources(mod.program, state, mod.address);

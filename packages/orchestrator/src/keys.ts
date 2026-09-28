@@ -2,7 +2,7 @@ import { Address } from '@clay/contracts';
 
 /**
  * How a node is addressed in the dependency graph. Keys are built here and never taken apart.
- * A resource's key is its address, `type.name`, so these two spell their kind with a `:`, which no name can hold.
+ * A resource's key is the address of its block, `type.name`, which every instance of it shares, so these two spell their kind with a `:`, which no name can hold.
  */
 export function variableKey(scope: string, name: string): string {
   return scope ? `${scope}.vars:${name}` : `vars:${name}`;
