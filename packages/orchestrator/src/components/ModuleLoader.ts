@@ -17,33 +17,35 @@ export interface LoadedModule {
   program: Statement[];
 }
 
+/** What the loader has found so far; each module adds to it where it is called. */
+export interface Loaded {
+  resources: LoadedResource[];
+  modules: LoadedModule[];
+}
+
 export class ModuleLoader {
   constructor(
     private files: ConfigFiles,
     private scopeManager: ScopeManager
   ) {}
 
-  async loadModuleTree(rootProgram: Statement[]): Promise<{ resources: LoadedResource[]; modules: LoadedModule[] }> {
-    const loadedResources: LoadedResource[] = [];
-    const loadedModules: LoadedModule[] = [];
+  async loadModuleTree(rootProgram: Statement[]): Promise<Loaded> {
+    const loaded: Loaded = { resources: [], modules: [] };
 
     const parentAddress = new Address([], '', '');
-    loadedModules.push({ address: parentAddress, program: rootProgram });
+    loaded.modules.push({ address: parentAddress, program: rootProgram });
     this.declareVariables(rootProgram, parentAddress);
 
     for (const stmt of rootProgram)
       if (stmt.type === 'Resource') {
         const address = new Address([], stmt.resourceType, stmt.name);
-        loadedResources.push({ uniqueId: address.toString(), address, block: stmt });
-      } else if (stmt.type === 'Module') {
-        const childResources = await this.loadChildModule(stmt, '.', parentAddress, loadedModules, ['.']);
-        loadedResources.push(...childResources);
-      }
+        loaded.resources.push({ uniqueId: address.toString(), address, block: stmt });
+      } else if (stmt.type === 'Module') await this.loadChildModule(stmt, '.', parentAddress, loaded, ['.']);
 
-    return { resources: loadedResources, modules: loadedModules };
+    return loaded;
   }
 
-  private async loadChildModule(stmt: ModuleBlock, parentDir: string, parentAddress: Address, moduleAccumulator: LoadedModule[], loadingDirs: string[]): Promise<LoadedResource[]> {
+  private async loadChildModule(stmt: ModuleBlock, parentDir: string, parentAddress: Address, loaded: Loaded, loadingDirs: string[]): Promise<void> {
     const moduleName = stmt.name;
 
     const sourceValue = stmt.attributes.source?.value;
@@ -58,20 +60,14 @@ export class ModuleLoader {
     const childAddress = new Address([...parentAddress.modulePath, moduleName], '', '');
     this.declareInputs(stmt, moduleProgram, childAddress, parentAddress);
 
-    moduleAccumulator.push({ address: childAddress, program: moduleProgram });
+    loaded.modules.push({ address: childAddress, program: moduleProgram });
     this.declareVariables(moduleProgram, childAddress);
 
-    const childResources: LoadedResource[] = [];
     for (const childStmt of moduleProgram)
       if (childStmt.type === 'Resource') {
         const resourceAddress = new Address(childAddress.modulePath, childStmt.resourceType, childStmt.name);
-        childResources.push({ uniqueId: resourceAddress.toString(), address: resourceAddress, block: childStmt });
-      } else if (childStmt.type === 'Module') {
-        const nestedResources = await this.loadChildModule(childStmt, moduleDir, childAddress, moduleAccumulator, [...loadingDirs, moduleDir]);
-        childResources.push(...nestedResources);
-      }
-
-    return childResources;
+        loaded.resources.push({ uniqueId: resourceAddress.toString(), address: resourceAddress, block: childStmt });
+      } else if (childStmt.type === 'Module') await this.loadChildModule(childStmt, moduleDir, childAddress, loaded, [...loadingDirs, moduleDir]);
   }
 
   private parseModuleFile(moduleDir: string): Statement[] {
