@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createStateCommand } from '../src/commands/state';
 
-vi.mock('@clay/state');
+// Only the manager: the helpers that change a state in memory run as they are.
+vi.mock('@clay/state', async (importOriginal) => ({ ...(await importOriginal<typeof import('@clay/state')>()), StateManager: vi.fn() }));
 
 describe('CLI: state command', () => {
   let consoleLogSpy: ReturnType<typeof vi.spyOn>;

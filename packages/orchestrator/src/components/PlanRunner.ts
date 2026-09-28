@@ -2,7 +2,7 @@ import { Address, State } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { Statement } from '@clay/parser';
 import { PlanAction } from '@clay/planner';
-import { StateManager } from '@clay/state';
+import { moveResource, StateManager } from '@clay/state';
 
 import { asError } from '../asError';
 import { Instances } from '../Instances';
@@ -96,11 +96,13 @@ export class PlanRunner {
   }
 
   private async *step(action: PlanAction, state: State): AsyncGenerator<RunEvent, boolean> {
-    // An unchanged resource has nothing to report; it only refreshes what it reads from, and the write that ends the run saves that.
-    const quiet = action.type === 'NO_OP';
+    // An unchanged resource has nothing to report; it only refreshes what it reads from, and the write that ends the run saves that. A move is a change of its own, reported and saved.
+    const quiet = action.type === 'NO_OP' && !action.movedFrom;
     if (!quiet) yield { type: 'started', action };
 
     try {
+      // Moved first, so the action finds the resource under the address it runs for.
+      if (action.movedFrom) moveResource(state, Address.parse(action.movedFrom), Address.of(action));
       await this.executor.execute(action, state);
     } catch (error) {
       yield { type: 'failed', action, error: asError(error), stateError: await this.saveAfterFailure(state) };

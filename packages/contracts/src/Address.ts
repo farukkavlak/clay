@@ -79,6 +79,14 @@ export class Address {
     return new Address(this.modulePath, this.resourceType, this.name);
   }
 
+  /** Where state keeps this instance when count came or went since: `a` for `a[0]`, and `a[0]` for `a`. Any other instance has no such place. */
+  countCounterpart(): Address | undefined {
+    if (this.key === 0) return this.withoutKey();
+    if (this.key === undefined) return new Address(this.modulePath, this.resourceType, this.name, 0);
+
+    return undefined;
+  }
+
   static root(resourceType: string, name: string): Address {
     return new Address([], resourceType, name);
   }
