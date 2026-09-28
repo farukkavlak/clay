@@ -427,6 +427,41 @@ describe('Clay Parser', () => {
       expect(error.position).toEqual(position);
     });
 
+    it.each([
+      ['a key with a dot', '"${var.m["a.b"]}"', 'a.b'],
+      ['a key holding the brace that closes an interpolation', '"${var.m["a}b"]}"', 'a}b'],
+      ['a key holding what starts a comment', '"${var.m["a#b"]}"', 'a#b'],
+      ['a key by what its escapes stand for', '"${var.m["a\\"b"]}"', 'a"b'],
+    ])('reads %s inside an interpolation', (_, written, key) => {
+      expect(valueOf(written)).toEqual({ type: 'Template', value: [reference(['var', 'm', key], 27)], position: at(1, 24) });
+    });
+
+    it('reads the text around an interpolation that holds a quoted key', () => {
+      expect(valueOf('"x ${var.m["k"]} y"')).toEqual({ type: 'Template', value: ['x ', reference(['var', 'm', 'k'], 29), ' y'], position: at(1, 24) });
+    });
+
+    it.each([
+      ['a key that holds an interpolation', '"${var.m["${var.k}"]}"', 'A map key is plain text; it cannot hold an interpolation', at(1, 33)],
+      ['a string where a reference should be', '"${"x"}"', "Expect a reference inside '${'.", at(1, 27)],
+    ])('refuses %s inside an interpolation, where it is written', (_, written, message, position) => {
+      const error = errorOf(`resource "t" "n" { v = ${written} }`);
+
+      expect(error.message).toBe(message);
+      expect(error.position).toEqual(position);
+    });
+
+    // A quote left where a brace belongs opens a string; the quotes after it pair up to the end, so the place to name is a `${`.
+    it.each([
+      ['not the quotes on later lines', 'resource "t" "n" { v = "a ${var.x" }\nresource "t" "m" { w = "b" }', at(1, 27)],
+      ['not the quote of a key never closed', 'resource "t" "n" { v = "${var.m["a} }', at(1, 25)],
+      ['the first of two still open', 'resource "t" "n" { v = "${var.m["${var.k', at(1, 25)],
+    ])('names the interpolation never closed, %s', (_, input, position) => {
+      const error = errorOf(input);
+
+      expect(error.message).toBe("This '${' is never closed with '}'");
+      expect(error.position).toEqual(position);
+    });
+
     // A key is read as it is written, so an interpolation in one would be text that looks like a reference.
     it('refuses an interpolation in a map key', () => {
       const error = errorOf('resource "t" "n" { m = { "${var.k}" = 1 } }');
