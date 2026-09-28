@@ -10,19 +10,20 @@ import { styleText } from 'node:util';
 import { confirm } from '../confirm';
 import { newOrchestrator } from '../engine';
 import { describeError } from '../describeError';
-import { actionSymbol, changesNothing, displayPlan, pastTense } from '../showPlan';
+import { actionLine, changesNothing, displayPlan } from '../showPlan';
 import { exists } from '../exists';
 
-/** A replacement counts once as an add and once as a destroy, as the plan summary counts it. */
+/** A replacement counts once as an add and once as a destroy, and a move when there is one, as the plan summary counts them. */
 function summarize(applied: PlanAction[]): string {
   const count = (type: PlanAction['type']) => applied.filter((action) => action.type === type).length;
   const replaced = count('REPLACE');
+  const moved = applied.filter((action) => action.movedFrom).length;
 
-  return `${count('CREATE') + replaced} added, ${count('UPDATE')} changed, ${count('DELETE') + replaced} destroyed`;
+  return `${count('CREATE') + replaced} added, ${count('UPDATE')} changed, ${count('DELETE') + replaced} destroyed${moved > 0 ? `, ${moved} moved` : ''}`;
 }
 
 function reportEvent(event: RunEvent): void {
-  if (event.type === 'applied') console.log(`  ${actionSymbol(event.action.type)} ${Address.of(event.action).toString()} ${pastTense(event.action.type)}`);
+  if (event.type === 'applied') console.log(actionLine(event.action, false));
   if (event.type === 'failed') {
     if (event.stateError) console.error(styleText('red', 'The state could not be saved:'), event.stateError.message);
     throw new Error(`${Address.of(event.action).toString()}: ${event.error.message}`);

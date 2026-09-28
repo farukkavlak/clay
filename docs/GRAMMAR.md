@@ -154,6 +154,11 @@ A reference names one instance: `local_file.logs[0].content`. On a resource with
 an index is refused. Reading an instance that stays as it is gives its value, even when
 another instance of the same block changes.
 
+Adding `count` to a resource that exists moves it to `type.name[0]`, and taking `count`
+off moves `type.name[0]` back to `type.name` and destroys the other instances. A move
+changes only where state keeps the resource; a plan shows it, and any change to the
+resource runs with it. With `count = 0` nothing takes its place, so it is destroyed.
+
 ### Interpolation
 
 A `${...}` in a string holds one reference and nothing else, and is read as the file is

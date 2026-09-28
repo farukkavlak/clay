@@ -73,7 +73,7 @@ hits each of these early.
       that thin, so this comes before `count`
 - [x] `count` on a resource, with `[0]` access and `count.index`; an address grows an
       instance key, the way Terraform's `addrs.AbsResourceInstance` does
-- [ ] Adding `count` to a resource moves `a` to `a[0]` in the plan, and taking it off
+- [x] Adding `count` to a resource moves `a` to `a[0]` in the plan, and taking it off
       moves `a[0]` back, rather than destroying one and creating the other. Terraform
       does this since 1.1
 - [ ] `for_each` on a resource, over a map or a list of strings, with `["key"]` access and

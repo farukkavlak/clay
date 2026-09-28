@@ -58,6 +58,7 @@ export class Orchestrator {
 
   async plan(configContent: string): Promise<Plan> {
     const currentState = await this.stateManager.read();
+    // Planning moves what gained or lost count in `currentState`, so the actions are planned against the resources where they now are.
     const { desiredResources, outputs, schemas } = await this.resolveAndCheck(configContent, currentState);
 
     return { serial: currentState.serial, actions: plan(desiredResources, currentState, schemas), outputs: outputChanges(currentState.outputs ?? {}, outputs) };

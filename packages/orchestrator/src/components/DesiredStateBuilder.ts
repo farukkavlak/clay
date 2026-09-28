@@ -2,6 +2,7 @@ import { Address, ExactNumber, State } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { AttributeValue, ResourceBlock, spell } from '@clay/parser';
 import { DesiredResource, hasChanges, isUnknown, UNKNOWN } from '@clay/planner';
+import { moveResource } from '@clay/state';
 
 import { Instances } from '../Instances';
 import { tryAt } from '../place';
@@ -44,6 +45,7 @@ export class DesiredStateBuilder {
     private instances: Instances
   ) {}
 
+  /** Moves are made in the state it is given, which a plan reads for itself and never writes, and then plans the actions against. */
   build(loadedResources: LoadedResource[], graph: Graph<GraphNode>, state: State): DesiredState {
     const byKey = new Map(loadedResources.map((r) => [r.address.toString(), r]));
     const pending = new Set<string>();
@@ -81,11 +83,21 @@ export class DesiredStateBuilder {
   }
 
   private planInstance(address: Address, block: ResourceBlock, dependencies: string[], state: State, pending: Set<string>): DesiredResource {
+    const movedFrom = this.moveIn(address, state);
     const attributes = this.resolveForPlan(block, state, address, pending);
     const current = state.resources[address.toString()];
     if (!current || hasChanges(current.attributes, attributes)) pending.add(address.toString());
 
-    return { address, block, attributes, dependencies };
+    return { address, block, attributes, dependencies, ...(movedFrom && { movedFrom }) };
+  }
+
+  /** Made before anything reads the instance, so a reader finds it where the configuration now names it and sees its value. */
+  private moveIn(address: Address, state: State): string | undefined {
+    const source = address.countCounterpart();
+    if (!source || Object.hasOwn(state.resources, address.toString()) || !Object.hasOwn(state.resources, source.toString())) return undefined;
+
+    moveResource(state, source, address);
+    return source.toString();
   }
 
   /** The graph links blocks; state keeps what each instance read, so a delete runs after every instance of what it read from. Each block was planned before, so its count is known. */

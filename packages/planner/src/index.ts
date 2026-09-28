@@ -17,6 +17,8 @@ export interface DesiredResource {
   block: ResourceBlock;
   attributes: Record<string, unknown>;
   dependencies: string[];
+  /** Where state held it before count came or went; the state planned against already has it here. */
+  movedFrom?: string;
 }
 
 /** What each named value was and would become; a missing `old` is an addition, a missing `new` a removal. */
@@ -28,6 +30,8 @@ export interface PlanAction {
   name: string;
   modulePath?: string[]; // Path of modules leading to this resource
   key?: InstanceKey;
+  /** The address state holds the resource under, when count was added or taken off since: it moves before the action runs. */
+  movedFrom?: string;
   id?: string;
   attributes?: Record<string, AttributeValue>;
   changes?: Changes;
@@ -104,6 +108,30 @@ function isModuleFiles(modules: unknown): modules is Record<string, string> {
   return isRecord(modules) && Object.values(modules).every((content) => typeof content === 'string');
 }
 
+/** A move starts where count coming or going left the action's own resource, and nowhere else. */
+function isMovedFrom(action: Record<string, unknown>): boolean {
+  if (action.movedFrom === undefined) return true;
+  if (typeof action.resourceType !== 'string' || typeof action.name !== 'string') return false;
+
+  const address = new Address((action.modulePath as string[] | undefined) ?? [], action.resourceType, action.name, action.key as InstanceKey | undefined);
+  return action.movedFrom === address.countCounterpart()?.toString();
+}
+
+/** A module path names modules, so an address built from it is the one state keys by. */
+function isModulePath(value: unknown): boolean {
+  return value === undefined || (Array.isArray(value) && value.every((name) => typeof name === 'string'));
+}
+
+function isAction(action: unknown): boolean {
+  return (
+    isRecord(action) &&
+    isModulePath(action.modulePath) &&
+    (action.key === undefined || isInstanceKey(action.key)) &&
+    isMovedFrom(action) &&
+    (action.changes === undefined || isChanges(action.changes))
+  );
+}
+
 export function validatePlanFile(planFile: unknown): planFile is PlanFile {
   if (!planFile || typeof planFile !== 'object') return false;
 
@@ -115,7 +143,7 @@ export function validatePlanFile(planFile: unknown): planFile is PlanFile {
     isModuleFiles(pf.modules) &&
     typeof pf.serial === 'number' &&
     Array.isArray(pf.actions) &&
-    pf.actions.every((action) => isRecord(action) && (action.key === undefined || isInstanceKey(action.key)) && (action.changes === undefined || isChanges(action.changes))) &&
+    pf.actions.every((action) => isAction(action)) &&
     isChanges(pf.outputs)
   );
 }
@@ -227,6 +255,7 @@ export function hasChanges(currentAttrs: Record<string, unknown>, desiredAttrs: 
 }
 
 function processExistingResource(actions: PlanAction[], desired: DesiredResource, currentResource: Resource, schemas: Map<string, Schema>) {
+  const moved = desired.movedFrom;
   const resource = desired.block;
   const changes = calculateDiff(currentResource.attributes, desired.attributes);
 
@@ -234,6 +263,7 @@ function processExistingResource(actions: PlanAction[], desired: DesiredResource
     actions.push({
       type: 'NO_OP',
       ...desired.address.fields(),
+      ...(moved && { movedFrom: moved }),
       id: currentResource.id,
       dependencies: desired.dependencies,
     });
@@ -246,6 +276,7 @@ function processExistingResource(actions: PlanAction[], desired: DesiredResource
   actions.push({
     type: forcesNew ? 'REPLACE' : 'UPDATE',
     ...desired.address.fields(),
+    ...(moved && { movedFrom: moved }),
     id: currentResource.id,
     attributes: resource.attributes,
     changes,
@@ -253,6 +284,7 @@ function processExistingResource(actions: PlanAction[], desired: DesiredResource
   });
 }
 
+/** `currentState` is the state with every move already made, as the desired resources were planned against it. */
 export function plan(desiredResources: DesiredResource[], currentState: State, schemas: Map<string, Schema> = new Map()): PlanAction[] {
   const actions: PlanAction[] = [];
   const currentMap = new Map<string, Resource>(Object.entries(currentState.resources));

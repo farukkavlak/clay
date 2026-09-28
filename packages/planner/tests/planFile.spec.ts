@@ -125,6 +125,39 @@ describe('reading a plan file', () => {
     expect(read(keyed(key))).toThrow(/^tfplan\.json is not a plan file$/);
   });
 
+  it.each([
+    ['a number', 5],
+    ['text that is no address', 'nowhere'],
+    ['another resource', 'local_file.x'],
+    ['an index other than the first', 'null_resource.a[1]'],
+  ])('refuses a move from %s', (_, movedFrom) => {
+    const content = { ...fields(), actions: [{ type: 'NO_OP', resourceType: 'null_resource', name: 'a', key: 0, movedFrom }] };
+
+    expect(read(content)).toThrow(/^tfplan\.json is not a plan file$/);
+  });
+
+  it.each([
+    ['text', 'm'],
+    ['a list that holds no names', [1]],
+  ])('refuses an action whose module path is %s', (_, modulePath) => {
+    const content = { ...fields(), actions: [{ type: 'DELETE', resourceType: 'null_resource', name: 'a', modulePath, id: '1' }] };
+
+    expect(read(content)).toThrow(/^tfplan\.json is not a plan file$/);
+  });
+
+  it('reads a move each way back as it was written', () => {
+    const plan: Plan = {
+      serial: 0,
+      actions: [
+        { type: 'NO_OP', resourceType: 'null_resource', name: 'a', key: 0, movedFrom: 'null_resource.a' },
+        { type: 'NO_OP', resourceType: 'null_resource', name: 'b', movedFrom: 'null_resource.b[0]' },
+      ],
+      outputs: {},
+    };
+
+    expect(parsePlanFile(aPlanFile(plan), 'tfplan.json').actions.map((action) => action.movedFrom)).toEqual(['null_resource.a', 'null_resource.b[0]']);
+  });
+
   it('names an instance key that is not whole', () => {
     expect(read(keyed(1.5))).toThrow('tfplan.json is not a plan file: an instance key: 1.5 is not a whole number');
   });

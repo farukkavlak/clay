@@ -2,11 +2,16 @@ import { Address } from '@clay/contracts';
 import { Changes, isUnknown, Plan, PlanAction } from '@clay/planner';
 import { styleText } from 'node:util';
 
-export function changesNothing(plan: Plan): boolean {
-  return plan.actions.every((action) => action.type === 'NO_OP') && Object.keys(plan.outputs).length === 0;
+/** A move changes where state keeps a resource, so a plan that only moves still has work to do. */
+function changes(action: PlanAction): boolean {
+  return action.type !== 'NO_OP' || action.movedFrom !== undefined;
 }
 
-export function actionSymbol(actionType: PlanAction['type']): string {
+export function changesNothing(plan: Plan): boolean {
+  return !plan.actions.some((action) => changes(action)) && Object.keys(plan.outputs).length === 0;
+}
+
+function actionSymbol(actionType: PlanAction['type']): string {
   if (actionType === 'CREATE') return styleText('green', '+');
   if (actionType === 'UPDATE') return styleText('yellow', '~');
   if (actionType === 'REPLACE') return styleText('red', '-') + styleText('green', '+');
@@ -14,7 +19,7 @@ export function actionSymbol(actionType: PlanAction['type']): string {
   return ' ';
 }
 
-export function pastTense(actionType: PlanAction['type']): string {
+function pastTense(actionType: PlanAction['type']): string {
   if (actionType === 'CREATE') return styleText('green', 'created');
   if (actionType === 'UPDATE') return styleText('yellow', 'updated');
   if (actionType === 'REPLACE') return styleText('red', 'replaced');
@@ -29,8 +34,18 @@ function showOr(value: unknown, whenAbsent: string): string {
   return value === undefined ? whenAbsent : show(value);
 }
 
+/** One line for an action, as a plan says it will run (`will be created`) or an apply says it ran (`created`). */
+export function actionLine(action: PlanAction, planned: boolean): string {
+  const address = Address.of(action).toString();
+  const will = planned ? 'will be ' : '';
+  if (action.type === 'NO_OP') return `  ${styleText('cyan', '>')} ${address} ${will}moved from ${action.movedFrom}`;
+
+  const moved = action.movedFrom ? `, moved from ${action.movedFrom}` : '';
+  return `  ${actionSymbol(action.type)} ${address} ${will}${pastTense(action.type)}${moved}`;
+}
+
 function displayAction(action: PlanAction): void {
-  console.log(`  ${actionSymbol(action.type)} ${Address.of(action).toString()} will be ${pastTense(action.type)}`);
+  console.log(actionLine(action, true));
 
   if ((action.type === 'UPDATE' || action.type === 'REPLACE') && action.changes)
     for (const [key, change] of Object.entries(action.changes)) console.log(`      ${key}: ${showOr(change.old, '(none)')} -> ${showOr(change.new, '(removed)')}`);
@@ -49,12 +64,14 @@ function displayOutputChanges(outputs: Changes): void {
   }
 }
 
-/** A replacement counts once as an add and once as a destroy. */
+/** A replacement counts once as an add and once as a destroy; a move is counted when there is one. */
 function displaySummary(actions: PlanAction[]): void {
   const count = (type: PlanAction['type']) => actions.filter((action) => action.type === type).length;
   const replaced = count('REPLACE');
+  const moved = actions.filter((action) => action.movedFrom).length;
 
-  console.log(styleText('bold', `\nPlan: ${count('CREATE') + replaced} to add, ${count('UPDATE')} to change, ${count('DELETE') + replaced} to destroy.`));
+  const summary = `${count('CREATE') + replaced} to add, ${count('UPDATE')} to change, ${count('DELETE') + replaced} to destroy${moved > 0 ? `, ${moved} to move` : ''}`;
+  console.log(styleText('bold', `\nPlan: ${summary}.`));
 }
 
 /** Shows what a plan would do, the same way whether it was just made, is about to run, or was saved to a file. */
@@ -64,14 +81,14 @@ export function displayPlan(plan: Plan): void {
     return;
   }
 
-  const changes = plan.actions.filter((action) => action.type !== 'NO_OP');
-  if (changes.length > 0) {
+  const changing = plan.actions.filter((action) => changes(action));
+  if (changing.length > 0) {
     console.log(styleText('bold', '\nClay will perform the following actions:\n'));
-    for (const action of changes) displayAction(action);
+    for (const action of changing) displayAction(action);
   }
 
   displayOutputChanges(plan.outputs);
 
-  if (changes.length > 0) displaySummary(plan.actions);
+  if (changing.length > 0) displaySummary(plan.actions);
   else console.log(styleText('bold', '\nAn apply would only update the outputs in state.'));
 }

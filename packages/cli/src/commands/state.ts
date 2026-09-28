@@ -1,5 +1,5 @@
 import { Address, Resource, State } from '@clay/contracts';
-import { StateManager } from '@clay/state';
+import { mapDependencies, moveResource, StateManager } from '@clay/state';
 import { Command } from 'commander';
 import { styleText } from 'node:util';
 
@@ -23,21 +23,13 @@ function findResource(state: State, address: string): Resource | undefined {
   return Object.hasOwn(state.resources, key) ? state.resources[key] : undefined;
 }
 
-/** State would keep a dependency on an address that no longer holds a resource. */
-function mapDependencies(state: State, change: (dependency: string) => string | undefined): void {
-  for (const resource of Object.values(state.resources))
-    if (resource.dependencies) resource.dependencies = resource.dependencies.map((dependency) => change(dependency)).filter((dependency) => dependency !== undefined);
-}
-
-/** A resource's address lives in its key, in its entry and in every entry that reads from it. */
-function moveResource(state: State, source: string, destination: string): void {
+/** The type is what the provider manages, so a move keeps it. */
+function checkedMove(state: State, source: string, destination: string): void {
   const from = Address.parse(source);
   const to = Address.parse(destination);
   if (from.resourceType !== to.resourceType) throw new Error(`Cannot move ${source} to ${destination}: the type changes`);
 
-  state.resources[to.toString()] = { ...state.resources[from.toString()], ...to.fields() };
-  delete state.resources[from.toString()];
-  mapDependencies(state, (dependency) => (dependency === from.toString() ? to.toString() : dependency));
+  moveResource(state, from, to);
 }
 
 export function createStateCommand(): Command {
@@ -107,7 +99,7 @@ export function createStateCommand(): Command {
 
           console.log(styleText('yellow', `Moving ${source} to ${destination}...`));
 
-          moveResource(state, source, destination);
+          checkedMove(state, source, destination);
           // Outputs come from a finished run; the next one writes them again.
           delete state.outputs;
 
