@@ -1,4 +1,4 @@
-import { State } from '@clay/contracts';
+import { State, STATE_VERSION } from '@clay/contracts';
 
 import { StateBackend } from './StateBackend';
 
@@ -16,9 +16,11 @@ export class StateManager {
   /**
    * Named field by field, so a key an older version wrote is dropped. A field added to the state belongs here too.
    * The serial is bumped on the given state, so the caller keeps writing from the serial on disk.
+   * The version is this Clay's: a state read from an older file may now hold what that version cannot.
    */
   async write(state: State): Promise<void> {
     state.serial += 1;
+    state.version = STATE_VERSION;
     await this.backend.write({ version: state.version, serial: state.serial, outputs: state.outputs, resources: state.resources });
   }
 

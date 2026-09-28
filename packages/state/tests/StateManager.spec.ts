@@ -2,7 +2,7 @@ import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import path from 'node:path';
 
-import { State } from '@clay/contracts';
+import { State, STATE_VERSION } from '@clay/contracts';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { LocalBackend } from '../src/backends/LocalBackend';
@@ -62,6 +62,17 @@ describe('StateManager', () => {
     const stored = await stateManager.read();
     expect(state.serial).toBe(2);
     expect(stored.serial).toBe(2);
+  });
+
+  // A state read from an older file may now hold what that version cannot, so the file says which Clay wrote it.
+  it('writes the version of this Clay, whatever version the state was read at', async () => {
+    const state: State = { version: STATE_VERSION - 1, serial: 0, resources: {} };
+
+    await stateManager.write(state);
+
+    const stored = await stateManager.read();
+    expect(stored.version).toBe(STATE_VERSION);
+    expect(state.version).toBe(STATE_VERSION);
   });
 
   describe('writeIfAbsent', () => {
