@@ -93,8 +93,6 @@ hits each of these early.
       unknown; Clay needs a value that is known in part
 - [ ] A whole resource as a value: `local_file.a[0]` as a map, and `local_file.a` as the
       list of its instances. Worth it once there are functions or splats to read one with
-- [ ] Bump the state and plan file versions once `count` and `for_each` are done: both
-      now hold instance keys, which an older Clay would read as the block
 - [ ] `path.module`, `path.root` and `path.cwd`, so a module can name a file next to
       itself; a relative path is resolved from where `clay` runs today
 - [ ] A module `source` has a kind. Terraform reads a local path only when it starts with
