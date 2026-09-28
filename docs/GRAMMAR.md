@@ -86,7 +86,7 @@ name either.
 ### References
 
 ```
-reference = IDENTIFIER { "." IDENTIFIER }
+reference = IDENTIFIER { "." IDENTIFIER | "[" ( NUMBER | STRING ) "]" }
 ```
 
 A bare reference is a value on its own: `path = var.dir`. Inside a string it is written
@@ -99,10 +99,22 @@ A bare reference is a value on its own: `path = var.dir`. Inside a string it is 
 | `module`   | An output of a module called in the same file        | `module.app.url`            |
 | anything   | An attribute of the resource with that type and name | `local_file.a.content`      |
 
-A resource's `id` is what the provider assigned on create. A reference reads one
-attribute and no deeper, so `local_file.a.tags.env` and `var.v.bogus` are refused.
-Reaching into a module (`module.app.local_file.a`) is refused too; a module is read
-through its outputs.
+A resource's `id` is what the provider assigned on create.
+
+After what it names, a reference may read into the value: `.name` or `["key"]` reads a
+key of a map, and `[0]` an item of a list, counted from 0. So `local_file.a.tags.env`,
+`var.names[0]` and `module.app.info["url"]` each read one value. An index is written in
+digits; a quoted key reads escapes as a map key does. A key the map does not have, an
+index past the end of the list, or a step into a string, number or bool is refused where
+the reference is written. A value not known until apply is read into at apply.
+
+The parts before that name what is read, so each is a name even when it is quoted:
+`var["region"]` is `var.region`, and `module["a.module.b"]` is refused.
+
+A module is read through its outputs, so `module.app.local_file.a` names an output
+called `local_file`, and is refused when the module has none.
+
+Inside `${...}` a key is written with a dot, since a quote there ends the string.
 
 ### Interpolation
 
@@ -137,7 +149,7 @@ type AttributeValue =
   | { type: 'List'; value: AttributeValue[]; position: Position }
   | { type: 'Map'; value: Record<string, AttributeValue>; position: Position };
 
-type Reference = { type: 'Reference'; value: string[]; position: Position };
+type Reference = { type: 'Reference'; value: (string | number)[]; position: Position };
 
 interface ResourceBlock {
   type: 'Resource';
@@ -180,8 +192,9 @@ type Statement = ResourceBlock | DataBlock | VariableBlock | OutputBlock | Modul
 type Program = Statement[];
 ```
 
-A `Reference` holds the dotted parts split up: `local_file.a.content` is
-`['local_file', 'a', 'content']`.
+A `Reference` holds its parts in order, a key as a string and an index as a number:
+`local_file.a.tags["env"]` is `['local_file', 'a', 'tags', 'env']` and `var.names[0]` is
+`['var', 'names', 0]`.
 
 ## Errors
 

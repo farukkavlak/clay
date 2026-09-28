@@ -1,8 +1,9 @@
-import { Address, ExactNumber, State } from '@clay/contracts';
-import { ConfigError, parseReference, ReferenceNode, TemplatePart } from '@clay/parser';
+import { Address, State } from '@clay/contracts';
+import { ConfigError, ParsedReference, parseReference, ReferenceNode, spellReference, TemplatePart } from '@clay/parser';
 import { ScopeManager } from '../scope/ScopeManager';
 import { DataSourceResolver } from './DataSourceResolver';
 import { ModuleOutputResolver } from './ModuleOutputResolver';
+import { kindOf, readPath } from './readPath';
 import { ResourceResolver } from './ResourceResolver';
 import { VariableResolver } from './VariableResolver';
 
@@ -19,10 +20,14 @@ export class ReferenceResolver {
     this.resources = new ResourceResolver();
   }
 
-  resolve(pathParts: string[], state: State, context?: Address): unknown {
-    const reference = parseReference(pathParts);
-    const where = context || new Address([], '', '');
+  private resolve(node: ReferenceNode, state: State, context?: Address): unknown {
+    const reference = parseReference(node.value);
+    const target = node.value.slice(0, node.value.length - reference.path.length);
 
+    return readPath(this.resolveTarget(reference, state, context || new Address([], '', '')), target, reference.path, node.position);
+  }
+
+  private resolveTarget(reference: ParsedReference, state: State, where: Address): unknown {
     if (reference.kind === 'variable') return this.variables.resolve(reference, where, state);
     if (reference.kind === 'data') return this.dataSources.resolve(reference, where);
     if (reference.kind === 'module') return this.moduleOutputs.resolve(reference, where);
@@ -43,7 +48,7 @@ export class ReferenceResolver {
 
     switch (node.type) {
       case 'Reference': {
-        return this.resolve(node.value as string[], state, context);
+        return this.resolve(node as ReferenceNode, state, context);
       }
       case 'Template': {
         return this.resolveTemplate(node.value as TemplatePart[], state, context);
@@ -83,15 +88,15 @@ export class ReferenceResolver {
   /** A template that is one interpolation is the value itself, type and all; text around it makes it a string. */
   private resolveTemplate(parts: TemplatePart[], state: State, context?: Address): unknown {
     const [first] = parts;
-    if (parts.length === 1 && typeof first !== 'string') return this.resolve(first.value, state, context);
+    if (parts.length === 1 && typeof first !== 'string') return this.resolve(first, state, context);
 
     return parts.map((part) => (typeof part === 'string' ? part : this.joined(part, state, context))).join('');
   }
 
   private joined(reference: ReferenceNode, state: State, context?: Address): string {
-    const resolved = this.resolve(reference.value, state, context);
-    if (resolved !== null && typeof resolved === 'object' && !(resolved instanceof ExactNumber))
-      throw new ConfigError(`${reference.value.join('.')} is a ${Array.isArray(resolved) ? 'list' : 'map'} and cannot be joined into a string`, reference.position);
+    const resolved = this.resolve(reference, state, context);
+    const kind = kindOf(resolved);
+    if (kind === 'list' || kind === 'map') throw new ConfigError(`${spellReference(reference.value)} is a ${kind} and cannot be joined into a string`, reference.position);
 
     return String(resolved);
   }

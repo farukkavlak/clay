@@ -57,8 +57,9 @@ string can read other values with `${...}`.
 | `module "name" { source = }`     | Another directory with its own `main.clay`, called with inputs |
 
 References: `var.name`, `local_file.a.content`, `module.m.out`, and `random_string.s.id`
-for what the provider assigned. A value read from a resource that has not been created
-yet is unknown at plan time and shown as such. Reaching inside a module
+for what the provider assigned. A reference reads into a map or a list with `.key`,
+`["key"]` and `[0]`: `var.tags.env`, `var.names[0]`. A value read from a resource that has
+not been created yet is unknown at plan time and shown as such. Reaching inside a module
 (`module.m.local_file.a`) is not allowed; a module speaks through its outputs.
 
 `docs/GRAMMAR.md` has the full grammar.

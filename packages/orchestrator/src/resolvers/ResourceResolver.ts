@@ -1,5 +1,5 @@
 import { Address, State } from '@clay/contracts';
-import { ResourceReference } from '@clay/parser';
+import { ResourceReference, spellReference } from '@clay/parser';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 
 export class ResourceResolver {
@@ -7,7 +7,7 @@ export class ResourceResolver {
     const resourceKey = new Address(context.modulePath, reference.type, reference.name).toString();
     const resource = state.resources[resourceKey];
 
-    const spelled = [reference.type, reference.name, reference.attribute].join('.');
+    const spelled = spellReference([reference.type, reference.name, reference.attribute]);
     if (!resource) throw new UnresolvedReferenceError(`Invalid resource reference "${spelled}": Resource "${resourceKey}" not found in state`);
 
     return this.getResolvedAttribute(resource, reference.attribute, spelled);

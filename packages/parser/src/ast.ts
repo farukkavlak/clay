@@ -1,5 +1,6 @@
 import { ExactNumber } from '@clay/contracts';
 import { Position } from './Position';
+import { Step } from './reference';
 
 /** Every configuration lives under this name, the root one and a module's alike. */
 export const CONFIG_FILE = 'main.clay';
@@ -9,7 +10,7 @@ interface Node {
   position: Position;
 }
 
-export type ReferenceNode = Node & { type: 'Reference'; value: string[] }; // e.g., ["resource_type", "resource_name", "attribute"]
+export type ReferenceNode = Node & { type: 'Reference'; value: Step[] };
 
 /** A piece of a string with `${ … }` in it: text, or the reference an interpolation reads. */
 export type TemplatePart = string | ReferenceNode;

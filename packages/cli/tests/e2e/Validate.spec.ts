@@ -87,14 +87,14 @@ describe('validate against real files', () => {
     expect(output).toContain('\n  3:   content = "${local_file.other}"\n                    ^');
   });
 
-  // A data source is read as the configuration loads, so its values reach no scanner; the rule holds for them all the same.
+  // A data source is read as the configuration loads, so its values reach no scanner; a module is read through its outputs all the same.
   it('refuses a reference that reaches into a module from a data source', async () => {
     await fs.mkdir(path.join(dir, 'm'), { recursive: true });
-    await fs.writeFile(path.join(dir, 'm', 'main.clay'), echoModule, 'utf8');
+    await fs.writeFile(path.join(dir, 'm', 'main.clay'), `resource "local_file" "a" { path = "a.txt" content = "hi" }`, 'utf8');
 
-    const output = await validate('module "m" { source = "./m" text = "hi" }\ndata "local_file" "d" { path = "${module.m.echo.deeper}" }');
+    const output = await validate('module "m" { source = "./m" }\ndata "local_file" "d" { path = "${module.m.local_file.a}" }');
 
-    expect(output).toContain('reaches into a module; modules are read through their outputs');
+    expect(output).toContain('Output "local_file" not found in module');
     expect(output).toContain('on main.clay line 2, in data "local_file" "d":');
   });
 
@@ -107,20 +107,11 @@ describe('validate against real files', () => {
     expect(output).toContain('\n  3:   content = "${var.missing}"\n                    ^');
   });
 
-  it('refuses a reference that reads deeper than the attribute it names', async () => {
-    const config = `resource "local_file" "a" { path = "a.txt" content = "hi" }
-resource "local_file" "b" {
-  content = "\${local_file.a.tags.content}"
-}`;
+  it('refuses a reference that reads into a string, and points at it', async () => {
+    const output = await validate('variable "v" { default = "x" }\noutput "o" { value = "${var.v.bogus}" }');
 
-    const output = await validate(config);
-
-    expect(output).toContain('Reference "local_file.a.tags.content" reads deeper than the attribute "tags"');
-    expect(output).toContain('on main.clay line 3, in resource "local_file" "b":');
-  });
-
-  it('refuses a reference that reads deeper than the variable it names', async () => {
-    expect(await validate('variable "v" { default = "x" }\noutput "o" { value = "${var.v.bogus}" }')).toContain('Reference "var.v.bogus" reads deeper than the variable "v"');
+    expect(output).toContain('var.v is a string and cannot be read into');
+    expect(output).toContain('\n  2: output "o" { value = "${var.v.bogus}" }\n                             ^');
   });
 
   it('refuses a reference with an empty part, rather than naming a target nobody wrote', async () => {

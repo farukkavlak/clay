@@ -1,5 +1,5 @@
 import { Address } from '@clay/contracts';
-import { parseReference, Position } from '@clay/parser';
+import { parseReference, Position, Step } from '@clay/parser';
 import { childScope, outputKey, scopeOf, variableKey } from '../keys';
 
 /** Every AST node carries one, but this walks plain objects too, so a value of another shape is no position. */
@@ -34,11 +34,11 @@ export class ReferenceScanner {
   private collectFromObject(obj: Record<string, unknown>, context: Address, references: Reference[]): void {
     const position = positionOf(obj.position);
 
-    if (obj.type === 'Reference' && Array.isArray(obj.value)) this.addReference(obj.value as string[], context, references, position);
+    if (obj.type === 'Reference' && Array.isArray(obj.value)) this.addReference(obj.value as Step[], context, references, position);
     else for (const item of Object.values(obj)) this.collect(item, context, references);
   }
 
-  private addReference(refParts: string[], context: Address, references: Reference[], position?: Position): void {
+  private addReference(refParts: Step[], context: Address, references: Reference[], position?: Position): void {
     const reference = parseReference(refParts, position);
     const scope = scopeOf(context);
 
