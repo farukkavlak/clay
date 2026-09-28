@@ -1,5 +1,7 @@
-import { Address, State } from '@clay/contracts';
-import { ConfigError, ParsedReference, parseReference, ReferenceNode, spellReference, TemplatePart } from '@clay/parser';
+import { Address, ExactNumber, State } from '@clay/contracts';
+import { ConfigError, ParsedReference, parseReference, Position, ReferenceNode, spellReference, Step, TemplatePart } from '@clay/parser';
+
+import { Instances } from '../Instances';
 import { ScopeManager } from '../scope/ScopeManager';
 import { DataSourceResolver } from './DataSourceResolver';
 import { ModuleOutputResolver } from './ModuleOutputResolver';
@@ -7,32 +9,41 @@ import { kindOf, readPath } from './readPath';
 import { ResourceResolver } from './ResourceResolver';
 import { VariableResolver } from './VariableResolver';
 
+/** The instance being made names its index; anything else read outside one has none. */
+function countIndex(where: Address, position: Position): ExactNumber {
+  if (typeof where.key !== 'number') throw new ConfigError('count.index is only known inside a resource that has count', position);
+
+  return ExactNumber.parse(String(where.key));
+}
+
 export class ReferenceResolver {
   private variables: VariableResolver;
   private dataSources: DataSourceResolver;
   private moduleOutputs: ModuleOutputResolver;
   private resources: ResourceResolver;
 
-  constructor(scopeManager: ScopeManager, dataSources: Map<string, Record<string, unknown>>) {
+  constructor(scopeManager: ScopeManager, dataSources: Map<string, Record<string, unknown>>, instances: Instances) {
     this.variables = new VariableResolver(scopeManager, this);
     this.dataSources = new DataSourceResolver(dataSources);
     this.moduleOutputs = new ModuleOutputResolver(scopeManager);
-    this.resources = new ResourceResolver();
+    this.resources = new ResourceResolver(instances);
   }
 
   private resolve(node: ReferenceNode, state: State, context?: Address): unknown {
-    const reference = parseReference(node.value);
-    const target = node.value.slice(0, node.value.length - reference.path.length);
+    const { value, path } = this.resolveTarget(parseReference(node.value), state, context || new Address([], '', ''), node.position);
+    const target = node.value.slice(0, node.value.length - path.length);
 
-    return readPath(this.resolveTarget(reference, state, context || new Address([], '', '')), target, reference.path, node.position);
+    return readPath(value, target, path, node.position);
   }
 
-  private resolveTarget(reference: ParsedReference, state: State, where: Address): unknown {
-    if (reference.kind === 'variable') return this.variables.resolve(reference, where, state);
-    if (reference.kind === 'data') return this.dataSources.resolve(reference, where);
-    if (reference.kind === 'module') return this.moduleOutputs.resolve(reference, where);
+  /** What the reference names, and the steps still to take into it. */
+  private resolveTarget(reference: ParsedReference, state: State, where: Address, position: Position): { value: unknown; path: Step[] } {
+    if (reference.kind === 'variable') return { value: this.variables.resolve(reference, where, state), path: reference.path };
+    if (reference.kind === 'data') return { value: this.dataSources.resolve(reference, where), path: reference.path };
+    if (reference.kind === 'module') return { value: this.moduleOutputs.resolve(reference, where), path: reference.path };
+    if (reference.kind === 'count') return { value: countIndex(where, position), path: reference.path };
 
-    return this.resources.resolve(reference, where, state);
+    return this.resources.resolve(reference, where, state, position);
   }
 
   resolveAttributes(attributes: Record<string, unknown>, state: State, context?: Address): Record<string, unknown> {

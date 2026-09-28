@@ -28,6 +28,8 @@ export interface ResourceBlock extends Node {
   type: 'Resource';
   resourceType: string; // e.g., "provider_resource"
   name: string; // e.g., "my_file"
+  /** How many instances the block makes; the engine's to read, so it is no attribute a provider is sent. */
+  count?: AttributeValue;
   attributes: Record<string, AttributeValue>;
 }
 

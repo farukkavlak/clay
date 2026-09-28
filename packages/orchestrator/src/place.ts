@@ -4,6 +4,11 @@ import { ConfigError, Position } from '@clay/parser';
 import { asError } from './asError';
 import { scopeOf } from './keys';
 
+/** A value that holds no position is placed by the caller, at the value around it. */
+export function placed(message: string, position?: Position): Error {
+  return position ? new ConfigError(message, position) : new Error(message);
+}
+
 /** A resolve error names the reference; this adds where it was read. */
 export function withPlace(error: unknown, position: Position, block: string, address: Address): ConfigError {
   const place = { block, module: scopeOf(address) || undefined };

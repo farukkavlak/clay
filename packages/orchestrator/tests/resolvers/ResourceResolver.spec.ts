@@ -2,13 +2,14 @@ import { Address, State } from '@clay/contracts';
 import { parseReference, ResourceReference } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
+import { Instances } from '../../src/Instances';
 import { ResourceResolver } from '../../src/resolvers/ResourceResolver';
 import { UnresolvedReferenceError } from '../../src/resolvers/UnresolvedReferenceError';
 
 const ref = (spelled: string) => parseReference(spelled.split('.')) as ResourceReference;
 
 describe('ResourceResolver', () => {
-  const resolver = new ResourceResolver();
+  const resolver = new ResourceResolver(new Instances());
   const context = new Address([], 'resource', 'main');
 
   const mockState: State = {
@@ -28,17 +29,17 @@ describe('ResourceResolver', () => {
   };
 
   it('should resolve simple attribute', () => {
-    const result = resolver.resolve(ref('resource.test.simple'), context, mockState);
+    const { value: result } = resolver.resolve(ref('resource.test.simple'), context, mockState);
     expect(result).toBe('value');
   });
 
   it('should return a map from state as it is, keys named type and value included', () => {
-    const result = resolver.resolve(ref('resource.test.settings'), context, mockState);
+    const { value: result } = resolver.resolve(ref('resource.test.settings'), context, mockState);
     expect(result).toEqual({ type: 'a', value: 'b' });
   });
 
   it('should resolve resource id when attribute is "id"', () => {
-    const result = resolver.resolve(ref('resource.test.id'), context, mockState);
+    const { value: result } = resolver.resolve(ref('resource.test.id'), context, mockState);
     expect(result).toBe('res-123');
   });
 

@@ -7,8 +7,8 @@ import { Position } from './Position';
 import { NAME, Step } from './reference';
 import { Token, TokenType } from './tokens';
 
-/** Words a reference already spells: `var.x`, `data.t.n`, `module.m`. */
-const RESERVED_TYPES = new Set(['module', 'var', 'data']);
+/** Words a reference already spells: `var.x`, `data.t.n`, `module.m`, `count.index`. */
+const RESERVED_TYPES = new Set(['module', 'var', 'data', 'count']);
 
 export class Parser {
   private tokens: Token[];
@@ -57,12 +57,13 @@ export class Parser {
     const typeToken = this.consumeType("Expect resource type string after 'resource'.");
     const nameToken = this.consumeName('Expect resource name string after resource type.');
 
-    const attributes = this.parseAttributes('resource');
+    const { count, ...attributes } = this.parseAttributes('resource');
 
     return {
       type: 'Resource',
       resourceType: typeToken.value,
       name: nameToken.value,
+      ...(count && { count }),
       attributes,
       position,
     };
@@ -73,6 +74,7 @@ export class Parser {
     const nameToken = this.consumeName('Expect data source name string after data source type.');
 
     const attributes = this.parseAttributes('data source');
+    this.refuseCount(attributes, `data "${typeToken.value}" "${nameToken.value}"`);
 
     return {
       type: 'Data',
@@ -86,6 +88,7 @@ export class Parser {
   private parseVariable(position: Position): VariableBlock {
     const nameToken = this.consumeName("Expect variable name string after 'variable'.");
     if (nameToken.value === 'source') throw new ConfigError('"source" cannot be a variable name: a module call reads it as the module\'s path.', nameToken.position);
+    if (nameToken.value === 'count') throw new ConfigError('"count" cannot be a variable name: a module call keeps it for itself.', nameToken.position);
 
     const attributes = this.parseAttributes('variable');
 
@@ -125,6 +128,7 @@ export class Parser {
     const nameToken = this.consumeName("Expect module name string after 'module'.");
 
     const attributes = this.parseAttributes('module');
+    this.refuseCount(attributes, `module "${nameToken.value}"`);
 
     return {
       type: 'Module',
@@ -132,6 +136,11 @@ export class Parser {
       attributes,
       position,
     };
+  }
+
+  /** Only a resource makes instances so far; anywhere else `count` would be taken for an input. */
+  private refuseCount(attributes: Record<string, AttributeValue>, block: string): void {
+    if (attributes.count) throw new ConfigError(`${block} cannot have count yet`, attributes.count.position);
   }
 
   /** The `{ name = value ... }` body every block but output has. */

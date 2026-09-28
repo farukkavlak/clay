@@ -2,12 +2,13 @@ import { Address, ExactNumber, State } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { ReferenceResolver } from '../../src/resolvers/ReferenceResolver';
+import { Instances } from '../../src/Instances';
 import { ScopeManager } from '../../src/scope/ScopeManager';
 
 describe('ReferenceResolver', () => {
   const scopeManager = new ScopeManager();
   const dataSources = new Map<string, Record<string, unknown>>();
-  const resolver = new ReferenceResolver(scopeManager, dataSources);
+  const resolver = new ReferenceResolver(scopeManager, dataSources, new Instances());
   const context = new Address([], 'resource', 'main');
 
   const mockState: State = {

@@ -74,6 +74,11 @@ export class Address {
     return { modulePath: this.modulePath, resourceType: this.resourceType, name: this.name, key: this.key };
   }
 
+  /** The block an instance belongs to, which every instance of it shares. */
+  withoutKey(): Address {
+    return new Address(this.modulePath, this.resourceType, this.name);
+  }
+
   static root(resourceType: string, name: string): Address {
     return new Address([], resourceType, name);
   }

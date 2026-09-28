@@ -63,8 +63,9 @@ module "name" { attributes }
 
 A `type` and a `name` are written as strings, and each has to spell an `IDENTIFIER`, since
 an address joins them with `.` and a reference reads them back. A `type` cannot be `var`,
-`data` or `module`, the three words a reference reads as something other than a type. A
-variable cannot be named `source`, since a module call reads that as the module's path.
+`data`, `module` or `count`, the words a reference reads as something other than a type. A
+variable cannot be named `source`, since a module call reads that as the module's path,
+or `count`, which a module call keeps for itself.
 
 `attributes` is zero or more `name = value` pairs, in any order, without separators, and
 no name twice.
@@ -74,11 +75,13 @@ What the engine reads from each:
 
 | Block      | Reads                                                                                                 |
 | ---------- | ----------------------------------------------------------------------------------------------------- |
-| `resource` | Every attribute goes to the provider                                                                  |
+| `resource` | `count`, read by the engine; every other attribute goes to the provider                               |
 | `data`     | Every attribute goes to the provider's `read`                                                         |
 | `variable` | `default`, and nothing else; another attribute is refused where it is written                         |
 | `output`   | `value`                                                                                               |
 | `module`   | `source`, a literal string naming a directory relative to the file; every other attribute is an input |
+
+`count` on a data source or a module is refused where it is written.
 
 ## Values
 
@@ -118,6 +121,7 @@ A bare reference is a value on its own: `path = var.dir`. Inside a string it is 
 | `var`      | A variable or input of the same module               | `var.name`                  |
 | `data`     | An attribute a data source read                      | `data.local_file.f.content` |
 | `module`   | An output of a module called in the same file        | `module.app.url`            |
+| `count`    | The index of the instance being made                 | `count.index`               |
 | anything   | An attribute of the resource with that type and name | `local_file.a.content`      |
 
 A resource's `id` is what the provider assigned on create.
@@ -134,6 +138,21 @@ The parts before that name what is read, so each is a name even when it is quote
 
 A module is read through its outputs, so `module.app.local_file.a` names an output
 called `local_file`, and is refused when the module has none.
+
+### Count
+
+A resource with `count = n` makes `n` instances, addressed `type.name[0]` to
+`type.name[n-1]`. `n` is a whole number from 0, known when planning: a literal, a
+variable, or a value a resource already has. One that reads a value only an apply makes
+is refused where it is written.
+
+Inside the block, `count.index` is the index of the instance being made. Anywhere else,
+and in `count` itself, it is refused where it is written.
+
+A reference names one instance: `local_file.logs[0].content`. On a resource with count,
+`local_file.logs.content` is refused, and so is an index past `n - 1`; on one without,
+an index is refused. Reading an instance that stays as it is gives its value, even when
+another instance of the same block changes.
 
 ### Interpolation
 
@@ -198,6 +217,7 @@ interface ResourceBlock {
   type: 'Resource';
   resourceType: string;
   name: string;
+  count?: AttributeValue;
   attributes: Record<string, AttributeValue>;
   position: Position;
 }
@@ -249,7 +269,8 @@ throws the same for a character it does not know, a string not closed on its lin
 ## Not in the language
 
 - Expressions, operators and functions; a value is a literal or a reference
-- `count`, `for_each`, `depends_on`, lifecycle blocks, provisioners
+- `count` on a data source or a module, `for_each`, `depends_on`, lifecycle blocks,
+  provisioners
 - Nested blocks inside a block
 - Any file other than `main.clay`
 

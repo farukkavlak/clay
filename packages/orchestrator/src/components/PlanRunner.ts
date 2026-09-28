@@ -5,6 +5,7 @@ import { PlanAction } from '@clay/planner';
 import { StateManager } from '@clay/state';
 
 import { asError } from '../asError';
+import { Instances } from '../Instances';
 import { scopeOf } from '../keys';
 import { tryAt } from '../place';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
@@ -20,7 +21,8 @@ export class PlanRunner {
     private stateManager: StateManager,
     private executor: ActionExecutor,
     private scopeManager: ScopeManager,
-    private resolver: ReferenceResolver
+    private resolver: ReferenceResolver,
+    private instances: Instances
   ) {}
 
   async *run(actions: PlanAction[], config: LoadedConfig, graph: Graph<GraphNode>, state: State): AsyncGenerator<RunEvent> {
@@ -39,17 +41,27 @@ export class PlanRunner {
     yield { type: 'done', outputs: state.outputs };
   }
 
-  /** An action with no node would be walked past in silence. A plan made from this configuration has one for each; a saved plan may not. */
+  /** An action with no block would be walked past in silence, and one keyed unlike its block would be run as another instance. A plan made from this configuration has neither; a saved plan may. */
   private checkActionsMatch(actions: PlanAction[], graph: Graph<GraphNode>): void {
     for (const action of actions) {
-      const key = Address.of(action).toString();
-      if (action.type !== 'DELETE' && !graph.hasNode(key)) throw new Error(`The plan has "${key}", which the configuration does not declare`);
+      const address = Address.of(action);
+      const block = address.withoutKey().toString();
+      const declared = graph.hasNode(block) && (typeof action.key === 'number') === this.instances.isCounted(block);
+
+      if (action.type !== 'DELETE' && !declared) throw new Error(`The plan has "${address.toString()}", which the configuration does not declare`);
     }
   }
 
-  /** Creates, updates and replacements follow the graph, so a resource runs after what it reads from. */
+  /** Creates, updates and replacements follow the graph, so a resource runs after what it reads from; the instances of a block run together, in the plan's order. */
   private async *applyInOrder(actions: PlanAction[], graph: Graph<GraphNode>, state: State): AsyncGenerator<RunEvent, boolean> {
-    const byKey = new Map(actions.map((action) => [Address.of(action).toString(), action]));
+    const byBlock = new Map<string, PlanAction[]>();
+    for (const action of actions) {
+      if (action.type === 'DELETE') continue;
+
+      const block = Address.of(action).withoutKey().toString();
+      if (!byBlock.has(block)) byBlock.set(block, []);
+      byBlock.get(block)!.push(action);
+    }
 
     for (const layer of graph.topologicalSort())
       for (const key of layer) {
@@ -57,9 +69,7 @@ export class PlanRunner {
         // Only this output: a sibling of it may read a resource a later layer creates.
         if (node.kind === 'output') this.resolveOutput(node, state);
 
-        const action = byKey.get(key);
-        if (!action || action.type === 'DELETE') continue;
-        if (!(yield* this.step(action, state))) return false;
+        for (const action of byBlock.get(key) ?? []) if (!(yield* this.step(action, state))) return false;
       }
 
     return true;

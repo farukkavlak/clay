@@ -138,7 +138,7 @@ describe('Orchestrator', () => {
       const config = `
         resource "mock_resource" "mixed" {
           name = "test"
-          count = 42
+          size = 42
           enabled = true
         }
       `;
@@ -151,7 +151,7 @@ describe('Orchestrator', () => {
       // All values should be extracted from AttributeValue format
       expect(inputs).toEqual({
         name: 'test',
-        count: ExactNumber.parse('42'),
+        size: ExactNumber.parse('42'),
         enabled: true,
       });
     });
@@ -339,7 +339,7 @@ describe('Orchestrator', () => {
       const createConfig = `
         resource "mock_resource" "multi" {
           name = "original"
-          count = 5
+          size = 5
           enabled = true
         }
       `;
@@ -349,7 +349,7 @@ describe('Orchestrator', () => {
       const updateConfig = `
         resource "mock_resource" "multi" {
           name = "updated"
-          count = 10
+          size = 10
           enabled = false
         }
       `;
@@ -361,7 +361,7 @@ describe('Orchestrator', () => {
       const [, inputs] = [...updated.entries()][0];
       expect(inputs).toEqual({
         name: 'updated',
-        count: ExactNumber.parse('10'),
+        size: ExactNumber.parse('10'),
         enabled: false,
       });
     });

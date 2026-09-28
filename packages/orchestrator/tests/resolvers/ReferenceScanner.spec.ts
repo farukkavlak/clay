@@ -1,17 +1,22 @@
 import { Address } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { ReferenceScanner } from '../../src/resolvers/ReferenceScanner';
+import { Instances } from '../../src/Instances';
+import { Reference, ReferenceScanner } from '../../src/resolvers/ReferenceScanner';
+
+const keysOf = (references: Reference[]) => references.map((reference) => (reference.kind === 'count' ? 'count' : reference.key));
 
 describe('ReferenceScanner', () => {
-  const scanner = new ReferenceScanner();
+  const scanner = new ReferenceScanner(new Instances());
   const context = new Address([], 'resource', 'main');
   const inModule = new Address(['app'], 'resource', 'main');
 
   it('should find a resource reference', () => {
     const attributes = { id: { type: 'Reference', value: ['resource', 'dep', 'id'] } };
 
-    expect(scanner.referencesIn(attributes, context)).toEqual([{ kind: 'resource', key: 'resource.dep', address: 'resource.dep' }]);
+    expect(scanner.referencesIn(attributes, context)).toEqual([
+      { kind: 'resource', key: 'resource.dep', address: 'resource.dep', reference: { kind: 'resource', type: 'resource', name: 'dep', path: ['id'] } },
+    ]);
   });
 
   it('should ignore data sources', () => {
@@ -35,7 +40,7 @@ describe('ReferenceScanner', () => {
   it('should find references inside lists', () => {
     const attributes = { ids: ['plain', { type: 'Reference', value: ['resource', 'dep', 'id'] }] };
 
-    expect(scanner.referencesIn(attributes, context).map((reference) => reference.key)).toEqual(['resource.dep']);
+    expect(keysOf(scanner.referencesIn(attributes, context))).toEqual(['resource.dep']);
   });
 
   it('should find every reference in a template', () => {
@@ -43,7 +48,7 @@ describe('ReferenceScanner', () => {
       line: { type: 'Template', value: [{ type: 'Reference', value: ['resource', 'db', 'endpoint'] }, ' and ', { type: 'Reference', value: ['resource', 'kv', 'id'] }] },
     };
 
-    expect(scanner.referencesIn(attributes, context).map((reference) => reference.key)).toEqual(['resource.db', 'resource.kv']);
+    expect(keysOf(scanner.referencesIn(attributes, context))).toEqual(['resource.db', 'resource.kv']);
   });
 
   it('should find no reference in a string that spells one', () => {
@@ -61,7 +66,7 @@ describe('ReferenceScanner', () => {
   it('should read a reference in the scope of the module it sits in', () => {
     const attributes = { id: { type: 'Reference', value: ['resource', 'dep', 'id'] } };
 
-    expect(scanner.referencesIn(attributes, inModule).map((reference) => reference.key)).toEqual(['module.app.resource.dep']);
+    expect(keysOf(scanner.referencesIn(attributes, inModule))).toEqual(['module.app.resource.dep']);
   });
 
   it('should point a reference that reads into a value at what it names', () => {
@@ -71,6 +76,6 @@ describe('ReferenceScanner', () => {
       team: { type: 'Reference', value: ['var', 'tags', 'team'] },
     };
 
-    expect(scanner.referencesIn(attributes, context).map((reference) => reference.key)).toEqual(['module.app.outputs:tags', 'resource.dep', 'vars:tags']);
+    expect(keysOf(scanner.referencesIn(attributes, context))).toEqual(['module.app.outputs:tags', 'resource.dep', 'vars:tags']);
   });
 });

@@ -71,8 +71,26 @@ hits each of these early.
 - [x] A reference is a type, not a string. Today it travels as `string[]` and four places
       split it on dots to read a part back. An instance key cannot be added to a shape
       that thin, so this comes before `count`
-- [ ] `count` and `for_each`, with `[0]` and `each.key` access; addresses grow an instance
-      key, the way Terraform's `addrs.AbsResourceInstance` does
+- [x] `count` on a resource, with `[0]` access and `count.index`; an address grows an
+      instance key, the way Terraform's `addrs.AbsResourceInstance` does
+- [ ] Adding `count` to a resource moves `a` to `a[0]` in the plan, and taking it off
+      moves `a[0]` back, rather than destroying one and creating the other. Terraform
+      does this since 1.1
+- [ ] `for_each` on a resource, over a map or a list of strings, with `["key"]` access and
+      `each.key`, `each.value`. A string twice in the list is refused where it is
+      written; Terraform's `toset` drops the second in silence
+- [ ] `count` and `for_each` on a module. A module address grows an instance key, so the
+      `Address` that stands for a module's scope, with an empty type and name, gets a type
+      of its own
+- [ ] `count` on a data source
+- [ ] A resource still to be created reads as unknown in full, even an attribute the
+      configuration sets to a literal, so `count = random_string.s.length` cannot be
+      planned on a fresh state. Terraform knows what the configuration sets on a planned
+      resource
+- [ ] A whole resource as a value: `local_file.a[0]` as a map, and `local_file.a` as the
+      list of its instances. Worth it once there are functions or splats to read one with
+- [ ] Bump the state and plan file versions once `count` and `for_each` are done: both
+      now hold instance keys, which an older Clay would read as the block
 - [ ] `path.module`, `path.root` and `path.cwd`, so a module can name a file next to
       itself; a relative path is resolved from where `clay` runs today
 - [ ] A module `source` has a kind. Terraform reads a local path only when it starts with

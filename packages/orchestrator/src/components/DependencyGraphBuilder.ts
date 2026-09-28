@@ -1,9 +1,11 @@
 import { Address } from '@clay/contracts';
 import { Graph } from '@clay/graph';
-import { AttributeValue, ConfigError, ModuleBlock, Position, spell } from '@clay/parser';
+import { AttributeValue, ModuleBlock, Position, spell } from '@clay/parser';
 
+import { Instances } from '../Instances';
 import { childScope, outputKey, scopeOf, variableKey } from '../keys';
-import { tryAt } from '../place';
+import { placed, tryAt } from '../place';
+import { readInstance } from '../resolvers/instance';
 import { Reference, ReferenceScanner } from '../resolvers/ReferenceScanner';
 import { LoadedModule, LoadedResource } from './ModuleLoader';
 
@@ -23,15 +25,18 @@ function inputNames(attributes: Record<string, AttributeValue>): string[] {
   return Object.keys(attributes).filter((name) => name !== 'source');
 }
 
-function describeMissing(reference: Reference, moduleScopes: Set<string>): string {
+function describeMissing(reference: Exclude<Reference, { kind: 'count' }>, moduleScopes: Set<string>): string {
   if (reference.kind === 'variable') return `variable "${reference.name}" is not defined`;
-  if (reference.kind === 'resource') return `"${reference.address}" is not declared in the configuration`;
+  if (reference.kind === 'resource') return `"${reference.key}" is not declared in the configuration`;
 
   return moduleScopes.has(reference.scope) ? `module "${reference.module}" has no output "${reference.name}"` : `module "${reference.module}" is not declared`;
 }
 
 export class DependencyGraphBuilder {
-  constructor(private scanner: ReferenceScanner) {}
+  constructor(
+    private scanner: ReferenceScanner,
+    private instances: Instances
+  ) {}
 
   buildExecutionGraph(loadedResources: LoadedResource[], loadedModules: LoadedModule[]): Graph<GraphNode> {
     const graph = new Graph<GraphNode>();
@@ -42,12 +47,18 @@ export class DependencyGraphBuilder {
     const moduleScopes = new Set(loadedModules.map((mod) => scopeOf(mod.address)));
     for (const [key, node] of graph.entries())
       if (node.kind !== 'resource') tryAt(node.position, node.declaration, node.context, () => this.addDependencies(node.value, graph, key, node.context, moduleScopes));
-    // One attribute at a time, so an error points at the value that reads, not at the block it sits in.
-    for (const { address, block } of loadedResources)
-      for (const value of Object.values(block.attributes))
-        tryAt(value.position, spell(block), address, () => this.addDependencies(value, graph, address.toString(), address, moduleScopes));
+    for (const resource of loadedResources) this.addResourceDependencies(resource, graph, moduleScopes);
 
     return graph;
+  }
+
+  /** One value at a time, so an error points at the value that reads, not at the block it sits in. The count is read before any instance is, so it has no index. */
+  private addResourceDependencies({ address, block }: LoadedResource, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
+    const key = address.toString();
+
+    if (block.count) tryAt(block.count.position, spell(block), address, () => this.addDependencies(block.count, graph, key, address, moduleScopes));
+    for (const value of Object.values(block.attributes))
+      tryAt(value.position, spell(block), address, () => this.addDependencies(value, graph, key, address, moduleScopes, block.count !== undefined));
   }
 
   /** The resources a resource reads from, looking through the variables and outputs in between. */
@@ -122,13 +133,21 @@ export class DependencyGraphBuilder {
       });
   }
 
-  private addDependencies(value: unknown, graph: Graph<GraphNode>, dependentKey: string, context: Address, moduleScopes: Set<string>): void {
+  private addDependencies(value: unknown, graph: Graph<GraphNode>, dependentKey: string, context: Address, moduleScopes: Set<string>, counted = false): void {
     for (const reference of this.scanner.referencesIn(value, context)) {
+      if (reference.kind === 'count') {
+        if (!counted) throw placed('count.index is only known inside a resource that has count', reference.position);
+        continue;
+      }
+
       if (!graph.hasNode(reference.key)) {
         const message = `Invalid reference in "${dependentKey}": ${describeMissing(reference, moduleScopes)}`;
         // A string may hold several references, so the one missing is a closer place than the value it sits in.
-        throw reference.position ? new ConfigError(message, reference.position) : new Error(message);
+        throw placed(message, reference.position);
       }
+
+      // Checked here, as well as where it is read, since a reference to a resource still to come is never read at plan time.
+      if (reference.kind === 'resource') readInstance(reference.reference, this.instances.isCounted(reference.key), reference.position);
 
       graph.addEdge(reference.key, dependentKey);
     }
