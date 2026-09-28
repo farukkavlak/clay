@@ -135,6 +135,32 @@ describe('state and output against a real state file', () => {
     await expect(fs.access(path.join(dir, 'a.txt'))).rejects.toThrow();
   });
 
+  it('moves a resource to an instance key with mv, so show and a later delete find it by that key', async () => {
+    await applyConfig();
+
+    await createStateCommand().parseAsync(['node', 'clay', 'mv', 'local_file.a', 'local_file.a["x.y"]']);
+    await createStateCommand().parseAsync(['node', 'clay', 'show', 'local_file.a["x.y"]']);
+
+    const moved = await stored();
+    expect(moved.resources['local_file.a["x.y"]']).toMatchObject({ name: 'a', key: 'x.y' });
+    expect(printed.join('\n')).toContain('# local_file.a["x.y"]:');
+
+    await run('');
+    const emptied = await stored();
+    expect(emptied.resources).toEqual({});
+    await expect(fs.access(path.join(dir, 'a.txt'))).rejects.toThrow();
+  });
+
+  it('takes the instance key off with mv', async () => {
+    await applyConfig();
+
+    await createStateCommand().parseAsync(['node', 'clay', 'mv', 'local_file.a', 'local_file.a[0]']);
+    await createStateCommand().parseAsync(['node', 'clay', 'mv', 'local_file.a[0]', 'local_file.a']);
+
+    const state = await stored();
+    expect(state.resources).toEqual({ 'local_file.a': expect.not.objectContaining({ key: expect.anything() }) });
+  });
+
   it('moves a resource into a module with mv', async () => {
     await applyConfig();
 

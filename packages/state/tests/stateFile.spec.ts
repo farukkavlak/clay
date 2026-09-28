@@ -23,6 +23,38 @@ describe('reading a state file', () => {
     expect(state.resources['null_resource.a'].attributes.id).toEqual(ExactNumber.parse('12345678901234567890'));
   });
 
+  it.each([
+    ['a number', 'local_file.a[0]', '0', 0],
+    ['a string', 'local_file.a["blog"]', '"blog"', 'blog'],
+  ])('reads an instance key that is %s', (_, address, written, key) => {
+    const text = `{"version": 1, "serial": 0, "resources": {${JSON.stringify(address)}: {"resourceType": "local_file", "name": "a", "key": ${written}, "attributes": {}}}}`;
+
+    expect(parseState(text, 'clay.state.json').resources[address].key).toBe(key);
+  });
+
+  it.each([
+    ['1.5', 'is not a whole number'],
+    ['-1', 'is not a key: a key is a whole number or a string'],
+    ['9007199254740992', 'is outside the range'],
+    ['true', 'is not a key: a key is a whole number or a string'],
+  ])('refuses an instance key of %s', (written, problem) => {
+    const text = `{"version": 1, "serial": 0, "resources": {"local_file.a[0]": {"resourceType": "local_file", "name": "a", "key": ${written}, "attributes": {}}}}`;
+
+    expect(read(text)).toThrow(`clay.state.json is not valid state: the key of "local_file.a[0]"`);
+    expect(read(text)).toThrow(problem);
+  });
+
+  it.each([
+    ['another name', 'local_file.a', { resourceType: 'local_file', name: 'b' }, 'local_file.b'],
+    ['another type', 'local_file.a', { resourceType: 'null_resource', name: 'a' }, 'null_resource.a'],
+    ['another module', 'module.m.local_file.a', { resourceType: 'local_file', name: 'a', modulePath: ['n'] }, 'module.n.local_file.a'],
+    ['a key', 'local_file.a', { resourceType: 'local_file', name: 'a', key: 0 }, 'local_file.a[0]'],
+  ])('refuses an entry filed under an address other than its own, by %s', (_, address, entry, held) => {
+    const content = { version: 1, serial: 0, resources: { [address]: { ...entry, attributes: {} } } };
+
+    expect(read(content)).toThrow(`clay.state.json is not valid state: "${address}" holds ${held}`);
+  });
+
   it('names a number out of range, rather than calling the file something other than JSON', () => {
     expect(read('{"version": 1, "serial": 0, "resources": {}, "outputs": {"o": 1e5000}}')).toThrow(
       'clay.state.json is not valid state: "1e5000" is out of range: a number reaches at most 1000 places either side of the point'
@@ -51,6 +83,11 @@ describe('reading a state file', () => {
     ['attributes that are a number', { version: 1, serial: 0, resources: { 'local_file.a': { resourceType: 'local_file', name: 'a', attributes: 5 } } }],
     ['outputs that are a number', { version: 1, serial: 0, outputs: 5, resources: {} }],
     ['a serial that is not whole', { version: 1, serial: 1.5, resources: {} }],
+    ['a module path that is not a list', { version: 1, serial: 0, resources: { 'local_file.a': { resourceType: 'local_file', name: 'a', modulePath: 'm', attributes: {} } } }],
+    [
+      'a module path that holds no name',
+      { version: 1, serial: 0, resources: { 'module.1.local_file.a': { resourceType: 'local_file', name: 'a', modulePath: [1], attributes: {} } } },
+    ],
     ['dependencies that are not a list', { version: 1, serial: 0, resources: { 'local_file.a': { resourceType: 'local_file', name: 'a', attributes: {}, dependencies: 'b' } } }],
     ['outputs that are not a record', { version: 1, serial: 0, outputs: 'oops', resources: {} }],
   ])('refuses %s', (_, content) => {
@@ -66,7 +103,7 @@ describe('reading a state file', () => {
   });
 
   it('keeps a resource attribute it has no opinion about', () => {
-    const resources = { 'local_file.a': { id: 'x', resourceType: 'local_file', name: 'a', modulePath: ['m'], attributes: {}, dependencies: ['local_file.b'] } };
+    const resources = { 'module.m.local_file.a': { id: 'x', resourceType: 'local_file', name: 'a', modulePath: ['m'], attributes: {}, dependencies: ['local_file.b'] } };
 
     expect(parseState(JSON.stringify({ version: 1, serial: 0, resources }), 'f').resources).toEqual(resources);
   });

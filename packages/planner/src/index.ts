@@ -1,4 +1,4 @@
-import { Address, ExactNumber, NumberError, Resource, Schema, State } from '@clay/contracts';
+import { Address, ExactNumber, InstanceKey, isInstanceKey, NumberError, Resource, Schema, State } from '@clay/contracts';
 import { AttributeValue, ResourceBlock } from '@clay/parser';
 import { isDeepStrictEqual } from 'node:util';
 
@@ -27,6 +27,7 @@ export interface PlanAction {
   resourceType: string;
   name: string;
   modulePath?: string[]; // Path of modules leading to this resource
+  key?: InstanceKey;
   id?: string;
   attributes?: Record<string, AttributeValue>;
   changes?: Changes;
@@ -114,7 +115,7 @@ export function validatePlanFile(planFile: unknown): planFile is PlanFile {
     isModuleFiles(pf.modules) &&
     typeof pf.serial === 'number' &&
     Array.isArray(pf.actions) &&
-    pf.actions.every((action) => isRecord(action) && (action.changes === undefined || isChanges(action.changes))) &&
+    pf.actions.every((action) => isRecord(action) && (action.key === undefined || isInstanceKey(action.key)) && (action.changes === undefined || isChanges(action.changes))) &&
     isChanges(pf.outputs)
   );
 }
@@ -153,14 +154,18 @@ function readNode(node: unknown): void {
   for (const child of childrenOf(node)) readNode(child);
 }
 
-/** The plan's serial, and the positions and indexes in its parsed attributes, are the file's own numbers; every other number in it is a value, kept exactly. */
+function readAction(action: Record<string, unknown>): void {
+  if (action.key instanceof ExactNumber) action.key = action.key.toSafeInteger('an instance key');
+  if (isRecord(action.attributes)) for (const node of Object.values(action.attributes)) readNode(node);
+}
+
+/** The plan's serial, the keys of its actions, and the positions and indexes in its parsed attributes, are the file's own numbers; every other number in it is a value, kept exactly. */
 function readPlan(content: string): unknown {
   const read = ExactNumber.readJSON(content);
   if (!isRecord(read)) return read;
 
   if (read.serial instanceof ExactNumber) read.serial = read.serial.toSafeInteger('its serial');
-  if (Array.isArray(read.actions))
-    for (const action of read.actions) if (isRecord(action) && isRecord(action.attributes)) for (const node of Object.values(action.attributes)) readNode(node);
+  if (Array.isArray(read.actions)) for (const action of read.actions) if (isRecord(action)) readAction(action);
 
   return read;
 }
@@ -223,15 +228,12 @@ export function hasChanges(currentAttrs: Record<string, unknown>, desiredAttrs: 
 
 function processExistingResource(actions: PlanAction[], desired: DesiredResource, currentResource: Resource, schemas: Map<string, Schema>) {
   const resource = desired.block;
-  const { modulePath } = desired.address;
   const changes = calculateDiff(currentResource.attributes, desired.attributes);
 
   if (!changes) {
     actions.push({
       type: 'NO_OP',
-      resourceType: resource.resourceType,
-      name: resource.name,
-      modulePath,
+      ...desired.address.fields(),
       id: currentResource.id,
       dependencies: desired.dependencies,
     });
@@ -243,9 +245,7 @@ function processExistingResource(actions: PlanAction[], desired: DesiredResource
 
   actions.push({
     type: forcesNew ? 'REPLACE' : 'UPDATE',
-    resourceType: resource.resourceType,
-    name: resource.name,
-    modulePath,
+    ...desired.address.fields(),
     id: currentResource.id,
     attributes: resource.attributes,
     changes,
@@ -266,9 +266,7 @@ export function plan(desiredResources: DesiredResource[], currentState: State, s
     else
       actions.push({
         type: 'CREATE',
-        resourceType: desired.block.resourceType,
-        name: desired.block.name,
-        modulePath: desired.address.modulePath,
+        ...desired.address.fields(),
         attributes: desired.block.attributes,
         dependencies: desired.dependencies,
       });
@@ -279,9 +277,7 @@ export function plan(desiredResources: DesiredResource[], currentState: State, s
 
     actions.push({
       type: 'DELETE',
-      resourceType: resource.resourceType,
-      name: resource.name,
-      modulePath: resource.modulePath,
+      ...Address.of(resource).fields(),
       id: resource.id,
     });
   }

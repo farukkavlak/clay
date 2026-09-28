@@ -35,7 +35,7 @@ function moveResource(state: State, source: string, destination: string): void {
   const to = Address.parse(destination);
   if (from.resourceType !== to.resourceType) throw new Error(`Cannot move ${source} to ${destination}: the type changes`);
 
-  state.resources[to.toString()] = { ...state.resources[from.toString()], name: to.name, modulePath: to.modulePath };
+  state.resources[to.toString()] = { ...state.resources[from.toString()], ...to.fields() };
   delete state.resources[from.toString()];
   mapDependencies(state, (dependency) => (dependency === from.toString() ? to.toString() : dependency));
 }

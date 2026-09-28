@@ -41,6 +41,11 @@ describe('a state file that is not valid state', () => {
     ['resources that are not a record', '{"version":1,"serial":0,"resources":"oops"}', 'its resources are not a record'],
     ['outputs that are not a record', '{"version":1,"serial":0,"outputs":"oops","resources":{}}', 'its outputs are not a record'],
     ['a resource with no attributes', '{"version":1,"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a"}}}', '"local_file.a" is not a resource'],
+    [
+      'a resource filed under another address',
+      '{"version":1,"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"b","attributes":{}}}}',
+      '"local_file.a" holds local_file.b',
+    ],
     ['no version at all', '{}', 'its version is not a number'],
     ['text that is not json', '{oops', 'the file is not JSON'],
   ])('refuses %s, and says which file', async (_, state, reason) => {
