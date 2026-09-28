@@ -1,4 +1,7 @@
-export { Address } from './Address';
+import type { InstanceKey } from './Address';
+
+export { Address, isInstanceKey } from './Address';
+export type { InstanceKey } from './Address';
 export { ExactNumber, NumberError } from './ExactNumber';
 
 /** A resource as state records it. */
@@ -7,6 +10,7 @@ export interface Resource {
   resourceType: string;
   name: string;
   modulePath?: string[];
+  key?: InstanceKey;
   attributes: Record<string, unknown>;
   /** Addresses of the resources this one reads from, kept so it can be deleted before them once the config drops it. */
   dependencies?: string[];

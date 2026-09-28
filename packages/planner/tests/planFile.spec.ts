@@ -99,6 +99,36 @@ describe('reading a plan file', () => {
     );
   });
 
+  it('reads the instance keys of actions back as they were written', () => {
+    const plan: Plan = {
+      serial: 0,
+      actions: [
+        { type: 'DELETE', resourceType: 'null_resource', name: 'a', key: 0, id: '1' },
+        { type: 'DELETE', resourceType: 'null_resource', name: 'a', key: 'x.y', id: '2' },
+      ],
+      outputs: {},
+    };
+
+    const [byIndex, byName] = parsePlanFile(aPlanFile(plan), 'tfplan.json').actions;
+
+    expect(byIndex.key).toBe(0);
+    expect(byName.key).toBe('x.y');
+  });
+
+  const keyed = (key: unknown) => ({ ...fields(), actions: [{ type: 'DELETE', resourceType: 'null_resource', name: 'a', key, id: '1' }] });
+
+  it.each([
+    ['a negative number', -1],
+    ['a bool', true],
+    ['a list', [0]],
+  ])('refuses an instance key that is %s', (_, key) => {
+    expect(read(keyed(key))).toThrow(/^tfplan\.json is not a plan file$/);
+  });
+
+  it('names an instance key that is not whole', () => {
+    expect(read(keyed(1.5))).toThrow('tfplan.json is not a plan file: an instance key: 1.5 is not a whole number');
+  });
+
   it('names a serial that is not whole', () => {
     expect(read({ ...fields(), serial: 1.5 })).toThrow('tfplan.json is not a plan file: its serial: 1.5 is not a whole number');
   });

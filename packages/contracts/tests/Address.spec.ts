@@ -18,6 +18,19 @@ describe('Address', () => {
       const addr = new Address(['core', 'net'], 'aws_vpc', 'main');
       expect(addr.toString()).toBe('module.core.module.net.aws_vpc.main');
     });
+
+    it.each([
+      ['a number', 0, 'local_file.a[0]'],
+      ['a string', 'blog', 'local_file.a["blog"]'],
+      ['a string with a dot in it', 'x.y', 'local_file.a["x.y"]'],
+      ['a string with a quote and a backslash in it, escaped', 'say "hi" \\', String.raw`local_file.a["say \"hi\" \\"]`],
+    ])('writes an instance key that is %s after the name', (_, key, written) => {
+      expect(new Address([], 'local_file', 'a', key).toString()).toBe(written);
+    });
+
+    it('writes an instance key of a resource in a module', () => {
+      expect(new Address(['app'], 'local_file', 'a', 1).toString()).toBe('module.app.local_file.a[1]');
+    });
   });
 
   describe('parse', () => {
@@ -40,6 +53,46 @@ describe('Address', () => {
       expect(addr.modulePath).toEqual(['app', 'db']);
       expect(addr.resourceType).toBe('aws_db_instance');
       expect(addr.name).toBe('main');
+    });
+
+    it.each([
+      ['local_file.a[0]', 0],
+      ['local_file.a[9007199254740991]', 9_007_199_254_740_991],
+      ['local_file.a["blog"]', 'blog'],
+      ['local_file.a["x.y"]', 'x.y'],
+      ['local_file.a["a[0]"]', 'a[0]'],
+      [String.raw`local_file.a["say \"hi\""]`, 'say "hi"'],
+      ['local_file.a[""]', ''],
+    ])('reads the instance key of %s', (input, key) => {
+      expect(Address.parse(input)).toEqual(new Address([], 'local_file', 'a', key));
+    });
+
+    it('reads the instance key of a resource in a module', () => {
+      expect(Address.parse('module.app.local_file.a[1]')).toEqual(new Address(['app'], 'local_file', 'a', 1));
+    });
+
+    it.each(['local_file.a', 'module.app.local_file.a[3]', 'local_file.a["x.y"]', String.raw`local_file.a["say \"hi\" \\"]`])('reads back what it writes: %s', (input) => {
+      expect(Address.parse(input).toString()).toBe(input);
+    });
+
+    it.each([
+      ['local_file.a[', 'a key is a whole number or a quoted string, as in [0] or ["name"]'],
+      ['local_file.a[]', 'a key is a whole number or a quoted string, as in [0] or ["name"]'],
+      ['local_file.a[-1]', 'a key is a whole number or a quoted string, as in [0] or ["name"]'],
+      ['local_file.a[01]', 'a key is a whole number or a quoted string, as in [0] or ["name"]'],
+      ['local_file.a[1.5]', 'a key is a whole number or a quoted string, as in [0] or ["name"]'],
+      ['local_file.a[blog]', 'a key is a whole number or a quoted string, as in [0] or ["name"]'],
+      ['local_file.a["blog]', 'a key is a whole number or a quoted string, as in [0] or ["name"]'],
+      ['local_file.a["a"]["b"]', 'a key is a whole number or a quoted string, as in [0] or ["name"]'],
+      ['local_file.a[0].b', 'a key is a whole number or a quoted string, as in [0] or ["name"]'],
+      ['local_file.a[9007199254740992]', 'a key is at most 9007199254740991'],
+      ['local_file.a["a" ]', 'a key is written as ["a"]'],
+      [String.raw`local_file.a["\u0062"]`, 'a key is written as ["b"]'],
+      ['module.app[0].local_file.a', 'a module has no instances, so it takes no key'],
+      ['module.app[0]', 'a module has no instances, so it takes no key'],
+      ['local_file[0].a', 'a key comes after the name'],
+    ])('refuses the key in %s and says what is wrong', (input, reason) => {
+      expect(() => Address.parse(input)).toThrow(`Invalid address "${input}": ${reason}`);
     });
 
     it.each([
