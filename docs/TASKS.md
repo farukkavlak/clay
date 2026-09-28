@@ -58,6 +58,8 @@ hits each of these early.
       token of its own, so a number never swallows the minus of a subtraction
 - [x] String escapes: `\"`, `\n`, `\r`, `\t`, `\\`, `\uNNNN`, `\UNNNNNNNN`, and `$${` for a
       literal `${`, as HCL reads them; any other escape is refused
+- [x] Heredoc strings, `<<EOT` and `<<-EOT`: text as written, `${...}` read, and with
+      `<<-` the shared indent taken off
 - [ ] Refuse a raw line break in a quoted string, as HCL does, once heredocs exist to take
       its place; `\n` is the other way to write one
 - [x] Nested access: `local_file.a.tags.env` and `var.list[0]`; today `[` after a

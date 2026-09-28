@@ -13,6 +13,9 @@ in a directory; a module is another directory with its own `main.clay`.
 | `TEMPLATE_INTERP` | `${`                                  | Inside a string                                                         |
 | `TEMPLATE_END`    | `}`                                   | Closes a `${`                                                           |
 | `CQUOTE`          | `"`                                   | Closes a string                                                         |
+| `OHEREDOC`        | `<<NAME` or `<<-NAME`, a line break   | Opens a heredoc                                                         |
+| `STRING_LIT`      | A heredoc's text, a line at a time    | No escapes                                                              |
+| `CHEREDOC`        | A line holding only `NAME`            | Closes a heredoc; spaces or tabs may come around the name               |
 | `NUMBER`          | `[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?` | No sign; `007` is `7`; at most 1000 places either side of the point     |
 | `MINUS`           | `-`                                   | Only before a number                                                    |
 | `BOOLEAN`         | `true`, `false`                       |                                                                         |
@@ -32,7 +35,9 @@ Inside quotes the lexer reads text until `"` or `${`. A `${` reads tokens as out
 quotes until its `}`: a quote there opens a string of its own, so `"${var.tags["a.b"]}"`
 reads a key, and a comment there is refused. A string still open at the end of the file
 is refused where it opens; when a `${` is open too, the first open `${` is named, since
-a `}` left out makes the quotes after it pair up to the end.
+a `}` left out makes the quotes after it pair up to the end. A heredoc is read the same
+way, a line at a time, until its closing line; one still open at the end is refused where
+it opens.
 
 There are no keywords. `resource`, `data`, `variable`, `output` and `module` start a
 block only at the top level; anywhere else they are ordinary identifiers, so
@@ -74,8 +79,9 @@ What the engine reads from each:
 ## Values
 
 ```
-value   = string | [ "-" ] NUMBER | BOOLEAN | reference | list | map
+value   = string | heredoc | [ "-" ] NUMBER | BOOLEAN | reference | list | map
 string  = OQUOTE { QUOTED_LIT | TEMPLATE_INTERP reference TEMPLATE_END } CQUOTE
+heredoc = OHEREDOC { STRING_LIT | TEMPLATE_INTERP reference TEMPLATE_END } CHEREDOC
 list    = "[" [ value { "," value } [ "," ] ] "]"
 map     = "{" { key "=" value [ "," ] } "}"
 key     = IDENTIFIER | string
@@ -136,6 +142,30 @@ plain text and cannot hold one.
 A string that is one `${...}` and nothing else is the referenced value itself, with its
 type: `length = "${var.n}"` is a number if `var.n` is one. Anything else, text around it
 or a second `${...}`, makes a string, and a list or map in such a string is an error.
+
+### Heredoc
+
+```
+content = <<-EOT
+  #!/bin/sh
+  echo "${var.greeting}"
+  EOT
+```
+
+A heredoc is a string written over lines. It opens with `<<NAME` or `<<-NAME` at the end
+of a line and closes at a line holding only `NAME`, with spaces or tabs around it; that
+line may be the last in the file with no line break after it. Its value is the lines
+between, each with its line break.
+
+Its text is read as written: no escapes, so `\n` stays two characters, and `#` or `"` is
+text. `${...}` reads a reference as in a quoted string, and `$${` is the text `${`.
+
+`<<-` finds the smallest indent among the lines with text on them and takes it off every
+such line, so the text can sit at the block's indent. A tab counts as one character, as a
+space does, and a line that opens with `${...}` has no indent. A line of only spaces or
+tabs keeps only its line break, so the value holds no whitespace you cannot see.
+
+A heredoc is a value; it cannot be a block label or a map key.
 
 ## AST
 

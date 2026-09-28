@@ -7,10 +7,15 @@ interface TokenSpec {
   regex: RegExp;
 }
 
-/** Inside quotes the text is a string's until `${` opens an interpolation, which reads tokens until its `}`. */
-interface Mode {
-  kind: 'string' | 'interpolation';
+/** Inside quotes or a heredoc the text is a string's until `${` opens an interpolation, which reads tokens until its `}`. */
+type Mode = { kind: 'string' | 'interpolation'; opened: Position } | Heredoc;
+
+/** A heredoc ends at a line holding only its name. */
+interface Heredoc {
+  kind: 'heredoc';
   opened: Position;
+  name: string;
+  closing: RegExp;
 }
 
 /** Every regex is sticky: it matches at the cursor and nowhere else, so nothing slices the input. */
@@ -24,6 +29,11 @@ export class Lexer {
 
   // A backslash takes the character after it along, so `\"` does not end the string, and `$${` is text; the parser reads what they mean.
   private literal = /(?:[^"\\$]|\\[\s\S]|\$\$\{|\$(?!\{))+/y;
+
+  // A heredoc's text is taken a line at a time, so each line can be checked for the closing name.
+  private heredocText = /(?:[^\n$]|\$\$\{|\$(?!\{))*\n?/y;
+
+  private heredoc = /<<(-?)([A-Z_a-z][\w-]*)\r?\n/y;
 
   // Boolean sits before Identifier, or true and false would lex as identifiers.
   private specs: TokenSpec[] = [
@@ -56,13 +66,20 @@ export class Lexer {
     this.modes = [];
 
     while (this.cursor < this.input.length) {
-      const token = this.mode()?.kind === 'string' ? this.stringToken() : this.codeToken();
+      const token = this.nextInMode(this.mode());
       if (token) tokens.push(token);
     }
 
     this.checkClosed();
     tokens.push({ type: TokenType.EOF, value: '', position: this.here() });
     return tokens;
+  }
+
+  private nextInMode(mode: Mode | undefined): Token | undefined {
+    if (mode?.kind === 'string') return this.stringToken();
+    if (mode?.kind === 'heredoc') return this.heredocToken(mode);
+
+    return this.codeToken();
   }
 
   /** Outside quotes, and inside a `${`: whitespace and comments go, and each token may open or close a mode. */
@@ -75,6 +92,8 @@ export class Lexer {
       this.advance(skipped);
       return undefined;
     }
+
+    if (this.input.startsWith('<<', this.cursor)) return this.openHeredoc();
 
     const token = this.nextToken();
     if (!token) throw new ConfigError(`Unexpected character: "${this.input[this.cursor]}"`, this.here());
@@ -105,16 +124,50 @@ export class Lexer {
       return { type: TokenType.CQuote, value: '"', position };
     }
 
-    if (this.input.startsWith('${', this.cursor)) {
-      this.advance('${');
-      this.modes.push({ kind: 'interpolation', opened: position });
-      return { type: TokenType.TemplateInterp, value: '${', position };
-    }
+    if (this.input.startsWith('${', this.cursor)) return this.openInterpolation(position);
 
     // Only a backslash that ends the input matches nothing; it is text, and the string is then never closed.
     const text = this.matchHere(this.literal) ?? this.input.slice(this.cursor);
     this.advance(text);
     return { type: TokenType.QuotedLit, value: text, position };
+  }
+
+  private openInterpolation(position: Position): Token {
+    this.advance('${');
+    this.modes.push({ kind: 'interpolation', opened: position });
+    return { type: TokenType.TemplateInterp, value: '${', position };
+  }
+
+  /** `<<NAME` or `<<-NAME`, and the line break its text starts after. */
+  private openHeredoc(): Token {
+    const position = this.here();
+    this.heredoc.lastIndex = this.cursor;
+    const match = this.heredoc.exec(this.input);
+    if (!match) throw new ConfigError('A heredoc opens with <<NAME or <<-NAME at the end of a line', position);
+
+    const [opener, flush, name] = match;
+    this.advance(opener);
+    this.modes.push({ kind: 'heredoc', opened: position, name, closing: new RegExp(String.raw`[ \t]*${name}[ \t]*(?=\r?\n|$)`, 'y') });
+    return { type: TokenType.OHeredoc, value: `<<${flush}${name}`, position };
+  }
+
+  /** Inside a heredoc: at the start of a line its closing name, else a `${`, or the text up to one or to the end of the line. */
+  private heredocToken(mode: Heredoc): Token {
+    const position = this.here();
+
+    const closing = this.input[this.cursor - 1] === '\n' ? this.matchHere(mode.closing) : undefined;
+    if (closing !== undefined) {
+      this.advance(closing);
+      this.modes.pop();
+      return { type: TokenType.CHeredoc, value: closing, position };
+    }
+
+    if (this.input.startsWith('${', this.cursor)) return this.openInterpolation(position);
+
+    // Never empty: the cursor is not at the end, and a `${` was taken above.
+    const text = this.matchHere(this.heredocText) as string;
+    this.advance(text);
+    return { type: TokenType.StringLit, value: text, position };
   }
 
   /** A `}` left out pairs the quotes after it up to the end, so the first open `${` is named. */
@@ -124,6 +177,8 @@ export class Lexer {
   }
 
   private neverClosed(mode: Mode): ConfigError {
+    if (mode.kind === 'heredoc') return new ConfigError(`This heredoc is never closed with a line holding only ${mode.name}`, mode.opened);
+
     const message = mode.kind === 'string' ? 'This string is never closed' : "This '${' is never closed with '}'";
     return new ConfigError(message, mode.opened);
   }
