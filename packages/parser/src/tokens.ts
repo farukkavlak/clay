@@ -2,7 +2,11 @@ import { Position } from './Position';
 
 export enum TokenType {
   Identifier = 'IDENTIFIER', // Block kinds, attribute names, reference parts
-  String = 'STRING', // "value"
+  OQuote = 'OQUOTE',
+  QuotedLit = 'QUOTED_LIT', // escapes as written
+  TemplateInterp = 'TEMPLATE_INTERP',
+  TemplateEnd = 'TEMPLATE_END',
+  CQuote = 'CQUOTE',
   Number = 'NUMBER', // 123, 1.5, 1e3
   Minus = 'MINUS', // - (before a number)
   Boolean = 'BOOLEAN', // true, false

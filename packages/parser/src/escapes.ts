@@ -1,11 +1,8 @@
 import { ConfigError } from './ConfigError';
 import { advanced, Position } from './Position';
 
-/** A piece of a string's text: plain text, or what one `${ … }` holds and where that begins. */
-export type Piece = { kind: 'text'; text: string } | { kind: 'interpolation'; text: string; position: Position };
-
-/** What starts at one place in a string: text, or an interpolation's inside, with the raw text it was written as. */
-type Step = { text: string; raw: string } | { interpolation: string; raw: string };
+/** What one place in a string's text stands for, with the raw text it was written as. */
+type Step = { text: string; raw: string };
 
 const ESCAPES = new Map([
   ['n', '\n'],
@@ -53,26 +50,14 @@ function escapeAt(raw: string, cursor: number, position: Position): Step {
 
 function stepAt(raw: string, cursor: number, position: Position): Step {
   if (raw.startsWith('$${', cursor)) return { text: '${', raw: '$${' };
-
-  if (raw.startsWith('${', cursor)) {
-    const close = raw.indexOf('}', cursor);
-    if (close === -1) throw new ConfigError("This '${' is never closed with '}'", position);
-
-    return { interpolation: raw.slice(cursor + 2, close), raw: raw.slice(cursor, close + 1) };
-  }
-
   if (raw[cursor] === '\\') return escapeAt(raw, cursor, position);
 
   const char = String.fromCodePoint(raw.codePointAt(cursor) as number);
   return { text: char, raw: char };
 }
 
-/**
- * Splits a string's text at each `${ … }` and reads its escapes. An escape is read in the text only, so `$${` stays text.
- * `start` is where the text begins, so every piece knows where it was written.
- */
-export function splitTemplate(raw: string, start: Position): Piece[] {
-  const pieces: Piece[] = [];
+/** The text a string's literal stands for, its escapes read. `start` is where the literal begins, so an escape it refuses is placed. */
+export function readEscapes(raw: string, start: Position): string {
   let text = '';
   let cursor = 0;
   let position = start;
@@ -80,17 +65,10 @@ export function splitTemplate(raw: string, start: Position): Piece[] {
   while (cursor < raw.length) {
     const step = stepAt(raw, cursor, position);
 
-    if ('interpolation' in step) {
-      if (text !== '') pieces.push({ kind: 'text', text });
-      text = '';
-      pieces.push({ kind: 'interpolation', text: step.interpolation, position: advanced(position, '${') });
-    } else text += step.text;
-
+    text += step.text;
     position = advanced(position, step.raw);
     cursor += step.raw.length;
   }
 
-  if (text !== '') pieces.push({ kind: 'text', text });
-
-  return pieces;
+  return text;
 }
