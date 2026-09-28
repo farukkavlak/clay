@@ -2,7 +2,7 @@ import { Address } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { AttributeValue, ModuleBlock, Position, spell } from '@clay/parser';
 
-import { Instances } from '../Instances';
+import { Instances, Repetition } from '../Instances';
 import { childScope, outputKey, scopeOf, variableKey } from '../keys';
 import { placed, tryAt } from '../place';
 import { readInstance } from '../resolvers/instance';
@@ -25,7 +25,13 @@ function inputNames(attributes: Record<string, AttributeValue>): string[] {
   return Object.keys(attributes).filter((name) => name !== 'source');
 }
 
-function describeMissing(reference: Exclude<Reference, { kind: 'count' }>, moduleScopes: Set<string>): string {
+/** `count.index` and `each.key` read the instance being made, so only a block that makes instances of that kind knows them. */
+function checkInstanceReference(reference: Extract<Reference, { kind: 'count' | 'each' }>, repetition: Repetition | undefined): void {
+  if (reference.kind === 'count' && repetition !== 'count') throw placed('count.index is only known inside a resource that has count', reference.position);
+  if (reference.kind === 'each' && repetition !== 'for_each') throw placed(`each.${reference.name} is only known inside a resource that has for_each`, reference.position);
+}
+
+function describeMissing(reference: Exclude<Reference, { kind: 'count' | 'each' }>, moduleScopes: Set<string>): string {
   if (reference.kind === 'variable') return `variable "${reference.name}" is not defined`;
   if (reference.kind === 'resource') return `"${reference.key}" is not declared in the configuration`;
 
@@ -52,13 +58,14 @@ export class DependencyGraphBuilder {
     return graph;
   }
 
-  /** One value at a time, so an error points at the value that reads, not at the block it sits in. The count is read before any instance is, so it has no index. */
+  /** One value at a time, so an error points at the value that reads, not at the block it sits in. The count or for_each is read before any instance is, so it has no key. */
   private addResourceDependencies({ address, block }: LoadedResource, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
     const key = address.toString();
+    const repetition = this.instances.repetitionOf(key);
 
-    if (block.count) tryAt(block.count.position, spell(block), address, () => this.addDependencies(block.count, graph, key, address, moduleScopes));
+    for (const value of [block.count, block.forEach]) if (value) tryAt(value.position, spell(block), address, () => this.addDependencies(value, graph, key, address, moduleScopes));
     for (const value of Object.values(block.attributes))
-      tryAt(value.position, spell(block), address, () => this.addDependencies(value, graph, key, address, moduleScopes, block.count !== undefined));
+      tryAt(value.position, spell(block), address, () => this.addDependencies(value, graph, key, address, moduleScopes, repetition));
   }
 
   /** The resources a resource reads from, looking through the variables and outputs in between. */
@@ -133,10 +140,10 @@ export class DependencyGraphBuilder {
       });
   }
 
-  private addDependencies(value: unknown, graph: Graph<GraphNode>, dependentKey: string, context: Address, moduleScopes: Set<string>, counted = false): void {
+  private addDependencies(value: unknown, graph: Graph<GraphNode>, dependentKey: string, context: Address, moduleScopes: Set<string>, repetition?: Repetition): void {
     for (const reference of this.scanner.referencesIn(value, context)) {
-      if (reference.kind === 'count') {
-        if (!counted) throw placed('count.index is only known inside a resource that has count', reference.position);
+      if (reference.kind === 'count' || reference.kind === 'each') {
+        checkInstanceReference(reference, repetition);
         continue;
       }
 
@@ -147,7 +154,7 @@ export class DependencyGraphBuilder {
       }
 
       // Checked here, as well as where it is read, since a reference to a resource still to come is never read at plan time.
-      if (reference.kind === 'resource') readInstance(reference.reference, this.instances.isCounted(reference.key), reference.position);
+      if (reference.kind === 'resource') readInstance(reference.reference, this.instances.repetitionOf(reference.key), reference.position);
 
       graph.addEdge(reference.key, dependentKey);
     }

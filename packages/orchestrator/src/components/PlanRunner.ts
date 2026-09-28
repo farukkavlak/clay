@@ -1,11 +1,12 @@
 import { Address, State } from '@clay/contracts';
 import { Graph } from '@clay/graph';
-import { Statement } from '@clay/parser';
+import { ResourceBlock, spell, Statement } from '@clay/parser';
 import { PlanAction } from '@clay/planner';
 import { moveResource, StateManager } from '@clay/state';
 
 import { asError } from '../asError';
-import { Instances } from '../Instances';
+import { eachFrom } from '../forEach';
+import { Instances, repetitionOfKey } from '../Instances';
 import { scopeOf } from '../keys';
 import { tryAt } from '../place';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
@@ -14,6 +15,22 @@ import { ScopeManager } from '../scope/ScopeManager';
 import { ActionExecutor } from './ActionExecutor';
 import { LoadedConfig } from './ConfigLoader';
 import { GraphNode, ValueNode } from './DependencyGraphBuilder';
+
+function undeclared(address: Address): Error {
+  return new Error(`The plan has "${address.toString()}", which the configuration does not declare`);
+}
+
+function byBlockOf(actions: PlanAction[]): Map<string, PlanAction[]> {
+  const byBlock = new Map<string, PlanAction[]>();
+
+  for (const action of actions) {
+    const block = Address.of(action).withoutKey().toString();
+    if (!byBlock.has(block)) byBlock.set(block, []);
+    byBlock.get(block)!.push(action);
+  }
+
+  return byBlock;
+}
 
 /** Runs a plan's actions in dependency order, reporting each step; the state file is rewritten after every action, so a failed run loses nothing done before it. */
 export class PlanRunner {
@@ -32,7 +49,7 @@ export class PlanRunner {
 
     // Outputs belong to a finished run; every write before the last leaves them out.
     delete state.outputs;
-    if (!(yield* this.applyInOrder(actions, graph, state))) return;
+    if (!(yield* this.applyInOrder(actions, config, graph, state))) return;
     if (!(yield* this.applyDeletes(actions, state))) return;
 
     // Outputs are read after the last action, so they never name a half-applied resource.
@@ -46,28 +63,38 @@ export class PlanRunner {
     for (const action of actions) {
       const address = Address.of(action);
       const block = address.withoutKey().toString();
-      const declared = graph.hasNode(block) && (typeof action.key === 'number') === this.instances.isCounted(block);
+      const declared = graph.hasNode(block) && repetitionOfKey(action.key) === this.instances.repetitionOf(block);
 
-      if (action.type !== 'DELETE' && !declared) throw new Error(`The plan has "${address.toString()}", which the configuration does not declare`);
+      if (action.type !== 'DELETE' && !declared) throw undeclared(address);
     }
   }
 
-  /** Creates, updates and replacements follow the graph, so a resource runs after what it reads from; the instances of a block run together, in the plan's order. */
-  private async *applyInOrder(actions: PlanAction[], graph: Graph<GraphNode>, state: State): AsyncGenerator<RunEvent, boolean> {
-    const byBlock = new Map<string, PlanAction[]>();
-    for (const action of actions) {
-      if (action.type === 'DELETE') continue;
+  /**
+   * An instance reads `each.value` from what for_each gives now, which is read once what for_each reads has run.
+   * A data source is read again for the run, so a saved plan may name a key for_each no longer gives.
+   */
+  private readEach(key: string, blocks: Map<string, ResourceBlock>, actions: PlanAction[], state: State): void {
+    const block = blocks.get(key);
+    if (!block?.forEach) return;
 
-      const block = Address.of(action).withoutKey().toString();
-      if (!byBlock.has(block)) byBlock.set(block, []);
-      byBlock.get(block)!.push(action);
-    }
+    const address = Address.parse(key);
+    const values = tryAt(block.forEach.position, spell(block), address, () => eachFrom(this.resolver.resolveValue(block.forEach, state, address)));
+    this.instances.setEach(key, values);
+
+    for (const action of actions) if (typeof action.key !== 'string' || !values.has(action.key)) throw undeclared(Address.of(action));
+  }
+
+  /** Creates, updates and replacements follow the graph, so a resource runs after what it reads from; the instances of a block run together, in the plan's order. */
+  private async *applyInOrder(actions: PlanAction[], config: LoadedConfig, graph: Graph<GraphNode>, state: State): AsyncGenerator<RunEvent, boolean> {
+    const blocks = new Map(config.loadedResources.map(({ uniqueId, block }) => [uniqueId, block]));
+    const byBlock = byBlockOf(actions.filter((action) => action.type !== 'DELETE'));
 
     for (const layer of graph.topologicalSort())
       for (const key of layer) {
         const node = graph.getNode(key)!;
         // Only this output: a sibling of it may read a resource a later layer creates.
         if (node.kind === 'output') this.resolveOutput(node, state);
+        this.readEach(key, blocks, byBlock.get(key) ?? [], state);
 
         for (const action of byBlock.get(key) ?? []) if (!(yield* this.step(action, state))) return false;
       }

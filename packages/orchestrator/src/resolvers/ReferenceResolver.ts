@@ -1,5 +1,5 @@
 import { Address, ExactNumber, State } from '@clay/contracts';
-import { ConfigError, ParsedReference, parseReference, Position, ReferenceNode, spellReference, Step, TemplatePart } from '@clay/parser';
+import { ConfigError, EachReference, ParsedReference, parseReference, Position, ReferenceNode, spellReference, Step, TemplatePart } from '@clay/parser';
 
 import { Instances } from '../Instances';
 import { ScopeManager } from '../scope/ScopeManager';
@@ -17,12 +17,14 @@ function countIndex(where: Address, position: Position): ExactNumber {
 }
 
 export class ReferenceResolver {
+  private instances: Instances;
   private variables: VariableResolver;
   private dataSources: DataSourceResolver;
   private moduleOutputs: ModuleOutputResolver;
   private resources: ResourceResolver;
 
   constructor(scopeManager: ScopeManager, dataSources: Map<string, Record<string, unknown>>, instances: Instances) {
+    this.instances = instances;
     this.variables = new VariableResolver(scopeManager, this);
     this.dataSources = new DataSourceResolver(dataSources);
     this.moduleOutputs = new ModuleOutputResolver(scopeManager);
@@ -42,8 +44,16 @@ export class ReferenceResolver {
     if (reference.kind === 'data') return { value: this.dataSources.resolve(reference, where), path: reference.path };
     if (reference.kind === 'module') return { value: this.moduleOutputs.resolve(reference, where), path: reference.path };
     if (reference.kind === 'count') return { value: countIndex(where, position), path: reference.path };
+    if (reference.kind === 'each') return { value: this.each(reference, where, position), path: reference.path };
 
     return this.resources.resolve(reference, where, state, position);
+  }
+
+  /** The instance being made names its key, and the value for_each gives that key; anything else read outside one has neither. */
+  private each(reference: EachReference, where: Address, position: Position): unknown {
+    if (typeof where.key !== 'string') throw new ConfigError(`each.${reference.name} is only known inside a resource that has for_each`, position);
+
+    return reference.name === 'key' ? where.key : this.instances.eachValue(where.withoutKey().toString(), where.key);
   }
 
   resolveAttributes(attributes: Record<string, unknown>, state: State, context?: Address): Record<string, unknown> {

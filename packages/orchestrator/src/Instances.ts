@@ -1,27 +1,53 @@
-/** Which resource blocks make instances with `count`, by the address of the block, and how many each makes once its count is read. */
+import { InstanceKey } from '@clay/contracts';
+
+/** How a block makes many instances: numbered by `count`, or keyed by `for_each`. */
+export type Repetition = 'count' | 'for_each';
+
+/** The repetition an instance key belongs to: an index to count, a string to for_each, and none to a block with neither. */
+export function repetitionOfKey(key: InstanceKey | undefined): Repetition | undefined {
+  if (key === undefined) return undefined;
+
+  return typeof key === 'number' ? 'count' : 'for_each';
+}
+
+/** Which resource blocks make many instances, by the address of the block, and which keys each makes once its count or for_each is read. */
 export class Instances {
-  private counted = new Set<string>();
-  private counts = new Map<string, number>();
+  private repetitions = new Map<string, Repetition>();
+  private keys = new Map<string, InstanceKey[]>();
+  private values = new Map<string, Map<string, unknown>>();
 
   clear(): void {
-    this.counted.clear();
-    this.counts.clear();
+    this.repetitions.clear();
+    this.keys.clear();
+    this.values.clear();
   }
 
-  declare(block: string): void {
-    this.counted.add(block);
+  declare(block: string, repetition: Repetition): void {
+    this.repetitions.set(block, repetition);
   }
 
-  isCounted(block: string): boolean {
-    return this.counted.has(block);
+  repetitionOf(block: string): Repetition | undefined {
+    return this.repetitions.get(block);
   }
 
   setCount(block: string, count: number): void {
-    this.counts.set(block, count);
+    const keys = Array.from({ length: count }, (_, index) => index);
+    this.keys.set(block, keys);
   }
 
-  /** Nothing until a plan reads the count; an apply runs the instances its plan listed. */
-  countOf(block: string): number | undefined {
-    return this.counts.get(block);
+  /** The value each key gives its instance, read as `each.value`. */
+  setEach(block: string, values: Map<string, unknown>): void {
+    this.keys.set(block, [...values.keys()]);
+    this.values.set(block, values);
+  }
+
+  /** Nothing until a plan reads the count or for_each. An apply reads only for_each, for each.value, and runs the instances its plan listed. */
+  keysOf(block: string): InstanceKey[] | undefined {
+    return this.keys.get(block);
+  }
+
+  /** A plan and an apply both read the for_each, and check the keys they run, before any instance reads its value. */
+  eachValue(block: string, key: string): unknown {
+    return this.values.get(block)?.get(key);
   }
 }

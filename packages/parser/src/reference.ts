@@ -40,8 +40,15 @@ export interface CountReference {
   path: Step[];
 }
 
+/** `each.key` and `each.value`, the key of the instance being made and the value `for_each` gives it. */
+export interface EachReference {
+  kind: 'each';
+  name: 'key' | 'value';
+  path: Step[];
+}
+
 /** A reference as the language reads it: what it names, and the steps into the value it names. */
-export type ParsedReference = VariableReference | DataReference | ModuleOutputReference | ResourceReference | CountReference;
+export type ParsedReference = VariableReference | DataReference | ModuleOutputReference | ResourceReference | CountReference | EachReference;
 
 /** What a reference can spell after a dot, so a declared name can always be read back. */
 export const NAME = /^[A-Za-z_][A-Za-z0-9_-]*$/;
@@ -111,12 +118,21 @@ function countReference(parts: Step[], position?: Position): CountReference {
   return { kind: 'count', path };
 }
 
+function eachReference(parts: Step[], position?: Position): EachReference {
+  const { names, path } = split(parts, 2, position);
+  const [, name] = names;
+  if (name !== 'key' && name !== 'value') refuse(`Reference "${spellReference(parts)}" names nothing: each.key and each.value are the key and value of an instance`, position);
+
+  return { kind: 'each', name, path };
+}
+
 /** The one place that says what a reference's parts mean: which name its target, and which read into the target's value. */
 export function parseReference(parts: Step[], position?: Position): ParsedReference {
   if (parts[0] === 'var') return variableReference(parts, position);
   if (parts[0] === 'data') return dataReference(parts, position);
   if (parts[0] === 'module') return moduleOutputReference(parts, position);
   if (parts[0] === 'count') return countReference(parts, position);
+  if (parts[0] === 'each') return eachReference(parts, position);
 
   return resourceReference(parts, position);
 }

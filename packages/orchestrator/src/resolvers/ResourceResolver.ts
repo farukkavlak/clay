@@ -11,7 +11,7 @@ export class ResourceResolver {
   /** The attribute the reference reads, and the steps still to take into it. */
   resolve(reference: ResourceReference, context: Address, state: State, position?: Position): { value: unknown; path: Step[] } {
     const block = new Address(context.modulePath, reference.type, reference.name).toString();
-    const { key, attribute, path } = readInstance(reference, this.instances.isCounted(block), position);
+    const { key, attribute, path } = readInstance(reference, this.instances.repetitionOf(block), position);
 
     const resourceKey = new Address(context.modulePath, reference.type, reference.name, key).toString();
     const resource = state.resources[resourceKey];

@@ -30,6 +30,8 @@ export interface ResourceBlock extends Node {
   name: string; // e.g., "my_file"
   /** How many instances the block makes; the engine's to read, so it is no attribute a provider is sent. */
   count?: AttributeValue;
+  /** The keys to make an instance for, a map's or a list's; the engine's to read, as count is. */
+  forEach?: AttributeValue;
   attributes: Record<string, AttributeValue>;
 }
 

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { Instances } from '../../src/Instances';
 import { Reference, ReferenceScanner } from '../../src/resolvers/ReferenceScanner';
 
-const keysOf = (references: Reference[]) => references.map((reference) => (reference.kind === 'count' ? 'count' : reference.key));
+const keysOf = (references: Reference[]) => references.map((reference) => (reference.kind === 'count' || reference.kind === 'each' ? reference.kind : reference.key));
 
 describe('ReferenceScanner', () => {
   const scanner = new ReferenceScanner(new Instances());
