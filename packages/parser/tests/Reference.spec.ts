@@ -2,32 +2,46 @@ import { describe, expect, it } from 'vitest';
 
 import { CONFIG_FILE } from '../src/ast';
 import { ConfigError } from '../src/ConfigError';
-import { parseReference } from '../src/reference';
+import { parseReference, spellReference, Step } from '../src/reference';
 
 const position = { file: CONFIG_FILE, line: 1, column: 1 };
 
 const parse = (spelled: string) => parseReference(spelled.split('.'), position);
 
-const errorOf = (spelled: string): ConfigError => {
+const errorOf = (parts: Step[]): ConfigError => {
   try {
-    parse(spelled);
+    parseReference(parts, position);
   } catch (error) {
     if (error instanceof ConfigError) return error;
 
     throw error;
   }
 
-  throw new Error(`Expected an error from: ${spelled}`);
+  throw new Error(`Expected an error from: ${parts.join('.')}`);
 };
 
 describe('a reference read into a value', () => {
   it.each([
-    ['var.text', { kind: 'variable', name: 'text' }],
-    ['data.local_file.f.content', { kind: 'data', type: 'local_file', name: 'f', attribute: 'content' }],
-    ['module.app.url', { kind: 'module', module: 'app', output: 'url' }],
-    ['local_file.a.content', { kind: 'resource', type: 'local_file', name: 'a', attribute: 'content' }],
-  ])('reads %s as what it names and what it reads on it', (spelled, expected) => {
+    ['var.text', { kind: 'variable', name: 'text', path: [] }],
+    ['data.local_file.f.content', { kind: 'data', type: 'local_file', name: 'f', attribute: 'content', path: [] }],
+    ['module.app.url', { kind: 'module', module: 'app', output: 'url', path: [] }],
+    ['local_file.a.content', { kind: 'resource', type: 'local_file', name: 'a', attribute: 'content', path: [] }],
+    ['var.tags.env', { kind: 'variable', name: 'tags', path: ['env'] }],
+    ['data.local_file.f.tags.env', { kind: 'data', type: 'local_file', name: 'f', attribute: 'tags', path: ['env'] }],
+    ['module.app.tags.env', { kind: 'module', module: 'app', output: 'tags', path: ['env'] }],
+    ['local_file.a.tags.env.name', { kind: 'resource', type: 'local_file', name: 'a', attribute: 'tags', path: ['env', 'name'] }],
+  ])('reads %s as what it names, what it reads on it, and the steps into that value', (spelled, expected) => {
     expect(parse(spelled)).toEqual(expected);
+  });
+
+  it('reads an index as a step into the value', () => {
+    expect(parseReference(['var', 'names', 0, 'first'], position)).toEqual({ kind: 'variable', name: 'names', path: [0, 'first'] });
+  });
+
+  // A key is any text; only a part that names the target has to be a name.
+  it('reads a key that is no name as a step', () => {
+    expect(parseReference(['var', 'tags', ''], position)).toEqual({ kind: 'variable', name: 'tags', path: [''] });
+    expect(parseReference(['module', 'app', 'url', 'a.b'], position)).toEqual({ kind: 'module', module: 'app', output: 'url', path: ['a.b'] });
   });
 
   // The engine resolves values long after the file is read, and adds the place itself.
@@ -37,20 +51,38 @@ describe('a reference read into a value', () => {
   });
 
   it.each([
-    ['var', 'Variable reference must include a name: var'],
-    ['data.local_file.f', 'Data source reference must include attribute: data.local_file.f'],
-    ['module.app', 'Module output reference must include output name: module.app'],
-    ['module.app.local_file.a', 'reaches into a module'],
-    ['local_file.a', 'Resource reference must include attribute: local_file.a'],
-    ['local_file..id', 'Reference "local_file..id" has a part that is empty'],
-    ['var..name', 'Reference "var..name" has a part that is empty'],
-    ['var.text.deeper', 'Reference "var.text.deeper" reads deeper than the variable "text"'],
-    ['local_file.a.tags.env', 'Reference "local_file.a.tags.env" reads deeper than the attribute "tags"'],
-    ['data.local_file.f.tags.env', 'Reference "data.local_file.f.tags.env" reads deeper than the attribute "tags"'],
-  ])('refuses %s', (spelled, message) => {
-    const error = errorOf(spelled);
+    [['var'], 'Variable reference must include a name: var'],
+    [['data', 'local_file', 'f'], 'Data source reference must include attribute: data.local_file.f'],
+    [['module', 'app'], 'Module output reference must include output name: module.app'],
+    [['local_file', 'a'], 'Resource reference must include attribute: local_file.a'],
+    [['local_file', '', 'id'], 'Reference "local_file[""].id" has "" where it needs a name'],
+    [['var', '', 'name'], 'Reference "var[""].name" has "" where it needs a name'],
+    [['var', 'a b'], 'Reference "var["a b"]" has "a b" where it needs a name'],
+    [['module', 'a.module.b', 'secret'], 'Reference "module["a.module.b"].secret" has "a.module.b" where it needs a name'],
+    [['data', 'module.m.local_file', 'd', 'content'], 'Reference "data["module.m.local_file"].d.content" has "module.m.local_file" where it needs a name'],
+    [['local_file', 'x.y', 'id'], 'Reference "local_file["x.y"].id" has "x.y" where it needs a name'],
+    [['local_file', 'a', 'tags.env'], 'Reference "local_file.a["tags.env"]" has "tags.env" where it needs a name'],
+    [['var', 0], 'Reference "var[0]" has an index where it needs a name'],
+    [['data', 'local_file', 0, 'content'], 'Reference "data.local_file[0].content" has an index where it needs a name'],
+    [['module', 'app', 0], 'Reference "module.app[0]" has an index where it needs a name'],
+    [['local_file', 'a', 0], 'Reference "local_file.a[0]" has an index where it needs a name'],
+    [[0, 'a', 'id'], 'Reference "[0].a.id" has an index where it needs a name'],
+  ])('refuses %j', (parts, message) => {
+    const error = errorOf(parts);
 
     expect(error.message).toContain(message);
     expect(error.position).toEqual(position);
+  });
+});
+
+describe('a reference spelled back', () => {
+  it.each([
+    [['var', 'names', 0], 'var.names[0]'],
+    [['local_file', 'a', 'tags', 'env'], 'local_file.a.tags.env'],
+    [['var', 'tags', 'a.b', 1], 'var.tags["a.b"][1]'],
+    [['var', 'tags', 'say "hi"'], String.raw`var.tags["say \"hi\""]`],
+    [['var', 'tags', ''], 'var.tags[""]'],
+  ])('spells %j as %s', (parts, spelled) => {
+    expect(spellReference(parts)).toBe(spelled);
   });
 });

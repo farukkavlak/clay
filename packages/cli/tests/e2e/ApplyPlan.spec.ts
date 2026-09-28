@@ -333,7 +333,7 @@ describe('apply and plan against real files', () => {
     expect(state.outputs).toEqual({ echo: 'hello' });
   });
 
-  it('says that modules are read through their outputs', async () => {
+  it('refuses a reference that reaches into a module, as an output the module does not have', async () => {
     await fs.mkdir(path.join(dir, 'm'));
     await fs.writeFile(path.join(dir, 'm', 'main.clay'), `resource "local_file" "inner" { path = "${path.join(dir, 'inner.txt')}" content = "x" }`);
     const config = `
@@ -344,7 +344,7 @@ describe('apply and plan against real files', () => {
       }
     `;
 
-    await expect(newOrchestrator().plan(config)).rejects.toThrow('modules are read through their outputs');
+    await expect(newOrchestrator().plan(config)).rejects.toThrow('module "m" has no output "local_file"');
   });
 
   it('plans one replacement when a forceNew attribute changes', async () => {

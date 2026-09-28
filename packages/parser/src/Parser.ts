@@ -3,11 +3,9 @@ import { AttributeValue, DataBlock, ModuleBlock, OutputBlock, Program, Reference
 import { ConfigError } from './ConfigError';
 import { Lexer } from './Lexer';
 import { advanced, Position } from './Position';
+import { NAME, Step } from './reference';
 import { Piece, splitTemplate } from './template';
 import { Token, TokenType } from './tokens';
-
-/** What a reference can spell, so a declared name can always be read back. */
-const NAME = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 
 /** Words a reference already spells: `var.x`, `data.t.n`, `module.m`. */
 const RESERVED_TYPES = new Set(['module', 'var', 'data']);
@@ -244,15 +242,33 @@ export class Parser {
   }
 
   private parseReference(position: Position): ReferenceNode {
-    const parts: string[] = [];
+    const parts: Step[] = [this.advance().value];
 
-    parts.push(this.advance().value);
-
-    while (this.matchToken(TokenType.Dot))
-      if (this.check(TokenType.Identifier)) parts.push(this.advance().value);
-      else return this.error('Expect property name after dot.');
+    while (this.matchToken(TokenType.Dot, TokenType.LBracket))
+      parts.push(this.previous().type === TokenType.Dot ? this.consume(TokenType.Identifier, 'Expect property name after dot.').value : this.parseBracket());
 
     return { type: 'Reference', value: parts, position };
+  }
+
+  /** What follows a `[`: an index into a list, or a key, which reads its escapes as a map key does. */
+  private parseBracket(): Step {
+    let step: Step;
+
+    if (this.matchToken(TokenType.String)) step = this.stringKey(this.previous()).value;
+    else if (this.check(TokenType.Number) || this.check(TokenType.Minus)) step = this.index(this.advance());
+    else return this.error("Expect a number or a string inside '['.");
+
+    this.consume(TokenType.RBracket, "Expect ']' after the index.");
+    return step;
+  }
+
+  /** A place in a list is counted, so it is written in digits and fits a JavaScript number. */
+  private index(token: Token): number {
+    const index = Number(token.value);
+    if (!/^\d+$/.test(token.value) || !Number.isSafeInteger(index))
+      throw new ConfigError(`An index is a whole number from 0 to ${Number.MAX_SAFE_INTEGER}, written in digits`, token.position);
+
+    return index;
   }
 
   private matchToken(...types: TokenType[]): boolean {

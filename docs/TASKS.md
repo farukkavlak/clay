@@ -20,7 +20,7 @@ change each.
 - [x] A reference that reads deeper than what it names drops the parts in between in
       silence: `var.v.bogus` gives the variable, and `local_file.a.tags.content` reads the
       `content` attribute as if `tags` were never written. Both were seen in a plan that
-      said nothing. A reference reads one attribute until nested access lands
+      said nothing. Every part is read or refused, never dropped
 - [x] An attribute a `variable` block does not use is accepted in silence.
       `declareVariables` reads `default` and nothing else, so `descriptoin = "x"` is
       dropped and `defualt = "x"` is reported as `variable "v" has no value`, which names
@@ -51,8 +51,8 @@ change each.
 
 ## 1. Language
 
-The parser takes plain strings and one level of attribute access. A real
-configuration hits each of these early.
+The parser takes literals and references, with no expressions yet. A real configuration
+hits each of these early.
 
 - [x] Negative and decimal numbers, with an exponent, as HCL writes them; the minus is a
       token of its own, so a number never swallows the minus of a subtraction
@@ -60,9 +60,12 @@ configuration hits each of these early.
       literal `${`, as HCL reads them; any other escape is refused
 - [ ] Refuse a raw line break in a quoted string, as HCL does, once heredocs exist to take
       its place; `\n` is the other way to write one
-- [ ] Nested access: `local_file.a.tags.env` and `var.list[0]`; today `[` after a
+- [x] Nested access: `local_file.a.tags.env` and `var.list[0]`; today `[` after a
       reference is a parse error, and a reference that reads deeper than one attribute is
       refused where it is read
+- [ ] A quoted key inside `${...}`: `"${var.tags["a.b"]}"`. The lexer ends a string at the
+      first unescaped quote, so the quote inside the interpolation ends it. HCL reads a
+      `${...}` to its closing brace, quotes and all
 - [x] A reference is a type, not a string. Today it travels as `string[]` and four places
       split it on dots to read a part back. An instance key cannot be added to a shape
       that thin, so this comes before `count`
@@ -229,6 +232,11 @@ by resource type, and no `provider` block exists yet.
       plain errors, and one of them means "not in state yet", so it cannot be wrapped blindly
 - [ ] "Did you mean": a reference to a name one edit away from a declared one says so
 - [ ] Provider errors carry what to do next, not only what went wrong
+- [ ] A module output that does not exist is reported two ways. Read from a resource,
+      the graph says `module "m" has no output "x"`. Read from a data source, which
+      loads before the graph, the resolver says
+      `Output "x" not found in module "module.m"`, with the scope key where the
+      module's name should be
 - [ ] An output that fails to resolve reports a failure. `resolveOutput` runs outside the
       step's `try`, so a throw there ends the run with no `failed` event and nothing said
 - [ ] An output may be named `__proto__`. The runner collects outputs into a plain object,

@@ -49,8 +49,8 @@ describe('reading a plan file', () => {
     expect(change.new).toEqual(lookalike);
   });
 
-  // A saved action carries its attributes as parsed; a value in them is exact, while where it was written stays a JavaScript number.
-  it('reads the positions in saved attributes as numbers, and the values in them exactly, however deep', () => {
+  // A saved action carries its attributes as parsed; a value in them is exact, while where it was written, and an index into a list, stay JavaScript numbers.
+  it('reads the positions and indexes in saved attributes as numbers, and the values in them exactly, however deep', () => {
     const at = { file: 'main.clay', line: 3, column: 7 };
     const plan: Plan = {
       serial: 4,
@@ -62,7 +62,8 @@ describe('reading a plan file', () => {
           attributes: {
             id: { type: 'Number', value: ExactNumber.parse('12345678901234567890'), position: at },
             tags: { type: 'List', value: [{ type: 'Map', value: { n: { type: 'Number', value: ExactNumber.parse('1'), position: at } }, position: at }], position: at },
-            label: { type: 'Template', value: ['id ', { type: 'Reference', value: ['var', 'id'], position: at }], position: at },
+            label: { type: 'Template', value: ['id ', { type: 'Reference', value: ['var', 'ids', 0], position: at }], position: at },
+            first: { type: 'Reference', value: ['var', 'ids', 1, 'name'], position: at },
           },
         },
       ],
@@ -112,6 +113,23 @@ describe('reading a plan file', () => {
     }).replace('"line": 1', '"line": 1.5');
 
     expect(() => parsePlanFile(text, 'tfplan.json')).toThrow("tfplan.json is not a plan file: a position's line: 1.5 is not a whole number");
+  });
+
+  it('names an index that is not whole', () => {
+    const text = aPlanFile({
+      serial: 0,
+      actions: [
+        {
+          type: 'CREATE',
+          resourceType: 'null_resource',
+          name: 'a',
+          attributes: { n: { type: 'Reference', value: ['var', 'l', 1], position: { file: 'main.clay', line: 1, column: 1 } } },
+        },
+      ],
+      outputs: {},
+    }).replace(/"l",\s*1/, '"l", 1.5');
+
+    expect(() => parsePlanFile(text, 'tfplan.json')).toThrow('tfplan.json is not a plan file: an index: 1.5 is not a whole number');
   });
 
   it('names the file when the text is not json', () => {

@@ -1,9 +1,13 @@
 import { ConfigError } from './ConfigError';
 import { Position } from './Position';
 
+/** A part of a reference: a name or key, from `.name` or `["key"]`, or an index into a list, from `[0]`. */
+export type Step = string | number;
+
 export interface VariableReference {
   kind: 'variable';
   name: string;
+  path: Step[];
 }
 
 export interface DataReference {
@@ -11,13 +15,15 @@ export interface DataReference {
   type: string;
   name: string;
   attribute: string;
+  path: Step[];
 }
 
-/** A module is read through its outputs, so nothing lies beyond the output name. */
+/** A module is read through its outputs, so what follows the output name reads into its value. */
 export interface ModuleOutputReference {
   kind: 'module';
   module: string;
   output: string;
+  path: Step[];
 }
 
 export interface ResourceReference {
@@ -25,53 +31,78 @@ export interface ResourceReference {
   type: string;
   name: string;
   attribute: string;
+  path: Step[];
 }
 
-/** A reference as the language reads it: what it names, and the one attribute it reads on that target. */
+/** A reference as the language reads it: what it names, and the steps into the value it names. */
 export type ParsedReference = VariableReference | DataReference | ModuleOutputReference | ResourceReference;
+
+/** What a reference can spell after a dot, so a declared name can always be read back. */
+export const NAME = /^[A-Za-z_][A-Za-z0-9_-]*$/;
+
+function spellStep(step: Step, first: boolean): string {
+  if (typeof step === 'number') return `[${step}]`;
+  if (!NAME.test(step)) return `[${JSON.stringify(step)}]`;
+
+  return first ? step : `.${step}`;
+}
+
+/** A reference as it would be written: `var.names[0]`, `local_file.a.tags["a.b"]`. */
+export function spellReference(parts: Step[]): string {
+  return parts.map((part, i) => spellStep(part, i === 0)).join('');
+}
 
 /** Without a position the engine adds one where the value was read. */
 function refuse(message: string, position?: Position): never {
   throw position ? new ConfigError(message, position) : new Error(message);
 }
 
-function variableReference(parts: string[], spelled: string, position?: Position): VariableReference {
-  if (parts.length < 2) refuse(`Variable reference must include a name: ${spelled}`, position);
-  if (parts.length > 2) refuse(`Reference "${spelled}" reads deeper than the variable "${parts[1]}"`, position);
+/** The parts that name the target have to be names, since scope keys join them with dots; the rest is the path into its value. */
+function split(parts: Step[], count: number, position?: Position): { names: string[]; path: Step[] } {
+  const names = parts.slice(0, count);
+  const spelled = () => spellReference(parts);
 
-  return { kind: 'variable', name: parts[1] };
+  for (const part of names) {
+    if (typeof part === 'number') refuse(`Reference "${spelled()}" has an index where it needs a name`, position);
+    if (!NAME.test(part)) refuse(`Reference "${spelled()}" has ${JSON.stringify(part)} where it needs a name`, position);
+  }
+
+  return { names: names as string[], path: parts.slice(count) };
 }
 
-function dataReference(parts: string[], spelled: string, position?: Position): DataReference {
-  if (parts.length < 4) refuse(`Data source reference must include attribute: ${spelled}`, position);
-  if (parts.length > 4) refuse(`Reference "${spelled}" reads deeper than the attribute "${parts[3]}"`, position);
+function variableReference(parts: Step[], position?: Position): VariableReference {
+  if (parts.length < 2) refuse(`Variable reference must include a name: ${spellReference(parts)}`, position);
+  const { names, path } = split(parts, 2, position);
 
-  return { kind: 'data', type: parts[1], name: parts[2], attribute: parts[3] };
+  return { kind: 'variable', name: names[1], path };
 }
 
-function moduleOutputReference(parts: string[], spelled: string, position?: Position): ModuleOutputReference {
-  if (parts.length < 3) refuse(`Module output reference must include output name: ${spelled}`, position);
-  if (parts.length > 3) refuse(`Reference "${spelled}" reaches into a module; modules are read through their outputs`, position);
+function dataReference(parts: Step[], position?: Position): DataReference {
+  if (parts.length < 4) refuse(`Data source reference must include attribute: ${spellReference(parts)}`, position);
+  const { names, path } = split(parts, 4, position);
 
-  return { kind: 'module', module: parts[1], output: parts[2] };
+  return { kind: 'data', type: names[1], name: names[2], attribute: names[3], path };
 }
 
-function resourceReference(parts: string[], spelled: string, position?: Position): ResourceReference {
-  if (parts.length < 3) refuse(`Resource reference must include attribute: ${spelled}`, position);
-  if (parts.length > 3) refuse(`Reference "${spelled}" reads deeper than the attribute "${parts[2]}"`, position);
+function moduleOutputReference(parts: Step[], position?: Position): ModuleOutputReference {
+  if (parts.length < 3) refuse(`Module output reference must include output name: ${spellReference(parts)}`, position);
+  const { names, path } = split(parts, 3, position);
 
-  return { kind: 'resource', type: parts[0], name: parts[1], attribute: parts[2] };
+  return { kind: 'module', module: names[1], output: names[2], path };
 }
 
-/** The one place that says what a reference's parts mean. A part beyond the one its kind reads is refused, not dropped. */
-export function parseReference(parts: string[], position?: Position): ParsedReference {
-  const spelled = parts.join('.');
+function resourceReference(parts: Step[], position?: Position): ResourceReference {
+  if (parts.length < 3) refuse(`Resource reference must include attribute: ${spellReference(parts)}`, position);
+  const { names, path } = split(parts, 3, position);
 
-  if (parts.includes('')) refuse(`Reference "${spelled}" has a part that is empty`, position);
+  return { kind: 'resource', type: names[0], name: names[1], attribute: names[2], path };
+}
 
-  if (parts[0] === 'var') return variableReference(parts, spelled, position);
-  if (parts[0] === 'data') return dataReference(parts, spelled, position);
-  if (parts[0] === 'module') return moduleOutputReference(parts, spelled, position);
+/** The one place that says what a reference's parts mean: which name its target, and which read into the target's value. */
+export function parseReference(parts: Step[], position?: Position): ParsedReference {
+  if (parts[0] === 'var') return variableReference(parts, position);
+  if (parts[0] === 'data') return dataReference(parts, position);
+  if (parts[0] === 'module') return moduleOutputReference(parts, position);
 
-  return resourceReference(parts, spelled, position);
+  return resourceReference(parts, position);
 }

@@ -27,7 +27,7 @@ function errorOf(input: string, file: string = CONFIG_FILE): ConfigError {
 
 const attributesOf = (input: string) => (makeParser(input).parse()[0] as ResourceBlock).attributes;
 const valueOf = (written: string) => attributesOf(`resource "t" "n" { v = ${written} }`).v;
-const reference = (parts: string[], column: number, line = 1) => ({ type: 'Reference', value: parts, position: at(line, column) });
+const reference = (parts: (string | number)[], column: number, line = 1) => ({ type: 'Reference', value: parts, position: at(line, column) });
 
 describe('Clay Parser', () => {
   describe('Valid Cases', () => {
@@ -412,6 +412,44 @@ describe('Clay Parser', () => {
 
       expect(error.message).toBe('A map key is plain text; it cannot hold an interpolation');
       expect(error.position).toEqual(at(1, 26));
+    });
+  });
+
+  describe('Nested access', () => {
+    it.each([
+      ['an index', 'var.l[0]', ['var', 'l', 0]],
+      ['a quoted key', 'local_file.a.tags["env"]', ['local_file', 'a', 'tags', 'env']],
+      ['a name after an index', 'var.l[0].name', ['var', 'l', 0, 'name']],
+      ['steps of each kind in a row', 'local_file.a.tags["k"][2].x', ['local_file', 'a', 'tags', 'k', 2, 'x']],
+      ['a key with a dot in it', 'var.m["a.b"]', ['var', 'm', 'a.b']],
+      ['a key by what its escapes stand for', String.raw`var.m["a\"b"]`, ['var', 'm', 'a"b']],
+      ['an index written with leading zeros', 'var.l[007]', ['var', 'l', 7]],
+    ])('reads %s', (_, written, parts) => {
+      expect(valueOf(written)).toEqual(reference(parts, 24));
+    });
+
+    it('reads an index inside an interpolation', () => {
+      expect(valueOf('"a ${var.l[1]}"')).toEqual({ type: 'Template', value: ['a ', reference(['var', 'l', 1], 29)], position: at(1, 24) });
+    });
+
+    it('reads an indexed reference as an item of a list', () => {
+      expect(valueOf('[var.l[0], 1]')).toMatchObject({ type: 'List', value: [reference(['var', 'l', 0], 25), { type: 'Number' }] });
+    });
+
+    it.each([
+      ['a negative index', 'var.l[-1]', 'An index is a whole number from 0 to 9007199254740991, written in digits', at(1, 30)],
+      ['a decimal index', 'var.l[1.5]', 'An index is a whole number from 0 to 9007199254740991, written in digits', at(1, 30)],
+      ['an index with an exponent', 'var.l[1e2]', 'An index is a whole number from 0 to 9007199254740991, written in digits', at(1, 30)],
+      ['an index past what a list can hold', 'var.l[9007199254740992]', 'An index is a whole number from 0 to 9007199254740991, written in digits', at(1, 30)],
+      ['a reference as an index', 'var.l[var.i]', "Expect a number or a string inside '['", at(1, 30)],
+      ['an empty index', 'var.l[]', "Expect a number or a string inside '['", at(1, 30)],
+      ['an index never closed', 'var.l[0 ', "Expect ']' after the index", at(1, 33)],
+      ['a key with an interpolation', 'var.m["${var.k}"]', 'A map key is plain text; it cannot hold an interpolation', at(1, 30)],
+    ])('refuses %s where it is written', (_, written, message, position) => {
+      const error = errorOf(`resource "t" "n" { v = ${written} }`);
+
+      expect(error.message).toContain(message);
+      expect(error.position).toEqual(position);
     });
   });
 

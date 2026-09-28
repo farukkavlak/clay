@@ -41,7 +41,7 @@ export interface Plan {
 }
 
 /** Bumped whenever the shape below changes, so a plan file from an older version is refused instead of misread. */
-export const PLAN_FILE_VERSION = '7.0';
+export const PLAN_FILE_VERSION = '8.0';
 
 export interface PlanFile extends Plan {
   version: string;
@@ -140,21 +140,27 @@ function childrenOf(node: Record<string, unknown>): unknown[] {
   return [];
 }
 
-function readPositions(node: unknown): void {
+/** An index is a place in a list, not a value, so it reads back as a JavaScript number too. */
+function readIndexes(node: Record<string, unknown>): void {
+  if (node.type === 'Reference' && Array.isArray(node.value)) node.value = node.value.map((step: unknown) => (step instanceof ExactNumber ? step.toSafeInteger('an index') : step));
+}
+
+function readNode(node: unknown): void {
   if (!isRecord(node)) return;
 
   readPosition(node.position);
-  for (const child of childrenOf(node)) readPositions(child);
+  readIndexes(node);
+  for (const child of childrenOf(node)) readNode(child);
 }
 
-/** The plan's serial and the positions in its parsed attributes are the file's own numbers; every other number in it is a value, kept exactly. */
+/** The plan's serial, and the positions and indexes in its parsed attributes, are the file's own numbers; every other number in it is a value, kept exactly. */
 function readPlan(content: string): unknown {
   const read = ExactNumber.readJSON(content);
   if (!isRecord(read)) return read;
 
   if (read.serial instanceof ExactNumber) read.serial = read.serial.toSafeInteger('its serial');
   if (Array.isArray(read.actions))
-    for (const action of read.actions) if (isRecord(action) && isRecord(action.attributes)) for (const node of Object.values(action.attributes)) readPositions(node);
+    for (const action of read.actions) if (isRecord(action) && isRecord(action.attributes)) for (const node of Object.values(action.attributes)) readNode(node);
 
   return read;
 }
