@@ -60,7 +60,7 @@ hits each of these early.
       literal `${`, as HCL reads them; any other escape is refused
 - [x] Heredoc strings, `<<EOT` and `<<-EOT`: text as written, `${...}` read, and with
       `<<-` the shared indent taken off
-- [ ] Refuse a raw line break in a quoted string, as HCL does, once heredocs exist to take
+- [x] Refuse a raw line break in a quoted string, as HCL does, once heredocs exist to take
       its place; `\n` is the other way to write one
 - [x] Nested access: `local_file.a.tags.env` and `var.list[0]`; today `[` after a
       reference is a parse error, and a reference that reads deeper than one attribute is

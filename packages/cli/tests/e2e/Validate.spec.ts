@@ -196,6 +196,13 @@ describe('validate against real files', () => {
     expect(output).toContain('\n  1: resource "local_file" {\n                           ^');
   });
 
+  it('refuses a string never closed on its line, and points at its quote rather than a quote further down', async () => {
+    const output = await validate('resource "local_file" "a" {\n  path = "a.txt\n  content = "hi"\n}\n');
+
+    expect(output).toContain('This string is never closed on its line');
+    expect(output).toContain('\n  2:   path = "a.txt\n              ^');
+  });
+
   it('names the module file a syntax error is in, not the root one', async () => {
     await fs.mkdir(path.join(dir, 'mod'), { recursive: true });
     await fs.writeFile(path.join(dir, 'mod', 'main.clay'), 'resource "local_file" {\n', 'utf8');

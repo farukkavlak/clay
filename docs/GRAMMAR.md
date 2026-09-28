@@ -9,7 +9,7 @@ in a directory; a module is another directory with its own `main.clay`.
 | ----------------- | ------------------------------------- | ----------------------------------------------------------------------- |
 | `IDENTIFIER`      | `[A-Za-z_][A-Za-z0-9_-]*`             | Block kinds, attribute names, reference parts; not `true` or `false`    |
 | `OQUOTE`          | `"`                                   | Opens a string                                                          |
-| `QUOTED_LIT`      | Text up to `"` or `${`                | Escapes as written, read below; `\"` and `$${` are text; may span lines |
+| `QUOTED_LIT`      | Text up to `"` or `${`                | Escapes as written, read below; `\"` and `$${` are text; no line breaks |
 | `TEMPLATE_INTERP` | `${`                                  | Inside a string                                                         |
 | `TEMPLATE_END`    | `}`                                   | Closes a `${`                                                           |
 | `CQUOTE`          | `"`                                   | Closes a string                                                         |
@@ -33,9 +33,11 @@ Whitespace and comments are skipped. A comment runs from `#` or
 
 Inside quotes the lexer reads text until `"` or `${`. A `${` reads tokens as outside
 quotes until its `}`: a quote there opens a string of its own, so `"${var.tags["a.b"]}"`
-reads a key, and a comment there is refused. A string still open at the end of the file
-is refused where it opens; when a `${` is open too, the first open `${` is named, since
-a `}` left out makes the quotes after it pair up to the end. A heredoc is read the same
+reads a key, and a comment there is refused. A string still open at the end of its line
+is refused where it opens; write `\n` for a line break, or use a heredoc. When a `${` is
+open too, the first open `${` is named: a `}` left out opens a string at the quote meant
+to close, and that looks the same as a key not closed on its line, so the message names
+both. Inside a `${` a line break is whitespace. A heredoc is read the same
 way, a line at a time, until its closing line; one still open at the end is refused where
 it opens.
 
@@ -239,8 +241,8 @@ A `Reference` holds its parts in order, a key as a string and an index as a numb
 
 A parse error is a `ConfigError` with the message and the position where it went wrong:
 the token the parser stopped on, or the escape inside a string it cannot read. The lexer
-throws the same for a character it does not know, and for a string or a `${` never
-closed.
+throws the same for a character it does not know, a string not closed on its line, and a
+`${` or a heredoc never closed.
 
 ## Not in the language
 

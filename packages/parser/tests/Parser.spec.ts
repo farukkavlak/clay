@@ -11,6 +11,8 @@ function makeParser(input: string, file: string = CONFIG_FILE): Parser {
 }
 
 const at = (line: number, column: number) => ({ file: CONFIG_FILE, line, column });
+const STRING_IN_OPEN = "This '${' is never closed with '}', or a string inside it is not closed on its line";
+const LINE_ENDED = String.raw`This string is never closed on its line; write \n for a line break inside it, or use a heredoc`;
 
 /** The error a bad configuration throws, so a test can pin both what it says and where it points. */
 function errorOf(input: string, file: string = CONFIG_FILE): ConfigError {
@@ -349,9 +351,13 @@ describe('Clay Parser', () => {
     });
 
     it.each([
-      ['a string never closed', 'resource "t" "n" { v = "abc }', 'This string is never closed', at(1, 24)],
+      ['a string never closed', 'resource "t" "n" { v = "abc }', LINE_ENDED, at(1, 24)],
       ['a string that ends inside an interpolation', 'resource "t" "n" { v = "a ${var.x', "This '${' is never closed with '}'", at(1, 27)],
-      ['a string that ends on a backslash at the end of the file', 'resource "t" "n" { v = "abc\\', 'This string is never closed', at(1, 24)],
+      ['a string that ends on a backslash at the end of the file', 'resource "t" "n" { v = "abc\\', LINE_ENDED, at(1, 24)],
+      ['a string over two lines', 'resource "t" "n" { v = "a\nb" }', LINE_ENDED, at(1, 24)],
+      ['a string over two lines that end in a carriage return', 'resource "t" "n" { v = "a\r\nb" }', LINE_ENDED, at(1, 24)],
+      ['a string with a backslash at the end of its line', 'resource "t" "n" { v = "a\\\nb" }', LINE_ENDED, at(1, 24)],
+      ['a string whose quote is left out, not the quotes on later lines', 'resource "t" "n" { v = "abc }\nresource "t" "m" { w = "b" }', LINE_ENDED, at(1, 24)],
     ])('refuses %s where it opens', (_, input, message, position) => {
       const error = errorOf(input);
 
@@ -377,8 +383,7 @@ describe('Clay Parser', () => {
 
     it.each([
       ['an escape the language does not know', String.raw`"a\qb"`, String.raw`Unknown escape "\q"`, at(1, 26)],
-      ['a backslash at the end of a line', '"a\\\nb"', 'A backslash ends the line;', at(1, 26)],
-      ['a backslash at the end of a line that ends in a carriage return', '"a\\\r\nb"', 'A backslash ends the line;', at(1, 26)],
+      ['a backslash before a character that does not print', '"a\\\rb"', 'Unknown escape: a backslash before U+000D;', at(1, 26)],
       ['a backslash before a character JavaScript writes in two', String.raw`"a\😀"`, String.raw`Unknown escape "\😀"`, at(1, 26)],
       ['a character with too few hex digits', String.raw`"\u12"`, String.raw`"\u12" is not a character`, at(1, 25)],
       ['a character with a digit that is not hex', String.raw`"\u00zz"`, String.raw`"\u00zz" is not a character`, at(1, 25)],
@@ -403,8 +408,9 @@ describe('Clay Parser', () => {
       expect(valueOf('"${ var.x }"')).toEqual({ type: 'Template', value: [reference(['var', 'x'], 28)], position: at(1, 24) });
     });
 
-    it('places a reference on the line it was written on, in a string over two lines', () => {
-      expect(valueOf('"a\n  ${local_file.f.id}"')).toEqual({ type: 'Template', value: ['a\n  ', reference(['local_file', 'f', 'id'], 5, 2)], position: at(1, 24) });
+    // Inside `${` is code, where a line break is whitespace.
+    it('reads an interpolation over two lines, placing its reference on the line it was written on', () => {
+      expect(valueOf('"a ${\n  local_file.f.id}"')).toEqual({ type: 'Template', value: ['a ', reference(['local_file', 'f', 'id'], 3, 2)], position: at(1, 24) });
     });
 
     it('keeps a string with no interpolation a string', () => {
@@ -450,15 +456,17 @@ describe('Clay Parser', () => {
       expect(error.position).toEqual(position);
     });
 
-    // A quote left where a brace belongs opens a string; the quotes after it pair up to the end, so the place to name is a `${`.
+    // A quote left where a brace belongs opens a string, as a key's quote does, so whether the brace or the string is at fault cannot be told.
     it.each([
-      ['not the quotes on later lines', 'resource "t" "n" { v = "a ${var.x" }\nresource "t" "m" { w = "b" }', at(1, 27)],
-      ['not the quote of a key never closed', 'resource "t" "n" { v = "${var.m["a} }', at(1, 25)],
-      ['the first of two still open', 'resource "t" "n" { v = "${var.m["${var.k', at(1, 25)],
-    ])('names the interpolation never closed, %s', (_, input, position) => {
+      ['a quote where its brace belongs, not the quote', 'resource "t" "n" { v = "a ${var.x" }\nresource "t" "m" { w = "b" }', STRING_IN_OPEN, at(1, 27)],
+      ['a key over two lines, not the key', 'resource "t" "n" { v = "${var.m["a\nb"]}" }', STRING_IN_OPEN, at(1, 25)],
+      ['a key over two lines in a heredoc, not the key', 'resource "t" "n" { v = <<EOT\nx ${var.m["a\nb"]}\nEOT\n}', STRING_IN_OPEN, at(2, 3)],
+      ['a key never closed, not the key', 'resource "t" "n" { v = "${var.m["a} }', STRING_IN_OPEN, at(1, 25)],
+      ['the first of two still open', 'resource "t" "n" { v = "${var.m["${var.k', "This '${' is never closed with '}'", at(1, 25)],
+    ])('names the interpolation for %s', (_, input, message, position) => {
       const error = errorOf(input);
 
-      expect(error.message).toBe("This '${' is never closed with '}'");
+      expect(error.message).toBe(message);
       expect(error.position).toEqual(position);
     });
 

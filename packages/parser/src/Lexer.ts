@@ -28,7 +28,8 @@ export class Lexer {
   private skip = /\s+|#[^\n]*|\/\/[^\n]*/y;
 
   // A backslash takes the character after it along, so `\"` does not end the string, and `$${` is text; the parser reads what they mean.
-  private literal = /(?:[^"\\$]|\\[\s\S]|\$\$\{|\$(?!\{))+/y;
+  // A line break ends the match: a quoted string is closed on its line.
+  private literal = /(?:[^"\\$\n]|\\[^\n]|\$\$\{|\$(?!\{))+/y;
 
   // A heredoc's text is taken a line at a time, so each line can be checked for the closing name.
   private heredocText = /(?:[^\n$]|\$\$\{|\$(?!\{))*\n?/y;
@@ -76,7 +77,7 @@ export class Lexer {
   }
 
   private nextInMode(mode: Mode | undefined): Token | undefined {
-    if (mode?.kind === 'string') return this.stringToken();
+    if (mode?.kind === 'string') return this.stringToken(mode);
     if (mode?.kind === 'heredoc') return this.heredocToken(mode);
 
     return this.codeToken();
@@ -115,7 +116,7 @@ export class Lexer {
   }
 
   /** Inside quotes: the closing quote, a `${`, or the text up to either. */
-  private stringToken(): Token {
+  private stringToken(mode: Mode): Token {
     const position = this.here();
 
     if (this.input.startsWith('"', this.cursor)) {
@@ -126,8 +127,10 @@ export class Lexer {
 
     if (this.input.startsWith('${', this.cursor)) return this.openInterpolation(position);
 
-    // Only a backslash that ends the input matches nothing; it is text, and the string is then never closed.
-    const text = this.matchHere(this.literal) ?? this.input.slice(this.cursor);
+    // Nothing matches at a line break, or at a backslash before one or at the end of the input.
+    const text = this.matchHere(this.literal);
+    if (text === undefined) throw this.neverClosed(mode);
+
     this.advance(text);
     return { type: TokenType.QuotedLit, value: text, position };
   }
@@ -170,17 +173,22 @@ export class Lexer {
     return { type: TokenType.StringLit, value: text, position };
   }
 
-  /** A `}` left out pairs the quotes after it up to the end, so the first open `${` is named. */
   private checkClosed(): void {
-    const open = this.modes.find((mode) => mode.kind === 'interpolation') ?? this.mode();
-    if (open) throw this.neverClosed(open);
+    const innermost = this.mode();
+    if (innermost) throw this.neverClosed(innermost);
   }
 
-  private neverClosed(mode: Mode): ConfigError {
-    if (mode.kind === 'heredoc') return new ConfigError(`This heredoc is never closed with a line holding only ${mode.name}`, mode.opened);
+  /** A `}` left out opens a string at the quote meant to close, so the first open `${` is named. */
+  private neverClosed(innermost: Mode): ConfigError {
+    const interpolation = this.modes.find((mode) => mode.kind === 'interpolation');
+    if (interpolation) {
+      const message = innermost.kind === 'string' ? "This '${' is never closed with '}', or a string inside it is not closed on its line" : "This '${' is never closed with '}'";
+      return new ConfigError(message, interpolation.opened);
+    }
 
-    const message = mode.kind === 'string' ? 'This string is never closed' : "This '${' is never closed with '}'";
-    return new ConfigError(message, mode.opened);
+    if (innermost.kind === 'heredoc') return new ConfigError(`This heredoc is never closed with a line holding only ${innermost.name}`, innermost.opened);
+
+    return new ConfigError(String.raw`This string is never closed on its line; write \n for a line break inside it, or use a heredoc`, innermost.opened);
   }
 
   private mode(): Mode | undefined {

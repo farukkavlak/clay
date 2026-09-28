@@ -29,17 +29,21 @@ function character(hex: string, digits: number): string | undefined {
   return String.fromCodePoint(code);
 }
 
+// A character that does not print would garble the message it is shown in, so it is named by number.
+function unknown(letter: string): string {
+  if (!/\p{C}/u.test(letter)) return `Unknown escape "\\${letter}"`;
+
+  const code = (letter.codePointAt(0) as number).toString(16).toUpperCase().padStart(4, '0');
+  return `Unknown escape: a backslash before U+${code}`;
+}
+
 function escapeAt(raw: string, cursor: number, position: Position): Step {
   const letter = String.fromCodePoint(raw.codePointAt(cursor + 1) as number);
   const plain = ESCAPES.get(letter);
   if (plain !== undefined) return { text: plain, raw: `\\${letter}` };
 
   const digits = HEX_DIGITS.get(letter);
-  if (digits === undefined) {
-    // A line break inside quotes would split the message it is shown in.
-    const problem = /[\n\r]/.test(letter) ? 'A backslash ends the line' : `Unknown escape "\\${letter}"`;
-    throw new ConfigError(`${problem}; a string knows ${KNOWN}`, position);
-  }
+  if (digits === undefined) throw new ConfigError(`${unknown(letter)}; a string knows ${KNOWN}`, position);
 
   const written = raw.slice(cursor, cursor + 2 + digits);
   const text = character(written.slice(2), digits);
