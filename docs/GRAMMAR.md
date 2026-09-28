@@ -5,24 +5,32 @@ in a directory; a module is another directory with its own `main.clay`.
 
 ## Tokens
 
-| Token        | Pattern                               | Notes                                                                |
-| ------------ | ------------------------------------- | -------------------------------------------------------------------- |
-| `IDENTIFIER` | `[A-Za-z_][A-Za-z0-9_-]*`             | Block kinds, attribute names, reference parts; not `true` or `false` |
-| `STRING`     | `"([^"\\]\|\\[\s\S])*"`               | Escapes below; may span lines                                        |
-| `NUMBER`     | `[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?` | No sign; `007` is `7`; at most 1000 places either side of the point  |
-| `MINUS`      | `-`                                   | Only before a number                                                 |
-| `BOOLEAN`    | `true`, `false`                       |                                                                      |
-| `LBRACE`     | `{`                                   |                                                                      |
-| `RBRACE`     | `}`                                   |                                                                      |
-| `LBRACKET`   | `[`                                   |                                                                      |
-| `RBRACKET`   | `]`                                   |                                                                      |
-| `COMMA`      | `,`                                   |                                                                      |
-| `ASSIGN`     | `=`                                   |                                                                      |
-| `DOT`        | `.`                                   |                                                                      |
-| `EOF`        |                                       | Ends every token stream                                              |
+| Token             | Pattern                               | Notes                                                                   |
+| ----------------- | ------------------------------------- | ----------------------------------------------------------------------- |
+| `IDENTIFIER`      | `[A-Za-z_][A-Za-z0-9_-]*`             | Block kinds, attribute names, reference parts; not `true` or `false`    |
+| `OQUOTE`          | `"`                                   | Opens a string                                                          |
+| `QUOTED_LIT`      | Text up to `"` or `${`                | Escapes as written, read below; `\"` and `$${` are text; may span lines |
+| `TEMPLATE_INTERP` | `${`                                  | Inside a string                                                         |
+| `TEMPLATE_END`    | `}`                                   | Closes a `${`                                                           |
+| `CQUOTE`          | `"`                                   | Closes a string                                                         |
+| `NUMBER`          | `[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?` | No sign; `007` is `7`; at most 1000 places either side of the point     |
+| `MINUS`           | `-`                                   | Only before a number                                                    |
+| `BOOLEAN`         | `true`, `false`                       |                                                                         |
+| `LBRACE`          | `{`                                   |                                                                         |
+| `RBRACE`          | `}`                                   |                                                                         |
+| `LBRACKET`        | `[`                                   |                                                                         |
+| `RBRACKET`        | `]`                                   |                                                                         |
+| `COMMA`           | `,`                                   |                                                                         |
+| `ASSIGN`          | `=`                                   |                                                                         |
+| `DOT`             | `.`                                   |                                                                         |
+| `EOF`             |                                       | Ends every token stream                                                 |
 
 Whitespace and comments are skipped. A comment runs from `#` or
 `//` to the end of the line. Every token carries the file, line and column it starts at.
+
+Inside quotes the lexer reads text until `"` or `${`. A `${` reads tokens as outside
+quotes until its `}`, and a comment or a quote there is refused. A string or a `${`
+still open at the end of the file is refused where it opens.
 
 There are no keywords. `resource`, `data`, `variable`, `output` and `module` start a
 block only at the top level; anywhere else they are ordinary identifiers, so
@@ -64,10 +72,11 @@ What the engine reads from each:
 ## Values
 
 ```
-value   = STRING | [ "-" ] NUMBER | BOOLEAN | reference | list | map
+value   = string | [ "-" ] NUMBER | BOOLEAN | reference | list | map
+string  = OQUOTE { QUOTED_LIT | TEMPLATE_INTERP reference TEMPLATE_END } CQUOTE
 list    = "[" [ value { "," value } [ "," ] ] "]"
 map     = "{" { key "=" value [ "," ] } "}"
-key     = IDENTIFIER | STRING
+key     = IDENTIFIER | string
 ```
 
 A string reads `\n`, `\r`, `\t`, `\"` and `\\`, a character by number as `\uNNNN` or
@@ -86,7 +95,7 @@ name either.
 ### References
 
 ```
-reference = IDENTIFIER { "." IDENTIFIER | "[" ( NUMBER | STRING ) "]" }
+reference = IDENTIFIER { "." IDENTIFIER | "[" ( NUMBER | string ) "]" }
 ```
 
 A bare reference is a value on its own: `path = var.dir`. Inside a string it is written
@@ -199,8 +208,9 @@ A `Reference` holds its parts in order, a key as a string and an index as a numb
 ## Errors
 
 A parse error is a `ConfigError` with the message and the position where it went wrong:
-the token the parser stopped on, or the place inside a string a `${...}` breaks. The lexer
-throws the same for a character it does not know.
+the token the parser stopped on, or the escape inside a string it cannot read. The lexer
+throws the same for a character it does not know, and for a string or a `${` never
+closed.
 
 ## Not in the language
 

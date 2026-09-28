@@ -1,10 +1,9 @@
 import { ExactNumber, NumberError } from '@clay/contracts';
-import { AttributeValue, DataBlock, ModuleBlock, OutputBlock, Program, ReferenceNode, ResourceBlock, spell, Statement, VariableBlock } from './ast';
+import { AttributeValue, DataBlock, ModuleBlock, OutputBlock, Program, ReferenceNode, ResourceBlock, spell, Statement, TemplatePart, VariableBlock } from './ast';
 import { ConfigError } from './ConfigError';
-import { Lexer } from './Lexer';
-import { advanced, Position } from './Position';
+import { readEscapes } from './escapes';
+import { Position } from './Position';
 import { NAME, Step } from './reference';
-import { Piece, splitTemplate } from './template';
 import { Token, TokenType } from './tokens';
 
 /** Words a reference already spells: `var.x`, `data.t.n`, `module.m`. */
@@ -153,7 +152,7 @@ export class Parser {
   private parseValue(): AttributeValue {
     const position = this.peek().position;
 
-    if (this.matchToken(TokenType.String)) return this.parseString(this.previous());
+    if (this.matchToken(TokenType.OQuote)) return this.parseString(position);
     if (this.matchToken(TokenType.Number)) return { type: 'Number', value: this.exactNumber(this.previous().value, position), position };
     if (this.matchToken(TokenType.Minus)) return this.parseNegative(position);
     if (this.matchToken(TokenType.Boolean)) return { type: 'Boolean', value: this.previous().value === 'true', position };
@@ -173,34 +172,36 @@ export class Parser {
   }
 
   /** A string with `${ … }` in it is a template: its text, and the references read into it, each where it was written. */
-  private parseString(token: Token): AttributeValue {
-    const pieces = this.piecesOf(token);
-    const texts = pieces.filter((piece) => piece.kind === 'text');
-    if (texts.length === pieces.length) return { type: 'String', value: texts.map((piece) => piece.text).join(''), position: token.position };
+  private parseString(position: Position): AttributeValue {
+    const parts: TemplatePart[] = [];
 
-    return { type: 'Template', value: pieces.map((piece) => (piece.kind === 'text' ? piece.text : this.interpolation(piece))), position: token.position };
+    while (!this.matchToken(TokenType.CQuote))
+      if (this.matchToken(TokenType.QuotedLit)) parts.push(readEscapes(this.previous().value, this.previous().position));
+      else parts.push(this.parseInterpolation());
+
+    if (parts.every((part) => typeof part === 'string')) return { type: 'String', value: parts.join(''), position };
+
+    return { type: 'Template', value: parts, position };
   }
 
-  private piecesOf(token: Token): Piece[] {
-    return splitTemplate(token.value, advanced(token.position, '"'));
-  }
-
-  private interpolation(piece: Piece & { kind: 'interpolation' }): ReferenceNode {
-    // The lexer would skip a comment, and the reference would read as if the comment were not there.
-    const comment = /#|\/\//.exec(piece.text);
-    if (comment) throw new ConfigError("A comment cannot sit inside '${'", advanced(piece.position, piece.text.slice(0, comment.index)));
-
-    return new Parser(new Lexer(piece.text, piece.position.file, piece.position).tokenize()).parseInterpolation();
-  }
-
-  /** What one `${ … }` holds, lexed on its own: a reference and nothing else. */
+  /** What one `${ … }` holds: a reference and nothing else. The lexer has put `${` next. */
   private parseInterpolation(): ReferenceNode {
+    this.advance();
     if (!this.check(TokenType.Identifier)) return this.error("Expect a reference inside '${'.");
 
     const reference = this.parseReference(this.peek().position);
-    if (!this.isAtEnd()) return this.error("Expect '}' after the reference.");
+    this.consume(TokenType.TemplateEnd, "Expect '}' after the reference.");
 
     return reference;
+  }
+
+  /** The text of a string that has no `${ … }` in it, as written; `quote` is the one that opened it. The lexer puts `"` after it. */
+  private plainText(quote: Token, what: string): Token {
+    const text = this.matchToken(TokenType.QuotedLit) ? this.previous() : { type: TokenType.QuotedLit, value: '', position: this.peek().position };
+    if (this.check(TokenType.TemplateInterp)) throw new ConfigError(`A ${what} is plain text; it cannot hold an interpolation`, quote.position);
+
+    this.advance();
+    return text;
   }
 
   private parseList(position: Position): AttributeValue {
@@ -216,7 +217,7 @@ export class Parser {
   private parseMap(position: Position): AttributeValue {
     const map: Record<string, AttributeValue> = {};
     while (!this.check(TokenType.RBrace) && !this.isAtEnd()) {
-      const key = this.matchToken(TokenType.String) ? this.stringKey(this.previous()) : this.consume(TokenType.Identifier, 'Expect key in map.');
+      const key = this.matchToken(TokenType.OQuote) ? this.stringKey(this.previous()) : this.consume(TokenType.Identifier, 'Expect key in map.');
       this.checkKey(map, key);
 
       this.consume(TokenType.Assign, "Expect '=' after key in map.");
@@ -228,11 +229,10 @@ export class Parser {
   }
 
   /** A quoted key is the text its escapes stand for, so one key spelled two ways is still one key. */
-  private stringKey(token: Token): Token {
-    const pieces = this.piecesOf(token);
-    if (pieces.some((piece) => piece.kind === 'interpolation')) throw new ConfigError('A map key is plain text; it cannot hold an interpolation', token.position);
+  private stringKey(quote: Token): Token {
+    const text = this.plainText(quote, 'map key');
 
-    return { ...token, value: pieces.map((piece) => piece.text).join('') };
+    return { ...quote, value: readEscapes(text.value, text.position) };
   }
 
   // A second value under one name would replace the first in silence, and `__proto__` would set a prototype, not a key.
@@ -254,7 +254,7 @@ export class Parser {
   private parseBracket(): Step {
     let step: Step;
 
-    if (this.matchToken(TokenType.String)) step = this.stringKey(this.previous()).value;
+    if (this.matchToken(TokenType.OQuote)) step = this.stringKey(this.previous()).value;
     else if (this.check(TokenType.Number) || this.check(TokenType.Minus)) step = this.index(this.advance());
     else return this.error("Expect a number or a string inside '['.");
 
@@ -282,7 +282,8 @@ export class Parser {
 
   /** A name travels into an address, which reads "." as a separator, so a name is an identifier, as a reference to it has to be. */
   private consumeName(message: string, word: 'name' | 'type' = 'name'): Token {
-    const token = this.consume(TokenType.String, message);
+    const quote = this.consume(TokenType.OQuote, message);
+    const token = { ...quote, value: this.plainText(quote, 'label').value };
     if (!NAME.test(token.value) || token.value === 'true' || token.value === 'false')
       throw new ConfigError(`Invalid ${word} "${token.value}": a ${word} starts with a letter or underscore, then letters, digits, underscores and dashes.`, token.position);
 

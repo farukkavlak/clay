@@ -348,6 +348,25 @@ describe('Clay Parser', () => {
       expect(error.position).toEqual(at(1, 35));
     });
 
+    it.each([
+      ['a string never closed', 'resource "t" "n" { v = "abc }', 'This string is never closed', at(1, 24)],
+      ['a string that ends inside an interpolation', 'resource "t" "n" { v = "a ${var.x', "This '${' is never closed with '}'", at(1, 27)],
+      ['a string that ends on a backslash at the end of the file', 'resource "t" "n" { v = "abc\\', 'This string is never closed', at(1, 24)],
+    ])('refuses %s where it opens', (_, input, message, position) => {
+      const error = errorOf(input);
+
+      expect(error.message).toBe(message);
+      expect(error.position).toEqual(position);
+    });
+
+    // A label travels into an address, which reads nothing into a name.
+    it('refuses an interpolation in a block label', () => {
+      const error = errorOf('resource "local_file" "a${var.x}" {}');
+
+      expect(error.message).toBe('A label is plain text; it cannot hold an interpolation');
+      expect(error.position).toEqual(at(1, 23));
+    });
+
     // A label travels into an address, which has no escapes, so one is refused rather than read.
     it('refuses an escape in a block label', () => {
       const error = errorOf(String.raw`resource "local_file" "a\"b" {}`);
@@ -365,6 +384,8 @@ describe('Clay Parser', () => {
       ['a character with a digit that is not hex', String.raw`"\u00zz"`, String.raw`"\u00zz" is not a character`, at(1, 25)],
       ['half of a character JavaScript writes in two', String.raw`"\uD800"`, String.raw`"\uD800" is not a character`, at(1, 25)],
       ['a character past the last one Unicode has', String.raw`"\U00110000"`, String.raw`"\U00110000" is not a character`, at(1, 25)],
+      ['an escape after an interpolation', '"${var.x}\\q"', String.raw`Unknown escape "\q"`, at(1, 33)],
+      ['an escape in a quoted map key', String.raw`{ "a\q" = 1 }`, String.raw`Unknown escape "\q"`, at(1, 28)],
     ])('refuses %s where it is written', (_, written, message, position) => {
       const error = errorOf(`resource "t" "n" { v = ${written} }`);
 
