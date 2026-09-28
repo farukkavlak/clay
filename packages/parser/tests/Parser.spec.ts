@@ -671,6 +671,7 @@ describe('Clay Parser', () => {
       ['var', 'resource "var" "a" {}', at(1, 10)],
       ['data', 'data "data" "a" {}', at(1, 6)],
       ['count', 'resource "count" "a" {}', at(1, 10)],
+      ['each', 'resource "each" "a" {}', at(1, 10)],
     ])('refuses "%s" as a type, which a reference reads as something else', (word, input, position) => {
       const error = errorOf(input);
 
@@ -696,10 +697,10 @@ describe('Clay Parser', () => {
       expect(error.position).toEqual(at(1, 10));
     });
 
-    it('refuses a variable named "count", which a module call keeps for itself', () => {
-      const error = errorOf('variable "count" { default = 2 }');
+    it.each(['count', 'for_each'])('refuses a variable named "%s", which a module call keeps for itself', (name) => {
+      const error = errorOf(`variable "${name}" { default = 2 }`);
 
-      expect(error.message).toBe('"count" cannot be a variable name: a module call keeps it for itself.');
+      expect(error.message).toBe(`"${name}" cannot be a variable name: a module call keeps it for itself.`);
       expect(error.position).toEqual(at(1, 10));
     });
 
@@ -768,6 +769,46 @@ describe('Clay Parser', () => {
       ['a data source', 'data "local_file" "a" { count = 2 }', 'data "local_file" "a" cannot have count yet', at(1, 33)],
       ['a module', 'module "m" { source = "./m" count = 2 }', 'module "m" cannot have count yet', at(1, 37)],
     ])('refuses count on %s, where it is written', (_, input, message, position) => {
+      const error = errorOf(input);
+
+      expect(error.message).toBe(message);
+      expect(error.position).toEqual(position);
+    });
+  });
+
+  describe('For each', () => {
+    it('keeps for_each apart from the attributes a provider is sent', () => {
+      const [block] = makeParser('resource "local_file" "a" { for_each = ["x"] path = "a" }').parse() as ResourceBlock[];
+
+      expect(block.forEach).toEqual({ type: 'List', value: [{ type: 'String', value: 'x', position: at(1, 41) }], position: at(1, 40) });
+      expect(block.attributes).toEqual({ path: { type: 'String', value: 'a', position: at(1, 53) } });
+    });
+
+    it('leaves for_each out of a resource that has none', () => {
+      const [block] = makeParser('resource "local_file" "a" { path = "a" }').parse() as ResourceBlock[];
+
+      expect(block).not.toHaveProperty('forEach');
+    });
+
+    it('reads each.key and each.value as references', () => {
+      expect(valueOf('"${each.key}-${each.value}"')).toEqual({
+        type: 'Template',
+        value: [reference(['each', 'key'], 27), '-', reference(['each', 'value'], 39)],
+        position: at(1, 24),
+      });
+    });
+
+    it('refuses a resource with both count and for_each, at for_each', () => {
+      const error = errorOf('resource "local_file" "a" { count = 2 for_each = ["x"] }');
+
+      expect(error.message).toBe('resource "local_file" "a" has count or for_each, not both');
+      expect(error.position).toEqual(at(1, 50));
+    });
+
+    it.each([
+      ['a data source', 'data "local_file" "a" { for_each = ["x"] }', 'data "local_file" "a" cannot have for_each yet', at(1, 36)],
+      ['a module', 'module "m" { source = "./m" for_each = ["x"] }', 'module "m" cannot have for_each yet', at(1, 40)],
+    ])('refuses for_each on %s, where it is written', (_, input, message, position) => {
       const error = errorOf(input);
 
       expect(error.message).toBe(message);

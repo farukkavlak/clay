@@ -1,7 +1,7 @@
 import { Address } from '@clay/contracts';
 import { ParsedReference, parseReference, Position, ResourceReference, Step } from '@clay/parser';
 
-import { Instances } from '../Instances';
+import { Instances, repetitionOfKey } from '../Instances';
 import { childScope, outputKey, scopeOf, variableKey } from '../keys';
 
 /** Every AST node carries one, but this walks plain objects too, so a value of another shape is no position. */
@@ -21,6 +21,7 @@ export type Reference = (
   | { kind: 'variable'; key: string; name: string }
   | { kind: 'output'; key: string; scope: string; module: string; name: string }
   | { kind: 'count' }
+  | { kind: 'each'; name: 'key' | 'value' }
 ) & { position?: Position };
 
 export class ReferenceScanner {
@@ -62,6 +63,9 @@ export class ReferenceScanner {
       case 'count': {
         return { kind: 'count' };
       }
+      case 'each': {
+        return { kind: 'each', name: reference.name };
+      }
       case 'variable': {
         return { kind: 'variable', key: variableKey(scope, reference.name), name: reference.name };
       }
@@ -75,11 +79,11 @@ export class ReferenceScanner {
     }
   }
 
-  /** The block, and the instance an index names on a block with count; whether the index is right is the graph's to say. */
+  /** The block, and the instance a first step names on a block with count or for_each; whether the step is right is the graph's to say. */
   private addressesOf(reference: ResourceReference, context: Address): { key: string; address: string } {
     const block = new Address(context.modulePath, reference.type, reference.name);
     const [first] = reference.path;
-    const key = this.instances.isCounted(block.toString()) && typeof first === 'number' ? first : undefined;
+    const key = this.instances.repetitionOf(block.toString()) === repetitionOfKey(first) ? first : undefined;
 
     return { key: block.toString(), address: new Address(block.modulePath, block.resourceType, block.name, key).toString() };
   }

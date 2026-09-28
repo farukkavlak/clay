@@ -27,6 +27,8 @@ describe('a reference read into a value', () => {
     ['module.app.url', { kind: 'module', module: 'app', output: 'url', path: [] }],
     ['local_file.a.content', { kind: 'resource', type: 'local_file', name: 'a', path: ['content'] }],
     ['count.index', { kind: 'count', path: [] }],
+    ['each.key', { kind: 'each', name: 'key', path: [] }],
+    ['each.value.port', { kind: 'each', name: 'value', path: ['port'] }],
     ['var.tags.env', { kind: 'variable', name: 'tags', path: ['env'] }],
     ['data.local_file.f.tags.env', { kind: 'data', type: 'local_file', name: 'f', attribute: 'tags', path: ['env'] }],
     ['module.app.tags.env', { kind: 'module', module: 'app', output: 'tags', path: ['env'] }],
@@ -74,6 +76,9 @@ describe('a reference read into a value', () => {
     [['count'], 'Reference "count" names nothing: count.index is the index of an instance'],
     [['count', 'id'], 'Reference "count.id" names nothing: count.index is the index of an instance'],
     [['count', 0], 'Reference "count[0]" has an index where it needs a name'],
+    [['each'], 'Reference "each" names nothing: each.key and each.value are the key and value of an instance'],
+    [['each', 'index'], 'Reference "each.index" names nothing: each.key and each.value are the key and value of an instance'],
+    [['each', 0], 'Reference "each[0]" has an index where it needs a name'],
     [[0, 'a', 'id'], 'Reference "[0].a.id" has an index where it needs a name'],
   ])('refuses %j', (parts, message) => {
     const error = errorOf(parts);

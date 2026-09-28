@@ -7,8 +7,11 @@ import { Position } from './Position';
 import { NAME, Step } from './reference';
 import { Token, TokenType } from './tokens';
 
-/** Words a reference already spells: `var.x`, `data.t.n`, `module.m`, `count.index`. */
-const RESERVED_TYPES = new Set(['module', 'var', 'data', 'count']);
+/** Words a reference already spells: `var.x`, `data.t.n`, `module.m`, `count.index`, `each.key`. */
+const RESERVED_TYPES = new Set(['module', 'var', 'data', 'count', 'each']);
+
+/** What makes a block many instances; a module call keeps these for itself, so they name no module input. */
+const INSTANCE_ARGUMENTS = ['count', 'for_each'];
 
 export class Parser {
   private tokens: Token[];
@@ -57,13 +60,15 @@ export class Parser {
     const typeToken = this.consumeType("Expect resource type string after 'resource'.");
     const nameToken = this.consumeName('Expect resource name string after resource type.');
 
-    const { count, ...attributes } = this.parseAttributes('resource');
+    const { count, for_each: forEach, ...attributes } = this.parseAttributes('resource');
+    if (count && forEach) throw new ConfigError(`resource "${typeToken.value}" "${nameToken.value}" has count or for_each, not both`, forEach.position);
 
     return {
       type: 'Resource',
       resourceType: typeToken.value,
       name: nameToken.value,
       ...(count && { count }),
+      ...(forEach && { forEach }),
       attributes,
       position,
     };
@@ -74,7 +79,7 @@ export class Parser {
     const nameToken = this.consumeName('Expect data source name string after data source type.');
 
     const attributes = this.parseAttributes('data source');
-    this.refuseCount(attributes, `data "${typeToken.value}" "${nameToken.value}"`);
+    this.refuseInstances(attributes, `data "${typeToken.value}" "${nameToken.value}"`);
 
     return {
       type: 'Data',
@@ -88,7 +93,8 @@ export class Parser {
   private parseVariable(position: Position): VariableBlock {
     const nameToken = this.consumeName("Expect variable name string after 'variable'.");
     if (nameToken.value === 'source') throw new ConfigError('"source" cannot be a variable name: a module call reads it as the module\'s path.', nameToken.position);
-    if (nameToken.value === 'count') throw new ConfigError('"count" cannot be a variable name: a module call keeps it for itself.', nameToken.position);
+    if (INSTANCE_ARGUMENTS.includes(nameToken.value))
+      throw new ConfigError(`"${nameToken.value}" cannot be a variable name: a module call keeps it for itself.`, nameToken.position);
 
     const attributes = this.parseAttributes('variable');
 
@@ -128,7 +134,7 @@ export class Parser {
     const nameToken = this.consumeName("Expect module name string after 'module'.");
 
     const attributes = this.parseAttributes('module');
-    this.refuseCount(attributes, `module "${nameToken.value}"`);
+    this.refuseInstances(attributes, `module "${nameToken.value}"`);
 
     return {
       type: 'Module',
@@ -138,9 +144,9 @@ export class Parser {
     };
   }
 
-  /** Only a resource makes instances so far; anywhere else `count` would be taken for an input. */
-  private refuseCount(attributes: Record<string, AttributeValue>, block: string): void {
-    if (attributes.count) throw new ConfigError(`${block} cannot have count yet`, attributes.count.position);
+  /** Only a resource makes instances so far; anywhere else `count` or `for_each` would be taken for an input. */
+  private refuseInstances(attributes: Record<string, AttributeValue>, block: string): void {
+    for (const name of INSTANCE_ARGUMENTS) if (Object.hasOwn(attributes, name)) throw new ConfigError(`${block} cannot have ${name} yet`, attributes[name].position);
   }
 
   /** The `{ name = value ... }` body every block but output has. */

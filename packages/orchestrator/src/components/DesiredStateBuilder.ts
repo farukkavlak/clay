@@ -4,9 +4,10 @@ import { AttributeValue, ResourceBlock, spell } from '@clay/parser';
 import { DesiredResource, hasChanges, isUnknown, UNKNOWN } from '@clay/planner';
 import { moveResource } from '@clay/state';
 
+import { eachFrom } from '../forEach';
 import { Instances } from '../Instances';
 import { tryAt } from '../place';
-import { checkInRange } from '../resolvers/instance';
+import { checkHasKey, checkInRange } from '../resolvers/instance';
 import { kindOf } from '../resolvers/readPath';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { Reference, ReferenceScanner } from '../resolvers/ReferenceScanner';
@@ -64,22 +65,23 @@ export class DesiredStateBuilder {
     return { resources, outputs };
   }
 
-  /** One desired resource for each instance the block makes: one with no count, and one per index with it. */
+  /** One desired resource for each instance the block makes: one with neither count nor for_each, and one per index or key with either. */
   private planResource(key: string, loaded: LoadedResource, graph: Graph<GraphNode>, state: State, pending: Set<string>): DesiredResource[] {
     const { address, block } = loaded;
-    const count = block.count && this.readCount(block.count, block, address, state, pending);
     const dependencies = this.instancesOf(this.graphBuilder.resourceDependencies(graph, key));
 
-    if (count === undefined) return [this.planInstance(address, block, dependencies, state, pending)];
+    if (block.count) this.instances.setCount(key, this.readAt(block.count, block, address, state, pending, countFrom));
+    if (block.forEach) this.instances.setEach(key, this.readAt(block.forEach, block, address, state, pending, eachFrom));
 
-    this.instances.setCount(key, count);
-    return Array.from({ length: count }, (_, index) =>
-      this.planInstance(new Address(address.modulePath, address.resourceType, address.name, index), block, dependencies, state, pending)
-    );
+    const keys = this.instances.keysOf(key);
+    if (keys === undefined) return [this.planInstance(address, block, dependencies, state, pending)];
+
+    return keys.map((instance) => this.planInstance(new Address(address.modulePath, address.resourceType, address.name, instance), block, dependencies, state, pending));
   }
 
-  private readCount(value: AttributeValue, block: ResourceBlock, address: Address, state: State, pending: Set<string>): number {
-    return tryAt(value.position, spell(block), address, () => countFrom(this.resolveOrUnknown(value, state, address, pending)));
+  /** The count or for_each, read before any instance is, so it has no key. */
+  private readAt<T>(value: AttributeValue, block: ResourceBlock, address: Address, state: State, pending: Set<string>, read: (value: unknown) => T): T {
+    return tryAt(value.position, spell(block), address, () => read(this.resolveOrUnknown(value, state, address, pending)));
   }
 
   private planInstance(address: Address, block: ResourceBlock, dependencies: string[], state: State, pending: Set<string>): DesiredResource {
@@ -100,14 +102,14 @@ export class DesiredStateBuilder {
     return source.toString();
   }
 
-  /** The graph links blocks; state keeps what each instance read, so a delete runs after every instance of what it read from. Each block was planned before, so its count is known. */
+  /** The graph links blocks; state keeps what each instance read, so a delete runs after every instance of what it read from. Each block was planned before, so its keys are known. */
   private instancesOf(blocks: string[]): string[] {
     return blocks.flatMap((block) => {
-      const count = this.instances.countOf(block);
-      if (count === undefined) return [block];
+      const keys = this.instances.keysOf(block);
+      if (keys === undefined) return [block];
 
       const { modulePath, resourceType, name } = Address.parse(block);
-      return Array.from({ length: count }, (_, index) => new Address(modulePath, resourceType, name, index).toString());
+      return keys.map((key) => new Address(modulePath, resourceType, name, key).toString());
     });
   }
 
@@ -140,10 +142,10 @@ export class DesiredStateBuilder {
     return tryAt(node.position, node.declaration, node.context, () => this.resolveOrUnknown(node.value, state, node.context, pending));
   }
 
-  /** An index past a count is refused before anything is read, since a reference to a pending instance is never resolved. */
+  /** An index past a count, or a key for_each does not give, is refused before anything is read, since a reference to a pending instance is never resolved. */
   private resolveOrUnknown(value: unknown, state: State, context: Address, pending: Set<string>): unknown {
     for (const reference of this.scanner.referencesIn(value, context)) {
-      if (reference.kind === 'count') continue;
+      if (reference.kind === 'count' || reference.kind === 'each') continue;
       if (reference.kind === 'resource') this.checkIndex(reference);
       if (pending.has(reference.kind === 'resource' ? reference.address : reference.key)) return UNKNOWN;
     }
@@ -158,6 +160,9 @@ export class DesiredStateBuilder {
 
   private checkIndex({ key, reference, position }: Extract<Reference, { kind: 'resource' }>): void {
     const [first] = reference.path;
-    if (typeof first === 'number' && this.instances.isCounted(key)) checkInRange(reference, first, this.instances.countOf(key), position);
+    const repetition = this.instances.repetitionOf(key);
+
+    if (repetition === 'count' && typeof first === 'number') checkInRange(reference, first, this.instances.keysOf(key)?.length, position);
+    if (repetition === 'for_each' && typeof first === 'string') checkHasKey(reference, first, this.instances.keysOf(key), position);
   }
 }

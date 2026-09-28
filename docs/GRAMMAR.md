@@ -63,9 +63,9 @@ module "name" { attributes }
 
 A `type` and a `name` are written as strings, and each has to spell an `IDENTIFIER`, since
 an address joins them with `.` and a reference reads them back. A `type` cannot be `var`,
-`data`, `module` or `count`, the words a reference reads as something other than a type. A
-variable cannot be named `source`, since a module call reads that as the module's path,
-or `count`, which a module call keeps for itself.
+`data`, `module`, `count` or `each`, the words a reference reads as something other than
+a type. A variable cannot be named `source`, since a module call reads that as the
+module's path, or `count` or `for_each`, which a module call keeps for itself.
 
 `attributes` is zero or more `name = value` pairs, in any order, without separators, and
 no name twice.
@@ -75,13 +75,14 @@ What the engine reads from each:
 
 | Block      | Reads                                                                                                 |
 | ---------- | ----------------------------------------------------------------------------------------------------- |
-| `resource` | `count`, read by the engine; every other attribute goes to the provider                               |
+| `resource` | `count` or `for_each`, read by the engine; every other attribute goes to the provider                 |
 | `data`     | Every attribute goes to the provider's `read`                                                         |
 | `variable` | `default`, and nothing else; another attribute is refused where it is written                         |
 | `output`   | `value`                                                                                               |
 | `module`   | `source`, a literal string naming a directory relative to the file; every other attribute is an input |
 
-`count` on a data source or a module is refused where it is written.
+`count` or `for_each` on a data source or a module is refused where it is written, and so
+is a resource with both.
 
 ## Values
 
@@ -122,6 +123,7 @@ A bare reference is a value on its own: `path = var.dir`. Inside a string it is 
 | `data`     | An attribute a data source read                      | `data.local_file.f.content` |
 | `module`   | An output of a module called in the same file        | `module.app.url`            |
 | `count`    | The index of the instance being made                 | `count.index`               |
+| `each`     | The key of the instance being made, or its value     | `each.key`, `each.value`    |
 | anything   | An attribute of the resource with that type and name | `local_file.a.content`      |
 
 A resource's `id` is what the provider assigned on create.
@@ -158,6 +160,29 @@ Adding `count` to a resource that exists moves it to `type.name[0]`, and taking 
 off moves `type.name[0]` back to `type.name` and destroys the other instances. A move
 changes only where state keeps the resource; a plan shows it, and any change to the
 resource runs with it. With `count = 0` nothing takes its place, so it is destroyed.
+
+### For each
+
+A resource with `for_each` makes one instance for each key, addressed `type.name["key"]`.
+Over a map, the keys are the map's and each instance is given the value under its key.
+Over a list of strings, each string is a key and its own value. A string twice in the
+list is refused, and so is anything other than a map or a list of strings. Like a count,
+it is known when planning: a map with a value only an apply makes is refused as a whole.
+The instances are planned in the order of their keys. An empty map or list makes none, so
+any that exist are destroyed.
+
+Inside the block, `each.key` is the key of the instance being made and `each.value` its
+value, which a reference can read into: `each.value.port`. Anywhere else, and in
+`for_each` itself, they are refused where they are written.
+
+A reference names one instance by its key: `local_file.site["web"].content`. `.web` is
+the same step as `["web"]`, so `local_file.site.web.content` reads it too, and
+`local_file.site.content` reads the instance `content` and names no attribute. That, an
+index, and a key `for_each` does not give are refused where they are written.
+
+Adding `for_each` to a resource, or taking it off, moves nothing: no key stands for the
+resource the way `[0]` does for a count. `clay state mv 'type.name' 'type.name["key"]'`
+keeps it.
 
 ### Interpolation
 
@@ -223,6 +248,7 @@ interface ResourceBlock {
   resourceType: string;
   name: string;
   count?: AttributeValue;
+  forEach?: AttributeValue;
   attributes: Record<string, AttributeValue>;
   position: Position;
 }
@@ -274,7 +300,7 @@ throws the same for a character it does not know, a string not closed on its lin
 ## Not in the language
 
 - Expressions, operators and functions; a value is a literal or a reference
-- `count` on a data source or a module, `for_each`, `depends_on`, lifecycle blocks,
+- `count` or `for_each` on a data source or a module, `depends_on`, lifecycle blocks,
   provisioners
 - Nested blocks inside a block
 - Any file other than `main.clay`

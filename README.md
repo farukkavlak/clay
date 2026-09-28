@@ -60,7 +60,9 @@ string can read other values with `${...}`. A string over many lines is a heredo
 A resource with `count = 3` makes three instances, `type.name[0]` to `type.name[2]`, and
 `count.index` inside the block is the index of the one being made. Another value reads
 one of them: `local_file.logs[0].content`. Adding `count` to a resource that exists moves
-it to `[0]` instead of making it again.
+it to `[0]` instead of making it again. With `for_each = { web = 80, api = 8080 }`, or a
+list of strings, it makes one instance for each key, `type.name["web"]`, and `each.key`
+and `each.value` inside the block are the key and value of the one being made.
 
 References: `var.name`, `local_file.a.content`, `module.m.out`, and `random_string.s.id`
 for what the provider assigned. A reference reads into a map or a list with `.key`,

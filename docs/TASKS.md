@@ -76,7 +76,7 @@ hits each of these early.
 - [x] Adding `count` to a resource moves `a` to `a[0]` in the plan, and taking it off
       moves `a[0]` back, rather than destroying one and creating the other. Terraform
       does this since 1.1
-- [ ] `for_each` on a resource, over a map or a list of strings, with `["key"]` access and
+- [x] `for_each` on a resource, over a map or a list of strings, with `["key"]` access and
       `each.key`, `each.value`. A string twice in the list is refused where it is
       written; Terraform's `toset` drops the second in silence
 - [ ] `count` and `for_each` on a module. A module address grows an instance key, so the
@@ -87,6 +87,10 @@ hits each of these early.
       configuration sets to a literal, so `count = random_string.s.length` cannot be
       planned on a fresh state. Terraform knows what the configuration sets on a planned
       resource
+- [ ] A `for_each` map whose keys are known and whose values are not. A value with a
+      reference still to come is unknown as a whole, so `{ a = random_string.s.id }` is
+      refused although its keys are there. Terraform plans the keys and leaves the values
+      unknown; Clay needs a value that is known in part
 - [ ] A whole resource as a value: `local_file.a[0]` as a map, and `local_file.a` as the
       list of its instances. Worth it once there are functions or splats to read one with
 - [ ] Bump the state and plan file versions once `count` and `for_each` are done: both
@@ -258,7 +262,8 @@ by resource type, and no `provider` block exists yet.
       `Output "x" not found in module "module.m"`, with the scope key where the
       module's name should be
 - [ ] An output that fails to resolve reports a failure. `resolveOutput` runs outside the
-      step's `try`, so a throw there ends the run with no `failed` event and nothing said
+      step's `try`, so a throw there ends the run with no `failed` event and nothing said.
+      `readEach`, which reads a `for_each` again at apply, runs there too
 - [ ] An output may be named `__proto__`. The runner collects outputs into a plain object,
       where that name sets a prototype instead of a key, so the output disappears
 - [ ] `apply` says a missing file is missing the same way twice. A missing plan file and a

@@ -33,7 +33,10 @@ export class ConfigLoader {
     const { resources: loadedResources, modules: loadedModules } = await this.moduleLoader.loadModuleTree(mainProgram);
 
     this.instances.clear();
-    for (const { uniqueId, block } of loadedResources) if (block.count) this.instances.declare(uniqueId);
+    for (const { uniqueId, block } of loadedResources) {
+      if (block.count) this.instances.declare(uniqueId, 'count');
+      if (block.forEach) this.instances.declare(uniqueId, 'for_each');
+    }
 
     this.dataSources.clear();
     for (const mod of loadedModules) await this.readDataSources(mod.program, state, mod.address);
