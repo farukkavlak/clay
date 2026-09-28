@@ -29,7 +29,9 @@ in a directory; a module is another directory with its own `main.clay`.
 | `EOF`             |                                       | Ends every token stream                                                 |
 
 Whitespace and comments are skipped. A comment runs from `#` or
-`//` to the end of the line. Every token carries the file, line and column it starts at.
+`//` to the end of the line. Every token carries the file, line and column it starts at. A
+line break written as CRLF is read as LF, so no value changes with how a checkout wrote
+the file's line breaks.
 
 Inside quotes the lexer reads text until `"` or `${`. A `${` reads tokens as outside
 quotes until its `}`: a quote there opens a string of its own, so `"${var.tags["a.b"]}"`

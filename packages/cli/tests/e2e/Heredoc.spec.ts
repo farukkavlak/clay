@@ -40,4 +40,13 @@ describe('a heredoc', () => {
 
     expect(await fs.readFile(path.join(dir, 'a.txt'), 'utf8')).toBe('#!/bin/sh\necho "hello clay"\n  exit 0\n');
   });
+
+  // Git on Windows may check a file out with CRLF line breaks.
+  it('writes the same lines from a file whose line breaks are CRLF', async () => {
+    const config = ['resource "local_file" "a" {', `  path    = "${path.join(dir, 'a.txt')}"`, '  content = <<-EOT', '    a', '      b', '    EOT', '}', ''].join('\r\n');
+
+    await apply(config);
+
+    expect(await fs.readFile(path.join(dir, 'a.txt'), 'utf8')).toBe('a\n  b\n');
+  });
 });

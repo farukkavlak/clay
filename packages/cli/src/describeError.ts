@@ -14,7 +14,7 @@ function currentContent(file: string, files: ConfigFiles): string | undefined {
 
 /** The line the error points at, with a caret under the column. */
 function sourceLine(position: Position, files: ConfigFiles): string | undefined {
-  const line = currentContent(position.file, files)?.split('\n')[position.line - 1];
+  const line = currentContent(position.file, files)?.split(/\r?\n/)[position.line - 1];
   if (line === undefined) return undefined;
 
   const gutter = `  ${position.line}: `;

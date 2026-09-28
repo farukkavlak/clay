@@ -24,6 +24,7 @@ export class Lexer {
   private line: number = 1;
   private column: number = 1;
   private modes: Mode[] = [];
+  private input: string;
 
   private skip = /\s+|#[^\n]*|\/\/[^\n]*/y;
 
@@ -34,7 +35,7 @@ export class Lexer {
   // A heredoc's text is taken a line at a time, so each line can be checked for the closing name.
   private heredocText = /(?:[^\n$]|\$\$\{|\$(?!\{))*\n?/y;
 
-  private heredoc = /<<(-?)([A-Z_a-z][\w-]*)\r?\n/y;
+  private heredoc = /<<(-?)([A-Z_a-z][\w-]*)\n/y;
 
   // Boolean sits before Identifier, or true and false would lex as identifiers.
   private specs: TokenSpec[] = [
@@ -54,10 +55,13 @@ export class Lexer {
     { type: TokenType.Assign, regex: /=/y },
   ];
 
+  // A checkout may write a line break as CRLF, and a heredoc's value must not change with it.
   constructor(
-    private input: string,
+    input: string,
     private file: string
-  ) {}
+  ) {
+    this.input = input.replaceAll('\r\n', '\n');
+  }
 
   tokenize(): Token[] {
     const tokens: Token[] = [];
@@ -150,7 +154,7 @@ export class Lexer {
 
     const [opener, flush, name] = match;
     this.advance(opener);
-    this.modes.push({ kind: 'heredoc', opened: position, name, closing: new RegExp(String.raw`[ \t]*${name}[ \t]*(?=\r?\n|$)`, 'y') });
+    this.modes.push({ kind: 'heredoc', opened: position, name, closing: new RegExp(String.raw`[ \t]*${name}[ \t]*(?=\n|$)`, 'y') });
     return { type: TokenType.OHeredoc, value: `<<${flush}${name}`, position };
   }
 

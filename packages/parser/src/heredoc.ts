@@ -2,7 +2,7 @@ import { TemplatePart } from './ast';
 
 const INDENT = /^[\t ]*/;
 
-const BLANK = /^[\t ]*\r?\n$/;
+const BLANK = /^[\t ]*\n$/;
 
 function leading(text: string): number {
   return INDENT.exec(text)?.[0].length ?? 0;
