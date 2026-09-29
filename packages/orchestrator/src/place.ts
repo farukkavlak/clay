@@ -1,8 +1,7 @@
-import { Address } from '@clay/contracts';
 import { ConfigError, Position } from '@clay/parser';
 
 import { asError } from './asError';
-import { scopeOf } from './keys';
+import { Context, scopeOf } from './keys';
 
 /** A value that holds no position is placed by the caller, at the value around it. */
 export function placed(message: string, position?: Position): Error {
@@ -10,7 +9,7 @@ export function placed(message: string, position?: Position): Error {
 }
 
 /** A resolve error names the reference; this adds where it was read. */
-export function withPlace(error: unknown, position: Position, block: string, address: Address): ConfigError {
+export function withPlace(error: unknown, position: Position, block: string, address: Context): ConfigError {
   const place = { block, module: scopeOf(address) || undefined };
 
   // An error that already knows a position knows a closer one than this; the block around it is still news.
@@ -20,7 +19,7 @@ export function withPlace(error: unknown, position: Position, block: string, add
 }
 
 /** Runs the work and, if it fails, says where the value it was working on was written. */
-export function tryAt<T>(position: Position, block: string, address: Address, work: () => T): T {
+export function tryAt<T>(position: Position, block: string, address: Context, work: () => T): T {
   try {
     return work();
   } catch (error) {

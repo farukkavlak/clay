@@ -1,7 +1,7 @@
-import type { InstanceKey } from './Address';
+import type { InstanceKey, ModuleStep } from './Address';
 
-export { Address, isInstanceKey } from './Address';
-export type { InstanceKey } from './Address';
+export { Address, isInstanceKey, isModulePath, ModuleAddress } from './Address';
+export type { InstanceKey, ModuleStep } from './Address';
 export { ExactNumber, NumberError } from './ExactNumber';
 
 /** A resource as state records it. */
@@ -9,7 +9,7 @@ export interface Resource {
   id?: string;
   resourceType: string;
   name: string;
-  modulePath?: string[];
+  modulePath?: readonly ModuleStep[];
   key?: InstanceKey;
   attributes: Record<string, unknown>;
   /** Addresses of the resources this one reads from, kept so it can be deleted before them once the config drops it. */
@@ -26,7 +26,7 @@ export interface State {
   resources: Record<string, Resource>;
 }
 
-/** The shape this version of Clay writes. A state that names a higher one was written by a Clay that knows something this one does not. */
+/** The shape this version of Clay writes, bumped when it changes once a Clay is released. A state that names a higher one was written by a Clay that knows something this one does not. */
 export const STATE_VERSION = 1;
 
 export function emptyState(): State {

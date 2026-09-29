@@ -144,7 +144,7 @@ module "app" {
         type: 'CREATE',
         resourceType: 'test_resource',
         name: 'server',
-        modulePath: ['app'],
+        modulePath: [{ name: 'app' }],
         attributes: { tags: { type: 'Reference', value: ['var', 'env'] } },
       },
     ]);
@@ -182,7 +182,7 @@ module "L2" {
         type: 'CREATE',
         resourceType: 'test_resource',
         name: 'child',
-        modulePath: ['L2'],
+        modulePath: [{ name: 'L2' }],
         attributes: { loc: { type: 'Reference', value: ['var', 'region'] } },
       },
     ]);
@@ -223,7 +223,7 @@ resource "test_resource" "instance" {
         type: 'CREATE',
         resourceType: 'test_resource',
         name: 'instance',
-        modulePath: ['db'],
+        modulePath: [{ name: 'db' }],
         attributes: { name: { type: 'Reference', value: ['var', 'db_name'] } },
       },
       {

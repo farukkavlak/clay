@@ -10,7 +10,7 @@ const ref = (spelled: string) => parseReference(spelled.split('.')) as ResourceR
 
 describe('ResourceResolver', () => {
   const resolver = new ResourceResolver(new Instances());
-  const context = new Address([], 'resource', 'main');
+  const context = Address.root('resource', 'main');
 
   const mockState: State = {
     version: 1,

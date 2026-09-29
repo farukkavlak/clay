@@ -1,4 +1,4 @@
-import { Address, ExactNumber, isInstanceKey, NumberError, Resource, State, STATE_VERSION } from '@clay/contracts';
+import { Address, ExactNumber, isInstanceKey, isModulePath, NumberError, Resource, State, STATE_VERSION } from '@clay/contracts';
 
 /** A plain object, as JSON makes one: a number read from a file is an ExactNumber, which is no record. */
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -9,17 +9,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
-function isModulePath(value: unknown): boolean {
-  return value === undefined || (Array.isArray(value) && value.every((name) => typeof name === 'string'));
-}
-
 /** What the engine goes on to read without asking: an address is built from the type, the name and the module path, the planner walks `attributes`, and the runner walks `dependencies`. */
 function isResource(value: unknown): value is Resource {
   return (
     isRecord(value) &&
     typeof value.resourceType === 'string' &&
     typeof value.name === 'string' &&
-    isModulePath(value.modulePath) &&
+    (value.modulePath === undefined || isModulePath(value.modulePath)) &&
     isRecord(value.attributes) &&
     (value.dependencies === undefined || Array.isArray(value.dependencies))
   );
@@ -59,10 +55,15 @@ export function serializeState(state: State): string {
   return JSON.stringify(state, null, 2);
 }
 
-/** An instance key names a resource, as an address does, so it is a JavaScript number too. */
+/** An instance key names a resource or a module, as an address does, so it is a JavaScript number too. */
 function readKeys(resources: Record<string, unknown>): void {
-  for (const [address, resource] of Object.entries(resources))
-    if (isRecord(resource) && resource.key instanceof ExactNumber) resource.key = resource.key.toSafeInteger(`the key of "${address}"`);
+  for (const [address, resource] of Object.entries(resources)) {
+    if (!isRecord(resource)) continue;
+
+    if (resource.key instanceof ExactNumber) resource.key = resource.key.toSafeInteger(`the key of "${address}"`);
+    if (Array.isArray(resource.modulePath))
+      for (const step of resource.modulePath) if (isRecord(step) && step.key instanceof ExactNumber) step.key = step.key.toSafeInteger(`a module key of "${address}"`);
+  }
 }
 
 /** The state's own counters are JavaScript numbers; every other number in it is a value, kept exactly. */

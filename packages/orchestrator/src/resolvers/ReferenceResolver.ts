@@ -1,7 +1,8 @@
-import { Address, ExactNumber, State } from '@clay/contracts';
+import { Address, ExactNumber, ModuleAddress, State } from '@clay/contracts';
 import { ConfigError, EachReference, ParsedReference, parseReference, Position, ReferenceNode, spellReference, Step, TemplatePart } from '@clay/parser';
 
 import { Instances } from '../Instances';
+import { Context } from '../keys';
 import { ScopeManager } from '../scope/ScopeManager';
 import { DataSourceResolver } from './DataSourceResolver';
 import { ModuleOutputResolver } from './ModuleOutputResolver';
@@ -10,8 +11,8 @@ import { ResourceResolver } from './ResourceResolver';
 import { VariableResolver } from './VariableResolver';
 
 /** The instance being made names its index; anything else read outside one has none. */
-function countIndex(where: Address, position: Position): ExactNumber {
-  if (typeof where.key !== 'number') throw new ConfigError('count.index is only known inside a resource that has count', position);
+function countIndex(where: Context, position: Position): ExactNumber {
+  if (!(where instanceof Address) || typeof where.key !== 'number') throw new ConfigError('count.index is only known inside a resource that has count', position);
 
   return ExactNumber.parse(String(where.key));
 }
@@ -31,15 +32,15 @@ export class ReferenceResolver {
     this.resources = new ResourceResolver(instances);
   }
 
-  private resolve(node: ReferenceNode, state: State, context?: Address): unknown {
-    const { value, path } = this.resolveTarget(parseReference(node.value), state, context || new Address([], '', ''), node.position);
+  private resolve(node: ReferenceNode, state: State, context?: Context): unknown {
+    const { value, path } = this.resolveTarget(parseReference(node.value), state, context ?? ModuleAddress.root, node.position);
     const target = node.value.slice(0, node.value.length - path.length);
 
     return readPath(value, target, path, node.position);
   }
 
   /** What the reference names, and the steps still to take into it. */
-  private resolveTarget(reference: ParsedReference, state: State, where: Address, position: Position): { value: unknown; path: Step[] } {
+  private resolveTarget(reference: ParsedReference, state: State, where: Context, position: Position): { value: unknown; path: Step[] } {
     if (reference.kind === 'variable') return { value: this.variables.resolve(reference, where, state), path: reference.path };
     if (reference.kind === 'data') return { value: this.dataSources.resolve(reference, where), path: reference.path };
     if (reference.kind === 'module') return { value: this.moduleOutputs.resolve(reference, where), path: reference.path };
@@ -50,19 +51,19 @@ export class ReferenceResolver {
   }
 
   /** The instance being made names its key, and the value for_each gives that key; anything else read outside one has neither. */
-  private each(reference: EachReference, where: Address, position: Position): unknown {
-    if (typeof where.key !== 'string') throw new ConfigError(`each.${reference.name} is only known inside a resource that has for_each`, position);
+  private each(reference: EachReference, where: Context, position: Position): unknown {
+    if (!(where instanceof Address) || typeof where.key !== 'string') throw new ConfigError(`each.${reference.name} is only known inside a resource that has for_each`, position);
 
     return reference.name === 'key' ? where.key : this.instances.eachValue(where.withoutKey().toString(), where.key);
   }
 
-  resolveAttributes(attributes: Record<string, unknown>, state: State, context?: Address): Record<string, unknown> {
+  resolveAttributes(attributes: Record<string, unknown>, state: State, context?: Context): Record<string, unknown> {
     const resolved: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(attributes)) resolved[key] = this.resolveValue(value, state, context);
     return resolved;
   }
 
-  resolveValue(value: unknown, state: State, context?: Address): unknown {
+  resolveValue(value: unknown, state: State, context?: Context): unknown {
     if (!value || typeof value !== 'object') return value;
 
     const node = value as { type?: string; value?: unknown };
@@ -92,12 +93,12 @@ export class ReferenceResolver {
     }
   }
 
-  private resolveList(valueObj: { value?: unknown }, state: State, context?: Address): unknown[] {
+  private resolveList(valueObj: { value?: unknown }, state: State, context?: Context): unknown[] {
     if (!Array.isArray(valueObj.value)) return [];
     return valueObj.value.map((item) => this.resolveValue(item, state, context));
   }
 
-  private resolveMap(valueObj: { value?: unknown }, state: State, context?: Address): Record<string, unknown> {
+  private resolveMap(valueObj: { value?: unknown }, state: State, context?: Context): Record<string, unknown> {
     if (!valueObj.value || typeof valueObj.value !== 'object') return {};
     const map = valueObj.value as Record<string, unknown>;
     const resolvedMap: Record<string, unknown> = {};
@@ -107,14 +108,14 @@ export class ReferenceResolver {
   }
 
   /** A template that is one interpolation is the value itself, type and all; text around it makes it a string. */
-  private resolveTemplate(parts: TemplatePart[], state: State, context?: Address): unknown {
+  private resolveTemplate(parts: TemplatePart[], state: State, context?: Context): unknown {
     const [first] = parts;
     if (parts.length === 1 && typeof first !== 'string') return this.resolve(first, state, context);
 
     return parts.map((part) => (typeof part === 'string' ? part : this.joined(part, state, context))).join('');
   }
 
-  private joined(reference: ReferenceNode, state: State, context?: Address): string {
+  private joined(reference: ReferenceNode, state: State, context?: Context): string {
     const resolved = this.resolve(reference, state, context);
     const kind = kindOf(resolved);
     if (kind === 'list' || kind === 'map') throw new ConfigError(`${spellReference(reference.value)} is a ${kind} and cannot be joined into a string`, reference.position);

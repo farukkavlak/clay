@@ -1,4 +1,4 @@
-import { Address, State } from '@clay/contracts';
+import { ModuleAddress, State } from '@clay/contracts';
 import { CONFIG_FILE, DataBlock, Lexer, Parser, spell, Statement } from '@clay/parser';
 
 import { Instances } from '../Instances';
@@ -44,7 +44,7 @@ export class ConfigLoader {
     return { mainProgram, loadedResources, loadedModules };
   }
 
-  private async readDataSources(program: Statement[], state: State, scopeAddress: Address): Promise<void> {
+  private async readDataSources(program: Statement[], state: State, scopeAddress: ModuleAddress): Promise<void> {
     const scope = scopeOf(scopeAddress);
 
     for (const stmt of program)
@@ -60,7 +60,7 @@ export class ConfigLoader {
   }
 
   /** One value at a time, so an error points at the value that caused it and not at the block around it. */
-  private resolveInputs(stmt: DataBlock, state: State, scopeAddress: Address): Record<string, unknown> {
+  private resolveInputs(stmt: DataBlock, state: State, scopeAddress: ModuleAddress): Record<string, unknown> {
     const declaration = spell(stmt);
     const inputs: Record<string, unknown> = {};
 

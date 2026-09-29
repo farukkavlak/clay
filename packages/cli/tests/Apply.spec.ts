@@ -89,7 +89,7 @@ describe('CLI: apply command', () => {
       const planMock = vi.fn().mockResolvedValue({ serial: 0, actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }], outputs: {} });
       const runMock = vi.fn(async function* () {
         yield { type: 'applied', action: { type: 'CREATE', resourceType: 'test', name: 't' } };
-        yield { type: 'applied', action: { type: 'DELETE', resourceType: 'test', name: 'gone', modulePath: ['m'] } };
+        yield { type: 'applied', action: { type: 'DELETE', resourceType: 'test', name: 'gone', modulePath: [{ name: 'm' }] } };
         yield { type: 'applied', action: { type: 'REPLACE', resourceType: 'test', name: 'again' } };
         yield { type: 'done', outputs: {} };
       });
