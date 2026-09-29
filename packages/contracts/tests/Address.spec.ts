@@ -127,6 +127,19 @@ describe('Address', () => {
     });
   });
 
+  describe('countCounterparts', () => {
+    it.each([
+      ['a resource with no key', 'local_file.a', ['local_file.a[0]']],
+      ['the first instance of a resource', 'local_file.a[0]', ['local_file.a']],
+      ['another instance', 'local_file.a[1]', []],
+      ['an instance by key', 'local_file.a["x"]', []],
+      ['a resource in the first instance of a module', 'module.m[0].local_file.a', ['module.m[0].local_file.a[0]', 'module.m.local_file.a', 'module.m.local_file.a[0]']],
+      ['the first instance of a resource in another instance of a module', 'module.m[1].local_file.a[0]', ['module.m[1].local_file.a']],
+    ])('gives where state may keep %s from before count came or went', (_, address, kept) => {
+      expect(Address.parse(address).countCounterparts().map(String)).toEqual(kept);
+    });
+  });
+
   describe('ModuleAddress', () => {
     it.each([
       ['the root, as nothing', ModuleAddress.root, ''],

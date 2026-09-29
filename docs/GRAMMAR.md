@@ -182,10 +182,13 @@ A data source in a module called with count, or in a module that one calls, is r
 where it is written: data sources are read once, as the configuration loads, before a
 module has instances.
 
-Adding `count` to a module that exists moves nothing yet: what is in it is made again
-under `module.name[0]`, and then the old one is destroyed. A resource that names the same
-thing as its old self, such as a file at one path, is gone when the run ends. Moving each
-resource first with `clay state mv` keeps it.
+Adding `count` to a module that exists moves what is in it to `module.name[0]`, and
+taking `count` off moves `module.name[0]` back and destroys the other instances, as for a
+resource. Each resource the configuration still has is moved on its own; one it no longer
+has is destroyed where state keeps it. A resource that gains count with its module moves
+in one step, `module.web.local_file.a` to `module.web[0].local_file.a[0]`. When state
+keeps it in two places it may have been, the plan is refused where the resource is
+written, since taking either would destroy the other; `clay state mv` says which.
 
 ### For each
 

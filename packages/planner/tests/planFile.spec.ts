@@ -142,9 +142,11 @@ describe('reading a plan file', () => {
     ['a number', 5],
     ['text that is no address', 'nowhere'],
     ['another resource', 'local_file.x'],
-    ['an index other than the first', 'null_resource.a[1]'],
+    ['an index other than the first', 'module.m[0].null_resource.a[1]'],
+    ['another instance of its module', 'module.m[1].null_resource.a'],
+    ['the resource outside its module', 'null_resource.a'],
   ])('refuses a move from %s', (_, movedFrom) => {
-    const content = { ...fields(), actions: [{ type: 'NO_OP', resourceType: 'null_resource', name: 'a', key: 0, movedFrom }] };
+    const content = { ...fields(), actions: [{ type: 'NO_OP', resourceType: 'null_resource', name: 'a', modulePath: [{ name: 'm', key: 0 }], key: 0, movedFrom }] };
 
     expect(read(content)).toThrow(/^tfplan\.json is not a plan file$/);
   });
@@ -167,6 +169,8 @@ describe('reading a plan file', () => {
         { type: 'NO_OP', resourceType: 'null_resource', name: 'a', key: 0, movedFrom: 'null_resource.a' },
         { type: 'NO_OP', resourceType: 'null_resource', name: 'b', movedFrom: 'null_resource.b[0]' },
         { type: 'NO_OP', resourceType: 'null_resource', name: 'c', modulePath: [{ name: 'm', key: 1 }], key: 0, movedFrom: 'module.m[1].null_resource.c' },
+        { type: 'NO_OP', resourceType: 'null_resource', name: 'd', modulePath: [{ name: 'm', key: 0 }], movedFrom: 'module.m.null_resource.d' },
+        { type: 'NO_OP', resourceType: 'null_resource', name: 'e', modulePath: [{ name: 'm' }], movedFrom: 'module.m[0].null_resource.e[0]' },
       ],
       outputs: {},
     };
@@ -175,6 +179,8 @@ describe('reading a plan file', () => {
       'null_resource.a',
       'null_resource.b[0]',
       'module.m[1].null_resource.c',
+      'module.m.null_resource.d',
+      'module.m[0].null_resource.e[0]',
     ]);
   });
 

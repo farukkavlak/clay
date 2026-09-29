@@ -115,7 +115,7 @@ function isMovedFrom(action: Record<string, unknown>): boolean {
 
   const module = new ModuleAddress((action.modulePath as readonly ModuleStep[] | undefined) ?? []);
   const address = new Address(module, action.resourceType, action.name, action.key as InstanceKey | undefined);
-  return action.movedFrom === address.countCounterpart()?.toString();
+  return address.countCounterparts().some((kept) => kept.toString() === action.movedFrom);
 }
 
 function isAction(action: unknown): boolean {

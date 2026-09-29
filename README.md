@@ -65,6 +65,8 @@ list of strings, it makes one instance for each key, `type.name["web"]`, and `ea
 and `each.value` inside the block are the key and value of the one being made. A module
 call takes `count` too: with `count = 3`, `module.web[0]` to `module.web[2]` are each a
 whole copy of the module, and `count.index` in the call's inputs is the index of the copy.
+Adding `count` to a module that exists moves what is in it to `module.web[0]` in the same
+way.
 
 References: `var.name`, `local_file.a.content`, `module.m.out`, `module.web[0].out`, and
 `random_string.s.id` for what the provider assigned. A reference reads into a map or a
