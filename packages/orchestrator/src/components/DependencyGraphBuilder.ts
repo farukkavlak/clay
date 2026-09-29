@@ -6,7 +6,7 @@ import { Instances, Repetition } from '../Instances';
 import { callKey, Context, ModuleCall, outputKey, scopeOf, variableKey } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
 import { placed, tryAt } from '../place';
-import { COUNT_INDEX_OUTSIDE, readCall, readInstance } from '../resolvers/instance';
+import { COUNT_INDEX_OUTSIDE, eachOutside, readCall, readInstance } from '../resolvers/instance';
 import { Reference, ReferenceScanner } from '../resolvers/ReferenceScanner';
 import { LoadedModule, LoadedResource } from './ModuleLoader';
 
@@ -37,7 +37,7 @@ function inputNames(attributes: Record<string, AttributeValue>): string[] {
 /** `count.index` and `each.key` read the instance being made, so only a block that makes instances of that kind knows them, and a module's inputs where its call does. */
 function checkInstanceReference(reference: Extract<Reference, { kind: 'count' | 'each' }>, repetition: Repetition | undefined): void {
   if (reference.kind === 'count' && repetition !== 'count') throw placed(COUNT_INDEX_OUTSIDE, reference.position);
-  if (reference.kind === 'each' && repetition !== 'for_each') throw placed(`each.${reference.name} is only known inside a resource that has for_each`, reference.position);
+  if (reference.kind === 'each' && repetition !== 'for_each') throw placed(eachOutside(reference.name), reference.position);
 }
 
 function describeMissing(reference: Exclude<Reference, { kind: 'count' | 'each' }>, moduleScopes: Set<string>): string {
@@ -70,7 +70,7 @@ export class DependencyGraphBuilder {
 
   private addNodeDependencies(key: string, node: GraphNode, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
     if (node.kind === 'variable' || node.kind === 'output') this.addValueDependencies(key, node, graph, moduleScopes);
-    if (node.kind === 'module') this.addCountDependencies(key, node.block, node.module, graph, moduleScopes);
+    if (node.kind === 'module') this.addCallDependencies(key, node.block, node.module, graph, moduleScopes);
   }
 
   private addValueDependencies(key: string, node: ValueNode, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
@@ -79,10 +79,9 @@ export class DependencyGraphBuilder {
     tryAt(node.position, node.declaration, node.context, () => this.addDependencies(node.value, graph, key, node.context, moduleScopes, repetition));
   }
 
-  /** A call's count is read in the module that calls it, before any instance of the module is made. */
-  private addCountDependencies(key: string, block: ModuleBlock, caller: ModuleAddress, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
-    const { count } = block;
-    if (count) tryAt(count.position, spell(block), caller, () => this.addDependencies(count, graph, key, caller, moduleScopes));
+  /** A call's count or for_each is read in the module that calls it, before any instance of the module is made. */
+  private addCallDependencies(key: string, block: ModuleBlock, caller: ModuleAddress, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
+    for (const value of [block.count, block.forEach]) if (value) tryAt(value.position, spell(block), caller, () => this.addDependencies(value, graph, key, caller, moduleScopes));
   }
 
   /** One value at a time, so an error points at the value that reads, not at the block it sits in. The count or for_each is read before any instance is, so it has no key. */

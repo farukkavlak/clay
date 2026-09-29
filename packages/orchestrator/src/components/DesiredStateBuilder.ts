@@ -4,7 +4,7 @@ import { AttributeValue, ResourceBlock, spell, spellReference, Statement } from 
 import { DesiredResource, hasChanges, isUnknown, UNKNOWN } from '@clay/planner';
 import { moveResource } from '@clay/state';
 
-import { countFrom, indexesOf } from '../count';
+import { countFrom } from '../count';
 import { eachFrom } from '../forEach';
 import { Instances } from '../Instances';
 import { Context, contextIn, enclosing, outputKey, variableKey } from '../keys';
@@ -66,11 +66,9 @@ export class DesiredStateBuilder {
     return { resources, outputs };
   }
 
-  /** A call's count is read in each instance of the module that calls it, and makes that many instances of the module there. */
+  /** A call's count or for_each is read in each instance of the module that calls it, and makes its instances there. */
   private planCall({ module, block }: Extract<GraphNode, { kind: 'module' }>, state: State, pending: Set<string>): void {
-    const { count } = block;
-
-    this.modules.expand(module, block.name, (caller) => (count === undefined ? undefined : indexesOf(this.readAt(count, block, caller, state, pending, countFrom))));
+    this.modules.expandCall(module, block, (value, parse, caller) => this.readAt(value, block, caller, state, pending, parse));
   }
 
   private planResource(key: string, loaded: LoadedResource, graph: Graph<GraphNode>, state: State, pending: Set<string>): DesiredResource[] {
@@ -212,7 +210,10 @@ export class DesiredStateBuilder {
     if (repetition === 'for_each' && typeof first === 'string') checkHasKey(spellReference([reference.type, reference.name]), first, this.instances.keysOf(block), position);
   }
 
-  private checkCallIndex({ module, call, index, position }: Extract<Reference, { kind: 'output' }>): void {
-    if (typeof index === 'number') checkInRange(spellReference(['module', module]), index, this.modules.keysOf(call)?.length, position);
+  private checkCallIndex({ module, call, instanceKey, position }: Extract<Reference, { kind: 'output' }>): void {
+    const spelled = spellReference(['module', module]);
+
+    if (typeof instanceKey === 'number') checkInRange(spelled, instanceKey, this.modules.keysOf(call)?.length, position);
+    if (typeof instanceKey === 'string') checkHasKey(spelled, instanceKey, this.modules.keysOf(call), position);
   }
 }

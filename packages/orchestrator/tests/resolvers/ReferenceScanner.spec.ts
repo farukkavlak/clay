@@ -2,12 +2,13 @@ import { Address, ModuleAddress } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { Instances } from '../../src/Instances';
+import { ModuleInstances } from '../../src/ModuleInstances';
 import { Reference, ReferenceScanner } from '../../src/resolvers/ReferenceScanner';
 
 const keysOf = (references: Reference[]) => references.map((reference) => (reference.kind === 'count' || reference.kind === 'each' ? reference.kind : reference.key));
 
 describe('ReferenceScanner', () => {
-  const scanner = new ReferenceScanner(new Instances());
+  const scanner = new ReferenceScanner(new Instances(), new ModuleInstances());
   const context = Address.root('resource', 'main');
   const inModule = new Address(ModuleAddress.root.child('app'), 'resource', 'main');
 
@@ -31,7 +32,7 @@ describe('ReferenceScanner', () => {
     instances.declare('module.app.resource.dep', 'count');
     const inInstance = new Address(ModuleAddress.root.child('app', 0), 'resource', 'main');
 
-    const [found] = new ReferenceScanner(instances).referencesIn({ type: 'Reference', value: ['resource', 'dep', 1, 'id'] }, inInstance);
+    const [found] = new ReferenceScanner(instances, new ModuleInstances()).referencesIn({ type: 'Reference', value: ['resource', 'dep', 1, 'id'] }, inInstance);
 
     expect(found).toMatchObject({ key: 'module.app.resource.dep', block: 'module.app[0].resource.dep', address: 'module.app[0].resource.dep[1]' });
   });
@@ -44,16 +45,28 @@ describe('ReferenceScanner', () => {
 
   // The graph has one node for the output, shared by every instance of its module; the plan reads the output of the instance the index names, in the instance it is read in.
   it('keys an output read in an instance of a module by its node, and names the output of the instance read and the call that makes it', () => {
+    const modules = new ModuleInstances();
+    modules.declare(ModuleAddress.root.child('app').child('db'), 'count');
     const inInstance = new Address(ModuleAddress.root.child('app', 0), 'resource', 'main');
 
-    const [found] = scanner.referencesIn({ type: 'Reference', value: ['module', 'db', 2, 'url'] }, inInstance);
+    const [found] = new ReferenceScanner(new Instances(), modules).referencesIn({ type: 'Reference', value: ['module', 'db', 2, 'url'] }, inInstance);
 
     expect(found).toMatchObject({
       key: 'module.app.module.db.outputs:url',
       address: 'module.app[0].module.db[2].outputs:url',
       call: ModuleAddress.root.child('app', 0).child('db'),
-      index: 2,
+      instanceKey: 2,
     });
+  });
+
+  // `.web` and `["web"]` are one step, so under for_each the first name is the key and the output follows it.
+  it('reads the first step of a module called with for_each as its key', () => {
+    const modules = new ModuleInstances();
+    modules.declare(ModuleAddress.root.child('db'), 'for_each');
+
+    const [found] = new ReferenceScanner(new Instances(), modules).referencesIn({ type: 'Reference', value: ['module', 'db', 'eu', 'url'] }, context);
+
+    expect(found).toMatchObject({ key: 'module.db.outputs:url', address: 'module.db["eu"].outputs:url', instanceKey: 'eu', name: 'url' });
   });
 
   it('should ignore data sources', () => {

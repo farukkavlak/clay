@@ -73,16 +73,16 @@ no name twice.
 
 What the engine reads from each:
 
-| Block      | Reads                                                                                                          |
-| ---------- | -------------------------------------------------------------------------------------------------------------- |
-| `resource` | `count` or `for_each`, read by the engine; every other attribute goes to the provider                          |
-| `data`     | Every attribute goes to the provider's `read`                                                                  |
-| `variable` | `default`, and nothing else; another attribute is refused where it is written                                  |
-| `output`   | `value`                                                                                                        |
-| `module`   | `source`, a literal string naming a directory relative to the file; `count`; every other attribute is an input |
+| Block      | Reads                                                                                                                        |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `resource` | `count` or `for_each`, read by the engine; every other attribute goes to the provider                                        |
+| `data`     | Every attribute goes to the provider's `read`                                                                                |
+| `variable` | `default`, and nothing else; another attribute is refused where it is written                                                |
+| `output`   | `value`                                                                                                                      |
+| `module`   | `source`, a literal string naming a directory relative to the file; `count` or `for_each`; every other attribute is an input |
 
-`count` or `for_each` on a data source, and `for_each` on a module, is refused where it is
-written, and so is a resource with both.
+`count` or `for_each` on a data source is refused where it is written, and so is a
+resource or a module with both.
 
 ## Values
 
@@ -140,7 +140,7 @@ The parts before that name what is read, so each is a name even when it is quote
 
 A module is read through its outputs, so `module.app.local_file.a` names an output
 called `local_file`, and is refused when the module has none. A module called with count
-is read one instance at a time: `module.app[0].url`.
+or for_each is read one instance at a time: `module.app[0].url`, `module.app["eu"].url`.
 
 ### Count
 
@@ -178,9 +178,9 @@ An output is read from one instance: `module.web[0].url`. On a call with count,
 `module.web.url` is refused, and so is an index past `n - 1`; on one without, an index is
 refused.
 
-A data source in a module called with count, or in a module that one calls, is refused
-where it is written: data sources are read once, as the configuration loads, before a
-module has instances.
+A data source in a module called with count or for_each, or in a module that one calls,
+is refused where it is written: data sources are read once, as the configuration loads,
+before a module has instances.
 
 Adding `count` to a module that exists moves what is in it to `module.name[0]`, and
 taking `count` off moves `module.name[0]` back and destroys the other instances, as for a
@@ -201,8 +201,8 @@ The instances are planned in the order of their keys. An empty map or list makes
 any that exist are destroyed.
 
 Inside the block, `each.key` is the key of the instance being made and `each.value` its
-value, which a reference can read into: `each.value.port`. Anywhere else, and in
-`for_each` itself, they are refused where they are written.
+value, which a reference can read into: `each.value.port`. Anywhere else but a module
+call with for_each, and in `for_each` itself, they are refused where they are written.
 
 A reference names one instance by its key: `local_file.site["web"].content`. `.web` is
 the same step as `["web"]`, so `local_file.site.web.content` reads it too, and
@@ -212,6 +212,25 @@ index, and a key `for_each` does not give are refused where they are written.
 Adding `for_each` to a resource, or taking it off, moves nothing: no key stands for the
 resource the way `[0]` does for a count. `clay state mv 'type.name' 'type.name["key"]'`
 keeps it.
+
+### For each on a module
+
+A module call with `for_each` makes one instance of the module for each key, addressed
+`module.name["key"]`, the way a resource's for_each does, over a map or a list of strings.
+It is read in the module that calls it, and a call in a module with count or for_each
+makes its instances in each instance of that module.
+
+In the call's inputs, `each.key` is the key of the instance being made and `each.value`
+its value. Inside the module they are refused where they are written; the module takes
+them as inputs.
+
+An output is read from one instance by its key: `module.web["eu"].url`, or
+`module.web.eu.url`, the same step. `module.web.url` reads the instance `url` and names no
+output, so it is refused where it is written, and so are an index and a key `for_each`
+does not give. A data source in the module is refused as it is under count.
+
+Adding `for_each` to a module that exists, or taking it off, moves nothing, as for a
+resource; `clay state mv` keeps each resource.
 
 ### Interpolation
 
@@ -308,6 +327,7 @@ interface ModuleBlock {
   type: 'Module';
   name: string;
   count?: AttributeValue;
+  forEach?: AttributeValue;
   attributes: Record<string, AttributeValue>;
   position: Position;
 }
@@ -330,8 +350,7 @@ throws the same for a character it does not know, a string not closed on its lin
 ## Not in the language
 
 - Expressions, operators and functions; a value is a literal or a reference
-- `count` or `for_each` on a data source, `for_each` on a module, `depends_on`, lifecycle
-  blocks, provisioners
+- `count` or `for_each` on a data source, `depends_on`, lifecycle blocks, provisioners
 - Nested blocks inside a block
 - Any file other than `main.clay`
 

@@ -41,7 +41,7 @@ export class Orchestrator {
     const instances = new Instances();
     const modules = new ModuleInstances();
     const resolver = new ReferenceResolver(scopes, dataSources, instances, modules);
-    const scanner = new ReferenceScanner(instances);
+    const scanner = new ReferenceScanner(instances, modules);
     const graphBuilder = new DependencyGraphBuilder(scanner, instances, modules);
 
     return new Orchestrator(

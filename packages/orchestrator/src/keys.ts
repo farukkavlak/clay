@@ -37,6 +37,11 @@ export class ModuleCall {
   get caller(): ModuleAddress {
     return new ModuleAddress(this.instance.path.slice(0, -1));
   }
+
+  /** The call in the instance of the module that makes it, as `module.a[1].module.b`, which every instance it makes there shares. */
+  get call(): ModuleAddress {
+    return this.caller.child(this.instance.path.at(-1)!.name);
+  }
 }
 
 /** Where a value is read: in an instance of a resource, among a module's own variables and outputs, or in a module call. */

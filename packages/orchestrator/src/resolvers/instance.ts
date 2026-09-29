@@ -14,6 +14,11 @@ export interface InstanceRead {
 /** `count.index` read where no instance is made by count. */
 export const COUNT_INDEX_OUTSIDE = 'count.index is only known inside a resource or a module call that has count';
 
+/** `each.key` or `each.value` read where no instance is made by for_each. */
+export function eachOutside(name: 'key' | 'value'): string {
+  return `each.${name} is only known inside a resource or a module call that has for_each`;
+}
+
 function refuse(message: string, position?: Position): never {
   throw placed(message, position);
 }
@@ -73,7 +78,10 @@ function readOutput(reference: ModuleOutputReference, steps: Step[], position?: 
   return output;
 }
 
-/** A module called with count is read one instance at a time, so its first step is an index; one called with neither has none. */
+/**
+ * A module called with count or for_each is read one instance at a time, so its first step is an index or a key; one called with neither has none.
+ * `.name` and `["name"]` read the same, so under for_each `module.web.ali.url` reads the instance "ali".
+ */
 export function readCall(reference: ModuleOutputReference, repetition: Repetition | undefined, position?: Position): CallRead {
   const call = spellReference(['module', reference.module]);
   const [first, ...rest] = reference.path;
@@ -83,7 +91,14 @@ export function readCall(reference: ModuleOutputReference, repetition: Repetitio
     return { output: readOutput(reference, reference.path, position), path: rest };
   }
 
-  if (typeof first !== 'number') refuse(`${call} has count, so name one of it by index, as in ${call}[0]`, position);
+  if (repetition === 'count' && typeof first !== 'number') refuse(`${call} has count, so name one of it by index, as in ${call}[0]`, position);
+  if (repetition === 'for_each' && typeof first !== 'string') refuse(`${call} has for_each, so name one of it by key, as in ${call}["key"]`, position);
+  // `module.web.url` reads "url" as the key, which a reader may have meant as the output.
+  if (repetition === 'for_each' && rest.length === 0)
+    refuse(
+      `Reference "${spellReference(['module', reference.module, ...reference.path])}" names an instance and no output: ${call} has for_each, so its key comes first, as in ${call}["key"].out`,
+      position
+    );
 
   return { key: first, output: readOutput(reference, rest, position), path: rest.slice(1) };
 }
