@@ -87,10 +87,9 @@ hits each of these early.
 - [x] Adding `count` to a module that exists moves what is in it to `module.name[0]`, and
       taking it off moves it back, as for a resource. Two places state may keep it are
       refused rather than guessed between
-- [ ] A resource still to be created reads as unknown in full, even an attribute the
-      configuration sets to a literal, so `count = random_string.s.length` cannot be
-      planned on a fresh state. Terraform knows what the configuration sets on a planned
-      resource
+- [x] A resource to be created or changed is read at plan time as its configuration sets
+      it, so `count = random_string.s.length` plans on a fresh state. Its id, and what the
+      configuration does not set or does not know yet, stay unknown
 - [ ] A `for_each` map whose keys are known and whose values are not. A value with a
       reference still to come is unknown as a whole, so `{ a = random_string.s.id }` is
       refused although its keys are there. Terraform plans the keys and leaves the values
@@ -135,6 +134,14 @@ whole resource and mark which attributes are computed.
 - [ ] Schema marks computed attributes, so `plan` can refuse a reference to an attribute
       that will never exist
 - [ ] `command_exec` exposes `stdout` and `exit_code`; `random_string` exposes `result`
+- [ ] The provider takes part in the plan: asked what a resource to create or change will
+      hold, it says which values are known, which only the apply makes, and whether the
+      change replaces the resource. A value it rewrites, such as a path it cleans up, then
+      shows in the plan as it will be, and the id of a resource changed in place is known.
+      Terraform's `PlanResourceChange`
+- [ ] A value the apply returns that differs from one the plan showed as known stops the
+      run with an error that names the provider, as Terraform's "inconsistent result after
+      apply" does. The plan was approved, so a different result is never taken in silence
 
 ### Schema-driven validation
 
@@ -157,7 +164,9 @@ reads a resource fails at plan. `plan` and `apply` each read them, so an apply r
 twice. The local provider's `read` returns `{}` for every type, so no data source reads
 anything yet.
 
-- [ ] Data sources are graph nodes, read in dependency order and once per run
+- [ ] Data sources are graph nodes, read in dependency order and once per run. Read at load,
+      one whose input reads a resource the plan changes gets the value in state, while a
+      resource that reads it gets the value the plan sets
 - [ ] A data source in a module called with `count` or `for_each` is refused, since it is
       read before the module has instances. As a graph node it is read once for each
       instance of its module; test that end to end with a module called with `count` and one

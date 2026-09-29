@@ -71,10 +71,11 @@ way. A module call takes `for_each` too, `module.web["eu"]`, with `each.key` and
 
 References: `var.name`, `local_file.a.content`, `module.m.out`, `module.web[0].out`, and
 `random_string.s.id` for what the provider assigned. A reference reads into a map or a
-list with `.key`, `["key"]` and `[0]`: `var.tags.env`, `var.names[0]`. A value read from a
-resource that has not been created yet is unknown at plan time and shown as such. Reaching
-inside a module (`module.m.local_file.a`) is not allowed; a module speaks through its
-outputs.
+list with `.key`, `["key"]` and `[0]`: `var.tags.env`, `var.names[0]`. A resource to be
+created or changed is read at plan time as its configuration sets it, so
+`random_string.s.length` is known; what only the apply makes, such as its id, is unknown
+and shown as such. Reaching inside a module (`module.m.local_file.a`) is not allowed; a
+module speaks through its outputs.
 
 `docs/GRAMMAR.md` has the full grammar.
 

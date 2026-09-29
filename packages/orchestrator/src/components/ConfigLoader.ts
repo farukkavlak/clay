@@ -3,6 +3,7 @@ import { CONFIG_FILE, ConfigError, DataBlock, Lexer, Parser, spell, Statement } 
 
 import { Instances } from '../Instances';
 import { ModuleInstances } from '../ModuleInstances';
+import { Planned } from '../Planned';
 import { ProviderRegistry } from '../ProviderRegistry';
 import { dataSourceKey, scopeOf } from '../keys';
 import { tryAt } from '../place';
@@ -25,7 +26,8 @@ export class ConfigLoader {
     private resolver: ReferenceResolver,
     private providers: ProviderRegistry,
     private instances: Instances,
-    private modules: ModuleInstances
+    private modules: ModuleInstances,
+    private planned: Planned
   ) {}
 
   async load(configContent: string, state: State): Promise<LoadedConfig> {
@@ -35,6 +37,8 @@ export class ConfigLoader {
     const { resources: loadedResources, modules: loadedModules } = await this.moduleLoader.loadModuleTree(mainProgram);
 
     this.instances.clear();
+    // A plan's values are its own; the next plan makes its own, and an apply reads state.
+    this.planned.clear();
     for (const { uniqueId, block } of loadedResources) {
       if (block.count) this.instances.declare(uniqueId, 'count');
       if (block.forEach) this.instances.declare(uniqueId, 'for_each');

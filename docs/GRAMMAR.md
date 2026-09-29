@@ -146,8 +146,9 @@ or for_each is read one instance at a time: `module.app[0].url`, `module.app["eu
 
 A resource with `count = n` makes `n` instances, addressed `type.name[0]` to
 `type.name[n-1]`. `n` is a whole number from 0, known when planning: a literal, a
-variable, or a value a resource already has. One that reads a value only an apply makes
-is refused where it is written.
+variable, a value a resource already has, or one the configuration sets on a resource to
+be created or changed. One that reads a value only an apply makes, such as an id, is
+refused where it is written.
 
 Inside the block, `count.index` is the index of the instance being made. Anywhere else,
 and in `count` itself, it is refused where it is written.

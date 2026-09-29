@@ -65,10 +65,28 @@ describe('outputs in the state file', () => {
     expect(plan.outputs).toEqual({ greeting: { old: 'hello', new: undefined }, message: { old: undefined, new: 'hello' } });
   });
 
-  it('plans an output that a pending resource feeds as known after apply', async () => {
-    const plan = await newOrchestrator().plan(withOutput('greeting'));
+  // The configuration sets the content, but only the apply makes the id.
+  it('plans an output that a resource to be created feeds with what its configuration sets, and its id as known after apply', async () => {
+    const plan = await newOrchestrator().plan(`${withOutput('greeting')}\noutput "id" { value = "\${local_file.a.id}" }`);
 
-    expect(isUnknown(plan.outputs.greeting.new)).toBe(true);
+    expect(plan.outputs.greeting.new).toBe('hello');
+    expect(isUnknown(plan.outputs.id.new)).toBe(true);
+  });
+
+  // What the configuration sets is known only as far as what it reads is; text around it does not make it known.
+  it('plans a value set from one only an apply makes as known after apply, read through another resource', async () => {
+    const config = `
+      resource "random_string" "s" { length = 4 }
+      resource "local_file" "a" {
+        path = "${path.join(dir, 'a.txt')}"
+        content = "\${random_string.s.id}"
+      }
+      output "o" { value = "read \${local_file.a.content}" }
+    `;
+
+    const plan = await newOrchestrator().plan(config);
+
+    expect(isUnknown(plan.outputs.o.new)).toBe(true);
   });
 
   it('plans no output change when the state already has it', async () => {

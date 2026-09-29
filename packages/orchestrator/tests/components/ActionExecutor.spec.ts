@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActionExecutor } from '../../src/components/ActionExecutor';
 import { ModuleInstances } from '../../src/ModuleInstances';
+import { Planned } from '../../src/Planned';
 import { ProviderRegistry } from '../../src/ProviderRegistry';
 import { Instances } from '../../src/Instances';
 import { ReferenceResolver } from '../../src/resolvers/ReferenceResolver';
@@ -30,7 +31,7 @@ describe('ActionExecutor', () => {
 
     providers = new ProviderRegistry();
     providers.register(mockProvider);
-    executor = new ActionExecutor(providers, new ReferenceResolver(new ScopeManager(), new Map(), new Instances(), new ModuleInstances()));
+    executor = new ActionExecutor(providers, new ReferenceResolver(new ScopeManager(), new Map(), new Instances(), new ModuleInstances(), new Planned()));
   });
 
   afterEach(() => {

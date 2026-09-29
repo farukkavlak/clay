@@ -1,6 +1,6 @@
 import { DiskFiles, Orchestrator, RunEvent } from '@clay/orchestrator';
 import { ConfigError } from '@clay/parser';
-import { isUnknown, parsePlanFile, serializePlan } from '@clay/planner';
+import { parsePlanFile, serializePlan } from '@clay/planner';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
@@ -188,14 +188,14 @@ describe('a resource with for_each', () => {
     ]);
   });
 
-  it('plans a reader of an instance that changes with what it reads unknown', async () => {
+  it('plans a reader of an instance that changes with the value it changes to', async () => {
     await apply(withReader('80'));
 
     const plan = await newOrchestrator().plan(withReader('80').replace('"8080"', '"9090"'));
 
     const reader = plan.actions.find((action) => action.name === 'reader');
     expect(reader?.type).toBe('UPDATE');
-    expect(isUnknown(reader?.changes?.content.new)).toBe(true);
+    expect(reader?.changes?.content.new).toBe('9090');
   });
 
   it('deletes a reader before the instances it read', async () => {

@@ -1,6 +1,6 @@
 import { DiskFiles, Orchestrator, RunEvent } from '@clay/orchestrator';
 import { ConfigError } from '@clay/parser';
-import { isUnknown, parsePlanFile, serializePlan } from '@clay/planner';
+import { parsePlanFile, serializePlan } from '@clay/planner';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
@@ -134,14 +134,14 @@ describe('a resource with count', () => {
     ]);
   });
 
-  it('plans a reader of an instance that changes with what it reads unknown', async () => {
+  it('plans a reader of an instance that changes with the value it changes to', async () => {
     await apply(withReader('1'));
 
     const plan = await newOrchestrator().plan(withReader('1', 'new'));
 
     const reader = plan.actions.find((action) => action.name === 'reader');
     expect(reader?.type).toBe('UPDATE');
-    expect(isUnknown(reader?.changes?.content.new)).toBe(true);
+    expect(reader?.changes?.content.new).toBe('new 0');
   });
 
   it('deletes a reader before the instances it read', async () => {
@@ -234,5 +234,12 @@ describe('a resource with count', () => {
 
     expect(error.message).toBe(message);
     expect(error.position).toMatchObject(placeOf(config, `count = ${count}`.slice('count = '.length)));
+  });
+
+  // The configuration sets the length, so the plan knows it before the string is made.
+  it('reads count from what the configuration sets on a resource still to be created', async () => {
+    await apply(`resource "random_string" "s" { length = 3 }\n${logs('random_string.s.length')}`);
+
+    expect(await files()).toEqual(['log-0.txt', 'log-1.txt', 'log-2.txt']);
   });
 });
