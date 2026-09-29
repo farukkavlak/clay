@@ -4,6 +4,15 @@ export { Address, isInstanceKey, isModulePath, ModuleAddress } from './Address';
 export type { InstanceKey, ModuleStep } from './Address';
 export { ExactNumber, NumberError } from './ExactNumber';
 
+/** A plain object, as JSON makes one: a number read from a file is an ExactNumber, which is no record. */
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null) return false;
+
+  const prototype: unknown = Object.getPrototypeOf(value);
+
+  return prototype === Object.prototype || prototype === null;
+}
+
 /** A resource as state records it. */
 export interface Resource {
   id?: string;
