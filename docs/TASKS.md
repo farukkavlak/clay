@@ -87,7 +87,6 @@ hits each of these early.
 - [x] Adding `count` to a module that exists moves what is in it to `module.name[0]`, and
       taking it off moves it back, as for a resource. Two places state may keep it are
       refused rather than guessed between
-- [ ] `count` on a data source
 - [ ] A resource still to be created reads as unknown in full, even an attribute the
       configuration sets to a literal, so `count = random_string.s.length` cannot be
       planned on a fresh state. Terraform knows what the configuration sets on a planned
@@ -163,6 +162,8 @@ anything yet.
       read before the module has instances. As a graph node it is read once for each
       instance of its module; test that end to end with a module called with `count` and one
       with `for_each`, nested ones too
+- [ ] `count` and `for_each` on a data source, as on a resource, once it is a graph node:
+      read at load, it cannot wait on what its count reads
 - [ ] A data source fed by a pending resource is `(known after apply)`
 - [ ] Their values travel in the plan, as in Terraform, so `apply` reads none of them
       again. `runPlan` still parses and builds the graph on its own, since a saved plan
