@@ -1,11 +1,12 @@
 import { DataReference } from '@clay/parser';
-import { dataSourceKey, Context, scopeOf } from '../keys';
+import { Context, dataSourceKey, moduleOf, scopeOf } from '../keys';
 
 export class DataSourceResolver {
   constructor(private dataSources: Map<string, Record<string, unknown>>) {}
 
   resolve(reference: DataReference, context: Context): unknown {
-    const key = dataSourceKey(scopeOf(context), reference.type, reference.name);
+    // Read once for the module as the configuration writes it, since the config loads before any module has instances.
+    const key = dataSourceKey(scopeOf(moduleOf(context).withoutKeys()), reference.type, reference.name);
     const attrName = reference.attribute;
 
     const dataAttributes = this.dataSources.get(key);

@@ -1,10 +1,12 @@
 import { ModuleAddress } from '@clay/contracts';
 
+/** A variable's value as written, and the module it is read in: the module itself for a default, the calling one for an input. */
 export interface VariableValue {
   value: unknown;
   context: ModuleAddress;
 }
 
+/** Variables by the module as the configuration writes it, since each instance reads the same values; outputs by the instance, since each comes to its own. */
 export class ScopeManager {
   private variables: Map<string, Map<string, VariableValue>> = new Map();
   private outputs: Map<string, Map<string, unknown>> = new Map();

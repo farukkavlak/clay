@@ -15,8 +15,32 @@ describe('ReferenceScanner', () => {
     const attributes = { id: { type: 'Reference', value: ['resource', 'dep', 'id'] } };
 
     expect(scanner.referencesIn(attributes, context)).toEqual([
-      { kind: 'resource', key: 'resource.dep', address: 'resource.dep', reference: { kind: 'resource', type: 'resource', name: 'dep', path: ['id'] } },
+      {
+        kind: 'resource',
+        key: 'resource.dep',
+        block: 'resource.dep',
+        address: 'resource.dep',
+        reference: { kind: 'resource', type: 'resource', name: 'dep', path: ['id'] },
+      },
     ]);
+  });
+
+  // The graph holds the block once for every instance of its module; the plan reads the one in the instance it is in.
+  it('keys a resource read in an instance of a module by its block, and names the block and the instance in that instance of the module', () => {
+    const instances = new Instances();
+    instances.declare('module.app.resource.dep', 'count');
+    const inInstance = new Address(ModuleAddress.root.child('app', 0), 'resource', 'main');
+
+    const [found] = new ReferenceScanner(instances).referencesIn({ type: 'Reference', value: ['resource', 'dep', 1, 'id'] }, inInstance);
+
+    expect(found).toMatchObject({ key: 'module.app.resource.dep', block: 'module.app[0].resource.dep', address: 'module.app[0].resource.dep[1]' });
+  });
+
+  it('keys a variable and an output read in an instance of a module in that instance', () => {
+    const inInstance = new Address(ModuleAddress.root.child('app', 0), 'resource', 'main');
+    const attributes = { a: { type: 'Reference', value: ['var', 'x'] }, b: { type: 'Reference', value: ['module', 'db', 'url'] } };
+
+    expect(keysOf(scanner.referencesIn(attributes, inInstance))).toEqual(['module.app[0].vars:x', 'module.app[0].module.db.outputs:url']);
   });
 
   it('should ignore data sources', () => {

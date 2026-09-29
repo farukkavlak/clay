@@ -140,6 +140,10 @@ describe('Address', () => {
       expect(new Address(ModuleAddress.root.child('app', 'a'), 'local_file', 'b', 1).toString()).toBe('module.app["a"].local_file.b[1]');
     });
 
+    it('drops the key of every module for the module as the configuration writes it', () => {
+      expect(ModuleAddress.root.child('app', 0).child('db').child('web', 'a').withoutKeys().toString()).toBe('module.app.module.db.module.web');
+    });
+
     it('leaves the module it grows from as it was', () => {
       const app = ModuleAddress.root.child('app');
       app.child('db');

@@ -1,4 +1,4 @@
-import { Address, ExactNumber, State } from '@clay/contracts';
+import { Address, ExactNumber, ModuleAddress, State } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { AttributeValue, ResourceBlock, spell } from '@clay/parser';
 import { DesiredResource, hasChanges, isUnknown, UNKNOWN } from '@clay/planner';
@@ -6,7 +6,8 @@ import { moveResource } from '@clay/state';
 
 import { eachFrom } from '../forEach';
 import { Instances } from '../Instances';
-import { Context } from '../keys';
+import { Context, enclosing, outputKey, variableKey } from '../keys';
+import { ModuleInstances } from '../ModuleInstances';
 import { tryAt } from '../place';
 import { checkHasKey, checkInRange } from '../resolvers/instance';
 import { kindOf } from '../resolvers/readPath';
@@ -23,6 +24,14 @@ export interface DesiredState {
   outputs: Record<string, unknown>;
 }
 
+/** The deepest module both sit in: `module.a` for `module.a.module.b` and `module.a.module.c`. */
+function sharedModule(one: ModuleAddress, other: ModuleAddress): ModuleAddress {
+  let depth = 0;
+  while (depth < one.path.length && depth < other.path.length && one.path[depth].name === other.path[depth].name) depth += 1;
+
+  return new ModuleAddress(one.path.slice(0, depth));
+}
+
 /** A count says how many instances to make, so it is a whole number, and one the plan knows. */
 function countFrom(value: unknown): number {
   if (isUnknown(value)) throw new Error('count must be known when planning: it reads a value only an apply makes');
@@ -36,7 +45,8 @@ function countFrom(value: unknown): number {
 
 /**
  * Resolves each resource after the ones it reads from, so a value an earlier action will change is UNKNOWN, not stale.
- * `pending` holds what will change: a resource by the instance it names, so reading one that stays as it is gives its value.
+ * Each node is resolved once for every instance of its module.
+ * `pending` holds what will change: a resource by the instance it names, so reading one that stays as it is gives its value, and a variable or an output by the instance of its module.
  */
 export class DesiredStateBuilder {
   constructor(
@@ -44,7 +54,8 @@ export class DesiredStateBuilder {
     private scanner: ReferenceScanner,
     private resolver: ReferenceResolver,
     private graphBuilder: DependencyGraphBuilder,
-    private instances: Instances
+    private instances: Instances,
+    private modules: ModuleInstances
   ) {}
 
   /** Moves are made in the state it is given, which a plan reads for itself and never writes, and then plans the actions against. */
@@ -58,18 +69,27 @@ export class DesiredStateBuilder {
       for (const key of layer) {
         const node = graph.getNode(key)!;
 
-        if (node.kind === 'variable') this.planVariable(key, node, state, pending);
-        else if (node.kind === 'output') this.planOutput(key, node, state, pending, outputs);
-        else resources.push(...this.planResource(key, byKey.get(key)!, graph, state, pending));
+        if (node.kind === 'module') this.modules.expand(node.module, node.name);
+        else if (node.kind === 'resource') resources.push(...this.planResource(key, byKey.get(key)!, graph, state, pending));
+        else for (const instance of this.modules.of(node.module)) this.planValue(node, instance, state, pending, outputs);
       }
 
     return { resources, outputs };
   }
 
-  /** One desired resource for each instance the block makes: one with neither count nor for_each, and one per index or key with either. */
   private planResource(key: string, loaded: LoadedResource, graph: Graph<GraphNode>, state: State, pending: Set<string>): DesiredResource[] {
     const { address, block } = loaded;
-    const dependencies = this.instancesOf(this.graphBuilder.resourceDependencies(graph, key));
+    const blocks = this.graphBuilder.resourceDependencies(graph, key);
+
+    return this.modules.of(address.module).flatMap((module) => {
+      const dependencies = this.instancesOf(blocks, module);
+      return this.planBlock(new Address(module, address.resourceType, address.name), block, dependencies, state, pending);
+    });
+  }
+
+  /** One desired resource for each instance the block makes in one instance of its module: one with neither count nor for_each, and one per index or key with either. */
+  private planBlock(address: Address, block: ResourceBlock, dependencies: string[], state: State, pending: Set<string>): DesiredResource[] {
+    const key = address.toString();
 
     if (block.count) this.instances.setCount(key, this.readAt(block.count, block, address, state, pending, countFrom));
     if (block.forEach) this.instances.setEach(key, this.readAt(block.forEach, block, address, state, pending, eachFrom));
@@ -103,29 +123,47 @@ export class DesiredStateBuilder {
     return source.toString();
   }
 
-  /** The graph links blocks; state keeps what each instance read, so a delete runs after every instance of what it read from. Each block was planned before, so its keys are known. */
-  private instancesOf(blocks: string[]): string[] {
+  /**
+   * The graph links blocks; state keeps what each instance read, so a delete runs after every instance of what it read from. Each block was planned before, so its keys are known.
+   * Only the instances in the same instance of the module both sit in as `reader`: `module.a[0]` reads from `module.a[0]`, never from `module.a[1]`.
+   */
+  private instancesOf(blocks: string[], reader: ModuleAddress): string[] {
     return blocks.flatMap((block) => {
-      const keys = this.instances.keysOf(block);
-      if (keys === undefined) return [block];
-
       const { module, resourceType, name } = Address.parse(block);
-      return keys.map((key) => new Address(module, resourceType, name, key).toString());
+      const shared = sharedModule(module, reader.withoutKeys());
+      const readerIn = enclosing(reader, shared).toString();
+
+      return this.modules
+        .of(module)
+        .filter((instance) => enclosing(instance, shared).toString() === readerIn)
+        .flatMap((instance) => this.instancesIn(new Address(instance, resourceType, name)));
     });
   }
 
+  private instancesIn(block: Address): string[] {
+    const keys = this.instances.keysOf(block.toString());
+    if (keys === undefined) return [block.toString()];
+
+    return keys.map((key) => new Address(block.module, block.resourceType, block.name, key).toString());
+  }
+
+  private planValue(node: ValueNode & { kind: 'variable' | 'output' }, instance: ModuleAddress, state: State, pending: Set<string>, rootOutputs: Record<string, unknown>): void {
+    if (node.kind === 'variable') this.planVariable(node, instance, state, pending);
+    else this.planOutput(node, instance, state, pending, rootOutputs);
+  }
+
   /** A variable fed by a pending resource is pending itself, so everything reading it plans against UNKNOWN. */
-  private planVariable(key: string, node: ValueNode, state: State, pending: Set<string>): void {
-    if (node.value !== undefined && isUnknown(this.resolveNode(node, state, pending))) pending.add(key);
+  private planVariable(node: ValueNode, instance: ModuleAddress, state: State, pending: Set<string>): void {
+    if (node.value !== undefined && isUnknown(this.resolveNode(node, instance, state, pending))) pending.add(variableKey(instance.toString(), node.name));
   }
 
   /** Gives an output its value so the resources reading it can be planned; an output fed by a pending resource keeps none. */
-  private planOutput(key: string, node: ValueNode, state: State, pending: Set<string>, rootOutputs: Record<string, unknown>): void {
-    const value = this.resolveNode(node, state, pending);
-    if (isUnknown(value)) pending.add(key);
-    else this.scopeManager.setOutput(node.scope, node.name, value);
+  private planOutput(node: ValueNode, instance: ModuleAddress, state: State, pending: Set<string>, rootOutputs: Record<string, unknown>): void {
+    const value = this.resolveNode(node, instance, state, pending);
+    if (isUnknown(value)) pending.add(outputKey(instance.toString(), node.name));
+    else this.scopeManager.setOutput(instance.toString(), node.name, value);
 
-    if (node.context.isRoot()) rootOutputs[node.name] = value;
+    if (instance.isRoot()) rootOutputs[node.name] = value;
   }
 
   /** Resolves config values the way the diff needs them; what an apply has to produce first stays UNKNOWN. */
@@ -139,8 +177,10 @@ export class DesiredStateBuilder {
     return resolved;
   }
 
-  private resolveNode(node: ValueNode, state: State, pending: Set<string>): unknown {
-    return tryAt(node.position, node.declaration, node.context, () => this.resolveOrUnknown(node.value, state, node.context, pending));
+  /** Read in the instance of its context that the instance of its module sits in: the caller's, for an input. */
+  private resolveNode(node: ValueNode, instance: ModuleAddress, state: State, pending: Set<string>): unknown {
+    const context = enclosing(instance, node.context);
+    return tryAt(node.position, node.declaration, context, () => this.resolveOrUnknown(node.value, state, context, pending));
   }
 
   /** An index past a count, or a key for_each does not give, is refused before anything is read, since a reference to a pending instance is never resolved. */
@@ -159,11 +199,11 @@ export class DesiredStateBuilder {
     }
   }
 
-  private checkIndex({ key, reference, position }: Extract<Reference, { kind: 'resource' }>): void {
+  private checkIndex({ key, block, reference, position }: Extract<Reference, { kind: 'resource' }>): void {
     const [first] = reference.path;
     const repetition = this.instances.repetitionOf(key);
 
-    if (repetition === 'count' && typeof first === 'number') checkInRange(reference, first, this.instances.keysOf(key)?.length, position);
-    if (repetition === 'for_each' && typeof first === 'string') checkHasKey(reference, first, this.instances.keysOf(key), position);
+    if (repetition === 'count' && typeof first === 'number') checkInRange(reference, first, this.instances.keysOf(block)?.length, position);
+    if (repetition === 'for_each' && typeof first === 'string') checkHasKey(reference, first, this.instances.keysOf(block), position);
   }
 }
