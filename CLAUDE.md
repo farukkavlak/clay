@@ -19,30 +19,7 @@ The owner makes the decisions and has to understand every line that lands.
 - After a change, explain what changed and why.
 - Nothing lands that the owner hasn't seen and understood.
 
-## Packages
-
-| Package          | Does                                                           |
-| ---------------- | -------------------------------------------------------------- |
-| `parser`         | Turns `.clay` files into an AST (`docs/GRAMMAR.md`)            |
-| `graph`          | Dependency graph, sorted into layers that can run in parallel  |
-| `contracts`      | Interfaces shared by the engine and providers                  |
-| `state`          | Reads and writes state, with a lock and a backup               |
-| `planner`        | Compares config with state and lists the actions               |
-| `orchestrator`   | Loads modules, resolves references and runs the plan           |
-| `cli`            | The `clay` command                                             |
-| `provider-local` | `local_file`, `random_string`, `null_resource`, `command_exec` |
-
 ## Commands
-
-```sh
-npm ci
-npm run build
-npm test
-npm run lint
-npm run type:check
-npm run format
-npm run format:check
-```
 
 Try the CLI in a temp directory, never in the repo: `node packages/cli/bin/clay.js plan`.
 

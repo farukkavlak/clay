@@ -196,8 +196,9 @@ written, since taking either would destroy the other; `clay state mv` says which
 A resource with `for_each` makes one instance for each key, addressed `type.name["key"]`.
 Over a map, the keys are the map's and each instance is given the value under its key.
 Over a list of strings, each string is a key and its own value. A string twice in the
-list is refused, and so is anything other than a map or a list of strings. Like a count,
-it is known when planning: a map with a value only an apply makes is refused as a whole.
+list is refused, and so is anything other than a map or a list of strings. Its keys are
+known when planning: a map's values may wait for the apply, and `each.value` is then
+unknown, but a list item or a whole value only an apply makes is refused.
 The instances are planned in the order of their keys. An empty map or list makes none, so
 any that exist are destroyed.
 

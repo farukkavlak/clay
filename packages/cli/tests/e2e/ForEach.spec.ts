@@ -324,8 +324,12 @@ describe('a resource with for_each', () => {
     ['a list with a number in it', '["a", 1]', 'for_each is a list of strings, but item [1] is a number'],
     ['a list with a string twice', '["a", "b", "a"]', 'for_each holds "a" twice; each instance needs a key of its own'],
     ['a value only an apply makes', 'random_string.s.id', 'for_each must be known when planning: it reads a value only an apply makes'],
-    // A map with a value still to come is unknown as a whole, keys and all.
-    ['a map with a value only an apply makes', '{ a = random_string.s.id }', 'for_each must be known when planning: it reads a value only an apply makes'],
+    // A list's items are its keys, so one still to come leaves an instance without a name.
+    [
+      'a list with an item only an apply makes',
+      '["a", random_string.s.id]',
+      'for_each must be known when planning: item [1] reads a value only an apply makes, and a list names its instances by its items',
+    ],
   ])('refuses a for_each that is %s, where it is written', async (_, forEach, message) => {
     const config = `resource "random_string" "s" { length = 4 }\n${files(forEach)}`;
 

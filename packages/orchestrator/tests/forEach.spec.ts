@@ -32,12 +32,26 @@ describe('the instances a for_each makes', () => {
     expect(eachFrom([]).size).toBe(0);
   });
 
+  // A map's keys are known before its values, so a value only an apply makes leaves them known.
+  it('makes one for each key of a map whose values are not known yet, given what it has of them', () => {
+    expect([...eachFrom({ b: UNKNOWN, a: { id: UNKNOWN, name: 'x' } })]).toEqual([
+      ['a', { id: UNKNOWN, name: 'x' }],
+      ['b', UNKNOWN],
+    ]);
+  });
+
   it('takes an empty string as a key', () => {
     expect([...eachFrom([''])]).toEqual([['', '']]);
   });
 
   it.each([
     ['a value only an apply makes', UNKNOWN, 'for_each must be known when planning: it reads a value only an apply makes'],
+    // A list's items are its keys.
+    [
+      'a list with an item only an apply makes',
+      ['a', UNKNOWN],
+      'for_each must be known when planning: item [1] reads a value only an apply makes, and a list names its instances by its items',
+    ],
     ['a string', 'a', 'for_each is a map or a list of strings, not a string'],
     ['a number', ExactNumber.parse('2'), 'for_each is a map or a list of strings, not a number'],
     ['a bool', true, 'for_each is a map or a list of strings, not a bool'],

@@ -1,5 +1,5 @@
+import { Address } from '@clay/contracts';
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
-import { ConfigError } from '@clay/parser';
 import { isUnknown, UNKNOWN } from '@clay/planner';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
@@ -141,19 +141,94 @@ describe('a value known in part', () => {
     expect(failed?.type === 'failed' && failed.error.message).toContain('Attribute "nosuch" not found on resource');
   });
 
-  it('refuses a for_each known in part, where it is written', async () => {
-    const withForEach = `
+  const applyAll = async (config: string) => {
+    for await (const event of start(newOrchestrator(), config)) if (event.type === 'failed') throw event.error;
+  };
+
+  const read = (name: string) => fs.readFile(path.join(dir, name), 'utf8');
+
+  // A map's keys are known before its values, so its values can wait for the apply while its instances are planned.
+  it('plans an instance for each key of a for_each whose values the apply makes, and applies them', async () => {
+    const config = `
       resource "random_string" "s" { length = 4 }
-      resource "null_resource" "n" {
-        for_each = { a = "\${random_string.s.id}" }
+      resource "local_file" "f" {
+        for_each = { a = random_string.s.id, b = "fixed" }
+        path = "${path.join(dir, '${each.key}.txt')}"
+        content = "\${each.value}"
       }
+      output "a" { value = { path = local_file.f["a"].path, content = local_file.f["a"].content } }
+      output "b" { value = local_file.f["b"].content }
     `;
 
-    const error = await newOrchestrator()
-      .plan(withForEach)
-      .catch((error: unknown) => error);
+    const { actions, outputs } = await newOrchestrator().plan(config);
 
-    expect(error).toBeInstanceOf(ConfigError);
-    expect((error as ConfigError).message).toBe('for_each must be known when planning: it reads a value only an apply makes');
+    expect(actions.map((action) => [action.type, Address.of(action).toString()])).toEqual([
+      ['CREATE', 'random_string.s'],
+      ['CREATE', 'local_file.f["a"]'],
+      ['CREATE', 'local_file.f["b"]'],
+    ]);
+    expect(outputs.a.new).toEqual({ path: path.join(dir, 'a.txt'), content: UNKNOWN });
+    expect(outputs.b.new).toBe('fixed');
+
+    await applyAll(config);
+    const { resources } = await new LocalBackend(dir).read();
+    expect(await read('a.txt')).toBe(resources['random_string.s'].id);
+    expect(await read('b.txt')).toBe('fixed');
+  });
+
+  it('plans an instance of a module for each key of a for_each whose values the apply makes, and applies them', async () => {
+    await fs.mkdir(path.join(dir, 'page'));
+    await fs.writeFile(
+      path.join(dir, 'page', 'main.clay'),
+      `
+        variable "name" {}
+        variable "body" {}
+        resource "local_file" "page" {
+          path = "${path.join(dir, '${var.name}.txt')}"
+          content = "\${var.body}"
+        }
+        output "content" { value = local_file.page.content }
+      `,
+      'utf8'
+    );
+    const config = `
+      resource "random_string" "s" { length = 4 }
+      module "page" {
+        source = "./page"
+        for_each = { a = random_string.s.id, b = "fixed" }
+        name = "\${each.key}"
+        body = "\${each.value}"
+      }
+      output "a" { value = module.page["a"].content }
+      output "b" { value = module.page["b"].content }
+    `;
+
+    const { actions, outputs } = await newOrchestrator().plan(config);
+
+    expect(actions.map((action) => [action.type, Address.of(action).toString()])).toEqual([
+      ['CREATE', 'random_string.s'],
+      ['CREATE', 'module.page["a"].local_file.page'],
+      ['CREATE', 'module.page["b"].local_file.page'],
+    ]);
+    expect(isUnknown(outputs.a.new)).toBe(true);
+    expect(outputs.b.new).toBe('fixed');
+
+    await applyAll(config);
+    const { resources } = await new LocalBackend(dir).read();
+    expect(await read('a.txt')).toBe(resources['random_string.s'].id);
+    expect(await read('b.txt')).toBe('fixed');
+  });
+
+  it('reads into a value of a for_each the apply makes as not known yet', async () => {
+    const { outputs } = await newOrchestrator().plan(`
+      resource "random_string" "s" { length = 4 }
+      resource "null_resource" "n" {
+        for_each = { a = { id = random_string.s.id, name = "x" } }
+        triggers = { id = each.value.id, name = each.value.name }
+      }
+      output "triggers" { value = null_resource.n["a"].triggers }
+    `);
+
+    expect(outputs.triggers.new).toEqual({ id: UNKNOWN, name: 'x' });
   });
 });
