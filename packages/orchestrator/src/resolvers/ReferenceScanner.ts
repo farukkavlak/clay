@@ -85,7 +85,8 @@ export class ReferenceScanner {
     const call = caller.child(reference.module);
     const [first, second] = reference.path;
     const index = typeof first === 'number' ? first : undefined;
-    const output = String(index === undefined ? first : second);
+    const named = index === undefined ? first : second;
+    const output = typeof named === 'string' ? named : '';
     const scope = scopeOf(call.withoutKeys());
 
     return {

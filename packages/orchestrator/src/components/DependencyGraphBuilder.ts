@@ -177,8 +177,7 @@ export class DependencyGraphBuilder {
       }
 
       // Once the module is known to be there, its call says whether the first step is an index, and a wrong one is refused for what it is.
-      if (reference.kind === 'output' && moduleScopes.has(reference.scope))
-        readCall(reference.reference, this.modules.repetitionOf(reference.call.withoutKeys()), reference.position);
+      if (reference.kind === 'output' && moduleScopes.has(reference.scope)) readCall(reference.reference, this.modules.repetitionOf(reference.call), reference.position);
 
       if (!graph.hasNode(reference.key)) {
         const message = `Invalid reference in "${dependentKey}": ${describeMissing(reference, moduleScopes)}`;
