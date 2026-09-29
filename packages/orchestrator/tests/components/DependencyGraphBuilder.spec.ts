@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest';
 import { DependencyGraphBuilder } from '../../src/components/DependencyGraphBuilder';
 import { LoadedModule, LoadedResource } from '../../src/components/ModuleLoader';
 import { Instances } from '../../src/Instances';
+import { ModuleCall } from '../../src/keys';
+import { ModuleInstances } from '../../src/ModuleInstances';
 import { ReferenceScanner } from '../../src/resolvers/ReferenceScanner';
 import { moduleBlock, ref, resourceBlock, str, variableBlock } from '../ast';
 
@@ -23,7 +25,8 @@ function module(modulePath: string[], program: Statement[]): LoadedModule {
 
 describe('DependencyGraphBuilder', () => {
   const instances = new Instances();
-  const builder = new DependencyGraphBuilder(new ReferenceScanner(instances), instances);
+  const modules = new ModuleInstances();
+  const builder = new DependencyGraphBuilder(new ReferenceScanner(instances), instances, modules);
 
   it('should run a resource after the one it reads from', () => {
     const main = resource('main', { id: ref('resource', 'dep', 'id') });
@@ -110,7 +113,7 @@ describe('DependencyGraphBuilder', () => {
     const graph = builder.buildExecutionGraph([resource('a'), resource('b', {}, ['m']), resource('c', {}, ['m', 'n'])], [root, child, grandchild]);
 
     expect(graph.topologicalSort()).toEqual([['resource.a', 'module:m'], ['module.m.resource.b', 'module.m.module:n', 'module.m.vars:v'], ['module.m.module.n.resource.c']]);
-    expect(graph.getNode('module.m.module:n')).toEqual({ kind: 'module', module: ModuleAddress.root.child('m'), name: 'n' });
+    expect(graph.getNode('module.m.module:n')).toMatchObject({ kind: 'module', module: ModuleAddress.root.child('m'), block: { name: 'n' } });
   });
 
   it('should read a module input where the module is called and hand it to the resource inside', () => {
@@ -121,7 +124,7 @@ describe('DependencyGraphBuilder', () => {
     const graph = builder.buildExecutionGraph([resource('dep'), inner], [root, child]);
 
     expect(graph.topologicalSort()).toEqual([['resource.dep', 'module:m'], ['module.m.vars:text'], ['module.m.resource.inner']]);
-    expect(graph.getNode('module.m.vars:text')).toMatchObject({ kind: 'variable', context: root.address });
+    expect(graph.getNode('module.m.vars:text')).toMatchObject({ kind: 'variable', context: new ModuleCall(ModuleAddress.root.child('m')) });
   });
 
   it('should list the resources a resource reads from, looking through a module input', () => {

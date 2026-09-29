@@ -3,9 +3,10 @@ import { Graph } from '@clay/graph';
 import { AttributeValue, ModuleBlock, Position, spell } from '@clay/parser';
 
 import { Instances, Repetition } from '../Instances';
-import { callKey, Context, outputKey, scopeOf, variableKey } from '../keys';
+import { callKey, Context, ModuleCall, outputKey, scopeOf, variableKey } from '../keys';
+import { ModuleInstances } from '../ModuleInstances';
 import { placed, tryAt } from '../place';
-import { readInstance } from '../resolvers/instance';
+import { COUNT_INDEX_OUTSIDE, readCall, readInstance } from '../resolvers/instance';
 import { Reference, ReferenceScanner } from '../resolvers/ReferenceScanner';
 import { LoadedModule, LoadedResource } from './ModuleLoader';
 
@@ -14,24 +15,28 @@ interface InModule {
   module: ModuleAddress;
 }
 
-/** `context` is the module that reads the value, not the one that declares it: a module input is read where the module is called. */
+/** `context` is where the value is read, not the module that declares it: a module input is read in the call. */
 export interface ValueNode extends InModule {
   name: string;
   value: AttributeValue | undefined;
-  context: ModuleAddress;
+  context: ModuleAddress | ModuleCall;
   position: Position;
   declaration: string;
 }
 
-export type GraphNode = ({ kind: 'resource' } & InModule) | ({ kind: 'variable' } & ValueNode) | ({ kind: 'output' } & ValueNode) | ({ kind: 'module'; name: string } & InModule);
+export type GraphNode =
+  | ({ kind: 'resource' } & InModule)
+  | ({ kind: 'variable' } & ValueNode)
+  | ({ kind: 'output' } & ValueNode)
+  | ({ kind: 'module'; block: ModuleBlock } & InModule);
 
 function inputNames(attributes: Record<string, AttributeValue>): string[] {
   return Object.keys(attributes).filter((name) => name !== 'source');
 }
 
-/** `count.index` and `each.key` read the instance being made, so only a block that makes instances of that kind knows them. */
+/** `count.index` and `each.key` read the instance being made, so only a block that makes instances of that kind knows them, and a module's inputs where its call does. */
 function checkInstanceReference(reference: Extract<Reference, { kind: 'count' | 'each' }>, repetition: Repetition | undefined): void {
-  if (reference.kind === 'count' && repetition !== 'count') throw placed('count.index is only known inside a resource that has count', reference.position);
+  if (reference.kind === 'count' && repetition !== 'count') throw placed(COUNT_INDEX_OUTSIDE, reference.position);
   if (reference.kind === 'each' && repetition !== 'for_each') throw placed(`each.${reference.name} is only known inside a resource that has for_each`, reference.position);
 }
 
@@ -45,7 +50,8 @@ function describeMissing(reference: Exclude<Reference, { kind: 'count' | 'each' 
 export class DependencyGraphBuilder {
   constructor(
     private scanner: ReferenceScanner,
-    private instances: Instances
+    private instances: Instances,
+    private modules: ModuleInstances
   ) {}
 
   buildExecutionGraph(loadedResources: LoadedResource[], loadedModules: LoadedModule[]): Graph<GraphNode> {
@@ -55,13 +61,28 @@ export class DependencyGraphBuilder {
     for (const [key, node] of this.valueNodes(loadedModules)) graph.addNode(key, node);
 
     const moduleScopes = new Set(loadedModules.map((mod) => scopeOf(mod.address)));
-    for (const [key, node] of graph.entries())
-      if (node.kind === 'variable' || node.kind === 'output')
-        tryAt(node.position, node.declaration, node.context, () => this.addDependencies(node.value, graph, key, node.context, moduleScopes));
+    for (const [key, node] of graph.entries()) this.addNodeDependencies(key, node, graph, moduleScopes);
     for (const resource of loadedResources) this.addResourceDependencies(resource, graph, moduleScopes);
     for (const [key, node] of graph.entries()) if (!node.module.isRoot()) graph.addEdge(callKey(node.module), key);
 
     return graph;
+  }
+
+  private addNodeDependencies(key: string, node: GraphNode, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
+    if (node.kind === 'variable' || node.kind === 'output') this.addValueDependencies(key, node, graph, moduleScopes);
+    if (node.kind === 'module') this.addCountDependencies(key, node.block, node.module, graph, moduleScopes);
+  }
+
+  private addValueDependencies(key: string, node: ValueNode, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
+    const repetition = node.context instanceof ModuleCall ? this.modules.repetitionOf(node.module) : undefined;
+
+    tryAt(node.position, node.declaration, node.context, () => this.addDependencies(node.value, graph, key, node.context, moduleScopes, repetition));
+  }
+
+  /** A call's count is read in the module that calls it, before any instance of the module is made. */
+  private addCountDependencies(key: string, block: ModuleBlock, caller: ModuleAddress, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
+    const { count } = block;
+    if (count) tryAt(count.position, spell(block), caller, () => this.addDependencies(count, graph, key, caller, moduleScopes));
   }
 
   /** One value at a time, so an error points at the value that reads, not at the block it sits in. The count or for_each is read before any instance is, so it has no key. */
@@ -129,12 +150,12 @@ export class DependencyGraphBuilder {
     return nodes;
   }
 
-  // An input is read where the module is called, so its context is the parent, and it wins over the default inside.
+  // An input is read in the call, and it wins over the default inside.
   private setCallNodes(stmt: ModuleBlock, nodes: Map<string, GraphNode>, context: ModuleAddress): void {
     const module = context.child(stmt.name);
     const declaration = spell(stmt);
 
-    nodes.set(callKey(module), { kind: 'module', module: context, name: stmt.name });
+    nodes.set(callKey(module), { kind: 'module', module: context, block: stmt });
 
     for (const name of inputNames(stmt.attributes))
       nodes.set(variableKey(scopeOf(module), name), {
@@ -142,7 +163,7 @@ export class DependencyGraphBuilder {
         module,
         name,
         value: stmt.attributes[name],
-        context,
+        context: new ModuleCall(module),
         position: stmt.attributes[name].position,
         declaration,
       });
@@ -154,6 +175,10 @@ export class DependencyGraphBuilder {
         checkInstanceReference(reference, repetition);
         continue;
       }
+
+      // Once the module is known to be there, its call says whether the first step is an index, and a wrong one is refused for what it is.
+      if (reference.kind === 'output' && moduleScopes.has(reference.scope))
+        readCall(reference.reference, this.modules.repetitionOf(reference.call.withoutKeys()), reference.position);
 
       if (!graph.hasNode(reference.key)) {
         const message = `Invalid reference in "${dependentKey}": ${describeMissing(reference, moduleScopes)}`;

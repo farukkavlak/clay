@@ -79,9 +79,14 @@ hits each of these early.
 - [x] `for_each` on a resource, over a map or a list of strings, with `["key"]` access and
       `each.key`, `each.value`. A string twice in the list is refused where it is
       written; Terraform's `toset` drops the second in silence
-- [ ] `count` and `for_each` on a module. A module address grows an instance key, so the
-      `Address` that stands for a module's scope, with an empty type and name, gets a type
-      of its own
+- [x] `count` on a module: one instance of everything in it for each index,
+      `module.name[0]`, with `count.index` in the call's inputs and `module.name[0].out` to
+      read one. A module address has its own type, and a key on each module
+- [ ] `for_each` on a module
+- [ ] Adding `count` to a module that exists moves what is in it to `module.name[0]`, and
+      taking it off moves it back, as for a resource. Today the new instance is made and
+      then the old one destroyed, so a resource that names the same thing, such as a file
+      at one path, is lost
 - [ ] `count` on a data source
 - [ ] A resource still to be created reads as unknown in full, even an attribute the
       configuration sets to a literal, so `count = random_string.s.length` cannot be
@@ -154,6 +159,9 @@ twice. The local provider's `read` returns `{}` for every type, so no data sourc
 anything yet.
 
 - [ ] Data sources are graph nodes, read in dependency order and once per run
+- [ ] A data source in a module called with `count` is refused, since it is read before the
+      module has instances. As a graph node it is read once for each instance of its
+      module; test that end to end with a module called with `count`, nested ones too
 - [ ] A data source fed by a pending resource is `(known after apply)`
 - [ ] Their values travel in the plan, as in Terraform, so `apply` reads none of them
       again. `runPlan` still parses and builds the graph on its own, since a saved plan
@@ -261,9 +269,9 @@ by resource type, and no `provider` block exists yet.
       module's name should be
 - [ ] An output that fails to resolve reports a failure. `resolveOutput` runs outside the
       step's `try`, so a throw there ends the run with no `failed` event and nothing said.
-      `readEach`, which reads a `for_each` again at apply, runs there too, and so does the
-      refusal of a saved plan's action in an instance of a module the configuration does
-      not make
+      `readEach`, which reads a `for_each` again at apply, runs there too, and so do
+      `readCount`, which reads a module's `count` again, and the refusal of a saved plan's
+      action in an instance of a module the configuration does not make
 - [ ] An output may be named `__proto__`. The runner collects outputs into a plain object,
       where that name sets a prototype instead of a key, so the output disappears
 - [ ] `apply` says a missing file is missing the same way twice. A missing plan file and a

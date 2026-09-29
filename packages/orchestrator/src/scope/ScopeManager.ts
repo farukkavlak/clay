@@ -1,9 +1,11 @@
 import { ModuleAddress } from '@clay/contracts';
 
-/** A variable's value as written, and the module it is read in: the module itself for a default, the calling one for an input. */
+import { ModuleCall } from '../keys';
+
+/** A variable's value as written, and where it is read: in the module itself for a default, in the call for an input. */
 export interface VariableValue {
   value: unknown;
-  context: ModuleAddress;
+  context: ModuleAddress | ModuleCall;
 }
 
 /** Variables by the module as the configuration writes it, since each instance reads the same values; outputs by the instance, since each comes to its own. */

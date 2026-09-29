@@ -24,14 +24,14 @@ describe('a reference read into a value', () => {
   it.each([
     ['var.text', { kind: 'variable', name: 'text', path: [] }],
     ['data.local_file.f.content', { kind: 'data', type: 'local_file', name: 'f', attribute: 'content', path: [] }],
-    ['module.app.url', { kind: 'module', module: 'app', output: 'url', path: [] }],
+    ['module.app.url', { kind: 'module', module: 'app', path: ['url'] }],
     ['local_file.a.content', { kind: 'resource', type: 'local_file', name: 'a', path: ['content'] }],
     ['count.index', { kind: 'count', path: [] }],
     ['each.key', { kind: 'each', name: 'key', path: [] }],
     ['each.value.port', { kind: 'each', name: 'value', path: ['port'] }],
     ['var.tags.env', { kind: 'variable', name: 'tags', path: ['env'] }],
     ['data.local_file.f.tags.env', { kind: 'data', type: 'local_file', name: 'f', attribute: 'tags', path: ['env'] }],
-    ['module.app.tags.env', { kind: 'module', module: 'app', output: 'tags', path: ['env'] }],
+    ['module.app.tags.env', { kind: 'module', module: 'app', path: ['tags', 'env'] }],
     ['local_file.a.tags.env.name', { kind: 'resource', type: 'local_file', name: 'a', path: ['tags', 'env', 'name'] }],
   ])('reads %s as what it names, what it reads on it, and the steps into that value', (spelled, expected) => {
     expect(parse(spelled)).toEqual(expected);
@@ -43,6 +43,11 @@ describe('a reference read into a value', () => {
     expect(parseReference(['local_file', 'a', 'tags.env'], position)).toEqual({ kind: 'resource', type: 'local_file', name: 'a', path: ['tags.env'] });
   });
 
+  // Whether a module's first step is an instance index or the output depends on its call, which only the engine knows.
+  it('reads what follows a module name as steps, an index and all', () => {
+    expect(parseReference(['module', 'app', 0, 'url'], position)).toEqual({ kind: 'module', module: 'app', path: [0, 'url'] });
+  });
+
   it('reads an index as a step into the value', () => {
     expect(parseReference(['var', 'names', 0, 'first'], position)).toEqual({ kind: 'variable', name: 'names', path: [0, 'first'] });
   });
@@ -50,7 +55,7 @@ describe('a reference read into a value', () => {
   // A key is any text; only a part that names the target has to be a name.
   it('reads a key that is no name as a step', () => {
     expect(parseReference(['var', 'tags', ''], position)).toEqual({ kind: 'variable', name: 'tags', path: [''] });
-    expect(parseReference(['module', 'app', 'url', 'a.b'], position)).toEqual({ kind: 'module', module: 'app', output: 'url', path: ['a.b'] });
+    expect(parseReference(['module', 'app', 'url', 'a.b'], position)).toEqual({ kind: 'module', module: 'app', path: ['url', 'a.b'] });
   });
 
   // The engine resolves values long after the file is read, and adds the place itself.
@@ -72,7 +77,6 @@ describe('a reference read into a value', () => {
     [['local_file', 'x.y', 'id'], 'Reference "local_file["x.y"].id" has "x.y" where it needs a name'],
     [['var', 0], 'Reference "var[0]" has an index where it needs a name'],
     [['data', 'local_file', 0, 'content'], 'Reference "data.local_file[0].content" has an index where it needs a name'],
-    [['module', 'app', 0], 'Reference "module.app[0]" has an index where it needs a name'],
     [['count'], 'Reference "count" names nothing: count.index is the index of an instance'],
     [['count', 'id'], 'Reference "count.id" names nothing: count.index is the index of an instance'],
     [['count', 0], 'Reference "count[0]" has an index where it needs a name'],

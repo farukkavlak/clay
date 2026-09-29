@@ -62,13 +62,16 @@ A resource with `count = 3` makes three instances, `type.name[0]` to `type.name[
 one of them: `local_file.logs[0].content`. Adding `count` to a resource that exists moves
 it to `[0]` instead of making it again. With `for_each = { web = 80, api = 8080 }`, or a
 list of strings, it makes one instance for each key, `type.name["web"]`, and `each.key`
-and `each.value` inside the block are the key and value of the one being made.
+and `each.value` inside the block are the key and value of the one being made. A module
+call takes `count` too: with `count = 3`, `module.web[0]` to `module.web[2]` are each a
+whole copy of the module, and `count.index` in the call's inputs is the index of the copy.
 
-References: `var.name`, `local_file.a.content`, `module.m.out`, and `random_string.s.id`
-for what the provider assigned. A reference reads into a map or a list with `.key`,
-`["key"]` and `[0]`: `var.tags.env`, `var.names[0]`. A value read from a resource that has
-not been created yet is unknown at plan time and shown as such. Reaching inside a module
-(`module.m.local_file.a`) is not allowed; a module speaks through its outputs.
+References: `var.name`, `local_file.a.content`, `module.m.out`, `module.web[0].out`, and
+`random_string.s.id` for what the provider assigned. A reference reads into a map or a
+list with `.key`, `["key"]` and `[0]`: `var.tags.env`, `var.names[0]`. A value read from a
+resource that has not been created yet is unknown at plan time and shown as such. Reaching
+inside a module (`module.m.local_file.a`) is not allowed; a module speaks through its
+outputs.
 
 `docs/GRAMMAR.md` has the full grammar.
 

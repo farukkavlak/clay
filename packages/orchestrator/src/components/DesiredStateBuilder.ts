@@ -1,16 +1,16 @@
-import { Address, ExactNumber, ModuleAddress, State } from '@clay/contracts';
+import { Address, ModuleAddress, State } from '@clay/contracts';
 import { Graph } from '@clay/graph';
-import { AttributeValue, ResourceBlock, spell } from '@clay/parser';
+import { AttributeValue, ResourceBlock, spell, spellReference, Statement } from '@clay/parser';
 import { DesiredResource, hasChanges, isUnknown, UNKNOWN } from '@clay/planner';
 import { moveResource } from '@clay/state';
 
+import { countFrom, indexesOf } from '../count';
 import { eachFrom } from '../forEach';
 import { Instances } from '../Instances';
-import { Context, enclosing, outputKey, variableKey } from '../keys';
+import { Context, contextIn, enclosing, outputKey, variableKey } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
 import { tryAt } from '../place';
 import { checkHasKey, checkInRange } from '../resolvers/instance';
-import { kindOf } from '../resolvers/readPath';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { Reference, ReferenceScanner } from '../resolvers/ReferenceScanner';
 import { UnresolvedReferenceError } from '../resolvers/UnresolvedReferenceError';
@@ -30,17 +30,6 @@ function sharedModule(one: ModuleAddress, other: ModuleAddress): ModuleAddress {
   while (depth < one.path.length && depth < other.path.length && one.path[depth].name === other.path[depth].name) depth += 1;
 
   return new ModuleAddress(one.path.slice(0, depth));
-}
-
-/** A count says how many instances to make, so it is a whole number, and one the plan knows. */
-function countFrom(value: unknown): number {
-  if (isUnknown(value)) throw new Error('count must be known when planning: it reads a value only an apply makes');
-  if (!(value instanceof ExactNumber)) throw new Error(`count is a whole number from 0, not a ${kindOf(value)}`);
-
-  const count = value.toSafeInteger('count');
-  if (count < 0) throw new Error(`count is a whole number from 0, not ${count}`);
-
-  return count;
 }
 
 /**
@@ -69,12 +58,19 @@ export class DesiredStateBuilder {
       for (const key of layer) {
         const node = graph.getNode(key)!;
 
-        if (node.kind === 'module') this.modules.expand(node.module, node.name);
+        if (node.kind === 'module') this.planCall(node, state, pending);
         else if (node.kind === 'resource') resources.push(...this.planResource(key, byKey.get(key)!, graph, state, pending));
         else for (const instance of this.modules.of(node.module)) this.planValue(node, instance, state, pending, outputs);
       }
 
     return { resources, outputs };
+  }
+
+  /** A call's count is read in each instance of the module that calls it, and makes that many instances of the module there. */
+  private planCall({ module, block }: Extract<GraphNode, { kind: 'module' }>, state: State, pending: Set<string>): void {
+    const { count } = block;
+
+    this.modules.expand(module, block.name, (caller) => (count === undefined ? undefined : indexesOf(this.readAt(count, block, caller, state, pending, countFrom))));
   }
 
   private planResource(key: string, loaded: LoadedResource, graph: Graph<GraphNode>, state: State, pending: Set<string>): DesiredResource[] {
@@ -101,8 +97,8 @@ export class DesiredStateBuilder {
   }
 
   /** The count or for_each, read before any instance is, so it has no key. */
-  private readAt<T>(value: AttributeValue, block: ResourceBlock, address: Address, state: State, pending: Set<string>, read: (value: unknown) => T): T {
-    return tryAt(value.position, spell(block), address, () => read(this.resolveOrUnknown(value, state, address, pending)));
+  private readAt<T>(value: AttributeValue, block: Statement, context: Context, state: State, pending: Set<string>, read: (value: unknown) => T): T {
+    return tryAt(value.position, spell(block), context, () => read(this.resolveOrUnknown(value, state, context, pending)));
   }
 
   private planInstance(address: Address, block: ResourceBlock, dependencies: string[], state: State, pending: Set<string>): DesiredResource {
@@ -177,9 +173,8 @@ export class DesiredStateBuilder {
     return resolved;
   }
 
-  /** Read in the instance of its context that the instance of its module sits in: the caller's, for an input. */
   private resolveNode(node: ValueNode, instance: ModuleAddress, state: State, pending: Set<string>): unknown {
-    const context = enclosing(instance, node.context);
+    const context = contextIn(node.context, instance);
     return tryAt(node.position, node.declaration, context, () => this.resolveOrUnknown(node.value, state, context, pending));
   }
 
@@ -188,7 +183,8 @@ export class DesiredStateBuilder {
     for (const reference of this.scanner.referencesIn(value, context)) {
       if (reference.kind === 'count' || reference.kind === 'each') continue;
       if (reference.kind === 'resource') this.checkIndex(reference);
-      if (pending.has(reference.kind === 'resource' ? reference.address : reference.key)) return UNKNOWN;
+      if (reference.kind === 'output') this.checkCallIndex(reference);
+      if (pending.has(reference.kind === 'variable' ? reference.key : reference.address)) return UNKNOWN;
     }
 
     try {
@@ -203,7 +199,11 @@ export class DesiredStateBuilder {
     const [first] = reference.path;
     const repetition = this.instances.repetitionOf(key);
 
-    if (repetition === 'count' && typeof first === 'number') checkInRange(reference, first, this.instances.keysOf(block)?.length, position);
-    if (repetition === 'for_each' && typeof first === 'string') checkHasKey(reference, first, this.instances.keysOf(block), position);
+    if (repetition === 'count' && typeof first === 'number') checkInRange(spellReference([reference.type, reference.name]), first, this.instances.keysOf(block)?.length, position);
+    if (repetition === 'for_each' && typeof first === 'string') checkHasKey(spellReference([reference.type, reference.name]), first, this.instances.keysOf(block), position);
+  }
+
+  private checkCallIndex({ module, call, index, position }: Extract<Reference, { kind: 'output' }>): void {
+    if (typeof index === 'number') checkInRange(spellReference(['module', module]), index, this.modules.keysOf(call)?.length, position);
   }
 }

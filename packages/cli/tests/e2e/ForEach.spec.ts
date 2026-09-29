@@ -306,7 +306,7 @@ describe('a resource with for_each', () => {
 
     const error = await planError(config);
 
-    expect(error.message).toBe('count.index is only known inside a resource that has count');
+    expect(error.message).toBe('count.index is only known inside a resource or a module call that has count');
     expect(error.position).toMatchObject(placeOf(config, 'count.index'));
   });
 

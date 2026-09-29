@@ -18,11 +18,10 @@ export interface DataReference {
   path: Step[];
 }
 
-/** A module is read through its outputs, so what follows the output name reads into its value. */
+/** A module is read through its outputs. Whether the first step is an instance index or the output depends on the module call, which the engine reads. */
 export interface ModuleOutputReference {
   kind: 'module';
   module: string;
-  output: string;
   path: Step[];
 }
 
@@ -99,9 +98,9 @@ function dataReference(parts: Step[], position?: Position): DataReference {
 
 function moduleOutputReference(parts: Step[], position?: Position): ModuleOutputReference {
   if (parts.length < 3) refuse(`Module output reference must include output name: ${spellReference(parts)}`, position);
-  const { names, path } = split(parts, 3, position);
+  const { names, path } = split(parts, 2, position);
 
-  return { kind: 'module', module: names[1], output: names[2], path };
+  return { kind: 'module', module: names[1], path };
 }
 
 function resourceReference(parts: Step[], position?: Position): ResourceReference {

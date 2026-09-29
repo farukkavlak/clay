@@ -73,16 +73,16 @@ no name twice.
 
 What the engine reads from each:
 
-| Block      | Reads                                                                                                 |
-| ---------- | ----------------------------------------------------------------------------------------------------- |
-| `resource` | `count` or `for_each`, read by the engine; every other attribute goes to the provider                 |
-| `data`     | Every attribute goes to the provider's `read`                                                         |
-| `variable` | `default`, and nothing else; another attribute is refused where it is written                         |
-| `output`   | `value`                                                                                               |
-| `module`   | `source`, a literal string naming a directory relative to the file; every other attribute is an input |
+| Block      | Reads                                                                                                          |
+| ---------- | -------------------------------------------------------------------------------------------------------------- |
+| `resource` | `count` or `for_each`, read by the engine; every other attribute goes to the provider                          |
+| `data`     | Every attribute goes to the provider's `read`                                                                  |
+| `variable` | `default`, and nothing else; another attribute is refused where it is written                                  |
+| `output`   | `value`                                                                                                        |
+| `module`   | `source`, a literal string naming a directory relative to the file; `count`; every other attribute is an input |
 
-`count` or `for_each` on a data source or a module is refused where it is written, and so
-is a resource with both.
+`count` or `for_each` on a data source, and `for_each` on a module, is refused where it is
+written, and so is a resource with both.
 
 ## Values
 
@@ -139,7 +139,8 @@ The parts before that name what is read, so each is a name even when it is quote
 `var["region"]` is `var.region`, and `module["a.module.b"]` is refused.
 
 A module is read through its outputs, so `module.app.local_file.a` names an output
-called `local_file`, and is refused when the module has none.
+called `local_file`, and is refused when the module has none. A module called with count
+is read one instance at a time: `module.app[0].url`.
 
 ### Count
 
@@ -160,6 +161,31 @@ Adding `count` to a resource that exists moves it to `type.name[0]`, and taking 
 off moves `type.name[0]` back to `type.name` and destroys the other instances. A move
 changes only where state keeps the resource; a plan shows it, and any change to the
 resource runs with it. With `count = 0` nothing takes its place, so it is destroyed.
+
+### Count on a module
+
+A module call with `count = n` makes `n` instances of the module, addressed
+`module.name[0]` to `module.name[n-1]`, and everything in the module is made once in each:
+`module.web[1].local_file.page`. `n` is read in the module that calls it, the way a
+resource's count is. A call in a module with count makes its instances in each instance of
+that module.
+
+In the call's inputs, `count.index` is the index of the instance being made. Inside the
+module it is refused where it is written: the module is written once for every way it may
+be called, so it takes the index as an input.
+
+An output is read from one instance: `module.web[0].url`. On a call with count,
+`module.web.url` is refused, and so is an index past `n - 1`; on one without, an index is
+refused.
+
+A data source in a module called with count, or in a module that one calls, is refused
+where it is written: data sources are read once, as the configuration loads, before a
+module has instances.
+
+Adding `count` to a module that exists moves nothing yet: what is in it is made again
+under `module.name[0]`, and then the old one is destroyed. A resource that names the same
+thing as its old self, such as a file at one path, is gone when the run ends. Moving each
+resource first with `clay state mv` keeps it.
 
 ### For each
 
@@ -278,6 +304,7 @@ interface OutputBlock {
 interface ModuleBlock {
   type: 'Module';
   name: string;
+  count?: AttributeValue;
   attributes: Record<string, AttributeValue>;
   position: Position;
 }
@@ -300,8 +327,8 @@ throws the same for a character it does not know, a string not closed on its lin
 ## Not in the language
 
 - Expressions, operators and functions; a value is a literal or a reference
-- `count` or `for_each` on a data source or a module, `depends_on`, lifecycle blocks,
-  provisioners
+- `count` or `for_each` on a data source, `for_each` on a module, `depends_on`, lifecycle
+  blocks, provisioners
 - Nested blocks inside a block
 - Any file other than `main.clay`
 

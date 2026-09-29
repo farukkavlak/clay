@@ -1,17 +1,26 @@
-import { ModuleOutputReference } from '@clay/parser';
+import { ModuleOutputReference, Position, Step } from '@clay/parser';
+
 import { Context, moduleOf, scopeOf } from '../keys';
+import { ModuleInstances } from '../ModuleInstances';
 import { ScopeManager } from '../scope/ScopeManager';
+import { readCall } from './instance';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 
 export class ModuleOutputResolver {
-  constructor(private scopeManager: ScopeManager) {}
+  constructor(
+    private scopeManager: ScopeManager,
+    private modules: ModuleInstances
+  ) {}
 
-  resolve(reference: ModuleOutputReference, context: Context): unknown {
-    const scope = scopeOf(moduleOf(context).child(reference.module));
+  /** The output the reference reads, of the instance its index names, and the steps still to take into it. */
+  resolve(reference: ModuleOutputReference, context: Context, position?: Position): { value: unknown; path: Step[] } {
+    const caller = moduleOf(context);
+    const { key, output, path } = readCall(reference, this.modules.repetitionOf(caller.child(reference.module).withoutKeys()), position);
+    const scope = scopeOf(caller.child(reference.module, key));
 
-    const output = this.scopeManager.getOutput(scope, reference.output);
-    if (output === undefined) throw new UnresolvedReferenceError(`Output "${reference.output}" not found in module "${scope}"`);
+    const value = this.scopeManager.getOutput(scope, output);
+    if (value === undefined) throw new UnresolvedReferenceError(`Output "${output}" not found in module "${scope}"`);
 
-    return output;
+    return { value, path };
   }
 }

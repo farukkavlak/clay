@@ -2,19 +2,22 @@ import { Address, ExactNumber, ModuleAddress, State } from '@clay/contracts';
 import { ConfigError, EachReference, ParsedReference, parseReference, Position, ReferenceNode, spellReference, Step, TemplatePart } from '@clay/parser';
 
 import { Instances } from '../Instances';
-import { Context } from '../keys';
+import { Context, instanceKeyOf } from '../keys';
+import { ModuleInstances } from '../ModuleInstances';
 import { ScopeManager } from '../scope/ScopeManager';
 import { DataSourceResolver } from './DataSourceResolver';
 import { ModuleOutputResolver } from './ModuleOutputResolver';
+import { COUNT_INDEX_OUTSIDE } from './instance';
 import { kindOf, readPath } from './readPath';
 import { ResourceResolver } from './ResourceResolver';
 import { VariableResolver } from './VariableResolver';
 
-/** The instance being made names its index; anything else read outside one has none. */
+/** The instance of a resource or of a module being made names its index; anything else read outside one has none. */
 function countIndex(where: Context, position: Position): ExactNumber {
-  if (!(where instanceof Address) || typeof where.key !== 'number') throw new ConfigError('count.index is only known inside a resource that has count', position);
+  const key = instanceKeyOf(where);
+  if (typeof key !== 'number') throw new ConfigError(COUNT_INDEX_OUTSIDE, position);
 
-  return ExactNumber.parse(String(where.key));
+  return ExactNumber.parse(String(key));
 }
 
 export class ReferenceResolver {
@@ -24,11 +27,11 @@ export class ReferenceResolver {
   private moduleOutputs: ModuleOutputResolver;
   private resources: ResourceResolver;
 
-  constructor(scopeManager: ScopeManager, dataSources: Map<string, Record<string, unknown>>, instances: Instances) {
+  constructor(scopeManager: ScopeManager, dataSources: Map<string, Record<string, unknown>>, instances: Instances, modules: ModuleInstances) {
     this.instances = instances;
     this.variables = new VariableResolver(scopeManager, this);
     this.dataSources = new DataSourceResolver(dataSources);
-    this.moduleOutputs = new ModuleOutputResolver(scopeManager);
+    this.moduleOutputs = new ModuleOutputResolver(scopeManager, modules);
     this.resources = new ResourceResolver(instances);
   }
 
@@ -43,7 +46,7 @@ export class ReferenceResolver {
   private resolveTarget(reference: ParsedReference, state: State, where: Context, position: Position): { value: unknown; path: Step[] } {
     if (reference.kind === 'variable') return { value: this.variables.resolve(reference, where, state), path: reference.path };
     if (reference.kind === 'data') return { value: this.dataSources.resolve(reference, where), path: reference.path };
-    if (reference.kind === 'module') return { value: this.moduleOutputs.resolve(reference, where), path: reference.path };
+    if (reference.kind === 'module') return this.moduleOutputs.resolve(reference, where, position);
     if (reference.kind === 'count') return { value: countIndex(where, position), path: reference.path };
     if (reference.kind === 'each') return { value: this.each(reference, where, position), path: reference.path };
 

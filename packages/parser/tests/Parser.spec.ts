@@ -761,18 +761,22 @@ describe('Clay Parser', () => {
       expect(block).not.toHaveProperty('count');
     });
 
+    it('keeps count on a module apart from its inputs', () => {
+      const [block] = makeParser('module "m" { source = "./m" count = 2 }').parse() as ModuleBlock[];
+
+      expect(block.count).toEqual({ type: 'Number', value: ExactNumber.parse('2'), position: at(1, 37) });
+      expect(block.attributes).toEqual({ source: { type: 'String', value: './m', position: at(1, 23) } });
+    });
+
     it('reads count.index as a reference', () => {
       expect(valueOf('"${count.index}"')).toEqual({ type: 'Template', value: [reference(['count', 'index'], 27)], position: at(1, 24) });
     });
 
-    it.each([
-      ['a data source', 'data "local_file" "a" { count = 2 }', 'data "local_file" "a" cannot have count yet', at(1, 33)],
-      ['a module', 'module "m" { source = "./m" count = 2 }', 'module "m" cannot have count yet', at(1, 37)],
-    ])('refuses count on %s, where it is written', (_, input, message, position) => {
-      const error = errorOf(input);
+    it('refuses count on a data source, where it is written', () => {
+      const error = errorOf('data "local_file" "a" { count = 2 }');
 
-      expect(error.message).toBe(message);
-      expect(error.position).toEqual(position);
+      expect(error.message).toBe('data "local_file" "a" cannot have count yet');
+      expect(error.position).toEqual(at(1, 33));
     });
   });
 

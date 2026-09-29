@@ -40,14 +40,14 @@ export class Orchestrator {
     const dataSources = new Map<string, Record<string, unknown>>();
     const instances = new Instances();
     const modules = new ModuleInstances();
-    const resolver = new ReferenceResolver(scopes, dataSources, instances);
+    const resolver = new ReferenceResolver(scopes, dataSources, instances, modules);
     const scanner = new ReferenceScanner(instances);
-    const graphBuilder = new DependencyGraphBuilder(scanner, instances);
+    const graphBuilder = new DependencyGraphBuilder(scanner, instances, modules);
 
     return new Orchestrator(
       stateManager,
       providers,
-      new ConfigLoader(new ModuleLoader(files, scopes), scopes, dataSources, resolver, providers, instances),
+      new ConfigLoader(new ModuleLoader(files, scopes), scopes, dataSources, resolver, providers, instances, modules),
       graphBuilder,
       new DesiredStateBuilder(scopes, scanner, resolver, graphBuilder, instances, modules),
       new PlanRunner(stateManager, new ActionExecutor(providers, resolver), scopes, resolver, instances, modules)

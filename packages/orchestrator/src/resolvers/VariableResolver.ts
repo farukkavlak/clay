@@ -1,6 +1,6 @@
 import { State } from '@clay/contracts';
 import { VariableReference } from '@clay/parser';
-import { Context, enclosing, moduleOf, scopeOf } from '../keys';
+import { Context, contextIn, moduleOf, scopeOf } from '../keys';
 import { ScopeManager } from '../scope/ScopeManager';
 
 export class VariableResolver {
@@ -15,7 +15,6 @@ export class VariableResolver {
     const declared = this.scopeManager.getVariable(scopeOf(module.withoutKeys()), reference.name);
     if (!declared) throw new Error(`variable "${reference.name}" is not defined`);
 
-    // An input is read in the instance of the calling module that this instance sits in.
-    return this.referenceResolver.resolveValue(declared.value, state, enclosing(module, declared.context));
+    return this.referenceResolver.resolveValue(declared.value, state, contextIn(declared.context, module));
   }
 }

@@ -133,18 +133,19 @@ export class Parser {
   private parseModule(position: Position): ModuleBlock {
     const nameToken = this.consumeName("Expect module name string after 'module'.");
 
-    const attributes = this.parseAttributes('module');
+    const { count, ...attributes } = this.parseAttributes('module');
     this.refuseInstances(attributes, `module "${nameToken.value}"`);
 
     return {
       type: 'Module',
       name: nameToken.value,
+      ...(count && { count }),
       attributes,
       position,
     };
   }
 
-  /** Only a resource makes instances so far; anywhere else `count` or `for_each` would be taken for an input. */
+  /** What makes no instances yet; there `count` or `for_each` would be taken for an input. */
   private refuseInstances(attributes: Record<string, AttributeValue>, block: string): void {
     for (const name of INSTANCE_ARGUMENTS) if (Object.hasOwn(attributes, name)) throw new ConfigError(`${block} cannot have ${name} yet`, attributes[name].position);
   }
