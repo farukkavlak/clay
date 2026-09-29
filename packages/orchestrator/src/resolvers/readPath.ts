@@ -6,6 +6,7 @@ import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 
 /** What a value is, in the words the language uses for it. */
 export function kindOf(value: unknown): string {
+  if (isUnknown(value)) return 'value known only after apply';
   if (Array.isArray(value)) return 'list';
   if (value instanceof ExactNumber || typeof value === 'number') return 'number';
   if (value === null || value === undefined) return 'null';

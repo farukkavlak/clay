@@ -1,13 +1,4 @@
-import { Address, ExactNumber, isInstanceKey, isModulePath, NumberError, Resource, State, STATE_VERSION } from '@clay/contracts';
-
-/** A plain object, as JSON makes one: a number read from a file is an ExactNumber, which is no record. */
-function isRecord(value: unknown): value is Record<string, unknown> {
-  if (typeof value !== 'object' || value === null) return false;
-
-  const prototype: unknown = Object.getPrototypeOf(value);
-
-  return prototype === Object.prototype || prototype === null;
-}
+import { Address, ExactNumber, isInstanceKey, isModulePath, isRecord, NumberError, Resource, State, STATE_VERSION } from '@clay/contracts';
 
 /** What the engine goes on to read without asking: an address is built from the type, the name and the module path, the planner walks `attributes`, and the runner walks `dependencies`. */
 function isResource(value: unknown): value is Resource {

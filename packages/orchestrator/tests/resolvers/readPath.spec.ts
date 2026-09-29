@@ -1,8 +1,9 @@
 import { ExactNumber } from '@clay/contracts';
 import { ConfigError } from '@clay/parser';
+import { UNKNOWN } from '@clay/planner';
 import { describe, expect, it } from 'vitest';
 
-import { readPath } from '../../src/resolvers/readPath';
+import { kindOf, readPath } from '../../src/resolvers/readPath';
 
 const at = { file: 'main.clay', line: 2, column: 9 };
 const errorOf = (value: unknown, path: (string | number)[]): ConfigError => {
@@ -50,5 +51,20 @@ describe('reading a path into a value', () => {
 
     expect(error.message).toBe(message);
     expect(error.position).toEqual(at);
+  });
+});
+
+describe('the kind of a value', () => {
+  it.each([
+    ['a list', ['a'], 'list'],
+    ['a number', ExactNumber.parse('1'), 'number'],
+    ['null', null, 'null'],
+    ['a map', { a: 'x' }, 'map'],
+    ['a bool', true, 'bool'],
+    ['a string', 'x', 'string'],
+    // Without its own check, a symbol would be named a string.
+    ['a value only an apply makes', UNKNOWN, 'value known only after apply'],
+  ])('names %s', (_, value, kind) => {
+    expect(kindOf(value)).toBe(kind);
   });
 });

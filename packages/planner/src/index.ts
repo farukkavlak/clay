@@ -1,4 +1,4 @@
-import { Address, ExactNumber, InstanceKey, isInstanceKey, isModulePath, ModuleAddress, ModuleStep, NumberError, Resource, Schema, State } from '@clay/contracts';
+import { Address, ExactNumber, InstanceKey, isInstanceKey, isModulePath, isRecord, ModuleAddress, ModuleStep, NumberError, Resource, Schema, State } from '@clay/contracts';
 import { AttributeValue, ResourceBlock } from '@clay/parser';
 import { isDeepStrictEqual } from 'node:util';
 
@@ -9,15 +9,6 @@ export const UNKNOWN: unique symbol = Symbol('unknown');
 
 export function isUnknown(value: unknown): boolean {
   return value === UNKNOWN;
-}
-
-/** A plain object, as JSON makes one: a number read from a file is an ExactNumber, which is no record. */
-function isRecord(value: unknown): value is Record<string, unknown> {
-  if (typeof value !== 'object' || value === null) return false;
-
-  const prototype: unknown = Object.getPrototypeOf(value);
-
-  return prototype === Object.prototype || prototype === null;
 }
 
 /** Whether a value, or anything a list or a map in it holds, is not known yet: a plan may know a map and not one of its values. */
