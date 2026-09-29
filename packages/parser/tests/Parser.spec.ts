@@ -809,14 +809,25 @@ describe('Clay Parser', () => {
       expect(error.position).toEqual(at(1, 50));
     });
 
-    it.each([
-      ['a data source', 'data "local_file" "a" { for_each = ["x"] }', 'data "local_file" "a" cannot have for_each yet', at(1, 36)],
-      ['a module', 'module "m" { source = "./m" for_each = ["x"] }', 'module "m" cannot have for_each yet', at(1, 40)],
-    ])('refuses for_each on %s, where it is written', (_, input, message, position) => {
-      const error = errorOf(input);
+    it('refuses for_each on a data source, where it is written', () => {
+      const error = errorOf('data "local_file" "a" { for_each = ["x"] }');
 
-      expect(error.message).toBe(message);
-      expect(error.position).toEqual(position);
+      expect(error.message).toBe('data "local_file" "a" cannot have for_each yet');
+      expect(error.position).toEqual(at(1, 36));
+    });
+
+    it('keeps for_each on a module apart from its inputs', () => {
+      const [block] = makeParser('module "m" { source = "./m" for_each = ["x"] }').parse() as ModuleBlock[];
+
+      expect(block.forEach).toEqual({ type: 'List', value: [{ type: 'String', value: 'x', position: at(1, 41) }], position: at(1, 40) });
+      expect(block.attributes).toEqual({ source: { type: 'String', value: './m', position: at(1, 23) } });
+    });
+
+    it('refuses a module with both count and for_each, at for_each', () => {
+      const error = errorOf('module "m" { source = "./m" count = 2 for_each = ["x"] }');
+
+      expect(error.message).toBe('module "m" has count or for_each, not both');
+      expect(error.position).toEqual(at(1, 50));
     });
   });
 

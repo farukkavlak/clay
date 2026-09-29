@@ -284,7 +284,7 @@ describe('a module called with count', () => {
 
     const error = await planError(web('2'));
 
-    expect(error.message).toBe('data "local_file" "d" is in a module called with count, where a data source cannot be read yet');
+    expect(error.message).toBe('data "local_file" "d" is in a module called with count or for_each, where a data source cannot be read yet');
     expect(error.position).toMatchObject({ file: `${where}/main.clay`, line: 1, column: 1 });
   });
 

@@ -2,11 +2,11 @@ import { Address, ExactNumber, ModuleAddress, State } from '@clay/contracts';
 import { ConfigError, EachReference, ParsedReference, parseReference, Position, ReferenceNode, spellReference, Step, TemplatePart } from '@clay/parser';
 
 import { Instances } from '../Instances';
-import { Context, instanceKeyOf } from '../keys';
+import { Context, instanceKeyOf, ModuleCall } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
 import { ScopeManager } from '../scope/ScopeManager';
 import { DataSourceResolver } from './DataSourceResolver';
-import { COUNT_INDEX_OUTSIDE } from './instance';
+import { COUNT_INDEX_OUTSIDE, eachOutside } from './instance';
 import { ModuleOutputResolver } from './ModuleOutputResolver';
 import { kindOf, readPath } from './readPath';
 import { ResourceResolver } from './ResourceResolver';
@@ -22,6 +22,7 @@ function countIndex(where: Context, position: Position): ExactNumber {
 
 export class ReferenceResolver {
   private instances: Instances;
+  private modules: ModuleInstances;
   private variables: VariableResolver;
   private dataSources: DataSourceResolver;
   private moduleOutputs: ModuleOutputResolver;
@@ -29,6 +30,7 @@ export class ReferenceResolver {
 
   constructor(scopeManager: ScopeManager, dataSources: Map<string, Record<string, unknown>>, instances: Instances, modules: ModuleInstances) {
     this.instances = instances;
+    this.modules = modules;
     this.variables = new VariableResolver(scopeManager, this);
     this.dataSources = new DataSourceResolver(dataSources);
     this.moduleOutputs = new ModuleOutputResolver(scopeManager, modules);
@@ -53,11 +55,16 @@ export class ReferenceResolver {
     return this.resources.resolve(reference, where, state, position);
   }
 
-  /** The instance being made names its key, and the value for_each gives that key; anything else read outside one has neither. */
+  /** The instance of a resource or of a module being made names its key, and the value for_each gives that key; anything else read outside one has neither. */
   private each(reference: EachReference, where: Context, position: Position): unknown {
-    if (!(where instanceof Address) || typeof where.key !== 'string') throw new ConfigError(`each.${reference.name} is only known inside a resource that has for_each`, position);
+    const key = instanceKeyOf(where);
+    if (typeof key !== 'string') throw new ConfigError(eachOutside(reference.name), position);
+    if (reference.name === 'key') return key;
 
-    return reference.name === 'key' ? where.key : this.instances.eachValue(where.withoutKey().toString(), where.key);
+    if (where instanceof ModuleCall) return this.modules.eachValue(where.call, key);
+
+    // Only an instance of a resource or a module call has a key.
+    return this.instances.eachValue((where as Address).withoutKey().toString(), key);
   }
 
   resolveAttributes(attributes: Record<string, unknown>, state: State, context?: Context): Record<string, unknown> {

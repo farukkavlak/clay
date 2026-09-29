@@ -82,7 +82,8 @@ hits each of these early.
 - [x] `count` on a module: one instance of everything in it for each index,
       `module.name[0]`, with `count.index` in the call's inputs and `module.name[0].out` to
       read one. A module address has its own type, and a key on each module
-- [ ] `for_each` on a module
+- [x] `for_each` on a module: `module.name["key"]`, with `each.key` and `each.value` in the
+      call's inputs
 - [x] Adding `count` to a module that exists moves what is in it to `module.name[0]`, and
       taking it off moves it back, as for a resource. Two places state may keep it are
       refused rather than guessed between
@@ -158,9 +159,10 @@ twice. The local provider's `read` returns `{}` for every type, so no data sourc
 anything yet.
 
 - [ ] Data sources are graph nodes, read in dependency order and once per run
-- [ ] A data source in a module called with `count` is refused, since it is read before the
-      module has instances. As a graph node it is read once for each instance of its
-      module; test that end to end with a module called with `count`, nested ones too
+- [ ] A data source in a module called with `count` or `for_each` is refused, since it is
+      read before the module has instances. As a graph node it is read once for each
+      instance of its module; test that end to end with a module called with `count` and one
+      with `for_each`, nested ones too
 - [ ] A data source fed by a pending resource is `(known after apply)`
 - [ ] Their values travel in the plan, as in Terraform, so `apply` reads none of them
       again. `runPlan` still parses and builds the graph on its own, since a saved plan
@@ -269,8 +271,8 @@ by resource type, and no `provider` block exists yet.
 - [ ] An output that fails to resolve reports a failure. `resolveOutput` runs outside the
       step's `try`, so a throw there ends the run with no `failed` event and nothing said.
       `readEach`, which reads a `for_each` again at apply, runs there too, and so do
-      `readCount`, which reads a module's `count` again, and the refusal of a saved plan's
-      action in an instance of a module the configuration does not make
+      `expandCall`, which reads a module's `count` or `for_each` again, and the refusal of
+      a saved plan's action in an instance of a module the configuration does not make
 - [ ] An output may be named `__proto__`. The runner collects outputs into a plain object,
       where that name sets a prototype instead of a key, so the output disappears
 - [ ] `apply` says a missing file is missing the same way twice. A missing plan file and a

@@ -51,7 +51,11 @@ export class ConfigLoader {
   private declareCalls(loadedModules: LoadedModule[]): void {
     this.modules.clear();
 
-    for (const { address, program } of loadedModules) for (const stmt of program) if (stmt.type === 'Module' && stmt.count) this.modules.declare(address.child(stmt.name), 'count');
+    for (const { address, program } of loadedModules)
+      for (const stmt of program) {
+        if (stmt.type === 'Module' && stmt.count) this.modules.declare(address.child(stmt.name), 'count');
+        if (stmt.type === 'Module' && stmt.forEach) this.modules.declare(address.child(stmt.name), 'for_each');
+      }
   }
 
   private async readDataSources(program: Statement[], state: State, scopeAddress: ModuleAddress): Promise<void> {
@@ -76,7 +80,7 @@ export class ConfigLoader {
     if (!repeated) return;
 
     const place = { block: spell(stmt), module: scopeOf(module) };
-    throw new ConfigError(`${spell(stmt)} is in a module called with count, where a data source cannot be read yet`, stmt.position, place);
+    throw new ConfigError(`${spell(stmt)} is in a module called with count or for_each, where a data source cannot be read yet`, stmt.position, place);
   }
 
   /** One value at a time, so an error points at the value that caused it and not at the block around it. */

@@ -12,6 +12,7 @@ describe('ModuleOutputResolver', () => {
   const scopeManager = new ScopeManager();
   const modules = new ModuleInstances();
   modules.declare(ModuleAddress.root.child('web'), 'count');
+  modules.declare(ModuleAddress.root.child('db'), 'for_each');
   const resolver = new ModuleOutputResolver(scopeManager, modules);
   const context = Address.root('resource', 'main');
 
@@ -34,7 +35,19 @@ describe('ModuleOutputResolver', () => {
     expect(resolver.resolve(ref('module', 'web', 1, 'tags', 'env'), context)).toEqual({ value: { env: 'b' }, path: ['env'] });
   });
 
+  it('reads the output of the instance a key names', () => {
+    scopeManager.setOutput('module.db["eu"]', 'url', 'eu-url');
+
+    expect(resolver.resolve(ref('module', 'db', 'eu', 'url'), context)).toEqual({ value: 'eu-url', path: [] });
+  });
+
   it.each([
+    [
+      'no key on a module called with for_each',
+      ref('module', 'db', 'url'),
+      'Reference "module.db.url" names an instance and no output: module.db has for_each, so its key comes first, as in module.db["key"].out',
+    ],
+    ['an index on a module called with for_each', ref('module', 'db', 0, 'url'), 'module.db has for_each, so name one of it by key, as in module.db["key"]'],
     ['an index on a module called without count', ref('module', 'app', 0, 'ip_address'), 'module.app has no count, so it takes no index'],
     ['no index on a module called with count', ref('module', 'web', 'tags'), 'module.web has count, so name one of it by index, as in module.web[0]'],
     ['an index and no output', ref('module', 'web', 0), 'Module output reference must include output name: module.web[0]'],

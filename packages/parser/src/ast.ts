@@ -59,6 +59,8 @@ export interface ModuleBlock extends Node {
   name: string;
   /** How many instances of the module to make; the engine's to read, so it is no input. */
   count?: AttributeValue;
+  /** The keys to make an instance of the module for, as a resource's for_each. */
+  forEach?: AttributeValue;
   attributes: Record<string, AttributeValue>;
 }
 

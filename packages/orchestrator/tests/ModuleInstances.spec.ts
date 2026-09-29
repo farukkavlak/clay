@@ -1,9 +1,13 @@
 import { ModuleAddress } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { ModuleInstances } from '../src/ModuleInstances';
+import { ModuleInstances, ReadIn } from '../src/ModuleInstances';
+import { str } from './ast';
 
 const none = (): undefined => {};
+
+/** What a for_each reads to, handed to the parse the call asks for. */
+const read: ReadIn = (_, parse) => parse({ b: 'two', a: 'one' });
 
 describe('ModuleInstances', () => {
   it('has one instance of the root', () => {
@@ -29,6 +33,18 @@ describe('ModuleInstances', () => {
     expect(modules.of(a.child('b')).map(String)).toEqual(['module.a[0].module.b[0]', 'module.a[1].module.b[0]', 'module.a[1].module.b[1]']);
     expect(modules.keysOf(ModuleAddress.root.child('a', 1).child('b'))).toEqual([0, 1]);
     expect(modules.keysOf(ModuleAddress.root.child('a', 1).child('c'))).toBeUndefined();
+  });
+
+  // The read is the caller's to make: at plan it may be unknown, at apply it is resolved.
+  it('makes an instance for each key the for_each of a call gives, and keeps the value of each', () => {
+    const modules = new ModuleInstances();
+    const block = { type: 'Module', name: 'web', attributes: {}, forEach: str('x'), position: str('x').position } as const;
+
+    modules.expandCall(ModuleAddress.root, block, read);
+
+    expect(modules.of(ModuleAddress.root.child('web')).map(String)).toEqual(['module.web["a"]', 'module.web["b"]']);
+    expect(modules.eachValue(ModuleAddress.root.child('web'), 'b')).toBe('two');
+    expect(modules.eachValue(ModuleAddress.root.child('other'), 'b')).toBeUndefined();
   });
 
   it('says which modules are called with count until it is cleared', () => {

@@ -1,11 +1,10 @@
 import { Address, ModuleAddress, State } from '@clay/contracts';
 import { Graph } from '@clay/graph';
-import { AttributeValue, ModuleBlock, ResourceBlock, spell, Statement } from '@clay/parser';
+import { ResourceBlock, spell, Statement } from '@clay/parser';
 import { PlanAction } from '@clay/planner';
 import { moveResource, StateManager } from '@clay/state';
 
 import { asError } from '../asError';
-import { countFrom, indexesOf } from '../count';
 import { eachFrom } from '../forEach';
 import { Instances, repetitionOfKey } from '../Instances';
 import { blockKey, contextIn, scopeOf } from '../keys';
@@ -107,15 +106,9 @@ export class PlanRunner {
     return true;
   }
 
-  /** The count is read again for the run, as for_each is: a data source it reads is read again. */
+  /** The count or for_each is read again for the run, as a resource's for_each is: a data source it reads is read again. */
   private expandCall({ module, block }: Extract<GraphNode, { kind: 'module' }>, state: State): void {
-    const { count } = block;
-
-    this.modules.expand(module, block.name, (caller) => (count === undefined ? undefined : indexesOf(this.readCount(count, block, caller, state))));
-  }
-
-  private readCount(count: AttributeValue, block: ModuleBlock, caller: ModuleAddress, state: State): number {
-    return tryAt(count.position, spell(block), caller, () => countFrom(this.resolver.resolveValue(count, state, caller)));
+    this.modules.expandCall(module, block, (value, parse, caller) => tryAt(value.position, spell(block), caller, () => parse(this.resolver.resolveValue(value, state, caller))));
   }
 
   /**
