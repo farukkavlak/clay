@@ -1,13 +1,14 @@
 import { Address, ModuleAddress, State } from '@clay/contracts';
 import { Graph } from '@clay/graph';
-import { ResourceBlock, spell, Statement } from '@clay/parser';
+import { AttributeValue, ModuleBlock, ResourceBlock, spell, Statement } from '@clay/parser';
 import { PlanAction } from '@clay/planner';
 import { moveResource, StateManager } from '@clay/state';
 
 import { asError } from '../asError';
+import { countFrom, indexesOf } from '../count';
 import { eachFrom } from '../forEach';
 import { Instances, repetitionOfKey } from '../Instances';
-import { blockKey, enclosing, scopeOf } from '../keys';
+import { blockKey, contextIn, scopeOf } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
 import { tryAt } from '../place';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
@@ -97,13 +98,24 @@ export class PlanRunner {
       for (const key of layer) {
         const node = graph.getNode(key)!;
 
-        if (node.kind === 'module') this.modules.expand(node.module, node.name);
+        if (node.kind === 'module') this.expandCall(node, state);
         // Only this output: a sibling of it may read a resource a later layer creates.
         if (node.kind === 'output') for (const instance of this.modules.of(node.module)) this.resolveOutput(node, instance, state);
         if (node.kind === 'resource' && !(yield* this.applyBlock(blocks.get(key)!, node.module, byBlock.get(key) ?? [], state))) return false;
       }
 
     return true;
+  }
+
+  /** The count is read again for the run, as for_each is: a data source it reads is read again. */
+  private expandCall({ module, block }: Extract<GraphNode, { kind: 'module' }>, state: State): void {
+    const { count } = block;
+
+    this.modules.expand(module, block.name, (caller) => (count === undefined ? undefined : indexesOf(this.readCount(count, block, caller, state))));
+  }
+
+  private readCount(count: AttributeValue, block: ModuleBlock, caller: ModuleAddress, state: State): number {
+    return tryAt(count.position, spell(block), caller, () => countFrom(this.resolver.resolveValue(count, state, caller)));
   }
 
   /**
@@ -192,7 +204,7 @@ export class PlanRunner {
   }
 
   private resolveOutput(node: ValueNode, instance: ModuleAddress, state: State): void {
-    const context = enclosing(instance, node.context);
+    const context = contextIn(node.context, instance);
     const value = tryAt(node.position, node.declaration, context, () => this.resolver.resolveValue(node.value, state, context));
 
     this.scopeManager.setOutput(instance.toString(), node.name, value);

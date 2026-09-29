@@ -57,6 +57,8 @@ export interface DataBlock extends Node {
 export interface ModuleBlock extends Node {
   type: 'Module';
   name: string;
+  /** How many instances of the module to make; the engine's to read, so it is no input. */
+  count?: AttributeValue;
   attributes: Record<string, AttributeValue>;
 }
 

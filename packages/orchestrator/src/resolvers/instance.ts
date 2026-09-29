@@ -1,5 +1,5 @@
 import { InstanceKey } from '@clay/contracts';
-import { NAME, Position, ResourceReference, spellReference, Step } from '@clay/parser';
+import { ModuleOutputReference, NAME, Position, ResourceReference, spellReference, Step } from '@clay/parser';
 
 import { Repetition } from '../Instances';
 import { placed } from '../place';
@@ -10,6 +10,9 @@ export interface InstanceRead {
   attribute: string;
   path: Step[];
 }
+
+/** `count.index` read where no instance is made by count. */
+export const COUNT_INDEX_OUTSIDE = 'count.index is only known inside a resource or a module call that has count';
 
 function refuse(message: string, position?: Position): never {
   throw placed(message, position);
@@ -52,21 +55,52 @@ export function readInstance(reference: ResourceReference, repetition: Repetitio
   return { key: first, attribute: readAttribute(reference, rest, position), path: rest.slice(1) };
 }
 
-/** An index past the count names an instance the plan will not make, so it is refused rather than read as one still to come. */
-export function checkInRange(reference: ResourceReference, key: number, count: number | undefined, position?: Position): void {
+/** What a reference to a module reads: which of its instances, the output, and the steps into that. */
+export interface CallRead {
+  key?: InstanceKey;
+  output: string;
+  path: Step[];
+}
+
+function readOutput(reference: ModuleOutputReference, steps: Step[], position?: Position): string {
+  const [output] = steps;
+  const spelled = spellReference(['module', reference.module, ...reference.path]);
+
+  if (output === undefined) refuse(`Module output reference must include output name: ${spelled}`, position);
+  if (typeof output === 'number') refuse(`Reference "${spelled}" has an index where it needs a name`, position);
+  if (!NAME.test(output)) refuse(`Reference "${spelled}" has ${JSON.stringify(output)} where it needs a name`, position);
+
+  return output;
+}
+
+/** A module called with count is read one instance at a time, so its first step is an index; one called with neither has none. */
+export function readCall(reference: ModuleOutputReference, repetition: Repetition | undefined, position?: Position): CallRead {
+  const call = spellReference(['module', reference.module]);
+  const [first, ...rest] = reference.path;
+
+  if (repetition === undefined) {
+    if (typeof first === 'number') refuse(`${call} has no count, so it takes no index`, position);
+    return { output: readOutput(reference, reference.path, position), path: rest };
+  }
+
+  if (typeof first !== 'number') refuse(`${call} has count, so name one of it by index, as in ${call}[0]`, position);
+
+  return { key: first, output: readOutput(reference, rest, position), path: rest.slice(1) };
+}
+
+/** An index past the count names an instance the plan will not make, so it is refused rather than read as one still to come. `block` is as written: `local_file.a`, `module.m`. */
+export function checkInRange(block: string, key: number, count: number | undefined, position?: Position): void {
   if (count === undefined || key < count) return;
 
-  const block = spellReference([reference.type, reference.name]);
   if (count === 0) refuse(`${block} has no instances: its count is 0`, position);
 
   refuse(`${block} has ${count} ${count === 1 ? 'instance, [0]' : `instances, [0] to [${count - 1}]`}`, position);
 }
 
 /** A key for_each does not give names an instance the plan will not make, so it is refused rather than read as one still to come. */
-export function checkHasKey(reference: ResourceReference, key: string, keys: InstanceKey[] | undefined, position?: Position): void {
+export function checkHasKey(block: string, key: string, keys: InstanceKey[] | undefined, position?: Position): void {
   if (keys === undefined || keys.includes(key)) return;
 
-  const block = spellReference([reference.type, reference.name]);
   if (keys.length === 0) refuse(`${block} has no instances: its for_each is empty`, position);
 
   refuse(`${block} has no instance [${JSON.stringify(key)}], only ${keys.map((k) => `[${JSON.stringify(k)}]`).join(', ')}`, position);

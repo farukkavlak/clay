@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 
 import { checkHasKey, checkInRange, readInstance } from '../../src/resolvers/instance';
 
-const reference = parseReference(['local_file', 'logs', 0, 'id']) as ResourceReference;
 const keyed = (...path: (string | number)[]) => parseReference(['local_file', 'logs', ...path]) as ResourceReference;
 
 describe('an index checked against a count', () => {
@@ -12,12 +11,12 @@ describe('an index checked against a count', () => {
     [1, 'local_file.logs has 1 instance, [0]'],
     [3, 'local_file.logs has 3 instances, [0] to [2]'],
   ])('says what a count of %i makes when the index is past it', (count, message) => {
-    expect(() => checkInRange(reference, count, count)).toThrow(message);
+    expect(() => checkInRange('local_file.logs', count, count)).toThrow(message);
   });
 
   it('takes an index below the count, and any index while the count is not read yet', () => {
-    expect(() => checkInRange(reference, 2, 3)).not.toThrow();
-    expect(() => checkInRange(reference, 7, undefined)).not.toThrow();
+    expect(() => checkInRange('local_file.logs', 2, 3)).not.toThrow();
+    expect(() => checkInRange('local_file.logs', 7, undefined)).not.toThrow();
   });
 });
 
@@ -27,12 +26,12 @@ describe('a key checked against a for_each', () => {
     [['a'], 'local_file.logs has no instance ["x"], only ["a"]'],
     [['a', 'b c'], 'local_file.logs has no instance ["x"], only ["a"], ["b c"]'],
   ])('says what a for_each of %j makes when the key is not one of them', (keys, message) => {
-    expect(() => checkHasKey(keyed('x', 'id'), 'x', keys)).toThrow(message);
+    expect(() => checkHasKey('local_file.logs', 'x', keys)).toThrow(message);
   });
 
   it('takes a key the for_each gives, and any key while the for_each is not read yet', () => {
-    expect(() => checkHasKey(keyed('a', 'id'), 'a', ['a'])).not.toThrow();
-    expect(() => checkHasKey(keyed('x', 'id'), 'x', undefined)).not.toThrow();
+    expect(() => checkHasKey('local_file.logs', 'a', ['a'])).not.toThrow();
+    expect(() => checkHasKey('local_file.logs', 'x', undefined)).not.toThrow();
   });
 });
 

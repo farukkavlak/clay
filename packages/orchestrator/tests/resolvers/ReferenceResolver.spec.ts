@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { ReferenceResolver } from '../../src/resolvers/ReferenceResolver';
 import { Instances } from '../../src/Instances';
+import { ModuleInstances } from '../../src/ModuleInstances';
 import { ScopeManager } from '../../src/scope/ScopeManager';
 
 const inInstance = (module: ModuleAddress) => new Address(module, 'resource', 'main');
@@ -11,7 +12,7 @@ const reference = (...value: (string | number)[]) => ({ type: 'Reference', value
 describe('ReferenceResolver', () => {
   const scopeManager = new ScopeManager();
   const dataSources = new Map<string, Record<string, unknown>>();
-  const resolver = new ReferenceResolver(scopeManager, dataSources, new Instances());
+  const resolver = new ReferenceResolver(scopeManager, dataSources, new Instances(), new ModuleInstances());
   const context = Address.root('resource', 'main');
 
   const mockState: State = {
@@ -156,7 +157,7 @@ describe('ReferenceResolver', () => {
       instances.declare('module.app.resource.dep', 'count');
       const state: State = { version: 1, serial: 0, resources: { 'module.app[0].resource.dep[1]': { resourceType: 'resource', name: 'dep', attributes: { id: 'one' } } } };
 
-      const read = new ReferenceResolver(new ScopeManager(), new Map(), instances).resolveValue(
+      const read = new ReferenceResolver(new ScopeManager(), new Map(), instances, new ModuleInstances()).resolveValue(
         reference('resource', 'dep', 1, 'id'),
         state,
         inInstance(ModuleAddress.root.child('app', 0))
@@ -171,7 +172,7 @@ describe('ReferenceResolver', () => {
       scopes.setOutput('module.a[1].module.c', 'out', 'from a[1]');
       scopes.setOutput('module.a.module.c', 'out', 'from a');
 
-      const read = new ReferenceResolver(scopes, new Map(), new Instances()).resolveValue(
+      const read = new ReferenceResolver(scopes, new Map(), new Instances(), new ModuleInstances()).resolveValue(
         reference('var', 'x'),
         mockState,
         inInstance(ModuleAddress.root.child('a', 1).child('b', 0))
@@ -183,7 +184,7 @@ describe('ReferenceResolver', () => {
     it('reads a data source once for the module as the configuration writes it', () => {
       const sources = new Map([['module.app.src.s', { v: 'read' }]]);
 
-      const read = new ReferenceResolver(new ScopeManager(), sources, new Instances()).resolveValue(
+      const read = new ReferenceResolver(new ScopeManager(), sources, new Instances(), new ModuleInstances()).resolveValue(
         reference('data', 'src', 's', 'v'),
         mockState,
         inInstance(ModuleAddress.root.child('app', 0))

@@ -1,0 +1,282 @@
+import { Address } from '@clay/contracts';
+import { DiskFiles, Orchestrator } from '@clay/orchestrator';
+import { ConfigError } from '@clay/parser';
+import { LocalProvider } from '@clay/provider-local';
+import { LocalBackend, StateManager } from '@clay/state';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import { start } from './start';
+
+/** The line and column `needle` is first written at, as an error would point at it. */
+const placeOf = (config: string, needle: string) => {
+  const before = config.slice(0, config.indexOf(needle)).split('\n');
+  return { line: before.length, column: before.at(-1)!.length + 1 };
+};
+
+const web = (count: string, rest = '') => `
+  module "web" {
+    source = "./web"
+    count = ${count}
+    name = "site-\${count.index}"
+  }
+  ${rest}
+`;
+
+describe('a module called with count', () => {
+  let dir: string;
+
+  const newOrchestrator = () => {
+    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
+    engine.registerProvider(new LocalProvider());
+    return engine;
+  };
+
+  const apply = async (config: string): Promise<Record<string, unknown>> => {
+    let outputs: Record<string, unknown> = {};
+    for await (const event of start(newOrchestrator(), config)) {
+      if (event.type === 'failed') throw event.error;
+      if (event.type === 'done') outputs = event.outputs;
+    }
+    return outputs;
+  };
+
+  const planError = async (config: string): Promise<ConfigError> => {
+    try {
+      await newOrchestrator().plan(config);
+    } catch (error) {
+      if (error instanceof ConfigError) return error;
+
+      throw error;
+    }
+
+    throw new Error('Expected the plan to fail');
+  };
+
+  /** A module that writes one page, named by what it is given. */
+  const writeModule = async (name: string, body: string) => {
+    await fs.mkdir(path.join(dir, name), { recursive: true });
+    await fs.writeFile(path.join(dir, name, 'main.clay'), body, 'utf8');
+  };
+
+  const page = () => `
+    variable "name" {}
+    resource "local_file" "page" {
+      path = "${path.join(dir, '${var.name}.txt')}"
+      content = "page \${var.name}"
+    }
+    output "path" { value = "\${local_file.page.path}" }
+  `;
+
+  const pages = async () => {
+    const names = await fs.readdir(dir);
+    return names.filter((name) => name.endsWith('.txt')).sort();
+  };
+
+  const stateKeys = async () => {
+    const state = await new LocalBackend(dir).read();
+    return Object.keys(state.resources).sort();
+  };
+
+  beforeEach(async () => {
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-module-count-'));
+    await writeModule('web', page());
+  });
+
+  afterEach(async () => {
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it('makes one instance of the module for each index, each given its own count.index', async () => {
+    await apply(web('3'));
+
+    expect(await pages()).toEqual(['site-0.txt', 'site-1.txt', 'site-2.txt']);
+    expect(await fs.readFile(path.join(dir, 'site-2.txt'), 'utf8')).toBe('page site-2');
+    expect(await stateKeys()).toEqual(['module.web[0].local_file.page', 'module.web[1].local_file.page', 'module.web[2].local_file.page']);
+  });
+
+  it('reads count from a variable', async () => {
+    await apply(`variable "n" { default = 2 }\n${web('var.n')}`);
+
+    expect(await pages()).toEqual(['site-0.txt', 'site-1.txt']);
+  });
+
+  // The count is read once the output it reads has its value, so the call waits on the other module.
+  it('reads count from the output of another module', async () => {
+    await writeModule('sizes', 'output "n" { value = 2 }');
+
+    await apply(`module "sizes" { source = "./sizes" }\n${web('module.sizes.n')}`);
+
+    expect(await pages()).toEqual(['site-0.txt', 'site-1.txt']);
+  });
+
+  it('deletes the instances past a lower count, and every one at a count of 0', async () => {
+    await apply(web('3'));
+
+    await apply(web('1'));
+    expect(await pages()).toEqual(['site-0.txt']);
+
+    await apply(web('0'));
+    expect(await pages()).toEqual([]);
+    expect(await stateKeys()).toEqual([]);
+  });
+
+  it('gives the output of one instance to what reads it by index', async () => {
+    const outputs = await apply(web('2', 'output "second" { value = "${module.web[1].path}" }'));
+
+    expect(outputs.second).toBe(path.join(dir, 'site-1.txt'));
+  });
+
+  // Two in each of two: the inner module has an instance for each index in each instance of the outer one.
+  it('makes the instances of a module with count in each instance of a module with count', async () => {
+    await writeModule(
+      'outer',
+      `
+      variable "name" {}
+      module "inner" {
+        source = "../web"
+        count = 2
+        name = "\${var.name}-\${count.index}"
+      }
+      output "second" { value = "\${module.inner[1].path}" }
+    `
+    );
+
+    const outputs = await apply('module "outer" {\n source = "./outer"\n count = 2\n name = "o${count.index}"\n}\noutput "o" { value = "${module.outer[1].second}" }');
+
+    expect(await pages()).toEqual(['o0-0.txt', 'o0-1.txt', 'o1-0.txt', 'o1-1.txt']);
+    expect(await stateKeys()).toContain('module.outer[1].module.inner[0].local_file.page');
+    expect(outputs.o).toBe(path.join(dir, 'o1-1.txt'));
+  });
+
+  // Each instance of the outer module reads the inner call's count with its own input.
+  it('reads the count of a call in a module in each instance of that module', async () => {
+    await writeModule(
+      'grow',
+      `
+      variable "n" {}
+      module "inner" {
+        source = "../web"
+        count = var.n
+        name = "i\${var.n}-\${count.index}"
+      }
+    `
+    );
+
+    await apply('module "grow" {\n source = "./grow"\n count = 3\n n = count.index\n}');
+
+    expect(await pages()).toEqual(['i1-0.txt', 'i2-0.txt', 'i2-1.txt']);
+  });
+
+  it('plans nothing to do once applied', async () => {
+    await apply(web('2', 'output "second" { value = "${module.web[1].path}" }'));
+
+    const { actions } = await newOrchestrator().plan(web('2', 'output "second" { value = "${module.web[1].path}" }'));
+
+    expect(actions.map((action) => action.type)).toEqual(['NO_OP', 'NO_OP']);
+  });
+
+  // The value waits on a value only an apply makes, so the plan never reads the output; the graph refuses it anyway.
+  it('refuses a reference to its output with no index even where the plan does not read it', async () => {
+    const config = web('2', 'resource "random_string" "s" { length = 4 }\noutput "o" { value = "${random_string.s.id}-${module.web.path}" }');
+
+    const error = await planError(config);
+
+    expect(error.message).toBe('module.web has count, so name one of it by index, as in module.web[0]');
+    expect(error.position).toMatchObject(placeOf(config, 'module.web.path'));
+  });
+
+  it.each([
+    ['no index', 'module.web.path', 'module.web has count, so name one of it by index, as in module.web[0]'],
+    ['an index past the count', 'module.web[2].path', 'module.web has 2 instances, [0] to [1]'],
+  ])('refuses a reference to its output with %s, where it is written', async (_, reference, message) => {
+    const config = web('2', `output "o" { value = "\${${reference}}" }`);
+
+    const error = await planError(config);
+
+    expect(error.message).toBe(message);
+    expect(error.position).toMatchObject(placeOf(config, reference));
+  });
+
+  it('says a module that is not declared is not, whatever index it is read at', async () => {
+    const config = web('2', 'output "o" { value = "${module.wbe[0].path}" }');
+
+    const error = await planError(config);
+
+    expect(error.message).toBe('Invalid reference in "outputs:o": module "wbe" is not declared');
+    expect(error.position).toMatchObject(placeOf(config, 'module.wbe[0]'));
+  });
+
+  // An engine plans many configurations; one's calls are not another's.
+  it('forgets which calls had count when it plans another configuration', async () => {
+    const engine = newOrchestrator();
+    await engine.plan(web('2'));
+
+    const { actions } = await engine.plan('module "web" {\n source = "./web"\n name = "one"\n}\noutput "o" { value = "${module.web.path}" }');
+
+    expect(actions.map((action) => Address.of(action).toString())).toEqual(['module.web.local_file.page']);
+  });
+
+  it('refuses an index into a module called without count', async () => {
+    const config = 'module "one" {\n source = "./web"\n name = "x"\n}\noutput "o" { value = "${module.one[0].path}" }';
+
+    const error = await planError(config);
+
+    expect(error.message).toBe('module.one has no count, so it takes no index');
+    expect(error.position).toMatchObject(placeOf(config, 'module.one[0]'));
+  });
+
+  it.each([
+    ['in the count it would come from', 'module "w" {\n source = "./web"\n count = count.index\n name = "x"\n}'],
+    ['in an input of a module called without count', 'module "w" {\n source = "./web"\n name = "${count.index}"\n}'],
+  ])('refuses count.index %s, where it is written', async (_, config) => {
+    const error = await planError(config);
+
+    expect(error.message).toBe('count.index is only known inside a resource or a module call that has count');
+    expect(error.position).toMatchObject(placeOf(config, 'count.index'));
+  });
+
+  // The module is written once for every way it may be called, so it takes its index as an input.
+  it('refuses count.index inside the module, where it is written in the module', async () => {
+    const body = 'variable "name" {}\noutput "o" { value = "${count.index}" }';
+    await writeModule('web', body);
+
+    const error = await planError(web('2'));
+
+    expect(error.message).toBe('count.index is only known inside a resource or a module call that has count');
+    expect(error.position).toMatchObject({ file: 'web/main.clay', ...placeOf(body, 'count.index') });
+  });
+
+  it.each([
+    ['a word', '"two"', 'count is a whole number from 0, not a string'],
+    ['a negative number', '-1', 'count is a whole number from 0, not -1'],
+    ['a value only an apply makes', 'random_string.s.length', 'count must be known when planning: it reads a value only an apply makes'],
+  ])('refuses a count that is %s, where it is written', async (_, count, message) => {
+    const config = `resource "random_string" "s" { length = 2 }\n${web(count)}`;
+
+    const error = await planError(config);
+
+    expect(error.message).toBe(message);
+    expect(error.position).toMatchObject(placeOf(config, count));
+  });
+
+  // A data source is read once as the config loads, before any module has instances.
+  it.each([
+    ['in the module', 'web'],
+    ['in a module the module calls', 'web/deeper'],
+  ])('refuses a data source %s, where it is written', async (_, where) => {
+    const data = `data "local_file" "d" { path = "${path.join(dir, 'x')}" }`;
+    if (where === 'web') await writeModule('web', `${data}\nvariable "name" {}`);
+    else {
+      await writeModule('web', `${page()}\nmodule "deeper" { source = "./deeper" }`);
+      await writeModule(where, data);
+    }
+
+    const error = await planError(web('2'));
+
+    expect(error.message).toBe('data "local_file" "d" is in a module called with count, where a data source cannot be read yet');
+    expect(error.position).toMatchObject({ file: `${where}/main.clay`, line: 1, column: 1 });
+  });
+});

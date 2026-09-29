@@ -1,5 +1,7 @@
 import { InstanceKey } from '@clay/contracts';
 
+import { indexesOf } from './count';
+
 /** How a block makes many instances: numbered by `count`, or keyed by `for_each`. */
 export type Repetition = 'count' | 'for_each';
 
@@ -34,8 +36,7 @@ export class Instances {
   }
 
   setCount(block: string, count: number): void {
-    const keys = Array.from({ length: count }, (_, index) => index);
-    this.keys.set(block, keys);
+    this.keys.set(block, indexesOf(count));
   }
 
   /** The value each key gives its instance, read as `each.value`. */
