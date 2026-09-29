@@ -1,4 +1,4 @@
-import { Address } from '@clay/contracts';
+import { Address, ModuleAddress } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { Instances } from '../../src/Instances';
@@ -8,8 +8,8 @@ const keysOf = (references: Reference[]) => references.map((reference) => (refer
 
 describe('ReferenceScanner', () => {
   const scanner = new ReferenceScanner(new Instances());
-  const context = new Address([], 'resource', 'main');
-  const inModule = new Address(['app'], 'resource', 'main');
+  const context = Address.root('resource', 'main');
+  const inModule = new Address(ModuleAddress.root.child('app'), 'resource', 'main');
 
   it('should find a resource reference', () => {
     const attributes = { id: { type: 'Reference', value: ['resource', 'dep', 'id'] } };

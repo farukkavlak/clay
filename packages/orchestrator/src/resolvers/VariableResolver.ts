@@ -1,15 +1,15 @@
-import { Address, State } from '@clay/contracts';
+import { State } from '@clay/contracts';
 import { VariableReference } from '@clay/parser';
-import { scopeOf } from '../keys';
+import { Context, scopeOf } from '../keys';
 import { ScopeManager } from '../scope/ScopeManager';
 
 export class VariableResolver {
   constructor(
     private scopeManager: ScopeManager,
-    private referenceResolver: { resolveValue: (value: unknown, state: State, context?: Address) => unknown }
+    private referenceResolver: { resolveValue: (value: unknown, state: State, context?: Context) => unknown }
   ) {}
 
-  resolve(reference: VariableReference, context: Address, state: State): unknown {
+  resolve(reference: VariableReference, context: Context, state: State): unknown {
     const scope = scopeOf(context);
 
     const scopeVars = this.scopeManager.getVariable(scope, reference.name);

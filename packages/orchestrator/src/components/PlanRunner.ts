@@ -1,4 +1,4 @@
-import { Address, State } from '@clay/contracts';
+import { Address, ModuleAddress, State } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { ResourceBlock, spell, Statement } from '@clay/parser';
 import { PlanAction } from '@clay/planner';
@@ -53,7 +53,7 @@ export class PlanRunner {
     if (!(yield* this.applyDeletes(actions, state))) return;
 
     // Outputs are read after the last action, so they never name a half-applied resource.
-    state.outputs = this.resolveOutputs(config.mainProgram, state, Address.root('', ''));
+    state.outputs = this.resolveOutputs(config.mainProgram, state, ModuleAddress.root);
     await this.stateManager.write(state);
     yield { type: 'done', outputs: state.outputs };
   }
@@ -153,7 +153,7 @@ export class PlanRunner {
     }
   }
 
-  private resolveOutputs(program: Statement[], state: State, context: Address): Record<string, unknown> {
+  private resolveOutputs(program: Statement[], state: State, context: ModuleAddress): Record<string, unknown> {
     const outputs: Record<string, unknown> = {};
     const scope = scopeOf(context);
 

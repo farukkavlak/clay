@@ -1,4 +1,4 @@
-import { Address } from '@clay/contracts';
+import { Address, ModuleAddress } from '@clay/contracts';
 import { ModuleOutputReference, parseReference } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
@@ -10,7 +10,7 @@ const ref = (spelled: string) => parseReference(spelled.split('.')) as ModuleOut
 describe('ModuleOutputResolver', () => {
   const scopeManager = new ScopeManager();
   const resolver = new ModuleOutputResolver(scopeManager);
-  const context = new Address([], 'resource', 'main');
+  const context = Address.root('resource', 'main');
 
   it('should resolve existing output in module', () => {
     // Setup: defined output in sub-module
@@ -24,7 +24,7 @@ describe('ModuleOutputResolver', () => {
     // Setup nested scope output
     scopeManager.setOutput('module.parent.module.child', 'value', 42);
 
-    const nestedContext = new Address(['parent'], 'resource', 'main');
+    const nestedContext = new Address(ModuleAddress.root.child('parent'), 'resource', 'main');
     const result = resolver.resolve(ref('module.child.value'), nestedContext);
     expect(result).toBe(42);
   });

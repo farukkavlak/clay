@@ -50,7 +50,7 @@ describe('a module source that is met twice', () => {
 
     const { actions } = await planned(`module "outer" { source = "./outer" }`);
 
-    expect(actions.map((action) => [...(action.modulePath ?? []), action.resourceType, action.name].join('.'))).toEqual([
+    expect(actions.map((action) => [...(action.modulePath ?? []).map((step) => step.name), action.resourceType, action.name].join('.'))).toEqual([
       'outer.first.leaf.local_file.one',
       'outer.second.leaf.local_file.one',
     ]);

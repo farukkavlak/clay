@@ -6,6 +6,7 @@ import { moveResource } from '@clay/state';
 
 import { eachFrom } from '../forEach';
 import { Instances } from '../Instances';
+import { Context } from '../keys';
 import { tryAt } from '../place';
 import { checkHasKey, checkInRange } from '../resolvers/instance';
 import { kindOf } from '../resolvers/readPath';
@@ -76,7 +77,7 @@ export class DesiredStateBuilder {
     const keys = this.instances.keysOf(key);
     if (keys === undefined) return [this.planInstance(address, block, dependencies, state, pending)];
 
-    return keys.map((instance) => this.planInstance(new Address(address.modulePath, address.resourceType, address.name, instance), block, dependencies, state, pending));
+    return keys.map((instance) => this.planInstance(new Address(address.module, address.resourceType, address.name, instance), block, dependencies, state, pending));
   }
 
   /** The count or for_each, read before any instance is, so it has no key. */
@@ -108,8 +109,8 @@ export class DesiredStateBuilder {
       const keys = this.instances.keysOf(block);
       if (keys === undefined) return [block];
 
-      const { modulePath, resourceType, name } = Address.parse(block);
-      return keys.map((key) => new Address(modulePath, resourceType, name, key).toString());
+      const { module, resourceType, name } = Address.parse(block);
+      return keys.map((key) => new Address(module, resourceType, name, key).toString());
     });
   }
 
@@ -124,11 +125,11 @@ export class DesiredStateBuilder {
     if (isUnknown(value)) pending.add(key);
     else this.scopeManager.setOutput(node.scope, node.name, value);
 
-    if (node.context.modulePath.length === 0) rootOutputs[node.name] = value;
+    if (node.context.isRoot()) rootOutputs[node.name] = value;
   }
 
   /** Resolves config values the way the diff needs them; what an apply has to produce first stays UNKNOWN. */
-  private resolveForPlan(block: ResourceBlock, state: State, context: Address, pending: Set<string>): Record<string, unknown> {
+  private resolveForPlan(block: ResourceBlock, state: State, context: Context, pending: Set<string>): Record<string, unknown> {
     const resolved: Record<string, unknown> = {};
     const declaration = spell(block);
 
@@ -143,7 +144,7 @@ export class DesiredStateBuilder {
   }
 
   /** An index past a count, or a key for_each does not give, is refused before anything is read, since a reference to a pending instance is never resolved. */
-  private resolveOrUnknown(value: unknown, state: State, context: Address, pending: Set<string>): unknown {
+  private resolveOrUnknown(value: unknown, state: State, context: Context, pending: Set<string>): unknown {
     for (const reference of this.scanner.referencesIn(value, context)) {
       if (reference.kind === 'count' || reference.kind === 'each') continue;
       if (reference.kind === 'resource') this.checkIndex(reference);

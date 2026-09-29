@@ -1,4 +1,4 @@
-import { Address } from '@clay/contracts';
+import { Address, ModuleAddress } from '@clay/contracts';
 import { AttributeValue, ReferenceNode, Statement } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
@@ -8,13 +8,17 @@ import { Instances } from '../../src/Instances';
 import { ReferenceScanner } from '../../src/resolvers/ReferenceScanner';
 import { moduleBlock, ref, resourceBlock, str, variableBlock } from '../ast';
 
+function moduleAt(names: string[]): ModuleAddress {
+  return names.reduce((module, name) => module.child(name), ModuleAddress.root);
+}
+
 function resource(name: string, attributes: Record<string, AttributeValue> = {}, modulePath: string[] = []): LoadedResource {
-  const address = new Address(modulePath, 'resource', name);
+  const address = new Address(moduleAt(modulePath), 'resource', name);
   return { uniqueId: address.toString(), address, block: resourceBlock('resource', name, attributes) };
 }
 
 function module(modulePath: string[], program: Statement[]): LoadedModule {
-  return { address: new Address(modulePath, '', ''), program };
+  return { address: moduleAt(modulePath), program };
 }
 
 describe('DependencyGraphBuilder', () => {
@@ -38,7 +42,7 @@ describe('DependencyGraphBuilder', () => {
   it('should run a module output after the resource it reads from', () => {
     const modules = [
       {
-        address: new Address(['app'], '', ''),
+        address: ModuleAddress.root.child('app'),
         program: [{ type: 'Output', name: 'ip', value: { type: 'Reference', value: ['resource', 'instance', 'ip'] } }],
       },
     ] as LoadedModule[];
@@ -81,7 +85,7 @@ describe('DependencyGraphBuilder', () => {
 
   // A resource's key is its address, so a variable named like one would take its node if both spelled their kind the same way.
   it('keeps a variable and a resource whose address reads like one apart', () => {
-    const address = new Address([], 'vars', 'x');
+    const address = Address.root('vars', 'x');
     const named: LoadedResource = { uniqueId: address.toString(), address, block: resourceBlock('vars', 'x', {}) };
     const root = module([], [variableBlock('x', { default: str('1') })]);
 

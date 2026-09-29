@@ -1,8 +1,8 @@
-import { Address } from '@clay/contracts';
+import { ModuleAddress } from '@clay/contracts';
 
 export interface VariableValue {
   value: unknown;
-  context: Address;
+  context: ModuleAddress;
 }
 
 export class ScopeManager {

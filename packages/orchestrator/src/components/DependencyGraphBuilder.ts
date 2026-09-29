@@ -1,9 +1,9 @@
-import { Address } from '@clay/contracts';
+import { ModuleAddress } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { AttributeValue, ModuleBlock, Position, spell } from '@clay/parser';
 
 import { Instances, Repetition } from '../Instances';
-import { childScope, outputKey, scopeOf, variableKey } from '../keys';
+import { Context, outputKey, scopeOf, variableKey } from '../keys';
 import { placed, tryAt } from '../place';
 import { readInstance } from '../resolvers/instance';
 import { Reference, ReferenceScanner } from '../resolvers/ReferenceScanner';
@@ -14,7 +14,7 @@ export interface ValueNode {
   scope: string;
   name: string;
   value: AttributeValue | undefined;
-  context: Address;
+  context: ModuleAddress;
   position: Position;
   declaration: string;
 }
@@ -116,7 +116,7 @@ export class DependencyGraphBuilder {
             position: stmt.attributes.default?.position ?? stmt.position,
             declaration,
           });
-        if (stmt.type === 'Module') this.setInputNodes(stmt, nodes, scope, mod.address);
+        if (stmt.type === 'Module') this.setInputNodes(stmt, nodes, mod.address);
       }
     }
 
@@ -124,8 +124,8 @@ export class DependencyGraphBuilder {
   }
 
   // An input is read where the module is called, so its context is the parent, and it wins over the default inside.
-  private setInputNodes(stmt: ModuleBlock, nodes: Map<string, GraphNode>, scope: string, context: Address): void {
-    const child = childScope(scope, stmt.name);
+  private setInputNodes(stmt: ModuleBlock, nodes: Map<string, GraphNode>, context: ModuleAddress): void {
+    const child = scopeOf(context.child(stmt.name));
     const declaration = spell(stmt);
 
     for (const name of inputNames(stmt.attributes))
@@ -140,7 +140,7 @@ export class DependencyGraphBuilder {
       });
   }
 
-  private addDependencies(value: unknown, graph: Graph<GraphNode>, dependentKey: string, context: Address, moduleScopes: Set<string>, repetition?: Repetition): void {
+  private addDependencies(value: unknown, graph: Graph<GraphNode>, dependentKey: string, context: Context, moduleScopes: Set<string>, repetition?: Repetition): void {
     for (const reference of this.scanner.referencesIn(value, context)) {
       if (reference.kind === 'count' || reference.kind === 'each') {
         checkInstanceReference(reference, repetition);

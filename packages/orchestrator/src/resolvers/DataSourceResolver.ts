@@ -1,11 +1,10 @@
-import { Address } from '@clay/contracts';
 import { DataReference } from '@clay/parser';
-import { dataSourceKey, scopeOf } from '../keys';
+import { dataSourceKey, Context, scopeOf } from '../keys';
 
 export class DataSourceResolver {
   constructor(private dataSources: Map<string, Record<string, unknown>>) {}
 
-  resolve(reference: DataReference, context: Address): unknown {
+  resolve(reference: DataReference, context: Context): unknown {
     const key = dataSourceKey(scopeOf(context), reference.type, reference.name);
     const attrName = reference.attribute;
 

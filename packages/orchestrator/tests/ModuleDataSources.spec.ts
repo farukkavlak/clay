@@ -100,7 +100,7 @@ module "app" {
         type: 'CREATE',
         resourceType: 'test_resource',
         name: 'server',
-        modulePath: ['app'],
+        modulePath: [{ name: 'app' }],
         attributes: { ami: { type: 'Reference', value: ['data', 'aws_ami', 'ubuntu', 'id'] } },
       },
     ]);
@@ -134,7 +134,7 @@ module "app" {
         type: 'CREATE',
         resourceType: 'test_resource',
         name: 'server',
-        modulePath: ['app'],
+        modulePath: [{ name: 'app' }],
         attributes: { ami: { type: 'Reference', value: ['data', 'aws_ami', 'root_ami', 'id'] } },
       },
     ]);

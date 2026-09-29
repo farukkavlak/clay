@@ -103,7 +103,7 @@ describe('Orchestrator - Module Loading', () => {
         type: 'CREATE',
         resourceType: 'test_resource',
         name: 'main',
-        modulePath: ['vpc'],
+        modulePath: [{ name: 'vpc' }],
         attributes: { name: 'main-vpc' }, // minimal attributes
       },
     ]);
@@ -137,7 +137,7 @@ describe('Orchestrator - Module Loading', () => {
         type: 'CREATE',
         resourceType: 'test_resource',
         name: 'rds',
-        modulePath: ['app', 'db'],
+        modulePath: [{ name: 'app' }, { name: 'db' }],
         attributes: {},
       },
     ]);
@@ -173,7 +173,7 @@ describe('Orchestrator - Module Loading', () => {
         type: 'CREATE',
         resourceType: 'test_resource',
         name: 'deep',
-        modulePath: ['L2', 'L3', 'L4', 'L5'],
+        modulePath: [{ name: 'L2' }, { name: 'L3' }, { name: 'L4' }, { name: 'L5' }],
         attributes: {},
       },
     ]);

@@ -115,6 +115,19 @@ describe('reading a plan file', () => {
     expect(byName.key).toBe('x.y');
   });
 
+  it('reads the module keys of actions back as they were written', () => {
+    const modulePath = [{ name: 'm', key: 0 }, { name: 'n', key: 'x.y' }, { name: 'o' }];
+    const plan: Plan = { serial: 0, actions: [{ type: 'DELETE', resourceType: 'null_resource', name: 'a', modulePath, id: '1' }], outputs: {} };
+
+    expect(parsePlanFile(aPlanFile(plan), 'tfplan.json').actions[0].modulePath).toEqual(modulePath);
+  });
+
+  it('names a module key that is not whole', () => {
+    const content = { ...fields(), actions: [{ type: 'DELETE', resourceType: 'null_resource', name: 'a', modulePath: [{ name: 'm', key: 1.5 }], id: '1' }] };
+
+    expect(read(content)).toThrow('tfplan.json is not a plan file: a module key: 1.5 is not a whole number');
+  });
+
   const keyed = (key: unknown) => ({ ...fields(), actions: [{ type: 'DELETE', resourceType: 'null_resource', name: 'a', key, id: '1' }] });
 
   it.each([
@@ -139,6 +152,8 @@ describe('reading a plan file', () => {
   it.each([
     ['text', 'm'],
     ['a list that holds no names', [1]],
+    ['a list of bare names', ['m']],
+    ['a module key that is no key', [{ name: 'm', key: -1 }]],
   ])('refuses an action whose module path is %s', (_, modulePath) => {
     const content = { ...fields(), actions: [{ type: 'DELETE', resourceType: 'null_resource', name: 'a', modulePath, id: '1' }] };
 
@@ -151,11 +166,16 @@ describe('reading a plan file', () => {
       actions: [
         { type: 'NO_OP', resourceType: 'null_resource', name: 'a', key: 0, movedFrom: 'null_resource.a' },
         { type: 'NO_OP', resourceType: 'null_resource', name: 'b', movedFrom: 'null_resource.b[0]' },
+        { type: 'NO_OP', resourceType: 'null_resource', name: 'c', modulePath: [{ name: 'm', key: 1 }], key: 0, movedFrom: 'module.m[1].null_resource.c' },
       ],
       outputs: {},
     };
 
-    expect(parsePlanFile(aPlanFile(plan), 'tfplan.json').actions.map((action) => action.movedFrom)).toEqual(['null_resource.a', 'null_resource.b[0]']);
+    expect(parsePlanFile(aPlanFile(plan), 'tfplan.json').actions.map((action) => action.movedFrom)).toEqual([
+      'null_resource.a',
+      'null_resource.b[0]',
+      'module.m[1].null_resource.c',
+    ]);
   });
 
   it('names an instance key that is not whole', () => {

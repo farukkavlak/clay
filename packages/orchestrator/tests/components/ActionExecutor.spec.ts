@@ -36,7 +36,7 @@ describe('ActionExecutor', () => {
     vi.clearAllMocks();
   });
 
-  const context = new Address([], 'test', 'main');
+  const context = Address.root('test', 'main');
 
   describe('execute', () => {
     it('should throw if provider not found', async () => {

@@ -2,6 +2,7 @@ import { Address, State } from '@clay/contracts';
 import { Position, ResourceReference, spellReference, Step } from '@clay/parser';
 
 import { Instances } from '../Instances';
+import { Context, moduleOf } from '../keys';
 import { readInstance } from './instance';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 
@@ -9,11 +10,12 @@ export class ResourceResolver {
   constructor(private instances: Instances) {}
 
   /** The attribute the reference reads, and the steps still to take into it. */
-  resolve(reference: ResourceReference, context: Address, state: State, position?: Position): { value: unknown; path: Step[] } {
-    const block = new Address(context.modulePath, reference.type, reference.name).toString();
+  resolve(reference: ResourceReference, context: Context, state: State, position?: Position): { value: unknown; path: Step[] } {
+    const module = moduleOf(context);
+    const block = new Address(module, reference.type, reference.name).toString();
     const { key, attribute, path } = readInstance(reference, this.instances.repetitionOf(block), position);
 
-    const resourceKey = new Address(context.modulePath, reference.type, reference.name, key).toString();
+    const resourceKey = new Address(module, reference.type, reference.name, key).toString();
     const resource = state.resources[resourceKey];
 
     const spelled = spellReference([reference.type, reference.name, ...(key === undefined ? [] : [key]), attribute]);

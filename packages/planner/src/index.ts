@@ -1,4 +1,4 @@
-import { Address, ExactNumber, InstanceKey, isInstanceKey, NumberError, Resource, Schema, State } from '@clay/contracts';
+import { Address, ExactNumber, InstanceKey, isInstanceKey, isModulePath, ModuleAddress, ModuleStep, NumberError, Resource, Schema, State } from '@clay/contracts';
 import { AttributeValue, ResourceBlock } from '@clay/parser';
 import { isDeepStrictEqual } from 'node:util';
 
@@ -28,7 +28,7 @@ export interface PlanAction {
   type: ActionType;
   resourceType: string;
   name: string;
-  modulePath?: string[]; // Path of modules leading to this resource
+  modulePath?: readonly ModuleStep[];
   key?: InstanceKey;
   /** The address state holds the resource under, when count was added or taken off since: it moves before the action runs. */
   movedFrom?: string;
@@ -45,7 +45,7 @@ export interface Plan {
   outputs: Changes;
 }
 
-/** Bumped whenever the shape below changes, so a plan file from an older version is refused instead of misread. */
+/** Bumped when the shape below changes once a Clay is released, so a plan file from an older version is refused instead of misread. */
 export const PLAN_FILE_VERSION = '8.0';
 
 export interface PlanFile extends Plan {
@@ -113,19 +113,15 @@ function isMovedFrom(action: Record<string, unknown>): boolean {
   if (action.movedFrom === undefined) return true;
   if (typeof action.resourceType !== 'string' || typeof action.name !== 'string') return false;
 
-  const address = new Address((action.modulePath as string[] | undefined) ?? [], action.resourceType, action.name, action.key as InstanceKey | undefined);
+  const module = new ModuleAddress((action.modulePath as readonly ModuleStep[] | undefined) ?? []);
+  const address = new Address(module, action.resourceType, action.name, action.key as InstanceKey | undefined);
   return action.movedFrom === address.countCounterpart()?.toString();
-}
-
-/** A module path names modules, so an address built from it is the one state keys by. */
-function isModulePath(value: unknown): boolean {
-  return value === undefined || (Array.isArray(value) && value.every((name) => typeof name === 'string'));
 }
 
 function isAction(action: unknown): boolean {
   return (
     isRecord(action) &&
-    isModulePath(action.modulePath) &&
+    (action.modulePath === undefined || isModulePath(action.modulePath)) &&
     (action.key === undefined || isInstanceKey(action.key)) &&
     isMovedFrom(action) &&
     (action.changes === undefined || isChanges(action.changes))
@@ -184,6 +180,8 @@ function readNode(node: unknown): void {
 
 function readAction(action: Record<string, unknown>): void {
   if (action.key instanceof ExactNumber) action.key = action.key.toSafeInteger('an instance key');
+  if (Array.isArray(action.modulePath))
+    for (const step of action.modulePath) if (isRecord(step) && step.key instanceof ExactNumber) step.key = step.key.toSafeInteger('a module key');
   if (isRecord(action.attributes)) for (const node of Object.values(action.attributes)) readNode(node);
 }
 

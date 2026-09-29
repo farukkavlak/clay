@@ -1,4 +1,4 @@
-import { Address, ExactNumber, State } from '@clay/contracts';
+import { Address, ExactNumber, ModuleAddress, State } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { ReferenceResolver } from '../../src/resolvers/ReferenceResolver';
@@ -9,7 +9,7 @@ describe('ReferenceResolver', () => {
   const scopeManager = new ScopeManager();
   const dataSources = new Map<string, Record<string, unknown>>();
   const resolver = new ReferenceResolver(scopeManager, dataSources, new Instances());
-  const context = new Address([], 'resource', 'main');
+  const context = Address.root('resource', 'main');
 
   const mockState: State = {
     version: 1,
@@ -27,7 +27,7 @@ describe('ReferenceResolver', () => {
   };
 
   // Setup Variable
-  scopeManager.setVariable('', 'my_var', { value: 'var_value', context: new Address([], '', '') });
+  scopeManager.setVariable('', 'my_var', { value: 'var_value', context: ModuleAddress.root });
 
   it('should resolve simple string value as is', () => {
     expect(resolver.resolveValue('simple', mockState, context)).toBe('simple');
@@ -87,7 +87,7 @@ describe('ReferenceResolver', () => {
   });
 
   it('should give a template of one reference as the value itself', () => {
-    scopeManager.setVariable('', 'n', { value: ExactNumber.parse('8'), context: new Address([], '', '') });
+    scopeManager.setVariable('', 'n', { value: ExactNumber.parse('8'), context: ModuleAddress.root });
 
     expect(resolver.resolveValue({ type: 'Template', value: [{ type: 'Reference', value: ['var', 'n'] }] }, mockState, context)).toEqual(ExactNumber.parse('8'));
   });

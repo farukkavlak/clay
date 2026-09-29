@@ -33,6 +33,22 @@ describe('reading a state file', () => {
   });
 
   it.each([
+    ['a number', 'module.m[0].local_file.a', '0', 0],
+    ['a string', 'module.m["blog"].local_file.a', '"blog"', 'blog'],
+  ])('reads a module key that is %s', (_, address, written, key) => {
+    const text = `{"version": 1, "serial": 0, "resources": {${JSON.stringify(address)}: {"resourceType": "local_file", "name": "a", "modulePath": [{"name": "m", "key": ${written}}], "attributes": {}}}}`;
+
+    expect(parseState(text, 'clay.state.json').resources[address].modulePath).toEqual([{ name: 'm', key }]);
+  });
+
+  it('names a module key that is not whole', () => {
+    const text =
+      '{"version": 1, "serial": 0, "resources": {"module.m[0].local_file.a": {"resourceType": "local_file", "name": "a", "modulePath": [{"name": "m", "key": 1.5}], "attributes": {}}}}';
+
+    expect(read(text)).toThrow('clay.state.json is not valid state: a module key of "module.m[0].local_file.a": 1.5 is not a whole number');
+  });
+
+  it.each([
     ['1.5', 'is not a whole number'],
     ['-1', 'is not a key: a key is a whole number or a string'],
     ['9007199254740992', 'is outside the range'],
@@ -47,7 +63,8 @@ describe('reading a state file', () => {
   it.each([
     ['another name', 'local_file.a', { resourceType: 'local_file', name: 'b' }, 'local_file.b'],
     ['another type', 'local_file.a', { resourceType: 'null_resource', name: 'a' }, 'null_resource.a'],
-    ['another module', 'module.m.local_file.a', { resourceType: 'local_file', name: 'a', modulePath: ['n'] }, 'module.n.local_file.a'],
+    ['another module', 'module.m.local_file.a', { resourceType: 'local_file', name: 'a', modulePath: [{ name: 'n' }] }, 'module.n.local_file.a'],
+    ['another module instance', 'module.m[0].local_file.a', { resourceType: 'local_file', name: 'a', modulePath: [{ name: 'm', key: 1 }] }, 'module.m[1].local_file.a'],
     ['a key', 'local_file.a', { resourceType: 'local_file', name: 'a', key: 0 }, 'local_file.a[0]'],
   ])('refuses an entry filed under an address other than its own, by %s', (_, address, entry, held) => {
     const content = { version: 1, serial: 0, resources: { [address]: { ...entry, attributes: {} } } };
@@ -83,15 +100,22 @@ describe('reading a state file', () => {
     ['attributes that are a number', { version: 1, serial: 0, resources: { 'local_file.a': { resourceType: 'local_file', name: 'a', attributes: 5 } } }],
     ['outputs that are a number', { version: 1, serial: 0, outputs: 5, resources: {} }],
     ['a serial that is not whole', { version: 1, serial: 1.5, resources: {} }],
-    ['a module path that is not a list', { version: 1, serial: 0, resources: { 'local_file.a': { resourceType: 'local_file', name: 'a', modulePath: 'm', attributes: {} } } }],
-    [
-      'a module path that holds no name',
-      { version: 1, serial: 0, resources: { 'module.1.local_file.a': { resourceType: 'local_file', name: 'a', modulePath: [1], attributes: {} } } },
-    ],
     ['dependencies that are not a list', { version: 1, serial: 0, resources: { 'local_file.a': { resourceType: 'local_file', name: 'a', attributes: {}, dependencies: 'b' } } }],
     ['outputs that are not a record', { version: 1, serial: 0, outputs: 'oops', resources: {} }],
   ])('refuses %s', (_, content) => {
     expect(read(content)).toThrow(/clay\.state\.json is not valid state/);
+  });
+
+  // The entry would be refused later for the address it holds too, so the reason is what pins this.
+  it.each([
+    ['text', 'local_file.a', 'm'],
+    ['a list that holds no names', 'module.1.local_file.a', [1]],
+    ['a list of bare names', 'module.m.local_file.a', ['m']],
+    ['a module key that is no key', 'module.m[-1].local_file.a', [{ name: 'm', key: -1 }]],
+  ])('refuses a module path that is %s', (_, address, modulePath) => {
+    const content = { version: 1, serial: 0, resources: { [address]: { resourceType: 'local_file', name: 'a', modulePath, attributes: {} } } };
+
+    expect(read(content)).toThrow(`clay.state.json is not valid state: "${address}" is not a resource`);
   });
 
   it('refuses a state a newer Clay wrote, since it cannot know what changed', () => {
@@ -103,7 +127,7 @@ describe('reading a state file', () => {
   });
 
   it('keeps a resource attribute it has no opinion about', () => {
-    const resources = { 'module.m.local_file.a': { id: 'x', resourceType: 'local_file', name: 'a', modulePath: ['m'], attributes: {}, dependencies: ['local_file.b'] } };
+    const resources = { 'module.m.local_file.a': { id: 'x', resourceType: 'local_file', name: 'a', modulePath: [{ name: 'm' }], attributes: {}, dependencies: ['local_file.b'] } };
 
     expect(parseState(JSON.stringify({ version: 1, serial: 0, resources }), 'f').resources).toEqual(resources);
   });

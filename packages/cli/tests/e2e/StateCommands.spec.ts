@@ -167,7 +167,24 @@ describe('state and output against a real state file', () => {
     await createStateCommand().parseAsync(['node', 'clay', 'mv', 'local_file.a', 'module.m.local_file.a']);
 
     const state = await stored();
-    expect(state.resources['module.m.local_file.a']).toMatchObject({ name: 'a', modulePath: ['m'] });
+    expect(state.resources['module.m.local_file.a']).toMatchObject({ name: 'a', modulePath: [{ name: 'm' }] });
+  });
+
+  // The key is read back from the file, where a number is no JavaScript number until it is made one.
+  it('moves a resource into an instance of a module with mv, so show and a later delete find it by that key', async () => {
+    await applyConfig();
+
+    await createStateCommand().parseAsync(['node', 'clay', 'mv', 'local_file.a', 'module.m[0].local_file.a']);
+    await createStateCommand().parseAsync(['node', 'clay', 'show', 'module.m[0].local_file.a']);
+
+    const moved = await stored();
+    expect(moved.resources['module.m[0].local_file.a']).toMatchObject({ name: 'a', modulePath: [{ name: 'm', key: 0 }] });
+    expect(printed.join('\n')).toContain('# module.m[0].local_file.a:');
+
+    await run('');
+    const emptied = await stored();
+    expect(emptied.resources).toEqual({});
+    await expect(fs.access(path.join(dir, 'a.txt'))).rejects.toThrow();
   });
 
   it('renames what other resources read from when mv moves one', async () => {

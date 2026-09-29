@@ -1,4 +1,4 @@
-import { Address, State } from '@clay/contracts';
+import { Address, ModuleAddress, State } from '@clay/contracts';
 import { AttributeValue, CONFIG_FILE } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
@@ -10,7 +10,11 @@ const str = (value: string): AttributeValue => ({ type: 'String', value, positio
 
 function desiredResource(name: string, attributes: Record<string, string>, modulePath: string[] = []): DesiredResource {
   return {
-    address: new Address(modulePath, 'mock_resource', name),
+    address: new Address(
+      modulePath.reduce((module, name) => module.child(name), ModuleAddress.root),
+      'mock_resource',
+      name
+    ),
     block: {
       type: 'Resource',
       resourceType: 'mock_resource',
@@ -54,7 +58,7 @@ describe('Planner', () => {
 
     expect(actions).toHaveLength(1);
     expect(actions[0].type).toBe('CREATE');
-    expect(actions[0].modulePath).toEqual(['app', 'db']);
+    expect(actions[0].modulePath).toEqual([{ name: 'app' }, { name: 'db' }]);
   });
 
   it('should carry the dependencies of a resource on every action but a delete', () => {
@@ -157,7 +161,7 @@ describe('Planner', () => {
       version: 1,
       serial: 0,
       resources: {
-        'module.app.mock_resource.same': { id: 'in_module', resourceType: 'mock_resource', name: 'same', modulePath: ['app'], attributes: { path: 'old' } },
+        'module.app.mock_resource.same': { id: 'in_module', resourceType: 'mock_resource', name: 'same', modulePath: [{ name: 'app' }], attributes: { path: 'old' } },
         'mock_resource.same': { id: 'at_root', resourceType: 'mock_resource', name: 'same', attributes: { path: 'old' } },
       },
     };

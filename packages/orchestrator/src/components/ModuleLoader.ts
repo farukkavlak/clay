@@ -1,4 +1,4 @@
-import { Address } from '@clay/contracts';
+import { Address, ModuleAddress } from '@clay/contracts';
 import { CONFIG_FILE, ConfigError, Lexer, ModuleBlock, Parser, ResourceBlock, Statement, spell } from '@clay/parser';
 import path from 'node:path';
 
@@ -13,7 +13,7 @@ export interface LoadedResource {
 }
 
 export interface LoadedModule {
-  address: Address;
+  address: ModuleAddress;
   program: Statement[];
 }
 
@@ -32,20 +32,20 @@ export class ModuleLoader {
   async loadModuleTree(rootProgram: Statement[]): Promise<Loaded> {
     const loaded: Loaded = { resources: [], modules: [] };
 
-    const parentAddress = new Address([], '', '');
+    const parentAddress = ModuleAddress.root;
     loaded.modules.push({ address: parentAddress, program: rootProgram });
     this.declareVariables(rootProgram, parentAddress);
 
     for (const stmt of rootProgram)
       if (stmt.type === 'Resource') {
-        const address = new Address([], stmt.resourceType, stmt.name);
+        const address = Address.root(stmt.resourceType, stmt.name);
         loaded.resources.push({ uniqueId: address.toString(), address, block: stmt });
       } else if (stmt.type === 'Module') await this.loadChildModule(stmt, '.', parentAddress, loaded, ['.']);
 
     return loaded;
   }
 
-  private async loadChildModule(stmt: ModuleBlock, parentDir: string, parentAddress: Address, loaded: Loaded, loadingDirs: string[]): Promise<void> {
+  private async loadChildModule(stmt: ModuleBlock, parentDir: string, parentAddress: ModuleAddress, loaded: Loaded, loadingDirs: string[]): Promise<void> {
     const moduleName = stmt.name;
 
     const sourceValue = stmt.attributes.source?.value;
@@ -57,7 +57,7 @@ export class ModuleLoader {
 
     const moduleProgram = this.parseModuleFile(moduleDir);
 
-    const childAddress = new Address([...parentAddress.modulePath, moduleName], '', '');
+    const childAddress = parentAddress.child(moduleName);
     this.declareInputs(stmt, moduleProgram, childAddress, parentAddress);
 
     loaded.modules.push({ address: childAddress, program: moduleProgram });
@@ -65,7 +65,7 @@ export class ModuleLoader {
 
     for (const childStmt of moduleProgram)
       if (childStmt.type === 'Resource') {
-        const resourceAddress = new Address(childAddress.modulePath, childStmt.resourceType, childStmt.name);
+        const resourceAddress = new Address(childAddress, childStmt.resourceType, childStmt.name);
         loaded.resources.push({ uniqueId: resourceAddress.toString(), address: resourceAddress, block: childStmt });
       } else if (childStmt.type === 'Module') await this.loadChildModule(childStmt, moduleDir, childAddress, loaded, [...loadingDirs, moduleDir]);
   }
@@ -79,7 +79,7 @@ export class ModuleLoader {
   }
 
   // An input is read where the module is called, so its context is the parent.
-  private declareInputs(stmt: ModuleBlock, program: Statement[], childAddress: Address, parentAddress: Address): void {
+  private declareInputs(stmt: ModuleBlock, program: Statement[], childAddress: ModuleAddress, parentAddress: ModuleAddress): void {
     const declared = new Set(program.filter((moduleStmt) => moduleStmt.type === 'Variable').map((variable) => variable.name));
     const childScope = scopeOf(childAddress);
 
@@ -92,7 +92,7 @@ export class ModuleLoader {
     }
   }
 
-  private declareVariables(program: Statement[], address: Address): void {
+  private declareVariables(program: Statement[], address: ModuleAddress): void {
     const scope = scopeOf(address);
 
     // A caller's input beats the default; neither one is a missing input, read or not.
