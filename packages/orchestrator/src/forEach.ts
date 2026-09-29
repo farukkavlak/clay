@@ -1,4 +1,4 @@
-import { containsUnknown } from '@clay/planner';
+import { isUnknown } from '@clay/planner';
 
 import { kindOf } from './resolvers/readPath';
 
@@ -7,6 +7,7 @@ function eachOfList(items: unknown[]): Map<string, unknown> {
   const values = new Map<string, unknown>();
 
   for (const [index, item] of items.entries()) {
+    if (isUnknown(item)) throw new Error(`for_each must be known when planning: item [${index}] reads a value only an apply makes, and a list names its instances by its items`);
     if (typeof item !== 'string') throw new Error(`for_each is a list of strings, but item [${index}] is a ${kindOf(item)}`);
     if (values.has(item)) throw new Error(`for_each holds ${JSON.stringify(item)} twice; each instance needs a key of its own`);
 
@@ -19,9 +20,10 @@ function eachOfList(items: unknown[]): Map<string, unknown> {
 /**
  * The instances a for_each makes, by key, with the value each is given.
  * Sorted by key, since an object puts a key like "1" first whatever order it was written in.
+ * A map's keys are known before its values, so an instance can be made while its value is still unknown.
  */
 export function eachFrom(value: unknown): Map<string, unknown> {
-  if (containsUnknown(value)) throw new Error('for_each must be known when planning: it reads a value only an apply makes');
+  if (isUnknown(value)) throw new Error('for_each must be known when planning: it reads a value only an apply makes');
 
   const kind = kindOf(value);
   if (kind !== 'list' && kind !== 'map') throw new Error(`for_each is a map or a list of strings, not a ${kind}`);
