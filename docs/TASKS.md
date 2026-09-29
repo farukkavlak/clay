@@ -83,10 +83,9 @@ hits each of these early.
       `module.name[0]`, with `count.index` in the call's inputs and `module.name[0].out` to
       read one. A module address has its own type, and a key on each module
 - [ ] `for_each` on a module
-- [ ] Adding `count` to a module that exists moves what is in it to `module.name[0]`, and
-      taking it off moves it back, as for a resource. Today the new instance is made and
-      then the old one destroyed, so a resource that names the same thing, such as a file
-      at one path, is lost
+- [x] Adding `count` to a module that exists moves what is in it to `module.name[0]`, and
+      taking it off moves it back, as for a resource. Two places state may keep it are
+      refused rather than guessed between
 - [ ] `count` on a data source
 - [ ] A resource still to be created reads as unknown in full, even an attribute the
       configuration sets to a literal, so `count = random_string.s.length` cannot be

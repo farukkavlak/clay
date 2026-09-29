@@ -1,6 +1,7 @@
 import { Address } from '@clay/contracts';
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { ConfigError } from '@clay/parser';
+import { parsePlanFile, serializePlan } from '@clay/planner';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
@@ -24,6 +25,9 @@ const web = (count: string, rest = '') => `
   }
   ${rest}
 `;
+
+/** The one call of `web`, given `name`, with the count given or none. */
+const once = (count?: string, name = 'site') => `module "web" {\n source = "./web"\n${count ? ` count = ${count}\n` : ''} name = "${name}"\n}`;
 
 describe('a module called with count', () => {
   let dir: string;
@@ -69,6 +73,10 @@ describe('a module called with count', () => {
     }
     output "path" { value = "\${local_file.page.path}" }
   `;
+
+  /** The page with count on the resource too, still writing the one file. */
+  const countedPage = () =>
+    page().replace('resource "local_file" "page" {', 'resource "local_file" "page" {\n count = 1').replace('local_file.page.path', 'local_file.page[0].path');
 
   const pages = async () => {
     const names = await fs.readdir(dir);
@@ -278,5 +286,68 @@ describe('a module called with count', () => {
 
     expect(error.message).toBe('data "local_file" "d" is in a module called with count, where a data source cannot be read yet');
     expect(error.position).toMatchObject({ file: `${where}/main.clay`, line: 1, column: 1 });
+  });
+
+  describe('added to a module that exists, or taken off', () => {
+    it('moves what is in the module to its first instance, so nothing is made again', async () => {
+      await apply(once());
+
+      const { actions } = await newOrchestrator().plan(once('1'));
+      expect(actions.map((action) => [action.type, Address.of(action).toString(), action.movedFrom])).toEqual([
+        ['NO_OP', 'module.web[0].local_file.page', 'module.web.local_file.page'],
+      ]);
+
+      await apply(once('1'));
+      expect(await pages()).toEqual(['site.txt']);
+      expect(await stateKeys()).toEqual(['module.web[0].local_file.page']);
+    });
+
+    // A saved plan is read back from its file, where a move out of a module has to be one count could have made.
+    it('runs a saved plan that moves what is in the module', async () => {
+      await apply(once());
+      const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(once('1')), once('1'), {}), 'plan.json');
+
+      for await (const event of newOrchestrator().runPlan(saved, once('1'))) if (event.type === 'failed') throw event.error;
+
+      expect(await pages()).toEqual(['site.txt']);
+      expect(await stateKeys()).toEqual(['module.web[0].local_file.page']);
+    });
+
+    it('moves the first instance back when count is taken off, and destroys the others', async () => {
+      await apply(web('2'));
+
+      await apply(once(undefined, 'site-0'));
+
+      expect(await pages()).toEqual(['site-0.txt']);
+      expect(await stateKeys()).toEqual(['module.web.local_file.page']);
+    });
+
+    it('moves a resource that gains count with its module in one step', async () => {
+      await apply(once());
+      await writeModule('web', countedPage());
+
+      const { actions } = await newOrchestrator().plan(once('1'));
+      expect(actions.map((action) => [Address.of(action).toString(), action.movedFrom])).toEqual([['module.web[0].local_file.page[0]', 'module.web.local_file.page']]);
+
+      await apply(once('1'));
+      expect(await pages()).toEqual(['site.txt']);
+      expect(await stateKeys()).toEqual(['module.web[0].local_file.page[0]']);
+    });
+
+    // Two entries could each be the old one; taking either would leave the other to be destroyed, whichever it was.
+    it('refuses to guess when state keeps it in two places it may have been, where the resource is written', async () => {
+      await apply(once());
+      const state = await new LocalBackend(dir).read();
+      state.resources['module.web[0].local_file.page'] = { ...state.resources['module.web.local_file.page'], modulePath: [{ name: 'web', key: 0 }] };
+      await new LocalBackend(dir).write(state);
+      await writeModule('web', countedPage());
+
+      const error = await planError(once('1'));
+
+      expect(error.message).toBe(
+        '"module.web[0].local_file.page[0]" may be "module.web[0].local_file.page" or "module.web.local_file.page" in state, from before count came or went; say which with clay state mv'
+      );
+      expect(error.position).toMatchObject({ file: 'web/main.clay', ...placeOf(countedPage(), 'resource "local_file" "page"') });
+    });
   });
 });

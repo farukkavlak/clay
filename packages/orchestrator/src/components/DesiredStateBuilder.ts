@@ -102,7 +102,7 @@ export class DesiredStateBuilder {
   }
 
   private planInstance(address: Address, block: ResourceBlock, dependencies: string[], state: State, pending: Set<string>): DesiredResource {
-    const movedFrom = this.moveIn(address, state);
+    const movedFrom = tryAt(block.position, spell(block), address, () => this.moveIn(address, state));
     const attributes = this.resolveForPlan(block, state, address, pending);
     const current = state.resources[address.toString()];
     if (!current || hasChanges(current.attributes, attributes)) pending.add(address.toString());
@@ -110,10 +110,19 @@ export class DesiredStateBuilder {
     return { address, block, attributes, dependencies, ...(movedFrom && { movedFrom }) };
   }
 
-  /** Made before anything reads the instance, so a reader finds it where the configuration now names it and sees its value. */
+  /**
+   * Made before anything reads the instance, so a reader finds it where the configuration now names it and sees its value.
+   * Two places in state it may have been kept is a guess between two resources, so it is refused, not made.
+   */
   private moveIn(address: Address, state: State): string | undefined {
-    const source = address.countCounterpart();
-    if (!source || Object.hasOwn(state.resources, address.toString()) || !Object.hasOwn(state.resources, source.toString())) return undefined;
+    if (Object.hasOwn(state.resources, address.toString())) return undefined;
+
+    const found = address.countCounterparts().filter((kept) => Object.hasOwn(state.resources, kept.toString()));
+    if (found.length > 1)
+      throw new Error(`"${address}" may be ${found.map((kept) => `"${kept}"`).join(' or ')} in state, from before count came or went; say which with clay state mv`);
+
+    const [source] = found;
+    if (!source) return undefined;
 
     moveResource(state, source, address);
     return source.toString();

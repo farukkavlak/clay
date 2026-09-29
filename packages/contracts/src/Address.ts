@@ -169,12 +169,32 @@ export class Address {
     return new Address(this.module, this.resourceType, this.name);
   }
 
-  /** Where state keeps this instance when count came or went since: `a` for `a[0]`, and `a[0]` for `a`. Any other instance has no such place. */
-  countCounterpart(): Address | undefined {
-    if (this.key === 0) return this.withoutKey();
-    if (this.key === undefined) return new Address(this.module, this.resourceType, this.name, 0);
+  /**
+   * Where state may keep this instance when count came or went since, on the resource or on any module on its way.
+   * `a` for `a[0]`, `a[0]` for `a`, and `module.m[0].a[0]`, `module.m.a` or `module.m.a[0]` for `module.m[0].a`. `[1]` and `["x"]` have none.
+   */
+  countCounterparts(): Address[] {
+    const own = [...this.module.path.map((step) => step.key), this.key];
+    let found: (InstanceKey | undefined)[][] = [[]];
 
-    return undefined;
+    for (const key of own)
+      found = found.flatMap((keys) =>
+        key === 0 || key === undefined
+          ? [
+              [...keys, key],
+              [...keys, key === 0 ? undefined : 0],
+            ]
+          : [[...keys, key]]
+      );
+
+    // The first is the instance itself, with no key changed.
+    return found.slice(1).map((keys) => this.withKeys(keys));
+  }
+
+  /** The same instance with these keys, one for each module on its way and the last for the resource. */
+  private withKeys(keys: (InstanceKey | undefined)[]): Address {
+    const module = new ModuleAddress(this.module.path.map(({ name }, index) => (keys[index] === undefined ? { name } : { name, key: keys[index] })));
+    return new Address(module, this.resourceType, this.name, keys.at(-1));
   }
 
   static root(resourceType: string, name: string): Address {
