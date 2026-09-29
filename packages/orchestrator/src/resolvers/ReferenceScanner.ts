@@ -2,7 +2,7 @@ import { Address } from '@clay/contracts';
 import { ParsedReference, parseReference, Position, ResourceReference, Step } from '@clay/parser';
 
 import { Instances, repetitionOfKey } from '../Instances';
-import { Context, moduleOf, outputKey, scopeOf, variableKey } from '../keys';
+import { blockKey, Context, moduleOf, outputKey, scopeOf, variableKey } from '../keys';
 
 /** Every AST node carries one, but this walks plain objects too, so a value of another shape is no position. */
 function positionOf(value: unknown): Position | undefined {
@@ -13,11 +13,11 @@ function positionOf(value: unknown): Position | undefined {
 }
 
 /**
- * What a config value reads from, with the graph key it is addressed by, and where it was written.
- * A resource's key is its block, which every instance of it shares; its address names the instance read.
+ * What a config value reads from, with the key it is addressed by, and where it was written: read in an instance of a module, a variable or an output is keyed in that instance.
+ * A resource's key is its block in the graph, which every instance of it shares; `block` is that block in the module instance read from, and `address` names the instance read.
  */
 export type Reference = (
-  | { kind: 'resource'; key: string; address: string; reference: ResourceReference }
+  | { kind: 'resource'; key: string; block: string; address: string; reference: ResourceReference }
   | { kind: 'variable'; key: string; name: string }
   | { kind: 'output'; key: string; scope: string; module: string; name: string }
   | { kind: 'count' }
@@ -80,11 +80,12 @@ export class ReferenceScanner {
   }
 
   /** The block, and the instance a first step names on a block with count or for_each; whether the step is right is the graph's to say. */
-  private addressesOf(reference: ResourceReference, context: Context): { key: string; address: string } {
+  private addressesOf(reference: ResourceReference, context: Context): { key: string; block: string; address: string } {
     const block = new Address(moduleOf(context), reference.type, reference.name);
+    const key = blockKey(block);
     const [first] = reference.path;
-    const key = this.instances.repetitionOf(block.toString()) === repetitionOfKey(first) ? first : undefined;
+    const instance = this.instances.repetitionOf(key) === repetitionOfKey(first) ? first : undefined;
 
-    return { key: block.toString(), address: new Address(block.module, block.resourceType, block.name, key).toString() };
+    return { key, block: block.toString(), address: new Address(block.module, block.resourceType, block.name, instance).toString() };
   }
 }

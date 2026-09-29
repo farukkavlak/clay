@@ -261,7 +261,9 @@ by resource type, and no `provider` block exists yet.
       module's name should be
 - [ ] An output that fails to resolve reports a failure. `resolveOutput` runs outside the
       step's `try`, so a throw there ends the run with no `failed` event and nothing said.
-      `readEach`, which reads a `for_each` again at apply, runs there too
+      `readEach`, which reads a `for_each` again at apply, runs there too, and so does the
+      refusal of a saved plan's action in an instance of a module the configuration does
+      not make
 - [ ] An output may be named `__proto__`. The runner collects outputs into a plain object,
       where that name sets a prototype instead of a key, so the output disappears
 - [ ] `apply` says a missing file is missing the same way twice. A missing plan file and a

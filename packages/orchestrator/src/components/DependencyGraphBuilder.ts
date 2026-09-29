@@ -3,15 +3,19 @@ import { Graph } from '@clay/graph';
 import { AttributeValue, ModuleBlock, Position, spell } from '@clay/parser';
 
 import { Instances, Repetition } from '../Instances';
-import { Context, outputKey, scopeOf, variableKey } from '../keys';
+import { callKey, Context, outputKey, scopeOf, variableKey } from '../keys';
 import { placed, tryAt } from '../place';
 import { readInstance } from '../resolvers/instance';
 import { Reference, ReferenceScanner } from '../resolvers/ReferenceScanner';
 import { LoadedModule, LoadedResource } from './ModuleLoader';
 
+/** Every node sits in a module, as the configuration writes it, and runs once for each instance of it; a module call sits in the module that calls it. */
+interface InModule {
+  module: ModuleAddress;
+}
+
 /** `context` is the module that reads the value, not the one that declares it: a module input is read where the module is called. */
-export interface ValueNode {
-  scope: string;
+export interface ValueNode extends InModule {
   name: string;
   value: AttributeValue | undefined;
   context: ModuleAddress;
@@ -19,7 +23,7 @@ export interface ValueNode {
   declaration: string;
 }
 
-export type GraphNode = { kind: 'resource' } | ({ kind: 'variable' } & ValueNode) | ({ kind: 'output' } & ValueNode);
+export type GraphNode = ({ kind: 'resource' } & InModule) | ({ kind: 'variable' } & ValueNode) | ({ kind: 'output' } & ValueNode) | ({ kind: 'module'; name: string } & InModule);
 
 function inputNames(attributes: Record<string, AttributeValue>): string[] {
   return Object.keys(attributes).filter((name) => name !== 'source');
@@ -47,13 +51,15 @@ export class DependencyGraphBuilder {
   buildExecutionGraph(loadedResources: LoadedResource[], loadedModules: LoadedModule[]): Graph<GraphNode> {
     const graph = new Graph<GraphNode>();
 
-    for (const { uniqueId } of loadedResources) graph.addNode(uniqueId, { kind: 'resource' });
+    for (const { uniqueId, address } of loadedResources) graph.addNode(uniqueId, { kind: 'resource', module: address.module });
     for (const [key, node] of this.valueNodes(loadedModules)) graph.addNode(key, node);
 
     const moduleScopes = new Set(loadedModules.map((mod) => scopeOf(mod.address)));
     for (const [key, node] of graph.entries())
-      if (node.kind !== 'resource') tryAt(node.position, node.declaration, node.context, () => this.addDependencies(node.value, graph, key, node.context, moduleScopes));
+      if (node.kind === 'variable' || node.kind === 'output')
+        tryAt(node.position, node.declaration, node.context, () => this.addDependencies(node.value, graph, key, node.context, moduleScopes));
     for (const resource of loadedResources) this.addResourceDependencies(resource, graph, moduleScopes);
+    for (const [key, node] of graph.entries()) if (!node.module.isRoot()) graph.addEdge(callKey(node.module), key);
 
     return graph;
   }
@@ -99,7 +105,7 @@ export class DependencyGraphBuilder {
         if (stmt.type === 'Output')
           nodes.set(outputKey(scope, stmt.name), {
             kind: 'output',
-            scope,
+            module: mod.address,
             name: stmt.name,
             value: stmt.value,
             context: mod.address,
@@ -109,14 +115,14 @@ export class DependencyGraphBuilder {
         if (stmt.type === 'Variable' && !nodes.has(variableKey(scope, stmt.name)))
           nodes.set(variableKey(scope, stmt.name), {
             kind: 'variable',
-            scope,
+            module: mod.address,
             name: stmt.name,
             value: stmt.attributes.default,
             context: mod.address,
             position: stmt.attributes.default?.position ?? stmt.position,
             declaration,
           });
-        if (stmt.type === 'Module') this.setInputNodes(stmt, nodes, mod.address);
+        if (stmt.type === 'Module') this.setCallNodes(stmt, nodes, mod.address);
       }
     }
 
@@ -124,14 +130,16 @@ export class DependencyGraphBuilder {
   }
 
   // An input is read where the module is called, so its context is the parent, and it wins over the default inside.
-  private setInputNodes(stmt: ModuleBlock, nodes: Map<string, GraphNode>, context: ModuleAddress): void {
-    const child = scopeOf(context.child(stmt.name));
+  private setCallNodes(stmt: ModuleBlock, nodes: Map<string, GraphNode>, context: ModuleAddress): void {
+    const module = context.child(stmt.name);
     const declaration = spell(stmt);
 
+    nodes.set(callKey(module), { kind: 'module', module: context, name: stmt.name });
+
     for (const name of inputNames(stmt.attributes))
-      nodes.set(variableKey(child, name), {
+      nodes.set(variableKey(scopeOf(module), name), {
         kind: 'variable',
-        scope: child,
+        module,
         name,
         value: stmt.attributes[name],
         context,

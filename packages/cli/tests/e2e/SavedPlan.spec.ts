@@ -192,6 +192,20 @@ describe('a plan saved to a file', () => {
     );
   });
 
+  // The block is declared, so only the instance of its module says the configuration does not make it.
+  it('stops when it names an instance of a module the configuration does not make', async () => {
+    await fs.mkdir(path.join(dir, 'm'));
+    await fs.writeFile(path.join(dir, 'm', 'main.clay'), fileConfig('hello'), 'utf8');
+    const config = 'module "m" { source = "./m" }';
+    const saved = await save(config);
+    const elsewhere = saved.actions.map((action) => ({ ...action, modulePath: [{ name: 'm', key: 0 }] }));
+
+    await expect(drain(newOrchestrator().runPlan({ ...saved, actions: elsewhere }, config))).rejects.toThrow(
+      'The plan has "module.m[0].local_file.a", which the configuration does not declare'
+    );
+    await expect(fs.access(path.join(dir, 'a.txt'))).rejects.toThrow();
+  });
+
   it('is refused once another run has written the state', async () => {
     const saved = await save(fileConfig('planned'));
 

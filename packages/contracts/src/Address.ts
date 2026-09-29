@@ -47,6 +47,11 @@ export class ModuleAddress {
     return this.path.length === 0;
   }
 
+  /** The module as the configuration writes it, which every instance of it shares. */
+  withoutKeys(): ModuleAddress {
+    return new ModuleAddress(this.path.map(({ name }) => ({ name })));
+  }
+
   /** `module.app.module.db[0]`, and nothing at the root. */
   toString(): string {
     return this.path.map((step) => `module.${step.name}${spellKey(step.key)}`).join('.');

@@ -41,6 +41,7 @@ describe('DependencyGraphBuilder', () => {
 
   it('should run a module output after the resource it reads from', () => {
     const modules = [
+      module([], [moduleBlock('app', { source: str('./app') })]),
       {
         address: ModuleAddress.root.child('app'),
         program: [{ type: 'Output', name: 'ip', value: { type: 'Reference', value: ['resource', 'instance', 'ip'] } }],
@@ -49,7 +50,7 @@ describe('DependencyGraphBuilder', () => {
 
     const graph = builder.buildExecutionGraph([resource('instance', {}, ['app'])], modules);
 
-    expect(graph.topologicalSort()).toEqual([['module.app.resource.instance'], ['module.app.outputs:ip']]);
+    expect(graph.topologicalSort()).toEqual([['module:app'], ['module.app.resource.instance'], ['module.app.outputs:ip']]);
   });
 
   it('should reject a reference to a resource the config does not declare', () => {
@@ -100,6 +101,18 @@ describe('DependencyGraphBuilder', () => {
     expect(kinds).toEqual(['resource', 'variable']);
   });
 
+  // The call makes the instances of its module, so nothing in one runs before it, even what reads nothing.
+  it('runs everything in a module after the call that makes its instances, a call in it too', () => {
+    const root = module([], [moduleBlock('m', { source: str('./m') })]);
+    const child = module(['m'], [moduleBlock('n', { source: str('./n') }), variableBlock('v', { default: str('1') })]);
+    const grandchild = module(['m', 'n'], []);
+
+    const graph = builder.buildExecutionGraph([resource('a'), resource('b', {}, ['m']), resource('c', {}, ['m', 'n'])], [root, child, grandchild]);
+
+    expect(graph.topologicalSort()).toEqual([['resource.a', 'module:m'], ['module.m.resource.b', 'module.m.module:n', 'module.m.vars:v'], ['module.m.module.n.resource.c']]);
+    expect(graph.getNode('module.m.module:n')).toEqual({ kind: 'module', module: ModuleAddress.root.child('m'), name: 'n' });
+  });
+
   it('should read a module input where the module is called and hand it to the resource inside', () => {
     const root = module([], [moduleBlock('m', { source: str('./m'), text: ref('resource', 'dep', 'id') })]);
     const child = module(['m'], []);
@@ -107,7 +120,7 @@ describe('DependencyGraphBuilder', () => {
 
     const graph = builder.buildExecutionGraph([resource('dep'), inner], [root, child]);
 
-    expect(graph.topologicalSort()).toEqual([['resource.dep'], ['module.m.vars:text'], ['module.m.resource.inner']]);
+    expect(graph.topologicalSort()).toEqual([['resource.dep', 'module:m'], ['module.m.vars:text'], ['module.m.resource.inner']]);
     expect(graph.getNode('module.m.vars:text')).toMatchObject({ kind: 'variable', context: root.address });
   });
 

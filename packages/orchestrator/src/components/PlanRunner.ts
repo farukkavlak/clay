@@ -7,7 +7,8 @@ import { moveResource, StateManager } from '@clay/state';
 import { asError } from '../asError';
 import { eachFrom } from '../forEach';
 import { Instances, repetitionOfKey } from '../Instances';
-import { scopeOf } from '../keys';
+import { blockKey, enclosing, scopeOf } from '../keys';
+import { ModuleInstances } from '../ModuleInstances';
 import { tryAt } from '../place';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { RunEvent } from '../RunEvent';
@@ -20,16 +21,17 @@ function undeclared(address: Address): Error {
   return new Error(`The plan has "${address.toString()}", which the configuration does not declare`);
 }
 
-function byBlockOf(actions: PlanAction[]): Map<string, PlanAction[]> {
-  const byBlock = new Map<string, PlanAction[]>();
+/** Grouped by `key`, in the order the plan lists them. */
+function groupBy(actions: PlanAction[], key: (address: Address) => string): Map<string, PlanAction[]> {
+  const groups = new Map<string, PlanAction[]>();
 
   for (const action of actions) {
-    const block = Address.of(action).withoutKey().toString();
-    if (!byBlock.has(block)) byBlock.set(block, []);
-    byBlock.get(block)!.push(action);
+    const group = key(Address.of(action));
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group)!.push(action);
   }
 
-  return byBlock;
+  return groups;
 }
 
 /** Runs a plan's actions in dependency order, reporting each step; the state file is rewritten after every action, so a failed run loses nothing done before it. */
@@ -39,7 +41,8 @@ export class PlanRunner {
     private executor: ActionExecutor,
     private scopeManager: ScopeManager,
     private resolver: ReferenceResolver,
-    private instances: Instances
+    private instances: Instances,
+    private modules: ModuleInstances
   ) {}
 
   async *run(actions: PlanAction[], config: LoadedConfig, graph: Graph<GraphNode>, state: State): AsyncGenerator<RunEvent> {
@@ -62,7 +65,7 @@ export class PlanRunner {
   private checkActionsMatch(actions: PlanAction[], graph: Graph<GraphNode>): void {
     for (const action of actions) {
       const address = Address.of(action);
-      const block = address.withoutKey().toString();
+      const block = blockKey(address);
       const declared = graph.hasNode(block) && repetitionOfKey(action.key) === this.instances.repetitionOf(block);
 
       if (action.type !== 'DELETE' && !declared) throw undeclared(address);
@@ -73,31 +76,52 @@ export class PlanRunner {
    * An instance reads `each.value` from what for_each gives now, which is read once what for_each reads has run.
    * A data source is read again for the run, so a saved plan may name a key for_each no longer gives.
    */
-  private readEach(key: string, blocks: Map<string, ResourceBlock>, actions: PlanAction[], state: State): void {
-    const block = blocks.get(key);
-    if (!block?.forEach) return;
+  private readEach(address: Address, block: ResourceBlock, actions: PlanAction[], state: State): void {
+    if (!block.forEach) return;
 
-    const address = Address.parse(key);
     const values = tryAt(block.forEach.position, spell(block), address, () => eachFrom(this.resolver.resolveValue(block.forEach, state, address)));
-    this.instances.setEach(key, values);
+    this.instances.setEach(address.toString(), values);
 
     for (const action of actions) if (typeof action.key !== 'string' || !values.has(action.key)) throw undeclared(Address.of(action));
   }
 
-  /** Creates, updates and replacements follow the graph, so a resource runs after what it reads from; the instances of a block run together, in the plan's order. */
+  /** Creates, updates and replacements follow the graph, so a resource runs after what it reads from. */
   private async *applyInOrder(actions: PlanAction[], config: LoadedConfig, graph: Graph<GraphNode>, state: State): AsyncGenerator<RunEvent, boolean> {
     const blocks = new Map(config.loadedResources.map(({ uniqueId, block }) => [uniqueId, block]));
-    const byBlock = byBlockOf(actions.filter((action) => action.type !== 'DELETE'));
+    const byBlock = groupBy(
+      actions.filter((action) => action.type !== 'DELETE'),
+      blockKey
+    );
 
     for (const layer of graph.topologicalSort())
       for (const key of layer) {
         const node = graph.getNode(key)!;
-        // Only this output: a sibling of it may read a resource a later layer creates.
-        if (node.kind === 'output') this.resolveOutput(node, state);
-        this.readEach(key, blocks, byBlock.get(key) ?? [], state);
 
-        for (const action of byBlock.get(key) ?? []) if (!(yield* this.step(action, state))) return false;
+        if (node.kind === 'module') this.modules.expand(node.module, node.name);
+        // Only this output: a sibling of it may read a resource a later layer creates.
+        if (node.kind === 'output') for (const instance of this.modules.of(node.module)) this.resolveOutput(node, instance, state);
+        if (node.kind === 'resource' && !(yield* this.applyBlock(blocks.get(key)!, node.module, byBlock.get(key) ?? [], state))) return false;
       }
+
+    return true;
+  }
+
+  /**
+   * One instance of the module at a time, and in each, the instances of the block.
+   * A saved plan may name an instance of a module the configuration no longer makes, which would be walked past in silence.
+   */
+  private async *applyBlock(block: ResourceBlock, module: ModuleAddress, actions: PlanAction[], state: State): AsyncGenerator<RunEvent, boolean> {
+    const blocks = this.modules.of(module).map((instance) => new Address(instance, block.resourceType, block.name));
+    const byInstance = groupBy(actions, (address) => address.withoutKey().toString());
+
+    for (const [instance, instanceActions] of byInstance) if (!blocks.some((at) => at.toString() === instance)) throw undeclared(Address.of(instanceActions[0]));
+
+    for (const at of blocks) {
+      const instanceActions = byInstance.get(at.toString()) ?? [];
+      this.readEach(at, block, instanceActions, state);
+
+      for (const action of instanceActions) if (!(yield* this.step(action, state))) return false;
+    }
 
     return true;
   }
@@ -167,9 +191,10 @@ export class PlanRunner {
     return outputs;
   }
 
-  private resolveOutput(node: ValueNode, state: State): void {
-    const value = tryAt(node.position, node.declaration, node.context, () => this.resolver.resolveValue(node.value, state, node.context));
+  private resolveOutput(node: ValueNode, instance: ModuleAddress, state: State): void {
+    const context = enclosing(instance, node.context);
+    const value = tryAt(node.position, node.declaration, context, () => this.resolver.resolveValue(node.value, state, context));
 
-    this.scopeManager.setOutput(node.scope, node.name, value);
+    this.scopeManager.setOutput(instance.toString(), node.name, value);
   }
 }

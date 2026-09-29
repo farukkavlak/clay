@@ -5,6 +5,9 @@ import { ReferenceResolver } from '../../src/resolvers/ReferenceResolver';
 import { Instances } from '../../src/Instances';
 import { ScopeManager } from '../../src/scope/ScopeManager';
 
+const inInstance = (module: ModuleAddress) => new Address(module, 'resource', 'main');
+const reference = (...value: (string | number)[]) => ({ type: 'Reference', value });
+
 describe('ReferenceResolver', () => {
   const scopeManager = new ScopeManager();
   const dataSources = new Map<string, Record<string, unknown>>();
@@ -144,5 +147,49 @@ describe('ReferenceResolver', () => {
       value: ['custom', 'name', 'attr'],
     };
     expect(resolver.resolveValue(ref, customState, context)).toBe('ok');
+  });
+
+  // Every instance of a module reads the values declared once for it, and the resources and outputs of its own instance.
+  describe('in an instance of a module', () => {
+    it('reads the instance of a resource in that instance of the module', () => {
+      const instances = new Instances();
+      instances.declare('module.app.resource.dep', 'count');
+      const state: State = { version: 1, serial: 0, resources: { 'module.app[0].resource.dep[1]': { resourceType: 'resource', name: 'dep', attributes: { id: 'one' } } } };
+
+      const read = new ReferenceResolver(new ScopeManager(), new Map(), instances).resolveValue(
+        reference('resource', 'dep', 1, 'id'),
+        state,
+        inInstance(ModuleAddress.root.child('app', 0))
+      );
+
+      expect(read).toBe('one');
+    });
+
+    it('reads an input in the instance of the calling module it sits in', () => {
+      const scopes = new ScopeManager();
+      scopes.setVariable('module.a.module.b', 'x', { value: reference('module', 'c', 'out'), context: ModuleAddress.root.child('a') });
+      scopes.setOutput('module.a[1].module.c', 'out', 'from a[1]');
+      scopes.setOutput('module.a.module.c', 'out', 'from a');
+
+      const read = new ReferenceResolver(scopes, new Map(), new Instances()).resolveValue(
+        reference('var', 'x'),
+        mockState,
+        inInstance(ModuleAddress.root.child('a', 1).child('b', 0))
+      );
+
+      expect(read).toBe('from a[1]');
+    });
+
+    it('reads a data source once for the module as the configuration writes it', () => {
+      const sources = new Map([['module.app.src.s', { v: 'read' }]]);
+
+      const read = new ReferenceResolver(new ScopeManager(), sources, new Instances()).resolveValue(
+        reference('data', 'src', 's', 'v'),
+        mockState,
+        inInstance(ModuleAddress.root.child('app', 0))
+      );
+
+      expect(read).toBe('read');
+    });
   });
 });

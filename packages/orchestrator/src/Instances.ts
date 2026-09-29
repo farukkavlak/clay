@@ -10,7 +10,10 @@ export function repetitionOfKey(key: InstanceKey | undefined): Repetition | unde
   return typeof key === 'number' ? 'count' : 'for_each';
 }
 
-/** Which resource blocks make many instances, by the address of the block, and which keys each makes once its count or for_each is read. */
+/**
+ * Which resource blocks make many instances, by the block as the configuration writes it, and which keys each makes once its count or for_each is read.
+ * The keys and the values are by the block in one instance of its module, since each instance of the module reads its own count or for_each.
+ */
 export class Instances {
   private repetitions = new Map<string, Repetition>();
   private keys = new Map<string, InstanceKey[]>();
