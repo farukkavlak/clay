@@ -1,7 +1,7 @@
 import { Address, InstanceKey, ModuleAddress } from '@clay/contracts';
 import { ModuleOutputReference, ParsedReference, parseReference, Position, ResourceReference, Step } from '@clay/parser';
 
-import { Instances, repetitionOfKey } from '../Instances';
+import { repetitionOfKey } from '../Instances';
 import { ModuleInstances } from '../ModuleInstances';
 import { blockKey, Context, moduleOf, outputKey, scopeOf, variableKey } from '../keys';
 
@@ -15,22 +15,19 @@ function positionOf(value: unknown): Position | undefined {
 
 /**
  * What a config value reads from, with the key it is addressed by, and where it was written: read in an instance of a module, a variable or an output is keyed in that instance.
- * A resource's key is its block in the graph, which every instance of it shares; `block` is that block in the module instance read from, and `address` names the instance read.
- * An output's key is its node in the graph; `address` is the output of the instance read, and `call` the call that makes that instance, with `instanceKey` the index or key it is read at.
+ * A resource's key is its block in the graph, which every instance of it shares; `block` is that block in the module instance read from.
+ * An output's key is its node in the graph; `call` is the call that makes the instance read, and `instanceKey` the index or key it is read at.
  */
 export type Reference = (
-  | { kind: 'resource'; key: string; block: string; address: string; reference: ResourceReference }
+  | { kind: 'resource'; key: string; block: string; reference: ResourceReference }
   | { kind: 'variable'; key: string; name: string }
-  | { kind: 'output'; key: string; address: string; call: ModuleAddress; instanceKey?: InstanceKey; scope: string; module: string; name: string; reference: ModuleOutputReference }
+  | { kind: 'output'; key: string; call: ModuleAddress; instanceKey?: InstanceKey; scope: string; module: string; name: string; reference: ModuleOutputReference }
   | { kind: 'count' }
   | { kind: 'each'; name: 'key' | 'value' }
 ) & { position?: Position };
 
 export class ReferenceScanner {
-  constructor(
-    private instances: Instances,
-    private modules: ModuleInstances
-  ) {}
+  constructor(private modules: ModuleInstances) {}
 
   referencesIn(value: unknown, context: Context): Reference[] {
     const references: Reference[] = [];
@@ -96,7 +93,6 @@ export class ReferenceScanner {
 
     return {
       key: outputKey(scope, output),
-      address: outputKey(scopeOf(caller.child(reference.module, instanceKey)), output),
       call,
       ...(instanceKey !== undefined && { instanceKey }),
       scope,
@@ -106,13 +102,10 @@ export class ReferenceScanner {
     };
   }
 
-  /** The block, and the instance a first step names on a block with count or for_each; whether the step is right is the graph's to say. */
-  private addressesOf(reference: ResourceReference, context: Context): { key: string; block: string; address: string } {
+  /** The block in the graph, and the block in the module instance read from; whether the steps are right is the graph's to say. */
+  private addressesOf(reference: ResourceReference, context: Context): { key: string; block: string } {
     const block = new Address(moduleOf(context), reference.type, reference.name);
-    const key = blockKey(block);
-    const [first] = reference.path;
-    const instance = this.instances.repetitionOf(key) === repetitionOfKey(first) ? first : undefined;
 
-    return { key, block: block.toString(), address: new Address(block.module, block.resourceType, block.name, instance).toString() };
+    return { key: blockKey(block), block: block.toString() };
   }
 }

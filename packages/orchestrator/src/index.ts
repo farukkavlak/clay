@@ -11,6 +11,7 @@ import { ModuleLoader } from './components/ModuleLoader';
 import { PlanRunner } from './components/PlanRunner';
 import { Instances } from './Instances';
 import { ModuleInstances } from './ModuleInstances';
+import { Planned } from './Planned';
 import { withPlace } from './place';
 import { ConfigFiles } from './ConfigFiles';
 import { ProviderRegistry } from './ProviderRegistry';
@@ -40,16 +41,17 @@ export class Orchestrator {
     const dataSources = new Map<string, Record<string, unknown>>();
     const instances = new Instances();
     const modules = new ModuleInstances();
-    const resolver = new ReferenceResolver(scopes, dataSources, instances, modules);
-    const scanner = new ReferenceScanner(instances, modules);
+    const planned = new Planned();
+    const resolver = new ReferenceResolver(scopes, dataSources, instances, modules, planned);
+    const scanner = new ReferenceScanner(modules);
     const graphBuilder = new DependencyGraphBuilder(scanner, instances, modules);
 
     return new Orchestrator(
       stateManager,
       providers,
-      new ConfigLoader(new ModuleLoader(files, scopes), scopes, dataSources, resolver, providers, instances, modules),
+      new ConfigLoader(new ModuleLoader(files, scopes), scopes, dataSources, resolver, providers, instances, modules, planned),
       graphBuilder,
-      new DesiredStateBuilder(scopes, scanner, resolver, graphBuilder, instances, modules),
+      new DesiredStateBuilder(scopes, scanner, resolver, graphBuilder, instances, modules, planned),
       new PlanRunner(stateManager, new ActionExecutor(providers, resolver), scopes, resolver, instances, modules)
     );
   }

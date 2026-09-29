@@ -7,8 +7,9 @@ import { moveResource } from '@clay/state';
 import { countFrom } from '../count';
 import { eachFrom } from '../forEach';
 import { Instances } from '../Instances';
-import { Context, contextIn, enclosing, outputKey, variableKey } from '../keys';
+import { Context, contextIn, enclosing } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
+import { Planned } from '../Planned';
 import { tryAt } from '../place';
 import { checkHasKey, checkInRange } from '../resolvers/instance';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
@@ -33,9 +34,9 @@ function sharedModule(one: ModuleAddress, other: ModuleAddress): ModuleAddress {
 }
 
 /**
- * Resolves each resource after the ones it reads from, so a value an earlier action will change is UNKNOWN, not stale.
+ * Resolves each resource after the ones it reads from, so a value an earlier action will change is read as the plan knows it, not stale.
  * Each node is resolved once for every instance of its module.
- * `pending` holds what will change: a resource by the instance it names, so reading one that stays as it is gives its value, and a variable or an output by the instance of its module.
+ * An instance that will be created or changed is kept in `planned` with the values its configuration sets and knows; reading anything else of it is UNKNOWN.
  */
 export class DesiredStateBuilder {
   constructor(
@@ -44,13 +45,13 @@ export class DesiredStateBuilder {
     private resolver: ReferenceResolver,
     private graphBuilder: DependencyGraphBuilder,
     private instances: Instances,
-    private modules: ModuleInstances
+    private modules: ModuleInstances,
+    private planned: Planned
   ) {}
 
   /** Moves are made in the state it is given, which a plan reads for itself and never writes, and then plans the actions against. */
   build(loadedResources: LoadedResource[], graph: Graph<GraphNode>, state: State): DesiredState {
     const byKey = new Map(loadedResources.map((r) => [r.address.toString(), r]));
-    const pending = new Set<string>();
     const resources: DesiredResource[] = [];
     const outputs: Record<string, unknown> = {};
 
@@ -58,52 +59,52 @@ export class DesiredStateBuilder {
       for (const key of layer) {
         const node = graph.getNode(key)!;
 
-        if (node.kind === 'module') this.planCall(node, state, pending);
-        else if (node.kind === 'resource') resources.push(...this.planResource(key, byKey.get(key)!, graph, state, pending));
-        else for (const instance of this.modules.of(node.module)) this.planValue(node, instance, state, pending, outputs);
+        if (node.kind === 'module') this.planCall(node, state);
+        else if (node.kind === 'resource') resources.push(...this.planResource(key, byKey.get(key)!, graph, state));
+        else for (const instance of this.modules.of(node.module)) this.planValue(node, instance, state, outputs);
       }
 
     return { resources, outputs };
   }
 
   /** A call's count or for_each is read in each instance of the module that calls it, and makes its instances there. */
-  private planCall({ module, block }: Extract<GraphNode, { kind: 'module' }>, state: State, pending: Set<string>): void {
-    this.modules.expandCall(module, block, (value, parse, caller) => this.readAt(value, block, caller, state, pending, parse));
+  private planCall({ module, block }: Extract<GraphNode, { kind: 'module' }>, state: State): void {
+    this.modules.expandCall(module, block, (value, parse, caller) => this.readAt(value, block, caller, state, parse));
   }
 
-  private planResource(key: string, loaded: LoadedResource, graph: Graph<GraphNode>, state: State, pending: Set<string>): DesiredResource[] {
+  private planResource(key: string, loaded: LoadedResource, graph: Graph<GraphNode>, state: State): DesiredResource[] {
     const { address, block } = loaded;
     const blocks = this.graphBuilder.resourceDependencies(graph, key);
 
     return this.modules.of(address.module).flatMap((module) => {
       const dependencies = this.instancesOf(blocks, module);
-      return this.planBlock(new Address(module, address.resourceType, address.name), block, dependencies, state, pending);
+      return this.planBlock(new Address(module, address.resourceType, address.name), block, dependencies, state);
     });
   }
 
   /** One desired resource for each instance the block makes in one instance of its module: one with neither count nor for_each, and one per index or key with either. */
-  private planBlock(address: Address, block: ResourceBlock, dependencies: string[], state: State, pending: Set<string>): DesiredResource[] {
+  private planBlock(address: Address, block: ResourceBlock, dependencies: string[], state: State): DesiredResource[] {
     const key = address.toString();
 
-    if (block.count) this.instances.setCount(key, this.readAt(block.count, block, address, state, pending, countFrom));
-    if (block.forEach) this.instances.setEach(key, this.readAt(block.forEach, block, address, state, pending, eachFrom));
+    if (block.count) this.instances.setCount(key, this.readAt(block.count, block, address, state, countFrom));
+    if (block.forEach) this.instances.setEach(key, this.readAt(block.forEach, block, address, state, eachFrom));
 
     const keys = this.instances.keysOf(key);
-    if (keys === undefined) return [this.planInstance(address, block, dependencies, state, pending)];
+    if (keys === undefined) return [this.planInstance(address, block, dependencies, state)];
 
-    return keys.map((instance) => this.planInstance(new Address(address.module, address.resourceType, address.name, instance), block, dependencies, state, pending));
+    return keys.map((instance) => this.planInstance(new Address(address.module, address.resourceType, address.name, instance), block, dependencies, state));
   }
 
   /** The count or for_each, read before any instance is, so it has no key. */
-  private readAt<T>(value: AttributeValue, block: Statement, context: Context, state: State, pending: Set<string>, read: (value: unknown) => T): T {
-    return tryAt(value.position, spell(block), context, () => read(this.resolveOrUnknown(value, state, context, pending)));
+  private readAt<T>(value: AttributeValue, block: Statement, context: Context, state: State, read: (value: unknown) => T): T {
+    return tryAt(value.position, spell(block), context, () => read(this.resolveOrUnknown(value, state, context)));
   }
 
-  private planInstance(address: Address, block: ResourceBlock, dependencies: string[], state: State, pending: Set<string>): DesiredResource {
+  private planInstance(address: Address, block: ResourceBlock, dependencies: string[], state: State): DesiredResource {
     const movedFrom = tryAt(block.position, spell(block), address, () => this.moveIn(address, state));
-    const attributes = this.resolveForPlan(block, state, address, pending);
+    const attributes = this.resolveForPlan(block, state, address);
     const current = state.resources[address.toString()];
-    if (!current || hasChanges(current.attributes, attributes)) pending.add(address.toString());
+    if (!current || hasChanges(current.attributes, attributes)) this.planned.set(address.toString(), attributes);
 
     return { address, block, attributes, dependencies, ...(movedFrom && { movedFrom }) };
   }
@@ -150,48 +151,45 @@ export class DesiredStateBuilder {
     return keys.map((key) => new Address(block.module, block.resourceType, block.name, key).toString());
   }
 
-  private planValue(node: ValueNode & { kind: 'variable' | 'output' }, instance: ModuleAddress, state: State, pending: Set<string>, rootOutputs: Record<string, unknown>): void {
-    if (node.kind === 'variable') this.planVariable(node, instance, state, pending);
-    else this.planOutput(node, instance, state, pending, rootOutputs);
+  private planValue(node: ValueNode & { kind: 'variable' | 'output' }, instance: ModuleAddress, state: State, rootOutputs: Record<string, unknown>): void {
+    if (node.kind === 'variable') this.planVariable(node, instance, state);
+    else this.planOutput(node, instance, state, rootOutputs);
   }
 
-  /** A variable fed by a pending resource is pending itself, so everything reading it plans against UNKNOWN. */
-  private planVariable(node: ValueNode, instance: ModuleAddress, state: State, pending: Set<string>): void {
-    if (node.value !== undefined && isUnknown(this.resolveNode(node, instance, state, pending))) pending.add(variableKey(instance.toString(), node.name));
+  /** Resolved so an error in it is found at plan; a reader resolves it again where it reads it. */
+  private planVariable(node: ValueNode, instance: ModuleAddress, state: State): void {
+    if (node.value !== undefined) this.resolveNode(node, instance, state);
   }
 
-  /** Gives an output its value so the resources reading it can be planned; an output fed by a pending resource keeps none. */
-  private planOutput(node: ValueNode, instance: ModuleAddress, state: State, pending: Set<string>, rootOutputs: Record<string, unknown>): void {
-    const value = this.resolveNode(node, instance, state, pending);
-    if (isUnknown(value)) pending.add(outputKey(instance.toString(), node.name));
-    else this.scopeManager.setOutput(instance.toString(), node.name, value);
+  /** Gives an output its value so the resources reading it can be planned; an output with a value only the apply makes keeps none. */
+  private planOutput(node: ValueNode, instance: ModuleAddress, state: State, rootOutputs: Record<string, unknown>): void {
+    const value = this.resolveNode(node, instance, state);
+    if (!isUnknown(value)) this.scopeManager.setOutput(instance.toString(), node.name, value);
 
     if (instance.isRoot()) rootOutputs[node.name] = value;
   }
 
   /** Resolves config values the way the diff needs them; what an apply has to produce first stays UNKNOWN. */
-  private resolveForPlan(block: ResourceBlock, state: State, context: Context, pending: Set<string>): Record<string, unknown> {
+  private resolveForPlan(block: ResourceBlock, state: State, context: Context): Record<string, unknown> {
     const resolved: Record<string, unknown> = {};
     const declaration = spell(block);
 
-    for (const [key, value] of Object.entries(block.attributes))
-      resolved[key] = tryAt(value.position, declaration, context, () => this.resolveOrUnknown(value, state, context, pending));
+    for (const [key, value] of Object.entries(block.attributes)) resolved[key] = tryAt(value.position, declaration, context, () => this.resolveOrUnknown(value, state, context));
 
     return resolved;
   }
 
-  private resolveNode(node: ValueNode, instance: ModuleAddress, state: State, pending: Set<string>): unknown {
+  private resolveNode(node: ValueNode, instance: ModuleAddress, state: State): unknown {
     const context = contextIn(node.context, instance);
-    return tryAt(node.position, node.declaration, context, () => this.resolveOrUnknown(node.value, state, context, pending));
+    return tryAt(node.position, node.declaration, context, () => this.resolveOrUnknown(node.value, state, context));
   }
 
-  /** An index past a count, or a key for_each does not give, is refused before anything is read, since a reference to a pending instance is never resolved. */
-  private resolveOrUnknown(value: unknown, state: State, context: Context, pending: Set<string>): unknown {
+  /** An index past a count, or a key for_each does not give, is refused before anything is read, since an instance not made yet reads as unknown rather than as missing. */
+  private resolveOrUnknown(value: unknown, state: State, context: Context): unknown {
     for (const reference of this.scanner.referencesIn(value, context)) {
       if (reference.kind === 'count' || reference.kind === 'each') continue;
       if (reference.kind === 'resource') this.checkIndex(reference);
       if (reference.kind === 'output') this.checkCallIndex(reference);
-      if (pending.has(reference.kind === 'variable' ? reference.key : reference.address)) return UNKNOWN;
     }
 
     try {

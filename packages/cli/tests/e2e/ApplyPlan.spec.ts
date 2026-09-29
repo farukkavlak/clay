@@ -1,5 +1,4 @@
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
-import { isUnknown } from '@clay/planner';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
@@ -139,7 +138,8 @@ describe('apply and plan against real files', () => {
     expect(actions[0].changes).toEqual({ content: { old: 'hello', new: 'bye' } });
   });
 
-  it('plans an update for a resource that reads a value changing in the same run', async () => {
+  // The configuration sets what `a` changes to, so the plan reads that, not what state holds.
+  it('plans an update for a resource that reads a value changing in the same run, to the value it changes to', async () => {
     await apply(orchestrator, chained('one'));
 
     const actions = await changes(chained('two'));
@@ -148,7 +148,7 @@ describe('apply and plan against real files', () => {
       ['a', 'UPDATE'],
       ['b', 'UPDATE'],
     ]);
-    expect(isUnknown(actions[1].changes!.content.new)).toBe(true);
+    expect(actions[1].changes!.content.new).toBe('two');
   });
 
   it('writes the new value through to the resource that reads it', async () => {
@@ -210,7 +210,7 @@ describe('apply and plan against real files', () => {
 
     const actions = await changes(rootConfig('two'));
     expect(actions.map((action) => action.name)).toEqual(['inner', 'c']);
-    expect(isUnknown(actions[1].changes!.content.new)).toBe(true);
+    expect(actions[1].changes!.content.new).toBe('two');
 
     await apply(newOrchestrator(), rootConfig('two'));
 

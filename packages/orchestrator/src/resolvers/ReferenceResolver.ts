@@ -4,6 +4,7 @@ import { ConfigError, EachReference, ParsedReference, parseReference, Position, 
 import { Instances } from '../Instances';
 import { Context, instanceKeyOf, ModuleCall } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
+import { Planned } from '../Planned';
 import { ScopeManager } from '../scope/ScopeManager';
 import { DataSourceResolver } from './DataSourceResolver';
 import { COUNT_INDEX_OUTSIDE, eachOutside } from './instance';
@@ -28,13 +29,13 @@ export class ReferenceResolver {
   private moduleOutputs: ModuleOutputResolver;
   private resources: ResourceResolver;
 
-  constructor(scopeManager: ScopeManager, dataSources: Map<string, Record<string, unknown>>, instances: Instances, modules: ModuleInstances) {
+  constructor(scopeManager: ScopeManager, dataSources: Map<string, Record<string, unknown>>, instances: Instances, modules: ModuleInstances, planned: Planned) {
     this.instances = instances;
     this.modules = modules;
     this.variables = new VariableResolver(scopeManager, this);
     this.dataSources = new DataSourceResolver(dataSources);
     this.moduleOutputs = new ModuleOutputResolver(scopeManager, modules);
-    this.resources = new ResourceResolver(instances);
+    this.resources = new ResourceResolver(instances, planned);
   }
 
   private resolve(node: ReferenceNode, state: State, context?: Context): unknown {

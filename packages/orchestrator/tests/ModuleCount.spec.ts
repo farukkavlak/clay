@@ -1,5 +1,4 @@
 import { Address, Provider } from '@clay/contracts';
-import { isUnknown } from '@clay/planner';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -119,8 +118,8 @@ describe('a module called with count', () => {
     expect(resources['module.m[1].module.n.rec.s'].dependencies).toEqual(['module.m[1].module.o.rec.r']);
   });
 
-  // The input reads a resource the plan will change, so every instance reading the input plans against a value not known yet, not the one in state.
-  it('plans an input fed by a changing resource as unknown in every instance', async () => {
+  // The input reads a resource the plan will change, so every instance reading the input plans against the value it changes to, not the one in state.
+  it('plans an input fed by a changing resource with the value it changes to, in every instance', async () => {
     await apply(orchestrator(dir, modules()), root('top'));
 
     const { actions } = await orchestrator(dir, modules()).plan(root('changed'));
@@ -128,7 +127,7 @@ describe('a module called with count', () => {
     const byAddress = new Map(actions.map((action) => [Address.of(action).toString(), action]));
     for (const address of ['module.m[0].rec.a[0]', 'module.m[1].rec.a[0]']) {
       expect(byAddress.get(address)?.type, address).toBe('UPDATE');
-      expect(isUnknown(byAddress.get(address)?.changes?.value.new), address).toBe(true);
+      expect(byAddress.get(address)?.changes?.value.new, address).toBe('changed-0');
     }
   });
 

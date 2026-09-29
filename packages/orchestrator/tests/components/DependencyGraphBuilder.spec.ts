@@ -26,7 +26,7 @@ function module(modulePath: string[], program: Statement[]): LoadedModule {
 describe('DependencyGraphBuilder', () => {
   const instances = new Instances();
   const modules = new ModuleInstances();
-  const builder = new DependencyGraphBuilder(new ReferenceScanner(instances, modules), instances, modules);
+  const builder = new DependencyGraphBuilder(new ReferenceScanner(modules), instances, modules);
 
   it('should run a resource after the one it reads from', () => {
     const main = resource('main', { id: ref('resource', 'dep', 'id') });
