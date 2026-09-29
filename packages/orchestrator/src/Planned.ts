@@ -6,9 +6,21 @@ import { isUnknown } from '@clay/planner';
  */
 export class Planned {
   private attributes = new Map<string, Record<string, unknown>>();
+  private planning = false;
 
   clear(): void {
     this.attributes.clear();
+    this.planning = false;
+  }
+
+  /** A plan is being made: an item of a list or a map that only an apply can read is UNKNOWN where it sits, and the rest of the value is known. */
+  begin(): void {
+    this.planning = true;
+  }
+
+  /** An apply reads every value in full, so a value it cannot read is an error there. */
+  isPlanning(): boolean {
+    return this.planning;
   }
 
   set(address: string, attributes: Record<string, unknown>): void {

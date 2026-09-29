@@ -51,6 +51,7 @@ export class DesiredStateBuilder {
 
   /** Moves are made in the state it is given, which a plan reads for itself and never writes, and then plans the actions against. */
   build(loadedResources: LoadedResource[], graph: Graph<GraphNode>, state: State): DesiredState {
+    this.planned.begin();
     const byKey = new Map(loadedResources.map((r) => [r.address.toString(), r]));
     const resources: DesiredResource[] = [];
     const outputs: Record<string, unknown> = {};

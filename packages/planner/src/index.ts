@@ -11,6 +11,23 @@ export function isUnknown(value: unknown): boolean {
   return value === UNKNOWN;
 }
 
+/** A plain object, as JSON makes one: a number read from a file is an ExactNumber, which is no record. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null) return false;
+
+  const prototype: unknown = Object.getPrototypeOf(value);
+
+  return prototype === Object.prototype || prototype === null;
+}
+
+/** Whether a value, or anything a list or a map in it holds, is not known yet: a plan may know a map and not one of its values. */
+export function containsUnknown(value: unknown): boolean {
+  if (isUnknown(value)) return true;
+  if (Array.isArray(value)) return value.some((item) => containsUnknown(item));
+
+  return isRecord(value) && Object.values(value).some((item) => containsUnknown(item));
+}
+
 /** A resource from the config: where it lives, the block as parsed, and its values with references resolved. */
 export interface DesiredResource {
   address: Address;
@@ -57,13 +74,63 @@ export interface PlanFile extends Plan {
   modules: Record<string, string>;
 }
 
-/** A value not known yet has no form in JSON, so a saved change says so beside `old` instead of holding one. */
-function saveChanges(changes: Changes): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(changes).map(([name, change]) => [name, isUnknown(change.new) ? { old: change.old, unknown: true } : change]));
+/** The steps from a value to something in it: a key of a map or an index into a list. */
+type Path = (string | number)[];
+
+/** Where a value holds what is not known yet, as the steps to each; `[[]]` when the whole of it is not. */
+function unknownPaths(value: unknown, at: Path = []): Path[] {
+  if (isUnknown(value)) return [at];
+  if (Array.isArray(value)) return value.flatMap((item, index) => unknownPaths(item, [...at, index]));
+
+  return isRecord(value) ? Object.entries(value).flatMap(([key, item]) => unknownPaths(item, [...at, key])) : [];
 }
 
-function readChanges(saved: Record<string, { old?: unknown; new?: unknown; unknown?: unknown }>): Changes {
-  return Object.fromEntries(Object.entries(saved).map(([name, change]) => [name, { old: change.old, new: change.unknown === true ? UNKNOWN : change.new }]));
+function withoutUnknown(value: unknown): unknown {
+  if (isUnknown(value)) return null;
+  if (Array.isArray(value)) return value.map((item) => withoutUnknown(item));
+
+  return isRecord(value) ? Object.fromEntries(Object.entries(value).map(([key, item]) => [key, withoutUnknown(item)])) : value;
+}
+
+/**
+ * A value not known yet has no form in JSON, so a saved change holds null in its place and lists where each one is beside `new`.
+ * A list of steps cannot be mistaken for anything the value holds, as a marker inside it could.
+ */
+function saveChange(change: { old: unknown; new: unknown }): Record<string, unknown> {
+  const paths = unknownPaths(change.new);
+  if (paths.length === 0) return change;
+  if (isUnknown(change.new)) return { old: change.old, unknown: paths };
+
+  return { old: change.old, new: withoutUnknown(change.new), unknown: paths };
+}
+
+function saveChanges(changes: Changes): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(changes).map(([name, change]) => [name, saveChange(change)]));
+}
+
+/** Whether the steps land on something in the value, so a saved unknown has a place to go back into. */
+function lands(value: unknown, path: Path): boolean {
+  if (path.length === 0) return true;
+
+  const [step, ...rest] = path;
+  if (Array.isArray(value)) return typeof step === 'number' && Number.isInteger(step) && step >= 0 && step < value.length && lands(value[step], rest);
+
+  return isRecord(value) && typeof step === 'string' && Object.hasOwn(value, step) && lands(value[step], rest);
+}
+
+function placeUnknown(value: unknown, path: Path): unknown {
+  if (path.length === 0) return UNKNOWN;
+
+  const [step, ...rest] = path;
+  const container = value as Record<string | number, unknown>;
+  container[step] = placeUnknown(container[step], rest);
+  return value;
+}
+
+function readChanges(saved: Record<string, { old?: unknown; new?: unknown; unknown?: Path[] }>): Changes {
+  return Object.fromEntries(
+    Object.entries(saved).map(([name, change]) => [name, { old: change.old, new: (change.unknown ?? []).reduce<unknown>((value, path) => placeUnknown(value, path), change.new) }])
+  );
 }
 
 /** The plan file's text, as `plan --out` writes it and `parsePlanFile` reads it. */
@@ -78,30 +145,29 @@ export function serializePlan(plan: Plan, configContent: string, modules: Record
     outputs: saveChanges(plan.outputs),
   };
 
-  // Anywhere but a whole change, JSON has no form for a value not known yet and would write something else without a word.
-  return JSON.stringify(
-    file,
-    (_, value: unknown) => {
-      if (isUnknown(value)) throw new Error('A value not known yet sits inside another value, where a plan file cannot hold it');
-
-      return value;
-    },
-    2
-  );
+  return JSON.stringify(file, undefined, 2);
 }
 
-/** A plain object, as JSON makes one: a number read from a file is an ExactNumber, which is no record. */
-function isRecord(value: unknown): value is Record<string, unknown> {
-  if (typeof value !== 'object' || value === null) return false;
+function isPath(path: unknown): path is Path {
+  return Array.isArray(path) && path.every((step) => typeof step === 'string' || typeof step === 'number');
+}
 
-  const prototype: unknown = Object.getPrototypeOf(value);
+/** One path that leads through another would put a value into what is not known yet. */
+function overlaps(paths: Path[]): boolean {
+  return paths.some((path, i) => paths.some((other, j) => i !== j && path.length <= other.length && path.every((step, k) => other[k] === step)));
+}
 
-  return prototype === Object.prototype || prototype === null;
+/** Where a saved change says a value is not known, there has to be a place in it to put one back, and only one. */
+function isUnknownPaths(change: Record<string, unknown>): boolean {
+  const { unknown } = change;
+  if (unknown === undefined) return true;
+
+  return Array.isArray(unknown) && unknown.every((path) => isPath(path) && lands(change.new, path)) && !overlaps(unknown as Path[]);
 }
 
 /** Each change is read for what it held, so one that is not a record would fail far from the file it came from. */
 function isChanges(changes: unknown): boolean {
-  return isRecord(changes) && Object.values(changes).every((change) => isRecord(change));
+  return isRecord(changes) && Object.values(changes).every((change) => isRecord(change) && isUnknownPaths(change));
 }
 
 function isModuleFiles(modules: unknown): modules is Record<string, string> {
@@ -178,20 +244,35 @@ function readNode(node: unknown): void {
   for (const child of childrenOf(node)) readNode(child);
 }
 
+/** An index in the steps to a value not known yet is a place in a list, so it reads back as a JavaScript number. */
+function readSteps(path: unknown): unknown {
+  if (!Array.isArray(path)) return path;
+
+  return path.map((step: unknown) => (step instanceof ExactNumber ? step.toSafeInteger('an index') : step));
+}
+
+function readUnknownPaths(changes: unknown): void {
+  if (!isRecord(changes)) return;
+
+  for (const change of Object.values(changes)) if (isRecord(change) && Array.isArray(change.unknown)) change.unknown = change.unknown.map((path: unknown) => readSteps(path));
+}
+
 function readAction(action: Record<string, unknown>): void {
   if (action.key instanceof ExactNumber) action.key = action.key.toSafeInteger('an instance key');
+  readUnknownPaths(action.changes);
   if (Array.isArray(action.modulePath))
     for (const step of action.modulePath) if (isRecord(step) && step.key instanceof ExactNumber) step.key = step.key.toSafeInteger('a module key');
   if (isRecord(action.attributes)) for (const node of Object.values(action.attributes)) readNode(node);
 }
 
-/** The plan's serial, the keys of its actions, and the positions and indexes in its parsed attributes, are the file's own numbers; every other number in it is a value, kept exactly. */
+/** The plan's serial, the keys of its actions, the positions and indexes in its parsed attributes, and the indexes to values not known yet, are the file's own numbers; every other number in it is a value, kept exactly. */
 function readPlan(content: string): unknown {
   const read = ExactNumber.readJSON(content);
   if (!isRecord(read)) return read;
 
   if (read.serial instanceof ExactNumber) read.serial = read.serial.toSafeInteger('its serial');
   if (Array.isArray(read.actions)) for (const action of read.actions) if (isRecord(action)) readAction(action);
+  readUnknownPaths(read.outputs);
 
   return read;
 }

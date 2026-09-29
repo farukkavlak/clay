@@ -1,4 +1,5 @@
 import { Address, ExactNumber, ModuleAddress, State } from '@clay/contracts';
+import { UNKNOWN } from '@clay/planner';
 import { ConfigError, EachReference, ParsedReference, parseReference, Position, ReferenceNode, spellReference, Step, TemplatePart } from '@clay/parser';
 
 import { Instances } from '../Instances';
@@ -9,6 +10,7 @@ import { ScopeManager } from '../scope/ScopeManager';
 import { DataSourceResolver } from './DataSourceResolver';
 import { COUNT_INDEX_OUTSIDE, eachOutside } from './instance';
 import { ModuleOutputResolver } from './ModuleOutputResolver';
+import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 import { kindOf, readPath } from './readPath';
 import { ResourceResolver } from './ResourceResolver';
 import { VariableResolver } from './VariableResolver';
@@ -23,6 +25,7 @@ function countIndex(where: Context, position: Position): ExactNumber {
 
 export class ReferenceResolver {
   private instances: Instances;
+  private planned: Planned;
   private modules: ModuleInstances;
   private variables: VariableResolver;
   private dataSources: DataSourceResolver;
@@ -31,6 +34,7 @@ export class ReferenceResolver {
 
   constructor(scopeManager: ScopeManager, dataSources: Map<string, Record<string, unknown>>, instances: Instances, modules: ModuleInstances, planned: Planned) {
     this.instances = instances;
+    this.planned = planned;
     this.modules = modules;
     this.variables = new VariableResolver(scopeManager, this);
     this.dataSources = new DataSourceResolver(dataSources);
@@ -106,16 +110,26 @@ export class ReferenceResolver {
 
   private resolveList(valueObj: { value?: unknown }, state: State, context?: Context): unknown[] {
     if (!Array.isArray(valueObj.value)) return [];
-    return valueObj.value.map((item) => this.resolveValue(item, state, context));
+    return valueObj.value.map((item) => this.resolveItem(item, state, context));
   }
 
   private resolveMap(valueObj: { value?: unknown }, state: State, context?: Context): Record<string, unknown> {
     if (!valueObj.value || typeof valueObj.value !== 'object') return {};
     const map = valueObj.value as Record<string, unknown>;
     const resolvedMap: Record<string, unknown> = {};
-    for (const [key, val] of Object.entries(map)) resolvedMap[key] = this.resolveValue(val, state, context);
+    for (const [key, val] of Object.entries(map)) resolvedMap[key] = this.resolveItem(val, state, context);
 
     return resolvedMap;
+  }
+
+  /** At plan time an item only an apply can read is UNKNOWN on its own, so the list or map around it keeps what is known. */
+  private resolveItem(value: unknown, state: State, context?: Context): unknown {
+    try {
+      return this.resolveValue(value, state, context);
+    } catch (error) {
+      if (!(error instanceof UnresolvedReferenceError && this.planned.isPlanning())) throw error;
+      return UNKNOWN;
+    }
   }
 
   /** A template that is one interpolation is the value itself, type and all; text around it makes it a string. */

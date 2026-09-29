@@ -90,10 +90,11 @@ hits each of these early.
 - [x] A resource to be created or changed is read at plan time as its configuration sets
       it, so `count = random_string.s.length` plans on a fresh state. Its id, and what the
       configuration does not set or does not know yet, stay unknown
-- [ ] A `for_each` map whose keys are known and whose values are not. A value with a
-      reference still to come is unknown as a whole, so `{ a = random_string.s.id }` is
-      refused although its keys are there. Terraform plans the keys and leaves the values
-      unknown; Clay needs a value that is known in part
+- [x] A list or a map is known as far as its items are: an item only the apply makes is
+      unknown on its own, in the plan, its file and what it shows, and the rest is known
+- [ ] A `for_each` map whose keys are known and whose values are not is refused, although
+      its keys are there: `{ a = random_string.s.id }`. Terraform plans the keys and leaves
+      the values unknown
 - [ ] A whole resource as a value: `local_file.a[0]` as a map, and `local_file.a` as the
       list of its instances. Worth it once there are functions or splats to read one with
 - [ ] `path.module`, `path.root` and `path.cwd`, so a module can name a file next to

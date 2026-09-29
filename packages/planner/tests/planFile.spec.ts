@@ -76,10 +76,28 @@ describe('reading a plan file', () => {
     expect(read.actions[0].attributes).toEqual(plan.actions[0].attributes);
   });
 
-  it('refuses to write a value not known yet from inside another value, rather than drop it', () => {
-    const plan: Plan = { serial: 0, actions: [], outputs: { tags: { old: undefined, new: { env: UNKNOWN } } } };
+  // A value known in part keeps what is known, exactly, and says where the rest is.
+  it('reads a value known in part back as it was written', () => {
+    const tags = { env: UNKNOWN, list: ['a', UNKNOWN], size: ExactNumber.parse('12345678901234567890'), unknown: [['env']] };
+    const plan: Plan = { serial: 0, actions: [], outputs: { tags: { old: undefined, new: tags } } };
 
-    expect(() => aPlanFile(plan)).toThrow('A value not known yet sits inside another value, where a plan file cannot hold it');
+    expect(parsePlanFile(aPlanFile(plan), 'tfplan.json').outputs.tags.new).toEqual(tags);
+  });
+
+  it.each([
+    ['steps that are no list', 'env'],
+    ['a step that is neither a key nor an index', [[true]]],
+    ['steps to a key the value does not have', [['missing']]],
+    ['steps past the end of a list', [['list', 2]]],
+    ['a key into a list', [['list', 'a']]],
+    ['an index below 0', [['list', -1]]],
+    ['a path through the whole value', [[], ['env']]],
+    ['a path through another', [['list'], ['list', 1]]],
+    ['the same path twice', [['env'], ['env']]],
+  ])('refuses a change that says a value is unknown with %s', (_, unknown) => {
+    const content = { ...fields(), outputs: { tags: { new: { env: null, list: ['a', null] }, unknown } } };
+
+    expect(read(content)).toThrow(/^tfplan\.json is not a plan file$/);
   });
 
   it('keeps a change whose name every object has, rather than setting a prototype', () => {

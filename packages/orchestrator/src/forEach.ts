@@ -1,4 +1,4 @@
-import { isUnknown } from '@clay/planner';
+import { containsUnknown } from '@clay/planner';
 
 import { kindOf } from './resolvers/readPath';
 
@@ -21,7 +21,7 @@ function eachOfList(items: unknown[]): Map<string, unknown> {
  * Sorted by key, since an object puts a key like "1" first whatever order it was written in.
  */
 export function eachFrom(value: unknown): Map<string, unknown> {
-  if (isUnknown(value)) throw new Error('for_each must be known when planning: it reads a value only an apply makes');
+  if (containsUnknown(value)) throw new Error('for_each must be known when planning: it reads a value only an apply makes');
 
   const kind = kindOf(value);
   if (kind !== 'list' && kind !== 'map') throw new Error(`for_each is a map or a list of strings, not a ${kind}`);

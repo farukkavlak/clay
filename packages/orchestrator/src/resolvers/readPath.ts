@@ -1,5 +1,8 @@
 import { ExactNumber } from '@clay/contracts';
 import { ConfigError, Position, spellReference, Step } from '@clay/parser';
+import { isUnknown } from '@clay/planner';
+
+import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 
 /** What a value is, in the words the language uses for it. */
 export function kindOf(value: unknown): string {
@@ -30,16 +33,27 @@ function missing(value: unknown, step: Step): string | undefined {
   return kind === 'null' ? 'is null and cannot be read into' : `is a ${kind} and cannot be read into`;
 }
 
-/** Reads each step into what the one before it found. A step that finds nothing is a mistake in the configuration, not a value to come, so it is refused where the reference is written. */
+function checkKnown(value: unknown, read: Step[]): void {
+  if (isUnknown(value)) throw new UnresolvedReferenceError(`${spellReference(read)} is known only after apply`);
+}
+
+/**
+ * Reads each step into what the one before it found. A step that finds nothing is a mistake in the configuration, not a value to come, so it is refused where the reference is written.
+ * A value known in part may hold what only an apply makes; reading that, or into it, reads nothing yet.
+ */
 export function readPath(value: unknown, target: Step[], path: Step[], position: Position): unknown {
   let current = value;
 
   for (const [i, step] of path.entries()) {
+    const read = [...target, ...path.slice(0, i)];
+    checkKnown(current, read);
+
     const problem = missing(current, step);
-    if (problem) throw new ConfigError(`${spellReference([...target, ...path.slice(0, i)])} ${problem}`, position);
+    if (problem) throw new ConfigError(`${spellReference(read)} ${problem}`, position);
 
     current = (current as Record<Step, unknown>)[step];
   }
 
+  checkKnown(current, [...target, ...path]);
   return current;
 }
