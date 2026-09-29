@@ -1,6 +1,6 @@
 import { emptyState, Provider, Schema, State } from '@clay/contracts';
 import { spell } from '@clay/parser';
-import { DesiredResource, isUnknown, outputChanges, plan, Plan } from '@clay/planner';
+import { containsUnknown, DesiredResource, outputChanges, plan, Plan } from '@clay/planner';
 import { StateManager } from '@clay/state';
 
 import { ActionExecutor } from './components/ActionExecutor';
@@ -112,7 +112,7 @@ export class Orchestrator {
       const provider = this.providers.get(type);
 
       if (!schemas.has(type)) schemas.set(type, await provider.getSchema(type));
-      if (Object.values(resource.attributes).some((value) => isUnknown(value))) continue;
+      if (Object.values(resource.attributes).some((value) => containsUnknown(value))) continue;
 
       try {
         await provider.validate(type, resource.attributes);

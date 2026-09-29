@@ -74,8 +74,10 @@ References: `var.name`, `local_file.a.content`, `module.m.out`, `module.web[0].o
 list with `.key`, `["key"]` and `[0]`: `var.tags.env`, `var.names[0]`. A resource to be
 created or changed is read at plan time as its configuration sets it, so
 `random_string.s.length` is known; what only the apply makes, such as its id, is unknown
-and shown as such. Reaching inside a module (`module.m.local_file.a`) is not allowed; a
-module speaks through its outputs.
+and shown as such. A list or a map is known as far as its items are:
+`{ a = random_string.s.id, b = "x" }` plans as `{"a":(known after apply),"b":"x"}`.
+Reaching inside a module (`module.m.local_file.a`) is not allowed; a module speaks
+through its outputs.
 
 `docs/GRAMMAR.md` has the full grammar.
 

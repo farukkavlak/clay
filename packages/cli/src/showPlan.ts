@@ -26,8 +26,24 @@ function pastTense(actionType: PlanAction['type']): string {
   return styleText('red', 'destroyed');
 }
 
+/** A map as JSON makes one; a number is an ExactNumber, which JSON writes itself. */
+function isMap(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null) return false;
+
+  const prototype: unknown = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+/** A value known in part shows what is known, and where the rest goes; built piece by piece, since no text a value holds can stand for what is not known. */
 function show(value: unknown): string {
-  return isUnknown(value) ? '(known after apply)' : JSON.stringify(value);
+  if (isUnknown(value)) return '(known after apply)';
+  if (Array.isArray(value)) return `[${value.map((item) => show(item)).join(',')}]`;
+  if (isMap(value))
+    return `{${Object.entries(value)
+      .map(([key, item]) => `${JSON.stringify(key)}:${show(item)}`)
+      .join(',')}}`;
+
+  return JSON.stringify(value);
 }
 
 function showOr(value: unknown, whenAbsent: string): string {
