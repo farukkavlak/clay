@@ -170,7 +170,7 @@ describe('apply and plan against real files', () => {
     await expect(newOrchestrator().plan(config)).rejects.toThrow('"local_file.typo" is not declared in the configuration');
   });
 
-  it('names the resources in a dependency cycle', async () => {
+  it('names the resources in a dependency cycle, and points at the reference that starts it', async () => {
     const config = `
       resource "local_file" "a" {
         path = "${path.join(dir, 'a.txt')}"
@@ -182,7 +182,52 @@ describe('apply and plan against real files', () => {
       }
     `;
 
-    await expect(newOrchestrator().plan(config)).rejects.toThrow('Dependency cycle detected: local_file.a -> local_file.b -> local_file.a');
+    await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
+      message: 'Dependency cycle detected: local_file.a -> local_file.b -> local_file.a',
+      block: 'resource "local_file" "a"',
+      position: { file: 'main.clay', line: 4, column: 22 },
+    });
+  });
+
+  it('points at the first reference when a block reads the same node twice', async () => {
+    const config = `resource "null_resource" "a" {\n  triggers = {\n    x = null_resource.b.id\n    y = null_resource.b.id\n  }\n}\nresource "null_resource" "b" { triggers = { x = null_resource.a.id } }`;
+
+    await expect(newOrchestrator().plan(config)).rejects.toMatchObject({ position: { file: 'main.clay', line: 3, column: 9 } });
+  });
+
+  // The engine builds a graph for each run, so a place from an earlier one is no place in this one.
+  it('points at a reference in this run, not one an earlier run on the same engine read', async () => {
+    const engine = newOrchestrator();
+    await engine.plan(`resource "null_resource" "b" {}\nresource "null_resource" "a" { triggers = { x = null_resource.b.id } }`);
+
+    await expect(
+      engine.plan(`resource "null_resource" "a" {\n  triggers = { x = null_resource.b.id }\n}\nresource "null_resource" "b" { triggers = { x = null_resource.a.id } }`)
+    ).rejects.toMatchObject({
+      position: { file: 'main.clay', line: 2, column: 20 },
+    });
+  });
+
+  it('points at a resource that reads itself', async () => {
+    const config = `resource "local_file" "a" {\n  path = "a"\n  content = local_file.a.path\n}`;
+
+    await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
+      message: 'Dependency cycle detected: local_file.a -> local_file.a',
+      block: 'resource "local_file" "a"',
+      position: { file: 'main.clay', line: 3, column: 13 },
+    });
+  });
+
+  // The call's input reads an output of the module it calls, and the output reads that input.
+  it('points at a reference in a cycle that runs through a module', async () => {
+    await fs.mkdir(path.join(dir, 'm'));
+    await fs.writeFile(path.join(dir, 'm', 'main.clay'), 'variable "x" {}\noutput "y" { value = var.x }', 'utf8');
+    const config = 'module "m" {\n  source = "./m"\n  x = module.m.y\n}';
+
+    await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
+      message: 'Dependency cycle detected: module.m.vars:x -> module.m.outputs:y -> module.m.vars:x',
+      block: 'module "m"',
+      position: { file: 'main.clay', line: 3, column: 7 },
+    });
   });
 
   it('plans an update through a module output when the resource behind it changes', async () => {

@@ -189,7 +189,10 @@ describe('validate against real files', () => {
       resource "local_file" "b" { path = "b" content = "\${local_file.a.content}" }
     `;
 
-    expect(await validate(config)).toContain('Dependency cycle detected');
+    const output = await validate(config);
+
+    expect(output).toContain('Dependency cycle detected');
+    expect(output).toContain('on main.clay line 2, in resource "local_file" "a":');
   });
 
   it('refuses a syntax error and shows the line it is on', async () => {
