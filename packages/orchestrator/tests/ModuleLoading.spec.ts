@@ -65,11 +65,11 @@ describe('Orchestrator - Module Loading', () => {
       resources: ['test_resource'],
       dataSources: [],
       validate: vi.fn(),
-      create: vi.fn().mockResolvedValue('created-id'),
+      create: vi.fn(async (_type: string, inputs: Record<string, unknown>) => ({ id: 'created-id', attributes: inputs })),
       read: vi.fn(async (_type, _id, prior) => prior),
       validateDataSource: vi.fn(),
       readDataSource: vi.fn(),
-      update: vi.fn(),
+      update: vi.fn(async (_id: string, _type: string, inputs: Record<string, unknown>) => inputs),
       delete: vi.fn(),
       getSchema: vi.fn().mockReturnValue({}),
     };

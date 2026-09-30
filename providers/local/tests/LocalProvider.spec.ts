@@ -69,7 +69,7 @@ describe('LocalProvider', () => {
       const filePath = path.join(tmpDir, 'test.txt');
       const content = 'Hello World';
 
-      const id = await provider.create('local_file', {
+      const { id } = await provider.create('local_file', {
         path: filePath,
         content,
       });
@@ -156,10 +156,28 @@ describe('LocalProvider', () => {
     });
   });
 
+  describe('what create and update return', () => {
+    it('returns what each type was given, on create and on update', async () => {
+      const cases = [
+        ['local_file', { path: path.join(tmpDir, 'made.txt'), content: 'hi' }],
+        ['random_string', { length: ExactNumber.parse('4') }],
+        ['null_resource', { triggers: { a: 'b' } }],
+        ['command_exec', { command: 'true' }],
+      ] as const;
+
+      for (const [type, inputs] of cases) {
+        const { id, attributes } = await provider.create(type, inputs);
+
+        expect(attributes).toEqual(inputs);
+        expect(await provider.update(id, type, inputs)).toEqual(inputs);
+      }
+    });
+  });
+
   describe('READ', () => {
     it('reads a file as it is on disk now, keeping its path', async () => {
       const filePath = path.join(tmpDir, 'drift.txt');
-      const id = await provider.create('local_file', { path: filePath, content: 'applied' });
+      const { id } = await provider.create('local_file', { path: filePath, content: 'applied' });
       await fs.writeFile(filePath, 'changed by hand', 'utf8');
 
       expect(await provider.read('local_file', id, { path: filePath, content: 'applied' })).toEqual({ path: filePath, content: 'changed by hand' });
@@ -167,7 +185,7 @@ describe('LocalProvider', () => {
 
     it('reads a file that is gone as nothing', async () => {
       const filePath = path.join(tmpDir, 'gone.txt');
-      const id = await provider.create('local_file', { path: filePath, content: 'applied' });
+      const { id } = await provider.create('local_file', { path: filePath, content: 'applied' });
       await fs.unlink(filePath);
 
       expect(await provider.read('local_file', id, { path: filePath, content: 'applied' })).toBeNull();
@@ -265,13 +283,13 @@ describe('LocalProvider', () => {
     });
 
     it('should create a random string of specified length', async () => {
-      const id = await provider.create('random_string', { length: ExactNumber.parse('16') });
+      const { id } = await provider.create('random_string', { length: ExactNumber.parse('16') });
       expect(typeof id).toBe('string');
       expect(id).toHaveLength(16);
     });
 
     it('should create a random string with special characters', async () => {
-      const id = await provider.create('random_string', { length: ExactNumber.parse('50'), special: true });
+      const { id } = await provider.create('random_string', { length: ExactNumber.parse('50'), special: true });
       expect(id).toHaveLength(50);
       const specialChars = '!@#$%^&*()_+-=[]{}|;:,.<>?';
       const hasSpecial = [...id].some((char) => specialChars.includes(char));
@@ -290,7 +308,7 @@ describe('LocalProvider', () => {
     });
 
     it('should create and return a UUID', async () => {
-      const id = await provider.create('null_resource', {});
+      const { id } = await provider.create('null_resource', {});
       expect(id).toMatch(/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i);
     });
 
@@ -310,12 +328,12 @@ describe('LocalProvider', () => {
     });
 
     it('should execute a command', async () => {
-      const id = await provider.create('command_exec', { command: 'echo hello world' });
+      const { id } = await provider.create('command_exec', { command: 'echo hello world' });
       expect(id).toBeDefined();
     });
 
     it('should execute a command with cwd', async () => {
-      const id = await provider.create('command_exec', { command: 'pwd', cwd: '.' });
+      const { id } = await provider.create('command_exec', { command: 'pwd', cwd: '.' });
       expect(id).toBeDefined();
     });
 

@@ -33,7 +33,7 @@ export class RandomStringResource implements ResourceHandler {
     return prior;
   }
 
-  async create(inputs: Record<string, unknown>): Promise<string> {
+  async create(inputs: Record<string, unknown>): Promise<{ id: string; attributes: Record<string, unknown> }> {
     const length = lengthOf(inputs);
     const useSpecial = (inputs.special as boolean) ?? false;
 
@@ -49,11 +49,12 @@ export class RandomStringResource implements ResourceHandler {
 
     for (let i = 0; i < length; i++) result += chars[array[i] % chars.length];
 
-    return result;
+    return { id: result, attributes: inputs };
   }
 
-  async update(_id: string, _inputs: Record<string, unknown>): Promise<void> {
-    // The value is the id, so changed inputs mean a replacement, not an update.
+  // The value is the id, so changed inputs mean a replacement, not an update.
+  async update(_id: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return inputs;
   }
 
   async delete(_id: string): Promise<void> {}

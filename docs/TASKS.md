@@ -110,10 +110,10 @@ hits each of these early.
 ### Refresh
 
 Terraform reads every resource from its provider before the diff, so a change made by
-hand shows up in the plan. Clay does too, but its state holds only the inputs it sent.
+hand shows up in the plan. Clay does too.
 
 - [x] A provider reads a resource back, as it reads a data source
-- [ ] State holds what the provider returns, not only the inputs that were sent
+- [x] State holds what the provider returns, not only the inputs that were sent
 - [x] `plan` and `apply` refresh first, `--refresh=false` skips it. A plan writes nothing,
       as in Terraform, and an apply forgets a resource the plan found gone
 - [x] "Changed outside Clay" lists a value changed by hand, not only a resource deleted by
@@ -136,12 +136,12 @@ known that comes out otherwise stops the run.
 
 ### Computed attributes
 
-`create` returns one string, the id. A `random_string` is read through `.id`, a
-`command_exec` loses its output, and an output that names an attribute the resource does
-not have is only caught after the resource is created. Terraform's providers return the
-whole resource and mark which attributes are computed.
+`create` and `update` return the whole resource and a schema can mark an attribute
+computed, but no local resource computes one yet: a `random_string` is read through
+`.id`, a `command_exec` loses its output, and an output that names an attribute the
+resource does not have is only caught after the resource is created.
 
-- [ ] `create` and `update` return the resource's attributes; state holds them
+- [x] `create` and `update` return the resource's attributes; state holds them
 - [ ] Schema marks computed attributes, so `plan` can refuse a reference to an attribute
       that will never exist
 - [ ] `command_exec` exposes `stdout` and `exit_code`; `random_string` exposes `result`
@@ -152,7 +152,9 @@ whole resource and mark which attributes are computed.
       Terraform's `PlanResourceChange`
 - [ ] A value the apply returns that differs from one the plan showed as known stops the
       run with an error that names the provider, as Terraform's "inconsistent result after
-      apply" does. The plan was approved, so a different result is never taken in silence
+      apply" does. The plan was approved, so a different result is never taken in silence.
+      An attribute returned that the schema does not have is refused the same way, since
+      the next plan would read it as removed and plan an update every run
 
 ### Schema-driven validation
 

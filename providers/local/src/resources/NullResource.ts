@@ -15,11 +15,13 @@ export class NullResource implements ResourceHandler {
     return prior;
   }
 
-  async create(_inputs: Record<string, unknown>): Promise<string> {
-    return crypto.randomUUID();
+  async create(inputs: Record<string, unknown>): Promise<{ id: string; attributes: Record<string, unknown> }> {
+    return { id: crypto.randomUUID(), attributes: inputs };
   }
 
-  async update(_id: string, _inputs: Record<string, unknown>): Promise<void> {}
+  async update(_id: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return inputs;
+  }
 
   async delete(_id: string): Promise<void> {}
 }

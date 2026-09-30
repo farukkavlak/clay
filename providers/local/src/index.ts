@@ -46,12 +46,12 @@ export class LocalProvider implements Provider {
     return await this.handler(type).read(id, prior);
   }
 
-  async create(type: string, inputs: Record<string, unknown>): Promise<string> {
+  async create(type: string, inputs: Record<string, unknown>): Promise<{ id: string; attributes: Record<string, unknown> }> {
     return await this.handler(type).create(inputs);
   }
 
-  async update(id: string, type: string, inputs: Record<string, unknown>): Promise<void> {
-    await this.handler(type).update(id, inputs);
+  async update(id: string, type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return await this.handler(type).update(id, inputs);
   }
 
   async delete(id: string, type: string): Promise<void> {

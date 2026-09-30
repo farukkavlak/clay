@@ -405,15 +405,23 @@ export function offPlan(planned: Record<string, unknown>, resolved: Record<strin
   return undefined;
 }
 
+/** What the configuration asks for, with what the provider computed kept as state holds it, since the configuration never sets that. */
+function proposed(currentAttrs: Record<string, unknown>, desiredAttrs: Record<string, unknown>, schema: Schema): Record<string, unknown> {
+  const kept = Object.entries(currentAttrs).filter(([name]) => Object.hasOwn(schema, name) && schema[name].computed && !Object.hasOwn(desiredAttrs, name));
+
+  return { ...desiredAttrs, ...Object.fromEntries(kept) };
+}
+
 /** Tells whether a resource in state would change, without building the action for it. */
-export function hasChanges(currentAttrs: Record<string, unknown>, desiredAttrs: Record<string, unknown>): boolean {
-  return calculateDiff(currentAttrs, desiredAttrs) !== null;
+export function hasChanges(currentAttrs: Record<string, unknown>, desiredAttrs: Record<string, unknown>, schema: Schema = {}): boolean {
+  return calculateDiff(currentAttrs, proposed(currentAttrs, desiredAttrs, schema)) !== null;
 }
 
 function processExistingResource(actions: PlanAction[], desired: DesiredResource, currentResource: Resource, schemas: Map<string, Schema>) {
   const moved = desired.movedFrom;
   const resource = desired.block;
-  const changes = calculateDiff(currentResource.attributes, desired.attributes);
+  const schema = schemas.get(resource.resourceType) ?? {};
+  const changes = calculateDiff(currentResource.attributes, proposed(currentResource.attributes, desired.attributes, schema));
 
   if (!changes) {
     actions.push({
@@ -426,7 +434,6 @@ function processExistingResource(actions: PlanAction[], desired: DesiredResource
     return;
   }
 
-  const schema = schemas.get(resource.resourceType) ?? {};
   const forcesNew = Object.keys(changes).some((attr) => schema[attr]?.forceNew);
 
   actions.push({

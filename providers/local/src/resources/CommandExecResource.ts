@@ -22,20 +22,22 @@ export class CommandExecResource implements ResourceHandler {
     return prior;
   }
 
-  async create(inputs: Record<string, unknown>): Promise<string> {
+  async create(inputs: Record<string, unknown>): Promise<{ id: string; attributes: Record<string, unknown> }> {
     const command = inputs.command as string;
     const cwd = (inputs.cwd as string) || process.cwd();
 
     await execAsync(command, { cwd });
 
-    return crypto.randomUUID();
+    return { id: crypto.randomUUID(), attributes: inputs };
   }
 
-  async update(_id: string, inputs: Record<string, unknown>): Promise<void> {
+  async update(_id: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
     const command = inputs.command as string;
     const cwd = (inputs.cwd as string) || process.cwd();
 
     await execAsync(command, { cwd });
+
+    return inputs;
   }
 
   async delete(_id: string): Promise<void> {}

@@ -22,11 +22,13 @@ class MockDataProvider implements Provider {
 
   async validateDataSource(_type: string, _inputs: Record<string, unknown>): Promise<void> {}
 
-  async create(_type: string, _inputs: Record<string, unknown>): Promise<string> {
-    return 'created-id';
+  async create(_type: string, inputs: Record<string, unknown>): Promise<{ id: string; attributes: Record<string, unknown> }> {
+    return { id: 'created-id', attributes: inputs };
   }
 
-  async update(_id: string, _type: string, _inputs: Record<string, unknown>): Promise<void> {}
+  async update(_id: string, _type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return inputs;
+  }
 
   async delete(_id: string): Promise<void> {}
 

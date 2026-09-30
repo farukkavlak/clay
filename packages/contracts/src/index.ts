@@ -102,6 +102,8 @@ export interface SchemaDefinition {
   type: SchemaType;
   required?: boolean;
   forceNew?: boolean; // If true, a change to this attribute forces replacement (Delete -> Create)
+  /** Made by the provider: a plan keeps the value in state unless the configuration sets it. */
+  computed?: boolean;
   elemType?: SchemaType; // For 'list' and 'map'
   schema?: Schema; // For 'object'
 }
@@ -129,8 +131,10 @@ export interface Provider {
 
   readDataSource(type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>>;
 
-  create(type: string, inputs: Record<string, unknown>): Promise<string>;
-  update(id: string, type: string, inputs: Record<string, unknown>): Promise<void>;
+  /** The id the resource is known by from now on, and the whole of it as made, what the provider computed included. */
+  create(type: string, inputs: Record<string, unknown>): Promise<{ id: string; attributes: Record<string, unknown> }>;
+  /** The whole of the resource as changed. */
+  update(id: string, type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>>;
   delete(id: string, type: string): Promise<void>;
 }
 
@@ -142,10 +146,11 @@ export interface ResourceHandler {
 
   read(id: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null>;
 
-  /** Returns the id the resource is known by from now on. */
-  create(inputs: Record<string, unknown>): Promise<string>;
+  /** The id the resource is known by from now on, and the whole of it as made. */
+  create(inputs: Record<string, unknown>): Promise<{ id: string; attributes: Record<string, unknown> }>;
 
-  update(id: string, inputs: Record<string, unknown>): Promise<void>;
+  /** The whole of the resource as changed. */
+  update(id: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>>;
 
   delete(id: string): Promise<void>;
 }

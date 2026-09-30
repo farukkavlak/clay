@@ -75,13 +75,13 @@ export class ActionExecutor {
     const contextAddress = Address.of(action);
 
     await provider.validate(action.resourceType, inputs);
-    const id = await provider.create(action.resourceType, inputs);
+    const { id, attributes } = await provider.create(action.resourceType, inputs);
 
     const key = contextAddress.toString();
     currentState.resources[key] = {
       id,
       ...contextAddress.fields(),
-      attributes: inputs,
+      attributes,
       dependencies: action.dependencies ?? [],
     };
   }
@@ -95,9 +95,7 @@ export class ActionExecutor {
 
     await provider.validate(action.resourceType, inputs);
     if (!action.id) throw new Error(`UPDATE action for "${key}" missing resource ID`);
-    await provider.update(action.id, action.resourceType, inputs);
-
-    currentResource.attributes = inputs;
+    currentResource.attributes = await provider.update(action.id, action.resourceType, inputs);
     currentResource.dependencies = action.dependencies ?? [];
   }
 

@@ -8,7 +8,7 @@ import { ActionExecutor } from './components/ActionExecutor';
 import { ConfigLoader } from './components/ConfigLoader';
 import { DependencyGraphBuilder } from './components/DependencyGraphBuilder';
 import { DesiredStateBuilder } from './components/DesiredStateBuilder';
-import { ModuleLoader } from './components/ModuleLoader';
+import { LoadedResource, ModuleLoader } from './components/ModuleLoader';
 import { PlanRunner } from './components/PlanRunner';
 import { Instances } from './Instances';
 import { ModuleInstances } from './ModuleInstances';
@@ -137,31 +137,42 @@ export class Orchestrator {
     const { loadedResources, loadedModules } = await this.loader.load(configContent, state);
 
     const graph = this.graphBuilder.buildExecutionGraph(loadedResources, loadedModules);
-    const { resources: desiredResources, outputs } = this.desiredStateBuilder.build(loadedResources, graph, state);
+    const schemas = await this.schemasOf(loadedResources);
+    const { resources: desiredResources, outputs } = this.desiredStateBuilder.build(loadedResources, graph, state, schemas);
+    await this.checkWithProviders(desiredResources);
 
-    return { desiredResources, outputs, schemas: await this.checkWithProviders(desiredResources) };
+    return { desiredResources, outputs, schemas };
   }
 
-  /** What a provider can refuse before anything runs is refused here. A value not known yet is checked once the run knows it. */
-  private async checkWithProviders(desired: DesiredResource[]): Promise<Map<string, Schema>> {
+  /** Read before the values are, since what a provider computes is kept from state rather than planned as a change. */
+  private async schemasOf(loaded: LoadedResource[]): Promise<Map<string, Schema>> {
     // A Map because a resource type may be named `constructor`: an object would already hold a value there, and the real schema would be dropped.
     const schemas = new Map<string, Schema>();
 
-    for (const resource of desired) {
-      const type = resource.block.resourceType;
+    for (const { block, address } of loaded) {
+      const type = block.resourceType;
+      if (schemas.has(type)) continue;
 
       try {
-        const provider = this.providers.get(type);
-
-        if (!schemas.has(type)) schemas.set(type, await provider.getSchema(type));
-        if (Object.values(resource.attributes).some((value) => containsUnknown(value))) continue;
-
-        await provider.validate(type, resource.attributes);
+        schemas.set(type, await this.providers.get(type).getSchema(type));
       } catch (error) {
-        throw withPlace(error, resource.block.position, spell(resource.block), resource.address);
+        throw withPlace(error, block.position, spell(block), address);
       }
     }
 
     return schemas;
+  }
+
+  /** What a provider can refuse before anything runs is refused here. A value not known yet is checked once the run knows it. */
+  private async checkWithProviders(desired: DesiredResource[]): Promise<void> {
+    for (const resource of desired) {
+      if (Object.values(resource.attributes).some((value) => containsUnknown(value))) continue;
+
+      try {
+        await this.providers.get(resource.block.resourceType).validate(resource.block.resourceType, resource.attributes);
+      } catch (error) {
+        throw withPlace(error, resource.block.position, spell(resource.block), resource.address);
+      }
+    }
   }
 }
