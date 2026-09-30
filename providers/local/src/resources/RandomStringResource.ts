@@ -28,6 +28,11 @@ export class RandomStringResource implements ResourceHandler {
     if (inputs.special !== undefined && typeof inputs.special !== 'boolean') throw new Error('random_string "special" attribute must be a boolean');
   }
 
+  // Nothing outside the state holds it, so it is as it was applied.
+  async read(_id: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+    return prior;
+  }
+
   async create(inputs: Record<string, unknown>): Promise<string> {
     const length = lengthOf(inputs);
     const useSpecial = (inputs.special as boolean) ?? false;

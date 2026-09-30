@@ -1,8 +1,9 @@
-import { emptyState, Provider, Schema, State } from '@clay/contracts';
+import { emptyState, Provider, Resource, Schema, State } from '@clay/contracts';
 import { spell } from '@clay/parser';
 import { containsUnknown, DesiredResource, outputChanges, plan, Plan } from '@clay/planner';
 import { StateManager } from '@clay/state';
 
+import { asError } from './asError';
 import { ActionExecutor } from './components/ActionExecutor';
 import { ConfigLoader } from './components/ConfigLoader';
 import { DependencyGraphBuilder } from './components/DependencyGraphBuilder';
@@ -60,12 +61,15 @@ export class Orchestrator {
     this.providers.register(provider);
   }
 
-  async plan(configContent: string): Promise<Plan> {
-    const currentState = await this.stateManager.read();
+  /** Plans against each resource as its provider reads it now, unless `refresh` is false. What it reads is not written: a plan only looks. */
+  async plan(configContent: string, { refresh = true }: { refresh?: boolean } = {}): Promise<Plan> {
+    const saved = await this.stateManager.read();
+    const currentState = refresh ? await this.refresh(saved) : saved;
+    const gone = Object.keys(saved.resources).filter((key) => !Object.hasOwn(currentState.resources, key));
     // Planning moves what gained or lost count in `currentState`, so the actions are planned against the resources where they now are.
     const { desiredResources, outputs, schemas } = await this.resolveAndCheck(configContent, currentState);
 
-    return { serial: currentState.serial, actions: plan(desiredResources, currentState, schemas), outputs: outputChanges(currentState.outputs ?? {}, outputs) };
+    return { serial: currentState.serial, actions: plan(desiredResources, currentState, schemas), outputs: outputChanges(currentState.outputs ?? {}, outputs), gone };
   }
 
   /** Checks the configuration the way a plan would, against an empty state, so a value a resource would give is unknown and everything else is checked. */
@@ -81,12 +85,36 @@ export class Orchestrator {
     try {
       const state = await this.stateManager.read();
       if (state.serial !== saved.serial) throw new Error('The state has changed since the plan was made. Plan again.');
+      for (const key of saved.gone) delete state.resources[key];
 
       const config = await this.loader.load(configContent, state);
       const graph = this.graphBuilder.buildExecutionGraph(config.loadedResources, config.loadedModules);
       yield* this.runner.run(saved.actions, config, graph, state);
     } finally {
       await this.stateManager.unlock();
+    }
+  }
+
+  /** A resource its provider no longer finds is left out; the plan makes it again if the configuration still has it. */
+  private async refresh(state: State): Promise<State> {
+    const resources: State['resources'] = {};
+
+    for (const [key, resource] of Object.entries(state.resources)) {
+      const attributes = await this.readBack(key, resource);
+      if (attributes !== null) resources[key] = { ...resource, attributes };
+    }
+
+    return { ...state, resources };
+  }
+
+  private async readBack(key: string, resource: Resource): Promise<Record<string, unknown> | null> {
+    // Without an id there is nothing a provider could find it by.
+    if (resource.id === undefined) return resource.attributes;
+
+    try {
+      return await this.providers.get(resource.resourceType).read(resource.resourceType, resource.id, resource.attributes);
+    } catch (error) {
+      throw new Error(`${key}: ${asError(error).message}`, { cause: error });
     }
   }
 

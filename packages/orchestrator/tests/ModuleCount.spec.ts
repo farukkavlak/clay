@@ -14,6 +14,7 @@ const recorder: Provider = {
   dataSources: [],
   getSchema: async () => ({}),
   validate: async () => {},
+  read: async (_, __, prior) => prior,
   validateDataSource: async () => {},
   readDataSource: async () => ({}),
   create: async (_, inputs) => String(inputs.value),

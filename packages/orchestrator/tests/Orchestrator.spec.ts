@@ -1,4 +1,4 @@
-import { ExactNumber, Provider, Schema } from '@clay/contracts';
+import { emptyState, ExactNumber, Provider, Schema } from '@clay/contracts';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -39,6 +39,10 @@ class MockProvider implements Provider {
   }
 
   async validateDataSource(_type: string, _inputs: Record<string, unknown>): Promise<void> {}
+
+  async read(_type: string, _id: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+    return prior;
+  }
 
   async readDataSource(_type: string, _inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
     return {};
@@ -271,6 +275,21 @@ describe('Orchestrator', () => {
       const state = await stateManager.read();
 
       expect(state.resources['mock_resource.test']).toBeUndefined();
+    });
+  });
+
+  describe('Refresh', () => {
+    // Without an id there is nothing to ask the provider for, so what was recorded stands.
+    it('keeps a resource in state with no id as it is, without reading it', async () => {
+      const resource = { resourceType: 'mock_resource', name: 'a', attributes: { value: 'x' } };
+      await new LocalBackend(tmpDir).write({ ...emptyState(), resources: { 'mock_resource.a': resource } });
+      const read = vi.spyOn(mockProvider, 'read').mockResolvedValue(null);
+
+      const { actions, gone } = await orchestrator.plan('resource "mock_resource" "a" { value = "x" }');
+
+      expect(actions.map(({ type }) => type)).toEqual(['NO_OP']);
+      expect(gone).toEqual([]);
+      expect(read).not.toHaveBeenCalled();
     });
   });
 

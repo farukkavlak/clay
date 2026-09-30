@@ -45,6 +45,10 @@ class MockProvider implements Provider {
 
   async validateDataSource(_type: string, _inputs: Record<string, unknown>): Promise<void> {}
 
+  async read(_type: string, _id: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+    return prior;
+  }
+
   async readDataSource(_type: string, _inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
     return {};
   }

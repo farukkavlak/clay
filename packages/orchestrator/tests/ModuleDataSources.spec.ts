@@ -45,6 +45,7 @@ describe('Orchestrator - Phase 5: Scoped Data Sources', () => {
     dataSources: string[];
     validate: Mock;
     create: Mock;
+    read: Mock;
     validateDataSource: Mock;
     readDataSource: Mock;
     update: Mock;
@@ -61,6 +62,7 @@ describe('Orchestrator - Phase 5: Scoped Data Sources', () => {
       dataSources: ['aws_ami'],
       validate: vi.fn(),
       create: vi.fn().mockResolvedValue('created-id'),
+      read: vi.fn(async (_type, _id, prior) => prior),
       validateDataSource: vi.fn(),
       readDataSource: vi.fn().mockResolvedValue({ id: 'ami-12345', name: 'Ubuntu 20.04' }),
       update: vi.fn(),

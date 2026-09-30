@@ -42,6 +42,10 @@ export class LocalProvider implements Provider {
     await this.handler(type).validate(inputs);
   }
 
+  async read(type: string, id: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+    return await this.handler(type).read(id, prior);
+  }
+
   async create(type: string, inputs: Record<string, unknown>): Promise<string> {
     return await this.handler(type).create(inputs);
   }

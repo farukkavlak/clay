@@ -48,6 +48,7 @@ describe('Orchestrator - Phase 4: Data Flow', () => {
     dataSources: string[];
     validate: Mock;
     create: Mock;
+    read: Mock;
     validateDataSource: Mock;
     readDataSource: Mock;
     update: Mock;
@@ -66,6 +67,7 @@ describe('Orchestrator - Phase 4: Data Flow', () => {
       dataSources: [],
       validate: vi.fn(),
       create: vi.fn().mockResolvedValue('created-id'),
+      read: vi.fn(async (_type, _id, prior) => prior),
       validateDataSource: vi.fn(),
       readDataSource: vi.fn(),
       update: vi.fn(),

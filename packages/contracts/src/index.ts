@@ -67,6 +67,9 @@ export interface Provider {
   /** Throws when the inputs would not make a valid resource. */
   validate(type: string, inputs: Record<string, unknown>): Promise<void>;
 
+  /** The resource as it is now, from what was last applied, or `null` when it is gone. */
+  read(type: string, id: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null>;
+
   /** Throws when the inputs would not read a data source. */
   validateDataSource(type: string, inputs: Record<string, unknown>): Promise<void>;
 
@@ -82,6 +85,8 @@ export interface ResourceHandler {
   getSchema(): Promise<Schema>;
 
   validate(inputs: Record<string, unknown>): Promise<void>;
+
+  read(id: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null>;
 
   /** Returns the id the resource is known by from now on. */
   create(inputs: Record<string, unknown>): Promise<string>;

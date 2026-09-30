@@ -110,12 +110,15 @@ hits each of these early.
 ### Refresh
 
 Terraform reads every resource from its provider before the diff, so a change made by
-hand shows up in the plan. Clay plans against what it last applied.
+hand shows up in the plan. Clay does too, but its state holds only the inputs it sent.
 
-- [ ] A provider reads a resource back, as it reads a data source
+- [x] A provider reads a resource back, as it reads a data source
 - [ ] State holds what the provider returns, not only the inputs that were sent
-- [ ] `plan` refreshes first, `-refresh=false` skips it; a plan that writes state has to
-      take the lock, as `apply` does
+- [x] `plan` and `apply` refresh first, `--refresh=false` skips it. A plan writes nothing,
+      as in Terraform, and an apply forgets a resource the plan found gone
+- [ ] "Changed outside Clay" lists a value changed by hand, not only a resource deleted by
+      hand. Today such a value shows only as an update whose old value is the one found,
+      where Terraform lists both under "Objects have changed outside of Terraform"
 
 ### What a plan carries
 
@@ -254,6 +257,10 @@ by resource type, and no `provider` block exists yet.
       This comes before a provider can be loaded from a package
 - [ ] Provider instances with configuration: `provider "aws" { region = "..." }`, and
       aliases for a second instance of the same provider
+- [ ] A plan refreshes after the configuration loads, as Terraform does. It reads every
+      resource first today, so a mistake in `main.clay` is reported only after every read
+      and a read error hides it, and a provider configured by a `provider` block would be
+      asked to read before it is configured
 - [ ] Loading a provider from a package instead of a hard-coded import
 - [ ] A provider is told where the run is. Each reads `process.cwd()` for itself, so a
       relative path means whatever the shell was in
