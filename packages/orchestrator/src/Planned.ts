@@ -1,15 +1,22 @@
+import { Schema } from '@clay/contracts';
 import { isUnknown } from '@clay/planner';
 
+/** An instance as the plan knows it: the values its configuration sets and knows, and the names only the apply will give a value. */
+export interface PlannedInstance {
+  known: Record<string, unknown>;
+  later: Set<string>;
+}
+
 /**
- * What a plan knows of each instance it will create or change, by address: the values its configuration sets and knows.
- * The rest, and the id, only the apply makes. An apply reads state, so it is cleared before one.
+ * What a plan knows of each instance it will create or change, by address.
+ * The id, what the provider computes, and what the configuration sets but does not know yet, only the apply makes. An apply reads state, so it is cleared before one.
  */
 export class Planned {
-  private attributes = new Map<string, Record<string, unknown>>();
+  private instances = new Map<string, PlannedInstance>();
   private planning = false;
 
   clear(): void {
-    this.attributes.clear();
+    this.instances.clear();
     this.planning = false;
   }
 
@@ -23,11 +30,20 @@ export class Planned {
     return this.planning;
   }
 
-  set(address: string, attributes: Record<string, unknown>): void {
-    this.attributes.set(address, Object.fromEntries(Object.entries(attributes).filter(([, value]) => !isUnknown(value))));
+  set(address: string, attributes: Record<string, unknown>, schema: Schema | undefined): void {
+    const entries = Object.entries(attributes);
+    const computed = Object.entries(schema ?? {})
+      .filter(([, definition]) => definition.computed)
+      .map(([name]) => name);
+    const unknown = entries.filter(([, value]) => isUnknown(value)).map(([name]) => name);
+
+    this.instances.set(address, {
+      known: Object.fromEntries(entries.filter(([, value]) => !isUnknown(value))),
+      later: new Set(['id', ...computed, ...unknown]),
+    });
   }
 
-  get(address: string): Record<string, unknown> | undefined {
-    return this.attributes.get(address);
+  get(address: string): PlannedInstance | undefined {
+    return this.instances.get(address);
   }
 }

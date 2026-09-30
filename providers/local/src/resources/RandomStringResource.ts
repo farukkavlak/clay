@@ -19,6 +19,7 @@ export class RandomStringResource implements ResourceHandler {
     return {
       length: { type: 'number', required: true, forceNew: true },
       special: { type: 'boolean', required: false, forceNew: true },
+      result: { type: 'string', computed: true },
     };
   }
 
@@ -49,12 +50,12 @@ export class RandomStringResource implements ResourceHandler {
 
     for (let i = 0; i < length; i++) result += chars[array[i] % chars.length];
 
-    return { id: result, attributes: inputs };
+    return { id: result, attributes: { ...inputs, result } };
   }
 
   // The value is the id, so changed inputs mean a replacement, not an update.
-  async update(_id: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return inputs;
+  async update(id: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return { ...inputs, result: id };
   }
 
   async delete(_id: string): Promise<void> {}

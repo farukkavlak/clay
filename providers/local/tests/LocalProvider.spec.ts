@@ -157,12 +157,10 @@ describe('LocalProvider', () => {
   });
 
   describe('what create and update return', () => {
-    it('returns what each type was given, on create and on update', async () => {
+    it('returns what a type that computes nothing was given, on create and on update', async () => {
       const cases = [
         ['local_file', { path: path.join(tmpDir, 'made.txt'), content: 'hi' }],
-        ['random_string', { length: ExactNumber.parse('4') }],
         ['null_resource', { triggers: { a: 'b' } }],
-        ['command_exec', { command: 'true' }],
       ] as const;
 
       for (const [type, inputs] of cases) {
@@ -171,6 +169,35 @@ describe('LocalProvider', () => {
         expect(attributes).toEqual(inputs);
         expect(await provider.update(id, type, inputs)).toEqual(inputs);
       }
+    });
+  });
+
+  describe('what the provider computes', () => {
+    it.each([
+      ['random_string', 'result'],
+      ['command_exec', 'stdout'],
+    ])('marks %s %s as computed', async (type, name) => {
+      const schema = await provider.getSchema(type);
+
+      expect(schema[name]).toMatchObject({ computed: true });
+    });
+
+    it('returns the string it made as result, which is its id too, and keeps it on an update', async () => {
+      const inputs = { length: ExactNumber.parse('6') };
+
+      const { id, attributes } = await provider.create('random_string', inputs);
+
+      expect(attributes).toEqual({ ...inputs, result: id });
+      expect(id).toHaveLength(6);
+      expect(await provider.update(id, 'random_string', inputs)).toEqual({ ...inputs, result: id });
+    });
+
+    it('returns what a command printed, on create and on the run an update makes', async () => {
+      const created = await provider.create('command_exec', { command: 'echo made' });
+      const updated = await provider.update(created.id, 'command_exec', { command: 'echo changed' });
+
+      expect(created.attributes).toEqual({ command: 'echo made', stdout: 'made\n' });
+      expect(updated).toEqual({ command: 'echo changed', stdout: 'changed\n' });
     });
   });
 
@@ -328,13 +355,13 @@ describe('LocalProvider', () => {
     });
 
     it('should execute a command', async () => {
-      const { id } = await provider.create('command_exec', { command: 'echo hello world' });
-      expect(id).toBeDefined();
+      const { attributes } = await provider.create('command_exec', { command: 'echo hello world' });
+      expect(attributes.stdout).toBe('hello world\n');
     });
 
     it('should execute a command with cwd', async () => {
-      const { id } = await provider.create('command_exec', { command: 'pwd', cwd: '.' });
-      expect(id).toBeDefined();
+      const { attributes } = await provider.create('command_exec', { command: 'pwd', cwd: tmpDir });
+      expect(await fs.realpath(String(attributes.stdout).trim())).toBe(await fs.realpath(tmpDir));
     });
 
     it('should fail if command fails', async () => {

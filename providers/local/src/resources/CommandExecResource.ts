@@ -10,6 +10,7 @@ export class CommandExecResource implements ResourceHandler {
     return {
       command: { type: 'string', required: true, forceNew: false }, // Re-exec allows update
       cwd: { type: 'string', required: false, forceNew: false },
+      stdout: { type: 'string', computed: true },
     };
   }
 
@@ -26,18 +27,18 @@ export class CommandExecResource implements ResourceHandler {
     const command = inputs.command as string;
     const cwd = (inputs.cwd as string) || process.cwd();
 
-    await execAsync(command, { cwd });
+    const { stdout } = await execAsync(command, { cwd });
 
-    return { id: crypto.randomUUID(), attributes: inputs };
+    return { id: crypto.randomUUID(), attributes: { ...inputs, stdout } };
   }
 
   async update(_id: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
     const command = inputs.command as string;
     const cwd = (inputs.cwd as string) || process.cwd();
 
-    await execAsync(command, { cwd });
+    const { stdout } = await execAsync(command, { cwd });
 
-    return inputs;
+    return { ...inputs, stdout };
   }
 
   async delete(_id: string): Promise<void> {}

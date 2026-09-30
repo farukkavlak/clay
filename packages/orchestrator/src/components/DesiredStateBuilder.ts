@@ -36,7 +36,8 @@ function sharedModule(one: ModuleAddress, other: ModuleAddress): ModuleAddress {
 /**
  * Resolves each resource after the ones it reads from, so a value an earlier action will change is read as the plan knows it, not stale.
  * Each node is resolved once for every instance of its module.
- * An instance that will be created or changed is kept in `planned` with the values its configuration sets and knows; reading anything else of it is UNKNOWN.
+ * An instance that will be created or changed is kept in `planned` with the values its configuration sets and knows. Its id, what its provider computes, and what its
+ * configuration does not know yet are UNKNOWN; any other name is refused.
  */
 export class DesiredStateBuilder {
   private schemas = new Map<string, Schema>();
@@ -108,7 +109,8 @@ export class DesiredStateBuilder {
     const movedFrom = tryAt(block.position, spell(block), address, () => this.moveIn(address, state));
     const attributes = this.resolveForPlan(block, state, address);
     const current = state.resources[address.toString()];
-    if (!current || hasChanges(current.attributes, attributes, this.schemas.get(block.resourceType))) this.planned.set(address.toString(), attributes);
+    const schema = this.schemas.get(block.resourceType);
+    if (!current || hasChanges(current.attributes, attributes, schema)) this.planned.set(address.toString(), attributes, schema);
 
     return { address, block, attributes, dependencies, ...(movedFrom && { movedFrom }) };
   }

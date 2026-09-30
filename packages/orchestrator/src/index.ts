@@ -14,6 +14,7 @@ import { Instances } from './Instances';
 import { ModuleInstances } from './ModuleInstances';
 import { Planned } from './Planned';
 import { withPlace } from './place';
+import { refuseComputedSet } from './refuseComputedSet';
 import { ConfigFiles } from './ConfigFiles';
 import { ProviderRegistry } from './ProviderRegistry';
 import { ReferenceResolver } from './resolvers/ReferenceResolver';
@@ -138,6 +139,7 @@ export class Orchestrator {
 
     const graph = this.graphBuilder.buildExecutionGraph(loadedResources, loadedModules);
     const schemas = await this.schemasOf(loadedResources);
+    refuseComputedSet(loadedResources, schemas);
     const { resources: desiredResources, outputs } = this.desiredStateBuilder.build(loadedResources, graph, state, schemas);
     await this.checkWithProviders(desiredResources);
 

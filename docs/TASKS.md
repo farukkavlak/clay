@@ -88,8 +88,8 @@ hits each of these early.
       taking it off moves it back, as for a resource. Two places state may keep it are
       refused rather than guessed between
 - [x] A resource to be created or changed is read at plan time as its configuration sets
-      it, so `count = random_string.s.length` plans on a fresh state. Its id, and what the
-      configuration does not set or does not know yet, stay unknown
+      it, so `count = random_string.s.length` plans on a fresh state. Its id, what the
+      provider computes, and what the configuration does not know yet, stay unknown
 - [x] A list or a map is known as far as its items are: an item only the apply makes is
       unknown on its own, in the plan, its file and what it shows, and the rest is known
 - [x] A `for_each` map whose keys are known and whose values are not plans its keys:
@@ -136,15 +136,14 @@ known that comes out otherwise stops the run.
 
 ### Computed attributes
 
-`create` and `update` return the whole resource and a schema can mark an attribute
-computed, but no local resource computes one yet: a `random_string` is read through
-`.id`, a `command_exec` loses its output, and an output that names an attribute the
-resource does not have is only caught after the resource is created.
+`create` and `update` return the whole resource, a schema marks what the provider
+computes, and `plan` refuses a reference to an attribute a resource will never have. The
+plan still decides alone what a resource to create or change will hold.
 
 - [x] `create` and `update` return the resource's attributes; state holds them
-- [ ] Schema marks computed attributes, so `plan` can refuse a reference to an attribute
+- [x] Schema marks computed attributes, so `plan` can refuse a reference to an attribute
       that will never exist
-- [ ] `command_exec` exposes `stdout` and `exit_code`; `random_string` exposes `result`
+- [x] `command_exec` exposes `stdout`; `random_string` exposes `result`
 - [ ] The provider takes part in the plan: asked what a resource to create or change will
       hold, it says which values are known, which only the apply makes, and whether the
       change replaces the resource. A value it rewrites, such as a path it cleans up, then
@@ -159,7 +158,8 @@ resource does not have is only caught after the resource is created.
 ### Schema-driven validation
 
 `SchemaDefinition` carries `type`, `required`, `elemType` and `schema`, and the engine
-reads only `forceNew`.
+reads only `forceNew`, `computed` and `optional`: a computed value the configuration sets
+is refused unless it is also optional.
 Every resource validates its inputs by hand.
 
 - [ ] The engine validates inputs against the schema before it asks the provider
@@ -365,7 +365,7 @@ Nothing here changes what Clay does. Each is a place the next change has to work
       the delete is untested the same way
 - [x] Data sources have no end-to-end test; the only `data` block in `e2e` is an error
       case, since `LocalProvider.read` returns `{}`
-- [ ] The two `command_exec` "execute" tests assert only that an id came back; they pass
+- [x] The two `command_exec` "execute" tests assert only that an id came back; they pass
       with the command never run and with `cwd` ignored
 - [ ] `Orchestrator.spec.ts` "should register a provider" asserts only `not.toThrow`,
       and passes with registration removed
