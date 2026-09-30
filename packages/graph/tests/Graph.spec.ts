@@ -75,6 +75,22 @@ describe('Graph', () => {
     expect(() => graph.topologicalSort()).toThrow('Dependency cycle detected: A -> B -> C -> A');
   });
 
+  it('finds a cycle as the nodes each one depends on, and nothing in a graph without one', () => {
+    // C is needed by B, B by A.
+    const graph = new Graph<string>();
+    graph.addNode('A', 'val');
+    graph.addNode('B', 'val');
+    graph.addNode('C', 'val');
+    graph.addEdge('C', 'B');
+    graph.addEdge('B', 'A');
+
+    expect(graph.findCycle()).toBeUndefined();
+
+    graph.addEdge('A', 'C');
+
+    expect(graph.findCycle()).toEqual(['A', 'B', 'C', 'A']);
+  });
+
   it('should list every node with its data', () => {
     const graph = new Graph<string>();
     graph.addNode('A', 'first');

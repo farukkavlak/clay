@@ -5,7 +5,7 @@ import { AttributeValue, ModuleBlock, Position, spell } from '@clay/parser';
 import { Instances, Repetition } from '../Instances';
 import { callKey, Context, ModuleCall, outputKey, scopeOf, variableKey } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
-import { placed, tryAt } from '../place';
+import { placed, tryAt, withPlace } from '../place';
 import { COUNT_INDEX_OUTSIDE, eachOutside, readCall, readInstance } from '../resolvers/instance';
 import { Reference, ReferenceScanner } from '../resolvers/ReferenceScanner';
 import { LoadedModule, LoadedResource } from './ModuleLoader';
@@ -47,7 +47,21 @@ function describeMissing(reference: Exclude<Reference, { kind: 'count' | 'each' 
   return moduleScopes.has(reference.scope) ? `module "${reference.module}" has no output "${reference.name}"` : `module "${reference.module}" is not declared`;
 }
 
+/** The node a value belongs to, and the block and module it is read in. */
+interface Dependent {
+  key: string;
+  declaration: string;
+  context: Context;
+}
+
+/** Where a reference that makes an edge is written. */
+type ReferencePlace = Omit<Dependent, 'key'> & { position: Position };
+
+const edgeKey = (from: string, to: string) => `${from} -> ${to}`;
+
 export class DependencyGraphBuilder {
+  private references = new Map<string, ReferencePlace>();
+
   constructor(
     private scanner: ReferenceScanner,
     private instances: Instances,
@@ -56,6 +70,7 @@ export class DependencyGraphBuilder {
 
   buildExecutionGraph(loadedResources: LoadedResource[], loadedModules: LoadedModule[]): Graph<GraphNode> {
     const graph = new Graph<GraphNode>();
+    this.references.clear();
 
     for (const { uniqueId, address } of loadedResources) graph.addNode(uniqueId, { kind: 'resource', module: address.module });
     for (const [key, node] of this.valueNodes(loadedModules)) graph.addNode(key, node);
@@ -65,7 +80,20 @@ export class DependencyGraphBuilder {
     for (const resource of loadedResources) this.addResourceDependencies(resource, graph, moduleScopes);
     for (const [key, node] of graph.entries()) if (!node.module.isRoot()) graph.addEdge(callKey(node.module), key);
 
+    this.refuseCycle(graph);
     return graph;
+  }
+
+  /** Refused at a reference in the cycle, so the error points at a line to change. An edge from a module call to its own nodes has no reference, but those edges alone never close a cycle. */
+  private refuseCycle(graph: Graph<GraphNode>): void {
+    const cycle = graph.findCycle();
+    if (!cycle) return;
+
+    const message = `Dependency cycle detected: ${cycle.join(' -> ')}`;
+    for (const [i, node] of cycle.slice(0, -1).entries()) {
+      const reference = this.references.get(edgeKey(cycle[i + 1], node));
+      if (reference) throw withPlace(new Error(message), reference.position, reference.declaration, reference.context);
+    }
   }
 
   private addNodeDependencies(key: string, node: GraphNode, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
@@ -76,22 +104,28 @@ export class DependencyGraphBuilder {
   private addValueDependencies(key: string, node: ValueNode, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
     const repetition = node.context instanceof ModuleCall ? this.modules.repetitionOf(node.module) : undefined;
 
-    tryAt(node.position, node.declaration, node.context, () => this.addDependencies(node.value, graph, key, node.context, moduleScopes, repetition));
+    const dependent = { key, declaration: node.declaration, context: node.context };
+
+    tryAt(node.position, node.declaration, node.context, () => this.addDependencies(node.value, graph, dependent, moduleScopes, repetition));
   }
 
   /** A call's count or for_each is read in the module that calls it, before any instance of the module is made. */
   private addCallDependencies(key: string, block: ModuleBlock, caller: ModuleAddress, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
-    for (const value of [block.count, block.forEach]) if (value) tryAt(value.position, spell(block), caller, () => this.addDependencies(value, graph, key, caller, moduleScopes));
+    const dependent = { key, declaration: spell(block), context: caller };
+
+    for (const value of [block.count, block.forEach])
+      if (value) tryAt(value.position, dependent.declaration, caller, () => this.addDependencies(value, graph, dependent, moduleScopes));
   }
 
   /** One value at a time, so an error points at the value that reads, not at the block it sits in. The count or for_each is read before any instance is, so it has no key. */
   private addResourceDependencies({ address, block }: LoadedResource, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
-    const key = address.toString();
-    const repetition = this.instances.repetitionOf(key);
+    const dependent = { key: address.toString(), declaration: spell(block), context: address };
+    const repetition = this.instances.repetitionOf(dependent.key);
 
-    for (const value of [block.count, block.forEach]) if (value) tryAt(value.position, spell(block), address, () => this.addDependencies(value, graph, key, address, moduleScopes));
+    for (const value of [block.count, block.forEach])
+      if (value) tryAt(value.position, dependent.declaration, address, () => this.addDependencies(value, graph, dependent, moduleScopes));
     for (const value of Object.values(block.attributes))
-      tryAt(value.position, spell(block), address, () => this.addDependencies(value, graph, key, address, moduleScopes, repetition));
+      tryAt(value.position, dependent.declaration, address, () => this.addDependencies(value, graph, dependent, moduleScopes, repetition));
   }
 
   /** The resources a resource reads from, looking through the variables and outputs in between. */
@@ -168,8 +202,8 @@ export class DependencyGraphBuilder {
       });
   }
 
-  private addDependencies(value: unknown, graph: Graph<GraphNode>, dependentKey: string, context: Context, moduleScopes: Set<string>, repetition?: Repetition): void {
-    for (const reference of this.scanner.referencesIn(value, context)) {
+  private addDependencies(value: unknown, graph: Graph<GraphNode>, dependent: Dependent, moduleScopes: Set<string>, repetition?: Repetition): void {
+    for (const reference of this.scanner.referencesIn(value, dependent.context)) {
       if (reference.kind === 'count' || reference.kind === 'each') {
         checkInstanceReference(reference, repetition);
         continue;
@@ -179,7 +213,7 @@ export class DependencyGraphBuilder {
       if (reference.kind === 'output' && moduleScopes.has(reference.scope)) readCall(reference.reference, this.modules.repetitionOf(reference.call), reference.position);
 
       if (!graph.hasNode(reference.key)) {
-        const message = `Invalid reference in "${dependentKey}": ${describeMissing(reference, moduleScopes)}`;
+        const message = `Invalid reference in "${dependent.key}": ${describeMissing(reference, moduleScopes)}`;
         // A string may hold several references, so the one missing is a closer place than the value it sits in.
         throw placed(message, reference.position);
       }
@@ -187,7 +221,10 @@ export class DependencyGraphBuilder {
       // Checked here, as well as where it is read, since a reference to a resource still to come is never read at plan time.
       if (reference.kind === 'resource') readInstance(reference.reference, this.instances.repetitionOf(reference.key), reference.position);
 
-      graph.addEdge(reference.key, dependentKey);
+      graph.addEdge(reference.key, dependent.key);
+      const edge = edgeKey(reference.key, dependent.key);
+      if (reference.position && !this.references.has(edge))
+        this.references.set(edge, { position: reference.position, declaration: dependent.declaration, context: dependent.context });
     }
   }
 }

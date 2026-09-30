@@ -61,14 +61,13 @@ export class Graph<T> {
     }
 
     const totalNodes = result.reduce((acc, layer) => acc + layer.length, 0);
-    // Reversed, so each arrow points from a node to what it depends on.
-    if (totalNodes !== this.nodes.size) throw new Error(`Dependency cycle detected: ${this.findCycle().reverse().join(' -> ')}`);
+    if (totalNodes !== this.nodes.size) throw new Error(`Dependency cycle detected: ${this.findCycle()!.join(' -> ')}`);
 
     return result;
   }
 
-  /** Walks the graph depth first and returns the first path that comes back to a node it is still visiting. */
-  private findCycle(): string[] {
+  /** The first cycle a depth-first walk comes back around, each node followed by one it depends on, or nothing when there is none. */
+  findCycle(): string[] | undefined {
     const visiting = new Set<string>();
     const visited = new Set<string>();
     const path: string[] = [];
@@ -94,10 +93,11 @@ export class Graph<T> {
     for (const node of this.nodes.keys())
       if (!visited.has(node)) {
         const cycle = walk(node);
-        if (cycle) return cycle;
+        // Reversed, since an edge points from a node to what depends on it.
+        if (cycle) return cycle.reverse();
       }
 
-    return [];
+    return undefined;
   }
 
   private calculateInDegrees(): Map<string, number> {
