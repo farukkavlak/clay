@@ -224,10 +224,33 @@ describe('apply and plan against real files', () => {
     const config = 'module "m" {\n  source = "./m"\n  x = module.m.y\n}';
 
     await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
-      message: 'Dependency cycle detected: module.m.vars:x -> module.m.outputs:y -> module.m.vars:x',
+      message: 'Dependency cycle detected: module.m.var.x -> module.m.output.y -> module.m.var.x',
       block: 'module "m"',
       position: { file: 'main.clay', line: 3, column: 7 },
     });
+  });
+
+  it.each([
+    ['variables', {}, 'variable "a" { default = var.b }\nvariable "b" { default = var.a }', 'var.a -> var.b -> var.a'],
+    [
+      'a module call and its output',
+      { 'm/main.clay': 'output "y" { value = 1 }' },
+      'module "m" {\n  source = "./m"\n  count = module.m[0].y\n}',
+      'module.m -> module.m.output.y -> module.m',
+    ],
+    [
+      'a call inside a module',
+      { 'a/main.clay': 'module "b" {\n  source = "../b"\n  count = module.b[0].y\n}', 'b/main.clay': 'output "y" { value = 1 }' },
+      'module "a" { source = "./a" }',
+      'module.a.module.b -> module.a.module.b.output.y -> module.a.module.b',
+    ],
+  ])('spells %s in a cycle as the configuration writes them', async (_, files, config, cycle) => {
+    for (const [file, content] of Object.entries(files)) {
+      await fs.mkdir(path.join(dir, path.dirname(file)), { recursive: true });
+      await fs.writeFile(path.join(dir, file), content, 'utf8');
+    }
+
+    await expect(newOrchestrator().plan(config)).rejects.toThrow(`Dependency cycle detected: ${cycle}`);
   });
 
   it('plans an update through a module output when the resource behind it changes', async () => {

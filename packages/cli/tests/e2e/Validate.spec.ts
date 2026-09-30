@@ -105,7 +105,8 @@ describe('validate against real files', () => {
   it('points at a reference to a name the configuration never declares', async () => {
     const output = await validate('resource "local_file" "f" {\n  path    = "a.txt"\n  content = "${var.missing}"\n}');
 
-    expect(output).toContain('Invalid reference in "local_file.f": variable "missing" is not defined');
+    // The `in resource` line names the block, so the message does not.
+    expect(output).toContain('Validation failed: variable "missing" is not defined\n');
     expect(output).toContain('on main.clay line 3, in resource "local_file" "f":');
     expect(output).toContain('\n  3:   content = "${var.missing}"\n                    ^');
   });

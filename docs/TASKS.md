@@ -163,9 +163,9 @@ Every resource validates its inputs by hand.
 
 ### Data sources in the graph
 
-Data sources are read while the config loads, before any resource exists, so one that
-reads a resource fails at plan. `plan` and `apply` each read them, so an apply reads
-twice.
+Data sources are read while the config loads, before any resource exists and before any
+module output has a value, so one that reads either fails at plan. `plan` and `apply` each
+read them, so an apply reads twice.
 
 - [ ] Data sources are graph nodes, read in dependency order and once per run. Read at load,
       one whose input reads a resource the plan changes gets the value in state, while a
@@ -264,7 +264,7 @@ by resource type, and no `provider` block exists yet.
 
 ## 5. Errors and tooling
 
-- [ ] Errors about a configuration that carry no position. Each is thrown where the
+- [x] Errors about a configuration that carry no position. Each is thrown where the
       position is at hand, and each prints as one bare line: a `module` block with no
       `source`, a `source` that names no file, a `source` cycle, a `variable` with no
       value, and the graph's dependency cycle, which knows the node but not the line and
@@ -280,7 +280,9 @@ by resource type, and no `provider` block exists yet.
       the graph says `module "m" has no output "x"`. Read from a data source, which
       loads before the graph, the resolver says
       `Output "x" not found in module "module.m"`, with the scope key where the
-      module's name should be
+      module's name should be. The resolver says the same for an output that is declared
+      but has no value yet, so the two need telling apart; once data sources are graph
+      nodes, the graph refuses the undeclared one
 - [ ] An output that fails to resolve reports a failure. `resolveOutput` runs outside the
       step's `try`, so a throw there ends the run with no `failed` event and nothing said.
       `readEach`, which reads a `for_each` again at apply, runs there too, and so do

@@ -30,6 +30,15 @@ export type GraphNode =
   | ({ kind: 'output' } & ValueNode)
   | ({ kind: 'module'; block: ModuleBlock } & InModule);
 
+/** A node by its address, `module.m.var.x`; a resource's key already is one, and a key is never taken apart. */
+function spellNode(key: string, node: GraphNode): string {
+  if (node.kind === 'resource') return key;
+  if (node.kind === 'module') return node.module.child(node.block.name).toString();
+
+  const scope = node.module.toString();
+  return `${scope ? `${scope}.` : ''}${node.kind === 'variable' ? 'var' : 'output'}.${node.name}`;
+}
+
 function inputNames(attributes: Record<string, AttributeValue>): string[] {
   return Object.keys(attributes).filter((name) => name !== 'source');
 }
@@ -89,7 +98,7 @@ export class DependencyGraphBuilder {
     const cycle = graph.findCycle();
     if (!cycle) return;
 
-    const message = `Dependency cycle detected: ${cycle.join(' -> ')}`;
+    const message = `Dependency cycle detected: ${cycle.map((key) => spellNode(key, graph.getNode(key)!)).join(' -> ')}`;
     for (const [i, node] of cycle.slice(0, -1).entries()) {
       const reference = this.references.get(edgeKey(cycle[i + 1], node));
       if (reference) throw withPlace(new Error(message), reference.position, reference.declaration, reference.context);
@@ -212,11 +221,8 @@ export class DependencyGraphBuilder {
       // Once the module is known to be there, its call says whether the first step is an index, and a wrong one is refused for what it is.
       if (reference.kind === 'output' && moduleScopes.has(reference.scope)) readCall(reference.reference, this.modules.repetitionOf(reference.call), reference.position);
 
-      if (!graph.hasNode(reference.key)) {
-        const message = `Invalid reference in "${dependent.key}": ${describeMissing(reference, moduleScopes)}`;
-        // A string may hold several references, so the one missing is a closer place than the value it sits in.
-        throw placed(message, reference.position);
-      }
+      // A string may hold several references, so the one missing is a closer place than the value it sits in; the block is added around it.
+      if (!graph.hasNode(reference.key)) throw placed(describeMissing(reference, moduleScopes), reference.position);
 
       // Checked here, as well as where it is read, since a reference to a resource still to come is never read at plan time.
       if (reference.kind === 'resource') readInstance(reference.reference, this.instances.repetitionOf(reference.key), reference.position);
