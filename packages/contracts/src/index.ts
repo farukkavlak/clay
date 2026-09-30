@@ -1,4 +1,6 @@
+import { Address, isInstanceKey, isModulePath } from './Address';
 import type { InstanceKey, ModuleStep } from './Address';
+import { ExactNumber, NumberError } from './ExactNumber';
 
 export { Address, isInstanceKey, isModulePath, ModuleAddress } from './Address';
 export type { InstanceKey, ModuleStep } from './Address';
@@ -40,6 +42,58 @@ export const STATE_VERSION = 1;
 
 export function emptyState(): State {
   return { version: STATE_VERSION, serial: 0, resources: {} };
+}
+
+/** What the engine goes on to read without asking: an address is built from the type, the name and the module path, the planner walks `attributes`, and the runner walks `dependencies`. */
+function isResource(value: unknown): value is Resource {
+  return (
+    isRecord(value) &&
+    typeof value.resourceType === 'string' &&
+    typeof value.name === 'string' &&
+    (value.modulePath === undefined || isModulePath(value.modulePath)) &&
+    isRecord(value.attributes) &&
+    (value.dependencies === undefined || Array.isArray(value.dependencies))
+  );
+}
+
+/** An instance key names a resource or a module, as an address does, so it is a JavaScript number too. */
+function readKeys(resources: Record<string, unknown>): void {
+  for (const [address, resource] of Object.entries(resources)) {
+    if (!isRecord(resource)) continue;
+
+    if (resource.key instanceof ExactNumber) resource.key = resource.key.toSafeInteger(`the key of "${address}"`);
+    if (Array.isArray(resource.modulePath))
+      for (const step of resource.modulePath) if (isRecord(step) && step.key instanceof ExactNumber) step.key = step.key.toSafeInteger(`a module key of "${address}"`);
+  }
+}
+
+function checkResources(resources: Record<string, unknown>, say: (problem: string) => never): asserts resources is Record<string, Resource> {
+  for (const [address, resource] of Object.entries(resources)) {
+    if (!isResource(resource)) say(`"${address}" is not a resource`);
+    if (resource.key !== undefined && !isInstanceKey(resource.key)) say(`the key of "${address}" is not a key: a key is a whole number or a string`);
+
+    // A step finds an entry by where it is filed, but a delete is built from what it holds.
+    const held = Address.of(resource).toString();
+    if (held !== address) say(`"${address}" holds ${held}`);
+  }
+}
+
+/**
+ * Resources as a file holds them, a state's or a plan's, read from JSON with every number exact: keys become JavaScript numbers, then each is checked for what the engine goes on to trust.
+ * `field` names them when they are not a record, and `say` reports a problem as the file's reader words it.
+ */
+export function readResources(resources: unknown, field: string, say: (problem: string) => never): asserts resources is Record<string, Resource> {
+  if (!isRecord(resources)) say(`${field} are not a record`);
+
+  try {
+    readKeys(resources);
+  } catch (error) {
+    if (error instanceof NumberError) say(error.message);
+
+    throw error;
+  }
+
+  checkResources(resources, say);
 }
 
 export type SchemaType = 'string' | 'number' | 'boolean' | 'list' | 'map' | 'object';

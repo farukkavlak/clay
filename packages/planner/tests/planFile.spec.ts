@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { isUnknown, parsePlanFile, Plan, serializePlan, UNKNOWN } from '../src/index';
 
-const emptyPlan: Plan = { serial: 0, actions: [], outputs: {}, gone: [] };
+const emptyPlan: Plan = { serial: 0, actions: [], outputs: {}, prevRun: {}, prior: {} };
 
 const aPlanFile = (plan: Plan = emptyPlan) => serializePlan(plan, 'resource "a" "b" {}', { 'm/main.clay': '' });
 
@@ -24,7 +24,8 @@ describe('reading a plan file', () => {
   it('reads a value that is not known yet back as one, in an action and in an output', () => {
     const plan: Plan = {
       serial: 0,
-      gone: [],
+      prevRun: {},
+      prior: {},
       actions: [{ type: 'UPDATE', resourceType: 'null_resource', name: 'a', changes: { triggers: { old: 'x', new: UNKNOWN } } }],
       outputs: { id: { old: undefined, new: UNKNOWN } },
     };
@@ -40,7 +41,8 @@ describe('reading a plan file', () => {
     const lookalike = { '@@clay/unknown': true };
     const plan: Plan = {
       serial: 0,
-      gone: [],
+      prevRun: {},
+      prior: {},
       actions: [{ type: 'UPDATE', resourceType: 'null_resource', name: 'a', changes: { triggers: { old: {}, new: lookalike } } }],
       outputs: {},
     };
@@ -56,7 +58,8 @@ describe('reading a plan file', () => {
     const at = { file: 'main.clay', line: 3, column: 7 };
     const plan: Plan = {
       serial: 4,
-      gone: [],
+      prevRun: {},
+      prior: {},
       actions: [
         {
           type: 'CREATE',
@@ -82,7 +85,7 @@ describe('reading a plan file', () => {
   // A value known in part keeps what is known, exactly, and says where the rest is.
   it('reads a value known in part back as it was written', () => {
     const tags = { env: UNKNOWN, list: ['a', UNKNOWN], size: ExactNumber.parse('12345678901234567890'), unknown: [['env']] };
-    const plan: Plan = { serial: 0, actions: [], outputs: { tags: { old: undefined, new: tags } }, gone: [] };
+    const plan: Plan = { serial: 0, actions: [], outputs: { tags: { old: undefined, new: tags } }, prevRun: {}, prior: {} };
 
     expect(parsePlanFile(aPlanFile(plan), 'tfplan.json').outputs.tags.new).toEqual(tags);
   });
@@ -104,7 +107,7 @@ describe('reading a plan file', () => {
   });
 
   it('keeps a change whose name every object has, rather than setting a prototype', () => {
-    const plan: Plan = { serial: 0, actions: [], outputs: JSON.parse('{"__proto__": {"old": "a", "new": "b"}}'), gone: [] };
+    const plan: Plan = { serial: 0, actions: [], outputs: JSON.parse('{"__proto__": {"old": "a", "new": "b"}}'), prevRun: {}, prior: {} };
 
     const outputs = parsePlanFile(aPlanFile(plan), 'tfplan.json').outputs;
 
@@ -123,7 +126,8 @@ describe('reading a plan file', () => {
   it('reads the instance keys of actions back as they were written', () => {
     const plan: Plan = {
       serial: 0,
-      gone: [],
+      prevRun: {},
+      prior: {},
       actions: [
         { type: 'DELETE', resourceType: 'null_resource', name: 'a', key: 0, id: '1' },
         { type: 'DELETE', resourceType: 'null_resource', name: 'a', key: 'x.y', id: '2' },
@@ -139,7 +143,7 @@ describe('reading a plan file', () => {
 
   it('reads the module keys of actions back as they were written', () => {
     const modulePath = [{ name: 'm', key: 0 }, { name: 'n', key: 'x.y' }, { name: 'o' }];
-    const plan: Plan = { serial: 0, actions: [{ type: 'DELETE', resourceType: 'null_resource', name: 'a', modulePath, id: '1' }], outputs: {}, gone: [] };
+    const plan: Plan = { serial: 0, actions: [{ type: 'DELETE', resourceType: 'null_resource', name: 'a', modulePath, id: '1' }], outputs: {}, prevRun: {}, prior: {} };
 
     expect(parsePlanFile(aPlanFile(plan), 'tfplan.json').actions[0].modulePath).toEqual(modulePath);
   });
@@ -187,7 +191,8 @@ describe('reading a plan file', () => {
   it('reads a move each way back as it was written', () => {
     const plan: Plan = {
       serial: 0,
-      gone: [],
+      prevRun: {},
+      prior: {},
       actions: [
         { type: 'NO_OP', resourceType: 'null_resource', name: 'a', key: 0, movedFrom: 'null_resource.a' },
         { type: 'NO_OP', resourceType: 'null_resource', name: 'b', movedFrom: 'null_resource.b[0]' },
@@ -211,15 +216,26 @@ describe('reading a plan file', () => {
     expect(read(keyed(1.5))).toThrow('tfplan.json is not a plan file: an instance key: 1.5 is not a whole number');
   });
 
-  it('reads back the resources a refresh found gone', () => {
-    expect(parsePlanFile(aPlanFile({ ...emptyPlan, gone: ['local_file.a'] }), 'tfplan.json').gone).toEqual(['local_file.a']);
+  it('reads back the resources as state held them and as the refresh read them, keys and numbers as state reads them', () => {
+    const resources = { 'x.a[0]': { resourceType: 'x', name: 'a', key: 0, attributes: { n: ExactNumber.parse('12345678901234567890') } } };
+
+    const read = parsePlanFile(aPlanFile({ ...emptyPlan, prevRun: resources, prior: {} }), 'tfplan.json');
+
+    expect(read.prevRun).toEqual(resources);
+    expect(read.prior).toEqual({});
   });
 
   it.each([
-    ['no list of them', undefined],
-    ['one that is not a string', [1]],
-  ])('refuses a plan file with %s for the resources found gone', (_, gone) => {
-    expect(read({ ...fields(), gone })).toThrow('tfplan.json is not a plan file');
+    ['no resources read back', { prior: undefined }, 'tfplan.json is not a plan file: its prior resources are not a record'],
+    ['an entry that is not a resource', { prior: { 'x.a': { name: 'a' } } }, 'tfplan.json is not a plan file: "x.a" is not a resource'],
+    [
+      'an instance key that is not whole',
+      { prior: { 'x.a': { resourceType: 'x', name: 'a', key: 1.5, attributes: {} } } },
+      'tfplan.json is not a plan file: the key of "x.a": 1.5 is not a whole number',
+    ],
+    ['an entry filed under another address', { prevRun: { 'x.b': { resourceType: 'x', name: 'a', attributes: {} } } }, 'tfplan.json is not a plan file: "x.b" holds x.a'],
+  ])('refuses a plan file with %s', (_, broken, message) => {
+    expect(read({ ...fields(), ...broken })).toThrow(message);
   });
 
   it('names a serial that is not whole', () => {
@@ -229,7 +245,8 @@ describe('reading a plan file', () => {
   it('names a position that is not whole', () => {
     const text = aPlanFile({
       serial: 0,
-      gone: [],
+      prevRun: {},
+      prior: {},
       actions: [
         { type: 'CREATE', resourceType: 'null_resource', name: 'a', attributes: { n: { type: 'String', value: 'x', position: { file: 'main.clay', line: 1, column: 1 } } } },
       ],
@@ -242,7 +259,8 @@ describe('reading a plan file', () => {
   it('names an index that is not whole', () => {
     const text = aPlanFile({
       serial: 0,
-      gone: [],
+      prevRun: {},
+      prior: {},
       actions: [
         {
           type: 'CREATE',

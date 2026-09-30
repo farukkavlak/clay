@@ -1,6 +1,7 @@
 import { Orchestrator } from '@clay/orchestrator';
 import { DiskFiles } from '@clay/orchestrator';
 import { LocalProvider } from '@clay/provider-local';
+import { changedOutside } from '@clay/planner';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -61,14 +62,27 @@ describe('a plan that reads each resource back first', () => {
     expect(await fs.readFile(file, 'utf8')).toBe('applied');
   });
 
-  it('names a resource it finds gone, so the apply can forget it', async () => {
+  it('carries a resource it finds gone, so the apply can forget it', async () => {
     await fs.unlink(file);
 
     const kept = await newOrchestrator().plan(config);
     const dropped = await newOrchestrator().plan('');
 
-    expect(kept.gone).toEqual(['local_file.a']);
-    expect(dropped.gone).toEqual(['local_file.a']);
+    expect(changedOutside(kept)).toEqual([{ address: 'local_file.a' }]);
+    expect(changedOutside(dropped)).toEqual([{ address: 'local_file.a' }]);
+  });
+
+  // The configuration now asks for what was written by hand, so there is nothing to do but record it.
+  it('records what it read when an apply has nothing else to do', async () => {
+    await fs.writeFile(file, 'by hand', 'utf8');
+    config = config.replace('applied', 'by hand');
+
+    const { actions } = await newOrchestrator().plan(config);
+    await apply();
+
+    expect(actions.map(({ type }) => type)).toEqual(['NO_OP']);
+    const state = await new LocalBackend(dir).read();
+    expect(state.resources['local_file.a'].attributes.content).toBe('by hand');
   });
 
   it('plans against the state alone when told not to read', async () => {
@@ -149,6 +163,43 @@ describe('a plan that reads each resource back first', () => {
       expect(await run(createApplyCommand, ['-y'])).toContain('Apply complete! Resources: 0 added, 0 changed, 0 destroyed, 1 forgotten.');
       const state = await new LocalBackend(dir).read();
       expect(state.resources).toEqual({});
+    });
+
+    // It is made again, so the state keeps it.
+    it('does not count a resource found gone as forgotten when the apply makes it again', async () => {
+      expect(await run(createApplyCommand, ['-y'])).toContain('Apply complete! Resources: 1 added, 0 changed, 0 destroyed.');
+    });
+
+    // Nothing is left to do but record what was read, which is still work for an apply.
+    it('applies a plan whose only change is a value changed outside Clay', async () => {
+      await fs.writeFile(file, 'by hand', 'utf8');
+      await fs.writeFile(path.join(dir, 'main.clay'), config.replace('applied', 'by hand'), 'utf8');
+
+      const applied = await run(createApplyCommand, ['-y']);
+
+      expect(applied).toContain('An apply would only update the state.');
+      expect(applied).toContain('Apply complete! Resources: 0 added, 0 changed, 0 destroyed.');
+      const state = await new LocalBackend(dir).read();
+      expect(state.resources['local_file.a'].attributes.content).toBe('by hand');
+    });
+
+    it('says nothing changed outside Clay when nothing did', async () => {
+      await fs.writeFile(file, 'applied', 'utf8');
+      await fs.writeFile(path.join(dir, 'main.clay'), config.replace('applied', 'new'), 'utf8');
+
+      const planned = await run(createPlanCommand, []);
+
+      expect(planned).toContain('local_file.a will be updated');
+      expect(planned).not.toContain('Changed outside Clay');
+    });
+
+    it('shows a value changed outside Clay', async () => {
+      await fs.writeFile(file, 'by hand', 'utf8');
+
+      const planned = await run(createPlanCommand, []);
+
+      expect(planned).toContain('local_file.a was changed outside Clay');
+      expect(planned).toContain('content: "applied" -> "by hand"');
     });
 
     it('refuses a --refresh that is neither true nor false', async () => {

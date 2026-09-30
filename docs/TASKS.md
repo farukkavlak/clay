@@ -116,18 +116,23 @@ hand shows up in the plan. Clay does too, but its state holds only the inputs it
 - [ ] State holds what the provider returns, not only the inputs that were sent
 - [x] `plan` and `apply` refresh first, `--refresh=false` skips it. A plan writes nothing,
       as in Terraform, and an apply forgets a resource the plan found gone
-- [ ] "Changed outside Clay" lists a value changed by hand, not only a resource deleted by
+- [x] "Changed outside Clay" lists a value changed by hand, not only a resource deleted by
       hand. Today such a value shows only as an update whose old value is the one found,
       where Terraform lists both under "Objects have changed outside of Terraform"
 
 ### What a plan carries
 
-A `PlanAction` holds the attributes as the parser wrote them, so `apply` is handed the
-configuration again and resolves every reference a second time. Terraform's plan carries
-finished values, which is what lets `apply` promise it will do what the plan showed.
+A `PlanAction` holds the attributes as the parser wrote them, and `apply` resolves them
+again. Terraform's apply evaluates the configuration again too, since a value only an
+apply makes is known only then, and its saved plan carries the configuration for that.
+What lets it promise to do what the plan showed is a check: a value the plan showed as
+known that comes out otherwise stops the run.
 
-- [ ] A plan carries resolved values, and `apply` runs them without resolving again
-- [ ] What a saved plan needs the configuration for is only what it cannot carry
+- [x] A plan carries the state it was made against and the state the refresh read, as
+      Terraform's does. The apply runs on what was read, and what changed outside Clay is
+      shown from the two
+- [ ] An action carries the values it was planned with, and `apply` stops before a
+      resource whose value the plan showed as known resolves to another
 
 ### Computed attributes
 
