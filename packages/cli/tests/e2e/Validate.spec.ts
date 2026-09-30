@@ -56,8 +56,11 @@ describe('validate against real files', () => {
     expect(await validate(config)).toContain('Configuration is valid');
   });
 
-  it('refuses a module that is not there', async () => {
-    expect(await validate('module "m" { source = "./missing" }')).toContain('Module source not found at: missing/main.clay');
+  it('refuses a module that is not there, and points at its source', async () => {
+    const output = await validate('module "m" { source = "./missing" }');
+
+    expect(output).toContain('Module source not found at: missing/main.clay');
+    expect(output).toContain('on main.clay line 1, in module "m":');
   });
 
   it('refuses an input the module has no variable for, and points at the line it is written on', async () => {

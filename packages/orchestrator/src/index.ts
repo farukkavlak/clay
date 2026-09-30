@@ -109,12 +109,13 @@ export class Orchestrator {
 
     for (const resource of desired) {
       const type = resource.block.resourceType;
-      const provider = this.providers.get(type);
-
-      if (!schemas.has(type)) schemas.set(type, await provider.getSchema(type));
-      if (Object.values(resource.attributes).some((value) => containsUnknown(value))) continue;
 
       try {
+        const provider = this.providers.get(type);
+
+        if (!schemas.has(type)) schemas.set(type, await provider.getSchema(type));
+        if (Object.values(resource.attributes).some((value) => containsUnknown(value))) continue;
+
         await provider.validate(type, resource.attributes);
       } catch (error) {
         throw withPlace(error, resource.block.position, spell(resource.block), resource.address);

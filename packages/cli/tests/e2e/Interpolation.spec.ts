@@ -113,8 +113,10 @@ describe('a string with an interpolation', () => {
 
   // The parser reads every interpolation out of a string, so a module's path that has one is not a path.
   it('refuses a module source with an interpolation', async () => {
-    await expect(newOrchestrator().plan('variable "v" { default = "m" }\nmodule "m" { source = "./${var.v}" }')).rejects.toThrow(
-      'Module "m" is missing a valid "source" attribute.'
-    );
+    await expect(newOrchestrator().plan('variable "v" { default = "m" }\nmodule "m" { source = "./${var.v}" }')).rejects.toMatchObject({
+      message: 'Module "m" is missing a valid "source" attribute.',
+      position: { file: CONFIG_FILE, line: 2, column: 23 },
+      block: 'module "m"',
+    });
   });
 });

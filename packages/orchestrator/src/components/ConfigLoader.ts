@@ -1,4 +1,4 @@
-import { ModuleAddress, State } from '@clay/contracts';
+import { ModuleAddress, Provider, State } from '@clay/contracts';
 import { CONFIG_FILE, ConfigError, DataBlock, Lexer, Parser, spell, Statement } from '@clay/parser';
 
 import { Instances } from '../Instances';
@@ -6,7 +6,7 @@ import { ModuleInstances } from '../ModuleInstances';
 import { Planned } from '../Planned';
 import { ProviderRegistry } from '../ProviderRegistry';
 import { dataSourceKey, scopeOf } from '../keys';
-import { tryAt } from '../place';
+import { tryAt, withPlace } from '../place';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { ScopeManager } from '../scope/ScopeManager';
 import { LoadedModule, LoadedResource, ModuleLoader } from './ModuleLoader';
@@ -68,14 +68,22 @@ export class ConfigLoader {
     for (const stmt of program)
       if (stmt.type === 'Data') {
         this.checkReadOnce(stmt, scopeAddress);
-        const provider = this.providers.get(stmt.dataSourceType);
+        const provider = tryAt(stmt.position, spell(stmt), scopeAddress, () => this.providers.get(stmt.dataSourceType));
         const inputs = this.resolveInputs(stmt, state, scopeAddress);
-
-        await provider.validate(stmt.dataSourceType, inputs);
-        const attributes = await provider.read(stmt.dataSourceType, inputs);
+        const attributes = await this.readDataSource(stmt, provider, inputs, scopeAddress);
 
         this.dataSources.set(dataSourceKey(scope, stmt.dataSourceType, stmt.name), attributes);
       }
+  }
+
+  private async readDataSource(stmt: DataBlock, provider: Provider, inputs: Record<string, unknown>, scopeAddress: ModuleAddress): Promise<Record<string, unknown>> {
+    try {
+      await provider.validate(stmt.dataSourceType, inputs);
+
+      return await provider.read(stmt.dataSourceType, inputs);
+    } catch (error) {
+      throw withPlace(error, stmt.position, spell(stmt), scopeAddress);
+    }
   }
 
   /** A data source is read once, as the config loads and before any module has instances, so a module whose instances each want their own cannot have one yet. */

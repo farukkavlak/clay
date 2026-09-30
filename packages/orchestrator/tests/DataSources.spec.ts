@@ -130,7 +130,11 @@ describe('Orchestrator - Data Sources', () => {
       }
     `;
 
-    await expect(apply(orchestrator, config)).rejects.toThrow('Data source mock_data with id missing-id not found');
+    await expect(apply(orchestrator, config)).rejects.toMatchObject({
+      message: 'Data source mock_data with id missing-id not found',
+      block: 'data "mock_data" "missing"',
+      position: { file: 'main.clay', line: 2, column: 7 },
+    });
   });
 
   it('should throw error if data reference is incomplete', async () => {
