@@ -1,4 +1,4 @@
-import { Address, ModuleAddress, State } from '@clay/contracts';
+import { Address, ModuleAddress, Schema, State } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { AttributeValue, ResourceBlock, spell, spellReference, Statement } from '@clay/parser';
 import { DesiredResource, hasChanges, isUnknown, UNKNOWN } from '@clay/planner';
@@ -39,6 +39,8 @@ function sharedModule(one: ModuleAddress, other: ModuleAddress): ModuleAddress {
  * An instance that will be created or changed is kept in `planned` with the values its configuration sets and knows; reading anything else of it is UNKNOWN.
  */
 export class DesiredStateBuilder {
+  private schemas = new Map<string, Schema>();
+
   constructor(
     private scopeManager: ScopeManager,
     private scanner: ReferenceScanner,
@@ -49,9 +51,10 @@ export class DesiredStateBuilder {
     private planned: Planned
   ) {}
 
-  /** Moves are made in the state it is given, which a plan reads for itself and never writes, and then plans the actions against. */
-  build(loadedResources: LoadedResource[], graph: Graph<GraphNode>, state: State): DesiredState {
+  /** Moves are made in the state it is given, which a plan reads for itself and never writes, and then plans the actions against. The schemas say which values the provider computes. */
+  build(loadedResources: LoadedResource[], graph: Graph<GraphNode>, state: State, schemas: Map<string, Schema>): DesiredState {
     this.planned.begin();
+    this.schemas = schemas;
     const byKey = new Map(loadedResources.map((r) => [r.address.toString(), r]));
     const resources: DesiredResource[] = [];
     const outputs: Record<string, unknown> = {};
@@ -105,7 +108,7 @@ export class DesiredStateBuilder {
     const movedFrom = tryAt(block.position, spell(block), address, () => this.moveIn(address, state));
     const attributes = this.resolveForPlan(block, state, address);
     const current = state.resources[address.toString()];
-    if (!current || hasChanges(current.attributes, attributes)) this.planned.set(address.toString(), attributes);
+    if (!current || hasChanges(current.attributes, attributes, this.schemas.get(block.resourceType))) this.planned.set(address.toString(), attributes);
 
     return { address, block, attributes, dependencies, ...(movedFrom && { movedFrom }) };
   }

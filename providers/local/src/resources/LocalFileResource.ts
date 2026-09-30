@@ -26,7 +26,7 @@ export class LocalFileResource implements ResourceHandler {
     }
   }
 
-  async create(inputs: Record<string, unknown>): Promise<string> {
+  async create(inputs: Record<string, unknown>): Promise<{ id: string; attributes: Record<string, unknown> }> {
     const filePath = inputs.path as string;
     const content = inputs.content as string;
 
@@ -35,13 +35,15 @@ export class LocalFileResource implements ResourceHandler {
 
     await fs.writeFile(filePath, content, 'utf8');
 
-    return path.resolve(filePath);
+    return { id: path.resolve(filePath), attributes: inputs };
   }
 
-  async update(id: string, inputs: Record<string, unknown>): Promise<void> {
+  async update(id: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
     const content = inputs.content as string;
 
     await fs.writeFile(id, content, 'utf8');
+
+    return inputs;
   }
 
   async delete(id: string): Promise<void> {

@@ -28,15 +28,16 @@ class MockProvider implements Provider {
     // Always valid for testing
   }
 
-  async create(_type: string, inputs: Record<string, unknown>): Promise<string> {
+  async create(_type: string, inputs: Record<string, unknown>): Promise<{ id: string; attributes: Record<string, unknown> }> {
     const id = `mock_${Date.now()}_${Math.random()}`;
     this.createdResources.set(id, inputs);
-    return id;
+    return { id, attributes: inputs };
   }
 
-  async update(id: string, _type: string, inputs: Record<string, unknown>): Promise<void> {
+  async update(id: string, _type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
     if (!this.createdResources.has(id)) throw new Error(`Resource ${id} not found`);
     this.createdResources.set(id, inputs);
+    return inputs;
   }
 
   async delete(id: string): Promise<void> {

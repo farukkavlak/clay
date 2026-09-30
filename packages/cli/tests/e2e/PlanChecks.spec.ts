@@ -49,6 +49,13 @@ describe('what plan refuses before anything runs', () => {
     });
   });
 
+  // Which values a provider computes is read before any value is resolved, so a type no provider handles is refused first.
+  it('a resource type no provider handles, before a value in it that does not resolve', async () => {
+    const config = 'variable "v" { default = "s" }\nresource "aws_bucket" "b" { name = var.v.x }';
+
+    await expect(newOrchestrator().plan(config)).rejects.toThrow('No provider handles "aws_bucket"');
+  });
+
   it('a data source the provider refuses, placed in its block', async () => {
     const config = 'data "local_file" "f" { name = "x" }';
 

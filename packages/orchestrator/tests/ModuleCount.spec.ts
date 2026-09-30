@@ -17,8 +17,8 @@ const recorder: Provider = {
   read: async (_, __, prior) => prior,
   validateDataSource: async () => {},
   readDataSource: async () => ({}),
-  create: async (_, inputs) => String(inputs.value),
-  update: async () => {},
+  create: async (_, inputs) => ({ id: String(inputs.value), attributes: inputs }),
+  update: async (_, __, inputs) => inputs,
   delete: async () => {},
 };
 
