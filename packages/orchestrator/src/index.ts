@@ -140,7 +140,7 @@ export class Orchestrator {
     const graph = this.graphBuilder.buildExecutionGraph(loadedResources, loadedModules);
     const schemas = await this.schemasOf(loadedResources);
     refuseComputedSet(loadedResources, schemas);
-    const { resources: desiredResources, outputs } = this.desiredStateBuilder.build(loadedResources, graph, state, schemas);
+    const { resources: desiredResources, outputs } = await this.desiredStateBuilder.build(loadedResources, graph, state, schemas);
     await this.checkWithProviders(desiredResources);
 
     return { desiredResources, outputs, schemas };

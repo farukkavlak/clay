@@ -53,7 +53,7 @@ export class DesiredStateBuilder {
   ) {}
 
   /** Moves are made in the state it is given, which a plan reads for itself and never writes, and then plans the actions against. The schemas say which values the provider computes. */
-  build(loadedResources: LoadedResource[], graph: Graph<GraphNode>, state: State, schemas: Map<string, Schema>): DesiredState {
+  async build(loadedResources: LoadedResource[], graph: Graph<GraphNode>, state: State, schemas: Map<string, Schema>): Promise<DesiredState> {
     this.planned.begin();
     this.schemas = schemas;
     const byKey = new Map(loadedResources.map((r) => [r.address.toString(), r]));
@@ -65,7 +65,7 @@ export class DesiredStateBuilder {
         const node = graph.getNode(key)!;
 
         if (node.kind === 'module') this.planCall(node, state);
-        else if (node.kind === 'resource') resources.push(...this.planResource(key, byKey.get(key)!, graph, state));
+        else if (node.kind === 'resource') resources.push(...(await this.planResource(key, byKey.get(key)!, graph, state)));
         else for (const instance of this.modules.of(node.module)) this.planValue(node, instance, state, outputs);
       }
 
@@ -77,27 +77,34 @@ export class DesiredStateBuilder {
     this.modules.expandCall(module, block, (value, parse, caller) => this.readAt(value, block, caller, state, parse));
   }
 
-  private planResource(key: string, loaded: LoadedResource, graph: Graph<GraphNode>, state: State): DesiredResource[] {
+  private async planResource(key: string, loaded: LoadedResource, graph: Graph<GraphNode>, state: State): Promise<DesiredResource[]> {
     const { address, block } = loaded;
     const blocks = this.graphBuilder.resourceDependencies(graph, key);
 
-    return this.modules.of(address.module).flatMap((module) => {
+    const planned: DesiredResource[] = [];
+
+    for (const module of this.modules.of(address.module)) {
       const dependencies = this.instancesOf(blocks, module);
-      return this.planBlock(new Address(module, address.resourceType, address.name), block, dependencies, state);
-    });
+      planned.push(...(await this.planBlock(new Address(module, address.resourceType, address.name), block, dependencies, state)));
+    }
+
+    return planned;
   }
 
   /** One desired resource for each instance the block makes in one instance of its module: one with neither count nor for_each, and one per index or key with either. */
-  private planBlock(address: Address, block: ResourceBlock, dependencies: string[], state: State): DesiredResource[] {
+  private async planBlock(address: Address, block: ResourceBlock, dependencies: string[], state: State): Promise<DesiredResource[]> {
     const key = address.toString();
 
     if (block.count) this.instances.setCount(key, this.readAt(block.count, block, address, state, countFrom));
     if (block.forEach) this.instances.setEach(key, this.readAt(block.forEach, block, address, state, eachFrom));
 
     const keys = this.instances.keysOf(key);
-    if (keys === undefined) return [this.planInstance(address, block, dependencies, state)];
+    if (keys === undefined) return [await this.planInstance(address, block, dependencies, state)];
 
-    return keys.map((instance) => this.planInstance(new Address(address.module, address.resourceType, address.name, instance), block, dependencies, state));
+    const planned: DesiredResource[] = [];
+    for (const instance of keys) planned.push(await this.planInstance(new Address(address.module, address.resourceType, address.name, instance), block, dependencies, state));
+
+    return planned;
   }
 
   /** The count or for_each, read before any instance is, so it has no key. */
@@ -105,7 +112,7 @@ export class DesiredStateBuilder {
     return tryAt(value.position, spell(block), context, () => read(this.resolveOrUnknown(value, state, context)));
   }
 
-  private planInstance(address: Address, block: ResourceBlock, dependencies: string[], state: State): DesiredResource {
+  private async planInstance(address: Address, block: ResourceBlock, dependencies: string[], state: State): Promise<DesiredResource> {
     const movedFrom = tryAt(block.position, spell(block), address, () => this.moveIn(address, state));
     const attributes = this.resolveForPlan(block, state, address);
     const current = state.resources[address.toString()];
