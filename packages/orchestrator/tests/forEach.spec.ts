@@ -1,5 +1,4 @@
-import { ExactNumber } from '@clay/contracts';
-import { UNKNOWN } from '@clay/planner';
+import { ExactNumber, UNKNOWN } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { eachFrom } from '../src/forEach';

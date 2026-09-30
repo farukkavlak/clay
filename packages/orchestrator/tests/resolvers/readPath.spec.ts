@@ -1,6 +1,5 @@
-import { ExactNumber } from '@clay/contracts';
+import { ExactNumber, UNKNOWN } from '@clay/contracts';
 import { ConfigError } from '@clay/parser';
-import { UNKNOWN } from '@clay/planner';
 import { describe, expect, it } from 'vitest';
 
 import { kindOf, readPath } from '../../src/resolvers/readPath';

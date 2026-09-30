@@ -1,7 +1,7 @@
-import { ExactNumber } from '@clay/contracts';
+import { ExactNumber, isUnknown, UNKNOWN } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { isUnknown, parsePlanFile, Plan, serializePlan, UNKNOWN } from '../src/index';
+import { parsePlanFile, Plan, serializePlan } from '../src/index';
 
 const emptyPlan: Plan = { serial: 0, actions: [], outputs: {}, prevRun: {}, prior: {} };
 

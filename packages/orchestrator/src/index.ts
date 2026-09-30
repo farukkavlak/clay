@@ -1,6 +1,6 @@
-import { emptyState, Provider, Resource, Schema, State } from '@clay/contracts';
+import { containsUnknown, emptyState, Provider, Resource, Schema, State } from '@clay/contracts';
 import { spell } from '@clay/parser';
-import { containsUnknown, DesiredResource, outputChanges, plan, Plan } from '@clay/planner';
+import { DesiredResource, outputChanges, plan, Plan } from '@clay/planner';
 import { StateManager } from '@clay/state';
 
 import { asError } from './asError';

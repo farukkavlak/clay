@@ -1,5 +1,5 @@
-import { Address, Provider, State } from '@clay/contracts';
-import { isUnknown, offPlan, PlanAction } from '@clay/planner';
+import { Address, isUnknown, Provider, State } from '@clay/contracts';
+import { offPlan, PlanAction } from '@clay/planner';
 
 import { ProviderRegistry } from '../ProviderRegistry';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';

@@ -1,8 +1,8 @@
-import { Address, ModuleAddress, State } from '@clay/contracts';
+import { Address, isUnknown, ModuleAddress, State, UNKNOWN } from '@clay/contracts';
 import { AttributeValue, CONFIG_FILE } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
-import { DesiredResource, hasChanges, isUnknown, outputChanges, plan, PLAN_FILE_VERSION, PlanAction, serializePlan, UNKNOWN, validatePlanFile } from '../src/index';
+import { DesiredResource, hasChanges, outputChanges, plan, PLAN_FILE_VERSION, PlanAction, serializePlan, validatePlanFile } from '../src/index';
 
 /** A plan is built from parsed blocks, and a test that builds one by hand still has to say where they came from. */
 const position = { file: CONFIG_FILE, line: 1, column: 1 };

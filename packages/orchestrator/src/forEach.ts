@@ -1,4 +1,4 @@
-import { isUnknown } from '@clay/planner';
+import { isUnknown } from '@clay/contracts';
 
 import { kindOf } from './resolvers/readPath';
 

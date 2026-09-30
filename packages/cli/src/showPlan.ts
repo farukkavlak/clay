@@ -1,5 +1,5 @@
-import { Address, isRecord } from '@clay/contracts';
-import { changedOutside, Changes, Drift, isUnknown, Plan, PlanAction } from '@clay/planner';
+import { Address, isRecord, isUnknown } from '@clay/contracts';
+import { changedOutside, Changes, Drift, Plan, PlanAction } from '@clay/planner';
 import { styleText } from 'node:util';
 
 /** A move changes where state keeps a resource, so a plan that only moves still has work to do. */

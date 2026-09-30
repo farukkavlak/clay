@@ -15,6 +15,21 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
+/** Stands for a value that only exists once the resources it depends on are created. A symbol, so no value a configuration or a file holds can pass for it. */
+export const UNKNOWN: unique symbol = Symbol('unknown');
+
+export function isUnknown(value: unknown): boolean {
+  return value === UNKNOWN;
+}
+
+/** Whether a value, or anything a list or a map in it holds, is not known yet: a plan may know a map and not one of its values. */
+export function containsUnknown(value: unknown): boolean {
+  if (isUnknown(value)) return true;
+  if (Array.isArray(value)) return value.some((item) => containsUnknown(item));
+
+  return isRecord(value) && Object.values(value).some((item) => containsUnknown(item));
+}
+
 /** A resource as state records it. */
 export interface Resource {
   id?: string;

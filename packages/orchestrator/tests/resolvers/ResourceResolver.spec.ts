@@ -1,6 +1,5 @@
-import { Address, State } from '@clay/contracts';
+import { Address, State, UNKNOWN } from '@clay/contracts';
 import { parseReference, ResourceReference } from '@clay/parser';
-import { UNKNOWN } from '@clay/planner';
 import { describe, expect, it } from 'vitest';
 
 import { Instances } from '../../src/Instances';

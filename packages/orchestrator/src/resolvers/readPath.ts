@@ -1,6 +1,5 @@
-import { ExactNumber } from '@clay/contracts';
+import { ExactNumber, isUnknown } from '@clay/contracts';
 import { ConfigError, Position, spellReference, Step } from '@clay/parser';
-import { isUnknown } from '@clay/planner';
 
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 

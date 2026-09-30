@@ -1,5 +1,4 @@
-import { Schema } from '@clay/contracts';
-import { isUnknown } from '@clay/planner';
+import { isUnknown, Schema } from '@clay/contracts';
 
 /** An instance as the plan knows it: the values its configuration sets and knows, and the names only the apply will give a value. */
 export interface PlannedInstance {

@@ -1,7 +1,7 @@
-import { Address, ModuleAddress, Schema, State } from '@clay/contracts';
+import { Address, isUnknown, ModuleAddress, Schema, State, UNKNOWN } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { AttributeValue, ResourceBlock, spell, spellReference, Statement } from '@clay/parser';
-import { DesiredResource, hasChanges, isUnknown, UNKNOWN } from '@clay/planner';
+import { DesiredResource, hasChanges } from '@clay/planner';
 import { moveResource } from '@clay/state';
 
 import { countFrom } from '../count';

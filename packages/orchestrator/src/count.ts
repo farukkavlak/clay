@@ -1,5 +1,4 @@
-import { ExactNumber } from '@clay/contracts';
-import { isUnknown } from '@clay/planner';
+import { ExactNumber, isUnknown } from '@clay/contracts';
 
 import { kindOf } from './resolvers/readPath';
 
