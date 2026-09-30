@@ -63,9 +63,9 @@ module "name" { attributes }
 
 A `type` and a `name` are written as strings, and each has to spell an `IDENTIFIER`, since
 an address joins them with `.` and a reference reads them back. A `type` cannot be `var`,
-`data`, `module`, `count` or `each`, the words a reference reads as something other than
-a type. A variable cannot be named `source`, since a module call reads that as the
-module's path, or `count` or `for_each`, which a module call keeps for itself.
+`data`, `module`, `count`, `each` or `path`, the words a reference reads as something
+other than a type. A variable cannot be named `source`, since a module call reads that as
+the module's path, or `count` or `for_each`, which a module call keeps for itself.
 
 `attributes` is zero or more `name = value` pairs, in any order, without separators, and
 no name twice.
@@ -124,9 +124,16 @@ A bare reference is a value on its own: `path = var.dir`. Inside a string it is 
 | `module`   | An output of a module called in the same file        | `module.app.url`            |
 | `count`    | The index of the instance being made                 | `count.index`               |
 | `each`     | The key of the instance being made, or its value     | `each.key`, `each.value`    |
+| `path`     | The directory of a module, relative to the root      | `path.module`, `path.root`  |
 | anything   | An attribute of the resource with that type and name | `local_file.a.content`      |
 
 A resource's `id` is what the provider assigned on create.
+
+`path.module` is the directory of the module it is written in, relative to the root: `.`
+at the root, `web` in a module called with `source = "./web"`. In a call's inputs it is the
+directory of the module that calls. `path.root` is `.`. A relative path is read from where
+`clay` runs, which is the root, so `"${path.module}/index.html"` names a file next to the
+module. Any other name after `path.` is refused where it is written.
 
 After what it names, a reference may read into the value: `.name` or `["key"]` reads a
 key of a map, and `[0]` an item of a list, counted from 0. So `local_file.a.tags.env`,

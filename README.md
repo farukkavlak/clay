@@ -78,7 +78,8 @@ created or changed is read at plan time as its configuration sets it, so
 and shown as such. A list or a map is known as far as its items are:
 `{ a = random_string.s.id, b = "x" }` plans as `{"a":(known after apply),"b":"x"}`.
 Reaching inside a module (`module.m.local_file.a`) is not allowed; a module speaks
-through its outputs.
+through its outputs. `path.module` is the directory of the module it is written in,
+relative to the root, so `"${path.module}/index.html"` names a file next to the module.
 
 `docs/GRAMMAR.md` has the full grammar.
 

@@ -1,9 +1,9 @@
 import { Address, ExactNumber, ModuleAddress, State } from '@clay/contracts';
 import { UNKNOWN } from '@clay/planner';
-import { ConfigError, EachReference, ParsedReference, parseReference, Position, ReferenceNode, spellReference, Step, TemplatePart } from '@clay/parser';
+import { ConfigError, EachReference, ParsedReference, PathReference, parseReference, Position, ReferenceNode, spellReference, Step, TemplatePart } from '@clay/parser';
 
 import { Instances } from '../Instances';
-import { Context, instanceKeyOf, ModuleCall } from '../keys';
+import { Context, instanceKeyOf, ModuleCall, moduleOf, scopeOf } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
 import { Planned } from '../Planned';
 import { ScopeManager } from '../scope/ScopeManager';
@@ -24,6 +24,7 @@ function countIndex(where: Context, position: Position): ExactNumber {
 }
 
 export class ReferenceResolver {
+  private scopeManager: ScopeManager;
   private instances: Instances;
   private planned: Planned;
   private modules: ModuleInstances;
@@ -33,6 +34,7 @@ export class ReferenceResolver {
   private resources: ResourceResolver;
 
   constructor(scopeManager: ScopeManager, dataSources: Map<string, Record<string, unknown>>, instances: Instances, modules: ModuleInstances, planned: Planned) {
+    this.scopeManager = scopeManager;
     this.instances = instances;
     this.planned = planned;
     this.modules = modules;
@@ -56,6 +58,7 @@ export class ReferenceResolver {
     if (reference.kind === 'module') return this.moduleOutputs.resolve(reference, where, position);
     if (reference.kind === 'count') return { value: countIndex(where, position), path: reference.path };
     if (reference.kind === 'each') return { value: this.each(reference, where, position), path: reference.path };
+    if (reference.kind === 'path') return { value: this.directory(reference, where), path: reference.path };
 
     return this.resources.resolve(reference, where, state, position);
   }
@@ -70,6 +73,14 @@ export class ReferenceResolver {
 
     // Only an instance of a resource or a module call has a key.
     return this.instances.eachValue((where as Address).withoutKey().toString(), key);
+  }
+
+  /** A module's directory is where its config sits, relative to the root, so a state or a plan made on one machine reads the same on another. */
+  private directory(reference: PathReference, where: Context): string {
+    if (reference.name === 'root') return '.';
+
+    // Every module the config calls was loaded, and its directory kept, before anything in it is read.
+    return this.scopeManager.getDirectory(scopeOf(moduleOf(where).withoutKeys()))!;
   }
 
   resolveAttributes(attributes: Record<string, unknown>, state: State, context?: Context): Record<string, unknown> {

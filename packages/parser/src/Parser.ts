@@ -7,8 +7,8 @@ import { Position } from './Position';
 import { NAME, Step } from './reference';
 import { Token, TokenType } from './tokens';
 
-/** Words a reference already spells: `var.x`, `data.t.n`, `module.m`, `count.index`, `each.key`. */
-const RESERVED_TYPES = new Set(['module', 'var', 'data', 'count', 'each']);
+/** Words a reference already spells: `var.x`, `data.t.n`, `module.m`, `count.index`, `each.key`, `path.module`. */
+const RESERVED_TYPES = new Set(['module', 'var', 'data', 'count', 'each', 'path']);
 
 /** What makes a block many instances; a module call keeps these for itself, so they name no module input. */
 const INSTANCE_ARGUMENTS = ['count', 'for_each'];

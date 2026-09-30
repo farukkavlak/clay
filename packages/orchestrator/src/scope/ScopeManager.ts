@@ -12,6 +12,7 @@ export interface VariableValue {
 export class ScopeManager {
   private variables: Map<string, Map<string, VariableValue>> = new Map();
   private outputs: Map<string, Map<string, unknown>> = new Map();
+  private directories: Map<string, string> = new Map();
 
   setVariable(scope: string, name: string, value: VariableValue): void {
     if (!this.variables.has(scope)) this.variables.set(scope, new Map());
@@ -31,8 +32,17 @@ export class ScopeManager {
     return this.outputs.get(scope)?.get(name);
   }
 
+  setDirectory(scope: string, directory: string): void {
+    this.directories.set(scope, directory);
+  }
+
+  getDirectory(scope: string): string | undefined {
+    return this.directories.get(scope);
+  }
+
   clear(): void {
     this.variables.clear();
     this.outputs.clear();
+    this.directories.clear();
   }
 }
