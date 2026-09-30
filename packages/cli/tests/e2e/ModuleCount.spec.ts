@@ -213,7 +213,7 @@ describe('a module called with count', () => {
 
     const error = await planError(config);
 
-    expect(error.message).toBe('Invalid reference in "outputs:o": module "wbe" is not declared');
+    expect(error.message).toBe('module "wbe" is not declared');
     expect(error.position).toMatchObject(placeOf(config, 'module.wbe[0]'));
   });
 

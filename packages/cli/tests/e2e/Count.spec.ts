@@ -218,7 +218,7 @@ describe('a resource with count', () => {
 
     const error = await planError(config);
 
-    expect(error.message).toBe('Invalid reference in "local_file.logs": "local_file.nowhere" is not declared in the configuration');
+    expect(error.message).toBe('"local_file.nowhere" is not declared in the configuration');
     expect(error.position).toMatchObject(placeOf(config, 'local_file.nowhere'));
   });
 

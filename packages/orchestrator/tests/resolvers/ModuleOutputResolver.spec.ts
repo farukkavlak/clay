@@ -58,6 +58,6 @@ describe('ModuleOutputResolver', () => {
   });
 
   it('should throw if output is not found', () => {
-    expect(() => resolver.resolve(ref('module', 'missing', 'val'), context)).toThrow(/Output "val" not found/);
+    expect(() => resolver.resolve(ref('module', 'missing', 'val'), context)).toThrow('module "missing" has no output "val"');
   });
 });

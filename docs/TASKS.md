@@ -264,7 +264,7 @@ by resource type, and no `provider` block exists yet.
 
 ## 5. Errors and tooling
 
-- [ ] Errors about a configuration that carry no position. Each is thrown where the
+- [x] Errors about a configuration that carry no position. Each is thrown where the
       position is at hand, and each prints as one bare line: a `module` block with no
       `source`, a `source` that names no file, a `source` cycle, a `variable` with no
       value, and the graph's dependency cycle, which knows the node but not the line and
@@ -276,7 +276,7 @@ by resource type, and no `provider` block exists yet.
       plain errors, and one of them means "not in state yet", so it cannot be wrapped blindly
 - [ ] "Did you mean": a reference to a name one edit away from a declared one says so
 - [ ] Provider errors carry what to do next, not only what went wrong
-- [ ] A module output that does not exist is reported two ways. Read from a resource,
+- [x] A module output that does not exist is reported two ways. Read from a resource,
       the graph says `module "m" has no output "x"`. Read from a data source, which
       loads before the graph, the resolver says
       `Output "x" not found in module "module.m"`, with the scope key where the
