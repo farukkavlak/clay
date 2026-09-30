@@ -23,11 +23,11 @@ function summarize(applied: PlanAction[], forgotten: number): string {
   return `${count('CREATE') + replaced} added, ${count('UPDATE')} changed, ${count('DELETE') + replaced} destroyed${moved > 0 ? `, ${moved} moved` : ''}${forgotten > 0 ? `, ${forgotten} forgotten` : ''}`;
 }
 
-/** Resources deleted outside Clay that an apply drops from state. Every resource the configuration has gets an action, so one with none is not made again. */
+/** Resources deleted outside Clay that an apply drops from state. One the configuration still has is made again, under the same address, since what is gone is never moved. */
 function forgotten(plan: Plan): number {
   const acted = new Set(plan.actions.map((action) => Address.of(action).toString()));
 
-  return changedOutside(plan).filter((drift) => !acted.has(drift.address)).length;
+  return changedOutside(plan).filter((drift) => !Object.hasOwn(plan.prior, drift.address) && !acted.has(drift.address)).length;
 }
 
 function reportEvent(event: RunEvent): void {

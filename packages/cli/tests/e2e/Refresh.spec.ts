@@ -193,6 +193,18 @@ describe('a plan that reads each resource back first', () => {
       expect(planned).not.toContain('Changed outside Clay');
     });
 
+    // The action is filed where count moves it, but the state keeps it, so it is not forgotten.
+    it('does not count a resource changed by hand and moved by count as forgotten', async () => {
+      await fs.writeFile(file, 'by hand', 'utf8');
+      await fs.writeFile(path.join(dir, 'main.clay'), config.replace('{', '{ count = 1').replace('applied', 'by hand'), 'utf8');
+
+      const applied = await run(createApplyCommand, ['-y']);
+
+      expect(applied).toContain('Apply complete! Resources: 0 added, 0 changed, 0 destroyed, 1 moved.');
+      const state = await new LocalBackend(dir).read();
+      expect(Object.keys(state.resources)).toEqual(['local_file.a[0]']);
+    });
+
     it('shows a value changed outside Clay', async () => {
       await fs.writeFile(file, 'by hand', 'utf8');
 
