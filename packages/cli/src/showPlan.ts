@@ -7,8 +7,9 @@ function changes(action: PlanAction): boolean {
   return action.type !== 'NO_OP' || action.movedFrom !== undefined;
 }
 
+/** A resource found gone still has to leave the state, so a plan with one has work to do. */
 export function changesNothing(plan: Plan): boolean {
-  return !plan.actions.some((action) => changes(action)) && Object.keys(plan.outputs).length === 0;
+  return !plan.actions.some((action) => changes(action)) && Object.keys(plan.outputs).length === 0 && plan.gone.length === 0;
 }
 
 function actionSymbol(actionType: PlanAction['type']): string {
@@ -90,6 +91,11 @@ export function displayPlan(plan: Plan): void {
     return;
   }
 
+  if (plan.gone.length > 0) {
+    console.log(styleText('bold', '\nChanged outside Clay:\n'));
+    for (const address of plan.gone) console.log(`  ${styleText('red', 'x')} ${address} was deleted outside Clay`);
+  }
+
   const changing = plan.actions.filter((action) => changes(action));
   if (changing.length > 0) {
     console.log(styleText('bold', '\nClay will perform the following actions:\n'));
@@ -99,5 +105,5 @@ export function displayPlan(plan: Plan): void {
   displayOutputChanges(plan.outputs);
 
   if (changing.length > 0) displaySummary(plan.actions);
-  else console.log(styleText('bold', '\nAn apply would only update the outputs in state.'));
+  else console.log(styleText('bold', `\nAn apply would only update ${plan.gone.length > 0 ? 'the state' : 'the outputs in state'}.`));
 }

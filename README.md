@@ -115,14 +115,19 @@ reads a file, and `data.local_file.f.content` is what it holds.
 
 ## How a run goes
 
-1. The parser turns `main.clay` and every module it names into a tree, with the file,
+1. Each resource in state is read back from its provider, so a change made by hand shows
+   up. A resource found gone is made again, or forgotten if the configuration dropped
+   it. `plan` and `apply` take `--refresh=false` to skip this and plan against the state
+   alone. A saved plan is applied as it was made, so `apply <plan>` reads nothing and
+   refuses the flag.
+2. The parser turns `main.clay` and every module it names into a tree, with the file,
    line and column on every node.
-2. The graph builder links each resource, variable and output to what it reads, and
+3. The graph builder links each resource, variable and output to what it reads, and
    sorts them so nothing runs before what it needs. A cycle or a reference to nothing
    stops here.
-3. Each value is resolved in that order; the planner compares it with the state and
+4. Each value is resolved in that order; the planner compares it with the state and
    lists the actions: create, update, replace, delete, or nothing.
-4. `apply` runs the actions in order, deletes in reverse order, and writes the state
+5. `apply` runs the actions in order, deletes in reverse order, and writes the state
    after each one, so a failure leaves everything before it on disk. The state is written
    to a temporary file and renamed, a backup is kept, and a lock file stops two runs at
    once.

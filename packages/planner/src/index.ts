@@ -51,10 +51,12 @@ export interface Plan {
   serial: number;
   actions: PlanAction[];
   outputs: Changes;
+  /** Resources in state that the refresh no longer found. An apply forgets them, since nothing is left to delete. */
+  gone: string[];
 }
 
 /** Bumped when the shape below changes once a Clay is released, so a plan file from an older version is refused instead of misread. */
-export const PLAN_FILE_VERSION = '8.0';
+export const PLAN_FILE_VERSION = '9.0';
 
 export interface PlanFile extends Plan {
   version: string;
@@ -134,6 +136,7 @@ export function serializePlan(plan: Plan, configContent: string, modules: Record
     serial: plan.serial,
     actions: plan.actions.map((action) => (action.changes ? { ...action, changes: saveChanges(action.changes) } : action)),
     outputs: saveChanges(plan.outputs),
+    gone: plan.gone,
   };
 
   return JSON.stringify(file, undefined, 2);
@@ -185,20 +188,20 @@ function isAction(action: unknown): boolean {
   );
 }
 
+function isAddresses(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((address) => typeof address === 'string');
+}
+
+/** What a plan holds, apart from the file around it. */
+function isPlan(plan: Partial<Plan>): plan is Plan {
+  return typeof plan.serial === 'number' && Array.isArray(plan.actions) && plan.actions.every((action) => isAction(action)) && isChanges(plan.outputs) && isAddresses(plan.gone);
+}
+
 export function validatePlanFile(planFile: unknown): planFile is PlanFile {
   if (!planFile || typeof planFile !== 'object') return false;
 
   const pf = planFile as Partial<PlanFile>;
-  return (
-    pf.version === PLAN_FILE_VERSION &&
-    typeof pf.timestamp === 'string' &&
-    typeof pf.config === 'string' &&
-    isModuleFiles(pf.modules) &&
-    typeof pf.serial === 'number' &&
-    Array.isArray(pf.actions) &&
-    pf.actions.every((action) => isAction(action)) &&
-    isChanges(pf.outputs)
-  );
+  return pf.version === PLAN_FILE_VERSION && typeof pf.timestamp === 'string' && typeof pf.config === 'string' && isModuleFiles(pf.modules) && isPlan(pf);
 }
 
 /** A plan file is written by `plan`, never by hand, so the only answer to a broken one is to plan again: the reason it is broken would not help. */

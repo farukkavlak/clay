@@ -30,6 +30,10 @@ class MockDataProvider implements Provider {
 
   async delete(_id: string): Promise<void> {}
 
+  async read(_type: string, _id: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+    return prior;
+  }
+
   async readDataSource(_type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
     const id = inputs.id as string;
     if (this.data.has(id)) return this.data.get(id)!;

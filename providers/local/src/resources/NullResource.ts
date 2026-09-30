@@ -10,6 +10,11 @@ export class NullResource implements ResourceHandler {
 
   async validate(_inputs: Record<string, unknown>): Promise<void> {}
 
+  // Nothing outside the state holds it, so it is as it was applied.
+  async read(_id: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+    return prior;
+  }
+
   async create(_inputs: Record<string, unknown>): Promise<string> {
     return crypto.randomUUID();
   }

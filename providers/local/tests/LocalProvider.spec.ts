@@ -156,6 +156,42 @@ describe('LocalProvider', () => {
     });
   });
 
+  describe('READ', () => {
+    it('reads a file as it is on disk now, keeping its path', async () => {
+      const filePath = path.join(tmpDir, 'drift.txt');
+      const id = await provider.create('local_file', { path: filePath, content: 'applied' });
+      await fs.writeFile(filePath, 'changed by hand', 'utf8');
+
+      expect(await provider.read('local_file', id, { path: filePath, content: 'applied' })).toEqual({ path: filePath, content: 'changed by hand' });
+    });
+
+    it('reads a file that is gone as nothing', async () => {
+      const filePath = path.join(tmpDir, 'gone.txt');
+      const id = await provider.create('local_file', { path: filePath, content: 'applied' });
+      await fs.unlink(filePath);
+
+      expect(await provider.read('local_file', id, { path: filePath, content: 'applied' })).toBeNull();
+    });
+
+    // A directory is there but is not a file, so reading it fails with something other than ENOENT.
+    it('still fails as the system says when the file cannot be read for another reason', async () => {
+      await expect(provider.read('local_file', tmpDir, { path: tmpDir, content: '' })).rejects.toMatchObject({ code: 'EISDIR' });
+    });
+
+    // Nothing outside the state says what these hold, so what was applied is what they are.
+    it.each([
+      ['random_string', { length: ExactNumber.parse('4') }],
+      ['null_resource', { triggers: { a: 'b' } }],
+      ['command_exec', { command: 'echo hi' }],
+    ])('reads %s as it was applied', async (type, prior) => {
+      expect(await provider.read(type, 'some-id', prior)).toEqual(prior);
+    });
+
+    it('refuses a type it does not make', async () => {
+      await expect(provider.read('unknown_type', 'id', {})).rejects.toThrow('Unsupported resource type');
+    });
+  });
+
   describe('Resources', () => {
     it('should expose local_file as supported resource', () => {
       expect(provider.resources).toContain('local_file');

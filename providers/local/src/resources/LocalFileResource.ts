@@ -16,6 +16,16 @@ export class LocalFileResource implements ResourceHandler {
     if (typeof inputs.content !== 'string') throw new Error('local_file requires "content" attribute (string)');
   }
 
+  async read(id: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+    try {
+      return { ...prior, content: await fs.readFile(id, 'utf8') };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+
+      throw error;
+    }
+  }
+
   async create(inputs: Record<string, unknown>): Promise<string> {
     const filePath = inputs.path as string;
     const content = inputs.content as string;

@@ -12,14 +12,15 @@ import { newOrchestrator } from '../engine';
 import { describeError } from '../describeError';
 import { actionLine, changesNothing, displayPlan } from '../showPlan';
 import { exists } from '../exists';
+import { refreshOption } from '../refreshOption';
 
-/** A replacement counts once as an add and once as a destroy, and a move when there is one, as the plan summary counts them. */
-function summarize(applied: PlanAction[]): string {
+/** A replacement counts once as an add and once as a destroy, and a move when there is one, as the plan summary counts them; a resource found gone is counted as forgotten. */
+function summarize(applied: PlanAction[], forgotten: number): string {
   const count = (type: PlanAction['type']) => applied.filter((action) => action.type === type).length;
   const replaced = count('REPLACE');
   const moved = applied.filter((action) => action.movedFrom).length;
 
-  return `${count('CREATE') + replaced} added, ${count('UPDATE')} changed, ${count('DELETE') + replaced} destroyed${moved > 0 ? `, ${moved} moved` : ''}`;
+  return `${count('CREATE') + replaced} added, ${count('UPDATE')} changed, ${count('DELETE') + replaced} destroyed${moved > 0 ? `, ${moved} moved` : ''}${forgotten > 0 ? `, ${forgotten} forgotten` : ''}`;
 }
 
 function reportEvent(event: RunEvent): void {
@@ -30,7 +31,7 @@ function reportEvent(event: RunEvent): void {
   }
 }
 
-async function runAndReport(events: AsyncGenerator<RunEvent>): Promise<void> {
+async function runAndReport(events: AsyncGenerator<RunEvent>, forgotten: number): Promise<void> {
   console.log(styleText('blue', '\napplying...'));
 
   const applied: PlanAction[] = [];
@@ -41,7 +42,7 @@ async function runAndReport(events: AsyncGenerator<RunEvent>): Promise<void> {
     if (event.type === 'done') outputs = event.outputs;
   }
 
-  console.log(styleText('green', `\nApply complete! Resources: ${summarize(applied)}.`));
+  console.log(styleText('green', `\nApply complete! Resources: ${summarize(applied, forgotten)}.`));
 
   if (Object.keys(outputs).length > 0) {
     console.log(styleText('cyan', '\nOutputs:'));
@@ -53,12 +54,12 @@ async function confirmApply(autoConfirm: boolean): Promise<boolean> {
   return autoConfirm || confirm('Do you want to perform these actions?');
 }
 
-async function executeApply(cwd: string, configPath: string, files: ConfigFiles, autoConfirm: boolean): Promise<void> {
+async function executeApply(cwd: string, configPath: string, files: ConfigFiles, autoConfirm: boolean, refresh: boolean): Promise<void> {
   const configContent = await fs.readFile(configPath, 'utf8');
   const orchestrator = newOrchestrator(cwd, files);
 
   console.log(styleText('blue', 'Calculating plan...'));
-  const planned = await orchestrator.plan(configContent);
+  const planned = await orchestrator.plan(configContent, { refresh });
 
   displayPlan(planned);
   if (changesNothing(planned)) return;
@@ -69,7 +70,7 @@ async function executeApply(cwd: string, configPath: string, files: ConfigFiles,
     return;
   }
 
-  await runAndReport(orchestrator.runPlan(planned, configContent));
+  await runAndReport(orchestrator.runPlan(planned, configContent), planned.gone.length);
 }
 
 /** A plan file the user names is their file, so what is wrong with it is said with the file's name and what to do about it. */
@@ -105,13 +106,14 @@ async function executeApplyFromPlan(cwd: string, planFile: PlanFile, files: Conf
   displayPlan(planFile);
   if (changesNothing(planFile)) return;
 
-  await runAndReport(orchestrator.runPlan(planFile, planFile.config));
+  await runAndReport(orchestrator.runPlan(planFile, planFile.config), planFile.gone.length);
 }
 
 export function createApplyCommand() {
   return new Command('apply')
     .description('Create or update infrastructure')
     .option('-y, --yes', 'Approve changes automatically')
+    .addOption(refreshOption())
     .argument('[plan-file]', 'Plan file to apply (optional)')
     .action(async (planFileArg: string | undefined, options) => {
       const cwd = process.cwd();
@@ -119,6 +121,8 @@ export function createApplyCommand() {
 
       try {
         if (planFileArg && !planFileArg.startsWith('-')) {
+          // A saved plan read each resource when it was made, or chose not to; applying it reads nothing.
+          if (options.refresh !== undefined) throw new Error('--refresh is for a plan: a saved plan is applied as it was made');
           const planData = await readPlanFile(planFileArg, files);
 
           files = filesInPlan(planData);
@@ -131,7 +135,7 @@ export function createApplyCommand() {
             process.exit(1);
           }
 
-          await executeApply(cwd, configPath, files, options.yes);
+          await executeApply(cwd, configPath, files, options.yes, options.refresh ?? true);
         }
       } catch (error: unknown) {
         console.error(styleText('red', 'Apply failed:'), describeError(error, files));

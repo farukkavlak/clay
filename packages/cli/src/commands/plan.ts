@@ -10,8 +10,9 @@ import { newOrchestrator } from '../engine';
 import { describeError } from '../describeError';
 import { displayPlan } from '../showPlan';
 import { exists } from '../exists';
+import { refreshOption } from '../refreshOption';
 
-async function executePlan(cwd: string, configPath: string, outFile?: string): Promise<void> {
+async function executePlan(cwd: string, configPath: string, refresh: boolean, outFile?: string): Promise<void> {
   const configContent = await fs.readFile(configPath, 'utf8');
 
   const files = new RecordingFiles(new DiskFiles(cwd));
@@ -19,7 +20,7 @@ async function executePlan(cwd: string, configPath: string, outFile?: string): P
 
   console.log(styleText('blue', 'Planning...'));
 
-  const planned = await orchestrator.plan(configContent);
+  const planned = await orchestrator.plan(configContent, { refresh });
   displayPlan(planned);
 
   if (outFile) {
@@ -32,6 +33,7 @@ export function createPlanCommand() {
   return new Command('plan')
     .description('Show changes required by the current configuration')
     .option('--out <file>', 'Save plan to file')
+    .addOption(refreshOption())
     .action(async (options) => {
       const cwd = process.cwd();
       const configPath = path.join(cwd, CONFIG_FILE);
@@ -42,7 +44,7 @@ export function createPlanCommand() {
           process.exit(1);
         }
 
-        await executePlan(cwd, configPath, options.out);
+        await executePlan(cwd, configPath, options.refresh ?? true, options.out);
       } catch (error: unknown) {
         console.error(styleText('red', 'Planning failed:'), describeError(error, new DiskFiles(cwd)));
         process.exit(1);

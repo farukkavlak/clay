@@ -17,6 +17,11 @@ export class CommandExecResource implements ResourceHandler {
     if (!inputs.command || typeof inputs.command !== 'string') throw new Error('command_exec requires "command" attribute (string)');
   }
 
+  // Nothing outside the state holds it, so it is as it was applied.
+  async read(_id: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+    return prior;
+  }
+
   async create(inputs: Record<string, unknown>): Promise<string> {
     const command = inputs.command as string;
     const cwd = (inputs.cwd as string) || process.cwd();
