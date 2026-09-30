@@ -46,8 +46,15 @@ export interface EachReference {
   path: Step[];
 }
 
+/** `path.module` and `path.root`, the directory of the module being read and of the root module. */
+export interface PathReference {
+  kind: 'path';
+  name: 'module' | 'root';
+  path: Step[];
+}
+
 /** A reference as the language reads it: what it names, and the steps into the value it names. */
-export type ParsedReference = VariableReference | DataReference | ModuleOutputReference | ResourceReference | CountReference | EachReference;
+export type ParsedReference = VariableReference | DataReference | ModuleOutputReference | ResourceReference | CountReference | EachReference | PathReference;
 
 /** What a reference can spell after a dot, so a declared name can always be read back. */
 export const NAME = /^[A-Za-z_][A-Za-z0-9_-]*$/;
@@ -125,6 +132,15 @@ function eachReference(parts: Step[], position?: Position): EachReference {
   return { kind: 'each', name, path };
 }
 
+function pathReference(parts: Step[], position?: Position): PathReference {
+  const { names, path } = split(parts, 2, position);
+  const [, name] = names;
+  if (name !== 'module' && name !== 'root')
+    refuse(`Reference "${spellReference(parts)}" names nothing: path.module and path.root are the directories of a module and of the root`, position);
+
+  return { kind: 'path', name, path };
+}
+
 /** The one place that says what a reference's parts mean: which name its target, and which read into the target's value. */
 export function parseReference(parts: Step[], position?: Position): ParsedReference {
   if (parts[0] === 'var') return variableReference(parts, position);
@@ -132,6 +148,7 @@ export function parseReference(parts: Step[], position?: Position): ParsedRefere
   if (parts[0] === 'module') return moduleOutputReference(parts, position);
   if (parts[0] === 'count') return countReference(parts, position);
   if (parts[0] === 'each') return eachReference(parts, position);
+  if (parts[0] === 'path') return pathReference(parts, position);
 
   return resourceReference(parts, position);
 }

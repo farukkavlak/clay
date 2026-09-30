@@ -58,8 +58,9 @@ export class ReferenceScanner {
     const scope = scopeOf(context);
 
     switch (reference.kind) {
-      // A data source is read where the config loads, so it is no node of its own.
-      case 'data': {
+      // A data source is read where the config loads, and a directory is known once it does, so neither is a node of its own.
+      case 'data':
+      case 'path': {
         return undefined;
       }
       case 'count': {

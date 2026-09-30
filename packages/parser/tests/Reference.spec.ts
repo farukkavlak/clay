@@ -29,6 +29,8 @@ describe('a reference read into a value', () => {
     ['count.index', { kind: 'count', path: [] }],
     ['each.key', { kind: 'each', name: 'key', path: [] }],
     ['each.value.port', { kind: 'each', name: 'value', path: ['port'] }],
+    ['path.module', { kind: 'path', name: 'module', path: [] }],
+    ['path.root', { kind: 'path', name: 'root', path: [] }],
     ['var.tags.env', { kind: 'variable', name: 'tags', path: ['env'] }],
     ['data.local_file.f.tags.env', { kind: 'data', type: 'local_file', name: 'f', attribute: 'tags', path: ['env'] }],
     ['module.app.tags.env', { kind: 'module', module: 'app', path: ['tags', 'env'] }],
@@ -83,6 +85,9 @@ describe('a reference read into a value', () => {
     [['each'], 'Reference "each" names nothing: each.key and each.value are the key and value of an instance'],
     [['each', 'index'], 'Reference "each.index" names nothing: each.key and each.value are the key and value of an instance'],
     [['each', 0], 'Reference "each[0]" has an index where it needs a name'],
+    [['path'], 'Reference "path" names nothing: path.module and path.root are the directories of a module and of the root'],
+    [['path', 'cwd'], 'Reference "path.cwd" names nothing: path.module and path.root are the directories of a module and of the root'],
+    [['path', 0], 'Reference "path[0]" has an index where it needs a name'],
     [[0, 'a', 'id'], 'Reference "[0].a.id" has an index where it needs a name'],
   ])('refuses %j', (parts, message) => {
     const error = errorOf(parts);

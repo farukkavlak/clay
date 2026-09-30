@@ -34,6 +34,7 @@ export class ModuleLoader {
 
     const parentAddress = ModuleAddress.root;
     loaded.modules.push({ address: parentAddress, program: rootProgram });
+    this.scopeManager.setDirectory(scopeOf(parentAddress), '.');
     this.declareVariables(rootProgram, parentAddress);
 
     for (const stmt of rootProgram)
@@ -61,6 +62,7 @@ export class ModuleLoader {
     this.declareInputs(stmt, moduleProgram, childAddress, parentAddress);
 
     loaded.modules.push({ address: childAddress, program: moduleProgram });
+    this.scopeManager.setDirectory(scopeOf(childAddress), moduleDir);
     this.declareVariables(moduleProgram, childAddress);
 
     for (const childStmt of moduleProgram)

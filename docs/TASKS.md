@@ -97,8 +97,10 @@ hits each of these early.
       items, since they are its keys
 - [ ] A whole resource as a value: `local_file.a[0]` as a map, and `local_file.a` as the
       list of its instances. Worth it once there are functions or splats to read one with
-- [ ] `path.module`, `path.root` and `path.cwd`, so a module can name a file next to
-      itself; a relative path is resolved from where `clay` runs today
+- [x] `path.module` and `path.root`, so a module can name a file next to itself. Both are
+      relative to the root, where `clay` runs, so a plan or a state reads the same on
+      another machine
+- [ ] `path.cwd`, once Clay can run from a directory other than the root
 - [ ] A module `source` has a kind. Terraform reads a local path only when it starts with
       `./` or `../` and treats anything else as a registry address; Clay joins whatever it
       is onto the parent directory, so an absolute path is read as well

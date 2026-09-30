@@ -672,6 +672,7 @@ describe('Clay Parser', () => {
       ['data', 'data "data" "a" {}', at(1, 6)],
       ['count', 'resource "count" "a" {}', at(1, 10)],
       ['each', 'resource "each" "a" {}', at(1, 10)],
+      ['path', 'resource "path" "a" {}', at(1, 10)],
     ])('refuses "%s" as a type, which a reference reads as something else', (word, input, position) => {
       const error = errorOf(input);
 
