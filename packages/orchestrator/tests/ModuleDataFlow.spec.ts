@@ -1,5 +1,5 @@
 import { emptyState } from '@clay/contracts';
-import { plan } from '@clay/planner';
+import { plan, UNKNOWN } from '@clay/planner';
 import fsPromises from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -109,6 +109,7 @@ describe('Orchestrator - Phase 4: Data Flow', () => {
         name: 'res',
         modulePath: [],
         attributes: { region: { type: 'Reference', value: ['var', 'region'] } },
+        planned: { region: UNKNOWN },
       },
     ]);
 
@@ -152,6 +153,7 @@ module "app" {
         name: 'server',
         modulePath: [{ name: 'app' }],
         attributes: { tags: { type: 'Reference', value: ['var', 'env'] } },
+        planned: { tags: UNKNOWN },
       },
     ]);
 
@@ -190,6 +192,7 @@ module "L2" {
         name: 'child',
         modulePath: [{ name: 'L2' }],
         attributes: { loc: { type: 'Reference', value: ['var', 'region'] } },
+        planned: { loc: UNKNOWN },
       },
     ]);
 
@@ -231,6 +234,7 @@ resource "test_resource" "instance" {
         name: 'instance',
         modulePath: [{ name: 'db' }],
         attributes: { name: { type: 'Reference', value: ['var', 'db_name'] } },
+        planned: { name: UNKNOWN },
       },
       {
         type: 'CREATE',
@@ -238,6 +242,7 @@ resource "test_resource" "instance" {
         name: 'app',
         modulePath: [],
         attributes: { name: { type: 'String', value: 'my-app' } },
+        planned: { name: 'my-app' },
       },
     ]);
 

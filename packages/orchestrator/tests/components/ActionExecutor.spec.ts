@@ -1,5 +1,5 @@
 import { Address, emptyState, Provider, State } from '@clay/contracts';
-import { PlanAction } from '@clay/planner';
+import { PlanAction, UNKNOWN } from '@clay/planner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActionExecutor } from '../../src/components/ActionExecutor';
@@ -10,6 +10,24 @@ import { Instances } from '../../src/Instances';
 import { ReferenceResolver } from '../../src/resolvers/ReferenceResolver';
 import { ScopeManager } from '../../src/scope/ScopeManager';
 import { str } from '../ast';
+
+/** A create of a map the plan knew in part: `a` only the apply makes, `b` known. */
+const withTags = (tags: Record<string, string>): PlanAction => ({
+  type: 'CREATE',
+  resourceType: 'test',
+  name: 'main',
+  attributes: { tags: { type: 'Map', value: Object.fromEntries(Object.entries(tags).map(([key, value]) => [key, str(value)])), position: str('').position } },
+  planned: { tags: { a: UNKNOWN, b: 'x' } },
+});
+
+/** A create of a list the plan knew in part: its first item known, its second only the apply makes. */
+const withList = (items: string[]): PlanAction => ({
+  type: 'CREATE',
+  resourceType: 'test',
+  name: 'main',
+  attributes: { l: { type: 'List', value: items.map((item) => str(item)), position: str('').position } },
+  planned: { l: ['a', UNKNOWN] },
+});
 
 describe('ActionExecutor', () => {
   let providers: ProviderRegistry;
@@ -109,7 +127,7 @@ describe('ActionExecutor', () => {
     });
 
     it('should write the new resource whole: its id, values and dependencies, and nothing copied from the ast', async () => {
-      const action: PlanAction = { type: 'CREATE', resourceType: 'test', name: 'main', attributes: { path: str('p') }, dependencies: ['test.dep'] };
+      const action: PlanAction = { type: 'CREATE', resourceType: 'test', name: 'main', attributes: { path: str('p') }, planned: { path: 'p' }, dependencies: ['test.dep'] };
 
       await executor.executeCreate(action, mockProvider, mockState);
 
@@ -143,6 +161,7 @@ describe('ActionExecutor', () => {
         name: 'missing',
         id: 'id',
         attributes: {},
+        planned: {},
       };
 
       await expect(executor.executeUpdate(action, mockProvider, mockState)).rejects.toThrow('not found in state');
@@ -162,6 +181,7 @@ describe('ActionExecutor', () => {
         resourceType: 'test',
         name: 'main',
         attributes: {},
+        planned: {},
         // missing id
       };
 
@@ -183,6 +203,7 @@ describe('ActionExecutor', () => {
         name: 'main',
         id: 'existing',
         attributes: { old: str('updated') },
+        planned: { old: 'updated' },
       };
 
       await executor.executeUpdate(action, mockProvider, mockState);
@@ -194,7 +215,7 @@ describe('ActionExecutor', () => {
     it('should write the dependencies the action carries', async () => {
       const key = context.toString();
       mockState.resources[key] = { id: 'existing', resourceType: 'test', name: 'main', attributes: {}, dependencies: ['test.old'] };
-      const action: PlanAction = { type: 'UPDATE', resourceType: 'test', name: 'main', id: 'existing', attributes: {}, dependencies: ['test.dep'] };
+      const action: PlanAction = { type: 'UPDATE', resourceType: 'test', name: 'main', id: 'existing', attributes: {}, planned: {}, dependencies: ['test.dep'] };
 
       await executor.executeUpdate(action, mockProvider, mockState);
 
@@ -202,11 +223,65 @@ describe('ActionExecutor', () => {
     });
   });
 
+  describe('holding to the plan', () => {
+    it.each(['CREATE', 'UPDATE', 'REPLACE'] as const)('refuses a %s without the values it was planned with', async (type) => {
+      mockState.resources[context.toString()] = { id: 'old', resourceType: 'test', name: 'main', attributes: {} };
+
+      await expect(executor.execute({ type, resourceType: 'test', name: 'main', id: 'old', attributes: {} }, mockState)).rejects.toThrow(
+        `${type} action missing the values it was planned with`
+      );
+    });
+
+    // A replace deletes first, so a value off the plan found after the delete would leave nothing.
+    it('leaves a resource to be replaced as it was when a value is off the plan', async () => {
+      mockState.resources[context.toString()] = { id: 'old', resourceType: 'test', name: 'main', attributes: { path: 'old' } };
+      const action: PlanAction = { type: 'REPLACE', resourceType: 'test', name: 'main', id: 'old', attributes: { path: str('other') }, planned: { path: 'new' } };
+
+      await expect(executor.execute(action, mockState)).rejects.toThrow('the plan showed path = "new", but it now comes to "other". Plan again.');
+      expect(mockProvider.delete).not.toHaveBeenCalled();
+      expect(mockProvider.create).not.toHaveBeenCalled();
+    });
+
+    it('runs a map known in part whose known part comes to what the plan showed', async () => {
+      await executor.execute(withTags({ a: 'y', b: 'x' }), mockState);
+
+      expect(mockProvider.create).toHaveBeenCalledWith('test', { tags: { a: 'y', b: 'x' } });
+    });
+
+    it.each([
+      ['a known part comes to another', { a: 'y', b: 'z' }, 'the plan showed tags = {"a":"(known after apply)","b":"x"}, but it now comes to {"a":"y","b":"z"}. Plan again.'],
+      ['it has a key the plan did not', { a: 'y', b: 'x', c: 'w' }, 'but it now comes to {"a":"y","b":"x","c":"w"}'],
+    ])('refuses a map known in part when %s', async (_, tags, refused) => {
+      await expect(executor.execute(withTags(tags), mockState)).rejects.toThrow(refused);
+    });
+
+    it('runs a list known in part whose known items come to what the plan showed', async () => {
+      await executor.execute(withList(['a', 'z']), mockState);
+
+      expect(mockProvider.create).toHaveBeenCalledWith('test', { l: ['a', 'z'] });
+    });
+
+    it.each([
+      ['a known item comes to another', ['b', 'z']],
+      ['it holds more items than the plan did', ['a', 'z', 'q']],
+    ])('refuses a list known in part when %s', async (_, items) => {
+      await expect(executor.execute(withList(items), mockState)).rejects.toThrow(
+        `the plan showed l = ["a","(known after apply)"], but it now comes to ${JSON.stringify(items)}. Plan again.`
+      );
+    });
+
+    it('refuses a value the plan did not have', async () => {
+      const action: PlanAction = { type: 'CREATE', resourceType: 'test', name: 'main', attributes: { path: str('p') }, planned: {} };
+
+      await expect(executor.execute(action, mockState)).rejects.toThrow('the plan showed path = (none), but it now comes to "p". Plan again.');
+    });
+  });
+
   describe('REPLACE', () => {
     it('should delete the old resource, create the new one and keep it in state', async () => {
       const key = context.toString();
       mockState.resources[key] = { id: 'old', resourceType: 'test', name: 'main', attributes: { path: 'old' } };
-      const action: PlanAction = { type: 'REPLACE', resourceType: 'test', name: 'main', id: 'old', attributes: { path: str('new') } };
+      const action: PlanAction = { type: 'REPLACE', resourceType: 'test', name: 'main', id: 'old', attributes: { path: str('new') }, planned: { path: 'new' } };
 
       await executor.execute(action, mockState);
 

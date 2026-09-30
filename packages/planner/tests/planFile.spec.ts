@@ -26,7 +26,7 @@ describe('reading a plan file', () => {
       serial: 0,
       prevRun: {},
       prior: {},
-      actions: [{ type: 'UPDATE', resourceType: 'null_resource', name: 'a', changes: { triggers: { old: 'x', new: UNKNOWN } } }],
+      actions: [{ type: 'UPDATE', resourceType: 'null_resource', name: 'a', planned: { triggers: UNKNOWN }, changes: { triggers: { old: 'x', new: UNKNOWN } } }],
       outputs: { id: { old: undefined, new: UNKNOWN } },
     };
 
@@ -43,7 +43,7 @@ describe('reading a plan file', () => {
       serial: 0,
       prevRun: {},
       prior: {},
-      actions: [{ type: 'UPDATE', resourceType: 'null_resource', name: 'a', changes: { triggers: { old: {}, new: lookalike } } }],
+      actions: [{ type: 'UPDATE', resourceType: 'null_resource', name: 'a', planned: { triggers: lookalike }, changes: { triggers: { old: {}, new: lookalike } } }],
       outputs: {},
     };
 
@@ -71,6 +71,7 @@ describe('reading a plan file', () => {
             label: { type: 'Template', value: ['id ', { type: 'Reference', value: ['var', 'ids', 0], position: at }], position: at },
             first: { type: 'Reference', value: ['var', 'ids', 1, 'name'], position: at },
           },
+          planned: {},
         },
       ],
       outputs: {},
@@ -236,6 +237,24 @@ describe('reading a plan file', () => {
     ['an entry filed under another address', { prevRun: { 'x.b': { resourceType: 'x', name: 'a', attributes: {} } } }, 'tfplan.json is not a plan file: "x.b" holds x.a'],
   ])('refuses a plan file with %s', (_, broken, message) => {
     expect(read({ ...fields(), ...broken })).toThrow(message);
+  });
+
+  it('reads back the values an action was planned with, what is not known yet and exact numbers among them', () => {
+    const planned = { tags: { a: UNKNOWN, b: 'x' }, list: ['x', UNKNOWN], id: UNKNOWN, n: ExactNumber.parse('12345678901234567890') };
+    const plan: Plan = { ...emptyPlan, actions: [{ type: 'CREATE', resourceType: 'x', name: 'a', attributes: {}, planned }] };
+
+    expect(parsePlanFile(aPlanFile(plan), 'tfplan.json').actions[0].planned).toEqual(planned);
+  });
+
+  it.each([
+    ['a value that is not saved as one', { path: 'x' }],
+    ['no record of values', []],
+  ])('refuses an action whose planned values hold %s', (_, planned) => {
+    expect(read({ ...fields(), actions: [{ type: 'CREATE', resourceType: 'x', name: 'a', attributes: {}, planned }] })).toThrow('tfplan.json is not a plan file');
+  });
+
+  it.each(['CREATE', 'UPDATE', 'REPLACE'])('refuses a %s without the values it was planned with', (type) => {
+    expect(read({ ...fields(), actions: [{ type, resourceType: 'x', name: 'a', attributes: {} }] })).toThrow('tfplan.json is not a plan file');
   });
 
   it('names a serial that is not whole', () => {

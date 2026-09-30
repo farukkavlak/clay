@@ -100,6 +100,8 @@ relative to the root, so `"${path.module}/index.html"` names a file next to the 
 A saved plan carries the configuration it was made from, the state it was planned
 against and what the refresh read. `apply` runs that configuration, not the one on disk
 now, against what the refresh read, and refuses the plan if the state has changed since.
+On every apply, a value the plan showed as known that now comes out otherwise stops the
+run before that resource is touched.
 
 ## Resources
 

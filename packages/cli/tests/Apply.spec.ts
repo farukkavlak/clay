@@ -278,7 +278,7 @@ describe('CLI: apply command', () => {
         config: 'saved config',
         modules: { 'm/main.clay': 'saved module' },
         serial: 2,
-        actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }],
+        actions: [{ type: 'CREATE', resourceType: 'test', name: 't', planned: {} }],
         outputs: {},
         prevRun: {},
         prior: {},
@@ -302,7 +302,7 @@ describe('CLI: apply command', () => {
 
       await createApplyCommand().parseAsync(['node', 'clay', 'plan.json']);
 
-      expect(runPlanMock).toHaveBeenCalledWith(expect.objectContaining({ serial: 2, actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }] }), 'saved config');
+      expect(runPlanMock).toHaveBeenCalledWith(expect.objectContaining({ serial: 2, actions: [{ type: 'CREATE', resourceType: 'test', name: 't', planned: {} }] }), 'saved config');
       expect(InMemoryFiles).toHaveBeenCalledWith({ 'm/main.clay': 'saved module', 'main.clay': 'saved config' });
       expect(confirm).not.toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Applying from saved plan'));
@@ -317,7 +317,7 @@ describe('CLI: apply command', () => {
         config: 'saved config',
         modules: { 'm/main.clay': 'saved module' },
         serial: 2,
-        actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }],
+        actions: [{ type: 'CREATE', resourceType: 'test', name: 't', planned: {} }],
         outputs: {},
         prevRun: {},
         prior: {},
@@ -354,7 +354,7 @@ describe('CLI: apply command', () => {
         config: 'saved config',
         modules: { 'm/main.clay': 'saved module' },
         serial: 2,
-        actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }],
+        actions: [{ type: 'CREATE', resourceType: 'test', name: 't', planned: {} }],
         outputs: {},
         prevRun: {},
         prior: {},

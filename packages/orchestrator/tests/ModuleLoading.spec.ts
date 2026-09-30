@@ -111,6 +111,7 @@ describe('Orchestrator - Module Loading', () => {
         name: 'main',
         modulePath: [{ name: 'vpc' }],
         attributes: { name: 'main-vpc' }, // minimal attributes
+        planned: { name: 'main-vpc' },
       },
     ]);
 
@@ -145,6 +146,7 @@ describe('Orchestrator - Module Loading', () => {
         name: 'rds',
         modulePath: [{ name: 'app' }, { name: 'db' }],
         attributes: {},
+        planned: {},
       },
     ]);
 
@@ -181,6 +183,7 @@ describe('Orchestrator - Module Loading', () => {
         name: 'deep',
         modulePath: [{ name: 'L2' }, { name: 'L3' }, { name: 'L4' }, { name: 'L5' }],
         attributes: {},
+        planned: {},
       },
     ]);
 
