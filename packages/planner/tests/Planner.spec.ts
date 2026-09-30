@@ -53,6 +53,19 @@ describe('Planner', () => {
     expect(actions[0].attributes!.path).toEqual(str('x'));
   });
 
+  // The whole of what was planned, the values that change and the ones that do not, so the apply can hold each to it.
+  it('carries every value it planned on a create, an update and a replace, and none on the others', () => {
+    const desired = desiredResource('r', { path: 'x', size: 'large' });
+    const forcesNew = new Map([[desired.block.resourceType, { path: { type: 'string' as const, forceNew: true } }]]);
+    const planned = { path: 'x', size: 'large' };
+
+    expect(plan([desired], { version: 1, serial: 0, resources: {} })[0]).toMatchObject({ type: 'CREATE', planned });
+    expect(plan([desired], stateWith('r', { path: 'x', size: 'small' }))[0]).toMatchObject({ type: 'UPDATE', planned });
+    expect(plan([desired], stateWith('r', { path: 'old', size: 'large' }), forcesNew)[0]).toMatchObject({ type: 'REPLACE', planned });
+    expect(plan([desired], stateWith('r', planned))[0].planned).toBeUndefined();
+    expect(plan([], stateWith('r', planned))[0].planned).toBeUndefined();
+  });
+
   it('should plan CREATE for nested module resources', () => {
     const actions = plan([desiredResource('nested_resource', { size: 'large' }, ['app', 'db'])], { version: 1, serial: 0, resources: {} });
 

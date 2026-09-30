@@ -1,5 +1,5 @@
 import { emptyState } from '@clay/contracts';
-import { plan } from '@clay/planner';
+import { plan, UNKNOWN } from '@clay/planner';
 import fsPromises from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -108,6 +108,7 @@ module "app" {
         name: 'server',
         modulePath: [{ name: 'app' }],
         attributes: { ami: { type: 'Reference', value: ['data', 'aws_ami', 'ubuntu', 'id'] } },
+        planned: { ami: 'ami-12345' },
       },
     ]);
 
@@ -142,6 +143,7 @@ module "app" {
         name: 'server',
         modulePath: [{ name: 'app' }],
         attributes: { ami: { type: 'Reference', value: ['data', 'aws_ami', 'root_ami', 'id'] } },
+        planned: { ami: UNKNOWN },
       },
     ]);
 

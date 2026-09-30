@@ -131,7 +131,7 @@ known that comes out otherwise stops the run.
 - [x] A plan carries the state it was made against and the state the refresh read, as
       Terraform's does. The apply runs on what was read, and what changed outside Clay is
       shown from the two
-- [ ] An action carries the values it was planned with, and `apply` stops before a
+- [x] An action carries the values it was planned with, and `apply` stops before a
       resource whose value the plan showed as known resolves to another
 
 ### Computed attributes
