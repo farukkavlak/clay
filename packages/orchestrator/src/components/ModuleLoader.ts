@@ -48,17 +48,7 @@ export class ModuleLoader {
 
   private async loadChildModule(stmt: ModuleBlock, parentDir: string, parentAddress: ModuleAddress, loaded: Loaded, loadingDirs: string[]): Promise<void> {
     const moduleName = stmt.name;
-    const source = stmt.attributes.source;
-    const place = { block: spell(stmt), module: scopeOf(parentAddress) || undefined };
-
-    if (source?.type !== 'String') throw new ConfigError(`Module "${moduleName}" is missing a valid "source" attribute.`, (source ?? stmt).position, place);
-
-    // The trailing "." leaves one spelling per directory, so a cycle is seen on the hop that closes it.
-    const moduleDir = path.posix.join(parentDir, source.value, '.');
-    if (loadingDirs.includes(moduleDir)) throw new ConfigError(`Module source cycle detected: ${[...loadingDirs, moduleDir].join(' -> ')}`, source.position, place);
-
-    const moduleProgram = this.parseModuleFile(moduleDir);
-    if (moduleProgram === undefined) throw new ConfigError(`Module source not found at: ${path.posix.join(moduleDir, CONFIG_FILE)}`, source.position, place);
+    const { moduleDir, moduleProgram } = this.readModule(stmt, parentDir, parentAddress, loadingDirs);
 
     const childAddress = parentAddress.child(moduleName);
     this.declareInputs(stmt, moduleProgram, childAddress, parentAddress);
@@ -72,6 +62,27 @@ export class ModuleLoader {
         const resourceAddress = new Address(childAddress, childStmt.resourceType, childStmt.name);
         loaded.resources.push({ uniqueId: resourceAddress.toString(), address: resourceAddress, block: childStmt });
       } else if (childStmt.type === 'Module') await this.loadChildModule(childStmt, moduleDir, childAddress, loaded, [...loadingDirs, moduleDir]);
+  }
+
+  /** The directory a module call names and the configuration in it. */
+  private readModule(stmt: ModuleBlock, parentDir: string, parentAddress: ModuleAddress, loadingDirs: string[]): { moduleDir: string; moduleProgram: Statement[] } {
+    const source = stmt.attributes.source;
+    const place = { block: spell(stmt), module: scopeOf(parentAddress) || undefined };
+
+    if (source?.type !== 'String') throw new ConfigError(`Module "${stmt.name}" is missing a valid "source" attribute.`, (source ?? stmt).position, place);
+
+    // Anything else names a registry or a remote module, which is not fetched, and an absolute path ties the configuration to one machine.
+    if (!/^\.\.?\//.test(source.value))
+      throw new ConfigError(`module "${stmt.name}" has source "${source.value}", which is not a local path: a source starts with ./ or ../`, source.position, place);
+
+    // The trailing "." leaves one spelling per directory, so a cycle is seen on the hop that closes it.
+    const moduleDir = path.posix.join(parentDir, source.value, '.');
+    if (loadingDirs.includes(moduleDir)) throw new ConfigError(`Module source cycle detected: ${[...loadingDirs, moduleDir].join(' -> ')}`, source.position, place);
+
+    const moduleProgram = this.parseModuleFile(moduleDir);
+    if (moduleProgram === undefined) throw new ConfigError(`Module source not found at: ${path.posix.join(moduleDir, CONFIG_FILE)}`, source.position, place);
+
+    return { moduleDir, moduleProgram };
   }
 
   private parseModuleFile(moduleDir: string): Statement[] | undefined {
