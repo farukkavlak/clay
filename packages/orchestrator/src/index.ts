@@ -25,6 +25,11 @@ export type { RunEvent } from './RunEvent';
 export { DiskFiles, InMemoryFiles, RecordingFiles } from './ConfigFiles';
 export type { ConfigFiles } from './ConfigFiles';
 
+/** Planning and running move entries and rewrite what each depends on, so each works on its own copy. */
+function copyResources(resources: Record<string, Resource>): Record<string, Resource> {
+  return Object.fromEntries(Object.entries(resources).map(([key, resource]) => [key, { ...resource }]));
+}
+
 export class Orchestrator {
   constructor(
     private stateManager: StateManager,
@@ -63,13 +68,19 @@ export class Orchestrator {
 
   /** Plans against each resource as its provider reads it now, unless `refresh` is false. What it reads is not written: a plan only looks. */
   async plan(configContent: string, { refresh = true }: { refresh?: boolean } = {}): Promise<Plan> {
-    const saved = await this.stateManager.read();
-    const currentState = refresh ? await this.refresh(saved) : saved;
-    const gone = Object.keys(saved.resources).filter((key) => !Object.hasOwn(currentState.resources, key));
-    // Planning moves what gained or lost count in `currentState`, so the actions are planned against the resources where they now are.
+    const prevRun = await this.stateManager.read();
+    const prior = refresh ? await this.refresh(prevRun) : prevRun;
+    // Planning moves what gained or lost count, so the actions are planned against the resources where they now are; the plan keeps them where they were.
+    const currentState = { ...prior, resources: copyResources(prior.resources) };
     const { desiredResources, outputs, schemas } = await this.resolveAndCheck(configContent, currentState);
 
-    return { serial: currentState.serial, actions: plan(desiredResources, currentState, schemas), outputs: outputChanges(currentState.outputs ?? {}, outputs), gone };
+    return {
+      serial: prevRun.serial,
+      actions: plan(desiredResources, currentState, schemas),
+      outputs: outputChanges(currentState.outputs ?? {}, outputs),
+      prevRun: prevRun.resources,
+      prior: prior.resources,
+    };
   }
 
   /** Checks the configuration the way a plan would, against an empty state, so a value a resource would give is unknown and everything else is checked. */
@@ -85,7 +96,8 @@ export class Orchestrator {
     try {
       const state = await this.stateManager.read();
       if (state.serial !== saved.serial) throw new Error('The state has changed since the plan was made. Plan again.');
-      for (const key of saved.gone) delete state.resources[key];
+      // The actions were planned against what the refresh read, so that is what they run on and what is written.
+      state.resources = copyResources(saved.prior);
 
       const config = await this.loader.load(configContent, state);
       const graph = this.graphBuilder.buildExecutionGraph(config.loadedResources, config.loadedModules);

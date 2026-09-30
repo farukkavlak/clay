@@ -1,7 +1,7 @@
 import { Address } from '@clay/contracts';
 import { ConfigFiles, DiskFiles, InMemoryFiles, RunEvent } from '@clay/orchestrator';
 import { CONFIG_FILE } from '@clay/parser';
-import { parsePlanFile, PlanAction, PlanFile } from '@clay/planner';
+import { changedOutside, parsePlanFile, Plan, PlanAction, PlanFile } from '@clay/planner';
 import { Command } from 'commander';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -14,13 +14,20 @@ import { actionLine, changesNothing, displayPlan } from '../showPlan';
 import { exists } from '../exists';
 import { refreshOption } from '../refreshOption';
 
-/** A replacement counts once as an add and once as a destroy, and a move when there is one, as the plan summary counts them; a resource found gone is counted as forgotten. */
+/** A replacement counts once as an add and once as a destroy, and a move when there is one, as the plan summary counts them, and what was forgotten. */
 function summarize(applied: PlanAction[], forgotten: number): string {
   const count = (type: PlanAction['type']) => applied.filter((action) => action.type === type).length;
   const replaced = count('REPLACE');
   const moved = applied.filter((action) => action.movedFrom).length;
 
   return `${count('CREATE') + replaced} added, ${count('UPDATE')} changed, ${count('DELETE') + replaced} destroyed${moved > 0 ? `, ${moved} moved` : ''}${forgotten > 0 ? `, ${forgotten} forgotten` : ''}`;
+}
+
+/** Resources deleted outside Clay that an apply drops from state. Every resource the configuration has gets an action, so one with none is not made again. */
+function forgotten(plan: Plan): number {
+  const acted = new Set(plan.actions.map((action) => Address.of(action).toString()));
+
+  return changedOutside(plan).filter((drift) => !acted.has(drift.address)).length;
 }
 
 function reportEvent(event: RunEvent): void {
@@ -70,7 +77,7 @@ async function executeApply(cwd: string, configPath: string, files: ConfigFiles,
     return;
   }
 
-  await runAndReport(orchestrator.runPlan(planned, configContent), planned.gone.length);
+  await runAndReport(orchestrator.runPlan(planned, configContent), forgotten(planned));
 }
 
 /** A plan file the user names is their file, so what is wrong with it is said with the file's name and what to do about it. */
@@ -106,7 +113,7 @@ async function executeApplyFromPlan(cwd: string, planFile: PlanFile, files: Conf
   displayPlan(planFile);
   if (changesNothing(planFile)) return;
 
-  await runAndReport(orchestrator.runPlan(planFile, planFile.config), planFile.gone.length);
+  await runAndReport(orchestrator.runPlan(planFile, planFile.config), forgotten(planFile));
 }
 
 export function createApplyCommand() {

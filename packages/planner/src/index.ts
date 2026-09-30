@@ -1,4 +1,18 @@
-import { Address, ExactNumber, InstanceKey, isInstanceKey, isModulePath, isRecord, ModuleAddress, ModuleStep, NumberError, Resource, Schema, State } from '@clay/contracts';
+import {
+  Address,
+  ExactNumber,
+  InstanceKey,
+  isInstanceKey,
+  isModulePath,
+  isRecord,
+  ModuleAddress,
+  ModuleStep,
+  NumberError,
+  readResources,
+  Resource,
+  Schema,
+  State,
+} from '@clay/contracts';
 import { AttributeValue, ResourceBlock } from '@clay/parser';
 import { isDeepStrictEqual } from 'node:util';
 
@@ -51,12 +65,14 @@ export interface Plan {
   serial: number;
   actions: PlanAction[];
   outputs: Changes;
-  /** Resources in state that the refresh no longer found. An apply forgets them, since nothing is left to delete. */
-  gone: string[];
+  /** The resources as state held them when the plan was made. */
+  prevRun: Record<string, Resource>;
+  /** The same resources as their providers read them then, which the actions run against; one not found is left out. */
+  prior: Record<string, Resource>;
 }
 
 /** Bumped when the shape below changes once a Clay is released, so a plan file from an older version is refused instead of misread. */
-export const PLAN_FILE_VERSION = '9.0';
+export const PLAN_FILE_VERSION = '10.0';
 
 export interface PlanFile extends Plan {
   version: string;
@@ -136,7 +152,8 @@ export function serializePlan(plan: Plan, configContent: string, modules: Record
     serial: plan.serial,
     actions: plan.actions.map((action) => (action.changes ? { ...action, changes: saveChanges(action.changes) } : action)),
     outputs: saveChanges(plan.outputs),
-    gone: plan.gone,
+    prevRun: plan.prevRun,
+    prior: plan.prior,
   };
 
   return JSON.stringify(file, undefined, 2);
@@ -188,13 +205,9 @@ function isAction(action: unknown): boolean {
   );
 }
 
-function isAddresses(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((address) => typeof address === 'string');
-}
-
-/** What a plan holds, apart from the file around it. */
+/** What a plan holds, apart from the file around it and the resources it carries, which are read as state's are. */
 function isPlan(plan: Partial<Plan>): plan is Plan {
-  return typeof plan.serial === 'number' && Array.isArray(plan.actions) && plan.actions.every((action) => isAction(action)) && isChanges(plan.outputs) && isAddresses(plan.gone);
+  return typeof plan.serial === 'number' && Array.isArray(plan.actions) && plan.actions.every((action) => isAction(action)) && isChanges(plan.outputs);
 }
 
 export function validatePlanFile(planFile: unknown): planFile is PlanFile {
@@ -289,6 +302,12 @@ export function parsePlanFile(content: string, source: string): PlanFile {
   if (version !== undefined && version !== PLAN_FILE_VERSION) throw new Error(`${source} was written by another Clay, plan version ${version}`);
   if (!validatePlanFile(parsed)) throw new Error(`${source} is not a plan file`);
 
+  const say = (problem: string): never => {
+    throw new Error(`${source} is not a plan file: ${problem}`);
+  };
+  readResources(parsed.prevRun, 'its prevRun resources', say);
+  readResources(parsed.prior, 'its prior resources', say);
+
   return {
     ...parsed,
     actions: parsed.actions.map((action) => (action.changes ? { ...action, changes: readChanges(action.changes) } : action)),
@@ -320,6 +339,22 @@ function calculateDiff(oldAttrs: Record<string, unknown>, newAttrs: Record<strin
 
 export function outputChanges(current: Record<string, unknown>, desired: Record<string, unknown>): Changes {
   return calculateDiff(current, desired) ?? {};
+}
+
+/** A resource changed outside Clay: gone, when it has no changes, or read with values other than state held. */
+export interface Drift {
+  address: string;
+  changes?: Changes;
+}
+
+/** What the refresh found that the last run did not leave, from the two states the plan carries. */
+export function changedOutside(plan: Plan): Drift[] {
+  return Object.entries(plan.prevRun).flatMap(([address, held]) => {
+    if (!Object.hasOwn(plan.prior, address)) return [{ address }];
+
+    const changes = calculateDiff(held.attributes, plan.prior[address].attributes);
+    return changes ? [{ address, changes }] : [];
+  });
 }
 
 /** Tells whether a resource in state would change, without building the action for it. */

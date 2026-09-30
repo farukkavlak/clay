@@ -97,9 +97,9 @@ relative to the root, so `"${path.module}/index.html"` names a file next to the 
 | `clay state mv <a> <b>`  | Renames a resource in state, so the next plan does not recreate it                     |
 | `clay state rm <addr>`   | Forgets a resource without destroying it                                               |
 
-A saved plan carries the configuration it was made from and the state serial it was
-planned against. `apply` runs that configuration, not what is on disk now, and refuses
-the plan if the state has changed since.
+A saved plan carries the configuration it was made from, the state it was planned
+against and what the refresh read. `apply` runs that configuration, not the one on disk
+now, against what the refresh read, and refuses the plan if the state has changed since.
 
 ## Resources
 
@@ -118,8 +118,8 @@ reads a file, and `data.local_file.f.content` is what it holds.
 1. Each resource in state is read back from its provider, so a change made by hand shows
    up. A resource found gone is made again, or forgotten if the configuration dropped
    it. `plan` and `apply` take `--refresh=false` to skip this and plan against the state
-   alone. A saved plan is applied as it was made, so `apply <plan>` reads nothing and
-   refuses the flag.
+   alone. An apply writes what was read, even when nothing else changes. A saved plan is
+   applied as it was made, so `apply <plan>` reads nothing and refuses the flag.
 2. The parser turns `main.clay` and every module it names into a tree, with the file,
    line and column on every node.
 3. The graph builder links each resource, variable and output to what it reads, and

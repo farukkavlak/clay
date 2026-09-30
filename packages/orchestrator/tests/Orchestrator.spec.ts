@@ -279,16 +279,27 @@ describe('Orchestrator', () => {
   });
 
   describe('Refresh', () => {
+    // The caller may show the plan again after the run, so the run works on its own copy.
+    it('leaves the plan it runs as it was', async () => {
+      await apply(orchestrator, 'resource "mock_resource" "a" { value = "x" }');
+      const planned = await orchestrator.plan('resource "mock_resource" "a" { value = "y" }');
+      const before = JSON.stringify(planned.prior);
+
+      for await (const event of orchestrator.runPlan(planned, 'resource "mock_resource" "a" { value = "y" }')) if (event.type === 'failed') throw event.error;
+
+      expect(JSON.stringify(planned.prior)).toBe(before);
+    });
+
     // Without an id there is nothing to ask the provider for, so what was recorded stands.
     it('keeps a resource in state with no id as it is, without reading it', async () => {
       const resource = { resourceType: 'mock_resource', name: 'a', attributes: { value: 'x' } };
       await new LocalBackend(tmpDir).write({ ...emptyState(), resources: { 'mock_resource.a': resource } });
       const read = vi.spyOn(mockProvider, 'read').mockResolvedValue(null);
 
-      const { actions, gone } = await orchestrator.plan('resource "mock_resource" "a" { value = "x" }');
+      const { actions, prior } = await orchestrator.plan('resource "mock_resource" "a" { value = "x" }');
 
       expect(actions.map(({ type }) => type)).toEqual(['NO_OP']);
-      expect(gone).toEqual([]);
+      expect(prior).toEqual({ 'mock_resource.a': resource });
       expect(read).not.toHaveBeenCalled();
     });
   });
