@@ -122,25 +122,6 @@ describe('a value known in part', () => {
     expect(isUnknown(outputs.into.new)).toBe(true);
   });
 
-  // The plan cannot tell an attribute the resource will have from one it never will; the apply can, and says so rather than send the provider nothing.
-  it('refuses at apply an item the apply cannot read, though the plan left it for the apply', async () => {
-    const withMissing = `
-      resource "local_file" "f" {
-        path = "${path.join(dir, 'f.txt')}"
-        content = "x"
-      }
-      resource "null_resource" "n" {
-        triggers = { a = "\${local_file.f.nosuch}" }
-      }
-    `;
-
-    const events = [];
-    for await (const event of start(newOrchestrator(), withMissing)) events.push(event);
-
-    const failed = events.find((event) => event.type === 'failed');
-    expect(failed?.type === 'failed' && failed.error.message).toContain('Attribute "nosuch" not found on resource');
-  });
-
   const applyAll = async (config: string) => {
     for await (const event of start(newOrchestrator(), config)) if (event.type === 'failed') throw event.error;
   };

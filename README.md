@@ -74,8 +74,10 @@ References: `var.name`, `local_file.a.content`, `module.m.out`, `module.web[0].o
 `random_string.s.id` for what the provider assigned. A reference reads into a map or a
 list with `.key`, `["key"]` and `[0]`: `var.tags.env`, `var.names[0]`. A resource to be
 created or changed is read at plan time as its configuration sets it, so
-`random_string.s.length` is known; what only the apply makes, such as its id, is unknown
-and shown as such. A list or a map is known as far as its items are:
+`random_string.s.length` is known; what only the apply makes, such as its id or
+`random_string.s.result`, is unknown and shown as such. A name the resource will never
+have, one the configuration does not set and the provider does not compute, is refused at
+plan. A list or a map is known as far as its items are:
 `{ a = random_string.s.id, b = "x" }` plans as `{"a":(known after apply),"b":"x"}`.
 Reaching inside a module (`module.m.local_file.a`) is not allowed; a module speaks
 through its outputs. `path.module` is the directory of the module it is written in,
@@ -105,12 +107,15 @@ run before that resource is touched.
 
 ## Resources
 
-| Type            | Attributes                                                                              |
-| --------------- | --------------------------------------------------------------------------------------- |
-| `local_file`    | `path` (replaces on change), `content`                                                  |
-| `random_string` | `length`, `special`, both replace on change; the string is its `id`                     |
-| `null_resource` | `triggers`, a map; does nothing, and another resource can read its `id` to run after it |
-| `command_exec`  | `command`, `cwd`; runs on create and on every update                                    |
+| Type            | Attributes                                                                                  |
+| --------------- | ------------------------------------------------------------------------------------------- |
+| `local_file`    | `path` (replaces on change), `content`                                                      |
+| `random_string` | `length`, `special`, both replace on change; the string is its `id` and its `result`        |
+| `null_resource` | `triggers`, a map; does nothing, and another resource can read its `id` to run after it     |
+| `command_exec`  | `command`, `cwd`; runs on create and on every update, and keeps what it printed in `stdout` |
+
+Only the provider makes `result` and `stdout`, so setting one in the configuration is
+refused.
 
 A data source reads something that already exists. `data "local_file" "f" { path = "x" }`
 reads a file, and `data.local_file.f.content` is what it holds.

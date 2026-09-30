@@ -102,8 +102,10 @@ export interface SchemaDefinition {
   type: SchemaType;
   required?: boolean;
   forceNew?: boolean; // If true, a change to this attribute forces replacement (Delete -> Create)
-  /** Made by the provider: a plan keeps the value in state unless the configuration sets it. */
+  /** Made by the provider, and the configuration cannot set it unless `optional` says so. A plan keeps the value in state unless the configuration sets it. */
   computed?: boolean;
+  /** With `computed`: the configuration may set it, and the provider makes it when the configuration does not. */
+  optional?: boolean;
   elemType?: SchemaType; // For 'list' and 'map'
   schema?: Schema; // For 'object'
 }

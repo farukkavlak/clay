@@ -10,13 +10,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { start } from './start';
 
-/** A resource whose `made` only the provider knows, once it has made or changed the resource. */
+/** A resource whose `made` the provider makes, once it has made or changed the resource, unless the configuration sets it. */
 class StampProvider implements Provider {
   readonly resources = ['stamp'];
   readonly dataSources: string[] = [];
 
   async getSchema(): Promise<Schema> {
-    return { label: { type: 'string', required: true }, note: { type: 'string' }, made: { type: 'string', computed: true } };
+    return { label: { type: 'string', required: true }, note: { type: 'string' }, made: { type: 'string', computed: true, optional: true } };
   }
 
   async validate(): Promise<void> {}
@@ -42,19 +42,26 @@ class StampProvider implements Provider {
   }
 }
 
+/** Says it computes `made`, then does not return it. */
+class ForgetfulStampProvider extends StampProvider {
+  override async create(_type: string, inputs: Record<string, unknown>): Promise<{ id: string; attributes: Record<string, unknown> }> {
+    return { id: 'stamp-id', attributes: inputs };
+  }
+}
+
 describe('a value only the provider knows', () => {
   let dir: string;
   let file: string;
 
-  const newOrchestrator = () => {
+  const newOrchestrator = (stamp: Provider = new StampProvider()) => {
     const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
     engine.registerProvider(new LocalProvider());
-    engine.registerProvider(new StampProvider());
+    engine.registerProvider(stamp);
     return engine;
   };
 
-  const apply = async (config: string) => {
-    for await (const event of start(newOrchestrator(), config)) if (event.type === 'failed') throw event.error;
+  const apply = async (config: string, stamp?: Provider) => {
+    for await (const event of start(newOrchestrator(stamp), config)) if (event.type === 'failed') throw event.error;
   };
 
   const withCopy = (stamp: string) => `${stamp}\nresource "local_file" "copy" {\n  path = "${file}"\n  content = stamp.a.made\n}`;
@@ -66,6 +73,78 @@ describe('a value only the provider knows', () => {
 
   afterEach(async () => {
     await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it('reads what random_string made and what command_exec printed', async () => {
+    const config = `
+      resource "random_string" "r" { length = 5 }
+      resource "command_exec" "c" { command = "echo printed" }
+      resource "local_file" "copy" {
+        path = "${file}"
+        content = "\${random_string.r.result} \${command_exec.c.stdout}"
+      }
+    `;
+
+    await apply(config);
+
+    const state = await new LocalBackend(dir).read();
+    expect(await fs.readFile(file, 'utf8')).toBe(`${String(state.resources['random_string.r'].attributes.result)} printed\n`);
+    expect(state.resources['random_string.r'].attributes.result).toHaveLength(5);
+  });
+
+  // A name the configuration does not set and the provider does not compute is never known.
+  it.each([
+    ['a name the resource does not have', 'stamp.a.nope', 'nope'],
+    ['a value the configuration leaves unset', 'stamp.a.note', 'note'],
+  ])('refuses a reference to %s, where it is written', async (_, reference, name) => {
+    const config = `resource "stamp" "a" { label = "x" }\noutput "o" { value = ${reference} }`;
+
+    await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
+      message: `"${reference}" will never be known: the configuration does not set ${name} and stamp does not compute it`,
+      position: { file: 'main.clay', line: 2, column: 22 },
+    });
+  });
+
+  it('refuses at apply an item the plan left for the apply, when the provider does not return it', async () => {
+    const config = 'resource "stamp" "a" { label = "x" }\nresource "null_resource" "n" {\n  triggers = { a = stamp.a.made }\n}';
+
+    await expect(apply(config, new ForgetfulStampProvider())).rejects.toThrow('Attribute "made" not found on resource');
+  });
+
+  it('refuses a reference to a name a resource that does not change has not got, where it is written', async () => {
+    await apply('resource "stamp" "a" { label = "x" }');
+
+    await expect(newOrchestrator().plan('resource "stamp" "a" { label = "x" }\noutput "o" { value = stamp.a.nope }')).rejects.toMatchObject({
+      message: 'Invalid resource reference "stamp.a.nope": Attribute "nope" not found on resource',
+      position: { file: 'main.clay', line: 2, column: 22 },
+    });
+  });
+
+  // Only the provider makes it, so a value the configuration gave it would show in the plan and never be applied.
+  it.each([
+    ['random_string', 'result', 'length = 4'],
+    ['command_exec', 'stdout', 'command = "echo x"'],
+  ])('refuses %s %s set by the configuration, where it is written', async (type, name, set) => {
+    const config = `resource "${type}" "a" {\n  ${set}\n  ${name} = "mine"\n}`;
+
+    await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
+      message: `${name} is computed by ${type} and cannot be set`,
+      position: { file: 'main.clay', line: 3, column: name.length + 6 },
+      block: `resource "${type}" "a"`,
+    });
+  });
+
+  // Whether the provider takes a name its schema does not have is for the provider to say.
+  it('plans a name the schema does not have', async () => {
+    const { actions } = await newOrchestrator().plan('resource "stamp" "a" {\n  label = "x"\n  extra = "y"\n}');
+
+    expect(actions.map(({ type }) => type)).toEqual(['CREATE']);
+  });
+
+  it('reads the id of a resource still to be made as known after apply', async () => {
+    const { outputs } = await newOrchestrator().plan('resource "stamp" "a" { label = "x" }\noutput "o" { value = stamp.a.id }');
+
+    expect(isUnknown(outputs.o.new)).toBe(true);
   });
 
   it('keeps what the provider returns in state', async () => {

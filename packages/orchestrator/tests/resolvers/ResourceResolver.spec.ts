@@ -49,19 +49,19 @@ describe('ResourceResolver', () => {
     expect(() => resolver.resolve(ref('resource.missing.id'), context, mockState)).toThrow(/Resource "resource.missing" not found/);
   });
 
-  it.each(['toString', 'constructor', 'hasOwnProperty'])('should throw if the attribute is only inherited, like %s', (name) => {
-    expect(() => resolver.resolve(ref(`resource.test.${name}`), context, mockState)).toThrow(UnresolvedReferenceError);
-    expect(() => resolver.resolve(ref(`resource.test.${name}`), context, mockState)).toThrow(`Attribute "${name}" not found`);
-  });
+  // State holds all the resource has, so a plan refuses the name where it is written rather than leaving it to the apply.
+  it.each(['missing', 'toString', 'constructor', 'hasOwnProperty'])('refuses %s, which state does not hold', (name) => {
+    const position = { file: 'main.clay', line: 3, column: 7 };
+    const read = () => resolver.resolve(ref(`resource.test.${name}`), context, mockState, position);
 
-  it('should throw if attribute not found', () => {
-    expect(() => resolver.resolve(ref('resource.test.missing'), context, mockState)).toThrow(/Attribute "missing" not found/);
+    expect(read).toThrow(expect.objectContaining({ message: `Invalid resource reference "resource.test.${name}": Attribute "${name}" not found on resource`, position }));
+    expect(read).not.toThrow(UnresolvedReferenceError);
   });
 
   // A resource the plan creates or changes is read as the plan knows it, over what state holds.
   describe('an instance the plan will create or change', () => {
     const planned = new Planned();
-    planned.set('resource.test', { simple: 'new', later: UNKNOWN });
+    planned.set('resource.test', { simple: 'new', later: UNKNOWN }, { simple: { type: 'string' }, made: { type: 'string', computed: true } });
     const planning = new ResourceResolver(new Instances(), planned);
 
     it('reads what its configuration sets, not what state holds', () => {
@@ -71,9 +71,18 @@ describe('ResourceResolver', () => {
     it.each([
       ['its id', 'resource.test.id'],
       ['a value its configuration does not know yet', 'resource.test.later'],
-      ['a value its configuration does not set', 'resource.test.settings'],
+      ['a value its provider computes', 'resource.test.made'],
     ])('leaves %s to the apply', (_, spelled) => {
       expect(() => planning.resolve(ref(spelled), context, mockState)).toThrow(UnresolvedReferenceError);
+    });
+
+    // State holds settings, but the plan will make the instance anew from its configuration.
+    it.each(['settings', 'toString'])('refuses %s, which neither its configuration sets nor its provider computes', (name) => {
+      const position = { file: 'main.clay', line: 3, column: 7 };
+
+      expect(() => planning.resolve(ref(`resource.test.${name}`), context, mockState, position)).toThrow(
+        expect.objectContaining({ message: `"resource.test.${name}" will never be known: the configuration does not set ${name} and resource does not compute it`, position })
+      );
     });
   });
 });
