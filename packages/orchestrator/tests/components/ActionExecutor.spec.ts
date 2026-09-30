@@ -21,11 +21,13 @@ describe('ActionExecutor', () => {
     mockState = emptyState();
     mockProvider = {
       resources: ['test'],
+      dataSources: [],
       validate: vi.fn(),
       create: vi.fn().mockResolvedValue('created-id'),
       update: vi.fn(),
       delete: vi.fn(),
-      read: vi.fn(),
+      validateDataSource: vi.fn(),
+      readDataSource: vi.fn(),
       getSchema: vi.fn(),
     };
 

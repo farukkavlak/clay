@@ -11,6 +11,7 @@ import { apply } from './apply';
 // Mock Provider for testing
 class MockProvider implements Provider {
   readonly resources = ['mock_resource'];
+  readonly dataSources: string[] = [];
   private createdResources: Map<string, Record<string, unknown>> = new Map();
 
   async getSchema(_type: string): Promise<Schema> {
@@ -42,7 +43,9 @@ class MockProvider implements Provider {
     this.createdResources.delete(id);
   }
 
-  async read(_type: string, _inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+  async validateDataSource(_type: string, _inputs: Record<string, unknown>): Promise<void> {}
+
+  async readDataSource(_type: string, _inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
     return {};
   }
 

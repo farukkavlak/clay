@@ -11,9 +11,11 @@ import { apply } from './apply';
 /** Keeps what it is given, so state holds the inputs. */
 const recorder: Provider = {
   resources: ['rec'],
+  dataSources: [],
   getSchema: async () => ({}),
   validate: async () => {},
-  read: async () => ({}),
+  validateDataSource: async () => {},
+  readDataSource: async () => ({}),
   create: async (_, inputs) => String(inputs.value),
   update: async () => {},
   delete: async () => {},

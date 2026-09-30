@@ -34,8 +34,4 @@ export class CommandExecResource implements ResourceHandler {
   }
 
   async delete(_id: string): Promise<void> {}
-
-  async read(_inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return {};
-  }
 }

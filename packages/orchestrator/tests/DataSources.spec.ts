@@ -10,16 +10,17 @@ import { apply } from './apply';
 
 // Mock Provider for testing Data Sources
 class MockDataProvider implements Provider {
-  readonly resources = ['mock_resource', 'mock_data', 'unknown_provider'];
+  readonly resources = ['mock_resource'];
+  readonly dataSources = ['mock_data'];
   data = new Map<string, Record<string, unknown>>();
 
   async getSchema(_type: string): Promise<Schema> {
     return {};
   }
 
-  async validate(_type: string, _inputs: Record<string, unknown>): Promise<void> {
-    // Always valid for testing
-  }
+  async validate(_type: string, _inputs: Record<string, unknown>): Promise<void> {}
+
+  async validateDataSource(_type: string, _inputs: Record<string, unknown>): Promise<void> {}
 
   async create(_type: string, _inputs: Record<string, unknown>): Promise<string> {
     return 'created-id';
@@ -29,15 +30,11 @@ class MockDataProvider implements Provider {
 
   async delete(_id: string): Promise<void> {}
 
-  // Implement read for data sources
-  async read(type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    if (type === 'mock_data') {
-      const id = inputs.id as string;
-      if (this.data.has(id)) return this.data.get(id)!;
+  async readDataSource(_type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const id = inputs.id as string;
+    if (this.data.has(id)) return this.data.get(id)!;
 
-      throw new Error(`Data source mock_data with id ${id} not found`);
-    }
-    return {};
+    throw new Error(`Data source mock_data with id ${id} not found`);
   }
 
   // Helper to setup mock data
@@ -119,8 +116,7 @@ describe('Orchestrator - Data Sources', () => {
         id = "1"
       }
     `;
-    // 'really_unknown_provider' is NOT in MockDataProvider.resources
-    await expect(apply(orchestrator, config)).rejects.toThrow('No provider handles "really_unknown_provider"');
+    await expect(apply(orchestrator, config)).rejects.toThrow('No provider reads data source "really_unknown_provider"');
   });
 
   it('should throw error if data source not found', async () => {

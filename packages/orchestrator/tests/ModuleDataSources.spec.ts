@@ -42,9 +42,11 @@ describe('Orchestrator - Phase 5: Scoped Data Sources', () => {
   let orchestrator: Orchestrator;
   let mockProvider: {
     resources: string[];
+    dataSources: string[];
     validate: Mock;
     create: Mock;
-    read: Mock;
+    validateDataSource: Mock;
+    readDataSource: Mock;
     update: Mock;
     delete: Mock;
     getSchema: Mock;
@@ -55,10 +57,12 @@ describe('Orchestrator - Phase 5: Scoped Data Sources', () => {
     tmpDir = await fsPromises.mkdtemp(path.join(os.tmpdir(), 'orchestrator-datasources-test-'));
 
     mockProvider = {
-      resources: ['test_resource', 'aws_ami'],
+      resources: ['test_resource'],
+      dataSources: ['aws_ami'],
       validate: vi.fn(),
       create: vi.fn().mockResolvedValue('created-id'),
-      read: vi.fn().mockResolvedValue({ id: 'ami-12345', name: 'Ubuntu 20.04' }),
+      validateDataSource: vi.fn(),
+      readDataSource: vi.fn().mockResolvedValue({ id: 'ami-12345', name: 'Ubuntu 20.04' }),
       update: vi.fn(),
       delete: vi.fn(),
       getSchema: vi.fn().mockReturnValue({}),

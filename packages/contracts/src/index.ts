@@ -59,12 +59,18 @@ export interface Provider {
   /** The resource types it handles. */
   readonly resources: string[];
 
+  /** The data source types it reads. A type may be both, as a file is written by one and read by the other. */
+  readonly dataSources: string[];
+
   getSchema(type: string): Promise<Schema>;
 
   /** Throws when the inputs would not make a valid resource. */
   validate(type: string, inputs: Record<string, unknown>): Promise<void>;
 
-  read(type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>>;
+  /** Throws when the inputs would not read a data source. */
+  validateDataSource(type: string, inputs: Record<string, unknown>): Promise<void>;
+
+  readDataSource(type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>>;
 
   create(type: string, inputs: Record<string, unknown>): Promise<string>;
   update(id: string, type: string, inputs: Record<string, unknown>): Promise<void>;
@@ -77,12 +83,17 @@ export interface ResourceHandler {
 
   validate(inputs: Record<string, unknown>): Promise<void>;
 
-  read(inputs: Record<string, unknown>): Promise<Record<string, unknown>>;
-
   /** Returns the id the resource is known by from now on. */
   create(inputs: Record<string, unknown>): Promise<string>;
 
   update(id: string, inputs: Record<string, unknown>): Promise<void>;
 
   delete(id: string): Promise<void>;
+}
+
+/** One data source type's side of a provider. */
+export interface DataSourceHandler {
+  validate(inputs: Record<string, unknown>): Promise<void>;
+
+  read(inputs: Record<string, unknown>): Promise<Record<string, unknown>>;
 }

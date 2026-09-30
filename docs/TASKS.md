@@ -112,7 +112,7 @@ hits each of these early.
 Terraform reads every resource from its provider before the diff, so a change made by
 hand shows up in the plan. Clay plans against what it last applied.
 
-- [ ] `read()` on every resource type; today each returns `{}`
+- [ ] A provider reads a resource back, as it reads a data source
 - [ ] State holds what the provider returns, not only the inputs that were sent
 - [ ] `plan` refreshes first, `-refresh=false` skips it; a plan that writes state has to
       take the lock, as `apply` does
@@ -154,6 +154,7 @@ Every resource validates its inputs by hand.
 
 - [ ] The engine validates inputs against the schema before it asks the provider
 - [ ] Providers keep `validate` for what a schema cannot say
+- [ ] A data source has a schema too; today only a resource type has one
 - [ ] A resource with a value that is not known yet has its known values checked. Today
       `plan` skips the whole resource, because a provider's `validate` would report a
       missing required attribute; a schema check knows the attribute is there and unknown
@@ -164,8 +165,7 @@ Every resource validates its inputs by hand.
 
 Data sources are read while the config loads, before any resource exists, so one that
 reads a resource fails at plan. `plan` and `apply` each read them, so an apply reads
-twice. The local provider's `read` returns `{}` for every type, so no data source reads
-anything yet.
+twice.
 
 - [ ] Data sources are graph nodes, read in dependency order and once per run. Read at load,
       one whose input reads a resource the plan changes gets the value in state, while a
@@ -180,7 +180,7 @@ anything yet.
 - [ ] Their values travel in the plan, as in Terraform, so `apply` reads none of them
       again. `runPlan` still parses and builds the graph on its own, since a saved plan
       brings its own configuration; that stays, and only the second read goes
-- [ ] `local_file` as a data source reads the file
+- [x] `local_file` as a data source reads the file
 - [ ] `clay validate` stops reading them. Checking a configuration asks the provider for
       real data today, so validating needs whatever the data source talks to
 
@@ -347,7 +347,7 @@ Nothing here changes what Clay does. Each is a place the next change has to work
       to write outputs, all 452 tests pass; the `failed` event, the kept state entry and
       the released lock on that path are unpinned. A replace whose create fails after
       the delete is untested the same way
-- [ ] Data sources have no end-to-end test; the only `data` block in `e2e` is an error
+- [x] Data sources have no end-to-end test; the only `data` block in `e2e` is an error
       case, since `LocalProvider.read` returns `{}`
 - [ ] The two `command_exec` "execute" tests assert only that an id came back; they pass
       with the command never run and with `cwd` ignored
@@ -396,7 +396,7 @@ What shipped, by area. The README says how each works today.
       `forceNew` decides replace; a value fed by a pending resource is unknown
 - [x] Modules: loaded from a directory, nested, inputs from the caller, outputs to the
       caller; reaching inside one is refused
-- [x] Data sources: `data` blocks read through the provider's `read`, scoped per module
+- [x] Data sources: `data` blocks read through the provider, scoped per module
 - [x] State: JSON file with a serial, atomic write, backup, lock; written after every
       change; dependencies recorded so deletes run in reverse order
 - [x] Saved plans: `plan --out` writes the plan with its configuration and modules;
