@@ -188,35 +188,35 @@ describe('Orchestrator - Module Loading', () => {
     expect(stateArg.resources).toHaveProperty(expectedKey);
   });
 
-  it('should throw error if module source is missing', async () => {
-    const rootConfig = `module "invalid" {}`;
-
-    // Mock plan to return relevant action if needed, but plan() might fail before if syntax is valid but semantic check fails
-    // Here we are testing orchestrator.run -> moduleLoader.loadModuleTree
-    // We need to bypass plan() mock and let module loader run.
-
-    // In Orchestrator.run:
-    // 1. Parser parses root config
-    // 2. ModuleLoader loads tree
-    // So we just need apply() to be called.
-
-    await expect(apply(orchestrator, rootConfig)).rejects.toThrow('missing a valid "source" attribute');
+  it('refuses a module with no source, pointing at the block', async () => {
+    await expect(apply(orchestrator, `module "invalid" {}`)).rejects.toMatchObject({
+      message: expect.stringContaining('missing a valid "source" attribute') as string,
+      position: { file: 'main.clay', line: 1, column: 1 },
+      block: 'module "invalid"',
+    });
   });
 
-  it('should throw error if module source file not found', async () => {
-    const rootConfig = `module "missing" { source = "./missing" }`;
-
-    await expect(apply(orchestrator, rootConfig)).rejects.toThrow('Module source not found at: missing/main.clay');
+  it('refuses a module source with no configuration in it, pointing at the source', async () => {
+    await expect(apply(orchestrator, `module "missing" { source = "./missing" }`)).rejects.toMatchObject({
+      message: 'Module source not found at: missing/main.clay',
+      position: { file: 'main.clay', line: 1, column: 29 },
+      block: 'module "missing"',
+    });
   });
 
   it('refuses a root module whose source is the configuration it was called from', async () => {
     await expect(apply(orchestrator, `module "self" { source = "." }`)).rejects.toThrow(/Module source cycle detected: \. -> \.$/);
   });
 
-  it('refuses a module whose source is the directory it was loaded from', async () => {
+  it('refuses a module whose source is the directory it was loaded from, pointing at the source in that module', async () => {
     files['a/main.clay'] = `module "self" { source = "." }`;
 
-    await expect(apply(orchestrator, `module "a" { source = "./a" }`)).rejects.toThrow(/Module source cycle detected: \. -> a -> a$/);
+    await expect(apply(orchestrator, `module "a" { source = "./a" }`)).rejects.toMatchObject({
+      message: expect.stringMatching(/Module source cycle detected: \. -> a -> a$/) as string,
+      position: { file: 'a/main.clay', line: 1, column: 26 },
+      block: 'module "self"',
+      module: 'module.a',
+    });
   });
 
   it('refuses a source that spells the directory it was loaded from with a trailing slash', async () => {

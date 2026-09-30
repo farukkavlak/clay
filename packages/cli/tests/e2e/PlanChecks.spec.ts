@@ -38,16 +38,35 @@ describe('what plan refuses before anything runs', () => {
     });
   });
 
-  it('a resource type no provider handles', async () => {
-    const config = 'resource "aws_bucket" "b" { name = "x" }';
+  it.each([
+    ['a resource type', 'resource "aws_bucket" "b" { name = "x" }', 'resource "aws_bucket" "b"'],
+    ['a data source type', 'data "aws_bucket" "b" { name = "x" }', 'data "aws_bucket" "b"'],
+  ])('%s no provider handles, placed in its block', async (_, config, block) => {
+    await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
+      message: 'No provider handles "aws_bucket"',
+      block,
+      position: { file: CONFIG_FILE, line: 1, column: 1 },
+    });
+  });
 
-    await expect(newOrchestrator().plan(config)).rejects.toThrow('No provider handles "aws_bucket"');
+  it('a data source the provider refuses, placed in its block', async () => {
+    const config = 'data "local_file" "f" { name = "x" }';
+
+    await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
+      message: 'local_file requires "path" attribute (string)',
+      block: 'data "local_file" "f"',
+      position: { file: CONFIG_FILE, line: 1, column: 1 },
+    });
   });
 
   it('a variable with no default and no value, whether or not anything reads it', async () => {
     const config = 'variable "unused" {}';
 
-    await expect(newOrchestrator().plan(config)).rejects.toThrow('variable "unused" has no value');
+    await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
+      message: 'variable "unused" has no value',
+      position: { file: 'main.clay', line: 1, column: 1 },
+      block: 'variable "unused"',
+    });
   });
 
   it('a module called without one of its inputs, naming the module', async () => {
@@ -55,7 +74,12 @@ describe('what plan refuses before anything runs', () => {
     await fs.writeFile(path.join(dir, 'm', 'main.clay'), echoModule, 'utf8');
     const config = 'module "m" { source = "./m" }';
 
-    await expect(newOrchestrator().plan(config)).rejects.toThrow('module.m: variable "text" has no value');
+    await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
+      message: 'variable "text" has no value',
+      position: { file: 'm/main.clay', line: 1, column: 1 },
+      block: 'variable "text"',
+      module: 'module.m',
+    });
   });
 
   it('nothing about a module input that the caller gives', async () => {

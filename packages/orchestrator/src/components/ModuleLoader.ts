@@ -48,15 +48,17 @@ export class ModuleLoader {
 
   private async loadChildModule(stmt: ModuleBlock, parentDir: string, parentAddress: ModuleAddress, loaded: Loaded, loadingDirs: string[]): Promise<void> {
     const moduleName = stmt.name;
+    const source = stmt.attributes.source;
+    const place = { block: spell(stmt), module: scopeOf(parentAddress) || undefined };
 
-    const sourceValue = stmt.attributes.source?.value;
-    if (typeof sourceValue !== 'string') throw new Error(`Module "${moduleName}" is missing a valid "source" attribute.`);
+    if (source?.type !== 'String') throw new ConfigError(`Module "${moduleName}" is missing a valid "source" attribute.`, (source ?? stmt).position, place);
 
     // The trailing "." leaves one spelling per directory, so a cycle is seen on the hop that closes it.
-    const moduleDir = path.posix.join(parentDir, sourceValue, '.');
-    if (loadingDirs.includes(moduleDir)) throw new Error(`Module source cycle detected: ${[...loadingDirs, moduleDir].join(' -> ')}`);
+    const moduleDir = path.posix.join(parentDir, source.value, '.');
+    if (loadingDirs.includes(moduleDir)) throw new ConfigError(`Module source cycle detected: ${[...loadingDirs, moduleDir].join(' -> ')}`, source.position, place);
 
     const moduleProgram = this.parseModuleFile(moduleDir);
+    if (moduleProgram === undefined) throw new ConfigError(`Module source not found at: ${path.posix.join(moduleDir, CONFIG_FILE)}`, source.position, place);
 
     const childAddress = parentAddress.child(moduleName);
     this.declareInputs(stmt, moduleProgram, childAddress, parentAddress);
@@ -72,10 +74,10 @@ export class ModuleLoader {
       } else if (childStmt.type === 'Module') await this.loadChildModule(childStmt, moduleDir, childAddress, loaded, [...loadingDirs, moduleDir]);
   }
 
-  private parseModuleFile(moduleDir: string): Statement[] {
+  private parseModuleFile(moduleDir: string): Statement[] | undefined {
     const moduleFile = path.posix.join(moduleDir, CONFIG_FILE);
     const moduleContent = this.files.read(moduleFile);
-    if (moduleContent === undefined) throw new Error(`Module source not found at: ${moduleFile}`);
+    if (moduleContent === undefined) return undefined;
 
     return new Parser(new Lexer(moduleContent, moduleFile).tokenize()).parse();
   }
@@ -100,7 +102,7 @@ export class ModuleLoader {
     // A caller's input beats the default; neither one is a missing input, read or not.
     for (const stmt of program) {
       if (stmt.type !== 'Variable' || this.scopeManager.getVariable(scope, stmt.name)) continue;
-      if (stmt.attributes.default === undefined) throw new Error(`${scope ? `${scope}: ` : ''}variable "${stmt.name}" has no value`);
+      if (stmt.attributes.default === undefined) throw new ConfigError(`variable "${stmt.name}" has no value`, stmt.position, { block: spell(stmt), module: scope || undefined });
 
       this.scopeManager.setVariable(scope, stmt.name, { value: stmt.attributes.default, context: address });
     }
