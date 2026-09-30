@@ -39,11 +39,11 @@ describe('what plan refuses before anything runs', () => {
   });
 
   it.each([
-    ['a resource type', 'resource "aws_bucket" "b" { name = "x" }', 'resource "aws_bucket" "b"'],
-    ['a data source type', 'data "aws_bucket" "b" { name = "x" }', 'data "aws_bucket" "b"'],
-  ])('%s no provider handles, placed in its block', async (_, config, block) => {
+    ['a resource type', 'resource "aws_bucket" "b" { name = "x" }', 'resource "aws_bucket" "b"', 'No provider handles "aws_bucket"'],
+    ['a data source type', 'data "aws_bucket" "b" { name = "x" }', 'data "aws_bucket" "b"', 'No provider reads data source "aws_bucket"'],
+  ])('%s no provider handles, placed in its block', async (_, config, block, message) => {
     await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
-      message: 'No provider handles "aws_bucket"',
+      message,
       block,
       position: { file: CONFIG_FILE, line: 1, column: 1 },
     });

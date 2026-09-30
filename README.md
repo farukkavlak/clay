@@ -110,6 +110,9 @@ the plan if the state has changed since.
 | `null_resource` | `triggers`, a map; does nothing, and another resource can read its `id` to run after it |
 | `command_exec`  | `command`, `cwd`; runs on create and on every update                                    |
 
+A data source reads something that already exists. `data "local_file" "f" { path = "x" }`
+reads a file, and `data.local_file.f.content` is what it holds.
+
 ## How a run goes
 
 1. The parser turns `main.clay` and every module it names into a tree, with the file,

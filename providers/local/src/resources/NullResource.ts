@@ -17,8 +17,4 @@ export class NullResource implements ResourceHandler {
   async update(_id: string, _inputs: Record<string, unknown>): Promise<void> {}
 
   async delete(_id: string): Promise<void> {}
-
-  async read(_inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return {};
-  }
 }

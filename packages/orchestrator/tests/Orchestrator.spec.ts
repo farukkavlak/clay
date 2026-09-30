@@ -11,6 +11,7 @@ import { apply } from './apply';
 // Mock Provider for testing
 class MockProvider implements Provider {
   readonly resources = ['mock_resource'];
+  readonly dataSources: string[] = [];
   private createdResources: Map<string, Record<string, unknown>> = new Map();
 
   async getSchema(_type: string): Promise<Schema> {
@@ -37,7 +38,9 @@ class MockProvider implements Provider {
     this.createdResources.delete(id);
   }
 
-  async read(_type: string, _inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+  async validateDataSource(_type: string, _inputs: Record<string, unknown>): Promise<void> {}
+
+  async readDataSource(_type: string, _inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
     return {};
   }
 
@@ -49,6 +52,9 @@ class MockProvider implements Provider {
     this.createdResources.clear();
   }
 }
+
+/** A provider that makes nothing and reads one data source type. */
+const reader = () => Object.assign(new MockProvider(), { resources: [], dataSources: ['mock_data'] });
 
 describe('Orchestrator', () => {
   let tmpDir: string;
@@ -78,6 +84,12 @@ describe('Orchestrator', () => {
 
     it('should throw error if provider already registered', () => {
       expect(() => orchestrator.registerProvider(mockProvider)).toThrow('already registered');
+    });
+
+    it('refuses a second provider for a data source type one already reads', () => {
+      orchestrator.registerProvider(reader());
+
+      expect(() => orchestrator.registerProvider(reader())).toThrow('Provider for data source type "mock_data" already registered');
     });
   });
 

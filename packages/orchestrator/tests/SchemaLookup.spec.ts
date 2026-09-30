@@ -11,6 +11,7 @@ import { apply } from './apply';
 /** `constructor` is a name every plain object already answers to, and a provider is free to use it for a resource type. */
 class InheritedNameProvider implements Provider {
   readonly resources = ['constructor'];
+  readonly dataSources: string[] = [];
 
   async getSchema(_type: string): Promise<Schema> {
     return { path: { type: 'string', forceNew: true } };
@@ -26,7 +27,9 @@ class InheritedNameProvider implements Provider {
 
   async delete(_id: string): Promise<void> {}
 
-  async read(_type: string, _inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+  async validateDataSource(_type: string, _inputs: Record<string, unknown>): Promise<void> {}
+
+  async readDataSource(_type: string, _inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
     return {};
   }
 }

@@ -45,9 +45,11 @@ describe('Orchestrator - Phase 4: Data Flow', () => {
   let orchestrator: Orchestrator;
   let mockProvider: {
     resources: string[];
+    dataSources: string[];
     validate: Mock;
     create: Mock;
-    read: Mock;
+    validateDataSource: Mock;
+    readDataSource: Mock;
     update: Mock;
     delete: Mock;
     getSchema: Mock;
@@ -61,9 +63,11 @@ describe('Orchestrator - Phase 4: Data Flow', () => {
     // Setup mock provider
     mockProvider = {
       resources: ['test_resource'],
+      dataSources: [],
       validate: vi.fn(),
       create: vi.fn().mockResolvedValue('created-id'),
-      read: vi.fn(),
+      validateDataSource: vi.fn(),
+      readDataSource: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
       getSchema: vi.fn().mockReturnValue({}),

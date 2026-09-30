@@ -162,6 +162,51 @@ describe('LocalProvider', () => {
     });
   });
 
+  describe('the local_file data source', () => {
+    it('reads local_file, and no other type, as a data source', () => {
+      expect(provider.dataSources).toEqual(['local_file']);
+    });
+
+    it('takes a path without content, which only a file to write needs', async () => {
+      await expect(provider.validateDataSource('local_file', { path: 'a.txt' })).resolves.toBeUndefined();
+    });
+
+    it.each([
+      ['no path', {}],
+      ['a path that is not a string', { path: 1 }],
+    ])('refuses %s', async (_, inputs) => {
+      await expect(provider.validateDataSource('local_file', inputs)).rejects.toThrow('local_file requires "path" attribute (string)');
+    });
+
+    it('reads the content of the file', async () => {
+      const filePath = path.join(tmpDir, 'read.txt');
+      await fs.writeFile(filePath, 'héllo', 'utf8');
+
+      expect(await provider.readDataSource('local_file', { path: filePath })).toEqual({ content: 'héllo' });
+    });
+
+    it('refuses a file that is not there', async () => {
+      const filePath = path.join(tmpDir, 'missing.txt');
+
+      await expect(provider.readDataSource('local_file', { path: filePath })).rejects.toMatchObject({
+        message: `local_file cannot read "${filePath}": there is no such file`,
+        cause: { code: 'ENOENT' },
+      });
+    });
+
+    // A directory is there but is not a file, so reading it fails with something other than ENOENT.
+    it('still fails as the system says when the file cannot be read for another reason', async () => {
+      await expect(provider.readDataSource('local_file', { path: tmpDir })).rejects.toMatchObject({ code: 'EISDIR' });
+    });
+
+    it.each([
+      ['validated', (p: LocalProvider) => p.validateDataSource('random_string', {})],
+      ['read', (p: LocalProvider) => p.readDataSource('random_string', {})],
+    ])('refuses to be %s as a type it only makes as a resource', async (_, call) => {
+      await expect(call(provider)).rejects.toThrow('Unsupported data source type: random_string');
+    });
+  });
+
   describe('random_string', () => {
     it('should validate length', async () => {
       await expect(provider.validate('random_string', { length: ExactNumber.parse('10') })).resolves.not.toThrow();

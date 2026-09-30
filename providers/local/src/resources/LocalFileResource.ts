@@ -40,8 +40,4 @@ export class LocalFileResource implements ResourceHandler {
       if (error.code !== 'ENOENT') throw error;
     });
   }
-
-  async read(_inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return {};
-  }
 }

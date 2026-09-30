@@ -68,7 +68,7 @@ export class ConfigLoader {
     for (const stmt of program)
       if (stmt.type === 'Data') {
         this.checkReadOnce(stmt, scopeAddress);
-        const provider = tryAt(stmt.position, spell(stmt), scopeAddress, () => this.providers.get(stmt.dataSourceType));
+        const provider = tryAt(stmt.position, spell(stmt), scopeAddress, () => this.providers.reader(stmt.dataSourceType));
         const inputs = this.resolveInputs(stmt, state, scopeAddress);
         const attributes = await this.readDataSource(stmt, provider, inputs, scopeAddress);
 
@@ -78,9 +78,9 @@ export class ConfigLoader {
 
   private async readDataSource(stmt: DataBlock, provider: Provider, inputs: Record<string, unknown>, scopeAddress: ModuleAddress): Promise<Record<string, unknown>> {
     try {
-      await provider.validate(stmt.dataSourceType, inputs);
+      await provider.validateDataSource(stmt.dataSourceType, inputs);
 
-      return await provider.read(stmt.dataSourceType, inputs);
+      return await provider.readDataSource(stmt.dataSourceType, inputs);
     } catch (error) {
       throw withPlace(error, stmt.position, spell(stmt), scopeAddress);
     }
