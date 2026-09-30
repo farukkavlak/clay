@@ -51,7 +51,7 @@ describe('a local_file data source', () => {
   it.each([
     ['at the root', (config: string) => config],
     ['in a module', () => 'module "m" { source = "./m" }'],
-  ])('names a data source it cannot find %s as the configuration writes it', async (_, root) => {
+  ])('names a data source it cannot find %s by its address', async (_, root) => {
     const config = 'output "o" { value = data.local_file.nope.content }';
     await fs.mkdir(path.join(dir, 'm'));
     await fs.writeFile(path.join(dir, 'm', 'main.clay'), config, 'utf8');
@@ -59,7 +59,7 @@ describe('a local_file data source', () => {
     await expect(newOrchestrator().plan(root(config))).rejects.toMatchObject({ message: 'Data source "data.local_file.nope" not found (or not resolved yet)' });
   });
 
-  it('names a data source without the attribute read from it as the configuration writes it', async () => {
+  it('names a data source by its address when the attribute read from it is missing', async () => {
     await fs.writeFile(path.join(dir, 'd.txt'), 'd', 'utf8');
     const config = `data "local_file" "d" { path = "${path.join(dir, 'd.txt')}" }\noutput "o" { value = data.local_file.d.nope }`;
 

@@ -97,7 +97,7 @@ describe('validate against real files', () => {
 
     const output = await validate('module "m" { source = "./m" }\ndata "local_file" "d" { path = "${module.m.local_file.a}" }');
 
-    expect(output).toContain('Validation failed: module "m" has no output "local_file"\n');
+    expect(output).toContain('Output "local_file" not found in module');
     expect(output).toContain('on main.clay line 2, in data "local_file" "d":');
   });
 

@@ -19,7 +19,7 @@ export class ModuleOutputResolver {
     const scope = scopeOf(caller.child(reference.module, key));
 
     const value = this.scopeManager.getOutput(scope, output);
-    if (value === undefined) throw new UnresolvedReferenceError(`module "${reference.module}" has no output "${output}"`);
+    if (value === undefined) throw new UnresolvedReferenceError(`Output "${output}" not found in module "${scope}"`);
 
     return { value, path };
   }
