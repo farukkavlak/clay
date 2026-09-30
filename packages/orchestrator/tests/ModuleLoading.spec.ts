@@ -208,12 +208,37 @@ describe('Orchestrator - Module Loading', () => {
     });
   });
 
+  it.each([
+    ['a bare name', 'app'],
+    ['a registry address', 'hashicorp/consul/aws'],
+    ['a remote address', 'git::https://example.com/app.git'],
+    ['an absolute path', '/srv/modules/app'],
+    ['a directory without its slash', '.'],
+    ['a parent without its slash', '..'],
+    ['an absolute path with ./ inside it', '/srv/./app'],
+  ])('refuses %s as a source, pointing at it', async (_, source) => {
+    files['app/main.clay'] = '';
+
+    await expect(apply(orchestrator, `module "app" { source = "${source}" }`)).rejects.toMatchObject({
+      message: `module "app" has source "${source}", which is not a local path: a source starts with ./ or ../`,
+      position: { file: 'main.clay', line: 1, column: 25 },
+      block: 'module "app"',
+    });
+  });
+
+  // A path is joined with forward slashes, so a backslash would be part of a directory's name.
+  it('refuses a source spelled with a backslash', async () => {
+    await expect(apply(orchestrator, String.raw`module "app" { source = ".\\app" }`)).rejects.toMatchObject({
+      message: String.raw`module "app" has source ".\app", which is not a local path: a source starts with ./ or ../`,
+    });
+  });
+
   it('refuses a root module whose source is the configuration it was called from', async () => {
-    await expect(apply(orchestrator, `module "self" { source = "." }`)).rejects.toThrow(/Module source cycle detected: \. -> \.$/);
+    await expect(apply(orchestrator, `module "self" { source = "./" }`)).rejects.toThrow(/Module source cycle detected: \. -> \.$/);
   });
 
   it('refuses a module whose source is the directory it was loaded from, pointing at the source in that module', async () => {
-    files['a/main.clay'] = `module "self" { source = "." }`;
+    files['a/main.clay'] = `module "self" { source = "../a" }`;
 
     await expect(apply(orchestrator, `module "a" { source = "./a" }`)).rejects.toMatchObject({
       message: expect.stringMatching(/Module source cycle detected: \. -> a -> a$/) as string,

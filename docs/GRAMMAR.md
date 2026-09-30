@@ -84,6 +84,9 @@ What the engine reads from each:
 `count` or `for_each` on a data source is refused where it is written, and so is a
 resource or a module with both.
 
+A module's `source` starts with `./` or `../`. Anything else, a registry address or an
+absolute path, is refused where it is written.
+
 ## Values
 
 ```

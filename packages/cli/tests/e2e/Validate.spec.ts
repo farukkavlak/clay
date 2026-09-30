@@ -56,6 +56,13 @@ describe('validate against real files', () => {
     expect(await validate(config)).toContain('Configuration is valid');
   });
 
+  it('refuses a source that is not a local path, and points at it', async () => {
+    const output = await validate('module "vpc" {\n  source = "terraform-aws-modules/vpc/aws"\n}');
+
+    expect(output).toContain('Validation failed: module "vpc" has source "terraform-aws-modules/vpc/aws", which is not a local path: a source starts with ./ or ../\n');
+    expect(output).toContain('on main.clay line 2, in module "vpc":');
+  });
+
   it('refuses a module that is not there, and points at its source', async () => {
     const output = await validate('module "m" { source = "./missing" }');
 

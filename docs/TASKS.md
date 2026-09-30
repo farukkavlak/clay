@@ -101,7 +101,7 @@ hits each of these early.
       relative to the root, where `clay` runs, so a plan or a state reads the same on
       another machine
 - [ ] `path.cwd`, once Clay can run from a directory other than the root
-- [ ] A module `source` has a kind. Terraform reads a local path only when it starts with
+- [x] A module `source` has a kind. Terraform reads a local path only when it starts with
       `./` or `../` and treats anything else as a registry address; Clay joins whatever it
       is onto the parent directory, so an absolute path is read as well
 
@@ -377,6 +377,7 @@ Ideas that need the sections above first.
 - A programmatic API: `plan()`, `apply()`, `destroy()` with events, for use from a script
 - Configuration in TypeScript, `clay.config.ts` with `defineConfig`, typed per provider
 - Snapshots of state with rollback
+- Modules from a registry or a git repository, fetched by `clay init`
 - A plan as an HTML page, with the diff highlighted
 - Cost estimation: a provider says what a resource costs, the plan sums the change
 - A language server: completion, go to definition, hover; a VS Code extension on top
