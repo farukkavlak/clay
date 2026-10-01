@@ -149,11 +149,16 @@ provider plans what a resource to create or change will hold.
       replaces the resource; a replacement is planned again as a create. A plan that
       changes a value the configuration sets is refused, and the id of a resource changed
       in place is known. Terraform's `PlanResourceChange`
-- [ ] A value the apply returns that differs from one the plan showed as known stops the
-      run with an error that names the provider, as Terraform's "inconsistent result after
-      apply" does. The plan was approved, so a different result is never taken in silence.
-      An attribute returned that the schema does not have is refused the same way, since
-      the next plan would read it as removed and plan an update every run
+- [x] A value the apply returns that differs from one the plan showed as known stops the
+      run with an error that says the provider has a bug, as Terraform's "inconsistent
+      result after apply" does. It names the resource type, since a provider has no name
+      yet. The plan was approved, so a different result is never taken in silence. A
+      value returned that the plan did not have is refused the same way, since the next
+      plan would read it as removed and plan an update every run
+- [ ] The apply plans each resource again with what it now knows, and holds what it
+      returns to that plan. A computed value made from one the configuration sets and the
+      plan did not know is taken as anything today, where the provider could know it by
+      then. Terraform plans again at apply and refuses a final plan that differs
 
 ### Schema-driven validation
 

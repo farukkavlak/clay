@@ -81,7 +81,7 @@ export interface PlanFile extends Plan {
 type Path = (string | number)[];
 
 /** Where a value holds what is not known yet, as the steps to each; `[[]]` when the whole of it is not. */
-function unknownPaths(value: unknown, at: Path = []): Path[] {
+export function unknownPaths(value: unknown, at: Path = []): Path[] {
   if (isUnknown(value)) return [at];
   if (Array.isArray(value)) return value.flatMap((item, index) => unknownPaths(item, [...at, index]));
 
@@ -392,26 +392,69 @@ export function changedOutside(plan: Plan): Drift[] {
   });
 }
 
-/** A value the plan did not know yet may come to anything; a known one, and every known part of one known in part, comes to the same. */
-function conforms(planned: unknown, resolved: unknown): boolean {
-  if (isUnknown(planned)) return true;
-  if (Array.isArray(planned)) return Array.isArray(resolved) && planned.length === resolved.length && planned.every((item, i) => conforms(item, resolved[i]));
-  if (isRecord(planned))
-    return (
-      isRecord(resolved) &&
-      isDeepStrictEqual(Object.keys(planned).sort(), Object.keys(resolved).sort()) &&
-      Object.keys(planned).every((key) => conforms(planned[key], resolved[key]))
-    );
+/** A place a value comes to something other than the plan showed there, and the two values at that place. */
+export interface Mismatch {
+  path: Path;
+  planned: unknown;
+  returned: unknown;
+}
 
-  return isDeepStrictEqual(planned, resolved);
+/** A value the plan did not know yet may come to anything; a known one, and every known part of one known in part, comes to the same. */
+function mismatches(planned: unknown, actual: unknown, at: Path): Mismatch[] {
+  if (isUnknown(planned)) return [];
+
+  const here = [{ path: at, planned, returned: actual }];
+  if (Array.isArray(planned)) {
+    if (!Array.isArray(actual) || planned.length !== actual.length) return here;
+    return planned.flatMap((item, i) => mismatches(item, actual[i], [...at, i]));
+  }
+  if (isRecord(planned)) {
+    if (!isRecord(actual) || !isDeepStrictEqual(Object.keys(planned).sort(), Object.keys(actual).sort())) return here;
+    return Object.keys(planned).flatMap((key) => mismatches(planned[key], actual[key], [...at, key]));
+  }
+
+  return isDeepStrictEqual(planned, actual) ? [] : here;
+}
+
+function conforms(planned: unknown, resolved: unknown): boolean {
+  return mismatches(planned, resolved, []).length === 0;
+}
+
+function own(values: Record<string, unknown>, name: string): unknown {
+  return Object.hasOwn(values, name) ? values[name] : undefined;
+}
+
+/** What the steps lead to, or undefined where the value holds nothing there. */
+function valueAt(value: unknown, path: Path): unknown {
+  let at = value;
+
+  for (const step of path)
+    if (Array.isArray(at) && typeof step === 'number') at = at[step];
+    else if (isRecord(at) && typeof step === 'string') at = own(at, step);
+    else return undefined;
+
+  return at;
+}
+
+/**
+ * Every place what an apply returned differs from what the plan showed. A value the configuration sets is held to what it resolved to for the apply, which the
+ * plan may not have known. Nothing returned may be unknown, since an apply returns the resource as it is.
+ */
+export function offApply(after: Record<string, unknown>, inputs: Record<string, unknown>, returned: Record<string, unknown>): Mismatch[] {
+  const expected = { ...after, ...inputs };
+
+  return [...new Set([...Object.keys(expected), ...Object.keys(returned)])].flatMap((name) => {
+    const unknown = unknownPaths(own(returned, name), [name]);
+    if (unknown.length > 0) return unknown.map((path) => ({ path, planned: valueAt(expected, path), returned: UNKNOWN }));
+
+    return mismatches(own(expected, name), own(returned, name), [name]);
+  });
 }
 
 /** The first value a resource now resolves to that the plan showed otherwise, or nothing when every one holds to the plan. */
 export function offPlan(planned: Record<string, unknown>, resolved: Record<string, unknown>): { name: string; planned: unknown; resolved: unknown } | undefined {
-  const value = (values: Record<string, unknown>, name: string) => (Object.hasOwn(values, name) ? values[name] : undefined);
-
   for (const name of new Set([...Object.keys(planned), ...Object.keys(resolved)]))
-    if (!conforms(value(planned, name), value(resolved, name))) return { name, planned: value(planned, name), resolved: value(resolved, name) };
+    if (!conforms(own(planned, name), own(resolved, name))) return { name, planned: own(planned, name), resolved: own(resolved, name) };
 
   return undefined;
 }

@@ -104,7 +104,9 @@ A saved plan carries the configuration it was made from, the state it was planne
 against and what the refresh read. `apply` runs that configuration, not the one on disk
 now, against what the refresh read, and refuses the plan if the state has changed since.
 On every apply, a value the plan showed as known that now comes out otherwise stops the
-run before that resource is touched.
+run before that resource is touched. A provider that makes a resource other than the plan
+showed stops the run too: what it made is kept in state, and the error lists each value
+that differs.
 
 ## Resources
 
@@ -119,7 +121,8 @@ Only the provider makes `result` and `stdout`, so setting one in the configurati
 refused.
 
 A data source reads something that already exists. `data "local_file" "f" { path = "x" }`
-reads a file, and `data.local_file.f.content` is what it holds.
+reads a file, and `data.local_file.f.content` is what it holds. A read that returns a
+value not known stops the run as a bug in the provider.
 
 ## How a run goes
 
@@ -127,7 +130,9 @@ reads a file, and `data.local_file.f.content` is what it holds.
    up. A resource found gone is made again, or forgotten if the configuration dropped
    it. `plan` and `apply` take `--refresh=false` to skip this and plan against the state
    alone. An apply writes what was read, even when nothing else changes. A saved plan is
-   applied as it was made, so `apply <plan>` reads nothing and refuses the flag.
+   applied as it was made, so `apply <plan>` reads nothing and refuses the flag. A read
+   that returns a value not known, or a name neither the schema nor the resource has,
+   stops the run as a bug in the provider.
 2. The parser turns `main.clay` and every module it names into a tree, with the file,
    line and column on every node.
 3. The graph builder links each resource, variable and output to what it reads, and

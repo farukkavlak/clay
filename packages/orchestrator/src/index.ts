@@ -11,6 +11,7 @@ import { DesiredStateBuilder } from './components/DesiredStateBuilder';
 import { LoadedResource, ModuleLoader } from './components/ModuleLoader';
 import { PlanRunner } from './components/PlanRunner';
 import { ResourcePlanner } from './components/ResourcePlanner';
+import { checkRead } from './providerResult';
 import { Instances } from './Instances';
 import { ModuleInstances } from './ModuleInstances';
 import { Planned } from './Planned';
@@ -126,7 +127,11 @@ export class Orchestrator {
     if (resource.id === undefined) return resource.attributes;
 
     try {
-      return await this.providers.get(resource.resourceType).read(resource.resourceType, resource.id, resource.attributes);
+      const provider = this.providers.get(resource.resourceType);
+      const read = await provider.read(resource.resourceType, resource.id, resource.attributes);
+      if (read !== null) checkRead(resource.resourceType, await provider.getSchema(resource.resourceType), resource.attributes, read);
+
+      return read;
     } catch (error) {
       throw new Error(`${key}: ${asError(error).message}`, { cause: error });
     }
