@@ -124,8 +124,8 @@ describe('a plan saved to a file', () => {
   // An output that reads a resource not created yet is unknown in the plan; the file has to carry that, since a symbol has no JSON form.
   it('shows a value not known yet as one when the plan is applied from its file', async () => {
     const config = `
-      resource "local_file" "a" { path = "${path.join(dir, 'a.txt')}" content = "hi" }
-      output "id" { value = "\${local_file.a.id}" }
+      resource "random_string" "a" { length = 4 }
+      output "id" { value = "\${random_string.a.id}" }
     `;
     await fs.writeFile(path.join(dir, 'main.clay'), config, 'utf8');
 
@@ -146,6 +146,33 @@ describe('a plan saved to a file', () => {
 
     expect(printed.join('\n')).toContain('Applying from saved plan');
     expect(printed.join('\n')).toContain('id = (known after apply)');
+  });
+
+  // A relative path lands where the apply runs, which the plan cannot know.
+  it('is applied from another directory with a file at a relative path', async () => {
+    const [planned, applied] = [path.join(dir, 'planned'), path.join(dir, 'applied')];
+    await fs.mkdir(planned);
+    await fs.mkdir(applied);
+    await fs.writeFile(path.join(planned, 'main.clay'), 'resource "local_file" "a" { path = "c.txt" content = "hi" }', 'utf8');
+
+    const cwd = process.cwd();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const failed = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
+
+    try {
+      process.chdir(planned);
+      await createPlanCommand().parseAsync(['node', 'clay', '--out', 'plan.json']);
+      process.chdir(applied);
+      await createApplyCommand().parseAsync(['node', 'clay', path.join(planned, 'plan.json')]);
+      expect(failed).not.toHaveBeenCalled();
+      expect(exit).not.toHaveBeenCalled();
+    } finally {
+      vi.restoreAllMocks();
+      process.chdir(cwd);
+    }
+
+    expect(await fs.readFile(path.join(applied, 'c.txt'), 'utf8')).toBe('hi');
   });
 
   it('carries its modules, so a module edited or removed later changes nothing', async () => {

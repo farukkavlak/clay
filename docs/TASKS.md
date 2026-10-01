@@ -162,10 +162,12 @@ provider plans what a resource to create or change will hold.
 - [x] A resource's id is one of its attributes, as Terraform has it, so the plan and the
       apply check hold it like any other value. A provider finds a resource by what it
       last held, and the engine keeps no id of its own
-- [ ] The apply plans each resource again with what it now knows, and holds what it
-      returns to that plan. A computed value made from one the configuration sets and the
-      plan did not know is taken as anything today, where the provider could know it by
-      then. Terraform plans again at apply and refuses a final plan that differs
+- [x] The apply plans each resource again with what it now knows, and holds what it
+      returns to that plan. A replacement is planned again as a create. A final plan
+      that changes a value the plan knew, or replaces what the plan changed in place,
+      stops the run before anything changes, as a bug in the provider. `local_file`
+      plans its id from an absolute path. Terraform plans again at apply and refuses a
+      final plan that differs
 - [ ] `create` and `update` are given what the plan says the resource will hold, not only
       the configuration's values, so a value the provider planned, such as a default, is
       not worked out a second time. Terraform's `ApplyResourceChange` is given the planned

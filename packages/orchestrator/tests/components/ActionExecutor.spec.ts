@@ -1,8 +1,9 @@
-import { Address, emptyState, ExactNumber, Provider, State, UNKNOWN } from '@clay/contracts';
+import { Address, emptyState, ExactNumber, PlanRequest, Provider, Schema, State, UNKNOWN } from '@clay/contracts';
 import { PlanAction } from '@clay/planner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActionExecutor } from '../../src/components/ActionExecutor';
+import { ResourcePlanner } from '../../src/components/ResourcePlanner';
 import { ModuleInstances } from '../../src/ModuleInstances';
 import { Planned } from '../../src/Planned';
 import { ProviderRegistry } from '../../src/ProviderRegistry';
@@ -30,6 +31,18 @@ const withList = (items: string[]): PlanAction => ({
   planned: { l: ['a', UNKNOWN] },
   after: { l: ['a', UNKNOWN] },
 });
+
+/** What the tests set, and what a provider makes of its own. */
+const schema: Schema = {
+  path: { type: 'string' },
+  old: { type: 'string' },
+  tags: { type: 'map' },
+  l: { type: 'list', optional: true, computed: true },
+  result: { type: 'string', computed: true },
+  a: { type: 'string', computed: true },
+  b: { type: 'string', computed: true },
+  n: { type: 'number', computed: true },
+};
 
 /** A create of `path = "p"` whose provider planned `after`. */
 const create = (after: Record<string, unknown>): PlanAction => ({
@@ -61,13 +74,15 @@ describe('ActionExecutor', () => {
       read: vi.fn(),
       validateDataSource: vi.fn(),
       readDataSource: vi.fn(),
-      getSchema: vi.fn(),
-      plan: vi.fn(),
+      getSchema: vi.fn(async () => schema),
+      // Plans the configuration as it is set, unless a test says what else it plans.
+      plan: vi.fn(async (_type: string, request: PlanRequest) => ({ after: request.config, replace: [] })),
     };
 
     providers = new ProviderRegistry();
     providers.register(mockProvider);
-    executor = new ActionExecutor(providers, new ReferenceResolver(new ScopeManager(), new Map(), new Instances(), new ModuleInstances(), new Planned()));
+    const resolver = new ReferenceResolver(new ScopeManager(), new Map(), new Instances(), new ModuleInstances(), new Planned());
+    executor = new ActionExecutor(providers, resolver, new ResourcePlanner(providers));
   });
 
   afterEach(() => {
@@ -75,6 +90,11 @@ describe('ActionExecutor', () => {
   });
 
   const context = Address.root('test', 'main');
+
+  /** The plan at apply holds these, with what the configuration sets. */
+  function plansAtApply(after: Record<string, unknown>, replace: (string | number)[][] = []): void {
+    vi.mocked(mockProvider.plan).mockImplementationOnce(async (_type, request) => ({ after: { ...after, ...request.config }, replace }));
+  }
 
   /** The next create returns these. */
   function created(attributes: Record<string, unknown>): void {
@@ -326,6 +346,7 @@ describe('ActionExecutor', () => {
     });
 
     it('takes any value where the plan did not know one the provider makes', async () => {
+      plansAtApply({ result: UNKNOWN });
       created({ path: 'p', result: 'r' });
 
       await executor.execute(create({ path: 'p', result: UNKNOWN }), mockState);
@@ -344,12 +365,14 @@ describe('ActionExecutor', () => {
         'n = 5, where the plan showed 5 (a JavaScript number where the plan has an exact number)',
       ],
     ])('names %s', async (_, returned, planned, line) => {
+      plansAtApply(planned);
       created(returned);
 
       await expect(executor.execute(create({ path: 'p', ...planned }), mockState)).rejects.toThrow(`${bug}\n  ${line}`);
     });
 
     it('names every value that differs', async () => {
+      plansAtApply({ a: '1', b: '2' });
       created({ path: 'p', a: 'x', b: 'y' });
 
       await expect(executor.execute(create({ path: 'p', a: '1', b: '2' }), mockState)).rejects.toThrow(
@@ -364,6 +387,46 @@ describe('ActionExecutor', () => {
         `${type} action missing what its provider planned`
       );
       expect(mockProvider.create).not.toHaveBeenCalled();
+      expect(mockProvider.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('planning again at apply', () => {
+    it('holds a create to what its provider plans once the values are known', async () => {
+      plansAtApply({ result: 'r' });
+      created({ path: 'p', result: 'x' });
+
+      await expect(executor.execute(create({ path: 'p', result: UNKNOWN }), mockState)).rejects.toThrow(`${bug}\n  result = "x", where the plan showed "r"`);
+    });
+
+    it.each([
+      ['another value', 's', 'result = "s", where the plan showed "r"'],
+      ['no value known', UNKNOWN, 'result is not known, where the plan showed "r"'],
+    ])('stops a replace before the delete when its provider plans %s where the plan knew one', async (_, result, line) => {
+      mockState.resources[context.toString()] = { resourceType: 'test', name: 'main', attributes: { path: 'old' } };
+      plansAtApply({ result });
+
+      await expect(executor.execute({ ...create({ path: 'p', result: 'r' }), type: 'REPLACE' }, mockState)).rejects.toThrow(
+        `test planned at apply what the plan did not show, which is a bug in the provider:\n  ${line}`
+      );
+      expect(mockProvider.delete).not.toHaveBeenCalled();
+      expect(mockProvider.create).not.toHaveBeenCalled();
+    });
+
+    it('plans a replace again as a create, since the old resource goes', async () => {
+      mockState.resources[context.toString()] = { resourceType: 'test', name: 'main', attributes: { path: 'old' } };
+
+      await executor.execute({ ...create({ path: 'p' }), type: 'REPLACE' }, mockState);
+
+      expect(mockProvider.plan).toHaveBeenCalledWith('test', { prior: null, proposed: { path: 'p' }, config: { path: 'p' } });
+    });
+
+    it('stops an update its provider plans at apply to replace', async () => {
+      mockState.resources[context.toString()] = { resourceType: 'test', name: 'main', attributes: { path: 'old' } };
+      plansAtApply({}, [['path']]);
+      const action: PlanAction = { type: 'UPDATE', resourceType: 'test', name: 'main', attributes: { path: str('p') }, planned: { path: 'p' }, after: { path: 'p' } };
+
+      await expect(executor.execute(action, mockState)).rejects.toThrow('test planned at apply to replace what the plan changed in place, which is a bug in the provider');
       expect(mockProvider.update).not.toHaveBeenCalled();
     });
   });

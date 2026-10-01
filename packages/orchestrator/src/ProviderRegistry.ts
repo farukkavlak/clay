@@ -1,4 +1,6 @@
-import { Provider } from '@clay/contracts';
+import { Provider, Schema } from '@clay/contracts';
+
+import { checkSchema } from './providerResult';
 
 /** The providers a run can use, each under the resource types it handles and the data source types it reads. */
 export class ProviderRegistry {
@@ -32,5 +34,9 @@ export class ProviderRegistry {
     if (!provider) throw new Error(`No provider handles "${type}"`);
 
     return provider;
+  }
+
+  async schema(type: string): Promise<Schema> {
+    return checkSchema(type, await this.get(type).getSchema(type));
   }
 }

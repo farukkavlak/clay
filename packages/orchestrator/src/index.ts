@@ -11,7 +11,7 @@ import { DesiredStateBuilder } from './components/DesiredStateBuilder';
 import { LoadedResource, ModuleLoader } from './components/ModuleLoader';
 import { PlanRunner } from './components/PlanRunner';
 import { ResourcePlanner } from './components/ResourcePlanner';
-import { checkRead, checkSchema } from './providerResult';
+import { checkRead } from './providerResult';
 import { Instances } from './Instances';
 import { ModuleInstances } from './ModuleInstances';
 import { Planned } from './Planned';
@@ -54,14 +54,15 @@ export class Orchestrator {
     const resolver = new ReferenceResolver(scopes, dataSources, instances, modules, planned);
     const scanner = new ReferenceScanner(modules);
     const graphBuilder = new DependencyGraphBuilder(scanner, instances, modules);
+    const resourcePlanner = new ResourcePlanner(providers);
 
     return new Orchestrator(
       stateManager,
       providers,
       new ConfigLoader(new ModuleLoader(files, scopes), scopes, dataSources, resolver, providers, instances, modules, planned),
       graphBuilder,
-      new DesiredStateBuilder(scopes, scanner, resolver, graphBuilder, instances, modules, planned, new ResourcePlanner(providers)),
-      new PlanRunner(stateManager, new ActionExecutor(providers, resolver), scopes, resolver, instances, modules)
+      new DesiredStateBuilder(scopes, scanner, resolver, graphBuilder, instances, modules, planned, resourcePlanner),
+      new PlanRunner(stateManager, new ActionExecutor(providers, resolver, resourcePlanner), scopes, resolver, instances, modules)
     );
   }
 
@@ -126,7 +127,7 @@ export class Orchestrator {
     try {
       const provider = this.providers.get(resource.resourceType);
       const read = await provider.read(resource.resourceType, resource.attributes);
-      if (read !== null) checkRead(resource.resourceType, await this.schemaOf(resource.resourceType), resource.attributes, read);
+      if (read !== null) checkRead(resource.resourceType, await this.providers.schema(resource.resourceType), resource.attributes, read);
 
       return read;
     } catch (error) {
@@ -155,16 +156,12 @@ export class Orchestrator {
       if (schemas.has(type)) continue;
 
       try {
-        schemas.set(type, await this.schemaOf(type));
+        schemas.set(type, await this.providers.schema(type));
       } catch (error) {
         throw withPlace(error, block.position, spell(block), address);
       }
     }
 
     return schemas;
-  }
-
-  private async schemaOf(type: string): Promise<Schema> {
-    return checkSchema(type, await this.providers.get(type).getSchema(type));
   }
 }

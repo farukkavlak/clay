@@ -141,13 +141,17 @@ value not known stops the run as a bug in the provider.
    stops here.
 4. Each value is resolved in that order, and the provider checks it and plans what the
    resource will hold: a value it computes is known after apply once anything changes,
-   and it says which changes replace the resource. A plan that changes a value the
+   unless it can work it out sooner, as `local_file` does its id from an absolute path.
+   It also says which changes replace the resource. A plan that changes a value the
    configuration sets is refused. The planner compares each plan with the state and lists
    the actions: create, update, replace, delete, or nothing.
 5. `apply` runs the actions in order, deletes in reverse order, and writes the state
-   after each one, so a failure leaves everything before it on disk. The state is written
-   to a temporary file and renamed, a backup is kept, and a lock file stops two runs at
-   once.
+   after each one, so a failure leaves everything before it on disk. Before each
+   create, update or replace, the provider plans it again with what is known by then.
+   A value the plan showed that comes out different, or a replace where the plan showed
+   an update, stops the run before anything changes. What the provider returns is held
+   to that plan. The state is written to a temporary file and renamed, a backup is kept,
+   and a lock file stops two runs at once.
 
 An error says where it was written:
 

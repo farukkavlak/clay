@@ -97,6 +97,17 @@ class MisnamingProvider extends LoudProvider {
   }
 }
 
+/** Plans its id with a count of the plans it made, so no two plans agree. */
+class FickleProvider extends MisnamingProvider {
+  private plans = 0;
+
+  override async plan(_type: string, request: PlanRequest): Promise<PlannedChange> {
+    const { after, replace } = planFromSchema(await this.getSchema(), request);
+    this.plans += 1;
+    return { after: { ...after, id: `plan-${this.plans}` }, replace };
+  }
+}
+
 describe('what an apply returns, held to the plan', () => {
   let dir: string;
   let file: string;
@@ -148,6 +159,68 @@ describe('what an apply returns, held to the plan', () => {
     expect(failures.map(({ message }) => message)).toEqual([
       'named returned what the plan did not show, which is a bug in the provider:\n  id = "logs-123", where the plan showed "logs"',
     ]);
+  });
+});
+
+describe('the plan made again at apply', () => {
+  let dir: string;
+
+  const failuresOf = async (config: string, ...providers: Provider[]) => {
+    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
+    engine.registerProvider(new LocalProvider());
+    for (const provider of providers) engine.registerProvider(provider);
+
+    const failures: string[] = [];
+    for await (const event of start(engine, config)) if (event.type === 'failed') failures.push(event.error.message);
+    return failures;
+  };
+
+  beforeEach(async () => {
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-final-plan-'));
+  });
+
+  afterEach(async () => {
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  // The name is not known at plan, so the plan cannot know the id; the plan at apply can.
+  it('holds what the apply returns to what the provider plans once the values are known', async () => {
+    const failures = await failuresOf(
+      `
+        resource "random_string" "n" { length = 4 }
+        resource "named" "a" { name = random_string.n.result }
+      `,
+      new MisnamingProvider()
+    );
+
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toMatch(/^named returned what the plan did not show, which is a bug in the provider:\n {2}id = "(\w{4})-123", where the plan showed "\1"$/);
+  });
+
+  it('stops before anything is made when the provider plans at apply what the plan did not show', async () => {
+    const failures = await failuresOf('resource "named" "a" { name = "logs" }', new FickleProvider());
+
+    expect(failures).toEqual(['named planned at apply what the plan did not show, which is a bug in the provider:\n  id = "plan-2", where the plan showed "plan-1"']);
+    const state = await new LocalBackend(dir).read();
+    expect(state.resources).toEqual({});
+  });
+
+  it('makes a file whose path is known only at apply, with its path as its id', async () => {
+    const failures = await failuresOf(
+      `
+        resource "random_string" "n" { length = 4 }
+        resource "local_file" "a" {
+          path    = "${dir}/\${random_string.n.result}.txt"
+          content = "hi"
+        }
+      `
+    );
+
+    expect(failures).toEqual([]);
+    const state = await new LocalBackend(dir).read();
+    const { attributes } = state.resources['local_file.a'];
+    expect(attributes.id).toBe(attributes.path);
+    expect(await fs.readFile(String(attributes.id), 'utf8')).toBe('hi');
   });
 });
 

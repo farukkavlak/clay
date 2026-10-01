@@ -1,4 +1,4 @@
-import { ExactNumber } from '@clay/contracts';
+import { ExactNumber, UNKNOWN } from '@clay/contracts';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -227,6 +227,33 @@ describe('LocalProvider', () => {
       expect(created).toEqual({ ...inputs, id: created.result, result: created.result });
       expect(created.result).toHaveLength(6);
       expect(await provider.update('random_string', created, inputs)).toEqual(created);
+    });
+
+    it('plans the id of a file to make as the path it is written to, which create returns', async () => {
+      const config = { path: path.join(tmpDir, 'sub', '..', 'a.txt'), content: 'hi' };
+
+      const { after } = await provider.plan('local_file', { prior: null, proposed: config, config });
+
+      expect(after.id).toBe(path.join(tmpDir, 'a.txt'));
+      expect(await provider.create('local_file', config)).toEqual(after);
+    });
+
+    it.each([
+      ['its path is not known', UNKNOWN],
+      ['its path is relative, since it lands where the apply runs', 'a.txt'],
+    ])('plans the id of a file as not known while %s', async (_, file) => {
+      const config = { path: file, content: 'hi' };
+
+      expect(await provider.plan('local_file', { prior: null, proposed: config, config })).toEqual({ after: { ...config, id: UNKNOWN }, replace: [] });
+    });
+
+    it('plans an update of a file with the id it already holds', async () => {
+      const config = { path: path.join(tmpDir, 'a.txt'), content: 'changed' };
+      const prior = { path: config.path, content: 'hi', id: '/where/it/was/made' };
+
+      const { after } = await provider.plan('local_file', { prior, proposed: { ...config, id: prior.id }, config });
+
+      expect(after.id).toBe('/where/it/was/made');
     });
 
     it('returns what a command printed, on create and on the run an update makes', async () => {

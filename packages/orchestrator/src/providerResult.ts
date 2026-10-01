@@ -23,19 +23,27 @@ function kinds(planned: unknown, returned: unknown): string {
   return shown(planned) === shown(returned) ? ` (${kind(returned)} where the plan has ${kind(planned)})` : '';
 }
 
-function line({ path, planned, returned }: Mismatch): string {
+function differs({ path, planned, returned }: Mismatch): string {
   const at = spelled(path);
 
-  if (isUnknown(returned)) return `${at} is not known; an apply returns every value`;
   if (planned === undefined) return `${at} = ${shown(returned)}, which the plan did not have`;
   if (returned === undefined) return `${at} is missing, where the plan showed ${shown(planned)}`;
 
   return `${at} = ${shown(returned)}, where the plan showed ${shown(planned)}${kinds(planned, returned)}`;
 }
 
-/** The plan was approved as shown, so a provider that makes something else has a bug, and the run stops on it. */
-export function inconsistentResult(type: string, mismatches: Mismatch[]): Error {
-  return new Error([`${type} returned what the plan did not show, which is a bug in the provider:`, ...mismatches.map((mismatch) => `  ${line(mismatch)}`)].join('\n'));
+/** How each check names its step, and a value it found not known. */
+const steps = {
+  apply: { did: 'returned', unknown: () => 'is not known; an apply returns every value' },
+  plan: { did: 'planned at apply', unknown: (planned: unknown) => `is not known, where the plan showed ${shown(planned)}` },
+};
+
+/** The plan was approved as shown, so a provider that plans or makes something else has a bug, and the run stops on it. */
+export function inconsistent(type: string, step: keyof typeof steps, mismatches: Mismatch[]): Error {
+  const { did, unknown } = steps[step];
+  const line = (mismatch: Mismatch) => (isUnknown(mismatch.returned) ? `${spelled(mismatch.path)} ${unknown(mismatch.planned)}` : differs(mismatch));
+
+  return new Error([`${type} ${did} what the plan did not show, which is a bug in the provider:`, ...mismatches.map((mismatch) => `  ${line(mismatch)}`)].join('\n'));
 }
 
 function unknownIn(name: string, value: unknown): string[] {
