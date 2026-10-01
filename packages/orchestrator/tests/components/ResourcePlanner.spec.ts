@@ -1,4 +1,4 @@
-import { planFromSchema, PlannedChange, PlanRequest, Provider, Resource, Schema, UNKNOWN } from '@clay/contracts';
+import { ExactNumber, planFromSchema, PlannedChange, PlanRequest, Provider, Resource, Schema, UNKNOWN } from '@clay/contracts';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ResourcePlanner } from '../../src/components/ResourcePlanner';
@@ -37,7 +37,7 @@ describe('ResourcePlanner', () => {
   it('plans a change in place as its provider plans it', async () => {
     const config = { path: 'a', tags: { x: '2' } };
 
-    expect(await plannerFor(fakeProvider()).plan('thing', schema, current, config)).toEqual({ after: { ...config, made: UNKNOWN }, replace: false });
+    expect(await plannerFor(fakeProvider()).plan('thing', schema, current, config)).toEqual({ after: { ...config, made: UNKNOWN }, replace: false, config });
   });
 
   it('plans a resource it replaces again, as one to create', async () => {
@@ -46,8 +46,20 @@ describe('ResourcePlanner', () => {
 
     const planned = await plannerFor(provider).plan('thing', schema, current, config);
 
-    expect(planned).toEqual({ after: { ...config, made: UNKNOWN }, replace: true });
+    expect(planned).toEqual({ after: { ...config, made: UNKNOWN }, replace: true, config });
     expect(provider.plan).toHaveBeenLastCalledWith('thing', { prior: null, proposed: config, config });
+  });
+
+  // The provider is sent the values as the schema takes them, and so plans them, and the apply sends them again.
+  it('sends the provider a value converted to the type the schema names, and gives it back', async () => {
+    const provider = fakeProvider();
+    const converted = { path: '5', tags: {} };
+
+    const planned = await plannerFor(provider).plan('thing', schema, undefined, { path: ExactNumber.parse('5'), tags: {} });
+
+    expect(provider.validate).toHaveBeenCalledWith('thing', converted);
+    expect(provider.plan).toHaveBeenCalledWith('thing', { prior: null, proposed: converted, config: converted });
+    expect(planned).toEqual({ after: { ...converted, made: UNKNOWN }, replace: false, config: converted });
   });
 
   it('replaces only where a value the provider names changes', async () => {

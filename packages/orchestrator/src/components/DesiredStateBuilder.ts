@@ -4,7 +4,7 @@ import { AttributeValue, ResourceBlock, spell, spellReference, Statement } from 
 import { DesiredResource, hasChanges } from '@clay/planner';
 import { moveResource } from '@clay/state';
 
-import { writtenAt } from '../checkValues';
+import { writtenAt } from '../conformValues';
 import { countFrom } from '../count';
 import { eachFrom } from '../forEach';
 import { Instances } from '../Instances';

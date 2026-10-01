@@ -176,7 +176,8 @@ provider plans what a resource to create or change will hold.
 ### Schema-driven validation
 
 `SchemaDefinition` carries `type`, `required`, `elemType` and `schema`. The engine holds
-a resource's and a data source's names and values to them, refuses a computed value the
+a resource's and a data source's names and values to them, converts a number, a bool or
+a string to the one the schema names where it can, refuses a computed value the
 configuration sets unless it is also optional, and refuses a schema that keeps a value it
 does not compute. `planFromSchema` reads `forceNew`, `computed` and `kept` for a provider.
 A provider's `validate` checks only what a schema cannot say: an empty path or command, a
@@ -194,10 +195,10 @@ length below 1.
 - [x] A resource with a value that is not known yet has its known values checked. The
       provider's `validate` sees every value, UNKNOWN where only the apply makes one, and
       checks what it knows; the apply checks the rest once it knows them
-- [ ] A number or a bool where the schema wants a string, and the reverse, is refused.
-      Terraform converts between them; Clay decides between converting and a `tostring`
-      function once a configuration needs it. `null_resource` takes any map as
-      `triggers` until then
+- [x] A number or a bool where the schema wants a string becomes its text, and a string
+      that spells a number or a bool where one is wanted becomes it, as Terraform does.
+      Any other string there is refused where it is written. `null_resource` takes any
+      map as `triggers`, since it only compares them
 - [ ] `SchemaType` knows a `set`, whose order is not a change. Every list is compared in
       order today, so writing the same members in another order plans an update
 

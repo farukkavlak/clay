@@ -122,8 +122,11 @@ full path, the string, or a random UUID. Only the provider makes `id`, `result` 
 `stdout`, so setting one in the configuration is refused.
 
 Each resource is held to its schema. A name the schema does not have, a required one
-left out, or a value of another type is refused where it is written. No value is
-converted: a number given where a string is wanted is refused, not turned into text.
+left out, or a value of another type is refused where it is written. A number or a bool
+where a string is wanted becomes its text: `5` is `"5"`, `1.50` is `"1.5"`. A string
+where a number or a bool is wanted is read as one when it spells one: `"8"` is `8`,
+`"true"` is `true`, and `"8 MB"` is refused. Nothing else is converted. The plan, the
+provider and the state all see the converted value.
 
 A data source reads something that already exists. `data "local_file" "f" { path = "x" }`
 reads a file, and `data.local_file.f.content` is what it holds. A data source has a schema

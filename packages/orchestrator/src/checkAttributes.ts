@@ -1,7 +1,7 @@
 import { Schema } from '@clay/contracts';
 import { ConfigError, DataBlock, Position, ResourceBlock, spell } from '@clay/parser';
 
-import { nameProblem } from './checkValues';
+import { nameProblem } from './conformValues';
 import { LoadedResource } from './components/ModuleLoader';
 import { Context } from './keys';
 import { withPlace } from './place';
