@@ -111,6 +111,7 @@ module "app" {
         modulePath: [{ name: 'app' }],
         attributes: { ami: { type: 'Reference', value: ['data', 'aws_ami', 'ubuntu', 'id'] } },
         planned: { ami: 'ami-12345' },
+        after: { ami: 'ami-12345' },
       },
     ]);
 
@@ -146,6 +147,7 @@ module "app" {
         modulePath: [{ name: 'app' }],
         attributes: { ami: { type: 'Reference', value: ['data', 'aws_ami', 'root_ami', 'id'] } },
         planned: { ami: UNKNOWN },
+        after: { ami: UNKNOWN },
       },
     ]);
 

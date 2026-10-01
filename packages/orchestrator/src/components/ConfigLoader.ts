@@ -1,6 +1,7 @@
 import { ModuleAddress, Provider, State } from '@clay/contracts';
 import { CONFIG_FILE, ConfigError, DataBlock, Lexer, Parser, spell, Statement } from '@clay/parser';
 
+import { checkDataSourceRead } from '../providerResult';
 import { Instances } from '../Instances';
 import { ModuleInstances } from '../ModuleInstances';
 import { Planned } from '../Planned';
@@ -79,8 +80,10 @@ export class ConfigLoader {
   private async readDataSource(stmt: DataBlock, provider: Provider, inputs: Record<string, unknown>, scopeAddress: ModuleAddress): Promise<Record<string, unknown>> {
     try {
       await provider.validateDataSource(stmt.dataSourceType, inputs);
+      const read = await provider.readDataSource(stmt.dataSourceType, inputs);
+      checkDataSourceRead(stmt.dataSourceType, read);
 
-      return await provider.readDataSource(stmt.dataSourceType, inputs);
+      return read;
     } catch (error) {
       throw withPlace(error, stmt.position, spell(stmt), scopeAddress);
     }

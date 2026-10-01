@@ -112,6 +112,7 @@ describe('Orchestrator - Phase 4: Data Flow', () => {
         modulePath: [],
         attributes: { region: { type: 'Reference', value: ['var', 'region'] } },
         planned: { region: UNKNOWN },
+        after: { region: UNKNOWN },
       },
     ]);
 
@@ -156,6 +157,7 @@ module "app" {
         modulePath: [{ name: 'app' }],
         attributes: { tags: { type: 'Reference', value: ['var', 'env'] } },
         planned: { tags: UNKNOWN },
+        after: { tags: UNKNOWN },
       },
     ]);
 
@@ -195,6 +197,7 @@ module "L2" {
         modulePath: [{ name: 'L2' }],
         attributes: { loc: { type: 'Reference', value: ['var', 'region'] } },
         planned: { loc: UNKNOWN },
+        after: { loc: UNKNOWN },
       },
     ]);
 
@@ -237,6 +240,7 @@ resource "test_resource" "instance" {
         modulePath: [{ name: 'db' }],
         attributes: { name: { type: 'Reference', value: ['var', 'db_name'] } },
         planned: { name: UNKNOWN },
+        after: { name: UNKNOWN },
       },
       {
         type: 'CREATE',
@@ -245,6 +249,7 @@ resource "test_resource" "instance" {
         modulePath: [],
         attributes: { name: { type: 'String', value: 'my-app' } },
         planned: { name: 'my-app' },
+        after: { name: 'my-app' },
       },
     ]);
 
