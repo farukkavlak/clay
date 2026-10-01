@@ -1,4 +1,4 @@
-import { isUnknown, Provider, Schema } from '@clay/contracts';
+import { isUnknown, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, UNKNOWN } from '@clay/contracts';
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
@@ -16,6 +16,10 @@ class StampProvider implements Provider {
 
   async getSchema(): Promise<Schema> {
     return { label: { type: 'string', required: true }, note: { type: 'string' }, made: { type: 'string', computed: true, optional: true } };
+  }
+
+  async plan(type: string, request: PlanRequest): Promise<PlannedChange> {
+    return planFromSchema(await this.getSchema(), request);
   }
 
   async validate(): Promise<void> {}
@@ -170,12 +174,15 @@ describe('a value only the provider knows', () => {
     expect(actions.map(({ type, changes }) => ({ type, changes }))).toEqual([{ type: 'UPDATE', changes: { made: { old: 'made x', new: 'mine' } } }]);
   });
 
+  // Any change makes the provider compute its values again, so what it made before is known only after apply.
   it('still plans a value the configuration stops setting as removed', async () => {
     await apply('resource "stamp" "a" {\n  label = "x"\n  note = "n"\n}');
 
     const { actions } = await newOrchestrator().plan('resource "stamp" "a" { label = "x" }');
 
-    expect(actions.map(({ type, changes }) => ({ type, changes }))).toEqual([{ type: 'UPDATE', changes: { note: { old: 'n', new: undefined } } }]);
+    expect(actions.map(({ type, changes }) => ({ type, changes }))).toEqual([
+      { type: 'UPDATE', changes: { note: { old: 'n', new: undefined }, made: { old: 'made x', new: UNKNOWN } } },
+    ]);
   });
 
   it('plans a value a resource to be made will have as known after apply, and the apply reads it', async () => {

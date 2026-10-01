@@ -1,4 +1,4 @@
-import { ResourceHandler, Schema } from '@clay/contracts';
+import { PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema } from '@clay/contracts';
 import { exec } from 'node:child_process';
 import crypto from 'node:crypto';
 import { promisify } from 'node:util';
@@ -16,6 +16,10 @@ export class CommandExecResource implements ResourceHandler {
 
   async validate(inputs: Record<string, unknown>): Promise<void> {
     if (!inputs.command || typeof inputs.command !== 'string') throw new Error('command_exec requires "command" attribute (string)');
+  }
+
+  async plan(request: PlanRequest): Promise<PlannedChange> {
+    return planFromSchema(await this.getSchema(), request);
   }
 
   // Nothing outside the state holds it, so it is as it was applied.

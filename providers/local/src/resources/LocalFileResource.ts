@@ -1,4 +1,4 @@
-import { ResourceHandler, Schema } from '@clay/contracts';
+import { PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema } from '@clay/contracts';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -14,6 +14,10 @@ export class LocalFileResource implements ResourceHandler {
     if (!inputs.path || typeof inputs.path !== 'string') throw new Error('local_file requires "path" attribute (string)');
 
     if (typeof inputs.content !== 'string') throw new Error('local_file requires "content" attribute (string)');
+  }
+
+  async plan(request: PlanRequest): Promise<PlannedChange> {
+    return planFromSchema(await this.getSchema(), request);
   }
 
   async read(id: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {

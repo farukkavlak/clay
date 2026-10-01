@@ -73,11 +73,12 @@ way. A module call takes `for_each` too, `module.web["eu"]`, with `each.key` and
 References: `var.name`, `local_file.a.content`, `module.m.out`, `module.web[0].out`, and
 `random_string.s.id` for what the provider assigned. A reference reads into a map or a
 list with `.key`, `["key"]` and `[0]`: `var.tags.env`, `var.names[0]`. A resource to be
-created or changed is read at plan time as its configuration sets it, so
-`random_string.s.length` is known; what only the apply makes, such as its id or
-`random_string.s.result`, is unknown and shown as such. A name the resource will never
-have, one the configuration does not set and the provider does not compute, is refused at
-plan. A list or a map is known as far as its items are:
+created or changed is read at plan time as its provider plans it, so `random_string.s.length`
+is known, and so is `local_file.a.id` when only its content changes; what only the apply
+makes, such as the id of a new resource or `random_string.s.result`, is unknown and shown
+as such. A name the resource will never have, one the configuration does not set and the
+provider does not compute, is refused at plan. A list or a map is known as far as its
+items are:
 `{ a = random_string.s.id, b = "x" }` plans as `{"a":(known after apply),"b":"x"}`.
 Reaching inside a module (`module.m.local_file.a`) is not allowed; a module speaks
 through its outputs. `path.module` is the directory of the module it is written in,
@@ -132,8 +133,11 @@ reads a file, and `data.local_file.f.content` is what it holds.
 3. The graph builder links each resource, variable and output to what it reads, and
    sorts them so nothing runs before what it needs. A cycle or a reference to nothing
    stops here.
-4. Each value is resolved in that order; the planner compares it with the state and
-   lists the actions: create, update, replace, delete, or nothing.
+4. Each value is resolved in that order, and the provider checks it and plans what the
+   resource will hold: a value it computes is known after apply once anything changes,
+   and it says which changes replace the resource. A plan that changes a value the
+   configuration sets is refused. The planner compares each plan with the state and lists
+   the actions: create, update, replace, delete, or nothing.
 5. `apply` runs the actions in order, deletes in reverse order, and writes the state
    after each one, so a failure leaves everything before it on disk. The state is written
    to a temporary file and renamed, a backup is kept, and a lock file stops two runs at

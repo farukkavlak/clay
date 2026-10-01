@@ -1,4 +1,4 @@
-import { ExactNumber, Provider, Schema } from '@clay/contracts';
+import { ExactNumber, planFromSchema, PlannedChange, PlanRequest, Provider, Schema } from '@clay/contracts';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -22,6 +22,10 @@ class MockProvider implements Provider {
       depends_on: { type: 'string' },
       name: { type: 'string' },
     };
+  }
+
+  async plan(type: string, request: PlanRequest): Promise<PlannedChange> {
+    return planFromSchema(await this.getSchema(type), request);
   }
 
   async validate(_type: string, _inputs: Record<string, unknown>): Promise<void> {

@@ -1,4 +1,4 @@
-import { Address, isUnknown, ModuleAddress, Schema, State, UNKNOWN } from '@clay/contracts';
+import { Address, isUnknown, ModuleAddress, Resource, Schema, State, UNKNOWN } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { AttributeValue, ResourceBlock, spell, spellReference, Statement } from '@clay/parser';
 import { DesiredResource, hasChanges } from '@clay/planner';
@@ -10,7 +10,7 @@ import { Instances } from '../Instances';
 import { Context, contextIn, enclosing } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
 import { Planned } from '../Planned';
-import { tryAt } from '../place';
+import { tryAt, withPlace } from '../place';
 import { checkHasKey, checkInRange } from '../resolvers/instance';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { Reference, ReferenceScanner } from '../resolvers/ReferenceScanner';
@@ -18,6 +18,7 @@ import { UnresolvedReferenceError } from '../resolvers/UnresolvedReferenceError'
 import { ScopeManager } from '../scope/ScopeManager';
 import { DependencyGraphBuilder, GraphNode, ValueNode } from './DependencyGraphBuilder';
 import { LoadedResource } from './ModuleLoader';
+import { ResourcePlan, ResourcePlanner } from './ResourcePlanner';
 
 /** What the configuration asks for, with every value resolved against the state or left UNKNOWN. */
 export interface DesiredState {
@@ -36,8 +37,8 @@ function sharedModule(one: ModuleAddress, other: ModuleAddress): ModuleAddress {
 /**
  * Resolves each resource after the ones it reads from, so a value an earlier action will change is read as the plan knows it, not stale.
  * Each node is resolved once for every instance of its module.
- * An instance that will be created or changed is kept in `planned` with the values its configuration sets and knows. Its id, what its provider computes, and what its
- * configuration does not know yet are UNKNOWN; any other name is refused.
+ * Each instance is planned by its provider. One that will be created or changed is kept in `planned` as the provider planned it, so a resource that reads it
+ * reads what it will hold: a value planned as UNKNOWN, and an id not known yet, only the apply makes, and any other name is refused.
  */
 export class DesiredStateBuilder {
   private schemas = new Map<string, Schema>();
@@ -49,7 +50,8 @@ export class DesiredStateBuilder {
     private graphBuilder: DependencyGraphBuilder,
     private instances: Instances,
     private modules: ModuleInstances,
-    private planned: Planned
+    private planned: Planned,
+    private resourcePlanner: ResourcePlanner
   ) {}
 
   /** Moves are made in the state it is given, which a plan reads for itself and never writes, and then plans the actions against. The schemas say which values the provider computes. */
@@ -116,10 +118,18 @@ export class DesiredStateBuilder {
     const movedFrom = tryAt(block.position, spell(block), address, () => this.moveIn(address, state));
     const attributes = this.resolveForPlan(block, state, address);
     const current = state.resources[address.toString()];
-    const schema = this.schemas.get(block.resourceType);
-    if (!current || hasChanges(current.attributes, attributes, schema)) this.planned.set(address.toString(), attributes, schema);
+    const change = await this.askProvider(address, block, current, attributes);
+    if (!current || change.replace || hasChanges(current.attributes, change.after)) this.planned.set(address.toString(), change.after, change.id);
 
-    return { address, block, attributes, dependencies, ...(movedFrom && { movedFrom }) };
+    return { address, block, attributes, after: change.after, replace: change.replace, dependencies, ...(movedFrom && { movedFrom }) };
+  }
+
+  private async askProvider(address: Address, block: ResourceBlock, current: Resource | undefined, attributes: Record<string, unknown>): Promise<ResourcePlan> {
+    try {
+      return await this.resourcePlanner.plan(block.resourceType, this.schemas.get(block.resourceType) ?? {}, current, attributes);
+    } catch (error) {
+      throw withPlace(error, block.position, spell(block), address);
+    }
   }
 
   /**

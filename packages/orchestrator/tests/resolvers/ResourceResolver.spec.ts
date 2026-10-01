@@ -60,7 +60,7 @@ describe('ResourceResolver', () => {
   // A resource the plan creates or changes is read as the plan knows it, over what state holds.
   describe('an instance the plan will create or change', () => {
     const planned = new Planned();
-    planned.set('resource.test', { simple: 'new', later: UNKNOWN }, { simple: { type: 'string' }, made: { type: 'string', computed: true } });
+    planned.set('resource.test', { simple: 'new', later: UNKNOWN, made: UNKNOWN }, undefined);
     const planning = new ResourceResolver(new Instances(), planned);
 
     it('reads what its configuration sets, not what state holds', () => {
@@ -73,6 +73,20 @@ describe('ResourceResolver', () => {
       ['a value its provider computes', 'resource.test.made'],
     ])('leaves %s to the apply', (_, spelled) => {
       expect(() => planning.resolve(ref(spelled), context, mockState)).toThrow(UnresolvedReferenceError);
+    });
+
+    it('reads the id it keeps', () => {
+      const kept = new Planned();
+      kept.set('resource.test', { simple: 'new' }, 'kept-id');
+
+      expect(new ResourceResolver(new Instances(), kept).resolve(ref('resource.test.id'), context, mockState).value).toBe('kept-id');
+    });
+
+    it('reads an id value the resource holds of its own over the id it keeps', () => {
+      const own = new Planned();
+      own.set('resource.test', { id: 'its own' }, 'kept-id');
+
+      expect(new ResourceResolver(new Instances(), own).resolve(ref('resource.test.id'), context, mockState).value).toBe('its own');
     });
 
     // State holds settings, but the plan will make the instance anew from its configuration.
