@@ -123,6 +123,8 @@ export interface SchemaDefinition {
   computed?: boolean;
   /** With `computed`: the configuration may set it, and the provider makes it when the configuration does not. */
   optional?: boolean;
+  /** With `computed`: made with the resource and the same until it is replaced, so a change in place keeps it as it was read. */
+  kept?: boolean;
   elemType?: SchemaType; // For 'list' and 'map'
   schema?: Schema; // For 'object'
 }
@@ -156,12 +158,13 @@ export interface PlannedChange {
 
 /**
  * A plan from the schema alone: with nothing changed the resource stays as it was read, and with anything changed, what the provider computes and the
- * configuration does not set is made again, and a changed `forceNew` attribute replaces it.
+ * configuration does not set is made again unless it is kept, and a changed `forceNew` attribute replaces it.
  */
 export function planFromSchema(schema: Schema, { prior, proposed, config }: PlanRequest): PlannedChange {
   if (prior !== null && isDeepStrictEqual(prior, proposed)) return { after: prior, replace: [] };
 
-  const remade = Object.keys(schema).filter((name) => schema[name].computed && !Object.hasOwn(config, name));
+  const kept = (name: string) => schema[name].kept && Object.hasOwn(proposed, name);
+  const remade = Object.keys(schema).filter((name) => schema[name].computed && !Object.hasOwn(config, name) && !kept(name));
   const after = Object.fromEntries([...Object.entries(proposed), ...remade.map((name) => [name, UNKNOWN])]);
   if (prior === null) return { after, replace: [] };
 

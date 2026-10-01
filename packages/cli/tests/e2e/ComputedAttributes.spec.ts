@@ -52,6 +52,22 @@ class ForgetfulStampProvider extends StampProvider {
   }
 }
 
+/** Makes a `serial` from its `size`, which replaces it, so the serial is the same until the resource is replaced. */
+class SerialStampProvider extends StampProvider {
+  override async getSchema(): Promise<Schema> {
+    return { ...(await super.getSchema()), size: { type: 'string', forceNew: true }, serial: { type: 'string', computed: true, kept: true } };
+  }
+
+  override async create(type: string, inputs: Record<string, unknown>): Promise<{ id: string; attributes: Record<string, unknown> }> {
+    const { id, attributes } = await super.create(type, inputs);
+    return { id, attributes: { ...attributes, serial: `serial ${String(inputs.size)}` } };
+  }
+
+  override async update(id: string, type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return { ...(await super.update(id, type, inputs)), serial: `serial ${String(inputs.size)}` };
+  }
+}
+
 describe('a value only the provider knows', () => {
   let dir: string;
   let file: string;
@@ -66,6 +82,9 @@ describe('a value only the provider knows', () => {
   const apply = async (config: string, stamp?: Provider) => {
     for await (const event of start(newOrchestrator(stamp), config)) if (event.type === 'failed') throw event.error;
   };
+
+  const serialCopy = (label: string, size = '1') =>
+    `resource "stamp" "a" {\n  label = "${label}"\n  size = "${size}"\n}\nresource "local_file" "copy" {\n  path = "${file}"\n  content = stamp.a.serial\n}`;
 
   const withCopy = (stamp: string) => `${stamp}\nresource "local_file" "copy" {\n  path = "${file}"\n  content = stamp.a.made\n}`;
 
@@ -201,6 +220,35 @@ describe('a value only the provider knows', () => {
     const { actions } = await newOrchestrator().plan(withCopy('resource "stamp" "a" { label = "x" }'));
 
     expect(actions.find((action) => action.name === 'copy')!.planned).toMatchObject({ content: 'made x' });
+  });
+
+  it('leaves what reads a kept value unchanged when the resource changes in place, and the apply keeps it', async () => {
+    await apply(serialCopy('x'), new SerialStampProvider());
+
+    const { actions } = await newOrchestrator(new SerialStampProvider()).plan(serialCopy('y'));
+    await apply(serialCopy('y'), new SerialStampProvider());
+
+    expect(actions.map(({ name, type }) => [name, type])).toEqual([
+      ['a', 'UPDATE'],
+      ['copy', 'NO_OP'],
+    ]);
+    const state = await new LocalBackend(dir).read();
+    expect(state.resources['stamp.a'].attributes).toMatchObject({ label: 'y', serial: 'serial 1' });
+    expect(await fs.readFile(file, 'utf8')).toBe('serial 1');
+  });
+
+  it('plans a kept value as known after apply when the resource is replaced, and what reads it changes', async () => {
+    await apply(serialCopy('x'), new SerialStampProvider());
+
+    const { actions } = await newOrchestrator(new SerialStampProvider()).plan(serialCopy('x', '2'));
+    await apply(serialCopy('x', '2'), new SerialStampProvider());
+
+    expect(actions.map(({ name, type }) => [name, type])).toEqual([
+      ['a', 'REPLACE'],
+      ['copy', 'UPDATE'],
+    ]);
+    expect(isUnknown(actions.find((action) => action.name === 'copy')!.planned!.content)).toBe(true);
+    expect(await fs.readFile(file, 'utf8')).toBe('serial 2');
   });
 
   // The provider may make it again on a change, so the plan cannot say what it will be.

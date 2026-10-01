@@ -1,7 +1,7 @@
 import { Schema, UNKNOWN } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { checkDataSourceRead, checkRead } from '../src/providerResult';
+import { checkDataSourceRead, checkRead, checkSchema } from '../src/providerResult';
 
 const schema: Schema = { label: { type: 'string', required: true }, made: { type: 'string', computed: true } };
 const bug = 'echo read what the resource cannot hold, which is a bug in the provider:';
@@ -41,5 +41,13 @@ describe('what a data source read', () => {
     expect(() => checkDataSourceRead('echo', { a: '1', b: { c: UNKNOWN } })).toThrow(
       'echo read what the data source cannot hold, which is a bug in the provider:\n  b["c"] is not known; a read returns every value'
     );
+  });
+});
+
+describe('a schema a provider gives', () => {
+  it('is refused where a value inside an object is kept and not computed', () => {
+    const nested: Schema = { box: { type: 'object', schema: { lid: { type: 'string', kept: true } } } };
+
+    expect(() => checkSchema('echo', nested)).toThrow('echo keeps box.lid, which it does not compute; only a computed value can be kept, which is a bug in the provider');
   });
 });

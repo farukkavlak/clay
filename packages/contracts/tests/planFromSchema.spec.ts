@@ -9,6 +9,8 @@ const schema: Schema = {
   label: { type: 'string', computed: true, optional: true },
 };
 
+const keeping: Schema = { ...schema, serial: { type: 'string', computed: true, kept: true } };
+
 describe('planFromSchema', () => {
   it('plans what the provider computes for a resource to create as known after apply, and what the configuration sets as set', () => {
     const config = { path: 'a', label: 'set' };
@@ -30,6 +32,32 @@ describe('planFromSchema', () => {
       after: { path: 'a', content: 'y', label: 'l', made: UNKNOWN },
       replace: [],
     });
+  });
+
+  it('keeps a kept value as it was read when the resource changes in place', () => {
+    const prior = { path: 'a', content: 'x', made: 'm', serial: 's' };
+    const config = { path: 'a', content: 'y' };
+
+    expect(planFromSchema(keeping, { id: 'i', prior, proposed: { ...config, made: 'm', serial: 's' }, config }).after).toEqual({
+      path: 'a',
+      content: 'y',
+      made: UNKNOWN,
+      label: UNKNOWN,
+      serial: 's',
+    });
+  });
+
+  it('plans a kept value for a resource to create as known after apply', () => {
+    const config = { path: 'a' };
+
+    expect(planFromSchema(keeping, { prior: null, proposed: config, config }).after).toEqual({ path: 'a', made: UNKNOWN, label: UNKNOWN, serial: UNKNOWN });
+  });
+
+  // A resource made before the provider kept the value has none to keep.
+  it('plans a kept value the resource does not hold as known after apply', () => {
+    const config = { path: 'a', content: 'y' };
+
+    expect(planFromSchema(keeping, { id: 'i', prior: { path: 'a', content: 'x' }, proposed: config, config }).after.serial).toBe(UNKNOWN);
   });
 
   it.each([

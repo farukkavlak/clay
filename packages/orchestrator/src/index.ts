@@ -11,7 +11,7 @@ import { DesiredStateBuilder } from './components/DesiredStateBuilder';
 import { LoadedResource, ModuleLoader } from './components/ModuleLoader';
 import { PlanRunner } from './components/PlanRunner';
 import { ResourcePlanner } from './components/ResourcePlanner';
-import { checkRead } from './providerResult';
+import { checkRead, checkSchema } from './providerResult';
 import { Instances } from './Instances';
 import { ModuleInstances } from './ModuleInstances';
 import { Planned } from './Planned';
@@ -129,7 +129,7 @@ export class Orchestrator {
     try {
       const provider = this.providers.get(resource.resourceType);
       const read = await provider.read(resource.resourceType, resource.id, resource.attributes);
-      if (read !== null) checkRead(resource.resourceType, await provider.getSchema(resource.resourceType), resource.attributes, read);
+      if (read !== null) checkRead(resource.resourceType, await this.schemaOf(resource.resourceType), resource.attributes, read);
 
       return read;
     } catch (error) {
@@ -158,12 +158,16 @@ export class Orchestrator {
       if (schemas.has(type)) continue;
 
       try {
-        schemas.set(type, await this.providers.get(type).getSchema(type));
+        schemas.set(type, await this.schemaOf(type));
       } catch (error) {
         throw withPlace(error, block.position, spell(block), address);
       }
     }
 
     return schemas;
+  }
+
+  private async schemaOf(type: string): Promise<Schema> {
+    return checkSchema(type, await this.providers.get(type).getSchema(type));
   }
 }

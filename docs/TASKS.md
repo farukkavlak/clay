@@ -155,6 +155,10 @@ provider plans what a resource to create or change will hold.
       yet. The plan was approved, so a different result is never taken in silence. A
       value returned that the plan did not have is refused the same way, since the next
       plan would read it as removed and plan an update every run
+- [x] A schema can mark a computed value `kept`: made with the resource and the same
+      until it is replaced, so a change in place plans it as it was read and what reads it
+      does not change. A schema that keeps a value it does not compute is refused.
+      Terraform's framework does this with `UseStateForUnknown`
 - [ ] The apply plans each resource again with what it now knows, and holds what it
       returns to that plan. A computed value made from one the configuration sets and the
       plan did not know is taken as anything today, where the provider could know it by
@@ -163,8 +167,9 @@ provider plans what a resource to create or change will hold.
 ### Schema-driven validation
 
 `SchemaDefinition` carries `type`, `required`, `elemType` and `schema`. The engine reads
-only `computed` and `optional`: a computed value the configuration sets is refused unless
-it is also optional. `planFromSchema` reads `forceNew` and `computed` for a provider.
+only `computed`, `optional` and `kept`: a computed value the configuration sets is
+refused unless it is also optional, and a schema that keeps a value it does not compute
+is refused. `planFromSchema` reads `forceNew`, `computed` and `kept` for a provider.
 Every resource validates its inputs by hand.
 
 - [ ] The engine validates inputs against the schema before it asks the provider

@@ -72,6 +72,13 @@ class VagueReader extends LoudProvider {
   }
 }
 
+/** Says it keeps a value it does not compute. */
+class MuddledEcho extends EchoProvider {
+  override async getSchema(): Promise<Schema> {
+    return { label: { type: 'string', required: true, kept: true } };
+  }
+}
+
 describe('what an apply returns, held to the plan', () => {
   let dir: string;
   let file: string;
@@ -171,5 +178,39 @@ describe('what a data source reads', () => {
     } finally {
       await fs.rm(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('a schema a provider gives', () => {
+  let dir: string;
+
+  const newOrchestrator = (echo: EchoProvider) => {
+    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
+    engine.registerProvider(echo);
+    return engine;
+  };
+
+  beforeEach(async () => {
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-schema-'));
+  });
+
+  afterEach(async () => {
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  const refused = 'echo keeps label, which it does not compute; only a computed value can be kept, which is a bug in the provider';
+
+  it('is refused where it keeps a value it does not compute, at the resource', async () => {
+    await expect(newOrchestrator(new MuddledEcho()).plan('\nresource "echo" "a" { label = "a" }')).rejects.toMatchObject({
+      message: refused,
+      position: { file: 'main.clay', line: 2, column: 1 },
+    });
+  });
+
+  it('is refused the same way when the refresh reads it', async () => {
+    const config = 'resource "echo" "a" { label = "a" }';
+    for await (const event of start(newOrchestrator(new EchoProvider()), config)) if (event.type === 'failed') throw event.error;
+
+    await expect(newOrchestrator(new MuddledEcho()).plan(config)).rejects.toThrow(`echo.a: ${refused}`);
   });
 });
