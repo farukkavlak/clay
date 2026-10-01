@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from 'node:util';
+
 import { Address, isInstanceKey, isModulePath } from './Address';
 import type { InstanceKey, ModuleStep } from './Address';
 import { ExactNumber, NumberError } from './ExactNumber';
@@ -127,6 +129,47 @@ export interface SchemaDefinition {
 
 export type Schema = Record<string, SchemaDefinition>;
 
+/** The steps from an attribute into what it holds: its name, then a key of a map or an index into a list. */
+export type AttributePath = (string | number)[];
+
+/** What a provider is asked to plan: a resource to create when `prior` is null, else one to change. */
+export interface PlanRequest {
+  /** The id state holds it by; a resource to create has none. */
+  id?: string;
+  /** The resource as the refresh read it. */
+  prior: Record<string, unknown> | null;
+  /** The configuration's values, with what the provider computed kept from `prior` where the configuration does not set it. */
+  proposed: Record<string, unknown>;
+  /** The configuration's values alone, so an optional computed value it sets can be told from one kept from `prior`. */
+  config: Record<string, unknown>;
+}
+
+/** What a resource will hold once applied, as its provider plans it. */
+export interface PlannedChange {
+  /** Every value it will hold, UNKNOWN where only the apply makes one. A value the configuration sets stays as it is set. */
+  after: Record<string, unknown>;
+  /** The id a resource to create will have, when the provider knows it before the apply. */
+  id?: string;
+  /** Where a change replaces the resource rather than changing it in place. */
+  replace: AttributePath[];
+}
+
+/**
+ * A plan from the schema alone: with nothing changed the resource stays as it was read, and with anything changed, what the provider computes and the
+ * configuration does not set is made again, and a changed `forceNew` attribute replaces it.
+ */
+export function planFromSchema(schema: Schema, { prior, proposed, config }: PlanRequest): PlannedChange {
+  if (prior !== null && isDeepStrictEqual(prior, proposed)) return { after: prior, replace: [] };
+
+  const remade = Object.keys(schema).filter((name) => schema[name].computed && !Object.hasOwn(config, name));
+  const after = Object.fromEntries([...Object.entries(proposed), ...remade.map((name) => [name, UNKNOWN])]);
+  if (prior === null) return { after, replace: [] };
+
+  const own = (values: Record<string, unknown>, name: string) => (Object.hasOwn(values, name) ? values[name] : undefined);
+  const replacing = Object.keys(schema).filter((name) => schema[name].forceNew && !isDeepStrictEqual(own(prior, name), own(proposed, name)));
+  return { after, replace: replacing.map((name) => [name]) };
+}
+
 /** The engine's contract with a provider. A number in the inputs it is given arrives as an `ExactNumber`, never rounded. */
 export interface Provider {
   /** The resource types it handles. */
@@ -139,6 +182,9 @@ export interface Provider {
 
   /** Throws when the inputs would not make a valid resource. */
   validate(type: string, inputs: Record<string, unknown>): Promise<void>;
+
+  /** What the resource will hold once applied. `planFromSchema` plans from the schema alone. */
+  plan(type: string, request: PlanRequest): Promise<PlannedChange>;
 
   /** The resource as it is now, from what was last applied, or `null` when it is gone. */
   read(type: string, id: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null>;
@@ -160,6 +206,8 @@ export interface ResourceHandler {
   getSchema(): Promise<Schema>;
 
   validate(inputs: Record<string, unknown>): Promise<void>;
+
+  plan(request: PlanRequest): Promise<PlannedChange>;
 
   read(id: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null>;
 

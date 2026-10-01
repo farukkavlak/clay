@@ -48,6 +48,7 @@ describe('ActionExecutor', () => {
       validateDataSource: vi.fn(),
       readDataSource: vi.fn(),
       getSchema: vi.fn(),
+      plan: vi.fn(),
     };
 
     providers = new ProviderRegistry();

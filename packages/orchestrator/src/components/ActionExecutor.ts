@@ -1,15 +1,9 @@
-import { Address, isUnknown, Provider, State } from '@clay/contracts';
+import { Address, Provider, State } from '@clay/contracts';
 import { offPlan, PlanAction } from '@clay/planner';
 
 import { ProviderRegistry } from '../ProviderRegistry';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
-
-/** A value as a message shows it: one not known yet, or in part, says so where it is not. */
-function shown(value: unknown): string {
-  if (value === undefined) return '(none)';
-
-  return JSON.stringify(value, (_, item: unknown) => (isUnknown(item) ? '(known after apply)' : item));
-}
+import { shown } from '../shown';
 
 export class ActionExecutor {
   constructor(

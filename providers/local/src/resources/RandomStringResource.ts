@@ -1,4 +1,4 @@
-import { ExactNumber, ResourceHandler, Schema } from '@clay/contracts';
+import { ExactNumber, PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema } from '@clay/contracts';
 import crypto from 'node:crypto';
 
 const LENGTH_REQUIRED = 'random_string requires "length" attribute (number > 0)';
@@ -27,6 +27,10 @@ export class RandomStringResource implements ResourceHandler {
     lengthOf(inputs);
 
     if (inputs.special !== undefined && typeof inputs.special !== 'boolean') throw new Error('random_string "special" attribute must be a boolean');
+  }
+
+  async plan(request: PlanRequest): Promise<PlannedChange> {
+    return planFromSchema(await this.getSchema(), request);
   }
 
   // Nothing outside the state holds it, so it is as it was applied.

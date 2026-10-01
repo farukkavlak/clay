@@ -138,17 +138,17 @@ known that comes out otherwise stops the run.
 
 `create` and `update` return the whole resource, a schema marks what the provider
 computes, and `plan` refuses a reference to an attribute a resource will never have. The
-plan still decides alone what a resource to create or change will hold.
+provider plans what a resource to create or change will hold.
 
 - [x] `create` and `update` return the resource's attributes; state holds them
 - [x] Schema marks computed attributes, so `plan` can refuse a reference to an attribute
       that will never exist
 - [x] `command_exec` exposes `stdout`; `random_string` exposes `result`
-- [ ] The provider takes part in the plan: asked what a resource to create or change will
-      hold, it says which values are known, which only the apply makes, and whether the
-      change replaces the resource. A value it rewrites, such as a path it cleans up, then
-      shows in the plan as it will be, and the id of a resource changed in place is known.
-      Terraform's `PlanResourceChange`
+- [x] The provider takes part in the plan: asked what a resource to create or change will
+      hold, it says which values are known, which only the apply makes, and where a change
+      replaces the resource; a replacement is planned again as a create. A plan that
+      changes a value the configuration sets is refused, and the id of a resource changed
+      in place is known. Terraform's `PlanResourceChange`
 - [ ] A value the apply returns that differs from one the plan showed as known stops the
       run with an error that names the provider, as Terraform's "inconsistent result after
       apply" does. The plan was approved, so a different result is never taken in silence.
@@ -157,9 +157,9 @@ plan still decides alone what a resource to create or change will hold.
 
 ### Schema-driven validation
 
-`SchemaDefinition` carries `type`, `required`, `elemType` and `schema`, and the engine
-reads only `forceNew`, `computed` and `optional`: a computed value the configuration sets
-is refused unless it is also optional.
+`SchemaDefinition` carries `type`, `required`, `elemType` and `schema`. The engine reads
+only `computed` and `optional`: a computed value the configuration sets is refused unless
+it is also optional. `planFromSchema` reads `forceNew` and `computed` for a provider.
 Every resource validates its inputs by hand.
 
 - [ ] The engine validates inputs against the schema before it asks the provider
@@ -410,7 +410,7 @@ What shipped, by area. The README says how each works today.
 - [x] Dependency graph with cycle detection, sorted into layers; variables and outputs
       are nodes, so a value is resolved after what it reads
 - [x] Planner: create, update, replace, delete and no-op from config against state;
-      `forceNew` decides replace; a value fed by a pending resource is unknown
+      a value fed by a pending resource is unknown
 - [x] Modules: loaded from a directory, nested, inputs from the caller, outputs to the
       caller; reaching inside one is refused
 - [x] Data sources: `data` blocks read through the provider, scoped per module

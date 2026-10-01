@@ -11,7 +11,6 @@ import {
   NumberError,
   readResources,
   Resource,
-  Schema,
   State,
   UNKNOWN,
 } from '@clay/contracts';
@@ -20,11 +19,15 @@ import { isDeepStrictEqual } from 'node:util';
 
 export type ActionType = 'CREATE' | 'UPDATE' | 'REPLACE' | 'DELETE' | 'NO_OP';
 
-/** A resource from the config: where it lives, the block as parsed, and its values with references resolved. */
+/** A resource from the config: where it lives, the block as parsed, its values with references resolved, and what its provider plans it to hold. */
 export interface DesiredResource {
   address: Address;
   block: ResourceBlock;
   attributes: Record<string, unknown>;
+  /** Every value it will hold once applied, as its provider plans it; UNKNOWN where only the apply makes one. */
+  after: Record<string, unknown>;
+  /** The provider plans to replace it rather than change it in place. */
+  replace: boolean;
   dependencies: string[];
   /** Where state held it before count came or went; the state planned against already has it here. */
   movedFrom?: string;
@@ -45,6 +48,8 @@ export interface PlanAction {
   attributes?: Record<string, AttributeValue>;
   /** Every value a create, an update or a replace was planned with, some not known yet. The apply resolves the attributes again and holds each known one to this. */
   planned?: Record<string, unknown>;
+  /** What the resource will hold once applied, as its provider planned it. */
+  after?: Record<string, unknown>;
   changes?: Changes;
   dependencies?: string[];
 }
@@ -61,7 +66,7 @@ export interface Plan {
 }
 
 /** Bumped when the shape below changes once a Clay is released, so a plan file from an older version is refused instead of misread. */
-export const PLAN_FILE_VERSION = '11.0';
+export const PLAN_FILE_VERSION = '12.0';
 
 export interface PlanFile extends Plan {
   version: string;
@@ -112,7 +117,12 @@ function saveValues(values: Record<string, unknown>): Record<string, unknown> {
 }
 
 function saveAction(action: PlanAction): Record<string, unknown> {
-  return { ...action, ...(action.changes && { changes: saveChanges(action.changes) }), ...(action.planned && { planned: saveValues(action.planned) }) };
+  return {
+    ...action,
+    ...(action.changes && { changes: saveChanges(action.changes) }),
+    ...(action.planned && { planned: saveValues(action.planned) }),
+    ...(action.after && { after: saveValues(action.after) }),
+  };
 }
 
 /** Whether the steps land on something in the value, so a saved unknown has a place to go back into. */
@@ -193,8 +203,15 @@ function isMovedFrom(action: Record<string, unknown>): boolean {
   return address.countCounterparts().some((kept) => kept.toString() === action.movedFrom);
 }
 
-/** The actions that send values to a provider, and so are planned with them. */
+/** The actions that send values to a provider, and so are planned with them and planned by it. */
 const SENDS_VALUES = new Set<ActionType>(['CREATE', 'UPDATE', 'REPLACE']);
+
+/** A create, an update or a replace carries the values it was planned with and what its provider planned; any other action carries neither. */
+function carriesValues(action: Record<string, unknown>): boolean {
+  const sends = SENDS_VALUES.has(action.type as ActionType);
+
+  return [action.planned, action.after].every((values) => (values === undefined ? !sends : sends && isChanges(values)));
+}
 
 function isAction(action: unknown): boolean {
   return (
@@ -203,7 +220,7 @@ function isAction(action: unknown): boolean {
     (action.key === undefined || isInstanceKey(action.key)) &&
     isMovedFrom(action) &&
     (action.changes === undefined || isChanges(action.changes)) &&
-    (action.planned === undefined ? !SENDS_VALUES.has(action.type as ActionType) : isChanges(action.planned))
+    carriesValues(action)
   );
 }
 
@@ -270,6 +287,7 @@ function readAction(action: Record<string, unknown>): void {
   if (action.key instanceof ExactNumber) action.key = action.key.toSafeInteger('an instance key');
   readUnknownPaths(action.changes);
   readUnknownPaths(action.planned);
+  readUnknownPaths(action.after);
   if (Array.isArray(action.modulePath))
     for (const step of action.modulePath) if (isRecord(step) && step.key instanceof ExactNumber) step.key = step.key.toSafeInteger('a module key');
   if (isRecord(action.attributes)) for (const node of Object.values(action.attributes)) readNode(node);
@@ -287,12 +305,18 @@ function readPlan(content: string): unknown {
   return read;
 }
 
-function readSavedAction(action: PlanAction): PlanAction {
-  const planned =
-    action.planned &&
-    Object.fromEntries(Object.entries(readChanges(action.planned as Record<string, { new?: unknown; unknown?: Path[] }>)).map(([name, change]) => [name, change.new]));
+/** Values saved as changes from nothing, read back as the values. */
+function readValues(saved: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(readChanges(saved as Record<string, { new?: unknown; unknown?: Path[] }>)).map(([name, change]) => [name, change.new]));
+}
 
-  return { ...action, ...(action.changes && { changes: readChanges(action.changes) }), ...(planned && { planned }) };
+function readSavedAction(action: PlanAction): PlanAction {
+  return {
+    ...action,
+    ...(action.changes && { changes: readChanges(action.changes) }),
+    ...(action.planned && { planned: readValues(action.planned) }),
+    ...(action.after && { after: readValues(action.after) }),
+  };
 }
 
 /** `source` names the plan in the error, since the caller knows where it read from and this does not. */
@@ -392,25 +416,17 @@ export function offPlan(planned: Record<string, unknown>, resolved: Record<strin
   return undefined;
 }
 
-/** What the configuration asks for, with what the provider computed kept as state holds it, since the configuration never sets that. */
-function proposed(currentAttrs: Record<string, unknown>, desiredAttrs: Record<string, unknown>, schema: Schema): Record<string, unknown> {
-  const kept = Object.entries(currentAttrs).filter(([name]) => Object.hasOwn(schema, name) && schema[name].computed && !Object.hasOwn(desiredAttrs, name));
-
-  return { ...desiredAttrs, ...Object.fromEntries(kept) };
-}
-
 /** Tells whether a resource in state would change, without building the action for it. */
-export function hasChanges(currentAttrs: Record<string, unknown>, desiredAttrs: Record<string, unknown>, schema: Schema = {}): boolean {
-  return calculateDiff(currentAttrs, proposed(currentAttrs, desiredAttrs, schema)) !== null;
+export function hasChanges(currentAttrs: Record<string, unknown>, after: Record<string, unknown>): boolean {
+  return calculateDiff(currentAttrs, after) !== null;
 }
 
-function processExistingResource(actions: PlanAction[], desired: DesiredResource, currentResource: Resource, schemas: Map<string, Schema>) {
+function processExistingResource(actions: PlanAction[], desired: DesiredResource, currentResource: Resource) {
   const moved = desired.movedFrom;
   const resource = desired.block;
-  const schema = schemas.get(resource.resourceType) ?? {};
-  const changes = calculateDiff(currentResource.attributes, proposed(currentResource.attributes, desired.attributes, schema));
+  const changes = calculateDiff(currentResource.attributes, desired.after);
 
-  if (!changes) {
+  if (!changes && !desired.replace) {
     actions.push({
       type: 'NO_OP',
       ...desired.address.fields(),
@@ -421,22 +437,21 @@ function processExistingResource(actions: PlanAction[], desired: DesiredResource
     return;
   }
 
-  const forcesNew = Object.keys(changes).some((attr) => schema[attr]?.forceNew);
-
   actions.push({
-    type: forcesNew ? 'REPLACE' : 'UPDATE',
+    type: desired.replace ? 'REPLACE' : 'UPDATE',
     ...desired.address.fields(),
     ...(moved && { movedFrom: moved }),
     id: currentResource.id,
     attributes: resource.attributes,
     planned: desired.attributes,
-    changes,
+    after: desired.after,
+    changes: changes ?? {},
     dependencies: desired.dependencies,
   });
 }
 
 /** `currentState` is the state with every move already made, as the desired resources were planned against it. */
-export function plan(desiredResources: DesiredResource[], currentState: State, schemas: Map<string, Schema> = new Map()): PlanAction[] {
+export function plan(desiredResources: DesiredResource[], currentState: State): PlanAction[] {
   const actions: PlanAction[] = [];
   const currentMap = new Map<string, Resource>(Object.entries(currentState.resources));
   const desiredMap = new Map<string, DesiredResource>();
@@ -445,13 +460,14 @@ export function plan(desiredResources: DesiredResource[], currentState: State, s
 
   for (const [key, desired] of desiredMap.entries()) {
     const currentResource = currentMap.get(key);
-    if (currentResource) processExistingResource(actions, desired, currentResource, schemas);
+    if (currentResource) processExistingResource(actions, desired, currentResource);
     else
       actions.push({
         type: 'CREATE',
         ...desired.address.fields(),
         attributes: desired.block.attributes,
         planned: desired.attributes,
+        after: desired.after,
         dependencies: desired.dependencies,
       });
   }

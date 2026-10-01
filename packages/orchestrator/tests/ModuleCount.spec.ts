@@ -1,4 +1,4 @@
-import { Address, Provider } from '@clay/contracts';
+import { Address, planFromSchema, Provider } from '@clay/contracts';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -13,6 +13,7 @@ const recorder: Provider = {
   resources: ['rec'],
   dataSources: [],
   getSchema: async () => ({}),
+  plan: async (_, request) => planFromSchema({}, request),
   validate: async () => {},
   read: async (_, __, prior) => prior,
   validateDataSource: async () => {},

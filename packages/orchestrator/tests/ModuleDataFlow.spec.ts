@@ -1,4 +1,4 @@
-import { emptyState, UNKNOWN } from '@clay/contracts';
+import { emptyState, planFromSchema, PlanRequest, UNKNOWN } from '@clay/contracts';
 import { plan } from '@clay/planner';
 import fsPromises from 'node:fs/promises';
 import os from 'node:os';
@@ -54,6 +54,7 @@ describe('Orchestrator - Phase 4: Data Flow', () => {
     update: Mock;
     delete: Mock;
     getSchema: Mock;
+    plan: Mock;
   };
 
   beforeEach(async () => {
@@ -73,6 +74,7 @@ describe('Orchestrator - Phase 4: Data Flow', () => {
       update: vi.fn(async (_id: string, _type: string, inputs: Record<string, unknown>) => inputs),
       delete: vi.fn(),
       getSchema: vi.fn().mockReturnValue({}),
+      plan: vi.fn(async (_type: string, request: PlanRequest) => planFromSchema({}, request)),
     };
 
     const { StateManager, LocalBackend } = await import('@clay/state');

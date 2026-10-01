@@ -1,4 +1,4 @@
-import { containsUnknown, emptyState, Provider, Resource, Schema, State } from '@clay/contracts';
+import { emptyState, Provider, Resource, Schema, State } from '@clay/contracts';
 import { spell } from '@clay/parser';
 import { DesiredResource, outputChanges, plan, Plan } from '@clay/planner';
 import { StateManager } from '@clay/state';
@@ -10,6 +10,7 @@ import { DependencyGraphBuilder } from './components/DependencyGraphBuilder';
 import { DesiredStateBuilder } from './components/DesiredStateBuilder';
 import { LoadedResource, ModuleLoader } from './components/ModuleLoader';
 import { PlanRunner } from './components/PlanRunner';
+import { ResourcePlanner } from './components/ResourcePlanner';
 import { Instances } from './Instances';
 import { ModuleInstances } from './ModuleInstances';
 import { Planned } from './Planned';
@@ -58,7 +59,7 @@ export class Orchestrator {
       providers,
       new ConfigLoader(new ModuleLoader(files, scopes), scopes, dataSources, resolver, providers, instances, modules, planned),
       graphBuilder,
-      new DesiredStateBuilder(scopes, scanner, resolver, graphBuilder, instances, modules, planned),
+      new DesiredStateBuilder(scopes, scanner, resolver, graphBuilder, instances, modules, planned, new ResourcePlanner(providers)),
       new PlanRunner(stateManager, new ActionExecutor(providers, resolver), scopes, resolver, instances, modules)
     );
   }
@@ -73,11 +74,11 @@ export class Orchestrator {
     const prior = refresh ? await this.refresh(prevRun) : prevRun;
     // Planning moves what gained or lost count, so the actions are planned against the resources where they now are; the plan keeps them where they were.
     const currentState = { ...prior, resources: copyResources(prior.resources) };
-    const { desiredResources, outputs, schemas } = await this.resolveAndCheck(configContent, currentState);
+    const { desiredResources, outputs } = await this.resolveAndCheck(configContent, currentState);
 
     return {
       serial: prevRun.serial,
-      actions: plan(desiredResources, currentState, schemas),
+      actions: plan(desiredResources, currentState),
       outputs: outputChanges(currentState.outputs ?? {}, outputs),
       prevRun: prevRun.resources,
       prior: prior.resources,
@@ -131,22 +132,18 @@ export class Orchestrator {
     }
   }
 
-  private async resolveAndCheck(
-    configContent: string,
-    state: State
-  ): Promise<{ desiredResources: DesiredResource[]; outputs: Record<string, unknown>; schemas: Map<string, Schema> }> {
+  private async resolveAndCheck(configContent: string, state: State): Promise<{ desiredResources: DesiredResource[]; outputs: Record<string, unknown> }> {
     const { loadedResources, loadedModules } = await this.loader.load(configContent, state);
 
     const graph = this.graphBuilder.buildExecutionGraph(loadedResources, loadedModules);
     const schemas = await this.schemasOf(loadedResources);
     refuseComputedSet(loadedResources, schemas);
     const { resources: desiredResources, outputs } = await this.desiredStateBuilder.build(loadedResources, graph, state, schemas);
-    await this.checkWithProviders(desiredResources);
 
-    return { desiredResources, outputs, schemas };
+    return { desiredResources, outputs };
   }
 
-  /** Read before the values are, since what a provider computes is kept from state rather than planned as a change. */
+  /** Read before the values are, since a provider is asked to plan with what it computed kept from state where the configuration does not set it. */
   private async schemasOf(loaded: LoadedResource[]): Promise<Map<string, Schema>> {
     // A Map because a resource type may be named `constructor`: an object would already hold a value there, and the real schema would be dropped.
     const schemas = new Map<string, Schema>();
@@ -163,18 +160,5 @@ export class Orchestrator {
     }
 
     return schemas;
-  }
-
-  /** What a provider can refuse before anything runs is refused here. A value not known yet is checked once the run knows it. */
-  private async checkWithProviders(desired: DesiredResource[]): Promise<void> {
-    for (const resource of desired) {
-      if (Object.values(resource.attributes).some((value) => containsUnknown(value))) continue;
-
-      try {
-        await this.providers.get(resource.block.resourceType).validate(resource.block.resourceType, resource.attributes);
-      } catch (error) {
-        throw withPlace(error, resource.block.position, spell(resource.block), resource.address);
-      }
-    }
   }
 }

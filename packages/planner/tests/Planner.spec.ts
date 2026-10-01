@@ -23,6 +23,8 @@ function desiredResource(name: string, attributes: Record<string, string>, modul
       position,
     },
     attributes,
+    after: attributes,
+    replace: false,
     dependencies: [],
   };
 }
@@ -55,15 +57,23 @@ describe('Planner', () => {
 
   // The whole of what was planned, the values that change and the ones that do not, so the apply can hold each to it.
   it('carries every value it planned on a create, an update and a replace, and none on the others', () => {
-    const desired = desiredResource('r', { path: 'x', size: 'large' });
-    const forcesNew = new Map([[desired.block.resourceType, { path: { type: 'string' as const, forceNew: true } }]]);
     const planned = { path: 'x', size: 'large' };
+    const after = { ...planned, made: UNKNOWN };
+    const desired = { ...desiredResource('r', planned), after };
 
-    expect(plan([desired], { version: 1, serial: 0, resources: {} })[0]).toMatchObject({ type: 'CREATE', planned });
-    expect(plan([desired], stateWith('r', { path: 'x', size: 'small' }))[0]).toMatchObject({ type: 'UPDATE', planned });
-    expect(plan([desired], stateWith('r', { path: 'old', size: 'large' }), forcesNew)[0]).toMatchObject({ type: 'REPLACE', planned });
-    expect(plan([desired], stateWith('r', planned))[0].planned).toBeUndefined();
-    expect(plan([], stateWith('r', planned))[0].planned).toBeUndefined();
+    expect(plan([desired], { version: 1, serial: 0, resources: {} })[0]).toMatchObject({ type: 'CREATE', planned, after });
+    expect(plan([desired], stateWith('r', { path: 'x', size: 'small' }))[0]).toMatchObject({ type: 'UPDATE', planned, after });
+    expect(plan([{ ...desired, replace: true }], stateWith('r', { path: 'old', size: 'large' }))[0]).toMatchObject({ type: 'REPLACE', planned, after });
+    expect(plan([{ ...desiredResource('r', planned) }], stateWith('r', planned))[0]).not.toHaveProperty('after');
+    expect(plan([], stateWith('r', planned))[0]).not.toHaveProperty('after');
+  });
+
+  // The configuration sets the same path; what changes is what the provider will make again.
+  it('plans the change from what the provider plans, not from the configuration alone', () => {
+    const desired = { ...desiredResource('r', { path: 'x' }), after: { path: 'x', made: UNKNOWN } };
+    const [action] = plan([desired], stateWith('r', { path: 'x', made: 'before' }));
+
+    expect(action).toMatchObject({ type: 'UPDATE', changes: { made: { old: 'before', new: UNKNOWN } } });
   });
 
   it('should plan CREATE for nested module resources', () => {
@@ -80,8 +90,7 @@ describe('Planner', () => {
     expect(plan([desired], { version: 1, serial: 0, resources: {} })[0]).toMatchObject({ type: 'CREATE', dependencies: ['mock_resource.dep'] });
     expect(plan([desired], stateWith('r', { path: 'old' }))[0]).toMatchObject({ type: 'UPDATE', dependencies: ['mock_resource.dep'] });
     expect(plan([desired], stateWith('r', { path: 'x' }))[0]).toMatchObject({ type: 'NO_OP', dependencies: ['mock_resource.dep'] });
-    const forcesNew = new Map([[desired.block.resourceType, { path: { type: 'string' as const, forceNew: true } }]]);
-    expect(plan([desired], stateWith('r', { path: 'old' }), forcesNew)[0]).toMatchObject({ type: 'REPLACE', dependencies: ['mock_resource.dep'] });
+    expect(plan([{ ...desired, replace: true }], stateWith('r', { path: 'old' }))[0]).toMatchObject({ type: 'REPLACE', dependencies: ['mock_resource.dep'] });
     expect(plan([], stateWith('r', { path: 'x' }))[0]).not.toHaveProperty('dependencies');
   });
 
@@ -119,7 +128,8 @@ describe('Planner', () => {
   it('should plan NO_OP when a map holds the same values in another order', () => {
     const desired = desiredResource('test_resource_g', { path: 'path' });
 
-    const actions = plan([{ ...desired, attributes: { triggers: { b: '2', a: '1' } } }], stateWith('test_resource_g', { triggers: { a: '1', b: '2' } }));
+    const attributes = { triggers: { b: '2', a: '1' } };
+    const actions = plan([{ ...desired, attributes, after: attributes }], stateWith('test_resource_g', { triggers: { a: '1', b: '2' } }));
 
     expect(actions).toHaveLength(1);
     expect(actions[0].type).toBe('NO_OP');
@@ -142,7 +152,7 @@ describe('Planner', () => {
 
   it('should treat an unknown value as a change', () => {
     const desired = desiredResource('test_resource_e', { path: 'path' });
-    const actions = plan([{ ...desired, attributes: { path: UNKNOWN } }], stateWith('test_resource_e', { path: 'path' }));
+    const actions = plan([{ ...desired, attributes: { path: UNKNOWN }, after: { path: UNKNOWN } }], stateWith('test_resource_e', { path: 'path' }));
 
     expect(actions).toHaveLength(1);
     expect(actions[0].type).toBe('UPDATE');
@@ -157,16 +167,21 @@ describe('Planner', () => {
     expect(hasChanges({ triggers: lookalike }, { triggers: { ...lookalike } })).toBe(false);
   });
 
-  const schemas = new Map([['mock_resource', { path: { type: 'string' as const, required: true, forceNew: true } }]]);
-
-  it('should plan one REPLACE when a forceNew attribute changes', () => {
-    const actions = plan([desiredResource('test_resource_f', { path: 'new_path' })], stateWith('test_resource_f', { path: 'old_path' }, 'mock_id_123'), schemas);
+  it('should plan one REPLACE when the provider plans to replace the resource', () => {
+    const actions = plan([{ ...desiredResource('test_resource_f', { path: 'new_path' }), replace: true }], stateWith('test_resource_f', { path: 'old_path' }, 'mock_id_123'));
 
     expect(actions).toHaveLength(1);
     expect(actions[0].type).toBe('REPLACE');
     expect(actions[0].id).toBe('mock_id_123');
     expect(actions[0].attributes).toEqual({ path: str('new_path') });
     expect(actions[0].changes).toEqual({ path: { old: 'old_path', new: 'new_path' } });
+  });
+
+  // The provider decides; a resource it plans to replace is replaced even when it would come out holding the same values.
+  it('plans a REPLACE the provider asks for with no value changing', () => {
+    const [action] = plan([{ ...desiredResource('r', { path: 'x' }), replace: true }], stateWith('r', { path: 'x' }));
+
+    expect(action).toMatchObject({ type: 'REPLACE', changes: {} });
   });
 
   it('should tell a replaced resource in a module apart from a removed one', () => {
@@ -179,7 +194,7 @@ describe('Planner', () => {
       },
     };
 
-    const actions = plan([desiredResource('same', { path: 'new' }, ['app'])], state, schemas);
+    const actions = plan([{ ...desiredResource('same', { path: 'new' }, ['app']), replace: true }], state);
 
     expect(actions.map((action) => [action.type, action.id])).toEqual([
       ['REPLACE', 'in_module'],

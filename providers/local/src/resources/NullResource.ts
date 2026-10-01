@@ -1,4 +1,4 @@
-import { ResourceHandler, Schema } from '@clay/contracts';
+import { PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema } from '@clay/contracts';
 import crypto from 'node:crypto';
 
 export class NullResource implements ResourceHandler {
@@ -9,6 +9,10 @@ export class NullResource implements ResourceHandler {
   }
 
   async validate(_inputs: Record<string, unknown>): Promise<void> {}
+
+  async plan(request: PlanRequest): Promise<PlannedChange> {
+    return planFromSchema(await this.getSchema(), request);
+  }
 
   // Nothing outside the state holds it, so it is as it was applied.
   async read(_id: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {

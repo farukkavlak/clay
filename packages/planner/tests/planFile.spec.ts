@@ -26,7 +26,16 @@ describe('reading a plan file', () => {
       serial: 0,
       prevRun: {},
       prior: {},
-      actions: [{ type: 'UPDATE', resourceType: 'null_resource', name: 'a', planned: { triggers: UNKNOWN }, changes: { triggers: { old: 'x', new: UNKNOWN } } }],
+      actions: [
+        {
+          type: 'UPDATE',
+          resourceType: 'null_resource',
+          name: 'a',
+          planned: { triggers: UNKNOWN },
+          after: { triggers: UNKNOWN },
+          changes: { triggers: { old: 'x', new: UNKNOWN } },
+        },
+      ],
       outputs: { id: { old: undefined, new: UNKNOWN } },
     };
 
@@ -43,7 +52,16 @@ describe('reading a plan file', () => {
       serial: 0,
       prevRun: {},
       prior: {},
-      actions: [{ type: 'UPDATE', resourceType: 'null_resource', name: 'a', planned: { triggers: lookalike }, changes: { triggers: { old: {}, new: lookalike } } }],
+      actions: [
+        {
+          type: 'UPDATE',
+          resourceType: 'null_resource',
+          name: 'a',
+          planned: { triggers: lookalike },
+          after: { triggers: lookalike },
+          changes: { triggers: { old: {}, new: lookalike } },
+        },
+      ],
       outputs: {},
     };
 
@@ -72,6 +90,7 @@ describe('reading a plan file', () => {
             first: { type: 'Reference', value: ['var', 'ids', 1, 'name'], position: at },
           },
           planned: {},
+          after: {},
         },
       ],
       outputs: {},
@@ -239,22 +258,39 @@ describe('reading a plan file', () => {
     expect(read({ ...fields(), ...broken })).toThrow(message);
   });
 
-  it('reads back the values an action was planned with, what is not known yet and exact numbers among them', () => {
-    const planned = { tags: { a: UNKNOWN, b: 'x' }, list: ['x', UNKNOWN], id: UNKNOWN, n: ExactNumber.parse('12345678901234567890') };
-    const plan: Plan = { ...emptyPlan, actions: [{ type: 'CREATE', resourceType: 'x', name: 'a', attributes: {}, planned }] };
+  it.each(['planned', 'after'])('reads back the %s values of an action, what is not known yet and exact numbers among them', (field) => {
+    const values = { tags: { a: UNKNOWN, b: 'x' }, list: ['x', UNKNOWN], id: UNKNOWN, n: ExactNumber.parse('12345678901234567890') };
+    const plan: Plan = { ...emptyPlan, actions: [{ type: 'CREATE', resourceType: 'x', name: 'a', attributes: {}, planned: {}, after: {}, [field]: values }] };
 
-    expect(parsePlanFile(aPlanFile(plan), 'tfplan.json').actions[0].planned).toEqual(planned);
+    expect(parsePlanFile(aPlanFile(plan), 'tfplan.json').actions[0]).toMatchObject({ [field]: values });
   });
 
   it.each([
-    ['a value that is not saved as one', { path: 'x' }],
-    ['no record of values', []],
-  ])('refuses an action whose planned values hold %s', (_, planned) => {
-    expect(read({ ...fields(), actions: [{ type: 'CREATE', resourceType: 'x', name: 'a', attributes: {}, planned }] })).toThrow('tfplan.json is not a plan file');
+    ['planned', 'a value that is not saved as one', { path: 'x' }],
+    ['planned', 'no record of values', []],
+    ['after', 'a value that is not saved as one', { path: 'x' }],
+    ['after', 'no record of values', []],
+  ])('refuses an action whose %s values hold %s', (field, _, values) => {
+    const action = { type: 'CREATE', resourceType: 'x', name: 'a', attributes: {}, planned: {}, after: {}, [field]: values };
+
+    expect(read({ ...fields(), actions: [action] })).toThrow('tfplan.json is not a plan file');
   });
 
   it.each(['CREATE', 'UPDATE', 'REPLACE'])('refuses a %s without the values it was planned with', (type) => {
-    expect(read({ ...fields(), actions: [{ type, resourceType: 'x', name: 'a', attributes: {} }] })).toThrow('tfplan.json is not a plan file');
+    expect(read({ ...fields(), actions: [{ type, resourceType: 'x', name: 'a', attributes: {}, after: {} }] })).toThrow('tfplan.json is not a plan file');
+  });
+
+  it.each([
+    ['DELETE', 'planned'],
+    ['DELETE', 'after'],
+    ['NO_OP', 'planned'],
+    ['NO_OP', 'after'],
+  ])('refuses a %s that carries %s values, since it sends none to a provider', (type, field) => {
+    expect(read({ ...fields(), actions: [{ type, resourceType: 'x', name: 'a', [field]: {} }] })).toThrow('tfplan.json is not a plan file');
+  });
+
+  it.each(['CREATE', 'UPDATE', 'REPLACE'])('refuses a %s without what its provider planned', (type) => {
+    expect(read({ ...fields(), actions: [{ type, resourceType: 'x', name: 'a', attributes: {}, planned: {} }] })).toThrow('tfplan.json is not a plan file');
   });
 
   it('names a serial that is not whole', () => {
