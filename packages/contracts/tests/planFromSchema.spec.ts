@@ -21,14 +21,14 @@ describe('planFromSchema', () => {
   it('keeps a resource that does not change as it was read', () => {
     const prior = { path: 'a', content: 'x', made: 'm', label: 'l' };
 
-    expect(planFromSchema(schema, { id: 'i', prior, proposed: { ...prior }, config: { path: 'a', content: 'x' } })).toEqual({ after: prior, replace: [] });
+    expect(planFromSchema(schema, { prior, proposed: { ...prior }, config: { path: 'a', content: 'x' } })).toEqual({ after: prior, replace: [] });
   });
 
   it('makes what the provider computes again when anything changes, and keeps what the configuration sets', () => {
     const prior = { path: 'a', content: 'x', made: 'm', label: 'l' };
     const config = { path: 'a', content: 'y', label: 'l' };
 
-    expect(planFromSchema(schema, { id: 'i', prior, proposed: { ...config, made: 'm' }, config })).toEqual({
+    expect(planFromSchema(schema, { prior, proposed: { ...config, made: 'm' }, config })).toEqual({
       after: { path: 'a', content: 'y', label: 'l', made: UNKNOWN },
       replace: [],
     });
@@ -38,7 +38,7 @@ describe('planFromSchema', () => {
     const prior = { path: 'a', content: 'x', made: 'm', serial: 's' };
     const config = { path: 'a', content: 'y' };
 
-    expect(planFromSchema(keeping, { id: 'i', prior, proposed: { ...config, made: 'm', serial: 's' }, config }).after).toEqual({
+    expect(planFromSchema(keeping, { prior, proposed: { ...config, made: 'm', serial: 's' }, config }).after).toEqual({
       path: 'a',
       content: 'y',
       made: UNKNOWN,
@@ -57,7 +57,7 @@ describe('planFromSchema', () => {
   it('plans a kept value the resource does not hold as known after apply', () => {
     const config = { path: 'a', content: 'y' };
 
-    expect(planFromSchema(keeping, { id: 'i', prior: { path: 'a', content: 'x' }, proposed: config, config }).after.serial).toBe(UNKNOWN);
+    expect(planFromSchema(keeping, { prior: { path: 'a', content: 'x' }, proposed: config, config }).after.serial).toBe(UNKNOWN);
   });
 
   it.each([
@@ -66,12 +66,12 @@ describe('planFromSchema', () => {
   ])('replaces the resource where a forceNew value %s', (_, path) => {
     const config = { path, content: 'x' };
 
-    expect(planFromSchema(schema, { id: 'i', prior: { path: 'a', content: 'x' }, proposed: config, config }).replace).toEqual([['path']]);
+    expect(planFromSchema(schema, { prior: { path: 'a', content: 'x' }, proposed: config, config }).replace).toEqual([['path']]);
   });
 
   it('names no forceNew value that stays the same', () => {
     const config = { path: 'a', content: 'y' };
 
-    expect(planFromSchema(schema, { id: 'i', prior: { path: 'a', content: 'x' }, proposed: config, config }).replace).toEqual([]);
+    expect(planFromSchema(schema, { prior: { path: 'a', content: 'x' }, proposed: config, config }).replace).toEqual([]);
   });
 });

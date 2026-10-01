@@ -30,19 +30,13 @@ function plannerFor(provider: Provider): ResourcePlanner {
   return new ResourcePlanner(providers);
 }
 
-const current: Resource = { id: 'thing-1', resourceType: 'thing', name: 'a', attributes: { path: 'a', tags: { x: '1' }, made: 'm' } };
+const current: Resource = { resourceType: 'thing', name: 'a', attributes: { path: 'a', tags: { x: '1' }, made: 'm' } };
 
 describe('ResourcePlanner', () => {
-  it('keeps the id of a resource it changes in place', async () => {
+  it('plans a change in place as its provider plans it', async () => {
     const config = { path: 'a', tags: { x: '2' } };
 
-    expect(await plannerFor(fakeProvider()).plan('thing', schema, current, config)).toEqual({ after: { ...config, made: UNKNOWN }, id: 'thing-1', replace: false });
-  });
-
-  it('gives a resource to create the id its provider already knows', async () => {
-    const provider = fakeProvider((request) => ({ ...planFromSchema(schema, request), id: 'known' }));
-
-    expect(await plannerFor(provider).plan('thing', schema, undefined, { path: 'a' })).toMatchObject({ id: 'known', replace: false });
+    expect(await plannerFor(fakeProvider()).plan('thing', schema, current, config)).toEqual({ after: { ...config, made: UNKNOWN }, replace: false });
   });
 
   it('plans a resource it replaces again, as one to create', async () => {
@@ -85,12 +79,6 @@ describe('ResourcePlanner', () => {
     await expect(plannerFor(provider).plan('thing', schema, undefined, { path: 'a' })).rejects.toThrow(
       'thing planned extra, which the configuration does not set and thing does not compute'
     );
-  });
-
-  it('refuses a new id for a resource changed in place', async () => {
-    const provider = fakeProvider((request) => ({ ...planFromSchema(schema, request), id: 'other' }));
-
-    await expect(plannerFor(provider).plan('thing', schema, current, { path: 'a' })).rejects.toThrow('thing planned the id "other" for a resource it changes in place');
   });
 
   it('checks the values with the provider before it asks for a plan', async () => {

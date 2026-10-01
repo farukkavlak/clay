@@ -8,7 +8,7 @@ import { Planned, PlannedInstance } from '../Planned';
 import { readInstance } from './instance';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 
-/** The id, what the provider computes, and a value the configuration does not know yet, only the apply makes. Anything else it never will. */
+/** What the provider computes, and a value the configuration does not know yet, only the apply makes. Anything else it never will. */
 function plannedAttribute(instance: PlannedInstance, type: string, name: string, spelled: string, position?: Position): unknown {
   if (Object.hasOwn(instance.known, name)) return instance.known[name];
   if (instance.later.has(name)) throw new UnresolvedReferenceError(`"${spelled}" is known only after apply`);
@@ -40,10 +40,9 @@ export class ResourceResolver {
   }
 
   /** State holds all a resource has, so a name it does not hold never will be read. */
-  private getResolvedAttribute(resource: { id?: string; attributes: Record<string, unknown> }, attributeName: string, fullPath: string, position?: Position): unknown {
+  private getResolvedAttribute(resource: { attributes: Record<string, unknown> }, attributeName: string, fullPath: string, position?: Position): unknown {
     // Plain indexing would find inherited names like `toString`.
-    let attrValue: unknown = Object.hasOwn(resource.attributes, attributeName) ? resource.attributes[attributeName] : undefined;
-    if (attrValue === undefined && attributeName === 'id') attrValue = resource.id;
+    const attrValue: unknown = Object.hasOwn(resource.attributes, attributeName) ? resource.attributes[attributeName] : undefined;
 
     if (attrValue === undefined) throw placed(`Invalid resource reference "${fullPath}": Attribute "${attributeName}" not found on resource`, position);
 

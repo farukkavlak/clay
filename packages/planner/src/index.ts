@@ -44,7 +44,6 @@ export interface PlanAction {
   key?: InstanceKey;
   /** The address state holds the resource under, when count was added or taken off since: it moves before the action runs. */
   movedFrom?: string;
-  id?: string;
   attributes?: Record<string, AttributeValue>;
   /** Every value a create, an update or a replace was planned with, some not known yet. The apply resolves the attributes again and holds each known one to this. */
   planned?: Record<string, unknown>;
@@ -66,7 +65,7 @@ export interface Plan {
 }
 
 /** Bumped when the shape below changes once a Clay is released, so a plan file from an older version is refused instead of misread. */
-export const PLAN_FILE_VERSION = '12.0';
+export const PLAN_FILE_VERSION = '13.0';
 
 export interface PlanFile extends Plan {
   version: string;
@@ -474,7 +473,6 @@ function processExistingResource(actions: PlanAction[], desired: DesiredResource
       type: 'NO_OP',
       ...desired.address.fields(),
       ...(moved && { movedFrom: moved }),
-      id: currentResource.id,
       dependencies: desired.dependencies,
     });
     return;
@@ -484,7 +482,6 @@ function processExistingResource(actions: PlanAction[], desired: DesiredResource
     type: desired.replace ? 'REPLACE' : 'UPDATE',
     ...desired.address.fields(),
     ...(moved && { movedFrom: moved }),
-    id: currentResource.id,
     attributes: resource.attributes,
     planned: desired.attributes,
     after: desired.after,
@@ -521,7 +518,6 @@ export function plan(desiredResources: DesiredResource[], currentState: State): 
     actions.push({
       type: 'DELETE',
       ...Address.of(resource).fields(),
-      id: resource.id,
     });
   }
 

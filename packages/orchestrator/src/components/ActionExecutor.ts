@@ -1,10 +1,19 @@
-import { Address, Provider, State } from '@clay/contracts';
+import { Address, Provider, Resource, State } from '@clay/contracts';
 import { offApply, offPlan, PlanAction } from '@clay/planner';
 
 import { inconsistentResult } from '../providerResult';
 import { ProviderRegistry } from '../ProviderRegistry';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { shown } from '../shown';
+
+/** The resource as state holds it, which is how its provider finds it. */
+function held(action: PlanAction, state: State): Resource {
+  const key = Address.of(action).toString();
+  const resource = Object.hasOwn(state.resources, key) ? state.resources[key] : undefined;
+  if (!resource) throw new Error(`${action.type} of "${key}", which state does not hold`);
+
+  return resource;
+}
 
 /** What an action sends its provider, and what the provider planned it would make of them. */
 interface Sending {
@@ -84,11 +93,10 @@ export class ActionExecutor {
     const contextAddress = Address.of(action);
 
     await provider.validate(action.resourceType, inputs);
-    const { id, attributes } = await provider.create(action.resourceType, inputs);
+    const attributes = await provider.create(action.resourceType, inputs);
 
     const key = contextAddress.toString();
     currentState.resources[key] = {
-      id,
       ...contextAddress.fields(),
       attributes,
       dependencies: action.dependencies ?? [],
@@ -100,33 +108,21 @@ export class ActionExecutor {
     const sending = this.sendingFor(action, currentState);
     const { inputs } = sending;
 
-    const key = Address.of(action).toString();
-    const currentResource = currentState.resources[key];
-    if (!currentResource) throw new Error(`Resource "${key}" not found in state for update`);
+    const currentResource = held(action, currentState);
 
     await provider.validate(action.resourceType, inputs);
-    if (!action.id) throw new Error(`UPDATE action for "${key}" missing resource ID`);
-    currentResource.attributes = await provider.update(action.id, action.resourceType, inputs);
+    currentResource.attributes = await provider.update(action.resourceType, currentResource.attributes, inputs);
     currentResource.dependencies = action.dependencies ?? [];
     this.holdToPlan(action.resourceType, sending, currentResource.attributes);
   }
 
   /** What a resource reads from can change while its values do not, so an unchanged resource still refreshes its list. */
   private recordDependencies(action: PlanAction, currentState: State): void {
-    const key = Address.of(action).toString();
-    const currentResource = currentState.resources[key];
-    if (!currentResource) throw new Error(`Resource "${key}" not found in state`);
-
-    currentResource.dependencies = action.dependencies ?? [];
+    held(action, currentState).dependencies = action.dependencies ?? [];
   }
 
   async executeDelete(action: PlanAction, provider: Provider, currentState: State): Promise<void> {
-    if (!action.id) throw new Error(`${action.type} action missing id`);
-
-    const contextAddress = Address.of(action);
-
-    await provider.delete(action.id, action.resourceType);
-    const key = contextAddress.toString();
-    delete currentState.resources[key];
+    await provider.delete(action.resourceType, held(action, currentState).attributes);
+    delete currentState.resources[Address.of(action).toString()];
   }
 }

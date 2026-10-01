@@ -33,7 +33,7 @@ describe('a resource that gains or loses count', () => {
 
   const ids = async () => {
     const state = await new LocalBackend(dir).read();
-    return Object.fromEntries(Object.entries(state.resources).map(([address, resource]) => [address, resource.id]));
+    return Object.fromEntries(Object.entries(state.resources).map(([address, resource]) => [address, resource.attributes.id]));
   };
 
   beforeEach(async () => {

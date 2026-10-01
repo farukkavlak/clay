@@ -55,8 +55,8 @@ describe('ActionExecutor', () => {
       resources: ['test'],
       dataSources: [],
       validate: vi.fn(),
-      create: vi.fn(async (_type: string, inputs: Record<string, unknown>) => ({ id: 'created-id', attributes: inputs })),
-      update: vi.fn(async (_id: string, _type: string, inputs: Record<string, unknown>) => inputs),
+      create: vi.fn(async (_type: string, inputs: Record<string, unknown>) => inputs),
+      update: vi.fn(async (_type: string, _prior: Record<string, unknown>, inputs: Record<string, unknown>) => inputs),
       delete: vi.fn(),
       read: vi.fn(),
       validateDataSource: vi.fn(),
@@ -78,7 +78,7 @@ describe('ActionExecutor', () => {
 
   /** The next create returns these. */
   function created(attributes: Record<string, unknown>): void {
-    vi.mocked(mockProvider.create).mockResolvedValueOnce({ id: 'created-id', attributes });
+    vi.mocked(mockProvider.create).mockResolvedValueOnce(attributes);
   }
 
   describe('execute', () => {
@@ -107,7 +107,7 @@ describe('ActionExecutor', () => {
 
     it('should only refresh the dependencies on a NO_OP action', async () => {
       const key = context.toString();
-      mockState.resources[key] = { id: 'existing', resourceType: 'test', name: 'main', attributes: {}, dependencies: ['test.old'] };
+      mockState.resources[key] = { resourceType: 'test', name: 'main', attributes: {}, dependencies: ['test.old'] };
       const action: PlanAction = { type: 'NO_OP', resourceType: 'test', name: 'main', dependencies: ['test.new'] };
 
       await executor.execute(action, mockState);
@@ -120,17 +120,16 @@ describe('ActionExecutor', () => {
 
     it('should execute a DELETE action and take the resource out of state', async () => {
       const key = context.toString();
-      mockState.resources[key] = { id: 'existing-id', resourceType: 'test', name: 'main', attributes: {} };
+      mockState.resources[key] = { resourceType: 'test', name: 'main', attributes: { id: 'existing-id' } };
       const action: PlanAction = {
         type: 'DELETE',
         resourceType: 'test',
         name: 'main',
-        id: 'existing-id',
       };
 
       await executor.execute(action, mockState);
 
-      expect(mockProvider.delete).toHaveBeenCalledWith('existing-id', 'test');
+      expect(mockProvider.delete).toHaveBeenCalledWith('test', { id: 'existing-id' });
       expect(mockState.resources[key]).toBeUndefined();
     });
   });
@@ -146,7 +145,7 @@ describe('ActionExecutor', () => {
       await expect(executor.executeCreate(action, mockProvider, mockState)).rejects.toThrow('missing attributes');
     });
 
-    it('should write the new resource whole: its id, values and dependencies, and nothing copied from the ast', async () => {
+    it('should write the new resource whole: its values and dependencies, and nothing copied from the ast', async () => {
       const action: PlanAction = {
         type: 'CREATE',
         resourceType: 'test',
@@ -160,7 +159,6 @@ describe('ActionExecutor', () => {
       await executor.executeCreate(action, mockProvider, mockState);
 
       expect(mockState.resources[context.toString()]).toEqual({
-        id: 'created-id',
         resourceType: 'test',
         name: 'main',
         modulePath: [],
@@ -176,52 +174,27 @@ describe('ActionExecutor', () => {
         type: 'UPDATE',
         resourceType: 'test',
         name: 'main',
-        id: 'id',
       };
 
       await expect(executor.executeUpdate(action, mockProvider, mockState)).rejects.toThrow('missing attributes');
     });
 
-    it('should throw if resource not found in state', async () => {
+    it('refuses an update of a resource state does not hold', async () => {
       const action: PlanAction = {
         type: 'UPDATE',
         resourceType: 'test',
         name: 'missing',
-        id: 'id',
         attributes: {},
         planned: {},
         after: {},
       };
 
-      await expect(executor.executeUpdate(action, mockProvider, mockState)).rejects.toThrow('not found in state');
-    });
-
-    it('should throw if UPDATE action missing resource ID', async () => {
-      const key = context.toString();
-      mockState.resources[key] = {
-        id: 'existing',
-        resourceType: 'test',
-        name: 'main',
-        attributes: {},
-      };
-
-      const action: PlanAction = {
-        type: 'UPDATE',
-        resourceType: 'test',
-        name: 'main',
-        attributes: {},
-        planned: {},
-        after: {},
-        // missing id
-      };
-
-      await expect(executor.executeUpdate(action, mockProvider, mockState)).rejects.toThrow('missing resource ID');
+      await expect(executor.executeUpdate(action, mockProvider, mockState)).rejects.toThrow('UPDATE of "test.missing", which state does not hold');
     });
 
     it('should send only the config attributes and drop the ones the config no longer sets', async () => {
       const key = context.toString();
       mockState.resources[key] = {
-        id: 'existing',
         resourceType: 'test',
         name: 'main',
         attributes: { old: 'val', dropped: 'val' },
@@ -231,7 +204,6 @@ describe('ActionExecutor', () => {
         type: 'UPDATE',
         resourceType: 'test',
         name: 'main',
-        id: 'existing',
         attributes: { old: str('updated') },
         planned: { old: 'updated' },
         after: { old: 'updated' },
@@ -239,14 +211,14 @@ describe('ActionExecutor', () => {
 
       await executor.executeUpdate(action, mockProvider, mockState);
 
-      expect(mockProvider.update).toHaveBeenCalledWith('existing', 'test', { old: 'updated' });
+      expect(mockProvider.update).toHaveBeenCalledWith('test', { old: 'val', dropped: 'val' }, { old: 'updated' });
       expect(mockState.resources[key].attributes).toEqual({ old: 'updated' });
     });
 
     it('should write the dependencies the action carries', async () => {
       const key = context.toString();
-      mockState.resources[key] = { id: 'existing', resourceType: 'test', name: 'main', attributes: {}, dependencies: ['test.old'] };
-      const action: PlanAction = { type: 'UPDATE', resourceType: 'test', name: 'main', id: 'existing', attributes: {}, planned: {}, after: {}, dependencies: ['test.dep'] };
+      mockState.resources[key] = { resourceType: 'test', name: 'main', attributes: {}, dependencies: ['test.old'] };
+      const action: PlanAction = { type: 'UPDATE', resourceType: 'test', name: 'main', attributes: {}, planned: {}, after: {}, dependencies: ['test.dep'] };
 
       await executor.executeUpdate(action, mockProvider, mockState);
 
@@ -256,21 +228,20 @@ describe('ActionExecutor', () => {
 
   describe('holding to the plan', () => {
     it.each(['CREATE', 'UPDATE', 'REPLACE'] as const)('refuses a %s without the values it was planned with', async (type) => {
-      mockState.resources[context.toString()] = { id: 'old', resourceType: 'test', name: 'main', attributes: {} };
+      mockState.resources[context.toString()] = { resourceType: 'test', name: 'main', attributes: {} };
 
-      await expect(executor.execute({ type, resourceType: 'test', name: 'main', id: 'old', attributes: {} }, mockState)).rejects.toThrow(
+      await expect(executor.execute({ type, resourceType: 'test', name: 'main', attributes: {} }, mockState)).rejects.toThrow(
         `${type} action missing the values it was planned with`
       );
     });
 
     // A replace deletes first, so a value off the plan found after the delete would leave nothing.
     it('leaves a resource to be replaced as it was when a value is off the plan', async () => {
-      mockState.resources[context.toString()] = { id: 'old', resourceType: 'test', name: 'main', attributes: { path: 'old' } };
+      mockState.resources[context.toString()] = { resourceType: 'test', name: 'main', attributes: { path: 'old' } };
       const action: PlanAction = {
         type: 'REPLACE',
         resourceType: 'test',
         name: 'main',
-        id: 'old',
         attributes: { path: str('other') },
         planned: { path: 'new' },
         after: { path: 'new' },
@@ -321,17 +292,16 @@ describe('ActionExecutor', () => {
       created({ path: 'q' });
 
       await expect(executor.execute(create({ path: 'p' }), mockState)).rejects.toThrow(`${bug}\n  path = "q", where the plan showed "p"`);
-      expect(mockState.resources[context.toString()]).toMatchObject({ id: 'created-id', attributes: { path: 'q' } });
+      expect(mockState.resources[context.toString()]).toMatchObject({ attributes: { path: 'q' } });
     });
 
     it('stops an update that returns a value the plan did not have, and keeps what it returned in state', async () => {
-      mockState.resources[context.toString()] = { id: 'existing', resourceType: 'test', name: 'main', attributes: { path: 'old' } };
+      mockState.resources[context.toString()] = { resourceType: 'test', name: 'main', attributes: { path: 'old' } };
       vi.mocked(mockProvider.update).mockResolvedValueOnce({ path: 'p', extra: 1 });
       const action: PlanAction = {
         type: 'UPDATE',
         resourceType: 'test',
         name: 'main',
-        id: 'existing',
         attributes: { path: str('p') },
         planned: { path: 'p' },
         after: { path: 'p' },
@@ -342,11 +312,11 @@ describe('ActionExecutor', () => {
     });
 
     it('stops a replace whose create returns another value, and keeps the new resource in state', async () => {
-      mockState.resources[context.toString()] = { id: 'old', resourceType: 'test', name: 'main', attributes: { path: 'old' } };
+      mockState.resources[context.toString()] = { resourceType: 'test', name: 'main', attributes: { path: 'old' } };
       created({ path: 'q' });
 
-      await expect(executor.execute({ ...create({ path: 'p' }), type: 'REPLACE', id: 'old' }, mockState)).rejects.toThrow(bug);
-      expect(mockState.resources[context.toString()]).toMatchObject({ id: 'created-id', attributes: { path: 'q' } });
+      await expect(executor.execute({ ...create({ path: 'p' }), type: 'REPLACE' }, mockState)).rejects.toThrow(bug);
+      expect(mockState.resources[context.toString()]).toMatchObject({ attributes: { path: 'q' } });
     });
 
     it('holds a value the configuration sets to what it came to, where the plan did not know it', async () => {
@@ -388,9 +358,9 @@ describe('ActionExecutor', () => {
     });
 
     it.each(['CREATE', 'UPDATE', 'REPLACE'] as const)('refuses a %s without what its provider planned', async (type) => {
-      mockState.resources[context.toString()] = { id: 'old', resourceType: 'test', name: 'main', attributes: {} };
+      mockState.resources[context.toString()] = { resourceType: 'test', name: 'main', attributes: {} };
 
-      await expect(executor.execute({ type, resourceType: 'test', name: 'main', id: 'old', attributes: {}, planned: {} }, mockState)).rejects.toThrow(
+      await expect(executor.execute({ type, resourceType: 'test', name: 'main', attributes: {}, planned: {} }, mockState)).rejects.toThrow(
         `${type} action missing what its provider planned`
       );
       expect(mockProvider.create).not.toHaveBeenCalled();
@@ -401,12 +371,11 @@ describe('ActionExecutor', () => {
   describe('REPLACE', () => {
     it('should delete the old resource, create the new one and keep it in state', async () => {
       const key = context.toString();
-      mockState.resources[key] = { id: 'old', resourceType: 'test', name: 'main', attributes: { path: 'old' } };
+      mockState.resources[key] = { resourceType: 'test', name: 'main', attributes: { path: 'old' } };
       const action: PlanAction = {
         type: 'REPLACE',
         resourceType: 'test',
         name: 'main',
-        id: 'old',
         attributes: { path: str('new') },
         planned: { path: 'new' },
         after: { path: 'new' },
@@ -414,21 +383,22 @@ describe('ActionExecutor', () => {
 
       await executor.execute(action, mockState);
 
-      expect(mockProvider.delete).toHaveBeenCalledWith('old', 'test');
+      expect(mockProvider.delete).toHaveBeenCalledWith('test', { path: 'old' });
       expect(mockProvider.create).toHaveBeenCalledWith('test', { path: 'new' });
-      expect(mockState.resources[key]).toMatchObject({ id: 'created-id', attributes: { path: 'new' } });
+      expect(mockState.resources[key]).toMatchObject({ attributes: { path: 'new' } });
     });
   });
 
   describe('executeDelete', () => {
-    it('should throw if DELETE action missing id', async () => {
+    it('refuses a delete of a resource state does not hold, and asks the provider nothing', async () => {
       const action: PlanAction = {
         type: 'DELETE',
         resourceType: 'test',
         name: 'main',
       };
 
-      await expect(executor.executeDelete(action, mockProvider, mockState)).rejects.toThrow('missing id');
+      await expect(executor.executeDelete(action, mockProvider, mockState)).rejects.toThrow('DELETE of "test.main", which state does not hold');
+      expect(mockProvider.delete).not.toHaveBeenCalled();
     });
   });
 });

@@ -15,10 +15,10 @@ const recorder: Provider = {
   getSchema: async () => ({}),
   plan: async (_, request) => planFromSchema({}, request),
   validate: async () => {},
-  read: async (_, __, prior) => prior,
+  read: async (_, prior) => prior,
   validateDataSource: async () => {},
   readDataSource: async () => ({}),
-  create: async (_, inputs) => ({ id: String(inputs.value), attributes: inputs }),
+  create: async (_, inputs) => inputs,
   update: async (_, __, inputs) => inputs,
   delete: async () => {},
 };

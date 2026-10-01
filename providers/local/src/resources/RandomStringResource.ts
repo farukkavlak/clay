@@ -1,6 +1,8 @@
 import { ExactNumber, PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema } from '@clay/contracts';
 import crypto from 'node:crypto';
 
+import { idOf } from './idOf';
+
 const LENGTH_REQUIRED = 'random_string requires "length" attribute (number > 0)';
 
 /** A number reaches a provider exactly; a length has to be a whole one a JavaScript array can be made with. */
@@ -19,7 +21,8 @@ export class RandomStringResource implements ResourceHandler {
     return {
       length: { type: 'number', required: true, forceNew: true },
       special: { type: 'boolean', required: false, forceNew: true },
-      result: { type: 'string', computed: true },
+      id: { type: 'string', computed: true, kept: true },
+      result: { type: 'string', computed: true, kept: true },
     };
   }
 
@@ -34,11 +37,11 @@ export class RandomStringResource implements ResourceHandler {
   }
 
   // Nothing outside the state holds it, so it is as it was applied.
-  async read(_id: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+  async read(prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
     return prior;
   }
 
-  async create(inputs: Record<string, unknown>): Promise<{ id: string; attributes: Record<string, unknown> }> {
+  async create(inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
     const length = lengthOf(inputs);
     const useSpecial = (inputs.special as boolean) ?? false;
 
@@ -54,13 +57,13 @@ export class RandomStringResource implements ResourceHandler {
 
     for (let i = 0; i < length; i++) result += chars[array[i] % chars.length];
 
-    return { id: result, attributes: { ...inputs, result } };
+    return { ...inputs, id: result, result };
   }
 
   // The value is the id, so changed inputs mean a replacement, not an update.
-  async update(id: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return { ...inputs, result: id };
+  async update(prior: Record<string, unknown>, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return { ...inputs, id: idOf(prior), result: prior.result };
   }
 
-  async delete(_id: string): Promise<void> {}
+  async delete(_prior: Record<string, unknown>): Promise<void> {}
 }

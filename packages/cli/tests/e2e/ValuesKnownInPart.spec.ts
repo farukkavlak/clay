@@ -93,7 +93,7 @@ describe('a value known in part', () => {
     expect(printed).toContain('Applying from saved plan');
     expect(printed).toContain('whole = {"a":(known after apply),"b":"fixed"}');
     const { outputs, resources } = await new LocalBackend(dir).read();
-    expect(outputs).toEqual({ whole: { a: resources['random_string.s'].id, b: 'fixed' }, known: 'fixed', later: `read ${resources['random_string.s'].id}` });
+    expect(outputs).toEqual({ whole: { a: resources['random_string.s'].attributes.id, b: 'fixed' }, known: 'fixed', later: `read ${resources['random_string.s'].attributes.id}` });
   });
 
   // The provider checks what it can once the apply knows the rest.
@@ -152,7 +152,7 @@ describe('a value known in part', () => {
 
     await applyAll(config);
     const { resources } = await new LocalBackend(dir).read();
-    expect(await read('a.txt')).toBe(resources['random_string.s'].id);
+    expect(await read('a.txt')).toBe(resources['random_string.s'].attributes.id);
     expect(await read('b.txt')).toBe('fixed');
   });
 
@@ -195,7 +195,7 @@ describe('a value known in part', () => {
 
     await applyAll(config);
     const { resources } = await new LocalBackend(dir).read();
-    expect(await read('a.txt')).toBe(resources['random_string.s'].id);
+    expect(await read('a.txt')).toBe(resources['random_string.s'].attributes.id);
     expect(await read('b.txt')).toBe('fixed');
   });
 

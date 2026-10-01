@@ -46,20 +46,20 @@ export class LocalProvider implements Provider {
     return await this.handler(type).plan(request);
   }
 
-  async read(type: string, id: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
-    return await this.handler(type).read(id, prior);
+  async read(type: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+    return await this.handler(type).read(prior);
   }
 
-  async create(type: string, inputs: Record<string, unknown>): Promise<{ id: string; attributes: Record<string, unknown> }> {
+  async create(type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
     return await this.handler(type).create(inputs);
   }
 
-  async update(id: string, type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return await this.handler(type).update(id, inputs);
+  async update(type: string, prior: Record<string, unknown>, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return await this.handler(type).update(prior, inputs);
   }
 
-  async delete(id: string, type: string): Promise<void> {
-    await this.handler(type).delete(id);
+  async delete(type: string, prior: Record<string, unknown>): Promise<void> {
+    await this.handler(type).delete(prior);
   }
 
   async validateDataSource(type: string, inputs: Record<string, unknown>): Promise<void> {

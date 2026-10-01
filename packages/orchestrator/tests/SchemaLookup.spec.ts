@@ -23,19 +23,19 @@ class InheritedNameProvider implements Provider {
 
   async validate(_type: string, _inputs: Record<string, unknown>): Promise<void> {}
 
-  async create(_type: string, inputs: Record<string, unknown>): Promise<{ id: string; attributes: Record<string, unknown> }> {
-    return { id: 'id', attributes: inputs };
-  }
-
-  async update(_id: string, _type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+  async create(_type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
     return inputs;
   }
 
-  async delete(_id: string): Promise<void> {}
+  async update(_type: string, _prior: Record<string, unknown>, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return inputs;
+  }
+
+  async delete(): Promise<void> {}
 
   async validateDataSource(_type: string, _inputs: Record<string, unknown>): Promise<void> {}
 
-  async read(_type: string, _id: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+  async read(_type: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
     return prior;
   }
 

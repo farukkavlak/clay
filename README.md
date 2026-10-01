@@ -117,8 +117,9 @@ that differs.
 | `null_resource` | `triggers`, a map; does nothing, and another resource can read its `id` to run after it     |
 | `command_exec`  | `command`, `cwd`; runs on create and on every update, and keeps what it printed in `stdout` |
 
-Only the provider makes `result` and `stdout`, so setting one in the configuration is
-refused.
+Each has an `id` the provider makes and keeps until the resource is replaced: the file's
+full path, the string, or a random UUID. Only the provider makes `id`, `result` and
+`stdout`, so setting one in the configuration is refused.
 
 A data source reads something that already exists. `data "local_file" "f" { path = "x" }`
 reads a file, and `data.local_file.f.content` is what it holds. A read that returns a

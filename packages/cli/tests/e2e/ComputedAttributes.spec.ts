@@ -15,7 +15,12 @@ class StampProvider implements Provider {
   readonly dataSources: string[] = [];
 
   async getSchema(): Promise<Schema> {
-    return { label: { type: 'string', required: true }, note: { type: 'string' }, made: { type: 'string', computed: true, optional: true } };
+    return {
+      id: { type: 'string', computed: true, kept: true },
+      label: { type: 'string', required: true },
+      note: { type: 'string' },
+      made: { type: 'string', computed: true, optional: true },
+    };
   }
 
   async plan(type: string, request: PlanRequest): Promise<PlannedChange> {
@@ -24,16 +29,16 @@ class StampProvider implements Provider {
 
   async validate(): Promise<void> {}
 
-  async read(_type: string, _id: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+  async read(_type: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
     return prior;
   }
 
-  async create(_type: string, inputs: Record<string, unknown>): Promise<{ id: string; attributes: Record<string, unknown> }> {
-    return { id: 'stamp-id', attributes: { ...inputs, made: `made ${String(inputs.label)}` } };
+  async create(_type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return { ...inputs, id: 'stamp-id', made: `made ${String(inputs.label)}` };
   }
 
-  async update(_id: string, _type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return { ...inputs, made: `remade ${String(inputs.label)}` };
+  async update(_type: string, prior: Record<string, unknown>, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return { ...inputs, id: prior.id, made: `remade ${String(inputs.label)}` };
   }
 
   async delete(): Promise<void> {}
@@ -47,8 +52,8 @@ class StampProvider implements Provider {
 
 /** Says it computes `made`, then does not return it. */
 class ForgetfulStampProvider extends StampProvider {
-  override async create(_type: string, inputs: Record<string, unknown>): Promise<{ id: string; attributes: Record<string, unknown> }> {
-    return { id: 'stamp-id', attributes: inputs };
+  override async create(_type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return { ...inputs, id: 'stamp-id' };
   }
 }
 
@@ -58,13 +63,12 @@ class SerialStampProvider extends StampProvider {
     return { ...(await super.getSchema()), size: { type: 'string', forceNew: true }, serial: { type: 'string', computed: true, kept: true } };
   }
 
-  override async create(type: string, inputs: Record<string, unknown>): Promise<{ id: string; attributes: Record<string, unknown> }> {
-    const { id, attributes } = await super.create(type, inputs);
-    return { id, attributes: { ...attributes, serial: `serial ${String(inputs.size)}` } };
+  override async create(type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return { ...(await super.create(type, inputs)), serial: `serial ${String(inputs.size)}` };
   }
 
-  override async update(id: string, type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return { ...(await super.update(id, type, inputs)), serial: `serial ${String(inputs.size)}` };
+  override async update(type: string, prior: Record<string, unknown>, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return { ...(await super.update(type, prior, inputs)), serial: `serial ${String(inputs.size)}` };
   }
 }
 
@@ -173,7 +177,7 @@ describe('a value only the provider knows', () => {
     await apply('resource "stamp" "a" { label = "x" }');
 
     const state = await new LocalBackend(dir).read();
-    expect(state.resources['stamp.a']).toMatchObject({ id: 'stamp-id', attributes: { label: 'x', made: 'made x' } });
+    expect(state.resources['stamp.a'].attributes).toEqual({ id: 'stamp-id', label: 'x', made: 'made x' });
   });
 
   // The configuration never sets it, so it is no change that the configuration does not have it.
@@ -262,6 +266,6 @@ describe('a value only the provider knows', () => {
     expect(isUnknown(actions.find((action) => action.name === 'copy')!.planned!.content)).toBe(true);
     expect(await fs.readFile(file, 'utf8')).toBe('remade y');
     const state = await new LocalBackend(dir).read();
-    expect(state.resources['stamp.a'].attributes).toEqual({ label: 'y', made: 'remade y' });
+    expect(state.resources['stamp.a'].attributes).toEqual({ id: 'stamp-id', label: 'y', made: 'remade y' });
   });
 });

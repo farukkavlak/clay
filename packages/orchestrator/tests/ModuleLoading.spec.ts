@@ -66,11 +66,11 @@ describe('Orchestrator - Module Loading', () => {
       resources: ['test_resource'],
       dataSources: [],
       validate: vi.fn(),
-      create: vi.fn(async (_type: string, inputs: Record<string, unknown>) => ({ id: 'created-id', attributes: inputs })),
-      read: vi.fn(async (_type, _id, prior) => prior),
+      create: vi.fn(async (_type: string, inputs: Record<string, unknown>) => inputs),
+      read: vi.fn(async (_type, prior) => prior),
       validateDataSource: vi.fn(),
       readDataSource: vi.fn(),
-      update: vi.fn(async (_id: string, _type: string, inputs: Record<string, unknown>) => inputs),
+      update: vi.fn(async (_type: string, _prior: Record<string, unknown>, inputs: Record<string, unknown>) => inputs),
       delete: vi.fn(),
       getSchema: vi.fn().mockReturnValue({}),
       plan: vi.fn(async (_type: string, request: PlanRequest) => planFromSchema({}, request)),
@@ -127,7 +127,7 @@ describe('Orchestrator - Module Loading', () => {
     const expectedKey = 'module.vpc.test_resource.main';
 
     expect(stateArg.resources).toHaveProperty(expectedKey);
-    expect(stateArg.resources[expectedKey].id).toBe('created-id');
+    expect(stateArg.resources[expectedKey].attributes).toEqual({ name: 'main-vpc' });
   });
 
   it('should handle nested modules', async () => {

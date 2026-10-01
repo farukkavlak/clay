@@ -1,4 +1,4 @@
-import { Address, isUnknown, ModuleAddress, State, UNKNOWN } from '@clay/contracts';
+import { Address, isUnknown, ModuleAddress, State, STATE_VERSION, UNKNOWN } from '@clay/contracts';
 import { AttributeValue, CONFIG_FILE } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
@@ -29,13 +29,12 @@ function desiredResource(name: string, attributes: Record<string, string>, modul
   };
 }
 
-function stateWith(name: string, attributes: Record<string, unknown>, id = `mock_resource.${name}`): State {
+function stateWith(name: string, attributes: Record<string, unknown>): State {
   return {
-    version: 1,
+    version: STATE_VERSION,
     serial: 0,
     resources: {
       [`mock_resource.${name}`]: {
-        id,
         resourceType: 'mock_resource',
         name,
         attributes,
@@ -46,7 +45,7 @@ function stateWith(name: string, attributes: Record<string, unknown>, id = `mock
 
 describe('Planner', () => {
   it('should plan CREATE for new resources', () => {
-    const actions = plan([desiredResource('test_resource_a', { path: 'x' })], { version: 1, serial: 0, resources: {} });
+    const actions = plan([desiredResource('test_resource_a', { path: 'x' })], { version: STATE_VERSION, serial: 0, resources: {} });
 
     expect(actions).toHaveLength(1);
     expect(actions[0].type).toBe('CREATE');
@@ -61,7 +60,7 @@ describe('Planner', () => {
     const after = { ...planned, made: UNKNOWN };
     const desired = { ...desiredResource('r', planned), after };
 
-    expect(plan([desired], { version: 1, serial: 0, resources: {} })[0]).toMatchObject({ type: 'CREATE', planned, after });
+    expect(plan([desired], { version: STATE_VERSION, serial: 0, resources: {} })[0]).toMatchObject({ type: 'CREATE', planned, after });
     expect(plan([desired], stateWith('r', { path: 'x', size: 'small' }))[0]).toMatchObject({ type: 'UPDATE', planned, after });
     expect(plan([{ ...desired, replace: true }], stateWith('r', { path: 'old', size: 'large' }))[0]).toMatchObject({ type: 'REPLACE', planned, after });
     expect(plan([{ ...desiredResource('r', planned) }], stateWith('r', planned))[0]).not.toHaveProperty('after');
@@ -77,7 +76,7 @@ describe('Planner', () => {
   });
 
   it('should plan CREATE for nested module resources', () => {
-    const actions = plan([desiredResource('nested_resource', { size: 'large' }, ['app', 'db'])], { version: 1, serial: 0, resources: {} });
+    const actions = plan([desiredResource('nested_resource', { size: 'large' }, ['app', 'db'])], { version: STATE_VERSION, serial: 0, resources: {} });
 
     expect(actions).toHaveLength(1);
     expect(actions[0].type).toBe('CREATE');
@@ -87,7 +86,7 @@ describe('Planner', () => {
   it('should carry the dependencies of a resource on every action but a delete', () => {
     const desired = { ...desiredResource('r', { path: 'x' }), dependencies: ['mock_resource.dep'] };
 
-    expect(plan([desired], { version: 1, serial: 0, resources: {} })[0]).toMatchObject({ type: 'CREATE', dependencies: ['mock_resource.dep'] });
+    expect(plan([desired], { version: STATE_VERSION, serial: 0, resources: {} })[0]).toMatchObject({ type: 'CREATE', dependencies: ['mock_resource.dep'] });
     expect(plan([desired], stateWith('r', { path: 'old' }))[0]).toMatchObject({ type: 'UPDATE', dependencies: ['mock_resource.dep'] });
     expect(plan([desired], stateWith('r', { path: 'x' }))[0]).toMatchObject({ type: 'NO_OP', dependencies: ['mock_resource.dep'] });
     expect(plan([{ ...desired, replace: true }], stateWith('r', { path: 'old' }))[0]).toMatchObject({ type: 'REPLACE', dependencies: ['mock_resource.dep'] });
@@ -98,8 +97,7 @@ describe('Planner', () => {
     const actions = plan([], stateWith('test_resource_b', {}));
 
     expect(actions).toHaveLength(1);
-    expect(actions[0].type).toBe('DELETE');
-    expect(actions[0].id).toBe('mock_resource.test_resource_b');
+    expect(actions[0]).toEqual({ type: 'DELETE', resourceType: 'mock_resource', name: 'test_resource_b', modulePath: [] });
   });
 
   it('should plan UPDATE when attributes change', () => {
@@ -107,7 +105,6 @@ describe('Planner', () => {
 
     expect(actions).toHaveLength(1);
     expect(actions[0].type).toBe('UPDATE');
-    expect(actions[0].id).toBe('mock_resource.test_resource_c');
     expect(actions[0].changes!.path).toEqual({ old: 'old_path', new: 'new_path' });
   });
 
@@ -168,11 +165,10 @@ describe('Planner', () => {
   });
 
   it('should plan one REPLACE when the provider plans to replace the resource', () => {
-    const actions = plan([{ ...desiredResource('test_resource_f', { path: 'new_path' }), replace: true }], stateWith('test_resource_f', { path: 'old_path' }, 'mock_id_123'));
+    const actions = plan([{ ...desiredResource('test_resource_f', { path: 'new_path' }), replace: true }], stateWith('test_resource_f', { path: 'old_path' }));
 
     expect(actions).toHaveLength(1);
     expect(actions[0].type).toBe('REPLACE');
-    expect(actions[0].id).toBe('mock_id_123');
     expect(actions[0].attributes).toEqual({ path: str('new_path') });
     expect(actions[0].changes).toEqual({ path: { old: 'old_path', new: 'new_path' } });
   });
@@ -186,19 +182,19 @@ describe('Planner', () => {
 
   it('should tell a replaced resource in a module apart from a removed one', () => {
     const state: State = {
-      version: 1,
+      version: STATE_VERSION,
       serial: 0,
       resources: {
-        'module.app.mock_resource.same': { id: 'in_module', resourceType: 'mock_resource', name: 'same', modulePath: [{ name: 'app' }], attributes: { path: 'old' } },
-        'mock_resource.same': { id: 'at_root', resourceType: 'mock_resource', name: 'same', attributes: { path: 'old' } },
+        'module.app.mock_resource.same': { resourceType: 'mock_resource', name: 'same', modulePath: [{ name: 'app' }], attributes: { path: 'old' } },
+        'mock_resource.same': { resourceType: 'mock_resource', name: 'same', attributes: { path: 'old' } },
       },
     };
 
     const actions = plan([{ ...desiredResource('same', { path: 'new' }, ['app']), replace: true }], state);
 
-    expect(actions.map((action) => [action.type, action.id])).toEqual([
-      ['REPLACE', 'in_module'],
-      ['DELETE', 'at_root'],
+    expect(actions.map((action) => [action.type, Address.of(action).toString()])).toEqual([
+      ['REPLACE', 'module.app.mock_resource.same'],
+      ['DELETE', 'mock_resource.same'],
     ]);
   });
 

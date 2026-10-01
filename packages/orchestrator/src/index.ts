@@ -123,12 +123,9 @@ export class Orchestrator {
   }
 
   private async readBack(key: string, resource: Resource): Promise<Record<string, unknown> | null> {
-    // Without an id there is nothing a provider could find it by.
-    if (resource.id === undefined) return resource.attributes;
-
     try {
       const provider = this.providers.get(resource.resourceType);
-      const read = await provider.read(resource.resourceType, resource.id, resource.attributes);
+      const read = await provider.read(resource.resourceType, resource.attributes);
       if (read !== null) checkRead(resource.resourceType, await this.schemaOf(resource.resourceType), resource.attributes, read);
 
       return read;

@@ -2,9 +2,12 @@ import { PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema } f
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
+import { idOf } from './idOf';
+
 export class LocalFileResource implements ResourceHandler {
   async getSchema(): Promise<Schema> {
     return {
+      id: { type: 'string', computed: true, kept: true },
       path: { type: 'string', required: true, forceNew: true }, // Changing path means new file
       content: { type: 'string', required: true, forceNew: false }, // Changing content is update
     };
@@ -20,9 +23,9 @@ export class LocalFileResource implements ResourceHandler {
     return planFromSchema(await this.getSchema(), request);
   }
 
-  async read(id: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+  async read(prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
     try {
-      return { ...prior, content: await fs.readFile(id, 'utf8') };
+      return { ...prior, content: await fs.readFile(idOf(prior), 'utf8') };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
 
@@ -30,7 +33,7 @@ export class LocalFileResource implements ResourceHandler {
     }
   }
 
-  async create(inputs: Record<string, unknown>): Promise<{ id: string; attributes: Record<string, unknown> }> {
+  async create(inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
     const filePath = inputs.path as string;
     const content = inputs.content as string;
 
@@ -39,20 +42,21 @@ export class LocalFileResource implements ResourceHandler {
 
     await fs.writeFile(filePath, content, 'utf8');
 
-    return { id: path.resolve(filePath), attributes: inputs };
+    return { ...inputs, id: path.resolve(filePath) };
   }
 
-  async update(id: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+  async update(prior: Record<string, unknown>, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
     const content = inputs.content as string;
+    const id = idOf(prior);
 
     await fs.writeFile(id, content, 'utf8');
 
-    return inputs;
+    return { ...inputs, id };
   }
 
-  async delete(id: string): Promise<void> {
+  async delete(prior: Record<string, unknown>): Promise<void> {
     // A file removed by hand is already what a delete asks for.
-    await fs.unlink(id).catch((error: { code?: string }) => {
+    await fs.unlink(idOf(prior)).catch((error: { code?: string }) => {
       if (error.code !== 'ENOENT') throw error;
     });
   }

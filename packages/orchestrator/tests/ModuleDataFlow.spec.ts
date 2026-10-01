@@ -67,11 +67,11 @@ describe('Orchestrator - Phase 4: Data Flow', () => {
       resources: ['test_resource'],
       dataSources: [],
       validate: vi.fn(),
-      create: vi.fn(async (_type: string, inputs: Record<string, unknown>) => ({ id: 'created-id', attributes: inputs })),
-      read: vi.fn(async (_type, _id, prior) => prior),
+      create: vi.fn(async (_type: string, inputs: Record<string, unknown>) => inputs),
+      read: vi.fn(async (_type, prior) => prior),
       validateDataSource: vi.fn(),
       readDataSource: vi.fn(),
-      update: vi.fn(async (_id: string, _type: string, inputs: Record<string, unknown>) => inputs),
+      update: vi.fn(async (_type: string, _prior: Record<string, unknown>, inputs: Record<string, unknown>) => inputs),
       delete: vi.fn(),
       getSchema: vi.fn().mockReturnValue({}),
       plan: vi.fn(async (_type: string, request: PlanRequest) => planFromSchema({}, request)),
@@ -253,7 +253,7 @@ resource "test_resource" "instance" {
       },
     ]);
 
-    mockProvider.create.mockImplementation(async (_type: string, inputs: Record<string, unknown>) => ({ id: 'resource-id', attributes: inputs }));
+    mockProvider.create.mockImplementation(async (_type: string, inputs: Record<string, unknown>) => inputs);
 
     await apply(orchestrator, rootConfig);
 

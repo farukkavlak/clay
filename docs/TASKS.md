@@ -159,10 +159,17 @@ provider plans what a resource to create or change will hold.
       until it is replaced, so a change in place plans it as it was read and what reads it
       does not change. A schema that keeps a value it does not compute is refused.
       Terraform's framework does this with `UseStateForUnknown`
+- [x] A resource's id is one of its attributes, as Terraform has it, so the plan and the
+      apply check hold it like any other value. A provider finds a resource by what it
+      last held, and the engine keeps no id of its own
 - [ ] The apply plans each resource again with what it now knows, and holds what it
       returns to that plan. A computed value made from one the configuration sets and the
       plan did not know is taken as anything today, where the provider could know it by
       then. Terraform plans again at apply and refuses a final plan that differs
+- [ ] `create` and `update` are given what the plan says the resource will hold, not only
+      the configuration's values, so a value the provider planned, such as a default, is
+      not worked out a second time. Terraform's `ApplyResourceChange` is given the planned
+      state
 
 ### Schema-driven validation
 
@@ -260,6 +267,8 @@ Terraform has it since backends replaced `-state`.
 - [ ] `clay force-unlock`: a run that dies leaves its lock behind, and the error names
       the file; this removes it, the way Terraform's does
 - [ ] `clay import <address> <id>`: take over a resource that exists but is not in state
+- [ ] A provider can name what identifies a resource apart from its values, for `import`
+      and for finding it again. Terraform 1.12's resource identity
 - [ ] `clay state pull`: print the state as JSON, for a script or a backup
 - [ ] Workspaces: `clay workspace new | select | list`, one state per workspace
 

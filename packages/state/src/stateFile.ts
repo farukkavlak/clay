@@ -12,6 +12,7 @@ function check(state: unknown, source: string): asserts state is State {
 
   if (typeof version !== 'number') say('its version is not a number');
   if (version > STATE_VERSION) throw new Error(`${source} was written by a newer Clay, version ${version}`);
+  if (version < STATE_VERSION) throw new Error(`${source} was written by an older Clay, version ${version}`);
   if (typeof serial !== 'number') say('its serial is not a number');
   if (outputs !== undefined && !isRecord(outputs)) say('its outputs are not a record');
   readResources(resources, 'its resources', say);

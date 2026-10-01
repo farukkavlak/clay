@@ -1,9 +1,12 @@
 import { PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema } from '@clay/contracts';
 import crypto from 'node:crypto';
 
+import { idOf } from './idOf';
+
 export class NullResource implements ResourceHandler {
   async getSchema(): Promise<Schema> {
     return {
+      id: { type: 'string', computed: true, kept: true },
       triggers: { type: 'map', elemType: 'string', required: false },
     };
   }
@@ -15,17 +18,17 @@ export class NullResource implements ResourceHandler {
   }
 
   // Nothing outside the state holds it, so it is as it was applied.
-  async read(_id: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+  async read(prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
     return prior;
   }
 
-  async create(inputs: Record<string, unknown>): Promise<{ id: string; attributes: Record<string, unknown> }> {
-    return { id: crypto.randomUUID(), attributes: inputs };
+  async create(inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return { ...inputs, id: crypto.randomUUID() };
   }
 
-  async update(_id: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return inputs;
+  async update(prior: Record<string, unknown>, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return { ...inputs, id: idOf(prior) };
   }
 
-  async delete(_id: string): Promise<void> {}
+  async delete(_prior: Record<string, unknown>): Promise<void> {}
 }

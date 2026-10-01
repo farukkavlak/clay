@@ -91,6 +91,13 @@ describe('a plan the provider takes part in', () => {
     ]);
   });
 
+  it('keeps the id of a local resource with its values', async () => {
+    await apply(files('one'));
+
+    const state = await new LocalBackend(dir).read();
+    expect(state.resources['local_file.a'].attributes).toEqual({ id: path.join(dir, 'a.txt'), path: path.join(dir, 'a.txt'), content: 'one' });
+  });
+
   it('plans what a changed command prints as known after apply, and the apply reads it', async () => {
     await apply(command('one'));
 
