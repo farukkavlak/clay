@@ -24,12 +24,12 @@ class LoudProvider implements Provider {
 
   async validate(): Promise<void> {}
 
-  async read(_type: string, _id: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+  async read(_type: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
     return prior;
   }
 
-  async create(_type: string, inputs: Record<string, unknown>): Promise<{ id: string; attributes: Record<string, unknown> }> {
-    return { id: 'loud-id', attributes: { label: String(inputs.label).toUpperCase(), volume: 'high' } };
+  async create(_type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return { label: String(inputs.label).toUpperCase(), volume: 'high' };
   }
 
   async update(): Promise<Record<string, unknown>> {
@@ -53,11 +53,11 @@ class EchoProvider extends LoudProvider {
     super();
   }
 
-  override async create(_type: string, inputs: Record<string, unknown>): Promise<{ id: string; attributes: Record<string, unknown> }> {
-    return { id: 'echo-id', attributes: inputs };
+  override async create(_type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return inputs;
   }
 
-  override async read(_type: string, _id: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+  override async read(_type: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
     return { ...prior, ...this.extra };
   }
 }
@@ -69,6 +69,31 @@ class VagueReader extends LoudProvider {
 
   override async readDataSource(): Promise<Record<string, unknown>> {
     return { content: UNKNOWN };
+  }
+}
+
+/** Says it keeps a value it does not compute. */
+class MuddledEcho extends EchoProvider {
+  override async getSchema(): Promise<Schema> {
+    return { label: { type: 'string', required: true, kept: true } };
+  }
+}
+
+/** Plans its id from the name it is given, then makes it with another. */
+class MisnamingProvider extends LoudProvider {
+  override readonly resources = ['named'];
+
+  override async getSchema(): Promise<Schema> {
+    return { name: { type: 'string', required: true }, id: { type: 'string', computed: true, kept: true } };
+  }
+
+  override async plan(_type: string, request: PlanRequest): Promise<PlannedChange> {
+    const { after, replace } = planFromSchema(await this.getSchema(), request);
+    return { after: { ...after, id: request.config.name }, replace };
+  }
+
+  override async create(_type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return { ...inputs, id: `${String(inputs.name)}-123` };
   }
 }
 
@@ -108,9 +133,21 @@ describe('what an apply returns, held to the plan', () => {
       'loud returned what the plan did not show, which is a bug in the provider:\n  label = "QUIET", where the plan showed "quiet"\n  volume = "high", which the plan did not have',
     ]);
     const state = await new LocalBackend(dir).read();
-    expect(state.resources['loud.a']).toMatchObject({ id: 'loud-id', attributes: { label: 'QUIET', volume: 'high' } });
+    expect(state.resources['loud.a'].attributes).toEqual({ label: 'QUIET', volume: 'high' });
     expect(Object.keys(state.resources)).toEqual(['loud.a']);
     await expect(fs.access(file)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('stops the run at a resource made with an id other than the plan showed', async () => {
+    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
+    engine.registerProvider(new MisnamingProvider());
+
+    const failures: Error[] = [];
+    for await (const event of start(engine, 'resource "named" "a" { name = "logs" }')) if (event.type === 'failed') failures.push(event.error);
+
+    expect(failures.map(({ message }) => message)).toEqual([
+      'named returned what the plan did not show, which is a bug in the provider:\n  id = "logs-123", where the plan showed "logs"',
+    ]);
   });
 });
 
@@ -171,5 +208,39 @@ describe('what a data source reads', () => {
     } finally {
       await fs.rm(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('a schema a provider gives', () => {
+  let dir: string;
+
+  const newOrchestrator = (echo: EchoProvider) => {
+    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
+    engine.registerProvider(echo);
+    return engine;
+  };
+
+  beforeEach(async () => {
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-schema-'));
+  });
+
+  afterEach(async () => {
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  const refused = 'echo keeps label, which it does not compute; only a computed value can be kept, which is a bug in the provider';
+
+  it('is refused where it keeps a value it does not compute, at the resource', async () => {
+    await expect(newOrchestrator(new MuddledEcho()).plan('\nresource "echo" "a" { label = "a" }')).rejects.toMatchObject({
+      message: refused,
+      position: { file: 'main.clay', line: 2, column: 1 },
+    });
+  });
+
+  it('is refused the same way when the refresh reads it', async () => {
+    const config = 'resource "echo" "a" { label = "a" }';
+    for await (const event of start(newOrchestrator(new EchoProvider()), config)) if (event.type === 'failed') throw event.error;
+
+    await expect(newOrchestrator(new MuddledEcho()).plan(config)).rejects.toThrow(`echo.a: ${refused}`);
   });
 });

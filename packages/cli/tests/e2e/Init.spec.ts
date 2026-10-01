@@ -1,3 +1,4 @@
+import { STATE_VERSION } from '@clay/contracts';
 import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -14,7 +15,7 @@ describe('init against real files', () => {
   let cwd: string;
 
   const stateWithResource = {
-    version: 1,
+    version: STATE_VERSION,
     serial: 0,
     resources: { 'local_file.a': { id: 'a.txt', resourceType: 'local_file', name: 'a', attributes: { content: 'hello' } } },
   };
@@ -35,7 +36,7 @@ describe('init against real files', () => {
   it('starts an empty state in a new workspace and leaves nothing else behind', async () => {
     await init();
 
-    expect(await new LocalBackend(dir).read()).toEqual({ version: 1, serial: 0, resources: {} });
+    expect(await new LocalBackend(dir).read()).toEqual({ version: STATE_VERSION, serial: 0, resources: {} });
     expect(await fs.readdir(dir)).toEqual(['clay.state.json']);
   });
 

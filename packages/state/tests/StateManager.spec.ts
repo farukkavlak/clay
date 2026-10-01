@@ -26,12 +26,12 @@ describe('StateManager', () => {
 
   it('should return default empty state if file does not exist', async () => {
     const state = await stateManager.read();
-    expect(state).toEqual({ version: 1, serial: 0, resources: {} });
+    expect(state).toEqual({ version: STATE_VERSION, serial: 0, resources: {} });
   });
 
   it('should write and read state correctly', async () => {
     const mockState: State = {
-      version: 1,
+      version: STATE_VERSION,
       serial: 0,
       resources: {
         'mock_resource.test_a': {
@@ -54,7 +54,7 @@ describe('StateManager', () => {
   });
 
   it('counts every write in the serial, on disk and in the state it was given', async () => {
-    const state: State = { version: 1, serial: 0, resources: {} };
+    const state: State = { version: STATE_VERSION, serial: 0, resources: {} };
 
     await stateManager.write(state);
     await stateManager.write(state);
@@ -76,7 +76,7 @@ describe('StateManager', () => {
   });
 
   describe('writeIfAbsent', () => {
-    const empty: State = { version: 1, serial: 0, resources: {} };
+    const empty: State = { version: STATE_VERSION, serial: 0, resources: {} };
 
     it('should write the state when none is stored yet', async () => {
       expect(await stateManager.writeIfAbsent(empty)).toBe(true);
@@ -84,7 +84,7 @@ describe('StateManager', () => {
     });
 
     it('should keep the stored state and say it wrote nothing', async () => {
-      const stored: State = { version: 1, serial: 0, resources: { 'mock_resource.a': { resourceType: 'mock_resource', name: 'a', attributes: {} } } };
+      const stored: State = { version: STATE_VERSION, serial: 0, resources: { 'mock_resource.a': { resourceType: 'mock_resource', name: 'a', attributes: {} } } };
       await stateManager.write(stored);
 
       expect(await stateManager.writeIfAbsent(empty)).toBe(false);
@@ -152,8 +152,8 @@ describe('StateManager', () => {
 
   describe('Backup', () => {
     it('should create a backup file before writing if state exists', async () => {
-      const state1 = { version: 1, serial: 0, resources: { a: { resourceType: 'rt', name: 'n', attributes: {} } } };
-      const state2 = { version: 2, serial: 0, resources: {} };
+      const state1 = { version: STATE_VERSION, serial: 0, resources: { a: { resourceType: 'rt', name: 'n', attributes: {} } } };
+      const state2 = { version: STATE_VERSION, serial: 0, resources: {} };
 
       // First write (no backup expected)
       await stateManager.write(state1);
@@ -173,8 +173,8 @@ describe('StateManager', () => {
 
   describe('a backup that cannot be written', () => {
     it('stops the write and leaves the state as it was', async () => {
-      const first: State = { version: 1, serial: 1, resources: {} };
-      const second: State = { version: 1, serial: 2, resources: {} };
+      const first: State = { version: STATE_VERSION, serial: 1, resources: {} };
+      const second: State = { version: STATE_VERSION, serial: 2, resources: {} };
       await stateManager.write(first);
       await stateManager.write(second);
 
@@ -184,7 +184,7 @@ describe('StateManager', () => {
       await fs.mkdir(bakPath);
 
       const statePath = path.join(tmpDir, 'test.state.json');
-      await expect(stateManager.write({ version: 1, serial: 3, resources: {} })).rejects.toThrow(
+      await expect(stateManager.write({ version: STATE_VERSION, serial: 3, resources: {} })).rejects.toThrow(
         `Could not back up ${statePath} to ${statePath}.bak (EISDIR); the state was not written`
       );
       expect(await stateManager.read()).toEqual(second);
@@ -193,18 +193,18 @@ describe('StateManager', () => {
 
   describe('a write that fails halfway', () => {
     it('leaves the state that was there, whole', async () => {
-      const before: State = { version: 1, serial: 0, resources: { 'mock_resource.a': { resourceType: 'mock_resource', name: 'a', attributes: {} } } };
+      const before: State = { version: STATE_VERSION, serial: 0, resources: { 'mock_resource.a': { resourceType: 'mock_resource', name: 'a', attributes: {} } } };
       await stateManager.write(before);
 
       // A directory in the way of the temporary file makes the write fail before the state file is touched.
       await fs.mkdir(path.join(tmpDir, 'test.state.json.tmp'));
 
-      await expect(stateManager.write({ version: 1, serial: 5, resources: {} })).rejects.toThrow();
+      await expect(stateManager.write({ version: STATE_VERSION, serial: 5, resources: {} })).rejects.toThrow();
       expect(await stateManager.read()).toEqual(before);
     });
 
     it('leaves nothing beside the state file when it succeeds', async () => {
-      await stateManager.write({ version: 1, serial: 0, resources: {} });
+      await stateManager.write({ version: STATE_VERSION, serial: 0, resources: {} });
 
       expect(await fs.readdir(tmpDir)).toEqual(['test.state.json']);
     });

@@ -130,7 +130,8 @@ A bare reference is a value on its own: `path = var.dir`. Inside a string it is 
 | `path`     | The directory of a module, relative to the root      | `path.module`, `path.root`  |
 | anything   | An attribute of the resource with that type and name | `local_file.a.content`      |
 
-A resource's `id` is what the provider assigned on create.
+A resource's `id` is an attribute like any other, one its provider makes. Each local resource
+keeps its `id` until it is replaced.
 
 `path.module` is the directory of the module it is written in, relative to the root: `.`
 at the root, `web` in a module called with `source = "./web"`. In a call's inputs it is the

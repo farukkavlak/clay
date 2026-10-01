@@ -1,3 +1,4 @@
+import { STATE_VERSION } from '@clay/contracts';
 import { StateManager } from '@clay/state';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -26,7 +27,7 @@ describe('CLI: init command', () => {
     await createInitCommand().parseAsync(['node', 'clay', 'init']);
 
     expect(StateManager).toHaveBeenCalledWith(expect.any(Object));
-    expect(writeIfAbsentMock).toHaveBeenCalledWith({ version: 1, serial: 0, resources: {} });
+    expect(writeIfAbsentMock).toHaveBeenCalledWith({ version: STATE_VERSION, serial: 0, resources: {} });
   });
 
   it('should handle errors gracefully', async () => {

@@ -7,8 +7,6 @@ import { shown } from '../shown';
 /** A resource as its provider plans it, and whether the change replaces it. */
 export interface ResourcePlan {
   after: Record<string, unknown>;
-  /** Known before the apply: the id a resource changed in place keeps, or one the provider gives a resource to create. */
-  id?: string;
   replace: boolean;
 }
 
@@ -62,21 +60,17 @@ export class ResourcePlanner {
     if (!Object.values(config).some((value) => containsUnknown(value))) await provider.validate(type, config);
     if (!current) return this.create(provider, type, schema, config);
 
-    const change = await this.ask(provider, type, schema, { id: current.id, prior: current.attributes, proposed: proposed(current.attributes, config, schema), config });
-    if (!replaces(change.replace, current.attributes, change.after)) {
-      if (change.id !== undefined && change.id !== current.id) throw new Error(`${type} planned the id ${shown(change.id)} for a resource it changes in place`);
-
-      return { after: change.after, ...(current.id !== undefined && { id: current.id }), replace: false };
-    }
+    const change = await this.ask(provider, type, schema, { prior: current.attributes, proposed: proposed(current.attributes, config, schema), config });
+    if (!replaces(change.replace, current.attributes, change.after)) return { after: change.after, replace: false };
 
     // What the old resource holds goes with it, so the new one is planned as if made from nothing.
     return { ...(await this.create(provider, type, schema, config)), replace: true };
   }
 
   private async create(provider: Provider, type: string, schema: Schema, config: Record<string, unknown>): Promise<ResourcePlan> {
-    const { after, id } = await this.ask(provider, type, schema, { prior: null, proposed: config, config });
+    const { after } = await this.ask(provider, type, schema, { prior: null, proposed: config, config });
 
-    return { after, ...(id !== undefined && { id }), replace: false };
+    return { after, replace: false };
   }
 
   private async ask(provider: Provider, type: string, schema: Schema, request: PlanRequest): Promise<PlannedChange> {

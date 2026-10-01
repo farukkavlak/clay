@@ -73,3 +73,19 @@ export function checkDataSourceRead(type: string, read: Record<string, unknown>)
     Object.entries(read).flatMap(([name, value]) => unknownIn(name, value))
   );
 }
+
+function checkDefinitions(type: string, schema: Schema, within: string): void {
+  for (const [name, definition] of Object.entries(schema)) {
+    const at = within + name;
+    if (definition.kept && !definition.computed)
+      throw new Error(`${type} keeps ${at}, which it does not compute; only a computed value can be kept, which is a bug in the provider`);
+    if (definition.schema) checkDefinitions(type, definition.schema, `${at}.`);
+  }
+}
+
+/** A schema comes from the provider, so one that says what cannot be is its bug, refused before anything is planned with it. */
+export function checkSchema(type: string, schema: Schema): Schema {
+  checkDefinitions(type, schema, '');
+
+  return schema;
+}

@@ -15,7 +15,12 @@ class StampProvider implements Provider {
   readonly dataSources: string[] = [];
 
   async getSchema(): Promise<Schema> {
-    return { label: { type: 'string', required: true }, note: { type: 'string' }, made: { type: 'string', computed: true, optional: true } };
+    return {
+      id: { type: 'string', computed: true, kept: true },
+      label: { type: 'string', required: true },
+      note: { type: 'string' },
+      made: { type: 'string', computed: true, optional: true },
+    };
   }
 
   async plan(type: string, request: PlanRequest): Promise<PlannedChange> {
@@ -24,16 +29,16 @@ class StampProvider implements Provider {
 
   async validate(): Promise<void> {}
 
-  async read(_type: string, _id: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+  async read(_type: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
     return prior;
   }
 
-  async create(_type: string, inputs: Record<string, unknown>): Promise<{ id: string; attributes: Record<string, unknown> }> {
-    return { id: 'stamp-id', attributes: { ...inputs, made: `made ${String(inputs.label)}` } };
+  async create(_type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return { ...inputs, id: 'stamp-id', made: `made ${String(inputs.label)}` };
   }
 
-  async update(_id: string, _type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return { ...inputs, made: `remade ${String(inputs.label)}` };
+  async update(_type: string, prior: Record<string, unknown>, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return { ...inputs, id: prior.id, made: `remade ${String(inputs.label)}` };
   }
 
   async delete(): Promise<void> {}
@@ -47,8 +52,23 @@ class StampProvider implements Provider {
 
 /** Says it computes `made`, then does not return it. */
 class ForgetfulStampProvider extends StampProvider {
-  override async create(_type: string, inputs: Record<string, unknown>): Promise<{ id: string; attributes: Record<string, unknown> }> {
-    return { id: 'stamp-id', attributes: inputs };
+  override async create(_type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return { ...inputs, id: 'stamp-id' };
+  }
+}
+
+/** Makes a `serial` from its `size`, which replaces it, so the serial is the same until the resource is replaced. */
+class SerialStampProvider extends StampProvider {
+  override async getSchema(): Promise<Schema> {
+    return { ...(await super.getSchema()), size: { type: 'string', forceNew: true }, serial: { type: 'string', computed: true, kept: true } };
+  }
+
+  override async create(type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return { ...(await super.create(type, inputs)), serial: `serial ${String(inputs.size)}` };
+  }
+
+  override async update(type: string, prior: Record<string, unknown>, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return { ...(await super.update(type, prior, inputs)), serial: `serial ${String(inputs.size)}` };
   }
 }
 
@@ -66,6 +86,9 @@ describe('a value only the provider knows', () => {
   const apply = async (config: string, stamp?: Provider) => {
     for await (const event of start(newOrchestrator(stamp), config)) if (event.type === 'failed') throw event.error;
   };
+
+  const serialCopy = (label: string, size = '1') =>
+    `resource "stamp" "a" {\n  label = "${label}"\n  size = "${size}"\n}\nresource "local_file" "copy" {\n  path = "${file}"\n  content = stamp.a.serial\n}`;
 
   const withCopy = (stamp: string) => `${stamp}\nresource "local_file" "copy" {\n  path = "${file}"\n  content = stamp.a.made\n}`;
 
@@ -154,7 +177,7 @@ describe('a value only the provider knows', () => {
     await apply('resource "stamp" "a" { label = "x" }');
 
     const state = await new LocalBackend(dir).read();
-    expect(state.resources['stamp.a']).toMatchObject({ id: 'stamp-id', attributes: { label: 'x', made: 'made x' } });
+    expect(state.resources['stamp.a'].attributes).toEqual({ id: 'stamp-id', label: 'x', made: 'made x' });
   });
 
   // The configuration never sets it, so it is no change that the configuration does not have it.
@@ -203,6 +226,35 @@ describe('a value only the provider knows', () => {
     expect(actions.find((action) => action.name === 'copy')!.planned).toMatchObject({ content: 'made x' });
   });
 
+  it('leaves what reads a kept value unchanged when the resource changes in place, and the apply keeps it', async () => {
+    await apply(serialCopy('x'), new SerialStampProvider());
+
+    const { actions } = await newOrchestrator(new SerialStampProvider()).plan(serialCopy('y'));
+    await apply(serialCopy('y'), new SerialStampProvider());
+
+    expect(actions.map(({ name, type }) => [name, type])).toEqual([
+      ['a', 'UPDATE'],
+      ['copy', 'NO_OP'],
+    ]);
+    const state = await new LocalBackend(dir).read();
+    expect(state.resources['stamp.a'].attributes).toMatchObject({ label: 'y', serial: 'serial 1' });
+    expect(await fs.readFile(file, 'utf8')).toBe('serial 1');
+  });
+
+  it('plans a kept value as known after apply when the resource is replaced, and what reads it changes', async () => {
+    await apply(serialCopy('x'), new SerialStampProvider());
+
+    const { actions } = await newOrchestrator(new SerialStampProvider()).plan(serialCopy('x', '2'));
+    await apply(serialCopy('x', '2'), new SerialStampProvider());
+
+    expect(actions.map(({ name, type }) => [name, type])).toEqual([
+      ['a', 'REPLACE'],
+      ['copy', 'UPDATE'],
+    ]);
+    expect(isUnknown(actions.find((action) => action.name === 'copy')!.planned!.content)).toBe(true);
+    expect(await fs.readFile(file, 'utf8')).toBe('serial 2');
+  });
+
   // The provider may make it again on a change, so the plan cannot say what it will be.
   it('plans the value as known after apply for a resource that changes, and keeps what the provider returns', async () => {
     await apply(withCopy('resource "stamp" "a" { label = "x" }'));
@@ -214,6 +266,6 @@ describe('a value only the provider knows', () => {
     expect(isUnknown(actions.find((action) => action.name === 'copy')!.planned!.content)).toBe(true);
     expect(await fs.readFile(file, 'utf8')).toBe('remade y');
     const state = await new LocalBackend(dir).read();
-    expect(state.resources['stamp.a'].attributes).toEqual({ label: 'y', made: 'remade y' });
+    expect(state.resources['stamp.a'].attributes).toEqual({ id: 'stamp-id', label: 'y', made: 'remade y' });
   });
 });

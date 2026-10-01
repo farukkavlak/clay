@@ -32,9 +32,8 @@ export function containsUnknown(value: unknown): boolean {
   return isRecord(value) && Object.values(value).some((item) => containsUnknown(item));
 }
 
-/** A resource as state records it. */
+/** A resource as state records it. Its address finds it; whatever its provider finds it by, an id among them, is one of its attributes. */
 export interface Resource {
-  id?: string;
   resourceType: string;
   name: string;
   modulePath?: readonly ModuleStep[];
@@ -55,7 +54,7 @@ export interface State {
 }
 
 /** The shape this version of Clay writes, bumped when it changes once a Clay is released. A state that names a higher one was written by a Clay that knows something this one does not. */
-export const STATE_VERSION = 1;
+export const STATE_VERSION = 2;
 
 export function emptyState(): State {
   return { version: STATE_VERSION, serial: 0, resources: {} };
@@ -119,10 +118,12 @@ export interface SchemaDefinition {
   type: SchemaType;
   required?: boolean;
   forceNew?: boolean; // If true, a change to this attribute forces replacement (Delete -> Create)
-  /** Made by the provider, and the configuration cannot set it unless `optional` says so. A plan keeps the value in state unless the configuration sets it. */
+  /** Made by the provider, and the configuration cannot set it unless `optional` says so. A plan with no change keeps it as read; a change makes it again unless it is `kept`. */
   computed?: boolean;
   /** With `computed`: the configuration may set it, and the provider makes it when the configuration does not. */
   optional?: boolean;
+  /** With `computed`: made with the resource and the same until it is replaced, so a change in place keeps it as it was read. */
+  kept?: boolean;
   elemType?: SchemaType; // For 'list' and 'map'
   schema?: Schema; // For 'object'
 }
@@ -134,8 +135,6 @@ export type AttributePath = (string | number)[];
 
 /** What a provider is asked to plan: a resource to create when `prior` is null, else one to change. */
 export interface PlanRequest {
-  /** The id state holds it by; a resource to create has none. */
-  id?: string;
   /** The resource as the refresh read it. */
   prior: Record<string, unknown> | null;
   /** The configuration's values, with what the provider computed kept from `prior` where the configuration does not set it. */
@@ -148,20 +147,19 @@ export interface PlanRequest {
 export interface PlannedChange {
   /** Every value it will hold, UNKNOWN where only the apply makes one. A value the configuration sets stays as it is set. */
   after: Record<string, unknown>;
-  /** The id a resource to create will have, when the provider knows it before the apply. */
-  id?: string;
   /** Where a change replaces the resource rather than changing it in place. */
   replace: AttributePath[];
 }
 
 /**
  * A plan from the schema alone: with nothing changed the resource stays as it was read, and with anything changed, what the provider computes and the
- * configuration does not set is made again, and a changed `forceNew` attribute replaces it.
+ * configuration does not set is made again unless it is kept, and a changed `forceNew` attribute replaces it.
  */
 export function planFromSchema(schema: Schema, { prior, proposed, config }: PlanRequest): PlannedChange {
   if (prior !== null && isDeepStrictEqual(prior, proposed)) return { after: prior, replace: [] };
 
-  const remade = Object.keys(schema).filter((name) => schema[name].computed && !Object.hasOwn(config, name));
+  const kept = (name: string) => schema[name].kept && Object.hasOwn(proposed, name);
+  const remade = Object.keys(schema).filter((name) => schema[name].computed && !Object.hasOwn(config, name) && !kept(name));
   const after = Object.fromEntries([...Object.entries(proposed), ...remade.map((name) => [name, UNKNOWN])]);
   if (prior === null) return { after, replace: [] };
 
@@ -186,19 +184,19 @@ export interface Provider {
   /** What the resource will hold once applied. `planFromSchema` plans from the schema alone. */
   plan(type: string, request: PlanRequest): Promise<PlannedChange>;
 
-  /** The resource as it is now, from what was last applied, or `null` when it is gone. */
-  read(type: string, id: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null>;
+  /** The resource as it is now, found by what was last applied, or `null` when it is gone. */
+  read(type: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null>;
 
   /** Throws when the inputs would not read a data source. */
   validateDataSource(type: string, inputs: Record<string, unknown>): Promise<void>;
 
   readDataSource(type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>>;
 
-  /** The id the resource is known by from now on, and the whole of it as made, what the provider computed included. */
-  create(type: string, inputs: Record<string, unknown>): Promise<{ id: string; attributes: Record<string, unknown> }>;
-  /** The whole of the resource as changed. */
-  update(id: string, type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>>;
-  delete(id: string, type: string): Promise<void>;
+  /** The whole of the resource as made, what the provider computed included. */
+  create(type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>>;
+  /** The whole of the resource as changed; `prior` is what it held, so the provider can find it. */
+  update(type: string, prior: Record<string, unknown>, inputs: Record<string, unknown>): Promise<Record<string, unknown>>;
+  delete(type: string, prior: Record<string, unknown>): Promise<void>;
 }
 
 /** One resource type's side of a provider. */
@@ -209,15 +207,15 @@ export interface ResourceHandler {
 
   plan(request: PlanRequest): Promise<PlannedChange>;
 
-  read(id: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null>;
+  read(prior: Record<string, unknown>): Promise<Record<string, unknown> | null>;
 
-  /** The id the resource is known by from now on, and the whole of it as made. */
-  create(inputs: Record<string, unknown>): Promise<{ id: string; attributes: Record<string, unknown> }>;
+  /** The whole of the resource as made. */
+  create(inputs: Record<string, unknown>): Promise<Record<string, unknown>>;
 
   /** The whole of the resource as changed. */
-  update(id: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>>;
+  update(prior: Record<string, unknown>, inputs: Record<string, unknown>): Promise<Record<string, unknown>>;
 
-  delete(id: string): Promise<void>;
+  delete(prior: Record<string, unknown>): Promise<void>;
 }
 
 /** One data source type's side of a provider. */

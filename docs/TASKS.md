@@ -155,16 +155,28 @@ provider plans what a resource to create or change will hold.
       yet. The plan was approved, so a different result is never taken in silence. A
       value returned that the plan did not have is refused the same way, since the next
       plan would read it as removed and plan an update every run
+- [x] A schema can mark a computed value `kept`: made with the resource and the same
+      until it is replaced, so a change in place plans it as it was read and what reads it
+      does not change. A schema that keeps a value it does not compute is refused.
+      Terraform's framework does this with `UseStateForUnknown`
+- [x] A resource's id is one of its attributes, as Terraform has it, so the plan and the
+      apply check hold it like any other value. A provider finds a resource by what it
+      last held, and the engine keeps no id of its own
 - [ ] The apply plans each resource again with what it now knows, and holds what it
       returns to that plan. A computed value made from one the configuration sets and the
       plan did not know is taken as anything today, where the provider could know it by
       then. Terraform plans again at apply and refuses a final plan that differs
+- [ ] `create` and `update` are given what the plan says the resource will hold, not only
+      the configuration's values, so a value the provider planned, such as a default, is
+      not worked out a second time. Terraform's `ApplyResourceChange` is given the planned
+      state
 
 ### Schema-driven validation
 
 `SchemaDefinition` carries `type`, `required`, `elemType` and `schema`. The engine reads
-only `computed` and `optional`: a computed value the configuration sets is refused unless
-it is also optional. `planFromSchema` reads `forceNew` and `computed` for a provider.
+only `computed`, `optional` and `kept`: a computed value the configuration sets is
+refused unless it is also optional, and a schema that keeps a value it does not compute
+is refused. `planFromSchema` reads `forceNew`, `computed` and `kept` for a provider.
 Every resource validates its inputs by hand.
 
 - [ ] The engine validates inputs against the schema before it asks the provider
@@ -255,6 +267,8 @@ Terraform has it since backends replaced `-state`.
 - [ ] `clay force-unlock`: a run that dies leaves its lock behind, and the error names
       the file; this removes it, the way Terraform's does
 - [ ] `clay import <address> <id>`: take over a resource that exists but is not in state
+- [ ] A provider can name what identifies a resource apart from its values, for `import`
+      and for finding it again. Terraform 1.12's resource identity
 - [ ] `clay state pull`: print the state as JSON, for a script or a backup
 - [ ] Workspaces: `clay workspace new | select | list`, one state per workspace
 

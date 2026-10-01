@@ -1,4 +1,4 @@
-import { Address, ExactNumber, ModuleAddress, State } from '@clay/contracts';
+import { Address, ExactNumber, ModuleAddress, State, STATE_VERSION } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { ReferenceResolver } from '../../src/resolvers/ReferenceResolver';
@@ -17,14 +17,14 @@ describe('ReferenceResolver', () => {
   const context = Address.root('resource', 'main');
 
   const mockState: State = {
-    version: 1,
+    version: STATE_VERSION,
     serial: 0,
     resources: {
       'resource.test': {
-        id: 'res-123',
         resourceType: 'resource',
         name: 'test',
         attributes: {
+          id: 'res-123',
           val: 'resolved',
         },
       },
@@ -136,10 +136,9 @@ describe('ReferenceResolver', () => {
       ...mockState,
       resources: {
         'custom.name': {
-          id: 'c-1',
           resourceType: 'custom',
           name: 'name',
-          attributes: { attr: 'ok' },
+          attributes: { id: 'c-1', attr: 'ok' },
         },
       },
     };
@@ -156,7 +155,11 @@ describe('ReferenceResolver', () => {
     it('reads the instance of a resource in that instance of the module', () => {
       const instances = new Instances();
       instances.declare('module.app.resource.dep', 'count');
-      const state: State = { version: 1, serial: 0, resources: { 'module.app[0].resource.dep[1]': { resourceType: 'resource', name: 'dep', attributes: { id: 'one' } } } };
+      const state: State = {
+        version: STATE_VERSION,
+        serial: 0,
+        resources: { 'module.app[0].resource.dep[1]': { resourceType: 'resource', name: 'dep', attributes: { id: 'one' } } },
+      };
 
       const read = new ReferenceResolver(new ScopeManager(), new Map(), instances, new ModuleInstances(), new Planned()).resolveValue(
         reference('resource', 'dep', 1, 'id'),

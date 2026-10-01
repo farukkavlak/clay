@@ -111,10 +111,14 @@ describe('LocalProvider', () => {
       await fs.writeFile(filePath, 'Original content', 'utf8');
 
       // Update
-      await provider.update(filePath, 'local_file', {
-        path: filePath,
-        content: 'Updated content',
-      });
+      await provider.update(
+        'local_file',
+        { id: filePath, path: filePath, content: 'Original content' },
+        {
+          path: filePath,
+          content: 'Updated content',
+        }
+      );
 
       const fileContent = await fs.readFile(filePath, 'utf8');
       expect(fileContent).toBe('Updated content');
@@ -122,9 +126,13 @@ describe('LocalProvider', () => {
 
     it('should throw for unsupported resource type', async () => {
       await expect(
-        provider.update('/tmp/test.txt', 'unknown_type', {
-          content: 'Hello',
-        })
+        provider.update(
+          'unknown_type',
+          { id: '/tmp/test.txt' },
+          {
+            content: 'Hello',
+          }
+        )
       ).rejects.toThrow('Unsupported resource type');
     });
   });
@@ -140,34 +148,47 @@ describe('LocalProvider', () => {
       await expect(fs.access(filePath)).resolves.not.toThrow();
 
       // Delete
-      await provider.delete(filePath, 'local_file');
+      await provider.delete('local_file', { id: filePath });
 
       // Verify it's gone
       await expect(fs.access(filePath)).rejects.toThrow();
     });
 
     it('treats a file that is already gone as deleted', async () => {
-      await expect(provider.delete(path.join(tmpDir, 'gone.txt'), 'local_file')).resolves.toBeUndefined();
+      await expect(provider.delete('local_file', { id: path.join(tmpDir, 'gone.txt') })).resolves.toBeUndefined();
     });
 
     it('still fails when the file cannot be removed for another reason', async () => {
       // A directory is not a file, so unlink refuses it with something other than ENOENT.
-      await expect(provider.delete(tmpDir, 'local_file')).rejects.toThrow();
+      await expect(provider.delete('local_file', { id: tmpDir })).rejects.toThrow();
+    });
+  });
+
+  describe('a resource that holds no id', () => {
+    it.each([
+      ['read', () => provider.read('local_file', { path: 'a.txt', content: '' })],
+      ['update', () => provider.update('local_file', { path: 'a.txt', content: '' }, { path: 'a.txt', content: 'x' })],
+      ['delete', () => provider.delete('local_file', { path: 'a.txt', content: '' })],
+      ['update of a command', () => provider.update('command_exec', { command: 'echo a' }, { command: 'echo b' })],
+      ['update of a null_resource', () => provider.update('null_resource', {}, {})],
+      ['update of a random_string', () => provider.update('random_string', {}, { length: ExactNumber.parse('4') })],
+    ])('is refused on a %s, since there is nothing to find it by', async (_, call) => {
+      await expect(call()).rejects.toThrow('the resource holds no id to find it by');
     });
   });
 
   describe('what create and update return', () => {
-    it('returns what a type that computes nothing was given, on create and on update', async () => {
+    it('returns what a type that computes only its id was given, with the id, on create and on update', async () => {
       const cases = [
         ['local_file', { path: path.join(tmpDir, 'made.txt'), content: 'hi' }],
         ['null_resource', { triggers: { a: 'b' } }],
       ] as const;
 
       for (const [type, inputs] of cases) {
-        const { id, attributes } = await provider.create(type, inputs);
+        const created = await provider.create(type, inputs);
 
-        expect(attributes).toEqual(inputs);
-        expect(await provider.update(id, type, inputs)).toEqual(inputs);
+        expect(created).toEqual({ ...inputs, id: created.id });
+        expect(await provider.update(type, created, inputs)).toEqual({ ...inputs, id: created.id });
       }
     });
   });
@@ -176,51 +197,67 @@ describe('LocalProvider', () => {
     it.each([
       ['random_string', 'result'],
       ['command_exec', 'stdout'],
+      ['local_file', 'id'],
+      ['random_string', 'id'],
+      ['null_resource', 'id'],
+      ['command_exec', 'id'],
     ])('marks %s %s as computed', async (type, name) => {
       const schema = await provider.getSchema(type);
 
       expect(schema[name]).toMatchObject({ computed: true });
     });
 
+    it.each([
+      ['local_file', 'id'],
+      ['random_string', 'id'],
+      ['random_string', 'result'],
+      ['null_resource', 'id'],
+      ['command_exec', 'id'],
+    ])('keeps %s %s until it is replaced', async (type, name) => {
+      const schema = await provider.getSchema(type);
+
+      expect(schema[name]).toEqual({ type: 'string', computed: true, kept: true });
+    });
+
     it('returns the string it made as result, which is its id too, and keeps it on an update', async () => {
       const inputs = { length: ExactNumber.parse('6') };
 
-      const { id, attributes } = await provider.create('random_string', inputs);
+      const created = await provider.create('random_string', inputs);
 
-      expect(attributes).toEqual({ ...inputs, result: id });
-      expect(id).toHaveLength(6);
-      expect(await provider.update(id, 'random_string', inputs)).toEqual({ ...inputs, result: id });
+      expect(created).toEqual({ ...inputs, id: created.result, result: created.result });
+      expect(created.result).toHaveLength(6);
+      expect(await provider.update('random_string', created, inputs)).toEqual(created);
     });
 
     it('returns what a command printed, on create and on the run an update makes', async () => {
       const created = await provider.create('command_exec', { command: 'echo made' });
-      const updated = await provider.update(created.id, 'command_exec', { command: 'echo changed' });
+      const updated = await provider.update('command_exec', created, { command: 'echo changed' });
 
-      expect(created.attributes).toEqual({ command: 'echo made', stdout: 'made\n' });
-      expect(updated).toEqual({ command: 'echo changed', stdout: 'changed\n' });
+      expect(created).toEqual({ id: created.id, command: 'echo made', stdout: 'made\n' });
+      expect(updated).toEqual({ id: created.id, command: 'echo changed', stdout: 'changed\n' });
     });
   });
 
   describe('READ', () => {
     it('reads a file as it is on disk now, keeping its path', async () => {
       const filePath = path.join(tmpDir, 'drift.txt');
-      const { id } = await provider.create('local_file', { path: filePath, content: 'applied' });
+      const created = await provider.create('local_file', { path: filePath, content: 'applied' });
       await fs.writeFile(filePath, 'changed by hand', 'utf8');
 
-      expect(await provider.read('local_file', id, { path: filePath, content: 'applied' })).toEqual({ path: filePath, content: 'changed by hand' });
+      expect(await provider.read('local_file', created)).toEqual({ id: created.id, path: filePath, content: 'changed by hand' });
     });
 
     it('reads a file that is gone as nothing', async () => {
       const filePath = path.join(tmpDir, 'gone.txt');
-      const { id } = await provider.create('local_file', { path: filePath, content: 'applied' });
+      const created = await provider.create('local_file', { path: filePath, content: 'applied' });
       await fs.unlink(filePath);
 
-      expect(await provider.read('local_file', id, { path: filePath, content: 'applied' })).toBeNull();
+      expect(await provider.read('local_file', created)).toBeNull();
     });
 
     // A directory is there but is not a file, so reading it fails with something other than ENOENT.
     it('still fails as the system says when the file cannot be read for another reason', async () => {
-      await expect(provider.read('local_file', tmpDir, { path: tmpDir, content: '' })).rejects.toMatchObject({ code: 'EISDIR' });
+      await expect(provider.read('local_file', { id: tmpDir, path: tmpDir, content: '' })).rejects.toMatchObject({ code: 'EISDIR' });
     });
 
     // Nothing outside the state says what these hold, so what was applied is what they are.
@@ -229,11 +266,11 @@ describe('LocalProvider', () => {
       ['null_resource', { triggers: { a: 'b' } }],
       ['command_exec', { command: 'echo hi' }],
     ])('reads %s as it was applied', async (type, prior) => {
-      expect(await provider.read(type, 'some-id', prior)).toEqual(prior);
+      expect(await provider.read(type, prior)).toEqual(prior);
     });
 
     it('refuses a type it does not make', async () => {
-      await expect(provider.read('unknown_type', 'id', {})).rejects.toThrow('Unsupported resource type');
+      await expect(provider.read('unknown_type', {})).rejects.toThrow('Unsupported resource type');
     });
   });
 
@@ -319,13 +356,13 @@ describe('LocalProvider', () => {
       const { id } = await provider.create('random_string', { length: ExactNumber.parse('50'), special: true });
       expect(id).toHaveLength(50);
       const specialChars = '!@#$%^&*()_+-=[]{}|;:,.<>?';
-      const hasSpecial = [...id].some((char) => specialChars.includes(char));
+      const hasSpecial = [...String(id)].some((char) => specialChars.includes(char));
       expect(hasSpecial).toBe(true);
     });
 
     it('should not update (no-op)', async () => {
       // Just ensure it doesn't throw
-      await expect(provider.update('any-id', 'random_string', { length: ExactNumber.parse('10') })).resolves.not.toThrow();
+      await expect(provider.update('random_string', { id: 'any-id' }, { length: ExactNumber.parse('10') })).resolves.not.toThrow();
     });
   });
 
@@ -340,11 +377,11 @@ describe('LocalProvider', () => {
     });
 
     it('should not update (no-op)', async () => {
-      await expect(provider.update('any-id', 'null_resource', {})).resolves.not.toThrow();
+      await expect(provider.update('null_resource', { id: 'any-id' }, {})).resolves.not.toThrow();
     });
 
     it('should not delete (no-op)', async () => {
-      await expect(provider.delete('any-id', 'null_resource')).resolves.not.toThrow();
+      await expect(provider.delete('null_resource', { id: 'any-id' })).resolves.not.toThrow();
     });
   });
 
@@ -355,12 +392,12 @@ describe('LocalProvider', () => {
     });
 
     it('should execute a command', async () => {
-      const { attributes } = await provider.create('command_exec', { command: 'echo hello world' });
+      const attributes = await provider.create('command_exec', { command: 'echo hello world' });
       expect(attributes.stdout).toBe('hello world\n');
     });
 
     it('should execute a command with cwd', async () => {
-      const { attributes } = await provider.create('command_exec', { command: 'pwd', cwd: tmpDir });
+      const attributes = await provider.create('command_exec', { command: 'pwd', cwd: tmpDir });
       expect(await fs.realpath(String(attributes.stdout).trim())).toBe(await fs.realpath(tmpDir));
     });
 
@@ -369,22 +406,22 @@ describe('LocalProvider', () => {
     });
 
     it('should re-execute on update', async () => {
-      await expect(provider.update('any-id', 'command_exec', { command: 'echo updated' })).resolves.not.toThrow();
+      await expect(provider.update('command_exec', { id: 'any-id' }, { command: 'echo updated' })).resolves.not.toThrow();
     });
 
     it('should not delete (no-op)', async () => {
-      await expect(provider.delete('any-id', 'command_exec')).resolves.not.toThrow();
+      await expect(provider.delete('command_exec', { id: 'any-id' })).resolves.not.toThrow();
     });
   });
 
   describe('delete (generic)', () => {
     it('should not throw when deleting non-file resources', async () => {
       // Pass correct type, should be no-op for random_string
-      await expect(provider.delete('some-random-id', 'random_string')).resolves.not.toThrow();
+      await expect(provider.delete('random_string', { id: 'some-random-id' })).resolves.not.toThrow();
     });
 
     it('should throw for unknown types', async () => {
-      await expect(provider.delete('id', 'unknown_type')).rejects.toThrow('Unsupported resource type');
+      await expect(provider.delete('unknown_type', { id: 'id' })).rejects.toThrow('Unsupported resource type');
     });
   });
 
@@ -411,11 +448,10 @@ describe('LocalProvider', () => {
     });
 
     it('should return schema for null_resource', async () => {
-      const schema = await provider.getSchema('null_resource');
-      expect(schema).toBeDefined();
-      expect(Object.keys(schema)).toHaveLength(1);
-      expect(schema.triggers).toBeDefined();
-      expect(schema.triggers.type).toBe('map');
+      expect(await provider.getSchema('null_resource')).toEqual({
+        id: { type: 'string', computed: true, kept: true },
+        triggers: { type: 'map', elemType: 'string', required: false },
+      });
     });
 
     it('should throw for unknown types', async () => {

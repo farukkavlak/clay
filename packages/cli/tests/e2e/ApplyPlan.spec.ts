@@ -433,7 +433,7 @@ describe('apply and plan against real files', () => {
     const files = await fs.readdir(dir);
     expect(files.filter((name) => name.endsWith('.txt'))).toEqual(['moved.txt']);
     const state = await new LocalBackend(dir).read();
-    expect(state.resources['local_file.a'].id).toBe(path.join(dir, 'moved.txt'));
+    expect(state.resources['local_file.a'].attributes.id).toBe(path.join(dir, 'moved.txt'));
     expect(await changes(moved)).toEqual([]);
   });
 

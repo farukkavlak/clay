@@ -1,3 +1,4 @@
+import { STATE_VERSION } from '@clay/contracts';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -38,12 +39,16 @@ describe('a state file that is not valid state', () => {
 
   // Each of these was read as a state and planned against: the string ones by the character, the empty one as a crash.
   it.each([
-    ['resources that are not a record', '{"version":1,"serial":0,"resources":"oops"}', 'its resources are not a record'],
-    ['outputs that are not a record', '{"version":1,"serial":0,"outputs":"oops","resources":{}}', 'its outputs are not a record'],
-    ['a resource with no attributes', '{"version":1,"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a"}}}', '"local_file.a" is not a resource'],
+    ['resources that are not a record', `{"version":${STATE_VERSION},"serial":0,"resources":"oops"}`, 'its resources are not a record'],
+    ['outputs that are not a record', `{"version":${STATE_VERSION},"serial":0,"outputs":"oops","resources":{}}`, 'its outputs are not a record'],
+    [
+      'a resource with no attributes',
+      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a"}}}`,
+      '"local_file.a" is not a resource',
+    ],
     [
       'a resource filed under another address',
-      '{"version":1,"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"b","attributes":{}}}}',
+      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"b","attributes":{}}}}`,
       '"local_file.a" holds local_file.b',
     ],
     ['no version at all', '{}', 'its version is not a number'],

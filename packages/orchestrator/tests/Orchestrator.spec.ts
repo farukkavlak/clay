@@ -15,7 +15,7 @@ class MockProvider implements Provider {
   private createdResources: Map<string, Record<string, unknown>> = new Map();
 
   async getSchema(_type: string): Promise<Schema> {
-    return {};
+    return { id: { type: 'string', computed: true, kept: true } };
   }
 
   async plan(type: string, request: PlanRequest): Promise<PlannedChange> {
@@ -26,26 +26,27 @@ class MockProvider implements Provider {
     // Always valid for testing
   }
 
-  async create(_type: string, inputs: Record<string, unknown>): Promise<{ id: string; attributes: Record<string, unknown> }> {
+  async create(_type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
     const id = `mock_${Date.now()}_${Math.random()}`;
     this.createdResources.set(id, inputs);
-    return { id, attributes: inputs };
+    return { ...inputs, id };
   }
 
-  async update(id: string, _type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+  async update(_type: string, prior: Record<string, unknown>, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const id = String(prior.id);
     if (!this.createdResources.has(id)) throw new Error(`Resource ${id} not found`);
 
     this.createdResources.set(id, inputs);
-    return inputs;
+    return { ...inputs, id };
   }
 
-  async delete(id: string): Promise<void> {
-    this.createdResources.delete(id);
+  async delete(_type: string, prior: Record<string, unknown>): Promise<void> {
+    this.createdResources.delete(String(prior.id));
   }
 
   async validateDataSource(_type: string, _inputs: Record<string, unknown>): Promise<void> {}
 
-  async read(_type: string, _id: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+  async read(_type: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
     return prior;
   }
 
@@ -295,17 +296,16 @@ describe('Orchestrator', () => {
       expect(JSON.stringify(planned.prior)).toBe(before);
     });
 
-    // Without an id there is nothing to ask the provider for, so what was recorded stands.
-    it('keeps a resource in state with no id as it is, without reading it', async () => {
+    // The provider finds the resource by what it holds, so it is asked with all of it, whether or not that holds an id.
+    it('asks the provider for each resource with what state holds', async () => {
       const resource = { resourceType: 'mock_resource', name: 'a', attributes: { value: 'x' } };
       await new LocalBackend(tmpDir).write({ ...emptyState(), resources: { 'mock_resource.a': resource } });
-      const read = vi.spyOn(mockProvider, 'read').mockResolvedValue(null);
+      const read = vi.spyOn(mockProvider, 'read');
 
-      const { actions, prior } = await orchestrator.plan('resource "mock_resource" "a" { value = "x" }');
+      const { actions } = await orchestrator.plan('resource "mock_resource" "a" { value = "x" }');
 
+      expect(read).toHaveBeenCalledWith('mock_resource', { value: 'x' });
       expect(actions.map(({ type }) => type)).toEqual(['NO_OP']);
-      expect(prior).toEqual({ 'mock_resource.a': resource });
-      expect(read).not.toHaveBeenCalled();
     });
   });
 

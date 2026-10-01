@@ -21,6 +21,7 @@ class MockProvider implements Provider {
       ref: { type: 'string' },
       depends_on: { type: 'string' },
       name: { type: 'string' },
+      id: { type: 'string', computed: true, kept: true },
     };
   }
 
@@ -32,25 +33,26 @@ class MockProvider implements Provider {
     // Always valid for testing
   }
 
-  async create(_type: string, inputs: Record<string, unknown>): Promise<{ id: string; attributes: Record<string, unknown> }> {
+  async create(_type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
     const id = `mock_${Date.now()}_${Math.random()}`;
     this.createdResources.set(id, inputs);
-    return { id, attributes: inputs };
+    return { ...inputs, id };
   }
 
-  async update(id: string, _type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+  async update(_type: string, prior: Record<string, unknown>, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const id = String(prior.id);
     if (!this.createdResources.has(id)) throw new Error(`Resource ${id} not found`);
     this.createdResources.set(id, inputs);
-    return inputs;
+    return { ...inputs, id };
   }
 
-  async delete(id: string): Promise<void> {
-    this.createdResources.delete(id);
+  async delete(_type: string, prior: Record<string, unknown>): Promise<void> {
+    this.createdResources.delete(String(prior.id));
   }
 
   async validateDataSource(_type: string, _inputs: Record<string, unknown>): Promise<void> {}
 
-  async read(_type: string, _id: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+  async read(_type: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
     return prior;
   }
 

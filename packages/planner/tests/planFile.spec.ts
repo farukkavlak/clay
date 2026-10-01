@@ -149,8 +149,8 @@ describe('reading a plan file', () => {
       prevRun: {},
       prior: {},
       actions: [
-        { type: 'DELETE', resourceType: 'null_resource', name: 'a', key: 0, id: '1' },
-        { type: 'DELETE', resourceType: 'null_resource', name: 'a', key: 'x.y', id: '2' },
+        { type: 'DELETE', resourceType: 'null_resource', name: 'a', key: 0 },
+        { type: 'DELETE', resourceType: 'null_resource', name: 'a', key: 'x.y' },
       ],
       outputs: {},
     };
@@ -163,18 +163,18 @@ describe('reading a plan file', () => {
 
   it('reads the module keys of actions back as they were written', () => {
     const modulePath = [{ name: 'm', key: 0 }, { name: 'n', key: 'x.y' }, { name: 'o' }];
-    const plan: Plan = { serial: 0, actions: [{ type: 'DELETE', resourceType: 'null_resource', name: 'a', modulePath, id: '1' }], outputs: {}, prevRun: {}, prior: {} };
+    const plan: Plan = { serial: 0, actions: [{ type: 'DELETE', resourceType: 'null_resource', name: 'a', modulePath }], outputs: {}, prevRun: {}, prior: {} };
 
     expect(parsePlanFile(aPlanFile(plan), 'tfplan.json').actions[0].modulePath).toEqual(modulePath);
   });
 
   it('names a module key that is not whole', () => {
-    const content = { ...fields(), actions: [{ type: 'DELETE', resourceType: 'null_resource', name: 'a', modulePath: [{ name: 'm', key: 1.5 }], id: '1' }] };
+    const content = { ...fields(), actions: [{ type: 'DELETE', resourceType: 'null_resource', name: 'a', modulePath: [{ name: 'm', key: 1.5 }] }] };
 
     expect(read(content)).toThrow('tfplan.json is not a plan file: a module key: 1.5 is not a whole number');
   });
 
-  const keyed = (key: unknown) => ({ ...fields(), actions: [{ type: 'DELETE', resourceType: 'null_resource', name: 'a', key, id: '1' }] });
+  const keyed = (key: unknown) => ({ ...fields(), actions: [{ type: 'DELETE', resourceType: 'null_resource', name: 'a', key }] });
 
   it.each([
     ['a negative number', -1],
@@ -203,7 +203,7 @@ describe('reading a plan file', () => {
     ['a list of bare names', ['m']],
     ['a module key that is no key', [{ name: 'm', key: -1 }]],
   ])('refuses an action whose module path is %s', (_, modulePath) => {
-    const content = { ...fields(), actions: [{ type: 'DELETE', resourceType: 'null_resource', name: 'a', modulePath, id: '1' }] };
+    const content = { ...fields(), actions: [{ type: 'DELETE', resourceType: 'null_resource', name: 'a', modulePath }] };
 
     expect(read(content)).toThrow(/^tfplan\.json is not a plan file$/);
   });
