@@ -66,11 +66,11 @@ describe('outputs in the state file', () => {
   });
 
   // The configuration sets the content, but only the apply makes the id.
-  it('plans an output that a resource to be created feeds with what its configuration sets, and its id as known after apply', async () => {
+  it('plans an output that a resource to be created feeds with what its configuration sets, and with the id its provider plans', async () => {
     const plan = await newOrchestrator().plan(`${withOutput('greeting')}\noutput "id" { value = "\${local_file.a.id}" }`);
 
     expect(plan.outputs.greeting.new).toBe('hello');
-    expect(isUnknown(plan.outputs.id.new)).toBe(true);
+    expect(plan.outputs.id.new).toBe(path.join(dir, 'a.txt'));
   });
 
   // What the configuration sets is known only as far as what it reads is; text around it does not make it known.

@@ -1,4 +1,4 @@
-import { PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema } from '@clay/contracts';
+import { isUnknown, own, PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema } from '@clay/contracts';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -19,8 +19,13 @@ export class LocalFileResource implements ResourceHandler {
     if (typeof inputs.content !== 'string') throw new Error('local_file requires "content" attribute (string)');
   }
 
+  // A relative path lands where the apply runs, so only an absolute one gives a known id.
   async plan(request: PlanRequest): Promise<PlannedChange> {
-    return planFromSchema(await this.getSchema(), request);
+    const change = planFromSchema(await this.getSchema(), request);
+    const file = own(request.config, 'path');
+    if (typeof file !== 'string' || !path.isAbsolute(file) || !isUnknown(change.after.id)) return change;
+
+    return { ...change, after: { ...change.after, id: path.resolve(file) } };
   }
 
   async read(prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {

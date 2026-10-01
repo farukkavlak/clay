@@ -412,6 +412,11 @@ function conforms(planned: unknown, resolved: unknown): boolean {
   return mismatches(planned, resolved, []).length === 0;
 }
 
+/** Every place the plan made again at apply differs from what the plan showed. A value the plan did not know may come to anything, or stay not known. */
+export function offFinal(after: Record<string, unknown>, final: Record<string, unknown>): Mismatch[] {
+  return [...new Set([...Object.keys(after), ...Object.keys(final)])].flatMap((name) => mismatches(own(after, name), own(final, name), [name]));
+}
+
 /**
  * Every place what an apply returned differs from what the plan showed. A value the configuration sets is held to what it resolved to for the apply, which the
  * plan may not have known. Nothing returned may be unknown, since an apply returns the resource as it is.
