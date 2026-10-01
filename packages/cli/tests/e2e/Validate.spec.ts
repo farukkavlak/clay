@@ -155,9 +155,9 @@ describe('validate against real files', () => {
 
   // Only the engine makes the unknown marker, so a map spelled like it is checked like any other value.
   it('checks a resource that holds a map spelled like the unknown marker', async () => {
-    const output = await validate('resource "random_string" "pw" {\n  length   = "8"\n  triggers = { "@@clay/unknown" = true }\n}');
+    const output = await validate('resource "local_file" "a" {\n  path    = "a.txt"\n  content = { "@@clay/unknown" = true }\n}');
 
-    expect(output).toContain('random_string requires "length"');
+    expect(output).toContain('content is a map, where local_file takes a string');
   });
 
   it('refuses a variable with no value', async () => {
@@ -165,7 +165,7 @@ describe('validate against real files', () => {
   });
 
   it('refuses a value the provider will not take, and points at the block', async () => {
-    const output = await validate('resource "random_string" "pw" { length = "8" }');
+    const output = await validate('resource "random_string" "pw" { length = 0 }');
 
     expect(output).toContain('random_string requires "length"');
     expect(output).toContain('on main.clay line 1, in resource "random_string" "pw":');

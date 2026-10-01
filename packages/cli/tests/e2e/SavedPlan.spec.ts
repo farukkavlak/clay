@@ -233,6 +233,19 @@ describe('a plan saved to a file', () => {
     await expect(fs.access(path.join(dir, 'a.txt'))).rejects.toThrow();
   });
 
+  // The load checks the names the configuration writes; a plan file carries its own, so the apply checks them again.
+  it('stops on a name the schema does not have that the plan file carries, before the provider is sent it', async () => {
+    const saved = await save(fileConfig('hello'));
+    const misspelled = saved.actions.map((action) => ({
+      ...action,
+      attributes: { ...action.attributes, contnet: action.attributes!.content },
+      planned: { ...action.planned, contnet: 'hello' },
+    }));
+
+    await expect(drain(newOrchestrator().runPlan({ ...saved, actions: misspelled }, saved.config))).rejects.toThrow('local_file has no attribute "contnet"');
+    await expect(fs.access(path.join(dir, 'a.txt'))).rejects.toThrow();
+  });
+
   it('is refused once another run has written the state', async () => {
     const saved = await save(fileConfig('planned'));
 

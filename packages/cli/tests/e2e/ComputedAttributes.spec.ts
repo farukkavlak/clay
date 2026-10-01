@@ -181,13 +181,6 @@ describe('a value only the provider knows', () => {
     });
   });
 
-  // Whether the provider takes a name its schema does not have is for the provider to say.
-  it('plans a name the schema does not have', async () => {
-    const { actions } = await newOrchestrator().plan('resource "stamp" "a" {\n  label = "x"\n  extra = "y"\n}');
-
-    expect(actions.map(({ type }) => type)).toEqual(['CREATE']);
-  });
-
   it('reads the id of a resource still to be made as known after apply', async () => {
     const { outputs } = await newOrchestrator().plan('resource "stamp" "a" { label = "x" }\noutput "o" { value = stamp.a.id }');
 

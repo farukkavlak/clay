@@ -1,4 +1,4 @@
-import { Address, planFromSchema, Provider } from '@clay/contracts';
+import { Address, planFromSchema, Provider, Schema } from '@clay/contracts';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -8,12 +8,14 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { InMemoryFiles, Orchestrator } from '../src/index';
 import { apply } from './apply';
 
+const schema: Schema = { value: { type: 'string' } };
+
 /** Keeps what it is given, so state holds the inputs. */
 const recorder: Provider = {
   resources: ['rec'],
   dataSources: [],
-  getSchema: async () => ({}),
-  plan: async (_, request) => planFromSchema({}, request),
+  getSchema: async () => schema,
+  plan: async (_, request) => planFromSchema(schema, request),
   validate: async () => {},
   read: async (_, prior) => prior,
   validateDataSource: async () => {},

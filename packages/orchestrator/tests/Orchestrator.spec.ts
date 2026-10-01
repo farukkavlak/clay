@@ -15,7 +15,13 @@ class MockProvider implements Provider {
   private createdResources: Map<string, Record<string, unknown>> = new Map();
 
   async getSchema(_type: string): Promise<Schema> {
-    return { id: { type: 'string', computed: true, kept: true } };
+    return {
+      id: { type: 'string', computed: true, kept: true },
+      name: { type: 'string' },
+      value: { type: 'string' },
+      size: { type: 'number' },
+      enabled: { type: 'boolean' },
+    };
   }
 
   async plan(type: string, request: PlanRequest): Promise<PlannedChange> {

@@ -175,18 +175,26 @@ provider plans what a resource to create or change will hold.
 
 ### Schema-driven validation
 
-`SchemaDefinition` carries `type`, `required`, `elemType` and `schema`. The engine reads
-only `computed`, `optional` and `kept`: a computed value the configuration sets is
-refused unless it is also optional, and a schema that keeps a value it does not compute
-is refused. `planFromSchema` reads `forceNew`, `computed` and `kept` for a provider.
-Every resource validates its inputs by hand.
+`SchemaDefinition` carries `type`, `required`, `elemType` and `schema`. The engine holds
+a resource's names and values to them, refuses a computed value the configuration sets
+unless it is also optional, and refuses a schema that keeps a value it does not compute.
+`planFromSchema` reads `forceNew`, `computed` and `kept` for a provider. Every resource
+still validates its inputs by hand as well.
 
-- [ ] The engine validates inputs against the schema before it asks the provider
+- [x] The engine validates inputs against the schema before it asks the provider. A name
+      the schema does not have and a required one left out are refused once per block,
+      where they are written; each value known is held to its type, in every item it
+      holds, at plan and again at apply once the apply knows it. Terraform: "An argument
+      named "contnet" is not expected here"
 - [ ] Providers keep `validate` for what a schema cannot say
 - [ ] A data source has a schema too; today only a resource type has one
 - [ ] A resource with a value that is not known yet has its known values checked. Today
       `plan` skips the whole resource, because a provider's `validate` would report a
       missing required attribute; a schema check knows the attribute is there and unknown
+- [ ] A number or a bool where the schema wants a string, and the reverse, is refused.
+      Terraform converts between them; Clay decides between converting and a `tostring`
+      function once a configuration needs it. `null_resource` takes any map as
+      `triggers` until then
 - [ ] `SchemaType` knows a `set`, whose order is not a change. Every list is compared in
       order today, so writing the same members in another order plans an update
 

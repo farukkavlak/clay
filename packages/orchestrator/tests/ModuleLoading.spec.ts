@@ -1,4 +1,4 @@
-import { CreateRequest, emptyState, planFromSchema, PlanRequest, UpdateRequest } from '@clay/contracts';
+import { CreateRequest, emptyState, planFromSchema, PlanRequest, Schema, UpdateRequest } from '@clay/contracts';
 import { plan } from '@clay/planner';
 import fsPromises from 'node:fs/promises';
 import os from 'node:os';
@@ -39,6 +39,8 @@ vi.mock('@clay/planner', async () => ({
   plan: vi.fn(() => []),
 }));
 
+const schema: Schema = { name: { type: 'string' } };
+
 describe('Orchestrator - Module Loading', () => {
   let tmpDir: string;
   let files: Record<string, string>;
@@ -72,8 +74,8 @@ describe('Orchestrator - Module Loading', () => {
       readDataSource: vi.fn(),
       update: vi.fn(async (_type: string, { config }: UpdateRequest) => config),
       delete: vi.fn(),
-      getSchema: vi.fn().mockReturnValue({}),
-      plan: vi.fn(async (_type: string, request: PlanRequest) => planFromSchema({}, request)),
+      getSchema: vi.fn().mockReturnValue(schema),
+      plan: vi.fn(async (_type: string, request: PlanRequest) => planFromSchema(schema, request)),
     };
 
     const { StateManager, LocalBackend } = await import('@clay/state');

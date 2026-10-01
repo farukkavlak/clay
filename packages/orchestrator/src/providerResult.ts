@@ -2,14 +2,9 @@ import { ExactNumber, isRecord, isUnknown, Schema, unknownPaths } from '@clay/co
 import { Mismatch } from '@clay/planner';
 
 import { shown } from './shown';
+import { spelled } from './spelled';
 
-function spelled(path: Mismatch['path']): string {
-  const [name, ...steps] = path;
-
-  return String(name) + steps.map((step) => `[${JSON.stringify(step)}]`).join('');
-}
-
-function kind(value: unknown): string {
+export function kind(value: unknown): string {
   if (value instanceof ExactNumber) return 'an exact number';
   if (typeof value === 'number') return 'a JavaScript number';
   if (Array.isArray(value)) return 'a list';
@@ -50,26 +45,23 @@ function unknownIn(name: string, value: unknown): string[] {
   return unknownPaths(value, [name]).map((path) => `${spelled(path)} is not known; a read returns every value`);
 }
 
-function oddRead(schema: Schema, prior: Record<string, unknown>, name: string, value: unknown): string[] {
+function oddRead(schema: Schema, name: string, value: unknown): string[] {
   const unknown = unknownIn(name, value);
   if (unknown.length > 0) return unknown;
 
-  return Object.hasOwn(schema, name) || Object.hasOwn(prior, name) ? [] : [`${name} = ${shown(value)}, which neither the schema nor the resource has`];
+  return Object.hasOwn(schema, name) ? [] : [`${name} = ${shown(value)}, which the schema does not have`];
 }
 
 function refuse(type: string, what: string, lines: string[]): void {
   if (lines.length > 0) throw new Error([`${type} read what the ${what} cannot hold, which is a bug in the provider:`, ...lines.map((odd) => `  ${odd}`)].join('\n'));
 }
 
-/**
- * A value a read returns is planned against, so one not known, or a name the next plan would read as removed, is refused. A name the resource held already
- * passes, since nothing checks what a configuration sets against the schema yet.
- */
-export function checkRead(type: string, schema: Schema, prior: Record<string, unknown>, read: Record<string, unknown>): void {
+/** A value a read returns is planned against, so one not known, or a name the next plan would read as removed, is refused. */
+export function checkRead(type: string, schema: Schema, read: Record<string, unknown>): void {
   refuse(
     type,
     'resource',
-    Object.entries(read).flatMap(([name, value]) => oddRead(schema, prior, name, value))
+    Object.entries(read).flatMap(([name, value]) => oddRead(schema, name, value))
   );
 }
 

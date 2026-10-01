@@ -27,7 +27,7 @@ describe('what plan refuses before anything runs', () => {
   });
 
   it("a value the provider will not take, placed in its block, with the provider's error as the cause", async () => {
-    const config = 'resource "random_string" "pw" { length = "8" }';
+    const config = 'resource "random_string" "pw" { length = 0 }';
     const refused = 'random_string requires "length" attribute (number > 0)';
 
     await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
