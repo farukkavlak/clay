@@ -387,6 +387,25 @@ describe('ActionExecutor', () => {
       expect(mockProvider.create).toHaveBeenCalledWith('test', { path: 'new' });
       expect(mockState.resources[key]).toMatchObject({ attributes: { path: 'new' } });
     });
+
+    // A value not known at plan was not checked then, so the check comes before the delete or a refused value would leave nothing.
+    it('leaves the old resource as it was when the provider refuses the new values', async () => {
+      const key = context.toString();
+      mockState.resources[key] = { resourceType: 'test', name: 'main', attributes: { path: 'old' } };
+      vi.mocked(mockProvider.validate).mockRejectedValueOnce(new Error('bad path'));
+      const action: PlanAction = {
+        type: 'REPLACE',
+        resourceType: 'test',
+        name: 'main',
+        attributes: { path: str('new') },
+        planned: { path: UNKNOWN },
+        after: { path: UNKNOWN },
+      };
+
+      await expect(executor.execute(action, mockState)).rejects.toThrow('bad path');
+      expect(mockProvider.delete).not.toHaveBeenCalled();
+      expect(mockState.resources[key]).toMatchObject({ attributes: { path: 'old' } });
+    });
   });
 
   describe('executeDelete', () => {

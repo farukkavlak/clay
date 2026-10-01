@@ -46,8 +46,8 @@ export class ActionExecutor {
         break;
       }
       case 'REPLACE': {
-        // Checked before the delete, so a value off the plan leaves the resource as it was.
-        const sending = this.sendingFor(action, currentState);
+        // Checked before the delete, so a value off the plan or one the provider refuses leaves the resource as it was.
+        const sending = await this.sendingFor(action, provider, currentState);
         await this.executeDelete(action, provider, currentState);
         await this.create(action, provider, currentState, sending);
         break;
@@ -64,9 +64,10 @@ export class ActionExecutor {
 
   /**
    * The plan resolved these against an older state, so they are resolved again, and each value the plan showed as known has to come to the same.
-   * A value only an apply makes is known now, and may come to anything.
+   * A value only an apply makes is known now, and may come to anything. The provider checks them before anything is changed, since the plan could not check
+   * a value it did not know.
    */
-  private sendingFor(action: PlanAction, currentState: State): Sending {
+  private async sendingFor(action: PlanAction, provider: Provider, currentState: State): Promise<Sending> {
     if (!action.attributes) throw new Error(`${action.type} action missing attributes`);
     if (!action.planned) throw new Error(`${action.type} action missing the values it was planned with`);
     if (!action.after) throw new Error(`${action.type} action missing what its provider planned`);
@@ -75,6 +76,7 @@ export class ActionExecutor {
     const off = offPlan(action.planned, inputs);
     if (off) throw new Error(`the plan showed ${off.name} = ${shown(off.planned)}, but it now comes to ${shown(off.resolved)}. Plan again.`);
 
+    await provider.validate(action.resourceType, inputs);
     return { inputs, after: action.after };
   }
 
@@ -85,14 +87,13 @@ export class ActionExecutor {
   }
 
   async executeCreate(action: PlanAction, provider: Provider, currentState: State): Promise<void> {
-    await this.create(action, provider, currentState, this.sendingFor(action, currentState));
+    await this.create(action, provider, currentState, await this.sendingFor(action, provider, currentState));
   }
 
   private async create(action: PlanAction, provider: Provider, currentState: State, sending: Sending): Promise<void> {
     const { inputs } = sending;
     const contextAddress = Address.of(action);
 
-    await provider.validate(action.resourceType, inputs);
     const attributes = await provider.create(action.resourceType, inputs);
 
     const key = contextAddress.toString();
@@ -105,12 +106,11 @@ export class ActionExecutor {
   }
 
   async executeUpdate(action: PlanAction, provider: Provider, currentState: State): Promise<void> {
-    const sending = this.sendingFor(action, currentState);
+    const sending = await this.sendingFor(action, provider, currentState);
     const { inputs } = sending;
 
     const currentResource = held(action, currentState);
 
-    await provider.validate(action.resourceType, inputs);
     currentResource.attributes = await provider.update(action.resourceType, currentResource.attributes, inputs);
     currentResource.dependencies = action.dependencies ?? [];
     this.holdToPlan(action.resourceType, sending, currentResource.attributes);
