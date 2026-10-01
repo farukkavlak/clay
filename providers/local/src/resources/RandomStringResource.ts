@@ -1,7 +1,5 @@
-import { ExactNumber, PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema } from '@clay/contracts';
+import { CreateRequest, ExactNumber, PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema, UpdateRequest } from '@clay/contracts';
 import crypto from 'node:crypto';
-
-import { idOf } from './idOf';
 
 const LENGTH_REQUIRED = 'random_string requires "length" attribute (number > 0)';
 
@@ -41,9 +39,9 @@ export class RandomStringResource implements ResourceHandler {
     return prior;
   }
 
-  async create(inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const length = lengthOf(inputs);
-    const useSpecial = (inputs.special as boolean) ?? false;
+  async create({ planned }: CreateRequest): Promise<Record<string, unknown>> {
+    const length = lengthOf(planned);
+    const useSpecial = (planned.special as boolean) ?? false;
 
     const alphanumeric = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     const special = '!@#$%^&*()_+-=[]{}|;:,.<>?';
@@ -57,12 +55,12 @@ export class RandomStringResource implements ResourceHandler {
 
     for (let i = 0; i < length; i++) result += chars[array[i] % chars.length];
 
-    return { ...inputs, id: result, result };
+    return { ...planned, id: result, result };
   }
 
-  // The value is the id, so changed inputs mean a replacement, not an update.
-  async update(prior: Record<string, unknown>, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return { ...inputs, id: idOf(prior), result: prior.result };
+  // The value is kept, so the plan already holds it.
+  async update({ planned }: UpdateRequest): Promise<Record<string, unknown>> {
+    return planned;
   }
 
   async delete(_prior: Record<string, unknown>): Promise<void> {}

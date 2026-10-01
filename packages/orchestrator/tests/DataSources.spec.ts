@@ -1,4 +1,4 @@
-import { planFromSchema, PlannedChange, PlanRequest, Provider, Schema } from '@clay/contracts';
+import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, UpdateRequest } from '@clay/contracts';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -26,12 +26,12 @@ class MockDataProvider implements Provider {
 
   async validateDataSource(_type: string, _inputs: Record<string, unknown>): Promise<void> {}
 
-  async create(_type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return inputs;
+  async create(_type: string, { config }: CreateRequest): Promise<Record<string, unknown>> {
+    return config;
   }
 
-  async update(_type: string, _prior: Record<string, unknown>, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return inputs;
+  async update(_type: string, { config }: UpdateRequest): Promise<Record<string, unknown>> {
+    return config;
   }
 
   async delete(): Promise<void> {}

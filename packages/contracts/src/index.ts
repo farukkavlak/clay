@@ -176,6 +176,20 @@ export interface PlannedChange {
   replace: AttributePath[];
 }
 
+/** What a provider is asked to make. */
+export interface CreateRequest {
+  /** The configuration's values. */
+  config: Record<string, unknown>;
+  /** What the resource will hold, as the provider planned it at apply, UNKNOWN where only the apply makes a value. */
+  planned: Record<string, unknown>;
+}
+
+/** What a provider is asked to change, with what it held so the provider can find it. */
+export interface UpdateRequest extends CreateRequest {
+  /** What state holds for it. */
+  prior: Record<string, unknown>;
+}
+
 /**
  * A plan from the schema alone: with nothing changed the resource stays as it was read, and with anything changed, what the provider computes and the
  * configuration does not set is made again unless it is kept, and a changed `forceNew` attribute replaces it.
@@ -217,9 +231,9 @@ export interface Provider {
   readDataSource(type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>>;
 
   /** The whole of the resource as made, what the provider computed included. */
-  create(type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>>;
-  /** The whole of the resource as changed; `prior` is what it held, so the provider can find it. */
-  update(type: string, prior: Record<string, unknown>, inputs: Record<string, unknown>): Promise<Record<string, unknown>>;
+  create(type: string, request: CreateRequest): Promise<Record<string, unknown>>;
+  /** The whole of the resource as changed. */
+  update(type: string, request: UpdateRequest): Promise<Record<string, unknown>>;
   delete(type: string, prior: Record<string, unknown>): Promise<void>;
 }
 
@@ -234,10 +248,10 @@ export interface ResourceHandler {
   read(prior: Record<string, unknown>): Promise<Record<string, unknown> | null>;
 
   /** The whole of the resource as made. */
-  create(inputs: Record<string, unknown>): Promise<Record<string, unknown>>;
+  create(request: CreateRequest): Promise<Record<string, unknown>>;
 
   /** The whole of the resource as changed. */
-  update(prior: Record<string, unknown>, inputs: Record<string, unknown>): Promise<Record<string, unknown>>;
+  update(request: UpdateRequest): Promise<Record<string, unknown>>;
 
   delete(prior: Record<string, unknown>): Promise<void>;
 }

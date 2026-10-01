@@ -1,4 +1,4 @@
-import { isUnknown, own, PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema } from '@clay/contracts';
+import { CreateRequest, isUnknown, own, PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema, UpdateRequest } from '@clay/contracts';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -38,25 +38,22 @@ export class LocalFileResource implements ResourceHandler {
     }
   }
 
-  async create(inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const filePath = inputs.path as string;
-    const content = inputs.content as string;
+  async create({ planned }: CreateRequest): Promise<Record<string, unknown>> {
+    const filePath = planned.path as string;
+    const content = planned.content as string;
 
     const dir = path.dirname(filePath);
     await fs.mkdir(dir, { recursive: true });
 
     await fs.writeFile(filePath, content, 'utf8');
 
-    return { ...inputs, id: path.resolve(filePath) };
+    return { ...planned, id: path.resolve(filePath) };
   }
 
-  async update(prior: Record<string, unknown>, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const content = inputs.content as string;
-    const id = idOf(prior);
+  async update({ prior, planned }: UpdateRequest): Promise<Record<string, unknown>> {
+    await fs.writeFile(idOf(prior), planned.content as string, 'utf8');
 
-    await fs.writeFile(id, content, 'utf8');
-
-    return { ...inputs, id };
+    return planned;
   }
 
   async delete(prior: Record<string, unknown>): Promise<void> {

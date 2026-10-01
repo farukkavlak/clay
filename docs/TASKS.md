@@ -168,10 +168,10 @@ provider plans what a resource to create or change will hold.
       stops the run before anything changes, as a bug in the provider. `local_file`
       plans its id from an absolute path. Terraform plans again at apply and refuses a
       final plan that differs
-- [ ] `create` and `update` are given what the plan says the resource will hold, not only
-      the configuration's values, so a value the provider planned, such as a default, is
-      not worked out a second time. Terraform's `ApplyResourceChange` is given the planned
-      state
+- [x] `create` and `update` are given what the plan made at apply says the resource will
+      hold, beside the configuration's values, so a value the provider planned, such as a
+      kept id, is not worked out a second time. Terraform's `ApplyResourceChange` is given
+      the planned state
 
 ### Schema-driven validation
 

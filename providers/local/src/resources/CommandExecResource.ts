@@ -1,11 +1,14 @@
-import { PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema } from '@clay/contracts';
+import { CreateRequest, PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema, UpdateRequest } from '@clay/contracts';
 import { exec } from 'node:child_process';
 import crypto from 'node:crypto';
 import { promisify } from 'node:util';
 
-import { idOf } from './idOf';
-
 const execAsync = promisify(exec);
+
+async function run(planned: Record<string, unknown>): Promise<string> {
+  const { stdout } = await execAsync(planned.command as string, { cwd: (planned.cwd as string) || process.cwd() });
+  return stdout;
+}
 
 export class CommandExecResource implements ResourceHandler {
   async getSchema(): Promise<Schema> {
@@ -30,22 +33,12 @@ export class CommandExecResource implements ResourceHandler {
     return prior;
   }
 
-  async create(inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const command = inputs.command as string;
-    const cwd = (inputs.cwd as string) || process.cwd();
-
-    const { stdout } = await execAsync(command, { cwd });
-
-    return { ...inputs, id: crypto.randomUUID(), stdout };
+  async create({ planned }: CreateRequest): Promise<Record<string, unknown>> {
+    return { ...planned, id: crypto.randomUUID(), stdout: await run(planned) };
   }
 
-  async update(prior: Record<string, unknown>, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const command = inputs.command as string;
-    const cwd = (inputs.cwd as string) || process.cwd();
-
-    const { stdout } = await execAsync(command, { cwd });
-
-    return { ...inputs, id: idOf(prior), stdout };
+  async update({ planned }: UpdateRequest): Promise<Record<string, unknown>> {
+    return { ...planned, stdout: await run(planned) };
   }
 
   async delete(_prior: Record<string, unknown>): Promise<void> {}

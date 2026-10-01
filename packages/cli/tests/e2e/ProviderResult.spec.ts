@@ -1,4 +1,4 @@
-import { planFromSchema, PlannedChange, PlanRequest, Provider, Schema, UNKNOWN } from '@clay/contracts';
+import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, UNKNOWN } from '@clay/contracts';
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
@@ -28,8 +28,8 @@ class LoudProvider implements Provider {
     return prior;
   }
 
-  async create(_type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return { label: String(inputs.label).toUpperCase(), volume: 'high' };
+  async create(_type: string, { config }: CreateRequest): Promise<Record<string, unknown>> {
+    return { label: String(config.label).toUpperCase(), volume: 'high' };
   }
 
   async update(): Promise<Record<string, unknown>> {
@@ -53,8 +53,8 @@ class EchoProvider extends LoudProvider {
     super();
   }
 
-  override async create(_type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return inputs;
+  override async create(_type: string, { config }: CreateRequest): Promise<Record<string, unknown>> {
+    return config;
   }
 
   override async read(_type: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
@@ -92,8 +92,8 @@ class MisnamingProvider extends LoudProvider {
     return { after: { ...after, id: request.config.name }, replace };
   }
 
-  override async create(_type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return { ...inputs, id: `${String(inputs.name)}-123` };
+  override async create(_type: string, { config }: CreateRequest): Promise<Record<string, unknown>> {
+    return { ...config, id: `${String(config.name)}-123` };
   }
 }
 

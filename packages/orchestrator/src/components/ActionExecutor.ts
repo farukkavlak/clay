@@ -104,10 +104,9 @@ export class ActionExecutor {
   }
 
   private async create(action: PlanAction, provider: Provider, currentState: State, sending: Sending): Promise<void> {
-    const { inputs } = sending;
     const contextAddress = Address.of(action);
 
-    const attributes = await provider.create(action.resourceType, inputs);
+    const attributes = await provider.create(action.resourceType, { config: sending.inputs, planned: sending.after });
 
     const key = contextAddress.toString();
     currentState.resources[key] = {
@@ -120,11 +119,11 @@ export class ActionExecutor {
 
   async executeUpdate(action: PlanAction, provider: Provider, currentState: State): Promise<void> {
     const sending = await this.sendingFor(action, currentState);
-    const { inputs } = sending;
 
     const currentResource = held(action, currentState);
+    const request = { prior: currentResource.attributes, config: sending.inputs, planned: sending.after };
 
-    currentResource.attributes = await provider.update(action.resourceType, currentResource.attributes, inputs);
+    currentResource.attributes = await provider.update(action.resourceType, request);
     currentResource.dependencies = action.dependencies ?? [];
     this.holdToPlan(action.resourceType, sending, currentResource.attributes);
   }

@@ -1,4 +1,4 @@
-import { Address, emptyState, ExactNumber, PlanRequest, Provider, Schema, State, UNKNOWN } from '@clay/contracts';
+import { Address, CreateRequest, emptyState, ExactNumber, PlanRequest, Provider, Schema, State, UNKNOWN, UpdateRequest } from '@clay/contracts';
 import { PlanAction } from '@clay/planner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -68,8 +68,8 @@ describe('ActionExecutor', () => {
       resources: ['test'],
       dataSources: [],
       validate: vi.fn(),
-      create: vi.fn(async (_type: string, inputs: Record<string, unknown>) => inputs),
-      update: vi.fn(async (_type: string, _prior: Record<string, unknown>, inputs: Record<string, unknown>) => inputs),
+      create: vi.fn(async (_type: string, { config }: CreateRequest) => config),
+      update: vi.fn(async (_type: string, { config }: UpdateRequest) => config),
       delete: vi.fn(),
       read: vi.fn(),
       validateDataSource: vi.fn(),
@@ -231,7 +231,7 @@ describe('ActionExecutor', () => {
 
       await executor.executeUpdate(action, mockProvider, mockState);
 
-      expect(mockProvider.update).toHaveBeenCalledWith('test', { old: 'val', dropped: 'val' }, { old: 'updated' });
+      expect(mockProvider.update).toHaveBeenCalledWith('test', { prior: { old: 'val', dropped: 'val' }, config: { old: 'updated' }, planned: { old: 'updated' } });
       expect(mockState.resources[key].attributes).toEqual({ old: 'updated' });
     });
 
@@ -275,7 +275,7 @@ describe('ActionExecutor', () => {
     it('runs a map known in part whose known part comes to what the plan showed', async () => {
       await executor.execute(withTags({ a: 'y', b: 'x' }), mockState);
 
-      expect(mockProvider.create).toHaveBeenCalledWith('test', { tags: { a: 'y', b: 'x' } });
+      expect(mockProvider.create).toHaveBeenCalledWith('test', { config: { tags: { a: 'y', b: 'x' } }, planned: { tags: { a: 'y', b: 'x' } } });
     });
 
     it.each([
@@ -288,7 +288,7 @@ describe('ActionExecutor', () => {
     it('runs a list known in part whose known items come to what the plan showed', async () => {
       await executor.execute(withList(['a', 'z']), mockState);
 
-      expect(mockProvider.create).toHaveBeenCalledWith('test', { l: ['a', 'z'] });
+      expect(mockProvider.create).toHaveBeenCalledWith('test', { config: { l: ['a', 'z'] }, planned: { l: ['a', 'z'] } });
     });
 
     it.each([
@@ -305,6 +305,16 @@ describe('ActionExecutor', () => {
 
       await expect(executor.execute(action, mockState)).rejects.toThrow('the plan showed path = (none), but it now comes to "p". Plan again.');
     });
+  });
+
+  // The plan made at apply can know a value the first plan did not, so that is the one the provider is given.
+  it('gives the provider what it planned at apply', async () => {
+    plansAtApply({ result: 'r' });
+    created({ path: 'p', result: 'r' });
+
+    await executor.execute(create({ path: 'p', result: UNKNOWN }), mockState);
+
+    expect(mockProvider.create).toHaveBeenCalledWith('test', { config: { path: 'p' }, planned: { path: 'p', result: 'r' } });
   });
 
   describe('holding what the apply returned to the plan', () => {
@@ -447,7 +457,7 @@ describe('ActionExecutor', () => {
       await executor.execute(action, mockState);
 
       expect(mockProvider.delete).toHaveBeenCalledWith('test', { path: 'old' });
-      expect(mockProvider.create).toHaveBeenCalledWith('test', { path: 'new' });
+      expect(mockProvider.create).toHaveBeenCalledWith('test', { config: { path: 'new' }, planned: { path: 'new' } });
       expect(mockState.resources[key]).toMatchObject({ attributes: { path: 'new' } });
     });
 
