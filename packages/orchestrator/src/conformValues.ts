@@ -1,6 +1,7 @@
 import { AttributePath, ExactNumber, isRecord, isUnknown, NumberError, Schema, SchemaDefinition, SchemaType } from '@clay/contracts';
 import { DataBlock, Position, ResourceBlock } from '@clay/parser';
 
+import { setsOrdered } from './setOrder';
 import { shown } from './shown';
 import { spelled } from './spelled';
 
@@ -37,7 +38,7 @@ export function nameProblem(resource: string, schema: Schema, names: string[], w
   return missing === undefined ? undefined : { message: `${resource} requires "${missing}"${where}` };
 }
 
-const articles: Record<SchemaType, string> = { string: 'a string', number: 'a number', boolean: 'a boolean', list: 'a list', map: 'a map', object: 'an object' };
+const articles: Record<SchemaType, string> = { string: 'a string', number: 'a number', boolean: 'a boolean', list: 'a list', set: 'a set', map: 'a map', object: 'an object' };
 
 function kindOf(value: unknown): string {
   if (value instanceof ExactNumber) return 'a number';
@@ -50,7 +51,7 @@ function kindOf(value: unknown): string {
 function isType(type: SchemaType, value: unknown): boolean {
   if (type === 'string' || type === 'boolean') return typeof value === type;
   if (type === 'number') return value instanceof ExactNumber;
-  if (type === 'list') return Array.isArray(value);
+  if (type === 'list' || type === 'set') return Array.isArray(value);
 
   return isRecord(value);
 }
@@ -117,10 +118,14 @@ function conformed(resource: string, definition: SchemaDefinition, written: unkn
  * Holds what the configuration sets to the schema: its names, and each value to the type the schema names, in every item it holds. A number or a boolean
  * where a string goes, and a string that spells a number or a boolean where one goes, is taken as that type. Only what is known is checked; a value the
  * apply makes is checked when the apply knows it. A saved plan's values reach the apply without the load's check, so the names are checked here too.
+ * Each set comes back in one order, with each member once.
  */
 export function conformValues(resource: string, schema: Schema, config: Record<string, unknown>): Record<string, unknown> {
   const named = nameProblem(resource, schema, Object.keys(config));
   if (named) throw new SchemaMismatch(named.message, named.set);
 
-  return entriesMapped(config, (name, value) => conformed(resource, schema[name], value, [name]));
+  return setsOrdered(
+    schema,
+    entriesMapped(config, (name, value) => conformed(resource, schema[name], value, [name]))
+  );
 }
