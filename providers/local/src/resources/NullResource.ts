@@ -1,7 +1,5 @@
-import { PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema } from '@clay/contracts';
+import { CreateRequest, PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema, UpdateRequest } from '@clay/contracts';
 import crypto from 'node:crypto';
-
-import { idOf } from './idOf';
 
 export class NullResource implements ResourceHandler {
   async getSchema(): Promise<Schema> {
@@ -22,12 +20,12 @@ export class NullResource implements ResourceHandler {
     return prior;
   }
 
-  async create(inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return { ...inputs, id: crypto.randomUUID() };
+  async create({ planned }: CreateRequest): Promise<Record<string, unknown>> {
+    return { ...planned, id: crypto.randomUUID() };
   }
 
-  async update(prior: Record<string, unknown>, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return { ...inputs, id: idOf(prior) };
+  async update({ planned }: UpdateRequest): Promise<Record<string, unknown>> {
+    return planned;
   }
 
   async delete(_prior: Record<string, unknown>): Promise<void> {}

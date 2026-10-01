@@ -1,4 +1,4 @@
-import { emptyState, planFromSchema, PlanRequest } from '@clay/contracts';
+import { CreateRequest, emptyState, planFromSchema, PlanRequest, UpdateRequest } from '@clay/contracts';
 import { plan } from '@clay/planner';
 import fsPromises from 'node:fs/promises';
 import os from 'node:os';
@@ -66,11 +66,11 @@ describe('Orchestrator - Module Loading', () => {
       resources: ['test_resource'],
       dataSources: [],
       validate: vi.fn(),
-      create: vi.fn(async (_type: string, inputs: Record<string, unknown>) => inputs),
+      create: vi.fn(async (_type: string, { config }: CreateRequest) => config),
       read: vi.fn(async (_type, prior) => prior),
       validateDataSource: vi.fn(),
       readDataSource: vi.fn(),
-      update: vi.fn(async (_type: string, _prior: Record<string, unknown>, inputs: Record<string, unknown>) => inputs),
+      update: vi.fn(async (_type: string, { config }: UpdateRequest) => config),
       delete: vi.fn(),
       getSchema: vi.fn().mockReturnValue({}),
       plan: vi.fn(async (_type: string, request: PlanRequest) => planFromSchema({}, request)),

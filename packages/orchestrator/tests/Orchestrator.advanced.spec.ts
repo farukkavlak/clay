@@ -1,4 +1,4 @@
-import { ExactNumber, planFromSchema, PlannedChange, PlanRequest, Provider, Schema } from '@clay/contracts';
+import { CreateRequest, ExactNumber, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, UpdateRequest } from '@clay/contracts';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -33,17 +33,17 @@ class MockProvider implements Provider {
     // Always valid for testing
   }
 
-  async create(_type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+  async create(_type: string, { config }: CreateRequest): Promise<Record<string, unknown>> {
     const id = `mock_${Date.now()}_${Math.random()}`;
-    this.createdResources.set(id, inputs);
-    return { ...inputs, id };
+    this.createdResources.set(id, config);
+    return { ...config, id };
   }
 
-  async update(_type: string, prior: Record<string, unknown>, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+  async update(_type: string, { prior, config }: UpdateRequest): Promise<Record<string, unknown>> {
     const id = String(prior.id);
     if (!this.createdResources.has(id)) throw new Error(`Resource ${id} not found`);
-    this.createdResources.set(id, inputs);
-    return { ...inputs, id };
+    this.createdResources.set(id, config);
+    return { ...config, id };
   }
 
   async delete(_type: string, prior: Record<string, unknown>): Promise<void> {

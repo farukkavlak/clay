@@ -1,4 +1,4 @@
-import { DataSourceHandler, PlannedChange, PlanRequest, Provider, ResourceHandler, Schema } from '@clay/contracts';
+import { CreateRequest, DataSourceHandler, PlannedChange, PlanRequest, Provider, ResourceHandler, Schema, UpdateRequest } from '@clay/contracts';
 
 import { LocalFileDataSource } from './dataSources/LocalFileDataSource';
 import { CommandExecResource } from './resources/CommandExecResource';
@@ -50,12 +50,12 @@ export class LocalProvider implements Provider {
     return await this.handler(type).read(prior);
   }
 
-  async create(type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return await this.handler(type).create(inputs);
+  async create(type: string, request: CreateRequest): Promise<Record<string, unknown>> {
+    return await this.handler(type).create(request);
   }
 
-  async update(type: string, prior: Record<string, unknown>, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return await this.handler(type).update(prior, inputs);
+  async update(type: string, request: UpdateRequest): Promise<Record<string, unknown>> {
+    return await this.handler(type).update(request);
   }
 
   async delete(type: string, prior: Record<string, unknown>): Promise<void> {

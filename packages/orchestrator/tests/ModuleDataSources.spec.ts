@@ -1,4 +1,4 @@
-import { emptyState, planFromSchema, PlanRequest, UNKNOWN } from '@clay/contracts';
+import { CreateRequest, emptyState, planFromSchema, PlanRequest, UNKNOWN, UpdateRequest } from '@clay/contracts';
 import { plan } from '@clay/planner';
 import fsPromises from 'node:fs/promises';
 import os from 'node:os';
@@ -62,11 +62,11 @@ describe('Orchestrator - Phase 5: Scoped Data Sources', () => {
       resources: ['test_resource'],
       dataSources: ['aws_ami'],
       validate: vi.fn(),
-      create: vi.fn(async (_type: string, inputs: Record<string, unknown>) => inputs),
+      create: vi.fn(async (_type: string, { config }: CreateRequest) => config),
       read: vi.fn(async (_type, prior) => prior),
       validateDataSource: vi.fn(),
       readDataSource: vi.fn().mockResolvedValue({ id: 'ami-12345', name: 'Ubuntu 20.04' }),
-      update: vi.fn(async (_type: string, _prior: Record<string, unknown>, inputs: Record<string, unknown>) => inputs),
+      update: vi.fn(async (_type: string, { config }: UpdateRequest) => config),
       delete: vi.fn(),
       getSchema: vi.fn().mockReturnValue({}),
       plan: vi.fn(async (_type: string, request: PlanRequest) => planFromSchema({}, request)),

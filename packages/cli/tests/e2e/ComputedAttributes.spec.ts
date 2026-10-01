@@ -1,4 +1,4 @@
-import { isUnknown, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, UNKNOWN } from '@clay/contracts';
+import { CreateRequest, isUnknown, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, UNKNOWN, UpdateRequest } from '@clay/contracts';
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
@@ -33,12 +33,12 @@ class StampProvider implements Provider {
     return prior;
   }
 
-  async create(_type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return { ...inputs, id: 'stamp-id', made: `made ${String(inputs.label)}` };
+  async create(_type: string, { config }: CreateRequest): Promise<Record<string, unknown>> {
+    return { ...config, id: 'stamp-id', made: `made ${String(config.label)}` };
   }
 
-  async update(_type: string, prior: Record<string, unknown>, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return { ...inputs, id: prior.id, made: `remade ${String(inputs.label)}` };
+  async update(_type: string, { prior, config }: UpdateRequest): Promise<Record<string, unknown>> {
+    return { ...config, id: prior.id, made: `remade ${String(config.label)}` };
   }
 
   async delete(): Promise<void> {}
@@ -52,8 +52,8 @@ class StampProvider implements Provider {
 
 /** Says it computes `made`, then does not return it. */
 class ForgetfulStampProvider extends StampProvider {
-  override async create(_type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return { ...inputs, id: 'stamp-id' };
+  override async create(_type: string, { config }: CreateRequest): Promise<Record<string, unknown>> {
+    return { ...config, id: 'stamp-id' };
   }
 }
 
@@ -63,12 +63,33 @@ class SerialStampProvider extends StampProvider {
     return { ...(await super.getSchema()), size: { type: 'string', forceNew: true }, serial: { type: 'string', computed: true, kept: true } };
   }
 
-  override async create(type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return { ...(await super.create(type, inputs)), serial: `serial ${String(inputs.size)}` };
+  override async create(type: string, request: CreateRequest): Promise<Record<string, unknown>> {
+    return { ...(await super.create(type, request)), serial: `serial ${String(request.config.size)}` };
   }
 
-  override async update(type: string, prior: Record<string, unknown>, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return { ...(await super.update(type, prior, inputs)), serial: `serial ${String(inputs.size)}` };
+  override async update(type: string, request: UpdateRequest): Promise<Record<string, unknown>> {
+    return { ...(await super.update(type, request)), serial: `serial ${String(request.config.size)}` };
+  }
+}
+
+/** Plans `made` itself, then makes the resource from that plan, and keeps what it was asked. */
+class PlannedStampProvider extends StampProvider {
+  readonly creates: CreateRequest[] = [];
+  readonly updates: UpdateRequest[] = [];
+
+  override async plan(type: string, request: PlanRequest): Promise<PlannedChange> {
+    const change = await super.plan(type, request);
+    return { ...change, after: { ...change.after, made: `planned ${String(request.config.label)}` } };
+  }
+
+  override async create(_type: string, request: CreateRequest): Promise<Record<string, unknown>> {
+    this.creates.push(request);
+    return { ...request.planned, id: 'stamp-id' };
+  }
+
+  override async update(_type: string, request: UpdateRequest): Promise<Record<string, unknown>> {
+    this.updates.push(request);
+    return request.planned;
   }
 }
 
@@ -267,5 +288,18 @@ describe('a value only the provider knows', () => {
     expect(await fs.readFile(file, 'utf8')).toBe('remade y');
     const state = await new LocalBackend(dir).read();
     expect(state.resources['stamp.a'].attributes).toEqual({ id: 'stamp-id', label: 'y', made: 'remade y' });
+  });
+  it('gives create and update the configuration, what the plan says it will hold, and update what it held', async () => {
+    const stamp = new PlannedStampProvider();
+
+    await apply('resource "stamp" "a" { label = "x" }', stamp);
+    await apply('resource "stamp" "a" { label = "y" }', stamp);
+
+    expect(stamp.creates).toEqual([{ config: { label: 'x' }, planned: { label: 'x', id: UNKNOWN, made: 'planned x' } }]);
+    expect(stamp.updates).toEqual([
+      { prior: { id: 'stamp-id', label: 'x', made: 'planned x' }, config: { label: 'y' }, planned: { id: 'stamp-id', label: 'y', made: 'planned y' } },
+    ]);
+    const state = await new LocalBackend(dir).read();
+    expect(state.resources['stamp.a'].attributes).toEqual({ id: 'stamp-id', label: 'y', made: 'planned y' });
   });
 });

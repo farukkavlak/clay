@@ -1,4 +1,4 @@
-import { emptyState, planFromSchema, PlanRequest, UNKNOWN } from '@clay/contracts';
+import { CreateRequest, emptyState, planFromSchema, PlanRequest, UNKNOWN, UpdateRequest } from '@clay/contracts';
 import { plan } from '@clay/planner';
 import fsPromises from 'node:fs/promises';
 import os from 'node:os';
@@ -67,11 +67,11 @@ describe('Orchestrator - Phase 4: Data Flow', () => {
       resources: ['test_resource'],
       dataSources: [],
       validate: vi.fn(),
-      create: vi.fn(async (_type: string, inputs: Record<string, unknown>) => inputs),
+      create: vi.fn(async (_type: string, { config }: CreateRequest) => config),
       read: vi.fn(async (_type, prior) => prior),
       validateDataSource: vi.fn(),
       readDataSource: vi.fn(),
-      update: vi.fn(async (_type: string, _prior: Record<string, unknown>, inputs: Record<string, unknown>) => inputs),
+      update: vi.fn(async (_type: string, { config }: UpdateRequest) => config),
       delete: vi.fn(),
       getSchema: vi.fn().mockReturnValue({}),
       plan: vi.fn(async (_type: string, request: PlanRequest) => planFromSchema({}, request)),
@@ -253,7 +253,7 @@ resource "test_resource" "instance" {
       },
     ]);
 
-    mockProvider.create.mockImplementation(async (_type: string, inputs: Record<string, unknown>) => inputs);
+    mockProvider.create.mockImplementation(async (_type: string, { config }: CreateRequest) => config);
 
     await apply(orchestrator, rootConfig);
 

@@ -19,6 +19,9 @@ describe('LocalProvider', () => {
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
 
+  /** A create as the engine asks for one, where the plan holds what the configuration sets. */
+  const create = (type: string, config: Record<string, unknown>) => provider.create(type, { config, planned: config });
+
   describe('Validation', () => {
     it('should validate local_file with path and content', async () => {
       await expect(
@@ -49,7 +52,7 @@ describe('LocalProvider', () => {
       const filePath = path.join(tmpDir, 'empty.txt');
       await expect(provider.validate('local_file', { path: filePath, content: '' })).resolves.not.toThrow();
 
-      await provider.create('local_file', { path: filePath, content: '' });
+      await create('local_file', { path: filePath, content: '' });
 
       expect(await fs.readFile(filePath, 'utf8')).toBe('');
     });
@@ -69,7 +72,7 @@ describe('LocalProvider', () => {
       const filePath = path.join(tmpDir, 'test.txt');
       const content = 'Hello World';
 
-      const { id } = await provider.create('local_file', {
+      const { id } = await create('local_file', {
         path: filePath,
         content,
       });
@@ -84,7 +87,7 @@ describe('LocalProvider', () => {
       const filePath = path.join(tmpDir, 'nested', 'dir', 'test.txt');
       const content = 'Nested file';
 
-      await provider.create('local_file', {
+      await create('local_file', {
         path: filePath,
         content,
       });
@@ -95,7 +98,7 @@ describe('LocalProvider', () => {
 
     it('should throw for unsupported resource type', async () => {
       await expect(
-        provider.create('unknown_type', {
+        create('unknown_type', {
           path: '/tmp/test.txt',
           content: 'Hello',
         })
@@ -111,29 +114,17 @@ describe('LocalProvider', () => {
       await fs.writeFile(filePath, 'Original content', 'utf8');
 
       // Update
-      await provider.update(
-        'local_file',
-        { id: filePath, path: filePath, content: 'Original content' },
-        {
-          path: filePath,
-          content: 'Updated content',
-        }
-      );
+      const config = { path: filePath, content: 'Updated content' };
+      await provider.update('local_file', { prior: { id: filePath, path: filePath, content: 'Original content' }, config, planned: { ...config, id: filePath } });
 
       const fileContent = await fs.readFile(filePath, 'utf8');
       expect(fileContent).toBe('Updated content');
     });
 
     it('should throw for unsupported resource type', async () => {
-      await expect(
-        provider.update(
-          'unknown_type',
-          { id: '/tmp/test.txt' },
-          {
-            content: 'Hello',
-          }
-        )
-      ).rejects.toThrow('Unsupported resource type');
+      await expect(provider.update('unknown_type', { prior: { id: '/tmp/test.txt' }, config: { content: 'Hello' }, planned: { content: 'Hello' } })).rejects.toThrow(
+        'Unsupported resource type'
+      );
     });
   });
 
@@ -167,29 +158,49 @@ describe('LocalProvider', () => {
   describe('a resource that holds no id', () => {
     it.each([
       ['read', () => provider.read('local_file', { path: 'a.txt', content: '' })],
-      ['update', () => provider.update('local_file', { path: 'a.txt', content: '' }, { path: 'a.txt', content: 'x' })],
+      ['update', () => provider.update('local_file', { prior: { path: 'a.txt', content: '' }, config: { path: 'a.txt', content: 'x' }, planned: { path: 'a.txt', content: 'x' } })],
       ['delete', () => provider.delete('local_file', { path: 'a.txt', content: '' })],
-      ['update of a command', () => provider.update('command_exec', { command: 'echo a' }, { command: 'echo b' })],
-      ['update of a null_resource', () => provider.update('null_resource', {}, {})],
-      ['update of a random_string', () => provider.update('random_string', {}, { length: ExactNumber.parse('4') })],
     ])('is refused on a %s, since there is nothing to find it by', async (_, call) => {
       await expect(call()).rejects.toThrow('the resource holds no id to find it by');
     });
   });
 
   describe('what create and update return', () => {
-    it('returns what a type that computes only its id was given, with the id, on create and on update', async () => {
-      const cases = [
-        ['local_file', { path: path.join(tmpDir, 'made.txt'), content: 'hi' }],
-        ['null_resource', { triggers: { a: 'b' } }],
-      ] as const;
+    it.each([
+      ['local_file', () => ({ path: path.join(tmpDir, 'made.txt'), content: 'hi' })],
+      ['null_resource', () => ({ triggers: { a: 'b' } })],
+      ['random_string', () => ({ length: ExactNumber.parse('4') })],
+      ['command_exec', () => ({ command: 'echo hi' })],
+    ])('makes %s from what the plan says, not only from the configuration', async (type, configOf) => {
+      const config = configOf();
 
-      for (const [type, inputs] of cases) {
-        const created = await provider.create(type, inputs);
+      const created = await provider.create(type, { config, planned: { ...config, from: 'plan' } });
 
-        expect(created).toEqual({ ...inputs, id: created.id });
-        expect(await provider.update(type, created, inputs)).toEqual({ ...inputs, id: created.id });
-      }
+      expect(created).toMatchObject({ ...config, from: 'plan' });
+    });
+
+    // The id it was made with differs from the one planned, so only the plan can give what is returned.
+    it.each([
+      ['null_resource', { triggers: { a: 'c' } }, { id: 'from-plan' }, {}],
+      ['random_string', { length: ExactNumber.parse('4') }, { id: 'from-plan', result: 'from-plan' }, {}],
+      ['command_exec', { command: 'echo b' }, { id: 'from-plan', stdout: UNKNOWN }, { stdout: 'b\n' }],
+    ])('returns what the plan says %s holds on an update, with what only the apply makes', async (type, config, computed, made) => {
+      const planned = { ...config, ...computed };
+
+      const updated = await provider.update(type, { prior: { id: 'made', result: 'made' }, config, planned });
+
+      expect(updated).toEqual({ ...planned, ...made });
+    });
+
+    it('writes a file found by the id it holds, and returns what the plan says', async () => {
+      const file = path.join(tmpDir, 'made.txt');
+      const config = { path: file, content: 'changed' };
+      await fs.writeFile(file, 'hi', 'utf8');
+
+      const updated = await provider.update('local_file', { prior: { path: file, content: 'hi', id: file }, config, planned: { ...config, id: 'from-plan' } });
+
+      expect(updated).toEqual({ ...config, id: 'from-plan' });
+      expect(await fs.readFile(file, 'utf8')).toBe('changed');
     });
   });
 
@@ -219,14 +230,13 @@ describe('LocalProvider', () => {
       expect(schema[name]).toEqual({ type: 'string', computed: true, kept: true });
     });
 
-    it('returns the string it made as result, which is its id too, and keeps it on an update', async () => {
+    it('returns the string it made as result, which is its id too', async () => {
       const inputs = { length: ExactNumber.parse('6') };
 
-      const created = await provider.create('random_string', inputs);
+      const created = await create('random_string', inputs);
 
       expect(created).toEqual({ ...inputs, id: created.result, result: created.result });
       expect(created.result).toHaveLength(6);
-      expect(await provider.update('random_string', created, inputs)).toEqual(created);
     });
 
     it('plans the id of a file to make as the path it is written to, which create returns', async () => {
@@ -235,7 +245,7 @@ describe('LocalProvider', () => {
       const { after } = await provider.plan('local_file', { prior: null, proposed: config, config });
 
       expect(after.id).toBe(path.join(tmpDir, 'a.txt'));
-      expect(await provider.create('local_file', config)).toEqual(after);
+      expect(await provider.create('local_file', { config, planned: after })).toEqual(after);
     });
 
     it.each([
@@ -257,8 +267,9 @@ describe('LocalProvider', () => {
     });
 
     it('returns what a command printed, on create and on the run an update makes', async () => {
-      const created = await provider.create('command_exec', { command: 'echo made' });
-      const updated = await provider.update('command_exec', created, { command: 'echo changed' });
+      const created = await create('command_exec', { command: 'echo made' });
+      const config = { command: 'echo changed' };
+      const updated = await provider.update('command_exec', { prior: created, config, planned: { ...config, id: created.id, stdout: UNKNOWN } });
 
       expect(created).toEqual({ id: created.id, command: 'echo made', stdout: 'made\n' });
       expect(updated).toEqual({ id: created.id, command: 'echo changed', stdout: 'changed\n' });
@@ -268,7 +279,7 @@ describe('LocalProvider', () => {
   describe('READ', () => {
     it('reads a file as it is on disk now, keeping its path', async () => {
       const filePath = path.join(tmpDir, 'drift.txt');
-      const created = await provider.create('local_file', { path: filePath, content: 'applied' });
+      const created = await create('local_file', { path: filePath, content: 'applied' });
       await fs.writeFile(filePath, 'changed by hand', 'utf8');
 
       expect(await provider.read('local_file', created)).toEqual({ id: created.id, path: filePath, content: 'changed by hand' });
@@ -276,7 +287,7 @@ describe('LocalProvider', () => {
 
     it('reads a file that is gone as nothing', async () => {
       const filePath = path.join(tmpDir, 'gone.txt');
-      const created = await provider.create('local_file', { path: filePath, content: 'applied' });
+      const created = await create('local_file', { path: filePath, content: 'applied' });
       await fs.unlink(filePath);
 
       expect(await provider.read('local_file', created)).toBeNull();
@@ -374,22 +385,17 @@ describe('LocalProvider', () => {
     });
 
     it('should create a random string of specified length', async () => {
-      const { id } = await provider.create('random_string', { length: ExactNumber.parse('16') });
+      const { id } = await create('random_string', { length: ExactNumber.parse('16') });
       expect(typeof id).toBe('string');
       expect(id).toHaveLength(16);
     });
 
     it('should create a random string with special characters', async () => {
-      const { id } = await provider.create('random_string', { length: ExactNumber.parse('50'), special: true });
+      const { id } = await create('random_string', { length: ExactNumber.parse('50'), special: true });
       expect(id).toHaveLength(50);
       const specialChars = '!@#$%^&*()_+-=[]{}|;:,.<>?';
       const hasSpecial = [...String(id)].some((char) => specialChars.includes(char));
       expect(hasSpecial).toBe(true);
-    });
-
-    it('should not update (no-op)', async () => {
-      // Just ensure it doesn't throw
-      await expect(provider.update('random_string', { id: 'any-id' }, { length: ExactNumber.parse('10') })).resolves.not.toThrow();
     });
   });
 
@@ -399,12 +405,8 @@ describe('LocalProvider', () => {
     });
 
     it('should create and return a UUID', async () => {
-      const { id } = await provider.create('null_resource', {});
+      const { id } = await create('null_resource', {});
       expect(id).toMatch(/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i);
-    });
-
-    it('should not update (no-op)', async () => {
-      await expect(provider.update('null_resource', { id: 'any-id' }, {})).resolves.not.toThrow();
     });
 
     it('should not delete (no-op)', async () => {
@@ -419,21 +421,17 @@ describe('LocalProvider', () => {
     });
 
     it('should execute a command', async () => {
-      const attributes = await provider.create('command_exec', { command: 'echo hello world' });
+      const attributes = await create('command_exec', { command: 'echo hello world' });
       expect(attributes.stdout).toBe('hello world\n');
     });
 
     it('should execute a command with cwd', async () => {
-      const attributes = await provider.create('command_exec', { command: 'pwd', cwd: tmpDir });
+      const attributes = await create('command_exec', { command: 'pwd', cwd: tmpDir });
       expect(await fs.realpath(String(attributes.stdout).trim())).toBe(await fs.realpath(tmpDir));
     });
 
     it('should fail if command fails', async () => {
-      await expect(provider.create('command_exec', { command: 'exit 1' })).rejects.toThrow();
-    });
-
-    it('should re-execute on update', async () => {
-      await expect(provider.update('command_exec', { id: 'any-id' }, { command: 'echo updated' })).resolves.not.toThrow();
+      await expect(create('command_exec', { command: 'exit 1' })).rejects.toThrow();
     });
 
     it('should not delete (no-op)', async () => {

@@ -18,8 +18,8 @@ const recorder: Provider = {
   read: async (_, prior) => prior,
   validateDataSource: async () => {},
   readDataSource: async () => ({}),
-  create: async (_, inputs) => inputs,
-  update: async (_, __, inputs) => inputs,
+  create: async (_, { config }) => config,
+  update: async (_, { config }) => config,
   delete: async () => {},
 };
 
