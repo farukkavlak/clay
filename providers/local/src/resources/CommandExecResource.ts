@@ -21,7 +21,7 @@ export class CommandExecResource implements ResourceHandler {
   }
 
   async validate(inputs: Record<string, unknown>): Promise<void> {
-    if (!inputs.command || typeof inputs.command !== 'string') throw new Error('command_exec requires "command" attribute (string)');
+    if (inputs.command === '') throw new Error('command_exec "command" must not be empty');
   }
 
   async plan(request: PlanRequest): Promise<PlannedChange> {

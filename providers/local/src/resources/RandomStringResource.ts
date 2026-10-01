@@ -26,8 +26,6 @@ export class RandomStringResource implements ResourceHandler {
 
   async validate(inputs: Record<string, unknown>): Promise<void> {
     lengthOf(inputs);
-
-    if (inputs.special !== undefined && typeof inputs.special !== 'boolean') throw new Error('random_string "special" attribute must be a boolean');
   }
 
   async plan(request: PlanRequest): Promise<PlannedChange> {

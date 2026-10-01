@@ -178,15 +178,15 @@ provider plans what a resource to create or change will hold.
 `SchemaDefinition` carries `type`, `required`, `elemType` and `schema`. The engine holds
 a resource's names and values to them, refuses a computed value the configuration sets
 unless it is also optional, and refuses a schema that keeps a value it does not compute.
-`planFromSchema` reads `forceNew`, `computed` and `kept` for a provider. Every resource
-still validates its inputs by hand as well.
+`planFromSchema` reads `forceNew`, `computed` and `kept` for a provider. A provider's
+`validate` checks only what a schema cannot say: an empty path or command, a length below 1.
 
 - [x] The engine validates inputs against the schema before it asks the provider. A name
       the schema does not have and a required one left out are refused once per block,
       where they are written; each value known is held to its type, in every item it
       holds, at plan and again at apply once the apply knows it. Terraform: "An argument
       named "contnet" is not expected here"
-- [ ] Providers keep `validate` for what a schema cannot say
+- [x] Providers keep `validate` for what a schema cannot say
 - [ ] A data source has a schema too; today only a resource type has one
 - [ ] A resource with a value that is not known yet has its known values checked. Today
       `plan` skips the whole resource, because a provider's `validate` would report a

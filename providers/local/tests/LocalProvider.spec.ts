@@ -32,20 +32,9 @@ describe('LocalProvider', () => {
       ).resolves.not.toThrow();
     });
 
-    it('should throw if path is missing', async () => {
-      await expect(
-        provider.validate('local_file', {
-          content: 'Hello',
-        })
-      ).rejects.toThrow('requires "path"');
-    });
-
-    it('should throw if content is missing', async () => {
-      await expect(
-        provider.validate('local_file', {
-          path: '/tmp/test.txt',
-        })
-      ).rejects.toThrow('requires "content"');
+    // The engine holds the names and types to the schema first, so what is left is what a schema cannot say.
+    it('should throw if path is empty', async () => {
+      await expect(provider.validate('local_file', { path: '', content: 'Hello' })).rejects.toThrow('local_file "path" must not be empty');
     });
 
     it('should accept empty content and write an empty file', async () => {
@@ -55,15 +44,6 @@ describe('LocalProvider', () => {
       await create('local_file', { path: filePath, content: '' });
 
       expect(await fs.readFile(filePath, 'utf8')).toBe('');
-    });
-
-    it('should throw if path is not a string', async () => {
-      await expect(
-        provider.validate('local_file', {
-          path: 123,
-          content: 'Hello',
-        })
-      ).rejects.toThrow('requires "path"');
     });
   });
 
@@ -417,7 +397,7 @@ describe('LocalProvider', () => {
   describe('command_exec', () => {
     it('should validate command', async () => {
       await expect(provider.validate('command_exec', { command: 'echo hello' })).resolves.not.toThrow();
-      await expect(provider.validate('command_exec', {})).rejects.toThrow();
+      await expect(provider.validate('command_exec', { command: '' })).rejects.toThrow('command_exec "command" must not be empty');
     });
 
     it('should execute a command', async () => {

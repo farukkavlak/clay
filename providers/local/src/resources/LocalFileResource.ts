@@ -14,9 +14,7 @@ export class LocalFileResource implements ResourceHandler {
   }
 
   async validate(inputs: Record<string, unknown>): Promise<void> {
-    if (!inputs.path || typeof inputs.path !== 'string') throw new Error('local_file requires "path" attribute (string)');
-
-    if (typeof inputs.content !== 'string') throw new Error('local_file requires "content" attribute (string)');
+    if (inputs.path === '') throw new Error('local_file "path" must not be empty');
   }
 
   // A relative path lands where the apply runs, so only an absolute one gives a known id.
