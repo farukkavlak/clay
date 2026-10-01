@@ -2,7 +2,7 @@ import { ModuleAddress, Provider, Schema, State } from '@clay/contracts';
 import { CONFIG_FILE, ConfigError, DataBlock, Lexer, Parser, spell, Statement } from '@clay/parser';
 
 import { checkNames } from '../checkAttributes';
-import { checkValues, writtenAt } from '../checkValues';
+import { conformValues, writtenAt } from '../conformValues';
 import { checkDataSourceRead } from '../providerResult';
 import { Instances } from '../Instances';
 import { ModuleInstances } from '../ModuleInstances';
@@ -96,9 +96,9 @@ export class ConfigLoader {
 
   private async readDataSource(stmt: DataBlock, { provider, schema }: Reader, inputs: Record<string, unknown>, scopeAddress: ModuleAddress): Promise<Record<string, unknown>> {
     try {
-      checkValues(stmt.dataSourceType, schema, inputs);
-      await provider.validateDataSource(stmt.dataSourceType, inputs);
-      const read = await provider.readDataSource(stmt.dataSourceType, inputs);
+      const conformed = conformValues(stmt.dataSourceType, schema, inputs);
+      await provider.validateDataSource(stmt.dataSourceType, conformed);
+      const read = await provider.readDataSource(stmt.dataSourceType, conformed);
       checkDataSourceRead(stmt.dataSourceType, schema, read);
 
       return read;

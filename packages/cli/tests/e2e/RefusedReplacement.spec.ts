@@ -25,23 +25,19 @@ describe('a replacement its provider refuses at apply', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
-  // The new path is not known at plan, so the values are first checked at apply, where the content is a number.
-  it('leaves the old file on disk and in state', async () => {
-    const file = path.join(dir, 'a.txt');
-    await run(`resource "local_file" "a" { path = "${file}" content = "hi" }`);
+  // The new length is not known at plan, so it is first checked at apply, where it comes to an id that spells no number.
+  it('leaves the old resource in state', async () => {
+    await run('resource "random_string" "a" { length = 4 }');
+    const before = await new LocalBackend(dir).read();
 
     await expect(
       run(`
-        resource "random_string" "n" { length = 4 }
-        resource "local_file" "a" {
-          path    = "${dir}/\${random_string.n.result}.txt"
-          content = random_string.n.length
-        }
+        resource "null_resource" "n" {}
+        resource "random_string" "a" { length = null_resource.n.id }
       `)
-    ).rejects.toThrow('content is a number, where local_file takes a string');
+    ).rejects.toThrow(/^length: "[0-9a-f-]+" is not a number$/);
 
-    expect(await fs.readFile(file, 'utf8')).toBe('hi');
-    const state = await new LocalBackend(dir).read();
-    expect(state.resources['local_file.a']).toMatchObject({ attributes: { path: file, content: 'hi' } });
+    const after = await new LocalBackend(dir).read();
+    expect(after.resources['random_string.a']).toEqual(before.resources['random_string.a']);
   });
 });

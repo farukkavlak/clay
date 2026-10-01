@@ -173,7 +173,7 @@ describe('validate against real files', () => {
 
   it('names the module instance an error came from, since one module file serves every call of it', async () => {
     await fs.mkdir(path.join(dir, 'm'), { recursive: true });
-    await fs.writeFile(path.join(dir, 'm', 'main.clay'), 'resource "random_string" "pw" { length = "8" }', 'utf8');
+    await fs.writeFile(path.join(dir, 'm', 'main.clay'), 'resource "random_string" "pw" { length = "eight" }', 'utf8');
 
     const output = await validate('module "a" { source = "./m" }\nmodule "b" { source = "./m" }');
 
@@ -182,7 +182,7 @@ describe('validate against real files', () => {
   });
 
   it('says nothing about a module when the error is in the root configuration', async () => {
-    const output = await validate('resource "random_string" "pw" { length = "8" }');
+    const output = await validate('resource "random_string" "pw" { length = "eight" }');
 
     expect(output).not.toContain('in module.');
   });

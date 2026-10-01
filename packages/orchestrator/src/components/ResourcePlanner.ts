@@ -1,14 +1,15 @@
 import { AttributePath, containsUnknown, own, PlannedChange, PlanRequest, Provider, Resource, Schema, valueAt } from '@clay/contracts';
 import { isDeepStrictEqual } from 'node:util';
 
-import { checkValues } from '../checkValues';
+import { conformValues } from '../conformValues';
 import { ProviderRegistry } from '../ProviderRegistry';
 import { shown } from '../shown';
 
-/** A resource as its provider plans it, and whether the change replaces it. */
+/** A resource as its provider plans it, whether the change replaces it, and the configuration as the schema takes it, which is what the provider is sent. */
 export interface ResourcePlan {
   after: Record<string, unknown>;
   replace: boolean;
+  config: Record<string, unknown>;
 }
 
 /** What the configuration asks for, with what the provider computed kept as the refresh read it, since the configuration never sets that. */
@@ -53,16 +54,16 @@ export class ResourcePlanner {
   constructor(private providers: ProviderRegistry) {}
 
   /** The values are checked first, since a plan of values the provider would refuse means nothing. A value not known yet is checked again once the apply knows it. */
-  async plan(type: string, schema: Schema, current: Resource | undefined, config: Record<string, unknown>): Promise<ResourcePlan> {
+  async plan(type: string, schema: Schema, current: Resource | undefined, written: Record<string, unknown>): Promise<ResourcePlan> {
     const provider = this.providers.get(type);
-    checkValues(type, schema, config);
+    const config = conformValues(type, schema, written);
     await provider.validate(type, config);
     if (!current) return this.create(provider, type, schema, config);
 
     const change = await this.ask(provider, type, schema, { prior: current.attributes, proposed: proposed(current.attributes, config, schema), config });
     if (!replaces(change.replace, current.attributes, change.after)) {
       checkKept(type, schema, current.attributes, change.after);
-      return { after: change.after, replace: false };
+      return { after: change.after, replace: false, config };
     }
 
     // What the old resource holds goes with it, so the new one is planned as if made from nothing.
@@ -72,7 +73,7 @@ export class ResourcePlanner {
   private async create(provider: Provider, type: string, schema: Schema, config: Record<string, unknown>): Promise<ResourcePlan> {
     const { after } = await this.ask(provider, type, schema, { prior: null, proposed: config, config });
 
-    return { after, replace: false };
+    return { after, replace: false, config };
   }
 
   private async ask(provider: Provider, type: string, schema: Schema, request: PlanRequest): Promise<PlannedChange> {

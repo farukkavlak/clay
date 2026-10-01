@@ -5,7 +5,7 @@ import { inconsistent } from '../providerResult';
 import { ProviderRegistry } from '../ProviderRegistry';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { shown } from '../shown';
-import { ResourcePlanner } from './ResourcePlanner';
+import { ResourcePlan, ResourcePlanner } from './ResourcePlanner';
 
 /** The resource as state holds it, which is how its provider finds it. */
 function held(action: PlanAction, state: State): Resource {
@@ -77,11 +77,12 @@ export class ActionExecutor {
     const off = offPlan(action.planned, inputs);
     if (off) throw new Error(`the plan showed ${off.name} = ${shown(off.planned)}, but it now comes to ${shown(off.resolved)}. Plan again.`);
 
-    return { inputs, after: await this.finalPlan(action, action.after, inputs, currentState) };
+    const final = await this.finalPlan(action, action.after, inputs, currentState);
+    return { inputs: final.config, after: final.after };
   }
 
   /** A replaced resource is planned as one to create, since the old one goes. What the plan knew was approved, so the plan made now has to agree with it. */
-  private async finalPlan(action: PlanAction, after: Record<string, unknown>, inputs: Record<string, unknown>, currentState: State): Promise<Record<string, unknown>> {
+  private async finalPlan(action: PlanAction, after: Record<string, unknown>, inputs: Record<string, unknown>, currentState: State): Promise<ResourcePlan> {
     const type = action.resourceType;
     const current = action.type === 'UPDATE' ? held(action, currentState) : undefined;
     const final = await this.planner.plan(type, await this.providers.schema(type), current, inputs);
@@ -90,7 +91,7 @@ export class ActionExecutor {
     const mismatches = offFinal(after, final.after);
     if (mismatches.length > 0) throw inconsistent(type, 'plan', mismatches);
 
-    return final.after;
+    return final;
   }
 
   /** Checked once what it returned is in state: the resource exists as the provider made it, whatever the plan showed. */
