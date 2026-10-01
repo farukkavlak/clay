@@ -1,4 +1,4 @@
-import { AttributePath, containsUnknown, isRecord, PlannedChange, PlanRequest, Provider, Resource, Schema } from '@clay/contracts';
+import { AttributePath, containsUnknown, own, PlannedChange, PlanRequest, Provider, Resource, Schema, valueAt } from '@clay/contracts';
 import { isDeepStrictEqual } from 'node:util';
 
 import { ProviderRegistry } from '../ProviderRegistry';
@@ -10,27 +10,11 @@ export interface ResourcePlan {
   replace: boolean;
 }
 
-function own(values: Record<string, unknown>, name: string): unknown {
-  return Object.hasOwn(values, name) ? values[name] : undefined;
-}
-
 /** What the configuration asks for, with what the provider computed kept as the refresh read it, since the configuration never sets that. */
 function proposed(prior: Record<string, unknown>, config: Record<string, unknown>, schema: Schema): Record<string, unknown> {
   const kept = Object.entries(prior).filter(([name]) => Object.hasOwn(schema, name) && schema[name].computed && !Object.hasOwn(config, name));
 
   return { ...config, ...Object.fromEntries(kept) };
-}
-
-/** What the steps lead to, or undefined where the value holds nothing there. */
-function valueAt(value: unknown, path: AttributePath): unknown {
-  let at = value;
-
-  for (const step of path)
-    if (Array.isArray(at) && typeof step === 'number') at = at[step];
-    else if (isRecord(at) && typeof step === 'string') at = own(at, step);
-    else return undefined;
-
-  return at;
 }
 
 /** A place the provider says would replace the resource replaces it only where the value there changes. */

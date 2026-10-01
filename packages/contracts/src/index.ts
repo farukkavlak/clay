@@ -32,6 +32,31 @@ export function containsUnknown(value: unknown): boolean {
   return isRecord(value) && Object.values(value).some((item) => containsUnknown(item));
 }
 
+/** Where a value holds what is not known yet, as the steps to each; `[[]]` when the whole of it is not. */
+export function unknownPaths(value: unknown, at: AttributePath = []): AttributePath[] {
+  if (isUnknown(value)) return [at];
+  if (Array.isArray(value)) return value.flatMap((item, index) => unknownPaths(item, [...at, index]));
+
+  return isRecord(value) ? Object.entries(value).flatMap(([key, item]) => unknownPaths(item, [...at, key])) : [];
+}
+
+/** A value the record holds itself, so a name like `toString` finds nothing rather than what every object inherits. */
+export function own(values: Record<string, unknown>, name: string): unknown {
+  return Object.hasOwn(values, name) ? values[name] : undefined;
+}
+
+/** What the steps lead to, or undefined where the value holds nothing there. */
+export function valueAt(value: unknown, path: AttributePath): unknown {
+  let at = value;
+
+  for (const step of path)
+    if (Array.isArray(at) && typeof step === 'number') at = at[step];
+    else if (isRecord(at) && typeof step === 'string') at = own(at, step);
+    else return undefined;
+
+  return at;
+}
+
 /** A resource as state records it. Its address finds it; whatever its provider finds it by, an id among them, is one of its attributes. */
 export interface Resource {
   resourceType: string;
@@ -163,7 +188,6 @@ export function planFromSchema(schema: Schema, { prior, proposed, config }: Plan
   const after = Object.fromEntries([...Object.entries(proposed), ...remade.map((name) => [name, UNKNOWN])]);
   if (prior === null) return { after, replace: [] };
 
-  const own = (values: Record<string, unknown>, name: string) => (Object.hasOwn(values, name) ? values[name] : undefined);
   const replacing = Object.keys(schema).filter((name) => schema[name].forceNew && !isDeepStrictEqual(own(prior, name), own(proposed, name)));
   return { after, replace: replacing.map((name) => [name]) };
 }

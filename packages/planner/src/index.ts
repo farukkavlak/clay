@@ -1,5 +1,6 @@
 import {
   Address,
+  AttributePath,
   ExactNumber,
   InstanceKey,
   isInstanceKey,
@@ -9,10 +10,13 @@ import {
   ModuleAddress,
   ModuleStep,
   NumberError,
+  own,
   readResources,
   Resource,
   State,
   UNKNOWN,
+  unknownPaths,
+  valueAt,
 } from '@clay/contracts';
 import { AttributeValue, ResourceBlock } from '@clay/parser';
 import { isDeepStrictEqual } from 'node:util';
@@ -76,17 +80,6 @@ export interface PlanFile extends Plan {
   modules: Record<string, string>;
 }
 
-/** The steps from a value to something in it: a key of a map or an index into a list. */
-type Path = (string | number)[];
-
-/** Where a value holds what is not known yet, as the steps to each; `[[]]` when the whole of it is not. */
-export function unknownPaths(value: unknown, at: Path = []): Path[] {
-  if (isUnknown(value)) return [at];
-  if (Array.isArray(value)) return value.flatMap((item, index) => unknownPaths(item, [...at, index]));
-
-  return isRecord(value) ? Object.entries(value).flatMap(([key, item]) => unknownPaths(item, [...at, key])) : [];
-}
-
 function withoutUnknown(value: unknown): unknown {
   if (isUnknown(value)) return null;
   if (Array.isArray(value)) return value.map((item) => withoutUnknown(item));
@@ -125,7 +118,7 @@ function saveAction(action: PlanAction): Record<string, unknown> {
 }
 
 /** Whether the steps land on something in the value, so a saved unknown has a place to go back into. */
-function lands(value: unknown, path: Path): boolean {
+function lands(value: unknown, path: AttributePath): boolean {
   if (path.length === 0) return true;
 
   const [step, ...rest] = path;
@@ -134,7 +127,7 @@ function lands(value: unknown, path: Path): boolean {
   return isRecord(value) && typeof step === 'string' && Object.hasOwn(value, step) && lands(value[step], rest);
 }
 
-function placeUnknown(value: unknown, path: Path): unknown {
+function placeUnknown(value: unknown, path: AttributePath): unknown {
   if (path.length === 0) return UNKNOWN;
 
   const [step, ...rest] = path;
@@ -143,7 +136,7 @@ function placeUnknown(value: unknown, path: Path): unknown {
   return value;
 }
 
-function readChanges(saved: Record<string, { old?: unknown; new?: unknown; unknown?: Path[] }>): Changes {
+function readChanges(saved: Record<string, { old?: unknown; new?: unknown; unknown?: AttributePath[] }>): Changes {
   return Object.fromEntries(
     Object.entries(saved).map(([name, change]) => [name, { old: change.old, new: (change.unknown ?? []).reduce<unknown>((value, path) => placeUnknown(value, path), change.new) }])
   );
@@ -166,12 +159,12 @@ export function serializePlan(plan: Plan, configContent: string, modules: Record
   return JSON.stringify(file, undefined, 2);
 }
 
-function isPath(path: unknown): path is Path {
+function isPath(path: unknown): path is AttributePath {
   return Array.isArray(path) && path.every((step) => typeof step === 'string' || typeof step === 'number');
 }
 
 /** One path that leads through another would put a value into what is not known yet. */
-function overlaps(paths: Path[]): boolean {
+function overlaps(paths: AttributePath[]): boolean {
   return paths.some((path, i) => paths.some((other, j) => i !== j && path.length <= other.length && path.every((step, k) => other[k] === step)));
 }
 
@@ -180,7 +173,7 @@ function isUnknownPaths(change: Record<string, unknown>): boolean {
   const { unknown } = change;
   if (unknown === undefined) return true;
 
-  return Array.isArray(unknown) && unknown.every((path) => isPath(path) && lands(change.new, path)) && !overlaps(unknown as Path[]);
+  return Array.isArray(unknown) && unknown.every((path) => isPath(path) && lands(change.new, path)) && !overlaps(unknown as AttributePath[]);
 }
 
 /** Each change is read for what it held, so one that is not a record would fail far from the file it came from. */
@@ -306,7 +299,7 @@ function readPlan(content: string): unknown {
 
 /** Values saved as changes from nothing, read back as the values. */
 function readValues(saved: Record<string, unknown>): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(readChanges(saved as Record<string, { new?: unknown; unknown?: Path[] }>)).map(([name, change]) => [name, change.new]));
+  return Object.fromEntries(Object.entries(readChanges(saved as Record<string, { new?: unknown; unknown?: AttributePath[] }>)).map(([name, change]) => [name, change.new]));
 }
 
 function readSavedAction(action: PlanAction): PlanAction {
@@ -393,13 +386,13 @@ export function changedOutside(plan: Plan): Drift[] {
 
 /** A place a value comes to something other than the plan showed there, and the two values at that place. */
 export interface Mismatch {
-  path: Path;
+  path: AttributePath;
   planned: unknown;
   returned: unknown;
 }
 
 /** A value the plan did not know yet may come to anything; a known one, and every known part of one known in part, comes to the same. */
-function mismatches(planned: unknown, actual: unknown, at: Path): Mismatch[] {
+function mismatches(planned: unknown, actual: unknown, at: AttributePath): Mismatch[] {
   if (isUnknown(planned)) return [];
 
   const here = [{ path: at, planned, returned: actual }];
@@ -417,22 +410,6 @@ function mismatches(planned: unknown, actual: unknown, at: Path): Mismatch[] {
 
 function conforms(planned: unknown, resolved: unknown): boolean {
   return mismatches(planned, resolved, []).length === 0;
-}
-
-function own(values: Record<string, unknown>, name: string): unknown {
-  return Object.hasOwn(values, name) ? values[name] : undefined;
-}
-
-/** What the steps lead to, or undefined where the value holds nothing there. */
-function valueAt(value: unknown, path: Path): unknown {
-  let at = value;
-
-  for (const step of path)
-    if (Array.isArray(at) && typeof step === 'number') at = at[step];
-    else if (isRecord(at) && typeof step === 'string') at = own(at, step);
-    else return undefined;
-
-  return at;
 }
 
 /**
