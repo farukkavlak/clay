@@ -1,4 +1,4 @@
-import { ExactNumber, isRecord, isUnknown, Schema, unknownPaths } from '@clay/contracts';
+import { ExactNumber, isRecord, isUnknown, Schema, SchemaDefinition, unknownPaths } from '@clay/contracts';
 import { Mismatch } from '@clay/planner';
 
 import { shown } from './shown';
@@ -52,40 +52,45 @@ function oddRead(schema: Schema, name: string, value: unknown): string[] {
   return Object.hasOwn(schema, name) ? [] : [`${name} = ${shown(value)}, which the schema does not have`];
 }
 
-function refuse(type: string, what: string, lines: string[]): void {
+function refuse(type: string, what: string, schema: Schema, read: Record<string, unknown>): void {
+  const lines = Object.entries(read).flatMap(([name, value]) => oddRead(schema, name, value));
   if (lines.length > 0) throw new Error([`${type} read what the ${what} cannot hold, which is a bug in the provider:`, ...lines.map((odd) => `  ${odd}`)].join('\n'));
 }
 
 /** A value a read returns is planned against, so one not known, or a name the next plan would read as removed, is refused. */
 export function checkRead(type: string, schema: Schema, read: Record<string, unknown>): void {
-  refuse(
-    type,
-    'resource',
-    Object.entries(read).flatMap(([name, value]) => oddRead(schema, name, value))
-  );
+  refuse(type, 'resource', schema, read);
 }
 
-/** A data source has no schema yet, so only a value not known is refused. */
-export function checkDataSourceRead(type: string, read: Record<string, unknown>): void {
-  refuse(
-    type,
-    'data source',
-    Object.entries(read).flatMap(([name, value]) => unknownIn(name, value))
-  );
+/** What a read returns is what a reference to the data source reads, so a value not known, or a name the schema does not have, is refused. */
+export function checkDataSourceRead(type: string, schema: Schema, read: Record<string, unknown>): void {
+  refuse(type, 'data source', schema, read);
 }
 
-function checkDefinitions(type: string, schema: Schema, within: string): void {
+/** Each definition in a schema, those inside an object included, with the path it is at. */
+function eachDefinition(schema: Schema, check: (at: string, definition: SchemaDefinition) => void, within = ''): void {
   for (const [name, definition] of Object.entries(schema)) {
-    const at = within + name;
-    if (definition.kept && !definition.computed)
-      throw new Error(`${type} keeps ${at}, which it does not compute; only a computed value can be kept, which is a bug in the provider`);
-    if (definition.schema) checkDefinitions(type, definition.schema, `${at}.`);
+    check(within + name, definition);
+    if (definition.schema) eachDefinition(definition.schema, check, `${within}${name}.`);
   }
 }
 
 /** A schema comes from the provider, so one that says what cannot be is its bug, refused before anything is planned with it. */
 export function checkSchema(type: string, schema: Schema): Schema {
-  checkDefinitions(type, schema, '');
+  eachDefinition(schema, (at, definition) => {
+    if (definition.kept && !definition.computed)
+      throw new Error(`${type} keeps ${at}, which it does not compute; only a computed value can be kept, which is a bug in the provider`);
+  });
+
+  return schema;
+}
+
+/** A data source is only read, never made or changed, so a schema that says when to remake it or what to keep is the provider's bug. */
+export function checkDataSourceSchema(type: string, schema: Schema): Schema {
+  eachDefinition(schema, (at, definition) => {
+    const flag = definition.forceNew ? 'forceNew' : definition.kept ? 'kept' : undefined;
+    if (flag) throw new Error(`data source ${type} marks ${at} ${flag}, but only a resource can be ${flag}, which is a bug in the provider`);
+  });
 
   return schema;
 }

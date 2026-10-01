@@ -1,4 +1,5 @@
 import { AttributePath, ExactNumber, isRecord, isUnknown, Schema, SchemaDefinition, SchemaType } from '@clay/contracts';
+import { DataBlock, Position, ResourceBlock } from '@clay/parser';
 
 import { spelled } from './spelled';
 
@@ -11,6 +12,11 @@ export class SchemaMismatch extends Error {
     super(message);
     this.name = 'SchemaMismatch';
   }
+}
+
+/** Where an error in a block's values was written: a mismatch at its value, anything else at the block. */
+export function writtenAt(error: unknown, block: ResourceBlock | DataBlock): Position {
+  return error instanceof SchemaMismatch && error.attribute !== undefined ? block.attributes[error.attribute].position : block.position;
 }
 
 /** What is wrong with the names a resource, or an object in it, sets: `set` is the name when it is one written, so it has a place. */

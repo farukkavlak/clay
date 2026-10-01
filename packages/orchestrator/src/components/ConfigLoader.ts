@@ -1,6 +1,8 @@
-import { ModuleAddress, Provider, State } from '@clay/contracts';
+import { ModuleAddress, Provider, Schema, State } from '@clay/contracts';
 import { CONFIG_FILE, ConfigError, DataBlock, Lexer, Parser, spell, Statement } from '@clay/parser';
 
+import { checkNames } from '../checkAttributes';
+import { checkValues, writtenAt } from '../checkValues';
 import { checkDataSourceRead } from '../providerResult';
 import { Instances } from '../Instances';
 import { ModuleInstances } from '../ModuleInstances';
@@ -17,6 +19,12 @@ export interface LoadedConfig {
   mainProgram: Statement[];
   loadedResources: LoadedResource[];
   loadedModules: LoadedModule[];
+}
+
+/** A data source type's provider, with the schema its blocks are held to. */
+interface Reader {
+  provider: Provider;
+  schema: Schema;
 }
 
 export class ConfigLoader {
@@ -69,23 +77,33 @@ export class ConfigLoader {
     for (const stmt of program)
       if (stmt.type === 'Data') {
         this.checkReadOnce(stmt, scopeAddress);
-        const provider = tryAt(stmt.position, spell(stmt), scopeAddress, () => this.providers.reader(stmt.dataSourceType));
+        const reader = await this.readerOf(stmt, scopeAddress);
+        checkNames(stmt, reader.schema, scopeAddress);
         const inputs = this.resolveInputs(stmt, state, scopeAddress);
-        const attributes = await this.readDataSource(stmt, provider, inputs, scopeAddress);
+        const attributes = await this.readDataSource(stmt, reader, inputs, scopeAddress);
 
         this.dataSources.set(dataSourceKey(scope, stmt.dataSourceType, stmt.name), attributes);
       }
   }
 
-  private async readDataSource(stmt: DataBlock, provider: Provider, inputs: Record<string, unknown>, scopeAddress: ModuleAddress): Promise<Record<string, unknown>> {
+  private async readerOf(stmt: DataBlock, scopeAddress: ModuleAddress): Promise<Reader> {
     try {
+      return { provider: this.providers.reader(stmt.dataSourceType), schema: await this.providers.dataSourceSchema(stmt.dataSourceType) };
+    } catch (error) {
+      throw withPlace(error, stmt.position, spell(stmt), scopeAddress);
+    }
+  }
+
+  private async readDataSource(stmt: DataBlock, { provider, schema }: Reader, inputs: Record<string, unknown>, scopeAddress: ModuleAddress): Promise<Record<string, unknown>> {
+    try {
+      checkValues(stmt.dataSourceType, schema, inputs);
       await provider.validateDataSource(stmt.dataSourceType, inputs);
       const read = await provider.readDataSource(stmt.dataSourceType, inputs);
-      checkDataSourceRead(stmt.dataSourceType, read);
+      checkDataSourceRead(stmt.dataSourceType, schema, read);
 
       return read;
     } catch (error) {
-      throw withPlace(error, stmt.position, spell(stmt), scopeAddress);
+      throw withPlace(error, writtenAt(error, stmt), spell(stmt), scopeAddress);
     }
   }
 

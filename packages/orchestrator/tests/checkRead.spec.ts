@@ -1,7 +1,7 @@
 import { Schema, UNKNOWN } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { checkDataSourceRead, checkRead, checkSchema } from '../src/providerResult';
+import { checkDataSourceRead, checkDataSourceSchema, checkRead, checkSchema } from '../src/providerResult';
 
 const schema: Schema = { label: { type: 'string', required: true }, made: { type: 'string', computed: true } };
 const bug = 'echo read what the resource cannot hold, which is a bug in the provider:';
@@ -30,10 +30,30 @@ describe('what a provider read back', () => {
 });
 
 describe('what a data source read', () => {
+  const read = 'echo read what the data source cannot hold, which is a bug in the provider:';
+
   it('refuses a value not known, where it is', () => {
-    expect(() => checkDataSourceRead('echo', { a: '1', b: { c: UNKNOWN } })).toThrow(
-      'echo read what the data source cannot hold, which is a bug in the provider:\n  b["c"] is not known; a read returns every value'
-    );
+    expect(() => checkDataSourceRead('echo', schema, { label: '1', made: { c: UNKNOWN } })).toThrow(`${read}\n  made["c"] is not known; a read returns every value`);
+  });
+
+  it('refuses a name the schema does not have', () => {
+    expect(() => checkDataSourceRead('echo', schema, { label: 'a', volume: 'high' })).toThrow(`${read}\n  volume = "high", which the schema does not have`);
+  });
+});
+
+describe('a schema a data source gives', () => {
+  it.each([
+    ['forceNew', { label: { type: 'string', forceNew: true } }, 'label'],
+    ['kept', { label: { type: 'string', computed: true, kept: true } }, 'label'],
+    ['forceNew inside an object', { box: { type: 'object', schema: { lid: { type: 'string', forceNew: true } } } }, 'box.lid'],
+  ] satisfies [string, Schema, string][])('is refused where a value is %s', (flag, given, at) => {
+    const name = flag.split(' ')[0];
+
+    expect(() => checkDataSourceSchema('echo', given)).toThrow(`data source echo marks ${at} ${name}, but only a resource can be ${name}, which is a bug in the provider`);
+  });
+
+  it('is taken as it is when it marks nothing a resource alone can be', () => {
+    expect(checkDataSourceSchema('echo', schema)).toBe(schema);
   });
 });
 

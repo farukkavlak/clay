@@ -51,6 +51,7 @@ describe('Orchestrator - Module Loading', () => {
     validate: Mock;
     create: Mock;
     read: Mock;
+    getDataSourceSchema: Mock;
     validateDataSource: Mock;
     readDataSource: Mock;
     update: Mock;
@@ -70,6 +71,7 @@ describe('Orchestrator - Module Loading', () => {
       validate: vi.fn(),
       create: vi.fn(async (_type: string, { config }: CreateRequest) => config),
       read: vi.fn(async (_type, prior) => prior),
+      getDataSourceSchema: vi.fn().mockResolvedValue({}),
       validateDataSource: vi.fn(),
       readDataSource: vi.fn(),
       update: vi.fn(async (_type: string, { config }: UpdateRequest) => config),

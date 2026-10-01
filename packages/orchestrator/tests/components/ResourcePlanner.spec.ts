@@ -15,6 +15,7 @@ function fakeProvider(plan: (request: PlanRequest) => PlannedChange = (request) 
     validate: vi.fn(async () => {}),
     plan: vi.fn(async (_type: string, request: PlanRequest) => plan(request)),
     read: async () => null,
+    getDataSourceSchema: async () => ({}),
     validateDataSource: async () => {},
     readDataSource: async () => ({}),
     create: async () => ({ id: 'x', attributes: {} }),

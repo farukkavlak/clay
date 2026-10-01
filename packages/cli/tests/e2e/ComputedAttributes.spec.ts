@@ -43,6 +43,10 @@ class StampProvider implements Provider {
 
   async delete(): Promise<void> {}
 
+  async getDataSourceSchema(): Promise<Schema> {
+    return {};
+  }
+
   async validateDataSource(): Promise<void> {}
 
   async readDataSource(): Promise<Record<string, unknown>> {

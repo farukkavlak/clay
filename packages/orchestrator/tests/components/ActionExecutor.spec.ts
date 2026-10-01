@@ -72,6 +72,7 @@ describe('ActionExecutor', () => {
       update: vi.fn(async (_type: string, { config }: UpdateRequest) => config),
       delete: vi.fn(),
       read: vi.fn(),
+      getDataSourceSchema: vi.fn().mockResolvedValue({}),
       validateDataSource: vi.fn(),
       readDataSource: vi.fn(),
       getSchema: vi.fn(async () => schema),

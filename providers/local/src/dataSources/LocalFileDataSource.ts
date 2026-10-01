@@ -1,9 +1,16 @@
-import { DataSourceHandler } from '@clay/contracts';
+import { DataSourceHandler, Schema } from '@clay/contracts';
 import fs from 'node:fs/promises';
 
 export class LocalFileDataSource implements DataSourceHandler {
+  async getSchema(): Promise<Schema> {
+    return {
+      path: { type: 'string', required: true },
+      content: { type: 'string', computed: true },
+    };
+  }
+
   async validate(inputs: Record<string, unknown>): Promise<void> {
-    if (!inputs.path || typeof inputs.path !== 'string') throw new Error('local_file requires "path" attribute (string)');
+    if (inputs.path === '') throw new Error('local_file "path" must not be empty');
   }
 
   async read(inputs: Record<string, unknown>): Promise<Record<string, unknown>> {

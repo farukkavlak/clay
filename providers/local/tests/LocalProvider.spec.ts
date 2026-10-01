@@ -307,11 +307,13 @@ describe('LocalProvider', () => {
       await expect(provider.validateDataSource('local_file', { path: 'a.txt' })).resolves.toBeUndefined();
     });
 
-    it.each([
-      ['no path', {}],
-      ['a path that is not a string', { path: 1 }],
-    ])('refuses %s', async (_, inputs) => {
-      await expect(provider.validateDataSource('local_file', inputs)).rejects.toThrow('local_file requires "path" attribute (string)');
+    // The file it reads is given, not written, so the content is the one value it makes.
+    it('has a schema of its own, apart from the resource of the same type', async () => {
+      expect(await provider.getDataSourceSchema('local_file')).toEqual({ path: { type: 'string', required: true }, content: { type: 'string', computed: true } });
+    });
+
+    it('refuses an empty path', async () => {
+      await expect(provider.validateDataSource('local_file', { path: '' })).rejects.toThrow('local_file "path" must not be empty');
     });
 
     it('reads the content of the file', async () => {
@@ -336,6 +338,7 @@ describe('LocalProvider', () => {
     });
 
     it.each([
+      ['described', (p: LocalProvider) => p.getDataSourceSchema('random_string')],
       ['validated', (p: LocalProvider) => p.validateDataSource('random_string', {})],
       ['read', (p: LocalProvider) => p.readDataSource('random_string', {})],
     ])('refuses to be %s as a type it only makes as a resource', async (_, call) => {

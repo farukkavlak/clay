@@ -18,6 +18,7 @@ const recorder: Provider = {
   plan: async (_, request) => planFromSchema(schema, request),
   validate: async () => {},
   read: async (_, prior) => prior,
+  getDataSourceSchema: async () => ({}),
   validateDataSource: async () => {},
   readDataSource: async () => ({}),
   create: async (_, { config }) => config,

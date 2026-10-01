@@ -42,6 +42,10 @@ class TallyProvider implements Provider {
 
   async delete(): Promise<void> {}
 
+  async getDataSourceSchema(): Promise<Schema> {
+    return {};
+  }
+
   async validateDataSource(): Promise<void> {}
 
   async readDataSource(): Promise<Record<string, unknown>> {
@@ -133,5 +137,58 @@ describe('a configuration held to the schema', () => {
 
     await expect(apply(config)).rejects.toThrow('content is a number, where local_file takes a string');
     await expect(fs.access(file)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+});
+
+describe('a data block held to the schema', () => {
+  let dir: string;
+  let file: string;
+
+  const plan = (config: string) => {
+    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
+    engine.registerProvider(new LocalProvider());
+    return engine.plan(config);
+  };
+
+  beforeEach(async () => {
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-data-schema-'));
+    file = path.join(dir, 'a.txt');
+    await fs.writeFile(file, 'hi');
+  });
+
+  afterEach(async () => {
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it('reads what the schema takes', async () => {
+    const { outputs } = await plan(`data "local_file" "f" { path = "${file}" }\noutput "c" { value = data.local_file.f.content }`);
+
+    expect(outputs).toEqual({ c: { old: undefined, new: 'hi' } });
+  });
+
+  // Each is refused before the file is read, so the path need not be there.
+  it.each([
+    ['a name it does not have', '  path    = "a.txt"\n  contnet = "x"', 'local_file has no attribute "contnet"', { line: 3, column: 13 }],
+    ['a name written in place of one it requires', '  paht = "a.txt"', 'local_file has no attribute "paht"', { line: 2, column: 10 }],
+    ['a value of a type it does not take', '  path = 5', 'path is a number, where local_file takes a string', { line: 2, column: 10 }],
+    ['a value it computes', '  path    = "a.txt"\n  content = "x"', 'content is computed by local_file and cannot be set', { line: 3, column: 13 }],
+  ])('refuses %s, where it is written', async (_, body, message, at) => {
+    await expect(plan(`data "local_file" "f" {\n${body}\n}`)).rejects.toMatchObject({
+      message,
+      position: { file: 'main.clay', ...at },
+      block: 'data "local_file" "f"',
+    });
+  });
+
+  it('refuses a block without a value it requires, at the block', async () => {
+    await expect(plan('\ndata "local_file" "f" {}')).rejects.toMatchObject({
+      message: 'local_file requires "path"',
+      position: { file: 'main.clay', line: 2, column: 1 },
+    });
+  });
+
+  // The names are checked before any value is resolved, so the wrong name is what is reported.
+  it('refuses a name it does not have before a value in it that does not resolve', async () => {
+    await expect(plan(`data "local_file" "f" {\n  path    = "${file}"\n  contnet = var.missing\n}`)).rejects.toThrow('local_file has no attribute "contnet"');
   });
 });

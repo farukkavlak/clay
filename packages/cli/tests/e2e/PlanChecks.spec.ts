@@ -57,10 +57,10 @@ describe('what plan refuses before anything runs', () => {
   });
 
   it('a data source the provider refuses, placed in its block', async () => {
-    const config = 'data "local_file" "f" { name = "x" }';
+    const config = 'data "local_file" "f" { path = "" }';
 
     await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
-      message: 'local_file requires "path" attribute (string)',
+      message: 'local_file "path" must not be empty',
       block: 'data "local_file" "f"',
       position: { file: CONFIG_FILE, line: 1, column: 1 },
     });
