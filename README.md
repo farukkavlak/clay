@@ -80,6 +80,8 @@ as such. A name the resource will never have, one the configuration does not set
 provider does not compute, is refused at plan. A list or a map is known as far as its
 items are:
 `{ a = random_string.s.id, b = "x" }` plans as `{"a":(known after apply),"b":"x"}`.
+A set is unknown as a whole while one member is, since that member may turn out the
+same as another.
 Reaching inside a module (`module.m.local_file.a`) is not allowed; a module speaks
 through its outputs. `path.module` is the directory of the module it is written in,
 relative to the root, so `"${path.module}/index.html"` names a file next to the module.

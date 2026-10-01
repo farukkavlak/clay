@@ -4,6 +4,7 @@ import { CONFIG_FILE, ConfigError, DataBlock, Lexer, Parser, spell, Statement } 
 import { checkNames } from '../checkAttributes';
 import { conformValues, writtenAt } from '../conformValues';
 import { checkDataSourceRead } from '../providerResult';
+import { setsOrdered } from '../setOrder';
 import { Instances } from '../Instances';
 import { ModuleInstances } from '../ModuleInstances';
 import { Planned } from '../Planned';
@@ -101,7 +102,7 @@ export class ConfigLoader {
       const read = await provider.readDataSource(stmt.dataSourceType, conformed);
       checkDataSourceRead(stmt.dataSourceType, schema, read);
 
-      return read;
+      return setsOrdered(schema, read);
     } catch (error) {
       throw withPlace(error, writtenAt(error, stmt), spell(stmt), scopeAddress);
     }

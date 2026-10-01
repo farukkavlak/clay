@@ -61,6 +61,23 @@ describe('ExactNumber', () => {
     });
   });
 
+  it.each([
+    ['1', '2', -1],
+    ['2', '1', 1],
+    ['80', '443', -1],
+    ['0.5', '0.25', 1],
+    ['1.50', '1.5', 0],
+    ['-1', '0', -1],
+    ['0', '-1', 1],
+    ['0', '0.0', 0],
+    ['-2', '-1', -1],
+    ['-0.5', '-0.25', -1],
+    ['1e3', '999.999', 1],
+    ['12345678901234567890', '12345678901234567891', -1],
+  ])('compares %s with %s as %d', (left, right, order) => {
+    expect(Math.sign(ExactNumber.parse(left).compare(ExactNumber.parse(right)))).toBe(order);
+  });
+
   // A caller catches this class and lets any other failure through, so every refusal has to be one.
   it.each([
     ['a text that is no number', () => ExactNumber.parse('abc')],

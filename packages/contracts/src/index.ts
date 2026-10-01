@@ -137,7 +137,8 @@ export function readResources(resources: unknown, field: string, say: (problem: 
   checkResources(resources, say);
 }
 
-export type SchemaType = 'string' | 'number' | 'boolean' | 'list' | 'map' | 'object';
+/** A `set` is a list whose order is not a change and that holds each member once. */
+export type SchemaType = 'string' | 'number' | 'boolean' | 'list' | 'set' | 'map' | 'object';
 
 export interface SchemaDefinition {
   type: SchemaType;
@@ -149,7 +150,7 @@ export interface SchemaDefinition {
   optional?: boolean;
   /** With `computed`: made with the resource and the same until it is replaced, so a change in place keeps it as it was read. */
   kept?: boolean;
-  elemType?: SchemaType; // For 'list' and 'map'
+  elemType?: SchemaType; // For 'list', 'set' and 'map'
   schema?: Schema; // For 'object'
 }
 

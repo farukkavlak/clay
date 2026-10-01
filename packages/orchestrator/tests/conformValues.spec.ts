@@ -8,6 +8,7 @@ const schema: Schema = {
   size: { type: 'number' },
   on: { type: 'boolean' },
   ports: { type: 'list', elemType: 'number' },
+  ids: { type: 'set', elemType: 'number' },
   tags: { type: 'map', elemType: 'string' },
   anything: { type: 'list' },
   settings: { type: 'object', schema: { mode: { type: 'string', required: true }, depth: { type: 'number' } } },
@@ -53,6 +54,8 @@ describe('conformValues', () => {
     ['a list where it takes a map', { tags: ['x'] }, 'tags is a list, where thing takes a map'],
     ['a list where it takes an object', { settings: ['m'] }, 'settings is a list, where thing takes an object'],
     ['an item of a list', { ports: [n('80'), 'http'] }, 'ports[1]: "http" is not a number'],
+    ['a member of a set', { ids: [n('80'), 'http'] }, 'ids[1]: "http" is not a number'],
+    ['a map where it takes a set', { ids: { a: n('1') } }, 'ids is a map, where thing takes a set'],
     ['a value of a map', { tags: { a: 'x', b: [true] } }, 'tags["b"] is a list, where thing takes a string'],
     ['a value inside an object', { settings: { mode: 'm', depth: 'deep' } }, 'settings["depth"]: "deep" is not a number'],
     ['a name an object does not have', { settings: { mode: 'm', moed: 'x' } }, 'thing has no attribute "moed" in settings'],
@@ -86,6 +89,16 @@ describe('conformValues', () => {
     ['a value inside an object', { settings: { mode: UNKNOWN } }],
   ])('takes %s not known yet, as it is', (_, config) => {
     expect(conformValues('thing', schema, config)).toEqual(config);
+  });
+
+  // Converted first, so "80" and 80 are the one member they both spell.
+  it('converts each member of a set, then holds it once and in order', () => {
+    expect(conformValues('thing', schema, { ids: ['80', n('443'), n('80')] })).toEqual({ ids: [n('80'), n('443')] });
+  });
+
+  it('checks a known member of a set beside one not known, and takes the set as not known', () => {
+    expect(conformValues('thing', schema, { ids: [UNKNOWN, '80'] })).toEqual({ ids: UNKNOWN });
+    expect(() => conformValues('thing', schema, { ids: [UNKNOWN, 'http'] })).toThrow('ids[1]: "http" is not a number');
   });
 
   it('checks and converts what is known beside what is not', () => {

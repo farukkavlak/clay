@@ -2,6 +2,7 @@ import { AttributePath, containsUnknown, own, PlannedChange, PlanRequest, Provid
 import { isDeepStrictEqual } from 'node:util';
 
 import { conformValues } from '../conformValues';
+import { setsOrdered } from '../setOrder';
 import { ProviderRegistry } from '../ProviderRegistry';
 import { shown } from '../shown';
 
@@ -78,8 +79,9 @@ export class ResourcePlanner {
 
   private async ask(provider: Provider, type: string, schema: Schema, request: PlanRequest): Promise<PlannedChange> {
     const change = await provider.plan(type, request);
-    checkPlanned(type, schema, request.config, change.after);
+    const after = setsOrdered(schema, change.after);
+    checkPlanned(type, schema, request.config, after);
 
-    return change;
+    return { ...change, after };
   }
 }

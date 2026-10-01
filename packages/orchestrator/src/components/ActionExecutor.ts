@@ -2,6 +2,7 @@ import { Address, Provider, Resource, State } from '@clay/contracts';
 import { offApply, offFinal, offPlan, PlanAction } from '@clay/planner';
 
 import { inconsistent } from '../providerResult';
+import { setsOrdered } from '../setOrder';
 import { ProviderRegistry } from '../ProviderRegistry';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { shown } from '../shown';
@@ -94,6 +95,11 @@ export class ActionExecutor {
     return final;
   }
 
+  /** What a provider made, with each set in the order a plan holds it, so the two compare. */
+  private async returned(type: string, attributes: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return setsOrdered(await this.providers.schema(type), attributes);
+  }
+
   /** Checked once what it returned is in state: the resource exists as the provider made it, whatever the plan showed. */
   private holdToPlan(type: string, { inputs, after }: Sending, returned: Record<string, unknown>): void {
     const mismatches = offApply(after, inputs, returned);
@@ -107,7 +113,7 @@ export class ActionExecutor {
   private async create(action: PlanAction, provider: Provider, currentState: State, sending: Sending): Promise<void> {
     const contextAddress = Address.of(action);
 
-    const attributes = await provider.create(action.resourceType, { config: sending.inputs, planned: sending.after });
+    const attributes = await this.returned(action.resourceType, await provider.create(action.resourceType, { config: sending.inputs, planned: sending.after }));
 
     const key = contextAddress.toString();
     currentState.resources[key] = {
@@ -124,7 +130,7 @@ export class ActionExecutor {
     const currentResource = held(action, currentState);
     const request = { prior: currentResource.attributes, config: sending.inputs, planned: sending.after };
 
-    currentResource.attributes = await provider.update(action.resourceType, request);
+    currentResource.attributes = await this.returned(action.resourceType, await provider.update(action.resourceType, request));
     currentResource.dependencies = action.dependencies ?? [];
     this.holdToPlan(action.resourceType, sending, currentResource.attributes);
   }

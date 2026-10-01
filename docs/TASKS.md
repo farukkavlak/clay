@@ -199,8 +199,15 @@ length below 1.
       that spells a number or a bool where one is wanted becomes it, as Terraform does.
       Any other string there is refused where it is written. `null_resource` takes any
       map as `triggers`, since it only compares them
-- [ ] `SchemaType` knows a `set`, whose order is not a change. Every list is compared in
-      order today, so writing the same members in another order plans an update
+- [x] `SchemaType` knows a `set`, whose order is not a change. A set from the
+      configuration and from every provider answer is held in one order, with each member
+      once, so every comparison sees the same members as the same value. One with a
+      member not known yet is not known as a whole
+- [ ] A set member is refused by index: `pool.p.members[0]` reads whichever member sorts
+      first. The resolver does not see the schema today. Terraform: "Elements of a set
+      are not addressable"
+- [ ] The plan shows a set change member by member, `+ "c"`, not index by index. A member
+      added at the front shifts every index after it, so each shows as changed
 
 ### Data sources in the graph
 
