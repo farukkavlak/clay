@@ -43,7 +43,13 @@ describe('setsOrdered', () => {
   });
 
   it('tells a list from one whose items would join into the same text', () => {
-    expect(setsOrdered(schema, { anything: [['a,b'], ['a', 'b']] })).toEqual({ anything: [['a', 'b'], ['a,b']] });
+    expect(setsOrdered(schema, { anything: [[['a'], ['b']], [['a', 'b']]] })).toEqual({ anything: [[['a', 'b']], [['a'], ['b']]] });
+  });
+
+  it('tells a map from one whose keys would join into the same text', () => {
+    const joined = { 'a:"x",b': '1' };
+
+    expect(setsOrdered(schema, { anything: [{ a: 'x', b: '1' }, joined] }).anything).toEqual(expect.arrayContaining([{ a: 'x', b: '1' }, joined]));
   });
 
   it('keeps the order of a list', () => {

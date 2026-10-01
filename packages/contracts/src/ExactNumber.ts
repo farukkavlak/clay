@@ -70,7 +70,7 @@ export class ExactNumber {
   /** Below zero, zero or above zero, as this number is less than, equal to or greater than `other`. */
   compare(other: ExactNumber): number {
     const sign = this.sign() - other.sign();
-    if (sign !== 0 || this.sign() === 0) return Math.sign(sign);
+    if (sign !== 0) return Math.sign(sign);
 
     return this.sign() * this.compareSize(other);
   }
@@ -81,16 +81,13 @@ export class ExactNumber {
     return this.negative ? -1 : 1;
   }
 
-  /** The number with more places before its first digit is larger; with as many, the digits decide, read from the first. */
+  /** The number with more places before its first digit is larger; with as many, the digits decide, read from the first, as no zero ends them. */
   private compareSize(other: ExactNumber): number {
     const places = this.digits.length + this.exponent - (other.digits.length + other.exponent);
     if (places !== 0) return Math.sign(places);
+    if (this.digits === other.digits) return 0;
 
-    const length = Math.max(this.digits.length, other.digits.length);
-    const [mine, theirs] = [this.digits.padEnd(length, '0'), other.digits.padEnd(length, '0')];
-    if (mine === theirs) return 0;
-
-    return mine < theirs ? -1 : 1;
+    return this.digits < other.digits ? -1 : 1;
   }
 
   /** For whoever needs a JavaScript number, as a provider sizing something does; refused rather than rounded. `name` says what the number is. */

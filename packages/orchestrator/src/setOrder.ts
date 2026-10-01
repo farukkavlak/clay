@@ -10,7 +10,8 @@ function memberKey(value: unknown): string {
       .map((key) => `${JSON.stringify(key)}:${memberKey(value[key])}`)
       .join(',')}}`;
 
-  return JSON.stringify(value);
+  // A provider may hand back `undefined`, which JSON has no text for.
+  return String(JSON.stringify(value));
 }
 
 /** Numbers by their value, anything else by its key. Every number's key starts with `#`, as no other key does, so the numbers stay together among the rest. */

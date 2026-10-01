@@ -98,6 +98,17 @@ describe('a set attribute', () => {
     expect(actions.map((action) => action.type)).toEqual(['NO_OP']);
   });
 
+  // Only create reached the provider's answer before; an update hands it back reversed too.
+  it('takes members an update returns in another order, and plans nothing after', async () => {
+    await apply(pool('["a", "b"]'));
+
+    await apply(pool('["a", "b", "c"]'));
+
+    expect(await members()).toEqual(['a', 'b', 'c']);
+    const { actions } = await newOrchestrator().plan(pool('["a", "b", "c"]'));
+    expect(actions.map((action) => action.type)).toEqual(['NO_OP']);
+  });
+
   it('holds a member written twice once', async () => {
     await apply(pool('["b", "a", "b"]'));
 
@@ -117,9 +128,10 @@ describe('a set attribute', () => {
   });
 
   it('is read from a data source in its own order', async () => {
-    await apply(`data "pool" "d" { names = ["b", "a"] }\nresource "pool" "p" { members = data.pool.d.members }`);
+    await apply(`data "pool" "d" { names = ["b", "a"] }\noutput "m" { value = data.pool.d.members }`);
 
-    expect(await members()).toEqual(['a', 'b']);
+    const { outputs } = await new LocalBackend(dir).read();
+    expect(outputs).toEqual({ m: ['a', 'b'] });
   });
 
   it('refuses a map where it takes a set', async () => {

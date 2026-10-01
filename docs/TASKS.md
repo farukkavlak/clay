@@ -206,8 +206,8 @@ length below 1.
 - [ ] A set member is refused by index: `pool.p.members[0]` reads whichever member sorts
       first. The resolver does not see the schema today. Terraform: "Elements of a set
       are not addressable"
-- [ ] The plan shows a set change member by member, `+ "c"`, not index by index. A member
-      added at the front shifts every index after it, so each shows as changed
+- [ ] The plan shows a set change as the members added and removed, `+ "c"`. Today it
+      prints the whole set before and after, and the reader finds the difference
 
 ### Data sources in the graph
 
