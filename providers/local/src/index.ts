@@ -62,6 +62,10 @@ export class LocalProvider implements Provider {
     await this.handler(type).delete(prior);
   }
 
+  async getDataSourceSchema(type: string): Promise<Schema> {
+    return await this.dataHandler(type).getSchema();
+  }
+
   async validateDataSource(type: string, inputs: Record<string, unknown>): Promise<void> {
     await this.dataHandler(type).validate(inputs);
   }

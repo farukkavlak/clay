@@ -38,6 +38,10 @@ class LoudProvider implements Provider {
 
   async delete(): Promise<void> {}
 
+  async getDataSourceSchema(): Promise<Schema> {
+    return {};
+  }
+
   async validateDataSource(): Promise<void> {}
 
   async readDataSource(): Promise<Record<string, unknown>> {
@@ -62,13 +66,24 @@ class EchoProvider extends LoudProvider {
   }
 }
 
-/** Reads a data source with a value it says is not known. */
-class VagueReader extends LoudProvider {
+/** Reads a data source whose schema holds the content it reads, and returns what it is told to. */
+class DataReader extends LoudProvider {
   override readonly resources: string[] = [];
   override readonly dataSources = ['vague'];
 
+  constructor(
+    private returned: Record<string, unknown>,
+    private schema: Schema = { content: { type: 'string', computed: true } }
+  ) {
+    super();
+  }
+
+  override async getDataSourceSchema(): Promise<Schema> {
+    return this.schema;
+  }
+
   override async readDataSource(): Promise<Record<string, unknown>> {
-    return { content: UNKNOWN };
+    return this.returned;
   }
 }
 
@@ -259,19 +274,40 @@ describe('what a refresh reads, held to what a resource can hold', () => {
 });
 
 describe('what a data source reads', () => {
-  it('refuses a value not known, at the data block', async () => {
-    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-data-result-'));
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new VagueReader());
+  let dir: string;
 
-    try {
-      await expect(engine.plan('\ndata "vague" "v" {}')).rejects.toMatchObject({
-        message: 'vague read what the data source cannot hold, which is a bug in the provider:\n  content is not known; a read returns every value',
-        position: { file: 'main.clay', line: 2, column: 1 },
-      });
-    } finally {
-      await fs.rm(dir, { recursive: true, force: true });
-    }
+  const plan = (reader: DataReader) => {
+    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
+    engine.registerProvider(reader);
+    return engine.plan('\ndata "vague" "v" {}');
+  };
+
+  beforeEach(async () => {
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-data-result-'));
+  });
+
+  afterEach(async () => {
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it.each([
+    ['a value not known', { content: UNKNOWN }, 'content is not known; a read returns every value'],
+    ['a name its schema does not have', { content: 'x', size: 'big' }, 'size = "big", which the schema does not have'],
+  ])('refuses %s, at the data block', async (_, returned, line) => {
+    await expect(plan(new DataReader(returned))).rejects.toMatchObject({
+      message: `vague read what the data source cannot hold, which is a bug in the provider:\n  ${line}`,
+      position: { file: 'main.clay', line: 2, column: 1 },
+    });
+  });
+
+  it('refuses a schema that says when to remake it, at the data block, before it is read', async () => {
+    const reader = new DataReader({ content: UNKNOWN }, { content: { type: 'string', computed: true, forceNew: true } });
+
+    await expect(plan(reader)).rejects.toMatchObject({
+      message: 'data source vague marks content forceNew, but only a resource can be forceNew, which is a bug in the provider',
+      position: { file: 'main.clay', line: 2, column: 1 },
+      block: 'data "vague" "v"',
+    });
   });
 });
 

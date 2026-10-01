@@ -33,6 +33,10 @@ class InheritedNameProvider implements Provider {
 
   async delete(): Promise<void> {}
 
+  async getDataSourceSchema(): Promise<Schema> {
+    return {};
+  }
+
   async validateDataSource(_type: string, _inputs: Record<string, unknown>): Promise<void> {}
 
   async read(_type: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {

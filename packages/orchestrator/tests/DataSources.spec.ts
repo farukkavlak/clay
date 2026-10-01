@@ -24,6 +24,12 @@ class MockDataProvider implements Provider {
 
   async validate(_type: string, _inputs: Record<string, unknown>): Promise<void> {}
 
+  async getDataSourceSchema(): Promise<Schema> {
+    const read = { type: 'string', computed: true } as const;
+
+    return { id: { type: 'string', required: true }, username: read, email: read, role: read, val: read, endpoint: read, port: { type: 'number', computed: true } };
+  }
+
   async validateDataSource(_type: string, _inputs: Record<string, unknown>): Promise<void> {}
 
   async create(_type: string, { config }: CreateRequest): Promise<Record<string, unknown>> {

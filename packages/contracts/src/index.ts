@@ -225,6 +225,9 @@ export interface Provider {
   /** The resource as it is now, found by what was last applied, or `null` when it is gone. */
   read(type: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null>;
 
+  /** A data source type's names, apart from a resource's, since one type may be both and take different names as each. */
+  getDataSourceSchema(type: string): Promise<Schema>;
+
   /** Throws when the inputs would not read a data source. */
   validateDataSource(type: string, inputs: Record<string, unknown>): Promise<void>;
 
@@ -258,6 +261,8 @@ export interface ResourceHandler {
 
 /** One data source type's side of a provider. */
 export interface DataSourceHandler {
+  getSchema(): Promise<Schema>;
+
   validate(inputs: Record<string, unknown>): Promise<void>;
 
   read(inputs: Record<string, unknown>): Promise<Record<string, unknown>>;

@@ -4,7 +4,7 @@ import { AttributeValue, ResourceBlock, spell, spellReference, Statement } from 
 import { DesiredResource, hasChanges } from '@clay/planner';
 import { moveResource } from '@clay/state';
 
-import { SchemaMismatch } from '../checkValues';
+import { writtenAt } from '../checkValues';
 import { countFrom } from '../count';
 import { eachFrom } from '../forEach';
 import { Instances } from '../Instances';
@@ -129,8 +129,7 @@ export class DesiredStateBuilder {
     try {
       return await this.resourcePlanner.plan(block.resourceType, this.schemas.get(block.resourceType) ?? {}, current, attributes);
     } catch (error) {
-      const at = error instanceof SchemaMismatch && error.attribute !== undefined ? block.attributes[error.attribute].position : block.position;
-      throw withPlace(error, at, spell(block), address);
+      throw withPlace(error, writtenAt(error, block), spell(block), address);
     }
   }
 
