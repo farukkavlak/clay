@@ -81,6 +81,24 @@ describe('ResourcePlanner', () => {
     );
   });
 
+  describe('a value kept until the resource is replaced', () => {
+    const keeping: Schema = { ...schema, serial: { type: 'string', computed: true, kept: true } };
+    const held: Resource = { ...current, attributes: { ...current.attributes, serial: 's' } };
+    const remaking = (request: PlanRequest) => ({ after: { ...planFromSchema(keeping, request).after, serial: UNKNOWN }, replace: [] });
+
+    it('refuses a provider that plans it as not known on a change in place', async () => {
+      await expect(plannerFor(fakeProvider(remaking)).plan('thing', keeping, held, { path: 'a', tags: { x: '2' } })).rejects.toThrow(
+        'thing planned serial as known after apply on a change in place, though it keeps it until it is replaced, which is a bug in the provider'
+      );
+    });
+
+    it('takes it as not known on a replacement, which makes it again', async () => {
+      const provider = fakeProvider((request) => ({ ...remaking(request), replace: [['path']] }));
+
+      expect(await plannerFor(provider).plan('thing', keeping, held, { path: 'b', tags: { x: '1' } })).toMatchObject({ after: { serial: UNKNOWN }, replace: true });
+    });
+  });
+
   it('checks the values with the provider before it asks for a plan', async () => {
     const provider = fakeProvider();
     provider.validate.mockRejectedValue(new Error('path is wrong'));

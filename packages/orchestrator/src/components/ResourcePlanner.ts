@@ -34,6 +34,19 @@ function checkPlanned(type: string, schema: Schema, config: Record<string, unkno
       throw new Error(`${type} planned ${name}, which the configuration does not set and ${type} does not compute`);
 }
 
+/** A kept value stays as it was made until the resource is replaced, so a change in place has it already. */
+function checkKept(type: string, schema: Schema, prior: Record<string, unknown>, after: Record<string, unknown>): void {
+  for (const name of Object.keys(schema)) {
+    if (!schema[name].kept || !containsUnknown(own(after, name))) continue;
+
+    if (!Object.hasOwn(prior, name))
+      throw new Error(
+        `the state holds no ${name}, which ${type} keeps until the resource is replaced. Restore the state from its backup, or remove the resource with clay state rm`
+      );
+    throw new Error(`${type} planned ${name} as known after apply on a change in place, though it keeps it until it is replaced, which is a bug in the provider`);
+  }
+}
+
 /** Asks a resource's provider what it will hold once applied, and holds the answer to what the configuration sets. */
 export class ResourcePlanner {
   constructor(private providers: ProviderRegistry) {}
@@ -45,7 +58,10 @@ export class ResourcePlanner {
     if (!current) return this.create(provider, type, schema, config);
 
     const change = await this.ask(provider, type, schema, { prior: current.attributes, proposed: proposed(current.attributes, config, schema), config });
-    if (!replaces(change.replace, current.attributes, change.after)) return { after: change.after, replace: false };
+    if (!replaces(change.replace, current.attributes, change.after)) {
+      checkKept(type, schema, current.attributes, change.after);
+      return { after: change.after, replace: false };
+    }
 
     // What the old resource holds goes with it, so the new one is planned as if made from nothing.
     return { ...(await this.create(provider, type, schema, config)), replace: true };
