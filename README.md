@@ -91,7 +91,7 @@ relative to the root, so `"${path.module}/index.html"` names a file next to the 
 | Command                  | Does                                                                                   |
 | ------------------------ | -------------------------------------------------------------------------------------- |
 | `clay init`              | Creates an empty state file, or says so if one is already there                        |
-| `clay validate`          | Parses, resolves references and has the provider check the values; reads no state file |
+| `clay validate`          | Resolves references and checks values with the schema and the provider; reads no state |
 | `clay plan [--out file]` | Shows what `apply` would do; `--out` saves the plan with its configuration             |
 | `clay apply [plan] [-y]` | Runs the plan it shows, or a saved one; `-y` skips the question                        |
 | `clay output [--json]`   | Prints the root outputs from the last apply                                            |
@@ -121,6 +121,10 @@ Each has an `id` the provider makes and keeps until the resource is replaced: th
 full path, the string, or a random UUID. Only the provider makes `id`, `result` and
 `stdout`, so setting one in the configuration is refused.
 
+Each resource is held to its schema. A name the schema does not have, a required one
+left out, or a value of another type is refused where it is written. No value is
+converted: a number given where a string is wanted is refused, not turned into text.
+
 A data source reads something that already exists. `data "local_file" "f" { path = "x" }`
 reads a file, and `data.local_file.f.content` is what it holds. A read that returns a
 value not known stops the run as a bug in the provider.
@@ -132,19 +136,20 @@ value not known stops the run as a bug in the provider.
    it. `plan` and `apply` take `--refresh=false` to skip this and plan against the state
    alone. An apply writes what was read, even when nothing else changes. A saved plan is
    applied as it was made, so `apply <plan>` reads nothing and refuses the flag. A read
-   that returns a value not known, or a name neither the schema nor the resource has,
-   stops the run as a bug in the provider.
+   that returns a value not known, or a name the schema does not have, stops the run as
+   a bug in the provider.
 2. The parser turns `main.clay` and every module it names into a tree, with the file,
    line and column on every node.
 3. The graph builder links each resource, variable and output to what it reads, and
    sorts them so nothing runs before what it needs. A cycle or a reference to nothing
    stops here.
-4. Each value is resolved in that order, and the provider checks it and plans what the
-   resource will hold: a value it computes is known after apply once anything changes,
-   unless it can work it out sooner, as `local_file` does its id from an absolute path.
-   It also says which changes replace the resource. A plan that changes a value the
-   configuration sets is refused. The planner compares each plan with the state and lists
-   the actions: create, update, replace, delete, or nothing.
+4. Each value is resolved in that order and held to the type its schema names. The
+   provider checks it and plans what the resource will hold: a value it computes is
+   known after apply once anything changes, unless it can work it out sooner, as
+   `local_file` does its id from an absolute path. It also says which changes replace
+   the resource. A plan that changes a value the configuration sets is refused. The
+   planner compares each plan with the state and lists the actions: create, update,
+   replace, delete, or nothing.
 5. `apply` runs the actions in order, deletes in reverse order, and writes the state
    after each one, so a failure leaves everything before it on disk. Before each
    create, update or replace, the provider plans it again with what is known by then.

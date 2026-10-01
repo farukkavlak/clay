@@ -1,4 +1,4 @@
-import { CreateRequest, emptyState, planFromSchema, PlanRequest, UNKNOWN, UpdateRequest } from '@clay/contracts';
+import { CreateRequest, emptyState, planFromSchema, PlanRequest, Schema, UNKNOWN, UpdateRequest } from '@clay/contracts';
 import { plan } from '@clay/planner';
 import fsPromises from 'node:fs/promises';
 import os from 'node:os';
@@ -36,6 +36,8 @@ vi.mock('@clay/planner', async () => ({
   plan: vi.fn(() => []),
 }));
 
+const schema: Schema = { ami: { type: 'string' } };
+
 describe('Orchestrator - Phase 5: Scoped Data Sources', () => {
   let tmpDir: string;
   let files: Record<string, string>;
@@ -68,8 +70,8 @@ describe('Orchestrator - Phase 5: Scoped Data Sources', () => {
       readDataSource: vi.fn().mockResolvedValue({ id: 'ami-12345', name: 'Ubuntu 20.04' }),
       update: vi.fn(async (_type: string, { config }: UpdateRequest) => config),
       delete: vi.fn(),
-      getSchema: vi.fn().mockReturnValue({}),
-      plan: vi.fn(async (_type: string, request: PlanRequest) => planFromSchema({}, request)),
+      getSchema: vi.fn().mockReturnValue(schema),
+      plan: vi.fn(async (_type: string, request: PlanRequest) => planFromSchema(schema, request)),
     };
 
     const { StateManager, LocalBackend } = await import('@clay/state');

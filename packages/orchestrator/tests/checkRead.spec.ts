@@ -8,31 +8,24 @@ const bug = 'echo read what the resource cannot hold, which is a bug in the prov
 
 describe('what a provider read back', () => {
   it('takes what the schema has', () => {
-    expect(() => checkRead('echo', schema, { label: 'a' }, { label: 'b', made: 'm' })).not.toThrow();
+    expect(() => checkRead('echo', schema, { label: 'b', made: 'm' })).not.toThrow();
   });
 
-  // Nothing checks a configuration against the schema yet, so state may hold a name the configuration set.
-  it('takes a name the schema does not have and the resource already held', () => {
-    expect(() => checkRead('echo', schema, { label: 'a', bogus: '1' }, { label: 'a', bogus: '1' })).not.toThrow();
-  });
-
-  it('refuses a name neither the schema nor the resource has', () => {
-    expect(() => checkRead('echo', schema, { label: 'a' }, { label: 'a', volume: 'high' })).toThrow(`${bug}\n  volume = "high", which neither the schema nor the resource has`);
+  it('refuses a name the schema does not have', () => {
+    expect(() => checkRead('echo', schema, { label: 'a', volume: 'high' })).toThrow(`${bug}\n  volume = "high", which the schema does not have`);
   });
 
   it('refuses a value not known, where it is', () => {
-    expect(() => checkRead('echo', schema, { label: 'a' }, { label: 'a', made: { at: [UNKNOWN] } })).toThrow(`${bug}\n  made["at"][0] is not known; a read returns every value`);
+    expect(() => checkRead('echo', schema, { label: 'a', made: { at: [UNKNOWN] } })).toThrow(`${bug}\n  made["at"][0] is not known; a read returns every value`);
   });
 
   // Every object answers to `constructor`, so the schema has to hold the name itself to have it.
   it('refuses a name the schema does not have, whatever its name', () => {
-    expect(() => checkRead('echo', schema, {}, { constructor: 'x' })).toThrow(`${bug}\n  constructor = "x", which neither the schema nor the resource has`);
+    expect(() => checkRead('echo', schema, { constructor: 'x' })).toThrow(`${bug}\n  constructor = "x", which the schema does not have`);
   });
 
   it('names every value it cannot hold', () => {
-    expect(() => checkRead('echo', schema, {}, { a: '1', b: UNKNOWN })).toThrow(
-      `${bug}\n  a = "1", which neither the schema nor the resource has\n  b is not known; a read returns every value`
-    );
+    expect(() => checkRead('echo', schema, { a: '1', b: UNKNOWN })).toThrow(`${bug}\n  a = "1", which the schema does not have\n  b is not known; a read returns every value`);
   });
 });
 

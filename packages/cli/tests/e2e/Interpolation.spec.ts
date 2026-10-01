@@ -38,24 +38,24 @@ describe('a string with an interpolation', () => {
       variable "n" { default = 8 }
       variable "tags" { default = ["a", "b"] }
       resource "random_string" "s" { length = "\${var.n}" }
-      resource "null_resource" "t" { tags = "\${var.tags}" }
+      resource "null_resource" "t" { triggers = { tags = "\${var.tags}" } }
     `;
 
     const resources = await applied(config);
 
     expect(resources['random_string.s'].attributes.length).toEqual(ExactNumber.parse('8'));
-    expect(resources['null_resource.t'].attributes.tags).toEqual(['a', 'b']);
+    expect(resources['null_resource.t'].attributes.triggers).toEqual({ tags: ['a', 'b'] });
   });
 
   it('passes a map from state through whole, keys named type and value included', async () => {
     const config = `
-      resource "null_resource" "a" { settings = { type = "a", value = "b" } }
-      resource "null_resource" "b" { copied = "\${null_resource.a.settings}" }
+      resource "null_resource" "a" { triggers = { type = "a", value = "b" } }
+      resource "null_resource" "b" { triggers = "\${null_resource.a.triggers}" }
     `;
 
     const resources = await applied(config);
 
-    expect(resources['null_resource.b'].attributes.copied).toEqual({ type: 'a', value: 'b' });
+    expect(resources['null_resource.b'].attributes.triggers).toEqual({ type: 'a', value: 'b' });
   });
 
   it('is text when there is text around the interpolation', async () => {
@@ -80,7 +80,7 @@ describe('a string with an interpolation', () => {
 
   // The same list, read from five places: each error has to name the block that reads it and point at the reference.
   it.each([
-    ['a resource', 'resource "null_resource" "t" { label = "tags: ${var.tags}" }', 'resource "null_resource" "t"', 49],
+    ['a resource', 'resource "null_resource" "t" { triggers = { label = "tags: ${var.tags}" } }', 'resource "null_resource" "t"', 62],
     ['a variable default', 'variable "v" { default = "tags: ${var.tags}" }', 'variable "v"', 35],
     ['an output', 'output "o" { value = "tags: ${var.tags}" }', 'output "o"', 31],
     ['a module input', 'module "m" { source = "./m" text = "tags: ${var.tags}" }', 'module "m"', 45],
@@ -102,8 +102,8 @@ describe('a string with an interpolation', () => {
 
   // A string may hold many references; an error about one has to point at that one, not at the string.
   it.each([
-    ['one that is not declared', 'resource "null_resource" "t" { label = "a ${var.tags} b ${var.nope}" }', 'variable "nope" is not defined', 59],
-    ['one that reads a key a list does not have', 'resource "null_resource" "t" { label = "a ${var.tags.x}" }', 'var.tags is a list and has no key "x"', 45],
+    ['one that is not declared', 'resource "null_resource" "t" { triggers = { label = "a ${var.tags} b ${var.nope}" } }', 'variable "nope" is not defined', 72],
+    ['one that reads a key a list does not have', 'resource "null_resource" "t" { triggers = { label = "a ${var.tags.x}" } }', 'var.tags is a list and has no key "x"', 58],
   ])('points at the reference in a string for %s', async (_, block, message, column) => {
     const planned = newOrchestrator().plan(`variable "tags" { default = ["a", "b"] }\n${block}`);
 

@@ -111,20 +111,13 @@ describe('apply and plan against real files', () => {
   });
 
   it('plans, instead of failing, when a reference reads an attribute the state does not have yet', async () => {
-    const withMode = `
-      resource "local_file" "a" {
-        path = "${path.join(dir, 'a.txt')}"
-        content = "hello"
-        mode = "0644"
-      }
-      resource "local_file" "b" {
-        path = "${path.join(dir, 'b.txt')}"
-        content = "\${local_file.a.mode}"
-      }
+    const withTriggers = `
+      resource "null_resource" "a" { triggers = { v = "1" } }
+      resource "null_resource" "b" { triggers = null_resource.a.triggers }
     `;
-    await apply(orchestrator, fileConfig('hello'));
+    await apply(orchestrator, 'resource "null_resource" "a" {}');
 
-    const actions = await changes(withMode);
+    const actions = await changes(withTriggers);
 
     expect(actions.map((action) => action.type)).toEqual(['UPDATE', 'CREATE']);
   });
@@ -438,17 +431,17 @@ describe('apply and plan against real files', () => {
   });
 
   it('drops an attribute from state when the config drops it', async () => {
-    const withMode = fileConfig('hello').replace('content = "hello"', 'content = "hello"\n      mode = "0644"');
-    await apply(orchestrator, withMode);
+    const bare = 'resource "null_resource" "a" {}';
+    await apply(orchestrator, 'resource "null_resource" "a" { triggers = { v = "1" } }');
 
-    const actions = await changes(fileConfig('hello'));
-    expect(actions[0].changes).toEqual({ mode: { old: '0644', new: undefined } });
+    const actions = await changes(bare);
+    expect(actions[0].changes).toEqual({ triggers: { old: { v: '1' }, new: undefined } });
 
-    await apply(newOrchestrator(), fileConfig('hello'));
+    await apply(newOrchestrator(), bare);
 
     const state = await new LocalBackend(dir).read();
-    expect(state.resources['local_file.a'].attributes).not.toHaveProperty('mode');
-    expect(await changes(fileConfig('hello'))).toEqual([]);
+    expect(state.resources['null_resource.a'].attributes).not.toHaveProperty('triggers');
+    expect(await changes(bare)).toEqual([]);
   });
 
   const destroyedNames = async (config: string) => {

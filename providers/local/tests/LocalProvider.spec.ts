@@ -475,7 +475,7 @@ describe('LocalProvider', () => {
     it('should return schema for null_resource', async () => {
       expect(await provider.getSchema('null_resource')).toEqual({
         id: { type: 'string', computed: true, kept: true },
-        triggers: { type: 'map', elemType: 'string', required: false },
+        triggers: { type: 'map', required: false },
       });
     });
 

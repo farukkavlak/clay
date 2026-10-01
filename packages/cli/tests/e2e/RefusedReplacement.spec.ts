@@ -38,7 +38,7 @@ describe('a replacement its provider refuses at apply', () => {
           content = random_string.n.length
         }
       `)
-    ).rejects.toThrow('local_file requires "content" attribute (string)');
+    ).rejects.toThrow('content is a number, where local_file takes a string');
 
     expect(await fs.readFile(file, 'utf8')).toBe('hi');
     const state = await new LocalBackend(dir).read();

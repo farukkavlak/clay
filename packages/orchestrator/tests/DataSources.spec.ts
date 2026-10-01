@@ -15,7 +15,7 @@ class MockDataProvider implements Provider {
   data = new Map<string, Record<string, unknown>>();
 
   async getSchema(_type: string): Promise<Schema> {
-    return {};
+    return { contact: { type: 'string' }, owner: { type: 'string' }, url: { type: 'string' }, val: { type: 'string' } };
   }
 
   async plan(type: string, request: PlanRequest): Promise<PlannedChange> {

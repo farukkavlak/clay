@@ -246,7 +246,7 @@ describe('what a refresh reads, held to what a resource can hold', () => {
   });
 
   it.each([
-    ['a name the provider made up', { volume: 'high' }, 'volume = "high", which neither the schema nor the resource has'],
+    ['a name the provider made up', { volume: 'high' }, 'volume = "high", which the schema does not have'],
     ['a value not known', { label: UNKNOWN }, 'label is not known; a read returns every value'],
   ])('refuses %s, at the resource', async (_, extra, line) => {
     const config = 'resource "echo" "a" { label = "a" }';
@@ -255,15 +255,6 @@ describe('what a refresh reads, held to what a resource can hold', () => {
     await expect(newOrchestrator(new EchoProvider(extra)).plan(config)).rejects.toThrow(
       `echo.a: echo read what the resource cannot hold, which is a bug in the provider:\n  ${line}`
     );
-  });
-
-  it('plans nothing for a name the configuration set that the schema does not have', async () => {
-    const config = 'resource "echo" "a" {\n  label = "a"\n  bogus = "1"\n}';
-    await apply(config);
-
-    const { actions } = await newOrchestrator(new EchoProvider()).plan(config);
-
-    expect(actions.map(({ type }) => type)).toEqual(['NO_OP']);
   });
 });
 

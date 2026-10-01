@@ -16,7 +16,7 @@ import { Instances } from './Instances';
 import { ModuleInstances } from './ModuleInstances';
 import { Planned } from './Planned';
 import { withPlace } from './place';
-import { refuseComputedSet } from './refuseComputedSet';
+import { checkAttributes } from './checkAttributes';
 import { ConfigFiles } from './ConfigFiles';
 import { ProviderRegistry } from './ProviderRegistry';
 import { ReferenceResolver } from './resolvers/ReferenceResolver';
@@ -127,7 +127,7 @@ export class Orchestrator {
     try {
       const provider = this.providers.get(resource.resourceType);
       const read = await provider.read(resource.resourceType, resource.attributes);
-      if (read !== null) checkRead(resource.resourceType, await this.providers.schema(resource.resourceType), resource.attributes, read);
+      if (read !== null) checkRead(resource.resourceType, await this.providers.schema(resource.resourceType), read);
 
       return read;
     } catch (error) {
@@ -140,7 +140,7 @@ export class Orchestrator {
 
     const graph = this.graphBuilder.buildExecutionGraph(loadedResources, loadedModules);
     const schemas = await this.schemasOf(loadedResources);
-    refuseComputedSet(loadedResources, schemas);
+    checkAttributes(loadedResources, schemas);
     const { resources: desiredResources, outputs } = await this.desiredStateBuilder.build(loadedResources, graph, state, schemas);
 
     return { desiredResources, outputs };

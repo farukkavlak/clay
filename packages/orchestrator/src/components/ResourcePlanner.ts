@@ -1,6 +1,7 @@
 import { AttributePath, containsUnknown, own, PlannedChange, PlanRequest, Provider, Resource, Schema, valueAt } from '@clay/contracts';
 import { isDeepStrictEqual } from 'node:util';
 
+import { checkValues } from '../checkValues';
 import { ProviderRegistry } from '../ProviderRegistry';
 import { shown } from '../shown';
 
@@ -51,9 +52,10 @@ function checkKept(type: string, schema: Schema, prior: Record<string, unknown>,
 export class ResourcePlanner {
   constructor(private providers: ProviderRegistry) {}
 
-  /** The provider checks the values first, since a plan of values it would refuse means nothing. A value not known yet is checked once the apply knows it. */
+  /** The values are checked first, since a plan of values the provider would refuse means nothing. A value not known yet is checked once the apply knows it. */
   async plan(type: string, schema: Schema, current: Resource | undefined, config: Record<string, unknown>): Promise<ResourcePlan> {
     const provider = this.providers.get(type);
+    checkValues(type, schema, config);
     if (!Object.values(config).some((value) => containsUnknown(value))) await provider.validate(type, config);
     if (!current) return this.create(provider, type, schema, config);
 

@@ -5,7 +5,8 @@ export class NullResource implements ResourceHandler {
   async getSchema(): Promise<Schema> {
     return {
       id: { type: 'string', computed: true, kept: true },
-      triggers: { type: 'map', elemType: 'string', required: false },
+      // A trigger is any value whose change matters, and Clay turns no number or bool into a string.
+      triggers: { type: 'map', required: false },
     };
   }
 
