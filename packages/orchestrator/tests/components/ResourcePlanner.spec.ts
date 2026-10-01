@@ -108,12 +108,12 @@ describe('ResourcePlanner', () => {
     expect(provider.plan).not.toHaveBeenCalled();
   });
 
-  it('plans a value not known yet without checking it', async () => {
+  it('asks the provider to check a value not known yet, as it is', async () => {
     const provider = fakeProvider();
 
     await plannerFor(provider).plan('thing', schema, undefined, { path: 'a', tags: { x: UNKNOWN } });
 
-    expect(provider.validate).not.toHaveBeenCalled();
+    expect(provider.validate).toHaveBeenCalledWith('thing', { path: 'a', tags: { x: UNKNOWN } });
     expect(provider.plan).toHaveBeenCalled();
   });
 });

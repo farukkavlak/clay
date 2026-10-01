@@ -354,6 +354,10 @@ describe('LocalProvider', () => {
       await expect(provider.validate('random_string', { length: ExactNumber.parse('-5') })).rejects.toThrow();
     });
 
+    it('takes a length that is not known yet, which the apply checks once it is', async () => {
+      await expect(provider.validate('random_string', { length: UNKNOWN })).resolves.toBeUndefined();
+    });
+
     // A number reaches a provider exactly, and a length is refused rather than rounded or cut to fit.
     it.each([
       ['a length that is not whole', ExactNumber.parse('1.5'), 'random_string "length": 1.5 is not a whole number'],

@@ -1,4 +1,4 @@
-import { CreateRequest, ExactNumber, PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema, UpdateRequest } from '@clay/contracts';
+import { CreateRequest, ExactNumber, isUnknown, PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema, UpdateRequest } from '@clay/contracts';
 import crypto from 'node:crypto';
 
 const LENGTH_REQUIRED = 'random_string requires "length" attribute (number > 0)';
@@ -25,7 +25,7 @@ export class RandomStringResource implements ResourceHandler {
   }
 
   async validate(inputs: Record<string, unknown>): Promise<void> {
-    lengthOf(inputs);
+    if (!isUnknown(inputs.length)) lengthOf(inputs);
   }
 
   async plan(request: PlanRequest): Promise<PlannedChange> {

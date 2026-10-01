@@ -52,11 +52,11 @@ function checkKept(type: string, schema: Schema, prior: Record<string, unknown>,
 export class ResourcePlanner {
   constructor(private providers: ProviderRegistry) {}
 
-  /** The values are checked first, since a plan of values the provider would refuse means nothing. A value not known yet is checked once the apply knows it. */
+  /** The values are checked first, since a plan of values the provider would refuse means nothing. A value not known yet is checked again once the apply knows it. */
   async plan(type: string, schema: Schema, current: Resource | undefined, config: Record<string, unknown>): Promise<ResourcePlan> {
     const provider = this.providers.get(type);
     checkValues(type, schema, config);
-    if (!Object.values(config).some((value) => containsUnknown(value))) await provider.validate(type, config);
+    await provider.validate(type, config);
     if (!current) return this.create(provider, type, schema, config);
 
     const change = await this.ask(provider, type, schema, { prior: current.attributes, proposed: proposed(current.attributes, config, schema), config });

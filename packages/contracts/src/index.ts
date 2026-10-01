@@ -216,7 +216,7 @@ export interface Provider {
 
   getSchema(type: string): Promise<Schema>;
 
-  /** Throws when the inputs would not make a valid resource. */
+  /** Throws when the inputs would not make a valid resource. An input may be UNKNOWN until the apply, and is checked then. */
   validate(type: string, inputs: Record<string, unknown>): Promise<void>;
 
   /** What the resource will hold once applied. `planFromSchema` plans from the schema alone. */

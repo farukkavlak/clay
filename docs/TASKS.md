@@ -191,9 +191,9 @@ length below 1.
 - [x] A data source has a schema too, apart from a resource of the same type. Its block is
       checked as a resource's is, before it is read; what it reads is held to the names
       the schema has, and a schema that marks a value `forceNew` or `kept` is refused
-- [ ] A resource with a value that is not known yet has its known values checked. Today
-      `plan` skips the whole resource, because a provider's `validate` would report a
-      missing required attribute; a schema check knows the attribute is there and unknown
+- [x] A resource with a value that is not known yet has its known values checked. The
+      provider's `validate` sees every value, UNKNOWN where only the apply makes one, and
+      checks what it knows; the apply checks the rest once it knows them
 - [ ] A number or a bool where the schema wants a string, and the reverse, is refused.
       Terraform converts between them; Clay decides between converting and a `tostring`
       function once a configuration needs it. `null_resource` takes any map as

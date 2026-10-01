@@ -1,4 +1,4 @@
-import { Address, isUnknown, UNKNOWN } from '@clay/contracts';
+import { Address, ExactNumber, isUnknown, UNKNOWN } from '@clay/contracts';
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
@@ -96,8 +96,8 @@ describe('a value known in part', () => {
     expect(outputs).toEqual({ whole: { a: resources['random_string.s'].attributes.id, b: 'fixed' }, known: 'fixed', later: `read ${resources['random_string.s'].attributes.id}` });
   });
 
-  // The provider checks what it can once the apply knows the rest.
-  it('leaves a value known in part for the provider to check at apply', async () => {
+  // The provider checks what it knows now, and the rest once the apply knows it.
+  it('gives the provider a value known in part to check, as it is', async () => {
     const withTriggers = `
       resource "random_string" "s" { length = 4 }
       resource "null_resource" "n" {
@@ -112,7 +112,10 @@ describe('a value known in part', () => {
 
     await engine.plan(withTriggers);
 
-    expect(validate.mock.calls.map(([type]) => type)).toEqual(['random_string']);
+    expect(validate.mock.calls).toEqual([
+      ['random_string', { length: ExactNumber.parse('4') }],
+      ['null_resource', { triggers: { a: UNKNOWN, b: 'fixed' } }],
+    ]);
   });
 
   it('reads into what is not known yet as not known yet', async () => {

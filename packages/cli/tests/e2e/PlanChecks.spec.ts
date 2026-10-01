@@ -112,4 +112,19 @@ describe('what plan refuses before anything runs', () => {
 
     expect(plan.actions.map((action) => action.type)).toEqual(['CREATE', 'CREATE']);
   });
+
+  it('a value the provider will not take, beside one that is not known yet', async () => {
+    const config = `
+      resource "random_string" "pw" { length = 8 }
+      resource "local_file" "f" {
+        path = ""
+        content = "\${random_string.pw.id}"
+      }
+    `;
+
+    await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
+      message: 'local_file "path" must not be empty',
+      block: 'resource "local_file" "f"',
+    });
+  });
 });
