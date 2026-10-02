@@ -13,6 +13,7 @@ import { tryAt } from '../place';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { RunEvent } from '../RunEvent';
 import { ScopeManager } from '../scope/ScopeManager';
+import { plain } from '../SetValue';
 import { ActionExecutor } from './ActionExecutor';
 import { LoadedConfig } from './ConfigLoader';
 import { GraphNode, ValueNode } from './DependencyGraphBuilder';
@@ -189,7 +190,7 @@ export class PlanRunner {
     for (const stmt of program)
       if (stmt.type === 'Output') {
         const resolved = this.resolver.resolveValue(stmt.value, state, context);
-        outputs[stmt.name] = resolved;
+        outputs[stmt.name] = plain(resolved);
         this.scopeManager.setOutput(scope, stmt.name, resolved);
       }
 

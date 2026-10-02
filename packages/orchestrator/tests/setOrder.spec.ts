@@ -1,7 +1,8 @@
 import { ExactNumber, Schema, UNKNOWN } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { setsOrdered } from '../src/setOrder';
+import { setsMarked, setsOrdered } from '../src/setOrder';
+import { SetValue } from '../src/SetValue';
 
 const n = (text: string) => ExactNumber.parse(text);
 
@@ -11,6 +12,7 @@ const schema: Schema = {
   ports: { type: 'list', elemType: 'number' },
   groups: { type: 'list', elemType: 'set' },
   byName: { type: 'map', elemType: 'set' },
+  nested: { type: 'set', elemType: 'set' },
   rule: { type: 'object', schema: { cidrs: { type: 'set', elemType: 'string' } } },
 };
 
@@ -66,5 +68,18 @@ describe('setsOrdered', () => {
 
   it('is not known while a member, or a value inside one, is not', () => {
     expect(setsOrdered(schema, { names: ['a', UNKNOWN], anything: [{ a: UNKNOWN }] })).toEqual({ names: UNKNOWN, anything: UNKNOWN });
+  });
+});
+
+describe('setsMarked', () => {
+  it('makes each set a SetValue, in the order setsOrdered holds it', () => {
+    expect(setsMarked(schema, { names: ['b', 'a', 'b'] })).toEqual({ names: new SetValue(['a', 'b']) });
+  });
+
+  // The inner sets are marked first, so the outer set compares SetValues; read as anything else, the same two would be two members.
+  it('holds two inner sets with the same members as one member', () => {
+    const nested = [[{ b: 'x', a: 'y' }], [{ a: 'y', b: 'x' }]];
+
+    expect(setsMarked(schema, { nested })).toEqual({ nested: new SetValue([new SetValue([{ a: 'y', b: 'x' }])]) });
   });
 });

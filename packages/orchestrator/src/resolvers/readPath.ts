@@ -1,12 +1,14 @@
 import { ExactNumber, isUnknown } from '@clay/contracts';
 import { ConfigError, Position, spellReference, Step } from '@clay/parser';
 
+import { SetValue } from '../SetValue';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 
 /** What a value is, in the words the language uses for it. */
 export function kindOf(value: unknown): string {
   if (isUnknown(value)) return 'value known only after apply';
   if (Array.isArray(value)) return 'list';
+  if (value instanceof SetValue) return 'set';
   if (value instanceof ExactNumber || typeof value === 'number') return 'number';
   if (value === null || value === undefined) return 'null';
   if (typeof value === 'object') return 'map';
@@ -23,6 +25,9 @@ function missing(value: unknown, step: Step): string | undefined {
     const items = (value as unknown[]).length;
     return step < items ? undefined : `has no item [${step}]: it holds ${items}`;
   }
+
+  // Its members are held sorted, so an index would read whichever sorts first, and another member would move it.
+  if (kind === 'set') return typeof step === 'string' ? `is a set and has no key ${JSON.stringify(step)}` : `is a set and has no item [${step}]: its members have no order`;
 
   if (kind === 'map') {
     if (typeof step === 'number') return `is a map and has no item [${step}]`;

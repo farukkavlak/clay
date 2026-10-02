@@ -2,6 +2,7 @@ import { ExactNumber, UNKNOWN } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { eachFrom } from '../src/forEach';
+import { SetValue } from '../src/SetValue';
 
 describe('the instances a for_each makes', () => {
   it('makes one for each key of a map, given its value', () => {
@@ -39,6 +40,18 @@ describe('the instances a for_each makes', () => {
     ]);
   });
 
+  it('makes one for each member of a set', () => {
+    expect([...eachFrom(new SetValue(['a', 'b']))]).toEqual([
+      ['a', 'a'],
+      ['b', 'b'],
+    ]);
+  });
+
+  // A set's members have no index, so the one that is not a string is named by what it is.
+  it('refuses a set that holds what is not a string, without an index', () => {
+    expect(() => eachFrom(new SetValue(['a', ExactNumber.parse('1')]))).toThrow('for_each is a set of strings, but it holds a number');
+  });
+
   it('takes an empty string as a key', () => {
     expect([...eachFrom([''])]).toEqual([['', '']]);
   });
@@ -51,9 +64,9 @@ describe('the instances a for_each makes', () => {
       ['a', UNKNOWN],
       'for_each must be known when planning: item [1] reads a value only an apply makes, and a list names its instances by its items',
     ],
-    ['a string', 'a', 'for_each is a map or a list of strings, not a string'],
-    ['a number', ExactNumber.parse('2'), 'for_each is a map or a list of strings, not a number'],
-    ['a bool', true, 'for_each is a map or a list of strings, not a bool'],
+    ['a string', 'a', 'for_each is a map, or a list or a set of strings, not a string'],
+    ['a number', ExactNumber.parse('2'), 'for_each is a map, or a list or a set of strings, not a number'],
+    ['a bool', true, 'for_each is a map, or a list or a set of strings, not a bool'],
     ['a list with a number in it', ['a', ExactNumber.parse('1')], 'for_each is a list of strings, but item [1] is a number'],
     ['a list with a list in it', [['a']], 'for_each is a list of strings, but item [0] is a list'],
     ['a list with a string twice', ['a', 'b', 'a'], 'for_each holds "a" twice; each instance needs a key of its own'],

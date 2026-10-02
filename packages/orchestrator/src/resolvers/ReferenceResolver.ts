@@ -1,4 +1,4 @@
-import { Address, ExactNumber, ModuleAddress, State, UNKNOWN } from '@clay/contracts';
+import { Address, ExactNumber, ModuleAddress, Schema, State, UNKNOWN } from '@clay/contracts';
 import { ConfigError, EachReference, ParsedReference, PathReference, parseReference, Position, ReferenceNode, spellReference, Step, TemplatePart } from '@clay/parser';
 
 import { Instances } from '../Instances';
@@ -6,6 +6,7 @@ import { Context, instanceKeyOf, ModuleCall, moduleOf, scopeOf } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
 import { Planned } from '../Planned';
 import { ScopeManager } from '../scope/ScopeManager';
+import { plain } from '../SetValue';
 import { DataSourceResolver } from './DataSourceResolver';
 import { COUNT_INDEX_OUTSIDE, eachOutside } from './instance';
 import { ModuleOutputResolver } from './ModuleOutputResolver';
@@ -32,7 +33,14 @@ export class ReferenceResolver {
   private moduleOutputs: ModuleOutputResolver;
   private resources: ResourceResolver;
 
-  constructor(scopeManager: ScopeManager, dataSources: Map<string, Record<string, unknown>>, instances: Instances, modules: ModuleInstances, planned: Planned) {
+  constructor(
+    scopeManager: ScopeManager,
+    dataSources: Map<string, Record<string, unknown>>,
+    schemas: Map<string, Schema>,
+    instances: Instances,
+    modules: ModuleInstances,
+    planned: Planned
+  ) {
     this.scopeManager = scopeManager;
     this.instances = instances;
     this.planned = planned;
@@ -40,7 +48,7 @@ export class ReferenceResolver {
     this.variables = new VariableResolver(scopeManager, this);
     this.dataSources = new DataSourceResolver(dataSources);
     this.moduleOutputs = new ModuleOutputResolver(scopeManager, modules);
-    this.resources = new ResourceResolver(instances, planned);
+    this.resources = new ResourceResolver(instances, planned, schemas);
   }
 
   private resolve(node: ReferenceNode, state: State, context?: Context): unknown {
@@ -82,9 +90,10 @@ export class ReferenceResolver {
     return this.scopeManager.getDirectory(scopeOf(moduleOf(where).withoutKeys()))!;
   }
 
+  /** A block's values, as a provider takes them. */
   resolveAttributes(attributes: Record<string, unknown>, state: State, context?: Context): Record<string, unknown> {
     const resolved: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(attributes)) resolved[key] = this.resolveValue(value, state, context);
+    for (const [key, value] of Object.entries(attributes)) resolved[key] = plain(this.resolveValue(value, state, context));
     return resolved;
   }
 
@@ -153,7 +162,8 @@ export class ReferenceResolver {
   private joined(reference: ReferenceNode, state: State, context?: Context): string {
     const resolved = this.resolve(reference, state, context);
     const kind = kindOf(resolved);
-    if (kind === 'list' || kind === 'map') throw new ConfigError(`${spellReference(reference.value)} is a ${kind} and cannot be joined into a string`, reference.position);
+    if (kind === 'list' || kind === 'set' || kind === 'map')
+      throw new ConfigError(`${spellReference(reference.value)} is a ${kind} and cannot be joined into a string`, reference.position);
 
     return String(resolved);
   }

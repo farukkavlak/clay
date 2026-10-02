@@ -1,5 +1,4 @@
 import { emptyState, Provider, Resource, Schema, State } from '@clay/contracts';
-import { spell } from '@clay/parser';
 import { DesiredResource, outputChanges, plan, Plan } from '@clay/planner';
 import { StateManager } from '@clay/state';
 
@@ -8,7 +7,7 @@ import { ActionExecutor } from './components/ActionExecutor';
 import { ConfigLoader } from './components/ConfigLoader';
 import { DependencyGraphBuilder } from './components/DependencyGraphBuilder';
 import { DesiredStateBuilder } from './components/DesiredStateBuilder';
-import { LoadedResource, ModuleLoader } from './components/ModuleLoader';
+import { ModuleLoader } from './components/ModuleLoader';
 import { PlanRunner } from './components/PlanRunner';
 import { ResourcePlanner } from './components/ResourcePlanner';
 import { checkRead } from './providerResult';
@@ -16,7 +15,6 @@ import { setsOrdered } from './setOrder';
 import { Instances } from './Instances';
 import { ModuleInstances } from './ModuleInstances';
 import { Planned } from './Planned';
-import { withPlace } from './place';
 import { checkAttributes } from './checkAttributes';
 import { ConfigFiles } from './ConfigFiles';
 import { ProviderRegistry } from './ProviderRegistry';
@@ -49,10 +47,11 @@ export class Orchestrator {
     const providers = new ProviderRegistry();
     const scopes = new ScopeManager();
     const dataSources = new Map<string, Record<string, unknown>>();
+    const schemas = new Map<string, Schema>();
     const instances = new Instances();
     const modules = new ModuleInstances();
     const planned = new Planned();
-    const resolver = new ReferenceResolver(scopes, dataSources, instances, modules, planned);
+    const resolver = new ReferenceResolver(scopes, dataSources, schemas, instances, modules, planned);
     const scanner = new ReferenceScanner(modules);
     const graphBuilder = new DependencyGraphBuilder(scanner, instances, modules);
     const resourcePlanner = new ResourcePlanner(providers);
@@ -60,7 +59,7 @@ export class Orchestrator {
     return new Orchestrator(
       stateManager,
       providers,
-      new ConfigLoader(new ModuleLoader(files, scopes), scopes, dataSources, resolver, providers, instances, modules, planned),
+      new ConfigLoader(new ModuleLoader(files, scopes), scopes, dataSources, schemas, resolver, providers, instances, modules, planned),
       graphBuilder,
       new DesiredStateBuilder(scopes, scanner, resolver, graphBuilder, instances, modules, planned, resourcePlanner),
       new PlanRunner(stateManager, new ActionExecutor(providers, resolver, resourcePlanner), scopes, resolver, instances, modules)
@@ -139,32 +138,12 @@ export class Orchestrator {
   }
 
   private async resolveAndCheck(configContent: string, state: State): Promise<{ desiredResources: DesiredResource[]; outputs: Record<string, unknown> }> {
-    const { loadedResources, loadedModules } = await this.loader.load(configContent, state);
+    const { loadedResources, loadedModules, schemas } = await this.loader.load(configContent, state);
 
     const graph = this.graphBuilder.buildExecutionGraph(loadedResources, loadedModules);
-    const schemas = await this.schemasOf(loadedResources);
     checkAttributes(loadedResources, schemas);
     const { resources: desiredResources, outputs } = await this.desiredStateBuilder.build(loadedResources, graph, state, schemas);
 
     return { desiredResources, outputs };
-  }
-
-  /** Read before the values are, since a provider is asked to plan with what it computed kept from state where the configuration does not set it. */
-  private async schemasOf(loaded: LoadedResource[]): Promise<Map<string, Schema>> {
-    // A Map because a resource type may be named `constructor`: an object would already hold a value there, and the real schema would be dropped.
-    const schemas = new Map<string, Schema>();
-
-    for (const { block, address } of loaded) {
-      const type = block.resourceType;
-      if (schemas.has(type)) continue;
-
-      try {
-        schemas.set(type, await this.providers.schema(type));
-      } catch (error) {
-        throw withPlace(error, block.position, spell(block), address);
-      }
-    }
-
-    return schemas;
   }
 }

@@ -10,7 +10,7 @@ import { UnresolvedReferenceError } from '../../src/resolvers/UnresolvedReferenc
 const ref = (spelled: string) => parseReference(spelled.split('.')) as ResourceReference;
 
 describe('ResourceResolver', () => {
-  const resolver = new ResourceResolver(new Instances(), new Planned());
+  const resolver = new ResourceResolver(new Instances(), new Planned(), new Map());
   const context = Address.root('resource', 'main');
 
   const mockState: State = {
@@ -61,7 +61,7 @@ describe('ResourceResolver', () => {
   describe('an instance the plan will create or change', () => {
     const planned = new Planned();
     planned.set('resource.test', { simple: 'new', later: UNKNOWN, made: UNKNOWN });
-    const planning = new ResourceResolver(new Instances(), planned);
+    const planning = new ResourceResolver(new Instances(), planned, new Map());
 
     it('reads what its configuration sets, not what state holds', () => {
       expect(planning.resolve(ref('resource.test.simple'), context, mockState).value).toBe('new');
