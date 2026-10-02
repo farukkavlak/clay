@@ -1,10 +1,11 @@
-import { Address, State } from '@clay/contracts';
+import { Address, Schema, State } from '@clay/contracts';
 import { Position, ResourceReference, spellReference, Step } from '@clay/parser';
 
 import { Instances } from '../Instances';
 import { blockKey, Context, moduleOf } from '../keys';
 import { placed } from '../place';
 import { Planned, PlannedInstance } from '../Planned';
+import { setsMarked } from '../setOrder';
 import { readInstance } from './instance';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 
@@ -19,11 +20,20 @@ function plannedAttribute(instance: PlannedInstance, type: string, name: string,
 export class ResourceResolver {
   constructor(
     private instances: Instances,
-    private planned: Planned
+    private planned: Planned,
+    private schemas: Map<string, Schema>
   ) {}
 
-  /** The attribute the reference reads, and the steps still to take into it. An instance the plan will create or change is read as the plan knows it. */
+  /** The attribute the reference reads, with each set in it a `SetValue`, and the steps still to take into it. */
   resolve(reference: ResourceReference, context: Context, state: State, position?: Position): { value: unknown; path: Step[] } {
+    const { value, attribute, path } = this.read(reference, context, state, position);
+    const values = setsMarked(this.schemas.get(reference.type) ?? {}, { [attribute]: value });
+
+    return { value: values[attribute], path };
+  }
+
+  /** An instance the plan will create or change is read as the plan knows it. */
+  private read(reference: ResourceReference, context: Context, state: State, position?: Position): { value: unknown; attribute: string; path: Step[] } {
     const module = moduleOf(context);
     const block = blockKey(new Address(module, reference.type, reference.name));
     const { key, attribute, path } = readInstance(reference, this.instances.repetitionOf(block), position);
@@ -33,10 +43,10 @@ export class ResourceResolver {
 
     const spelled = spellReference([reference.type, reference.name, ...(key === undefined ? [] : [key]), attribute]);
     const planned = this.planned.get(resourceKey);
-    if (planned) return { value: plannedAttribute(planned, reference.type, attribute, spelled, position), path };
+    if (planned) return { value: plannedAttribute(planned, reference.type, attribute, spelled, position), attribute, path };
     if (!resource) throw new UnresolvedReferenceError(`Invalid resource reference "${spelled}": Resource "${resourceKey}" not found in state`);
 
-    return { value: this.getResolvedAttribute(resource, attribute, spelled, position), path };
+    return { value: this.getResolvedAttribute(resource, attribute, spelled, position), attribute, path };
   }
 
   /** State holds all a resource has, so a name it does not hold never will be read. */

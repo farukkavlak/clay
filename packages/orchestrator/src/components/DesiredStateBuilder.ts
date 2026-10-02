@@ -17,6 +17,7 @@ import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { Reference, ReferenceScanner } from '../resolvers/ReferenceScanner';
 import { UnresolvedReferenceError } from '../resolvers/UnresolvedReferenceError';
 import { ScopeManager } from '../scope/ScopeManager';
+import { plain } from '../SetValue';
 import { DependencyGraphBuilder, GraphNode, ValueNode } from './DependencyGraphBuilder';
 import { LoadedResource } from './ModuleLoader';
 import { ResourcePlan, ResourcePlanner } from './ResourcePlanner';
@@ -190,15 +191,16 @@ export class DesiredStateBuilder {
     const value = this.resolveNode(node, instance, state);
     if (!isUnknown(value)) this.scopeManager.setOutput(instance.toString(), node.name, value);
 
-    if (instance.isRoot()) rootOutputs[node.name] = value;
+    if (instance.isRoot()) rootOutputs[node.name] = plain(value);
   }
 
-  /** Resolves config values the way the diff needs them; what an apply has to produce first stays UNKNOWN. */
+  /** Resolves config values the way the diff needs them, as a provider takes them; what an apply has to produce first stays UNKNOWN. */
   private resolveForPlan(block: ResourceBlock, state: State, context: Context): Record<string, unknown> {
     const resolved: Record<string, unknown> = {};
     const declaration = spell(block);
 
-    for (const [key, value] of Object.entries(block.attributes)) resolved[key] = tryAt(value.position, declaration, context, () => this.resolveOrUnknown(value, state, context));
+    for (const [key, value] of Object.entries(block.attributes))
+      resolved[key] = plain(tryAt(value.position, declaration, context, () => this.resolveOrUnknown(value, state, context)));
 
     return resolved;
   }

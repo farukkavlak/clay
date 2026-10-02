@@ -4,7 +4,7 @@ import { CONFIG_FILE, ConfigError, DataBlock, Lexer, Parser, spell, Statement } 
 import { checkNames } from '../checkAttributes';
 import { conformValues, writtenAt } from '../conformValues';
 import { checkDataSourceRead } from '../providerResult';
-import { setsOrdered } from '../setOrder';
+import { setsMarked } from '../setOrder';
 import { Instances } from '../Instances';
 import { ModuleInstances } from '../ModuleInstances';
 import { Planned } from '../Planned';
@@ -13,6 +13,7 @@ import { dataSourceKey, scopeOf } from '../keys';
 import { tryAt, withPlace } from '../place';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { ScopeManager } from '../scope/ScopeManager';
+import { plain } from '../SetValue';
 import { LoadedModule, LoadedResource, ModuleLoader } from './ModuleLoader';
 
 /** A configuration with its modules read, its variables declared and its data sources read. */
@@ -20,6 +21,8 @@ export interface LoadedConfig {
   mainProgram: Statement[];
   loadedResources: LoadedResource[];
   loadedModules: LoadedModule[];
+  /** Each resource type's schema, by type. */
+  schemas: Map<string, Schema>;
 }
 
 /** A data source type's provider, with the schema its blocks are held to. */
@@ -33,6 +36,8 @@ export class ConfigLoader {
     private moduleLoader: ModuleLoader,
     private scopeManager: ScopeManager,
     private dataSources: Map<string, Record<string, unknown>>,
+    // A Map because a resource type may be named `constructor`: an object would already hold a value there, and the real schema would be dropped.
+    private schemas: Map<string, Schema>,
     private resolver: ReferenceResolver,
     private providers: ProviderRegistry,
     private instances: Instances,
@@ -55,11 +60,28 @@ export class ConfigLoader {
     }
 
     this.declareCalls(loadedModules);
+    await this.loadSchemas(loadedResources);
 
     this.dataSources.clear();
     for (const mod of loadedModules) await this.readDataSources(mod.program, state, mod.address);
 
-    return { mainProgram, loadedResources, loadedModules };
+    return { mainProgram, loadedResources, loadedModules, schemas: this.schemas };
+  }
+
+  /** Read before any value is, since reading a resource's value needs to know which are sets, and a provider plans with what it computed kept from state. */
+  private async loadSchemas(loaded: LoadedResource[]): Promise<void> {
+    this.schemas.clear();
+
+    for (const { block, address } of loaded) {
+      const type = block.resourceType;
+      if (this.schemas.has(type)) continue;
+
+      try {
+        this.schemas.set(type, await this.providers.schema(type));
+      } catch (error) {
+        throw withPlace(error, block.position, spell(block), address);
+      }
+    }
   }
 
   private declareCalls(loadedModules: LoadedModule[]): void {
@@ -102,7 +124,7 @@ export class ConfigLoader {
       const read = await provider.readDataSource(stmt.dataSourceType, conformed);
       checkDataSourceRead(stmt.dataSourceType, schema, read);
 
-      return setsOrdered(schema, read);
+      return setsMarked(schema, read);
     } catch (error) {
       throw withPlace(error, writtenAt(error, stmt), spell(stmt), scopeAddress);
     }
@@ -123,7 +145,7 @@ export class ConfigLoader {
     const inputs: Record<string, unknown> = {};
 
     for (const [key, value] of Object.entries(stmt.attributes))
-      inputs[key] = tryAt(value.position, declaration, scopeAddress, () => this.resolver.resolveValue(value, state, scopeAddress));
+      inputs[key] = plain(tryAt(value.position, declaration, scopeAddress, () => this.resolver.resolveValue(value, state, scopeAddress)));
 
     return inputs;
   }

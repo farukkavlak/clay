@@ -101,6 +101,11 @@ hits each of these early.
       relative to the root, where `clay` runs, so a plan or a state reads the same on
       another machine
 - [ ] `path.cwd`, once Clay can run from a directory other than the root
+- [ ] `tolist`, `toset` and `length`, and a `for` expression. A set has no index, so
+      today no configuration can read one of its members. Terraform: `tolist(x)[0]`
+- [ ] A variable names its type: `variable "x" { type = set(string) }`. A module input
+      takes whatever it is given today, so a list passed where a set is meant keeps its
+      order and its duplicates
 - [x] A module `source` has a kind. Terraform reads a local path only when it starts with
       `./` or `../` and treats anything else as a registry address; Clay joins whatever it
       is onto the parent directory, so an absolute path is read as well
@@ -203,9 +208,12 @@ length below 1.
       configuration and from every provider answer is held in one order, with each member
       once, so every comparison sees the same members as the same value. One with a
       member not known yet is not known as a whole
-- [ ] A set member is refused by index: `pool.p.members[0]` reads whichever member sorts
-      first. The resolver does not see the schema today. Terraform: "Elements of a set
-      are not addressable"
+- [x] A set member is refused by index, since its members are held sorted and
+      `pool.p.members[0]` would read whichever sorts first. A set read from a resource
+      or a data source stays a set through variables, module inputs and outputs, so
+      `var.members[0]` and `module.m.out[0]` are refused too. Files and providers still
+      see a list in one order. Terraform: "Elements of a set are identified only by
+      their value"
 - [ ] The plan shows a set change as the members added and removed, `+ "c"`. Today it
       prints the whole set before and after, and the reader finds the difference
 
