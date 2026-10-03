@@ -13,6 +13,7 @@ import {
   own,
   readResources,
   Resource,
+  Schema,
   State,
   UNKNOWN,
   unknownPaths,
@@ -66,10 +67,12 @@ export interface Plan {
   prevRun: Record<string, Resource>;
   /** The same resources as their providers read them then, which the actions run against; one not found is left out. */
   prior: Record<string, Resource>;
+  /** The schema of each resource type the plan holds, so a saved plan says which value is a set without a provider. */
+  schemas: Record<string, Schema>;
 }
 
 /** Bumped when the shape below changes once a Clay is released, so a plan file from an older version is refused instead of misread. */
-export const PLAN_FILE_VERSION = '13.0';
+export const PLAN_FILE_VERSION = '14.0';
 
 export interface PlanFile extends Plan {
   version: string;
@@ -154,6 +157,7 @@ export function serializePlan(plan: Plan, configContent: string, modules: Record
     outputs: saveChanges(plan.outputs),
     prevRun: plan.prevRun,
     prior: plan.prior,
+    schemas: plan.schemas,
   };
 
   return JSON.stringify(file, undefined, 2);
@@ -216,9 +220,31 @@ function isAction(action: unknown): boolean {
   );
 }
 
+const SCHEMA_TYPES = new Set<unknown>(['string', 'number', 'boolean', 'list', 'set', 'map', 'object']);
+const FLAGS = ['required', 'forceNew', 'computed', 'optional', 'kept'] as const;
+
+/** A schema is checked whole, the schemas of objects inside it included. */
+function isSchema(schema: unknown): schema is Schema {
+  return (
+    isRecord(schema) &&
+    Object.values(schema).every(
+      (definition) =>
+        isRecord(definition) &&
+        SCHEMA_TYPES.has(definition.type) &&
+        FLAGS.every((flag) => definition[flag] === undefined || typeof definition[flag] === 'boolean') &&
+        (definition.elemType === undefined || SCHEMA_TYPES.has(definition.elemType)) &&
+        (definition.schema === undefined || isSchema(definition.schema))
+    )
+  );
+}
+
+function isSchemas(schemas: unknown): schemas is Record<string, Schema> {
+  return isRecord(schemas) && Object.values(schemas).every((schema) => isSchema(schema));
+}
+
 /** What a plan holds, apart from the file around it and the resources it carries, which are read as state's are. */
 function isPlan(plan: Partial<Plan>): plan is Plan {
-  return typeof plan.serial === 'number' && Array.isArray(plan.actions) && plan.actions.every((action) => isAction(action)) && isChanges(plan.outputs);
+  return typeof plan.serial === 'number' && Array.isArray(plan.actions) && plan.actions.every((action) => isAction(action)) && isChanges(plan.outputs) && isSchemas(plan.schemas);
 }
 
 export function validatePlanFile(planFile: unknown): planFile is PlanFile {
@@ -311,6 +337,13 @@ function readSavedAction(action: PlanAction): PlanAction {
   };
 }
 
+/** A plan that holds a resource without its type's schema could not show which of its values are sets. */
+function checkSchemasCover(plan: Plan, say: (problem: string) => never): void {
+  const types = [...plan.actions, ...Object.values(plan.prevRun), ...Object.values(plan.prior)].map((held) => held.resourceType);
+  const missing = types.find((type) => !Object.hasOwn(plan.schemas, type));
+  if (missing !== undefined) say(`it has no schema for ${missing}`);
+}
+
 /** `source` names the plan in the error, since the caller knows where it read from and this does not. */
 export function parsePlanFile(content: string, source: string): PlanFile {
   let parsed: unknown;
@@ -334,6 +367,7 @@ export function parsePlanFile(content: string, source: string): PlanFile {
   };
   readResources(parsed.prevRun, 'its prevRun resources', say);
   readResources(parsed.prior, 'its prior resources', say);
+  checkSchemasCover(parsed, say);
 
   return {
     ...parsed,

@@ -202,7 +202,9 @@ describe('Planner', () => {
     it('should serialize plan correctly', () => {
       const actions: PlanAction[] = [];
       const config = 'resource "test" {}';
-      const serialized = JSON.parse(serializePlan({ serial: 0, actions, outputs: {}, prevRun: {}, prior: {} }, config, { 'm/main.clay': 'output "x" { value = "y" }' }));
+      const serialized = JSON.parse(
+        serializePlan({ serial: 0, actions, outputs: {}, prevRun: {}, prior: {}, schemas: {} }, config, { 'm/main.clay': 'output "x" { value = "y" }' })
+      );
 
       expect(serialized.version).toBe(PLAN_FILE_VERSION);
       expect(serialized.actions).toEqual(actions);
@@ -222,6 +224,7 @@ describe('Planner', () => {
         outputs: {},
         prevRun: {},
         prior: {},
+        schemas: {},
       };
 
       expect(validatePlanFile(planFile)).toBe(true);
