@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 
 import { parsePlanFile, Plan, serializePlan } from '../src/index';
 
-const emptyPlan: Plan = { serial: 0, actions: [], outputs: {}, prevRun: {}, prior: {} };
+// Each resource type the tests hold, with nothing in it: these tests are about the file, not about what a schema says.
+const schemas = { null_resource: {}, x: {} };
+
+const emptyPlan: Plan = { serial: 0, actions: [], outputs: {}, prevRun: {}, prior: {}, schemas };
 
 const aPlanFile = (plan: Plan = emptyPlan) => serializePlan(plan, 'resource "a" "b" {}', { 'm/main.clay': '' });
 
@@ -26,6 +29,7 @@ describe('reading a plan file', () => {
       serial: 0,
       prevRun: {},
       prior: {},
+      schemas,
       actions: [
         {
           type: 'UPDATE',
@@ -52,6 +56,7 @@ describe('reading a plan file', () => {
       serial: 0,
       prevRun: {},
       prior: {},
+      schemas,
       actions: [
         {
           type: 'UPDATE',
@@ -78,6 +83,7 @@ describe('reading a plan file', () => {
       serial: 4,
       prevRun: {},
       prior: {},
+      schemas,
       actions: [
         {
           type: 'CREATE',
@@ -105,7 +111,7 @@ describe('reading a plan file', () => {
   // A value known in part keeps what is known, exactly, and says where the rest is.
   it('reads a value known in part back as it was written', () => {
     const tags = { env: UNKNOWN, list: ['a', UNKNOWN], size: ExactNumber.parse('12345678901234567890'), unknown: [['env']] };
-    const plan: Plan = { serial: 0, actions: [], outputs: { tags: { old: undefined, new: tags } }, prevRun: {}, prior: {} };
+    const plan: Plan = { serial: 0, actions: [], outputs: { tags: { old: undefined, new: tags } }, prevRun: {}, prior: {}, schemas };
 
     expect(parsePlanFile(aPlanFile(plan), 'tfplan.json').outputs.tags.new).toEqual(tags);
   });
@@ -127,7 +133,7 @@ describe('reading a plan file', () => {
   });
 
   it('keeps a change whose name every object has, rather than setting a prototype', () => {
-    const plan: Plan = { serial: 0, actions: [], outputs: JSON.parse('{"__proto__": {"old": "a", "new": "b"}}'), prevRun: {}, prior: {} };
+    const plan: Plan = { serial: 0, actions: [], outputs: JSON.parse('{"__proto__": {"old": "a", "new": "b"}}'), prevRun: {}, prior: {}, schemas };
 
     const outputs = parsePlanFile(aPlanFile(plan), 'tfplan.json').outputs;
 
@@ -148,6 +154,7 @@ describe('reading a plan file', () => {
       serial: 0,
       prevRun: {},
       prior: {},
+      schemas,
       actions: [
         { type: 'DELETE', resourceType: 'null_resource', name: 'a', key: 0 },
         { type: 'DELETE', resourceType: 'null_resource', name: 'a', key: 'x.y' },
@@ -163,7 +170,7 @@ describe('reading a plan file', () => {
 
   it('reads the module keys of actions back as they were written', () => {
     const modulePath = [{ name: 'm', key: 0 }, { name: 'n', key: 'x.y' }, { name: 'o' }];
-    const plan: Plan = { serial: 0, actions: [{ type: 'DELETE', resourceType: 'null_resource', name: 'a', modulePath }], outputs: {}, prevRun: {}, prior: {} };
+    const plan: Plan = { serial: 0, actions: [{ type: 'DELETE', resourceType: 'null_resource', name: 'a', modulePath }], outputs: {}, prevRun: {}, prior: {}, schemas };
 
     expect(parsePlanFile(aPlanFile(plan), 'tfplan.json').actions[0].modulePath).toEqual(modulePath);
   });
@@ -213,6 +220,7 @@ describe('reading a plan file', () => {
       serial: 0,
       prevRun: {},
       prior: {},
+      schemas,
       actions: [
         { type: 'NO_OP', resourceType: 'null_resource', name: 'a', key: 0, movedFrom: 'null_resource.a' },
         { type: 'NO_OP', resourceType: 'null_resource', name: 'b', movedFrom: 'null_resource.b[0]' },
@@ -302,6 +310,7 @@ describe('reading a plan file', () => {
       serial: 0,
       prevRun: {},
       prior: {},
+      schemas,
       actions: [
         { type: 'CREATE', resourceType: 'null_resource', name: 'a', attributes: { n: { type: 'String', value: 'x', position: { file: 'main.clay', line: 1, column: 1 } } } },
       ],
@@ -316,6 +325,7 @@ describe('reading a plan file', () => {
       serial: 0,
       prevRun: {},
       prior: {},
+      schemas,
       actions: [
         {
           type: 'CREATE',
@@ -355,5 +365,24 @@ describe('reading a plan file', () => {
     ['an action change that is not a record', { ...fields(), actions: [{ type: 'UPDATE', resourceType: 'a', name: 'b', changes: { x: 1 } }] }],
   ])('refuses %s', (_, content) => {
     expect(read(content)).toThrow('tfplan.json is not a plan file');
+  });
+
+  it.each([
+    ['no schemas', undefined],
+    ['a schema that is not a record', { x: 'oops' }],
+    ['an attribute of no type it knows', { x: { a: { type: 'tuple' } } }],
+    ['a flag that is not a bool', { x: { a: { type: 'string', computed: 'yes' } } }],
+    ['members of no type it knows', { x: { a: { type: 'set', elemType: 'tuple' } } }],
+    ['an object whose own schema is broken', { x: { a: { type: 'object', schema: { b: { type: 'tuple' } } } } }],
+  ])('refuses %s', (_, schemas) => {
+    expect(read({ ...fields(), schemas })).toThrow(/^tfplan\.json is not a plan file$/);
+  });
+
+  it.each([
+    ['an action', { actions: [{ type: 'DELETE', resourceType: 'pool', name: 'a' }] }],
+    ['the resources as state held them', { prevRun: { 'pool.a': { resourceType: 'pool', name: 'a', attributes: {} } } }],
+    ['the resources as the refresh read them', { prior: { 'pool.a': { resourceType: 'pool', name: 'a', attributes: {} } } }],
+  ])('refuses a resource type in %s that has no schema', (_, broken) => {
+    expect(read({ ...fields(), ...broken })).toThrow('tfplan.json is not a plan file: it has no schema for pool');
   });
 });

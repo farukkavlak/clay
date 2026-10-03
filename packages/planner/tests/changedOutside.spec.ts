@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { changedOutside, Plan } from '../src/index';
 
 const file = (content: string): Resource => ({ resourceType: 'local_file', name: 'a', attributes: { path: 'a.txt', content } });
-const planOf = (prevRun: Plan['prevRun'], prior: Plan['prior']): Plan => ({ serial: 0, actions: [], outputs: {}, prevRun, prior });
+const planOf = (prevRun: Plan['prevRun'], prior: Plan['prior']): Plan => ({ serial: 0, actions: [], outputs: {}, prevRun, prior, schemas: {} });
 
 describe('what changed outside Clay', () => {
   it('names a resource the refresh did not find', () => {

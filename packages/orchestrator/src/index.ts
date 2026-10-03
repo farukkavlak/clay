@@ -78,13 +78,23 @@ export class Orchestrator {
     const currentState = { ...prior, resources: copyResources(prior.resources) };
     const { desiredResources, outputs } = await this.resolveAndCheck(configContent, currentState);
 
+    const actions = plan(desiredResources, currentState);
+    // The refresh only drops what it finds gone, so prior holds no type prevRun does not.
+    const held = [...actions, ...Object.values(prevRun.resources)];
+
     return {
       serial: prevRun.serial,
-      actions: plan(desiredResources, currentState),
+      actions,
       outputs: outputChanges(currentState.outputs ?? {}, outputs),
       prevRun: prevRun.resources,
       prior: prior.resources,
+      schemas: await this.schemasOf(held.map((resource) => resource.resourceType)),
     };
+  }
+
+  private async schemasOf(types: string[]): Promise<Record<string, Schema>> {
+    const unique = [...new Set(types)];
+    return Object.fromEntries(await Promise.all(unique.map(async (type) => [type, await this.providers.schema(type)] as const)));
   }
 
   /** Checks the configuration the way a plan would, against an empty state, so a value a resource would give is unknown and everything else is checked. */

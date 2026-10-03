@@ -93,6 +93,13 @@ describe('a plan that reads each resource back first', () => {
     expect(actions.map(({ type }) => type)).toEqual(['NO_OP']);
   });
 
+  // The plan carries each type's schema, so a resource in state needs its provider even when nothing is read.
+  it('refuses a resource in state that no provider handles, when told not to read', async () => {
+    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
+
+    await expect(engine.plan('', { refresh: false })).rejects.toThrow('No provider handles "local_file"');
+  });
+
   // A plan only looks, so what it read is not written.
   it('leaves the state as it was', async () => {
     const before = await stateFile();

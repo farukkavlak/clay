@@ -1,13 +1,16 @@
 import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, UNKNOWN } from '@clay/contracts';
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { ConfigError } from '@clay/parser';
+import { parsePlanFile, serializePlan } from '@clay/planner';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { stripVTControlCharacters } from 'node:util';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { displayPlan } from '../../src/showPlan';
 import { start } from './start';
 
 const reversed = (value: unknown) => (Array.isArray(value) ? [...value].reverse() : value);
@@ -58,15 +61,24 @@ class PoolProvider implements Provider {
   }
 }
 
+/** Reads `a` gone and `x` added, as if someone changed the members outside Clay. */
+class ChangedPool extends PoolProvider {
+  override async read(type: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+    const read = await super.read(type, prior);
+    const members = Array.isArray(read?.members) ? read.members.filter((member) => member !== 'a') : [];
+    return { ...read, members: [...members, 'x'] };
+  }
+}
+
 const pool = (members: string) => `resource "pool" "p" { members = ${members} }`;
 
 describe('a set attribute', () => {
   let dir: string;
 
-  const newOrchestrator = () => {
+  const newOrchestrator = (poolProvider: Provider = new PoolProvider()) => {
     const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
     engine.registerProvider(new LocalProvider());
-    engine.registerProvider(new PoolProvider());
+    engine.registerProvider(poolProvider);
     return engine;
   };
 
@@ -98,7 +110,17 @@ describe('a set attribute', () => {
     await fs.mkdir(path.join(dir, 'm'));
   });
 
+  /** Plans, saves the plan to a file and reads it back, as `apply plan.json` would, and returns what the CLI prints for it. */
+  const shown = async (config: string, poolProvider?: Provider) => {
+    const saved = parsePlanFile(serializePlan(await newOrchestrator(poolProvider).plan(config), config, {}), 'plan.json');
+    const printed: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => printed.push(stripVTControlCharacters(args.join(' '))));
+    displayPlan(saved);
+    return printed.join('\n').split('\n');
+  };
+
   afterEach(async () => {
+    vi.restoreAllMocks();
     await fs.rm(dir, { recursive: true, force: true });
   });
 
@@ -253,5 +275,22 @@ describe('a set attribute', () => {
         .filter((key) => key.startsWith('null_resource'))
         .sort()
     ).toEqual(['null_resource.n["a"]', 'null_resource.n["b"]']);
+  });
+
+  it('shows the members a plan adds, not the whole set', async () => {
+    await apply(pool('["a", "b"]'));
+
+    const lines = await shown(pool('["a", "b", "c"]'));
+
+    expect(lines).toEqual(expect.arrayContaining(['      members:', '        + "c"', '        (2 unchanged)']));
+  });
+
+  it('shows the members changed outside Clay, removed first', async () => {
+    await apply(pool('["a", "b"]'));
+
+    const lines = await shown(pool('["b", "x"]'), new ChangedPool());
+
+    const at = lines.indexOf('  ~ pool.p was changed outside Clay');
+    expect(lines.slice(at + 1, at + 5)).toEqual(['      members:', '        - "a"', '        + "x"', '        (1 unchanged)']);
   });
 });

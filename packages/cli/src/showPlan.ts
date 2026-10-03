@@ -1,6 +1,6 @@
-import { Address, isRecord, isUnknown } from '@clay/contracts';
+import { Address, isRecord, isUnknown, Schema } from '@clay/contracts';
 import { changedOutside, Changes, Drift, Plan, PlanAction } from '@clay/planner';
-import { styleText } from 'node:util';
+import { isDeepStrictEqual, styleText } from 'node:util';
 
 /** A move changes where state keeps a resource, so a plan that only moves still has work to do. */
 function changes(action: PlanAction): boolean {
@@ -54,31 +54,52 @@ export function actionLine(action: PlanAction, planned: boolean): string {
   return `  ${actionSymbol(action.type)} ${address} ${will}${pastTense(action.type)}${moved}`;
 }
 
-function displayChanges(changes: Changes): void {
-  for (const [key, change] of Object.entries(changes)) console.log(`      ${key}: ${showOr(change.old, '(none)')} -> ${showOr(change.new, '(removed)')}`);
+function without(members: unknown[], others: unknown[]): unknown[] {
+  return members.filter((member) => !others.some((other) => isDeepStrictEqual(member, other)));
 }
 
-function displayAction(action: PlanAction): void {
+/** A set's members have no order, so a change to one is the members it loses and gains. */
+function displaySetChange(key: string, old: unknown[], next: unknown[]): void {
+  const removed = without(old, next);
+  const unchanged = old.length - removed.length;
+
+  console.log(`      ${key}:`);
+  for (const member of removed) console.log(`        ${styleText('red', '-')} ${show(member)}`);
+  for (const member of without(next, old)) console.log(`        ${styleText('green', '+')} ${show(member)}`);
+  if (unchanged > 0) console.log(`        (${unchanged} unchanged)`);
+}
+
+/** Each changed value, a set by its members where the schema names one. */
+function displayChanges(changes: Changes, schema: Schema): void {
+  for (const [key, change] of Object.entries(changes)) {
+    const isSet = Object.hasOwn(schema, key) && schema[key].type === 'set';
+    if (isSet && Array.isArray(change.old) && Array.isArray(change.new)) displaySetChange(key, change.old, change.new);
+    // A set not known yet, or one that comes or goes, has no members on one side to compare.
+    else console.log(`      ${key}: ${showOr(change.old, '(none)')} -> ${showOr(change.new, '(removed)')}`);
+  }
+}
+
+function displayAction(action: PlanAction, schemas: Plan['schemas']): void {
   console.log(actionLine(action, true));
 
-  if ((action.type === 'UPDATE' || action.type === 'REPLACE') && action.changes) displayChanges(action.changes);
+  if ((action.type === 'UPDATE' || action.type === 'REPLACE') && action.changes) displayChanges(action.changes, schemas[action.resourceType]);
 }
 
-function displayChangedOutside(address: string, changes: Changes | undefined): void {
+function displayChangedOutside({ address, changes }: Drift, plan: Plan): void {
   if (!changes) {
     console.log(`  ${styleText('red', 'x')} ${address} was deleted outside Clay`);
     return;
   }
 
   console.log(`  ${styleText('yellow', '~')} ${address} was changed outside Clay`);
-  displayChanges(changes);
+  displayChanges(changes, plan.schemas[plan.prevRun[address].resourceType]);
 }
 
-function displayDrift(drift: Drift[]): void {
+function displayDrift(drift: Drift[], plan: Plan): void {
   if (drift.length === 0) return;
 
   console.log(styleText('bold', '\nChanged outside Clay:\n'));
-  for (const { address, changes } of drift) displayChangedOutside(address, changes);
+  for (const found of drift) displayChangedOutside(found, plan);
 }
 
 function displayOutputChanges(outputs: Changes): void {
@@ -112,12 +133,12 @@ export function displayPlan(plan: Plan): void {
   }
 
   const drift = changedOutside(plan);
-  displayDrift(drift);
+  displayDrift(drift, plan);
 
   const changing = plan.actions.filter((action) => changes(action));
   if (changing.length > 0) {
     console.log(styleText('bold', '\nClay will perform the following actions:\n'));
-    for (const action of changing) displayAction(action);
+    for (const action of changing) displayAction(action, plan.schemas);
   }
 
   displayOutputChanges(plan.outputs);
