@@ -1,4 +1,4 @@
-import { CreateRequest, emptyState, planFromSchema, PlanRequest, Schema, UpdateRequest } from '@clay/contracts';
+import { CreateRequest, emptyState, planFromSchema, PlanRequest, Schema, types, UpdateRequest } from '@clay/contracts';
 import { plan } from '@clay/planner';
 import fsPromises from 'node:fs/promises';
 import os from 'node:os';
@@ -39,7 +39,7 @@ vi.mock('@clay/planner', async () => ({
   plan: vi.fn(() => []),
 }));
 
-const schema: Schema = { name: { type: 'string' } };
+const schema: Schema = { name: { type: types.string } };
 
 describe('Orchestrator - Module Loading', () => {
   let tmpDir: string;

@@ -6,6 +6,7 @@ import {
   isInstanceKey,
   isModulePath,
   isRecord,
+  isType,
   isUnknown,
   ModuleAddress,
   ModuleStep,
@@ -72,7 +73,7 @@ export interface Plan {
 }
 
 /** Bumped when the shape below changes once a Clay is released, so a plan file from an older version is refused instead of misread. */
-export const PLAN_FILE_VERSION = '14.0';
+export const PLAN_FILE_VERSION = '15.0';
 
 export interface PlanFile extends Plan {
   version: string;
@@ -220,20 +221,13 @@ function isAction(action: unknown): boolean {
   );
 }
 
-const SCHEMA_TYPES = new Set<unknown>(['string', 'number', 'boolean', 'list', 'set', 'map', 'object']);
 const FLAGS = ['required', 'forceNew', 'computed', 'optional', 'kept'] as const;
 
-/** A schema is checked whole, the schemas of objects inside it included. */
 function isSchema(schema: unknown): schema is Schema {
   return (
     isRecord(schema) &&
     Object.values(schema).every(
-      (definition) =>
-        isRecord(definition) &&
-        SCHEMA_TYPES.has(definition.type) &&
-        FLAGS.every((flag) => definition[flag] === undefined || typeof definition[flag] === 'boolean') &&
-        (definition.elemType === undefined || SCHEMA_TYPES.has(definition.elemType)) &&
-        (definition.schema === undefined || isSchema(definition.schema))
+      (definition) => isRecord(definition) && isType(definition.type) && FLAGS.every((flag) => definition[flag] === undefined || typeof definition[flag] === 'boolean')
     )
   );
 }

@@ -1,9 +1,9 @@
-import { Schema, UNKNOWN } from '@clay/contracts';
+import { Schema, types, UNKNOWN } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { checkDataSourceRead, checkDataSourceSchema, checkRead, checkSchema } from '../src/providerResult';
 
-const schema: Schema = { label: { type: 'string', required: true }, made: { type: 'string', computed: true } };
+const schema: Schema = { label: { type: types.string, required: true }, made: { type: types.string, computed: true } };
 const bug = 'echo read what the resource cannot hold, which is a bug in the provider:';
 
 describe('what a provider read back', () => {
@@ -43,13 +43,10 @@ describe('what a data source read', () => {
 
 describe('a schema a data source gives', () => {
   it.each([
-    ['forceNew', { label: { type: 'string', forceNew: true } }, 'label'],
-    ['kept', { label: { type: 'string', computed: true, kept: true } }, 'label'],
-    ['forceNew inside an object', { box: { type: 'object', schema: { lid: { type: 'string', forceNew: true } } } }, 'box.lid'],
-  ] satisfies [string, Schema, string][])('is refused where a value is %s', (flag, given, at) => {
-    const name = flag.split(' ')[0];
-
-    expect(() => checkDataSourceSchema('echo', given)).toThrow(`data source echo marks ${at} ${name}, but only a resource can be ${name}, which is a bug in the provider`);
+    ['forceNew', { label: { type: types.string, forceNew: true } }],
+    ['kept', { label: { type: types.string, computed: true, kept: true } }],
+  ] satisfies [string, Schema][])('is refused where a value is %s', (flag, given) => {
+    expect(() => checkDataSourceSchema('echo', given)).toThrow(`data source echo marks label ${flag}, but only a resource can be ${flag}, which is a bug in the provider`);
   });
 
   it('is taken as it is when it marks nothing a resource alone can be', () => {
@@ -58,9 +55,21 @@ describe('a schema a data source gives', () => {
 });
 
 describe('a schema a provider gives', () => {
-  it('is refused where a value inside an object is kept and not computed', () => {
-    const nested: Schema = { box: { type: 'object', schema: { lid: { type: 'string', kept: true } } } };
+  it('is refused where a value is kept and not computed', () => {
+    const given: Schema = { lid: { type: types.string, kept: true } };
 
-    expect(() => checkSchema('echo', nested)).toThrow('echo keeps box.lid, which it does not compute; only a computed value can be kept, which is a bug in the provider');
+    expect(() => checkSchema('echo', given)).toThrow('echo keeps lid, which it does not compute; only a computed value can be kept, which is a bug in the provider');
+  });
+});
+
+// A provider written in JavaScript has no type check, and a saved plan with such a type would be refused as a broken file.
+describe('a type a schema gives', () => {
+  const broken = { box: { type: { kind: 'object', attributes: { lid: types.string }, optional: ['lip'] } } } as unknown as Schema;
+
+  it.each([
+    ['a resource', () => checkSchema('echo', broken), 'echo'],
+    ['a data source', () => checkDataSourceSchema('echo', broken), 'data source echo'],
+  ])('is refused for %s when it is not whole', (_, check, named) => {
+    expect(check).toThrow(`${named} gives box a type Clay cannot read, which is a bug in the provider`);
   });
 });

@@ -1,4 +1,4 @@
-import { ExactNumber, Schema, UNKNOWN } from '@clay/contracts';
+import { ExactNumber, Schema, types, UNKNOWN } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { setsMarked, setsOrdered } from '../src/setOrder';
@@ -7,13 +7,14 @@ import { SetValue } from '../src/SetValue';
 const n = (text: string) => ExactNumber.parse(text);
 
 const schema: Schema = {
-  names: { type: 'set', elemType: 'string' },
-  anything: { type: 'set' },
-  ports: { type: 'list', elemType: 'number' },
-  groups: { type: 'list', elemType: 'set' },
-  byName: { type: 'map', elemType: 'set' },
-  nested: { type: 'set', elemType: 'set' },
-  rule: { type: 'object', schema: { cidrs: { type: 'set', elemType: 'string' } } },
+  names: { type: types.set(types.string) },
+  anything: { type: types.set(types.dynamic) },
+  ports: { type: types.list(types.number) },
+  groups: { type: types.list(types.set(types.dynamic)) },
+  byName: { type: types.map(types.set(types.dynamic)) },
+  nested: { type: types.set(types.set(types.dynamic)) },
+  rule: { type: types.object({ cidrs: types.set(types.string) }) },
+  pair: { type: types.tuple([types.set(types.string), types.list(types.string)]) },
 };
 
 describe('setsOrdered', () => {
@@ -58,12 +59,31 @@ describe('setsOrdered', () => {
     expect(setsOrdered(schema, { ports: [n('443'), n('80')] })).toEqual({ ports: [n('443'), n('80')] });
   });
 
-  it('orders a set inside a list, a map and an object', () => {
-    expect(setsOrdered(schema, { groups: [['b', 'a']], byName: { x: ['b', 'a'] }, rule: { cidrs: ['b', 'a'] } })).toEqual({
+  it('orders a set inside a list, a map, an object and a tuple', () => {
+    expect(
+      setsOrdered(schema, {
+        groups: [['b', 'a']],
+        byName: { x: ['b', 'a'] },
+        rule: { cidrs: ['b', 'a'] },
+        pair: [
+          ['b', 'a'],
+          ['b', 'a'],
+        ],
+      })
+    ).toEqual({
       groups: [['a', 'b']],
       byName: { x: ['a', 'b'] },
       rule: { cidrs: ['a', 'b'] },
+      pair: [
+        ['a', 'b'],
+        ['b', 'a'],
+      ],
     });
+  });
+
+  // A provider answer that does not match its own type is refused by the read check, not put in order here.
+  it('leaves a record where a list is named as it is', () => {
+    expect(setsOrdered(schema, { groups: { a: ['b', 'a'] } })).toEqual({ groups: { a: ['b', 'a'] } });
   });
 
   it('is not known while a member, or a value inside one, is not', () => {

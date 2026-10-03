@@ -1,17 +1,18 @@
-import { ExactNumber, Schema, UNKNOWN } from '@clay/contracts';
+import { ExactNumber, Schema, types, UNKNOWN } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { conformValues, SchemaMismatch } from '../src/conformValues';
 
 const schema: Schema = {
-  name: { type: 'string' },
-  size: { type: 'number' },
-  on: { type: 'boolean' },
-  ports: { type: 'list', elemType: 'number' },
-  ids: { type: 'set', elemType: 'number' },
-  tags: { type: 'map', elemType: 'string' },
-  anything: { type: 'list' },
-  settings: { type: 'object', schema: { mode: { type: 'string', required: true }, depth: { type: 'number' } } },
+  name: { type: types.string },
+  size: { type: types.number },
+  on: { type: types.bool },
+  ports: { type: types.list(types.number) },
+  ids: { type: types.set(types.number) },
+  tags: { type: types.map(types.string) },
+  anything: { type: types.list(types.dynamic) },
+  settings: { type: types.object({ mode: types.string, depth: types.number }, ['depth']) },
+  pair: { type: types.tuple([types.string, types.number]) },
 };
 
 const n = (text: string) => ExactNumber.parse(text);
@@ -39,6 +40,7 @@ describe('conformValues', () => {
     ['each item of a list', { ports: ['80', n('443')] }, { ports: [n('80'), n('443')] }],
     ['each value of a map', { tags: { a: n('1'), b: true } }, { tags: { a: '1', b: 'true' } }],
     ['a value inside an object', { settings: { mode: 'm', depth: '2' } }, { settings: { mode: 'm', depth: n('2') } }],
+    ['each item of a tuple, to the type its place names', { pair: [n('1'), '2'] }, { pair: ['1', n('2')] }],
   ])('takes %s', (_, config, conformed) => {
     expect(conformValues('thing', schema, config)).toEqual(conformed);
   });
@@ -60,6 +62,10 @@ describe('conformValues', () => {
     ['a value inside an object', { settings: { mode: 'm', depth: 'deep' } }, 'settings["depth"]: "deep" is not a number'],
     ['a name an object does not have', { settings: { mode: 'm', moed: 'x' } }, 'thing has no attribute "moed" in settings'],
     ['a name an object requires and is not given', { settings: { depth: n('1') } }, 'thing requires "mode" in settings'],
+    ['an item of a tuple', { pair: ['a', 'b'] }, 'pair[1]: "b" is not a number'],
+    ['a tuple with too few items', { pair: ['a'] }, 'pair holds 1 item, where thing takes 2 items'],
+    ['a tuple with too many items', { pair: ['a', n('1'), n('2')] }, 'pair holds 3 items, where thing takes 2 items'],
+    ['a map where it takes a tuple', { pair: { a: 'x' } }, 'pair is a map, where thing takes a tuple'],
   ])('refuses %s, and names the attribute', (_, config, message) => {
     const attribute = Object.keys(config)[0];
 
@@ -76,7 +82,7 @@ describe('conformValues', () => {
   });
 
   it('refuses a name the schema requires and is not given, in no attribute', () => {
-    const required: Schema = { path: { type: 'string', required: true } };
+    const required: Schema = { path: { type: types.string, required: true } };
 
     expect(() => conformValues('thing', required, {})).toThrow(expect.objectContaining({ message: 'thing requires "path"', attribute: undefined }));
   });
@@ -106,10 +112,10 @@ describe('conformValues', () => {
     expect(() => conformValues('thing', schema, { tags: { a: UNKNOWN, b: ['x'] } })).toThrow('tags["b"] is a list, where thing takes a string');
   });
 
-  // Nothing says what type an item of one should be, so nothing is converted.
-  it('takes any record as an object with no schema of its own, as it is', () => {
-    const config = { meta: { any: 'x', thing: n('1') } };
+  // dynamic names no type, so nothing is converted.
+  it('takes any value where the type is dynamic, as it is', () => {
+    const config = { meta: { any: 'x', thing: n('1') }, items: ['1', n('1'), [true]] };
 
-    expect(conformValues('thing', { meta: { type: 'object' } }, config)).toEqual(config);
+    expect(conformValues('thing', { meta: { type: types.map(types.dynamic) }, items: { type: types.list(types.dynamic) } }, config)).toEqual(config);
   });
 });

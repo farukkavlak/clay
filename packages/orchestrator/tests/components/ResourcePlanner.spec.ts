@@ -1,10 +1,10 @@
-import { ExactNumber, planFromSchema, PlannedChange, PlanRequest, Provider, Resource, Schema, UNKNOWN } from '@clay/contracts';
+import { ExactNumber, planFromSchema, PlannedChange, PlanRequest, Provider, Resource, Schema, types, UNKNOWN } from '@clay/contracts';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ResourcePlanner } from '../../src/components/ResourcePlanner';
 import { ProviderRegistry } from '../../src/ProviderRegistry';
 
-const schema: Schema = { path: { type: 'string', forceNew: true }, tags: { type: 'map' }, made: { type: 'string', computed: true } };
+const schema: Schema = { path: { type: types.string, forceNew: true }, tags: { type: types.map(types.dynamic) }, made: { type: types.string, computed: true } };
 
 /** Plans from the schema, unless a test gives it a plan of its own. */
 function fakeProvider(plan: (request: PlanRequest) => PlannedChange = (request) => planFromSchema(schema, request)) {
@@ -95,7 +95,7 @@ describe('ResourcePlanner', () => {
   });
 
   describe('a value kept until the resource is replaced', () => {
-    const keeping: Schema = { ...schema, serial: { type: 'string', computed: true, kept: true } };
+    const keeping: Schema = { ...schema, serial: { type: types.string, computed: true, kept: true } };
     const held: Resource = { ...current, attributes: { ...current.attributes, serial: 's' } };
     const remaking = (request: PlanRequest) => ({ after: { ...planFromSchema(keeping, request).after, serial: UNKNOWN }, replace: [] });
 

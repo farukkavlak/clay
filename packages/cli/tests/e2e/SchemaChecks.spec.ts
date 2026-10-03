@@ -1,5 +1,6 @@
-import { CreateRequest, ExactNumber, planFromSchema, PlannedChange, PlanRequest, Provider, Schema } from '@clay/contracts';
+import { CreateRequest, ExactNumber, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types } from '@clay/contracts';
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
+import { parsePlanFile, serializePlan } from '@clay/planner';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
@@ -9,16 +10,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { start } from './start';
 
-/** Counts to a `total` only the apply makes, a number, and keeps `labels`, a map of strings. As a data source it reads back the `size` it is given. */
+/**
+ * Counts to a `total` only the apply makes, a number, and keeps `labels`, a map of strings, `rule`, an object with an optional `port`, and `pair`, a
+ * string and a number. As a data source it reads back the `size` it is given.
+ */
 class TallyProvider implements Provider {
   readonly resources = ['tally'];
   readonly dataSources = ['tally'];
 
   async getSchema(): Promise<Schema> {
     return {
-      id: { type: 'string', computed: true, kept: true },
-      total: { type: 'number', computed: true },
-      labels: { type: 'map', elemType: 'string' },
+      id: { type: types.string, computed: true, kept: true },
+      total: { type: types.number, computed: true },
+      labels: { type: types.map(types.string) },
+      rule: { type: types.object({ mode: types.string, port: types.number }, ['port']) },
+      pair: { type: types.tuple([types.string, types.number]) },
     };
   }
 
@@ -43,7 +49,7 @@ class TallyProvider implements Provider {
   async delete(): Promise<void> {}
 
   async getDataSourceSchema(): Promise<Schema> {
-    return { size: { type: 'number', required: true } };
+    return { size: { type: types.number, required: true } };
   }
 
   async validateDataSource(): Promise<void> {}
@@ -166,6 +172,30 @@ describe('a configuration held to the schema', () => {
 
     const { resources } = await new LocalBackend(dir).read();
     expect(resources['random_string.r'].attributes).toMatchObject({ length: ExactNumber.parse('6'), result: expect.stringMatching(/^.{6}$/) });
+  });
+
+  it('holds an object and a tuple to the type each place in them names, through a saved plan', async () => {
+    const config = 'resource "tally" "t" {\n  rule = { mode = 1, port = "80" }\n  pair = [2, "3"]\n}';
+    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), config, {}), 'plan.json');
+
+    for await (const event of newOrchestrator().runPlan(saved, config)) if (event.type === 'failed') throw event.error;
+
+    const { resources } = await new LocalBackend(dir).read();
+    expect(resources['tally.t'].attributes).toMatchObject({ rule: { mode: '1', port: ExactNumber.parse('80') }, pair: ['2', ExactNumber.parse('3')] });
+  });
+
+  it('refuses an object without a name its type requires, where it is written', async () => {
+    await expect(newOrchestrator().plan('resource "tally" "t" {\n  rule = { port = 80 }\n}')).rejects.toMatchObject({
+      message: 'tally requires "mode" in rule',
+      position: { file: 'main.clay', line: 2, column: 10 },
+    });
+  });
+
+  it('refuses a tuple with another number of items than its type', async () => {
+    await expect(newOrchestrator().plan('resource "tally" "t" {\n  pair = ["a"]\n}')).rejects.toMatchObject({
+      message: 'pair holds 1 item, where tally takes 2 items',
+      position: { file: 'main.clay', line: 2, column: 10 },
+    });
   });
 
   it('converts at apply a value the plan did not know, once it is known', async () => {

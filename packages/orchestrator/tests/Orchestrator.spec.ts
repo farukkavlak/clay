@@ -1,4 +1,4 @@
-import { CreateRequest, emptyState, ExactNumber, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, UpdateRequest } from '@clay/contracts';
+import { CreateRequest, emptyState, ExactNumber, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types, UpdateRequest } from '@clay/contracts';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -16,11 +16,11 @@ class MockProvider implements Provider {
 
   async getSchema(_type: string): Promise<Schema> {
     return {
-      id: { type: 'string', computed: true, kept: true },
-      name: { type: 'string' },
-      value: { type: 'string' },
-      size: { type: 'number' },
-      enabled: { type: 'boolean' },
+      id: { type: types.string, computed: true, kept: true },
+      name: { type: types.string },
+      value: { type: types.string },
+      size: { type: types.number },
+      enabled: { type: types.bool },
     };
   }
 

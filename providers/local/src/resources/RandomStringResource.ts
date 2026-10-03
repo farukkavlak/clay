@@ -1,4 +1,4 @@
-import { CreateRequest, ExactNumber, isUnknown, PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema, UpdateRequest } from '@clay/contracts';
+import { CreateRequest, ExactNumber, isUnknown, PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema, types, UpdateRequest } from '@clay/contracts';
 import crypto from 'node:crypto';
 
 const LENGTH_REQUIRED = 'random_string requires "length" attribute (number > 0)';
@@ -17,10 +17,10 @@ function lengthOf(inputs: Record<string, unknown>): number {
 export class RandomStringResource implements ResourceHandler {
   async getSchema(): Promise<Schema> {
     return {
-      length: { type: 'number', required: true, forceNew: true },
-      special: { type: 'boolean', required: false, forceNew: true },
-      id: { type: 'string', computed: true, kept: true },
-      result: { type: 'string', computed: true, kept: true },
+      length: { type: types.number, required: true, forceNew: true },
+      special: { type: types.bool, required: false, forceNew: true },
+      id: { type: types.string, computed: true, kept: true },
+      result: { type: types.string, computed: true, kept: true },
     };
   }
 

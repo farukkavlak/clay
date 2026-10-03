@@ -1,4 +1,4 @@
-import { Address, CreateRequest, emptyState, ExactNumber, PlanRequest, Provider, Schema, State, UNKNOWN, UpdateRequest } from '@clay/contracts';
+import { Address, CreateRequest, emptyState, ExactNumber, PlanRequest, Provider, Schema, State, types, UNKNOWN, UpdateRequest } from '@clay/contracts';
 import { PlanAction } from '@clay/planner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -34,14 +34,14 @@ const withList = (items: string[]): PlanAction => ({
 
 /** What the tests set, and what a provider makes of its own. */
 const schema: Schema = {
-  path: { type: 'string' },
-  old: { type: 'string' },
-  tags: { type: 'map' },
-  l: { type: 'list', optional: true, computed: true },
-  result: { type: 'string', computed: true },
-  a: { type: 'string', computed: true },
-  b: { type: 'string', computed: true },
-  n: { type: 'number', computed: true },
+  path: { type: types.string },
+  old: { type: types.string },
+  tags: { type: types.map(types.dynamic) },
+  l: { type: types.list(types.dynamic), optional: true, computed: true },
+  result: { type: types.string, computed: true },
+  a: { type: types.string, computed: true },
+  b: { type: types.string, computed: true },
+  n: { type: types.number, computed: true },
 };
 
 /** A create of `path = "p"` whose provider planned `after`. */

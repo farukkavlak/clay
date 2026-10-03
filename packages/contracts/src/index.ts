@@ -3,19 +3,15 @@ import { isDeepStrictEqual } from 'node:util';
 import { Address, isInstanceKey, isModulePath } from './Address';
 import type { InstanceKey, ModuleStep } from './Address';
 import { ExactNumber, NumberError } from './ExactNumber';
+import { isRecord } from './isRecord';
+import type { Type } from './Type';
 
 export { Address, isInstanceKey, isModulePath, ModuleAddress } from './Address';
 export type { InstanceKey, ModuleStep } from './Address';
 export { ExactNumber, NumberError } from './ExactNumber';
-
-/** A plain object, as JSON makes one: a number read from a file is an ExactNumber, which is no record. */
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  if (typeof value !== 'object' || value === null) return false;
-
-  const prototype: unknown = Object.getPrototypeOf(value);
-
-  return prototype === Object.prototype || prototype === null;
-}
+export { isRecord } from './isRecord';
+export { isType, types } from './Type';
+export type { Type } from './Type';
 
 /** Stands for a value that only exists once the resources it depends on are created. A symbol, so no value a configuration or a file holds can pass for it. */
 export const UNKNOWN: unique symbol = Symbol('unknown');
@@ -137,11 +133,8 @@ export function readResources(resources: unknown, field: string, say: (problem: 
   checkResources(resources, say);
 }
 
-/** A `set` is a list whose order is not a change and that holds each member once. */
-export type SchemaType = 'string' | 'number' | 'boolean' | 'list' | 'set' | 'map' | 'object';
-
 export interface SchemaDefinition {
-  type: SchemaType;
+  type: Type;
   required?: boolean;
   forceNew?: boolean; // If true, a change to this attribute forces replacement (Delete -> Create)
   /** Made by the provider, and the configuration cannot set it unless `optional` says so. A plan with no change keeps it as read; a change makes it again unless it is `kept`. */
@@ -150,8 +143,6 @@ export interface SchemaDefinition {
   optional?: boolean;
   /** With `computed`: made with the resource and the same until it is replaced, so a change in place keeps it as it was read. */
   kept?: boolean;
-  elemType?: SchemaType; // For 'list', 'set' and 'map'
-  schema?: Schema; // For 'object'
 }
 
 export type Schema = Record<string, SchemaDefinition>;

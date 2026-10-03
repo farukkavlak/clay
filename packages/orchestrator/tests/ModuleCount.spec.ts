@@ -1,4 +1,4 @@
-import { Address, planFromSchema, Provider, Schema } from '@clay/contracts';
+import { Address, planFromSchema, Provider, Schema, types } from '@clay/contracts';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { InMemoryFiles, Orchestrator } from '../src/index';
 import { apply } from './apply';
 
-const schema: Schema = { value: { type: 'string' } };
+const schema: Schema = { value: { type: types.string } };
 
 /** Keeps what it is given, so state holds the inputs. */
 const recorder: Provider = {

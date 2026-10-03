@@ -1,4 +1,4 @@
-import { isUnknown, PlannedChange, PlanRequest, Provider, Schema } from '@clay/contracts';
+import { isUnknown, PlannedChange, PlanRequest, Provider, Schema, types } from '@clay/contracts';
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
@@ -17,7 +17,7 @@ class TidyProvider implements Provider {
   readonly dataSources: string[] = [];
 
   async getSchema(): Promise<Schema> {
-    return { path: { type: 'string', required: true } };
+    return { path: { type: types.string, required: true } };
   }
 
   async plan(_type: string, request: PlanRequest): Promise<PlannedChange> {

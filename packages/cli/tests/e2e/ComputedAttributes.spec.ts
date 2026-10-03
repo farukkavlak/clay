@@ -1,4 +1,4 @@
-import { CreateRequest, isUnknown, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, UNKNOWN, UpdateRequest } from '@clay/contracts';
+import { CreateRequest, isUnknown, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types, UNKNOWN, UpdateRequest } from '@clay/contracts';
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
@@ -16,10 +16,10 @@ class StampProvider implements Provider {
 
   async getSchema(): Promise<Schema> {
     return {
-      id: { type: 'string', computed: true, kept: true },
-      label: { type: 'string', required: true },
-      note: { type: 'string' },
-      made: { type: 'string', computed: true, optional: true },
+      id: { type: types.string, computed: true, kept: true },
+      label: { type: types.string, required: true },
+      note: { type: types.string },
+      made: { type: types.string, computed: true, optional: true },
     };
   }
 
@@ -64,7 +64,7 @@ class ForgetfulStampProvider extends StampProvider {
 /** Makes a `serial` from its `size`, which replaces it, so the serial is the same until the resource is replaced. */
 class SerialStampProvider extends StampProvider {
   override async getSchema(): Promise<Schema> {
-    return { ...(await super.getSchema()), size: { type: 'string', forceNew: true }, serial: { type: 'string', computed: true, kept: true } };
+    return { ...(await super.getSchema()), size: { type: types.string, forceNew: true }, serial: { type: types.string, computed: true, kept: true } };
   }
 
   override async create(type: string, request: CreateRequest): Promise<Record<string, unknown>> {

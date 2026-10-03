@@ -1,4 +1,4 @@
-import { ExactNumber, isRecord, isUnknown, Schema, SchemaDefinition, unknownPaths } from '@clay/contracts';
+import { ExactNumber, isRecord, isType, isUnknown, Schema, unknownPaths } from '@clay/contracts';
 import { Mismatch } from '@clay/planner';
 
 import { shown } from './shown';
@@ -67,30 +67,29 @@ export function checkDataSourceRead(type: string, schema: Schema, read: Record<s
   refuse(type, 'data source', schema, read);
 }
 
-/** Each definition in a schema, those inside an object included, with the path it is at. */
-function eachDefinition(schema: Schema, check: (at: string, definition: SchemaDefinition) => void, within = ''): void {
-  for (const [name, definition] of Object.entries(schema)) {
-    check(within + name, definition);
-    if (definition.schema) eachDefinition(definition.schema, check, `${within}${name}.`);
-  }
+/** A type is checked whole, since one a provider gets wrong would be refused only when a saved plan holding it is read back. */
+function checkTypes(named: string, schema: Schema): void {
+  for (const [name, definition] of Object.entries(schema))
+    if (!isType(definition.type)) throw new Error(`${named} gives ${name} a type Clay cannot read, which is a bug in the provider`);
 }
 
 /** A schema comes from the provider, so one that says what cannot be is its bug, refused before anything is planned with it. */
 export function checkSchema(type: string, schema: Schema): Schema {
-  eachDefinition(schema, (at, definition) => {
+  checkTypes(type, schema);
+  for (const [name, definition] of Object.entries(schema))
     if (definition.kept && !definition.computed)
-      throw new Error(`${type} keeps ${at}, which it does not compute; only a computed value can be kept, which is a bug in the provider`);
-  });
+      throw new Error(`${type} keeps ${name}, which it does not compute; only a computed value can be kept, which is a bug in the provider`);
 
   return schema;
 }
 
 /** A data source is only read, never made or changed, so a schema that says when to remake it or what to keep is the provider's bug. */
 export function checkDataSourceSchema(type: string, schema: Schema): Schema {
-  eachDefinition(schema, (at, definition) => {
+  checkTypes(`data source ${type}`, schema);
+  for (const [name, definition] of Object.entries(schema)) {
     const flag = definition.forceNew ? 'forceNew' : definition.kept ? 'kept' : undefined;
-    if (flag) throw new Error(`data source ${type} marks ${at} ${flag}, but only a resource can be ${flag}, which is a bug in the provider`);
-  });
+    if (flag) throw new Error(`data source ${type} marks ${name} ${flag}, but only a resource can be ${flag}, which is a bug in the provider`);
+  }
 
   return schema;
 }

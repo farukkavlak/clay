@@ -1,4 +1,4 @@
-import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, UpdateRequest } from '@clay/contracts';
+import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types, UpdateRequest } from '@clay/contracts';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -14,7 +14,7 @@ class InheritedNameProvider implements Provider {
   readonly dataSources: string[] = [];
 
   async getSchema(_type: string): Promise<Schema> {
-    return { path: { type: 'string', forceNew: true } };
+    return { path: { type: types.string, forceNew: true } };
   }
 
   async plan(type: string, request: PlanRequest): Promise<PlannedChange> {

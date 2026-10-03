@@ -1,11 +1,11 @@
-import { DataSourceHandler, Schema } from '@clay/contracts';
+import { DataSourceHandler, Schema, types } from '@clay/contracts';
 import fs from 'node:fs/promises';
 
 export class LocalFileDataSource implements DataSourceHandler {
   async getSchema(): Promise<Schema> {
     return {
-      path: { type: 'string', required: true },
-      content: { type: 'string', computed: true },
+      path: { type: types.string, required: true },
+      content: { type: types.string, computed: true },
     };
   }
 

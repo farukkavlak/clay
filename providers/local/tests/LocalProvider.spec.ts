@@ -1,4 +1,4 @@
-import { ExactNumber, UNKNOWN } from '@clay/contracts';
+import { ExactNumber, types, UNKNOWN } from '@clay/contracts';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -207,7 +207,7 @@ describe('LocalProvider', () => {
     ])('keeps %s %s until it is replaced', async (type, name) => {
       const schema = await provider.getSchema(type);
 
-      expect(schema[name]).toEqual({ type: 'string', computed: true, kept: true });
+      expect(schema[name]).toEqual({ type: types.string, computed: true, kept: true });
     });
 
     it('returns the string it made as result, which is its id too', async () => {
@@ -309,7 +309,7 @@ describe('LocalProvider', () => {
 
     // The file it reads is given, not written, so the content is the one value it makes.
     it('has a schema of its own, apart from the resource of the same type', async () => {
-      expect(await provider.getDataSourceSchema('local_file')).toEqual({ path: { type: 'string', required: true }, content: { type: 'string', computed: true } });
+      expect(await provider.getDataSourceSchema('local_file')).toEqual({ path: { type: types.string, required: true }, content: { type: types.string, computed: true } });
     });
 
     it('refuses an empty path', async () => {
@@ -461,8 +461,8 @@ describe('LocalProvider', () => {
 
     it('should return schema for null_resource', async () => {
       expect(await provider.getSchema('null_resource')).toEqual({
-        id: { type: 'string', computed: true, kept: true },
-        triggers: { type: 'map', required: false },
+        id: { type: types.string, computed: true, kept: true },
+        triggers: { type: types.map(types.dynamic), required: false },
       });
     });
 

@@ -1,4 +1,4 @@
-import { ExactNumber, isUnknown, UNKNOWN } from '@clay/contracts';
+import { ExactNumber, isUnknown, types, UNKNOWN } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { parsePlanFile, Plan, serializePlan } from '../src/index';
@@ -370,12 +370,30 @@ describe('reading a plan file', () => {
   it.each([
     ['no schemas', undefined],
     ['a schema that is not a record', { x: 'oops' }],
-    ['an attribute of no type it knows', { x: { a: { type: 'tuple' } } }],
-    ['a flag that is not a bool', { x: { a: { type: 'string', computed: 'yes' } } }],
-    ['members of no type it knows', { x: { a: { type: 'set', elemType: 'tuple' } } }],
-    ['an object whose own schema is broken', { x: { a: { type: 'object', schema: { b: { type: 'tuple' } } } } }],
+    ['an attribute with no type', { x: { a: {} } }],
+    ['an attribute of no type it knows', { x: { a: { type: { kind: 'tree' } } } }],
+    ['a flag that is not a bool', { x: { a: { type: { kind: 'string' }, computed: 'yes' } } }],
+    ['a collection with no element type', { x: { a: { type: { kind: 'set' } } } }],
+    ['members of no type it knows', { x: { a: { type: { kind: 'set', element: { kind: 'tree' } } } } }],
+    ['an object attribute of no type it knows', { x: { a: { type: { kind: 'object', attributes: { b: { kind: 'tree' } } } } } }],
+    ['an object with no attributes', { x: { a: { type: { kind: 'object' } } } }],
+    ['an optional list that is not a list', { x: { a: { type: { kind: 'object', attributes: { b: { kind: 'string' } }, optional: 'b' } } } }],
+    ['an optional name that is not a string', { x: { a: { type: { kind: 'object', attributes: { 1: { kind: 'string' } }, optional: [1] } } } }],
+    ['an optional attribute the object does not have', { x: { a: { type: { kind: 'object', attributes: {}, optional: ['b'] } } } }],
+    ['a tuple with no elements', { x: { a: { type: { kind: 'tuple' } } } }],
+    ['a tuple element of no type it knows', { x: { a: { type: { kind: 'tuple', elements: [{ kind: 'tree' }] } } } }],
   ])('refuses %s', (_, schemas) => {
     expect(read({ ...fields(), schemas })).toThrow(/^tfplan\.json is not a plan file$/);
+  });
+
+  it('reads back a schema with every kind of type, however deep', () => {
+    const type = types.object(
+      { ids: types.set(types.number), pairs: types.list(types.tuple([types.string, types.bool])), rest: types.map(types.dynamic), at: types.object({ x: types.number }) },
+      ['rest']
+    );
+    const plan: Plan = { ...emptyPlan, schemas: { x: { a: { type, required: true } } } };
+
+    expect(parsePlanFile(aPlanFile(plan), 'tfplan.json').schemas).toEqual(plan.schemas);
   });
 
   it.each([

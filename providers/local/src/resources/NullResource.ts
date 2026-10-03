@@ -1,12 +1,12 @@
-import { CreateRequest, PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema, UpdateRequest } from '@clay/contracts';
+import { CreateRequest, PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema, types, UpdateRequest } from '@clay/contracts';
 import crypto from 'node:crypto';
 
 export class NullResource implements ResourceHandler {
   async getSchema(): Promise<Schema> {
     return {
-      id: { type: 'string', computed: true, kept: true },
+      id: { type: types.string, computed: true, kept: true },
       // A trigger is any value whose change matters, and Clay turns no number or bool into a string.
-      triggers: { type: 'map', required: false },
+      triggers: { type: types.map(types.dynamic), required: false },
     };
   }
 
