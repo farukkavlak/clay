@@ -1,4 +1,4 @@
-import { UNKNOWN } from '@clay/contracts';
+import { types, UNKNOWN } from '@clay/contracts';
 import { Orchestrator } from '@clay/orchestrator';
 import fs from 'node:fs/promises';
 import { stripVTControlCharacters } from 'node:util';
@@ -165,7 +165,12 @@ describe('CLI: plan command', () => {
       order: { old: ['a', 'b'], new: ['b', 'a'] },
       names: { old: ['a'], new: ['b'] },
     };
-    const schema = { pending: { type: 'set' }, added: { type: 'set' }, order: { type: 'list' }, names: { type: 'set' } };
+    const schema = {
+      pending: { type: types.set(types.dynamic) },
+      added: { type: types.set(types.dynamic) },
+      order: { type: types.list(types.dynamic) },
+      names: { type: types.set(types.dynamic) },
+    };
     const planMock = vi.fn().mockResolvedValue({
       serial: 0,
       actions: [{ type: 'UPDATE', resourceType: 'test', name: 't', changes }],

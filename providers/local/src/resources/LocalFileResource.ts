@@ -1,4 +1,4 @@
-import { CreateRequest, isUnknown, own, PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema, UpdateRequest } from '@clay/contracts';
+import { CreateRequest, isUnknown, own, PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema, types, UpdateRequest } from '@clay/contracts';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -7,9 +7,9 @@ import { idOf } from './idOf';
 export class LocalFileResource implements ResourceHandler {
   async getSchema(): Promise<Schema> {
     return {
-      id: { type: 'string', computed: true, kept: true },
-      path: { type: 'string', required: true, forceNew: true }, // Changing path means new file
-      content: { type: 'string', required: true, forceNew: false }, // Changing content is update
+      id: { type: types.string, computed: true, kept: true },
+      path: { type: types.string, required: true, forceNew: true },
+      content: { type: types.string, required: true, forceNew: false },
     };
   }
 

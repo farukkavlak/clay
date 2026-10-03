@@ -72,7 +72,7 @@ function displaySetChange(key: string, old: unknown[], next: unknown[]): void {
 /** Each changed value, a set by its members where the schema names one. */
 function displayChanges(changes: Changes, schema: Schema): void {
   for (const [key, change] of Object.entries(changes)) {
-    const isSet = Object.hasOwn(schema, key) && schema[key].type === 'set';
+    const isSet = Object.hasOwn(schema, key) && schema[key].type.kind === 'set';
     if (isSet && Array.isArray(change.old) && Array.isArray(change.new)) displaySetChange(key, change.old, change.new);
     // A set not known yet, or one that comes or goes, has no members on one side to compare.
     else console.log(`      ${key}: ${showOr(change.old, '(none)')} -> ${showOr(change.new, '(removed)')}`);

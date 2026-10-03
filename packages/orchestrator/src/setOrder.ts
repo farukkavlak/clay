@@ -1,4 +1,4 @@
-import { containsUnknown, ExactNumber, isRecord, isUnknown, Schema, SchemaDefinition, UNKNOWN } from '@clay/contracts';
+import { containsUnknown, ExactNumber, isRecord, isUnknown, Schema, Type, UNKNOWN } from '@clay/contracts';
 
 import { SetValue } from './SetValue';
 
@@ -33,33 +33,38 @@ function asSet(members: unknown[]): unknown {
   return [...byKey].sort(byMember).map(([, member]) => member);
 }
 
-function definitionIn(schema: Schema, name: string): SchemaDefinition | undefined {
-  return Object.hasOwn(schema, name) ? schema[name] : undefined;
+function typeIn(schema: Schema, name: string): Type | undefined {
+  return Object.hasOwn(schema, name) ? schema[name].type : undefined;
 }
 
-type Order = (definition: SchemaDefinition | undefined, value: unknown) => unknown;
+type Order = (type: Type | undefined, value: unknown) => unknown;
 
-function entriesOrdered(value: Record<string, unknown>, definitionOf: (name: string) => SchemaDefinition | undefined, order: Order): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(value).map(([name, item]) => [name, order(definitionOf(name), item)]));
+function entriesOrdered(value: Record<string, unknown>, typeOf: (name: string) => Type | undefined, order: Order): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(value).map(([name, item]) => [name, order(typeOf(name), item)]));
 }
 
-function itemsOrdered({ type, schema, elemType }: SchemaDefinition, value: unknown, order: Order): unknown {
-  const item = elemType && { type: elemType };
-  if (Array.isArray(value)) return item ? value.map((member) => order(item, member)) : value;
+function listOrdered(type: Type, value: unknown[], order: Order): unknown[] {
+  if (type.kind === 'tuple') return value.map((item, index) => order(type.elements[index], item));
+
+  return type.kind === 'list' || type.kind === 'set' ? value.map((member) => order(type.element, member)) : value;
+}
+
+function itemsOrdered(type: Type, value: unknown, order: Order): unknown {
+  if (Array.isArray(value)) return listOrdered(type, value, order);
   if (!isRecord(value)) return value;
-  if (type === 'object') return schema ? entriesOrdered(value, (name) => definitionIn(schema, name), order) : value;
+  if (type.kind === 'object') return entriesOrdered(value, (name) => (Object.hasOwn(type.attributes, name) ? type.attributes[name] : undefined), order);
 
-  return item ? entriesOrdered(value, () => item, order) : value;
+  return type.kind === 'map' ? entriesOrdered(value, () => type.element, order) : value;
 }
 
 /** How a set ends up once its members are in order: a list for a provider, a plan and a state, a `SetValue` for the configuration to read. */
 type Finish = (members: unknown[]) => unknown;
 
-function ordered(definition: SchemaDefinition | undefined, value: unknown, finish: Finish): unknown {
-  if (!definition || isUnknown(value)) return value;
+function ordered(type: Type | undefined, value: unknown, finish: Finish): unknown {
+  if (!type || isUnknown(value)) return value;
 
-  const items = itemsOrdered(definition, value, (held, item) => ordered(held, item, finish));
-  if (definition.type !== 'set' || !Array.isArray(items)) return items;
+  const items = itemsOrdered(type, value, (held, item) => ordered(held, item, finish));
+  if (type.kind !== 'set' || !Array.isArray(items)) return items;
 
   const set = asSet(items);
   return Array.isArray(set) ? finish(set) : set;
@@ -69,8 +74,8 @@ function ordered(definition: SchemaDefinition | undefined, value: unknown, finis
 export function setsOrdered(schema: Schema, values: Record<string, unknown>): Record<string, unknown> {
   return entriesOrdered(
     values,
-    (name) => definitionIn(schema, name),
-    (definition, value) => ordered(definition, value, (members) => members)
+    (name) => typeIn(schema, name),
+    (type, value) => ordered(type, value, (members) => members)
   );
 }
 
@@ -78,7 +83,7 @@ export function setsOrdered(schema: Schema, values: Record<string, unknown>): Re
 export function setsMarked(schema: Schema, values: Record<string, unknown>): Record<string, unknown> {
   return entriesOrdered(
     values,
-    (name) => definitionIn(schema, name),
-    (definition, value) => ordered(definition, value, (members) => new SetValue(members))
+    (name) => typeIn(schema, name),
+    (type, value) => ordered(type, value, (members) => new SetValue(members))
   );
 }

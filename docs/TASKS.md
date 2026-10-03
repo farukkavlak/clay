@@ -180,8 +180,9 @@ provider plans what a resource to create or change will hold.
 
 ### Schema-driven validation
 
-`SchemaDefinition` carries `type`, `required`, `elemType` and `schema`. The engine holds
-a resource's and a data source's names and values to them, converts a number, a bool or
+`SchemaDefinition` carries a `type` and `required`. A type is whole, however deep:
+`list(set(string))`, an object of named types, a tuple. The engine holds a resource's and
+a data source's names and values to them, converts a number, a bool or
 a string to the one the schema names where it can, refuses a computed value the
 configuration sets unless it is also optional, and refuses a schema that keeps a value it
 does not compute. `planFromSchema` reads `forceNew`, `computed` and `kept` for a provider.
@@ -204,7 +205,7 @@ length below 1.
       that spells a number or a bool where one is wanted becomes it, as Terraform does.
       Any other string there is refused where it is written. `null_resource` takes any
       map as `triggers`, since it only compares them
-- [x] `SchemaType` knows a `set`, whose order is not a change. A set from the
+- [x] A schema type can be a `set`, whose order is not a change. A set from the
       configuration and from every provider answer is held in one order, with each member
       once, so every comparison sees the same members as the same value. One with a
       member not known yet is not known as a whole
@@ -214,6 +215,10 @@ length below 1.
       `var.members[0]` and `module.m.out[0]` are refused too. Files and providers still
       see a list in one order. Terraform: "Elements of a set are identified only by
       their value"
+- [x] A schema type nests as deep as it needs: `list(set(string))`, an object whose
+      attributes are required unless it lists them as optional, and a tuple with a type
+      for each position. A type a provider gives is checked whole when its schema is read.
+      Terraform: `object({ a = string, b = optional(number) })`
 - [ ] The plan shows a set change as the members added and removed, `+ "c"`. Today it
       prints the whole set before and after, and the reader finds the difference
 

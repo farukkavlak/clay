@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { planFromSchema, Schema, UNKNOWN } from '../src/index';
+import { planFromSchema, Schema, types, UNKNOWN } from '../src/index';
 
 const schema: Schema = {
-  path: { type: 'string', forceNew: true },
-  content: { type: 'string' },
-  made: { type: 'string', computed: true },
-  label: { type: 'string', computed: true, optional: true },
+  path: { type: types.string, forceNew: true },
+  content: { type: types.string },
+  made: { type: types.string, computed: true },
+  label: { type: types.string, computed: true, optional: true },
 };
 
-const keeping: Schema = { ...schema, serial: { type: 'string', computed: true, kept: true } };
+const keeping: Schema = { ...schema, serial: { type: types.string, computed: true, kept: true } };
 
 describe('planFromSchema', () => {
   it('plans what the provider computes for a resource to create as known after apply, and what the configuration sets as set', () => {

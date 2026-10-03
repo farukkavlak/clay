@@ -1,7 +1,7 @@
 import { Schema } from '@clay/contracts';
 import { ConfigError, DataBlock, Position, ResourceBlock, spell } from '@clay/parser';
 
-import { nameProblem } from './conformValues';
+import { nameProblem, namesOf } from './conformValues';
 import { LoadedResource } from './components/ModuleLoader';
 import { Context } from './keys';
 import { withPlace } from './place';
@@ -22,7 +22,7 @@ function computedSet(block: Block, schema: Schema): { message: string; position:
 
 /** A name written is placed where it is written; one left out, at the block. */
 function problemIn(block: Block, schema: Schema): { message: string; position: Position } | undefined {
-  const named = nameProblem(typeOf(block), schema, Object.keys(block.attributes));
+  const named = nameProblem(typeOf(block), namesOf(schema), Object.keys(block.attributes));
   if (named?.set !== undefined) return { message: named.message, position: block.attributes[named.set].position };
 
   return computedSet(block, schema) ?? (named && { message: named.message, position: block.position });

@@ -1,4 +1,4 @@
-import { AttributePath, ExactNumber, isRecord, isUnknown, NumberError, Schema, SchemaDefinition, SchemaType } from '@clay/contracts';
+import { AttributePath, ExactNumber, isRecord, isUnknown, NumberError, Schema, Type } from '@clay/contracts';
 import { DataBlock, Position, ResourceBlock } from '@clay/parser';
 
 import { setsOrdered } from './setOrder';
@@ -27,18 +27,44 @@ export interface NameProblem {
   set?: string;
 }
 
-/** A name the schema does not have comes first, then one it requires that is left out. */
-export function nameProblem(resource: string, schema: Schema, names: string[], within: AttributePath = []): NameProblem | undefined {
+/** The names a resource or an object in it has, and those of them it requires. */
+interface Names {
+  known: string[];
+  required: string[];
+}
+
+export function namesOf(schema: Schema): Names {
+  const known = Object.keys(schema);
+  return { known, required: known.filter((name) => schema[name].required) };
+}
+
+function namesOfObject(type: Extract<Type, { kind: 'object' }>): Names {
+  const known = Object.keys(type.attributes);
+  return { known, required: known.filter((name) => !type.optional?.includes(name)) };
+}
+
+/** A name it does not have comes first, then one it requires that is left out. */
+export function nameProblem(resource: string, { known, required }: Names, names: string[], within: AttributePath = []): NameProblem | undefined {
   const where = within.length > 0 ? ` in ${spelled(within)}` : '';
 
-  const unnamed = names.find((name) => !Object.hasOwn(schema, name));
+  const unnamed = names.find((name) => !known.includes(name));
   if (unnamed !== undefined) return { message: `${resource} has no attribute "${unnamed}"${where}`, set: unnamed };
 
-  const missing = Object.keys(schema).find((name) => schema[name].required && !names.includes(name));
+  const missing = required.find((name) => !names.includes(name));
   return missing === undefined ? undefined : { message: `${resource} requires "${missing}"${where}` };
 }
 
-const articles: Record<SchemaType, string> = { string: 'a string', number: 'a number', boolean: 'a boolean', list: 'a list', set: 'a set', map: 'a map', object: 'an object' };
+const articles: Record<Type['kind'], string> = {
+  string: 'a string',
+  number: 'a number',
+  bool: 'a boolean',
+  dynamic: 'any value',
+  list: 'a list',
+  set: 'a set',
+  map: 'a map',
+  object: 'an object',
+  tuple: 'a tuple',
+};
 
 function kindOf(value: unknown): string {
   if (value instanceof ExactNumber) return 'a number';
@@ -48,10 +74,12 @@ function kindOf(value: unknown): string {
   return `a ${typeof value}`;
 }
 
-function isType(type: SchemaType, value: unknown): boolean {
-  if (type === 'string' || type === 'boolean') return typeof value === type;
-  if (type === 'number') return value instanceof ExactNumber;
-  if (type === 'list' || type === 'set') return Array.isArray(value);
+function holds(kind: Type['kind'], value: unknown): boolean {
+  if (kind === 'dynamic') return true;
+  if (kind === 'string') return typeof value === 'string';
+  if (kind === 'bool') return typeof value === 'boolean';
+  if (kind === 'number') return value instanceof ExactNumber;
+  if (kind === 'list' || kind === 'set' || kind === 'tuple') return Array.isArray(value);
 
   return isRecord(value);
 }
@@ -77,11 +105,11 @@ function booleanIn(text: string, path: AttributePath): boolean {
 }
 
 /** A number or a boolean goes where a string does as its text, and a string where a number or a boolean does as the one it spells. */
-function converted(type: SchemaType, value: unknown, path: AttributePath): unknown {
-  if (type === 'string' && (value instanceof ExactNumber || typeof value === 'boolean')) return String(value);
+function converted(kind: Type['kind'], value: unknown, path: AttributePath): unknown {
+  if (kind === 'string' && (value instanceof ExactNumber || typeof value === 'boolean')) return String(value);
   if (typeof value !== 'string') return value;
-  if (type === 'number') return numberIn(value, path);
-  if (type === 'boolean') return booleanIn(value, path);
+  if (kind === 'number') return numberIn(value, path);
+  if (kind === 'bool') return booleanIn(value, path);
 
   return value;
 }
@@ -90,28 +118,40 @@ function entriesMapped(value: Record<string, unknown>, map: (name: string, item:
   return Object.fromEntries(Object.entries(value).map(([name, item]) => [name, map(name, item)]));
 }
 
-type Conform = (definition: SchemaDefinition, value: unknown, path: AttributePath) => unknown;
+type Conform = (type: Type, value: unknown, path: AttributePath) => unknown;
 
-/** What a value holds, each held to its definition. An object with no schema of its own, or a list or a map with no `elemType`, takes anything. */
-function itemsConformed({ type, schema, elemType }: SchemaDefinition, value: unknown, path: AttributePath, conform: Conform): unknown {
-  if (Array.isArray(value)) return elemType ? value.map((item, index) => conform({ type: elemType }, item, [...path, index])) : value;
-  if (!isRecord(value)) return value;
+/** What a value holds, each held to the type its place in the value names. */
+function itemsConformed(type: Type, value: unknown, path: AttributePath, conform: Conform): unknown {
+  if (type.kind === 'tuple') return (value as unknown[]).map((item, index) => conform(type.elements[index], item, [...path, index]));
+  if (type.kind === 'object') return entriesMapped(value as Record<string, unknown>, (name, item) => conform(type.attributes[name], item, [...path, name]));
+  if (type.kind !== 'list' && type.kind !== 'set' && type.kind !== 'map') return value;
 
-  if (type === 'object') return schema ? entriesMapped(value, (name, item) => conform(schema[name], item, [...path, name])) : value;
-  return elemType ? entriesMapped(value, (key, item) => conform({ type: elemType }, item, [...path, key])) : value;
+  const { element } = type;
+  if (Array.isArray(value)) return value.map((item, index) => conform(element, item, [...path, index]));
+  return entriesMapped(value as Record<string, unknown>, (key, item) => conform(element, item, [...path, key]));
 }
 
-function conformed(resource: string, definition: SchemaDefinition, written: unknown, path: AttributePath): unknown {
+const items = (count: number): string => `${count} ${count === 1 ? 'item' : 'items'}`;
+
+/** What the value's shape lacks for its type: an object's names, or a tuple's length. */
+function shapeProblem(resource: string, type: Type, value: unknown, path: AttributePath): string | undefined {
+  if (type.kind === 'object') return nameProblem(resource, namesOfObject(type), Object.keys(value as Record<string, unknown>), path)?.message;
+  if (type.kind !== 'tuple') return undefined;
+
+  const { length } = value as unknown[];
+  return length === type.elements.length ? undefined : `${spelled(path)} holds ${items(length)}, where ${resource} takes ${items(type.elements.length)}`;
+}
+
+function conformed(resource: string, type: Type, written: unknown, path: AttributePath): unknown {
   if (isUnknown(written)) return written;
 
-  const value = converted(definition.type, written, path);
-  if (!isType(definition.type, value)) throw mismatchAt(path, `${spelled(path)} is ${kindOf(value)}, where ${resource} takes ${articles[definition.type]}`);
+  const value = converted(type.kind, written, path);
+  if (!holds(type.kind, value)) throw mismatchAt(path, `${spelled(path)} is ${kindOf(value)}, where ${resource} takes ${articles[type.kind]}`);
 
-  const { schema } = definition;
-  const named = definition.type === 'object' && schema && isRecord(value) ? nameProblem(resource, schema, Object.keys(value), path) : undefined;
-  if (named) throw mismatchAt(path, named.message);
+  const problem = shapeProblem(resource, type, value, path);
+  if (problem) throw mismatchAt(path, problem);
 
-  return itemsConformed(definition, value, path, (held, item, at) => conformed(resource, held, item, at));
+  return itemsConformed(type, value, path, (held, item, at) => conformed(resource, held, item, at));
 }
 
 /**
@@ -121,11 +161,11 @@ function conformed(resource: string, definition: SchemaDefinition, written: unkn
  * Each set comes back in one order, with each member once.
  */
 export function conformValues(resource: string, schema: Schema, config: Record<string, unknown>): Record<string, unknown> {
-  const named = nameProblem(resource, schema, Object.keys(config));
+  const named = nameProblem(resource, namesOf(schema), Object.keys(config));
   if (named) throw new SchemaMismatch(named.message, named.set);
 
   return setsOrdered(
     schema,
-    entriesMapped(config, (name, value) => conformed(resource, schema[name], value, [name]))
+    entriesMapped(config, (name, value) => conformed(resource, schema[name].type, value, [name]))
   );
 }

@@ -1,4 +1,4 @@
-import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, UNKNOWN } from '@clay/contracts';
+import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types, UNKNOWN } from '@clay/contracts';
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { ConfigError } from '@clay/parser';
 import { parsePlanFile, serializePlan } from '@clay/planner';
@@ -22,10 +22,10 @@ class PoolProvider implements Provider {
 
   async getSchema(): Promise<Schema> {
     return {
-      id: { type: 'string', computed: true, kept: true },
-      members: { type: 'set', elemType: 'string' },
-      order: { type: 'list', elemType: 'string' },
-      groups: { type: 'set', elemType: 'set' },
+      id: { type: types.string, computed: true, kept: true },
+      members: { type: types.set(types.string) },
+      order: { type: types.list(types.string) },
+      groups: { type: types.set(types.set(types.dynamic)) },
     };
   }
 
@@ -51,7 +51,7 @@ class PoolProvider implements Provider {
   async delete(): Promise<void> {}
 
   async getDataSourceSchema(): Promise<Schema> {
-    return { names: { type: 'list', elemType: 'string', required: true }, members: { type: 'set', elemType: 'string', computed: true } };
+    return { names: { type: types.list(types.string), required: true }, members: { type: types.set(types.string), computed: true } };
   }
 
   async validateDataSource(): Promise<void> {}

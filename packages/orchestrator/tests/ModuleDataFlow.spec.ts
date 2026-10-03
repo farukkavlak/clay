@@ -1,4 +1,4 @@
-import { CreateRequest, emptyState, planFromSchema, PlanRequest, Schema, UNKNOWN, UpdateRequest } from '@clay/contracts';
+import { CreateRequest, emptyState, planFromSchema, PlanRequest, Schema, types, UNKNOWN, UpdateRequest } from '@clay/contracts';
 import { plan } from '@clay/planner';
 import fsPromises from 'node:fs/promises';
 import os from 'node:os';
@@ -39,7 +39,7 @@ vi.mock('@clay/planner', async () => ({
   plan: vi.fn(() => []),
 }));
 
-const schema: Schema = { loc: { type: 'string' }, name: { type: 'string' }, region: { type: 'string' }, tags: { type: 'string' } };
+const schema: Schema = { loc: { type: types.string }, name: { type: types.string }, region: { type: types.string }, tags: { type: types.string } };
 
 describe('Orchestrator - Phase 4: Data Flow', () => {
   let tmpDir: string;

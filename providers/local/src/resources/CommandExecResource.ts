@@ -1,4 +1,4 @@
-import { CreateRequest, PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema, UpdateRequest } from '@clay/contracts';
+import { CreateRequest, PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema, types, UpdateRequest } from '@clay/contracts';
 import { exec } from 'node:child_process';
 import crypto from 'node:crypto';
 import { promisify } from 'node:util';
@@ -13,10 +13,10 @@ async function run(planned: Record<string, unknown>): Promise<string> {
 export class CommandExecResource implements ResourceHandler {
   async getSchema(): Promise<Schema> {
     return {
-      id: { type: 'string', computed: true, kept: true },
-      command: { type: 'string', required: true, forceNew: false }, // Re-exec allows update
-      cwd: { type: 'string', required: false, forceNew: false },
-      stdout: { type: 'string', computed: true },
+      id: { type: types.string, computed: true, kept: true },
+      command: { type: types.string, required: true, forceNew: false }, // Re-exec allows update
+      cwd: { type: types.string, required: false, forceNew: false },
+      stdout: { type: types.string, computed: true },
     };
   }
 

@@ -1,4 +1,4 @@
-import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, UpdateRequest } from '@clay/contracts';
+import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types, UpdateRequest } from '@clay/contracts';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -15,7 +15,7 @@ class MockDataProvider implements Provider {
   data = new Map<string, Record<string, unknown>>();
 
   async getSchema(_type: string): Promise<Schema> {
-    return { contact: { type: 'string' }, owner: { type: 'string' }, url: { type: 'string' }, val: { type: 'string' } };
+    return { contact: { type: types.string }, owner: { type: types.string }, url: { type: types.string }, val: { type: types.string } };
   }
 
   async plan(type: string, request: PlanRequest): Promise<PlannedChange> {
@@ -25,9 +25,9 @@ class MockDataProvider implements Provider {
   async validate(_type: string, _inputs: Record<string, unknown>): Promise<void> {}
 
   async getDataSourceSchema(): Promise<Schema> {
-    const read = { type: 'string', computed: true } as const;
+    const read = { type: types.string, computed: true } as const;
 
-    return { id: { type: 'string', required: true }, username: read, email: read, role: read, val: read, endpoint: read, port: { type: 'number', computed: true } };
+    return { id: { type: types.string, required: true }, username: read, email: read, role: read, val: read, endpoint: read, port: { type: types.number, computed: true } };
   }
 
   async validateDataSource(_type: string, _inputs: Record<string, unknown>): Promise<void> {}

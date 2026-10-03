@@ -1,4 +1,4 @@
-import { CreateRequest, emptyState, planFromSchema, PlanRequest, Schema, UNKNOWN, UpdateRequest } from '@clay/contracts';
+import { CreateRequest, emptyState, planFromSchema, PlanRequest, Schema, types, UNKNOWN, UpdateRequest } from '@clay/contracts';
 import { plan } from '@clay/planner';
 import fsPromises from 'node:fs/promises';
 import os from 'node:os';
@@ -36,7 +36,7 @@ vi.mock('@clay/planner', async () => ({
   plan: vi.fn(() => []),
 }));
 
-const schema: Schema = { ami: { type: 'string' } };
+const schema: Schema = { ami: { type: types.string } };
 
 describe('Orchestrator - Phase 5: Scoped Data Sources', () => {
   let tmpDir: string;
@@ -67,7 +67,7 @@ describe('Orchestrator - Phase 5: Scoped Data Sources', () => {
       validate: vi.fn(),
       create: vi.fn(async (_type: string, { config }: CreateRequest) => config),
       read: vi.fn(async (_type, prior) => prior),
-      getDataSourceSchema: vi.fn().mockResolvedValue({ name: { type: 'string', required: true }, id: { type: 'string', computed: true } }),
+      getDataSourceSchema: vi.fn().mockResolvedValue({ name: { type: types.string, required: true }, id: { type: types.string, computed: true } }),
       validateDataSource: vi.fn(),
       readDataSource: vi.fn().mockResolvedValue({ id: 'ami-12345', name: 'Ubuntu 20.04' }),
       update: vi.fn(async (_type: string, { config }: UpdateRequest) => config),

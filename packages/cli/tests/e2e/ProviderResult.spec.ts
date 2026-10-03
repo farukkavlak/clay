@@ -1,4 +1,4 @@
-import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, UNKNOWN } from '@clay/contracts';
+import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types, UNKNOWN } from '@clay/contracts';
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
@@ -15,7 +15,7 @@ class LoudProvider implements Provider {
   readonly dataSources: string[] = [];
 
   async getSchema(): Promise<Schema> {
-    return { label: { type: 'string', required: true } };
+    return { label: { type: types.string, required: true } };
   }
 
   async plan(_type: string, request: PlanRequest): Promise<PlannedChange> {
@@ -73,7 +73,7 @@ class DataReader extends LoudProvider {
 
   constructor(
     private returned: Record<string, unknown>,
-    private schema: Schema = { content: { type: 'string', computed: true } }
+    private schema: Schema = { content: { type: types.string, computed: true } }
   ) {
     super();
   }
@@ -90,7 +90,7 @@ class DataReader extends LoudProvider {
 /** Says it keeps a value it does not compute. */
 class MuddledEcho extends EchoProvider {
   override async getSchema(): Promise<Schema> {
-    return { label: { type: 'string', required: true, kept: true } };
+    return { label: { type: types.string, required: true, kept: true } };
   }
 }
 
@@ -99,7 +99,7 @@ class MisnamingProvider extends LoudProvider {
   override readonly resources = ['named'];
 
   override async getSchema(): Promise<Schema> {
-    return { name: { type: 'string', required: true }, id: { type: 'string', computed: true, kept: true } };
+    return { name: { type: types.string, required: true }, id: { type: types.string, computed: true, kept: true } };
   }
 
   override async plan(_type: string, request: PlanRequest): Promise<PlannedChange> {
@@ -301,7 +301,7 @@ describe('what a data source reads', () => {
   });
 
   it('refuses a schema that says when to remake it, at the data block, before it is read', async () => {
-    const reader = new DataReader({ content: UNKNOWN }, { content: { type: 'string', computed: true, forceNew: true } });
+    const reader = new DataReader({ content: UNKNOWN }, { content: { type: types.string, computed: true, forceNew: true } });
 
     await expect(plan(reader)).rejects.toMatchObject({
       message: 'data source vague marks content forceNew, but only a resource can be forceNew, which is a bug in the provider',
