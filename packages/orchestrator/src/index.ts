@@ -10,8 +10,7 @@ import { DesiredStateBuilder } from './components/DesiredStateBuilder';
 import { ModuleLoader } from './components/ModuleLoader';
 import { PlanRunner } from './components/PlanRunner';
 import { ResourcePlanner } from './components/ResourcePlanner';
-import { checkRead } from './providerResult';
-import { setsOrdered } from './setOrder';
+import { checkRead, heldBy } from './providerResult';
 import { Instances } from './Instances';
 import { ModuleInstances } from './ModuleInstances';
 import { Planned } from './Planned';
@@ -22,6 +21,7 @@ import { ReferenceResolver } from './resolvers/ReferenceResolver';
 import { ReferenceScanner } from './resolvers/ReferenceScanner';
 import { RunEvent } from './RunEvent';
 import { ScopeManager } from './scope/ScopeManager';
+import { plainOf, Value } from './Value';
 
 export type { RunEvent } from './RunEvent';
 export { DiskFiles, InMemoryFiles, RecordingFiles } from './ConfigFiles';
@@ -46,7 +46,7 @@ export class Orchestrator {
   static create(stateManager: StateManager, files: ConfigFiles): Orchestrator {
     const providers = new ProviderRegistry();
     const scopes = new ScopeManager();
-    const dataSources = new Map<string, Record<string, unknown>>();
+    const dataSources = new Map<string, Record<string, Value>>();
     const schemas = new Map<string, Schema>();
     const instances = new Instances();
     const modules = new ModuleInstances();
@@ -140,8 +140,9 @@ export class Orchestrator {
       if (read === null) return null;
 
       const schema = await this.providers.schema(resource.resourceType);
-      checkRead(resource.resourceType, schema, read);
-      return setsOrdered(schema, read);
+      const held = plainOf(heldBy(resource.resourceType, 'read', schema, read));
+      checkRead(resource.resourceType, schema, held);
+      return held;
     } catch (error) {
       throw new Error(`${key}: ${asError(error).message}`, { cause: error });
     }

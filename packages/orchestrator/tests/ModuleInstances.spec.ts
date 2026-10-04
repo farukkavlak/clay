@@ -1,13 +1,14 @@
-import { ModuleAddress } from '@clay/contracts';
+import { ModuleAddress, types } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { ModuleInstances, ReadIn } from '../src/ModuleInstances';
+import { valueOf } from '../src/Value';
 import { str } from './ast';
 
 const none = (): undefined => {};
 
 /** What a for_each reads to, handed to the parse the call asks for. */
-const read: ReadIn = (_, parse) => parse({ b: 'two', a: 'one' });
+const read: ReadIn = (_, parse) => parse(valueOf(types.object({ b: types.string, a: types.string }), { b: 'two', a: 'one' }));
 
 describe('ModuleInstances', () => {
   it('has one instance of the root', () => {
@@ -43,7 +44,7 @@ describe('ModuleInstances', () => {
     modules.expandCall(ModuleAddress.root, block, read);
 
     expect(modules.of(ModuleAddress.root.child('web')).map(String)).toEqual(['module.web["a"]', 'module.web["b"]']);
-    expect(modules.eachValue(ModuleAddress.root.child('web'), 'b')).toBe('two');
+    expect(modules.eachValue(ModuleAddress.root.child('web'), 'b')).toEqual(valueOf(types.string, 'two'));
     expect(modules.eachValue(ModuleAddress.root.child('other'), 'b')).toBeUndefined();
   });
 

@@ -1,13 +1,13 @@
 import { ExactNumber, isUnknown } from '@clay/contracts';
 
-import { kindOf } from './resolvers/readPath';
+import { described, Value } from './Value';
 
 /** A count says how many instances to make, so it is a whole number, and one the plan knows. */
-export function countFrom(value: unknown): number {
-  if (isUnknown(value)) throw new Error('count must be known when planning: it reads a value only an apply makes');
-  if (!(value instanceof ExactNumber)) throw new Error(`count is a whole number from 0, not a ${kindOf(value)}`);
+export function countFrom(value: Value): number {
+  if (isUnknown(value.data)) throw new Error('count must be known when planning: it reads a value only an apply makes');
+  if (!(value.data instanceof ExactNumber)) throw new Error(`count is a whole number from 0, not ${described(value)}`);
 
-  const count = value.toSafeInteger('count');
+  const count = value.data.toSafeInteger('count');
   if (count < 0) throw new Error(`count is a whole number from 0, not ${count}`);
 
   return count;

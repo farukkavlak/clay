@@ -54,6 +54,17 @@ class StampProvider implements Provider {
   }
 }
 
+/** Makes `tags`, a map of strings, with the resource. */
+class TaggedStampProvider extends StampProvider {
+  override async getSchema(): Promise<Schema> {
+    return { ...(await super.getSchema()), tags: { type: types.map(types.string), computed: true } };
+  }
+
+  override async create(type: string, request: CreateRequest): Promise<Record<string, unknown>> {
+    return { ...(await super.create(type, request)), tags: { a: 'one' } };
+  }
+}
+
 /** Says it computes `made`, then does not return it. */
 class ForgetfulStampProvider extends StampProvider {
   override async create(_type: string, { config }: CreateRequest): Promise<Record<string, unknown>> {
@@ -143,23 +154,45 @@ describe('a value only the provider knows', () => {
     expect(state.resources['random_string.r'].attributes.result).toHaveLength(5);
   });
 
-  // A name the configuration does not set and the provider does not compute is never known.
+  // The map is not known at plan, and what is read out of it is a string, not a map.
   it.each([
-    ['a name the resource does not have', 'stamp.a.nope', 'nope'],
-    ['a value the configuration leaves unset', 'stamp.a.note', 'note'],
-  ])('refuses a reference to %s, where it is written', async (_, reference, name) => {
-    const config = `resource "stamp" "a" { label = "x" }\noutput "o" { value = ${reference} }`;
+    ['from the resource', (read: string) => `content = ${read}`, 'stamp.a.tags.a'],
+    ['from the resource, by a key in brackets', (read: string) => `content = ${read}`, 'stamp.a.tags["a"]'],
+    ['through a variable', (read: string) => `content = var.v.a\n}\nvariable "v" {\n  default = ${read}`, 'stamp.a.tags'],
+  ])('reads into a value the provider makes, %s', async (_, written, read) => {
+    await apply(`resource "stamp" "a" { label = "x" }\nresource "local_file" "copy" {\n  path = "${file}"\n  ${written(read)}\n}`, new TaggedStampProvider());
+
+    expect(await fs.readFile(file, 'utf8')).toBe('one');
+  });
+
+  // An output not known yet still has the type it will have, so the caller's mistake is refused at plan.
+  it('refuses, at plan, a module output not known yet of a type the attribute does not take', async () => {
+    await fs.mkdir(path.join(dir, 'm'));
+    await fs.writeFile(path.join(dir, 'm', 'main.clay'), 'resource "stamp" "a" { label = "x" }\noutput "t" { value = stamp.a.tags }', 'utf8');
+    const config = `module "m" { source = "./m" }\nresource "local_file" "copy" {\n  path = "${file}"\n  content = module.m.t\n}`;
+
+    await expect(newOrchestrator(new TaggedStampProvider()).plan(config)).rejects.toMatchObject({
+      message: 'content is a map known only after apply, where local_file takes a string',
+      position: { line: 4 },
+    });
+  });
+
+  // A name the schema does not have is never known; one it has and nothing sets reads as null.
+  it('refuses a reference to a name the resource does not have, where it is written', async () => {
+    const config = 'resource "stamp" "a" { label = "x" }\noutput "o" { value = stamp.a.nope }';
 
     await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
-      message: `"${reference}" will never be known: the configuration does not set ${name} and stamp does not compute it`,
+      message: '"stamp.a.nope" will never be known: the configuration does not set nope and stamp does not compute it',
       position: { file: 'main.clay', line: 2, column: 22 },
     });
   });
 
-  it('refuses at apply an item the plan left for the apply, when the provider does not return it', async () => {
-    const config = 'resource "stamp" "a" { label = "x" }\nresource "null_resource" "n" {\n  triggers = { a = stamp.a.made }\n}';
+  // The provider may leave out what it said it would make, and a name left out is null.
+  it('reads as null an item the plan left for the apply, when the provider does not return it', async () => {
+    await apply('resource "stamp" "a" { label = "x" }\nresource "null_resource" "n" {\n  triggers = { a = stamp.a.made }\n}', new ForgetfulStampProvider());
 
-    await expect(apply(config, new ForgetfulStampProvider())).rejects.toThrow('Attribute "made" not found on resource');
+    const { resources } = await new LocalBackend(dir).read();
+    expect(resources['null_resource.n'].attributes.triggers).toEqual({ a: null });
   });
 
   it('refuses a reference to a name a resource that does not change has not got, where it is written', async () => {

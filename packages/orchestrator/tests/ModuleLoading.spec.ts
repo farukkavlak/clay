@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vite
 
 import { InMemoryFiles, Orchestrator } from '../src/index';
 import { apply } from './apply';
+import { str } from './ast';
 
 /** Fresh per test: apply writes into whatever this returns, so one shared object would carry a test's resources into the next. */
 const readMock = vi.fn();
@@ -116,7 +117,7 @@ describe('Orchestrator - Module Loading', () => {
         resourceType: 'test_resource',
         name: 'main',
         modulePath: [{ name: 'vpc' }],
-        attributes: { name: 'main-vpc' }, // minimal attributes
+        attributes: { name: str('main-vpc') },
         planned: { name: 'main-vpc' },
         after: { name: 'main-vpc' },
       },

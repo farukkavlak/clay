@@ -1,4 +1,4 @@
-import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types, UpdateRequest } from '@clay/contracts';
+import { CreateRequest, ExactNumber, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types, UpdateRequest } from '@clay/contracts';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -167,7 +167,7 @@ describe('Orchestrator - Data Sources', () => {
   it('should support string interpolation with data sources', async () => {
     mockProvider.setMockData('config', {
       endpoint: 'api.example.com',
-      port: 8080,
+      port: ExactNumber.parse('8080'),
     });
 
     const config = `

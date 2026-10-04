@@ -1,6 +1,7 @@
 import {
   Address,
   AttributePath,
+  containsUnknown,
   ExactNumber,
   InstanceKey,
   isInstanceKey,
@@ -16,6 +17,9 @@ import {
   Resource,
   Schema,
   State,
+  Type,
+  typeAt,
+  typeIn,
   UNKNOWN,
   unknownPaths,
   valueAt,
@@ -25,7 +29,7 @@ import { isDeepStrictEqual } from 'node:util';
 
 export type ActionType = 'CREATE' | 'UPDATE' | 'REPLACE' | 'DELETE' | 'NO_OP';
 
-/** A resource from the config: where it lives, the block as parsed, its values with references resolved, and what its provider plans it to hold. */
+/** A resource from the config: where it lives, the block as parsed, its values with references resolved and held to its schema, and what its provider plans it to hold. */
 export interface DesiredResource {
   address: Address;
   block: ResourceBlock;
@@ -73,7 +77,7 @@ export interface Plan {
 }
 
 /** Bumped when the shape below changes once a Clay is released, so a plan file from an older version is refused instead of misread. */
-export const PLAN_FILE_VERSION = '15.0';
+export const PLAN_FILE_VERSION = '16.0';
 
 export interface PlanFile extends Plan {
   version: string;
@@ -419,51 +423,72 @@ export interface Mismatch {
   returned: unknown;
 }
 
-/** A value the plan did not know yet may come to anything; a known one, and every known part of one known in part, comes to the same. */
-function mismatches(planned: unknown, actual: unknown, at: AttributePath): Mismatch[] {
-  if (isUnknown(planned)) return [];
-
-  const here = [{ path: at, planned, returned: actual }];
-  if (Array.isArray(planned)) {
-    if (!Array.isArray(actual) || planned.length !== actual.length) return here;
-    return planned.flatMap((item, i) => mismatches(item, actual[i], [...at, i]));
-  }
-  if (isRecord(planned)) {
-    if (!isRecord(actual) || !isDeepStrictEqual(Object.keys(planned).sort(), Object.keys(actual).sort())) return here;
-    return Object.keys(planned).flatMap((key) => mismatches(planned[key], actual[key], [...at, key]));
-  }
-
-  return isDeepStrictEqual(planned, actual) ? [] : here;
+function includes(members: unknown[], member: unknown): boolean {
+  return members.some((other) => isDeepStrictEqual(other, member));
 }
 
-function conforms(planned: unknown, resolved: unknown): boolean {
-  return mismatches(planned, resolved, []).length === 0;
+/**
+ * A set's members have no place, so it holds to the plan when it has every member the plan knew, and no more others than the plan had members not
+ * known yet: each of those may come to a member of its own, or to one the set already has.
+ */
+function setMismatches(planned: unknown[], actual: unknown, at: AttributePath): Mismatch[] {
+  if (!Array.isArray(actual)) return [{ path: at, planned, returned: actual }];
+
+  const known = planned.filter((member) => !containsUnknown(member));
+  const others = actual.filter((member) => !includes(known, member));
+  const holds = known.every((member) => includes(actual, member)) && others.length <= planned.length - known.length;
+
+  return holds ? [] : [{ path: at, planned, returned: actual }];
+}
+
+type Compare = (type: Type, planned: unknown, actual: unknown, at: AttributePath) => Mismatch[];
+
+function itemMismatches(type: Type, planned: unknown[], actual: unknown, at: AttributePath, compare: Compare): Mismatch[] {
+  if (!Array.isArray(actual) || planned.length !== actual.length) return [{ path: at, planned, returned: actual }];
+
+  return planned.flatMap((item, i) => compare(typeAt(type, i), item, actual[i], [...at, i]));
+}
+
+function entryMismatches(type: Type, planned: Record<string, unknown>, actual: unknown, at: AttributePath, compare: Compare): Mismatch[] {
+  if (!isRecord(actual) || !isDeepStrictEqual(Object.keys(planned).sort(), Object.keys(actual).sort())) return [{ path: at, planned, returned: actual }];
+
+  return Object.keys(planned).flatMap((key) => compare(typeAt(type, key), planned[key], actual[key], [...at, key]));
+}
+
+/** A value the plan did not know yet may come to anything; a known one, and every known part of one known in part, comes to the same. */
+function mismatches(type: Type, planned: unknown, actual: unknown, at: AttributePath): Mismatch[] {
+  if (isUnknown(planned)) return [];
+  if (type.kind === 'set' && Array.isArray(planned)) return setMismatches(planned, actual, at);
+  if (Array.isArray(planned)) return itemMismatches(type, planned, actual, at, mismatches);
+  if (isRecord(planned)) return entryMismatches(type, planned, actual, at, mismatches);
+
+  return isDeepStrictEqual(planned, actual) ? [] : [{ path: at, planned, returned: actual }];
 }
 
 /** Every place the plan made again at apply differs from what the plan showed. A value the plan did not know may come to anything, or stay not known. */
-export function offFinal(after: Record<string, unknown>, final: Record<string, unknown>): Mismatch[] {
-  return [...new Set([...Object.keys(after), ...Object.keys(final)])].flatMap((name) => mismatches(own(after, name), own(final, name), [name]));
+export function offFinal(schema: Schema, after: Record<string, unknown>, final: Record<string, unknown>): Mismatch[] {
+  return [...new Set([...Object.keys(after), ...Object.keys(final)])].flatMap((name) => mismatches(typeIn(schema, name), own(after, name), own(final, name), [name]));
 }
 
 /**
  * Every place what an apply returned differs from what the plan showed. A value the configuration sets is held to what it resolved to for the apply, which the
  * plan may not have known. Nothing returned may be unknown, since an apply returns the resource as it is.
  */
-export function offApply(after: Record<string, unknown>, inputs: Record<string, unknown>, returned: Record<string, unknown>): Mismatch[] {
+export function offApply(schema: Schema, after: Record<string, unknown>, inputs: Record<string, unknown>, returned: Record<string, unknown>): Mismatch[] {
   const expected = { ...after, ...inputs };
 
   return [...new Set([...Object.keys(expected), ...Object.keys(returned)])].flatMap((name) => {
     const unknown = unknownPaths(own(returned, name), [name]);
     if (unknown.length > 0) return unknown.map((path) => ({ path, planned: valueAt(expected, path), returned: UNKNOWN }));
 
-    return mismatches(own(expected, name), own(returned, name), [name]);
+    return mismatches(typeIn(schema, name), own(expected, name), own(returned, name), [name]);
   });
 }
 
 /** The first value a resource now resolves to that the plan showed otherwise, or nothing when every one holds to the plan. */
-export function offPlan(planned: Record<string, unknown>, resolved: Record<string, unknown>): { name: string; planned: unknown; resolved: unknown } | undefined {
+export function offPlan(schema: Schema, planned: Record<string, unknown>, resolved: Record<string, unknown>): { name: string; planned: unknown; resolved: unknown } | undefined {
   for (const name of new Set([...Object.keys(planned), ...Object.keys(resolved)]))
-    if (!conforms(own(planned, name), own(resolved, name))) return { name, planned: own(planned, name), resolved: own(resolved, name) };
+    if (mismatches(typeIn(schema, name), own(planned, name), own(resolved, name), [name]).length > 0) return { name, planned: own(planned, name), resolved: own(resolved, name) };
 
   return undefined;
 }

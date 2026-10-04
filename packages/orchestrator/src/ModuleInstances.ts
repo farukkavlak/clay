@@ -4,9 +4,10 @@ import { AttributeValue, ModuleBlock } from '@clay/parser';
 import { countFrom, indexesOf } from './count';
 import { eachFrom } from './forEach';
 import { Repetition } from './Instances';
+import { Value } from './Value';
 
 /** Reads a call's count or for_each in one instance of the module that calls it, and parses what it reads. */
-export type ReadIn = <T>(value: AttributeValue, parse: (value: unknown) => T, caller: ModuleAddress) => T;
+export type ReadIn = <T>(value: AttributeValue, parse: (value: Value) => T, caller: ModuleAddress) => T;
 
 /**
  * Which modules are called with count or for_each, by the module as the configuration writes it, and the instances of each once its call has run.
@@ -16,7 +17,7 @@ export class ModuleInstances {
   private repetitions = new Map<string, Repetition>();
   private instances = new Map<string, ModuleAddress[]>();
   private keys = new Map<string, InstanceKey[]>();
-  private values = new Map<string, Map<string, unknown>>();
+  private values = new Map<string, Map<string, Value>>();
 
   clear(): void {
     this.repetitions.clear();
@@ -72,7 +73,7 @@ export class ModuleInstances {
   }
 
   /** The value for_each gives the instance `key` of a call, read as `each.value` in its inputs. */
-  eachValue(call: ModuleAddress, key: string): unknown {
+  eachValue(call: ModuleAddress, key: string): Value | undefined {
     return this.values.get(call.toString())?.get(key);
   }
 }

@@ -1,4 +1,4 @@
-import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types, UNKNOWN } from '@clay/contracts';
+import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types, UNKNOWN, UpdateRequest } from '@clay/contracts';
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
@@ -32,7 +32,7 @@ class LoudProvider implements Provider {
     return { label: String(config.label).toUpperCase(), volume: 'high' };
   }
 
-  async update(): Promise<Record<string, unknown>> {
+  async update(_type: string, _request: UpdateRequest): Promise<Record<string, unknown>> {
     return {};
   }
 
@@ -87,6 +87,23 @@ class DataReader extends LoudProvider {
   }
 }
 
+/** Makes and changes a resource with a `note` it names and gives no value. */
+class NotelessProvider extends LoudProvider {
+  override readonly resources = ['noteless'];
+
+  override async getSchema(): Promise<Schema> {
+    return { label: { type: types.string, required: true }, note: { type: types.string, computed: true, optional: true } };
+  }
+
+  override async create(_type: string, { config }: CreateRequest): Promise<Record<string, unknown>> {
+    return { ...config, note: undefined };
+  }
+
+  override async update(_type: string, { config }: UpdateRequest): Promise<Record<string, unknown>> {
+    return { ...config, note: undefined };
+  }
+}
+
 /** Says it keeps a value it does not compute. */
 class MuddledEcho extends EchoProvider {
   override async getSchema(): Promise<Schema> {
@@ -109,6 +126,14 @@ class MisnamingProvider extends LoudProvider {
 
   override async create(_type: string, { config }: CreateRequest): Promise<Record<string, unknown>> {
     return { ...config, id: `${String(config.name)}-123` };
+  }
+}
+
+/** Plans its label as a list, where its schema names a string. */
+class MistypingProvider extends LoudProvider {
+  override async plan(_type: string, request: PlanRequest): Promise<PlannedChange> {
+    const { after, replace } = planFromSchema(await this.getSchema(), request);
+    return { after: { ...after, label: [after.label] }, replace };
   }
 }
 
@@ -271,6 +296,81 @@ describe('what a refresh reads, held to what a resource can hold', () => {
       `echo.a: echo read what the resource cannot hold, which is a bug in the provider:\n  ${line}`
     );
   });
+
+  // A name with no value is one left out, so it is not a name the provider made up.
+  it('takes a name the read gives no value as one it left out', async () => {
+    const config = 'resource "echo" "a" { label = "a" }';
+    await apply(config);
+
+    const { actions } = await newOrchestrator(new EchoProvider({ volume: undefined })).plan(config);
+
+    expect(actions.map((action) => action.type)).toEqual(['NO_OP']);
+  });
+
+  it('refuses a value of another type than its schema names, at the resource', async () => {
+    const config = 'resource "echo" "a" { label = "a" }';
+    await apply(config);
+
+    await expect(newOrchestrator(new EchoProvider({ label: ['a'] })).plan(config)).rejects.toThrow(
+      'echo.a: echo read what its schema does not hold, which is a bug in the provider: label is a list, where its type is a string'
+    );
+  });
+});
+
+const noteless = (label: string) => `resource "noteless" "a" { label = "${label}" }\noutput "note" { value = noteless.a.note }`;
+
+describe('a name an apply returns with no value', () => {
+  let dir: string;
+
+  const newOrchestrator = () => {
+    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
+    engine.registerProvider(new NotelessProvider());
+    return engine;
+  };
+
+  beforeEach(async () => {
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-valueless-'));
+  });
+
+  afterEach(async () => {
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  // The output reads it in the same run, from what the apply returned, before any state file drops it.
+  it.each([
+    ['a create', []],
+    ['an update', ['old']],
+  ])('is a name %s left out, read as null in the same run', async (_, before) => {
+    for (const label of [...before, 'new']) for await (const event of start(newOrchestrator(), noteless(label))) if (event.type === 'failed') throw event.error;
+
+    const state = await new LocalBackend(dir).read();
+    expect(state.resources['noteless.a'].attributes).toEqual({ label: 'new' });
+    expect(state.outputs).toEqual({ note: null });
+    const plan = await newOrchestrator().plan(noteless('new'));
+    expect(plan.actions.map((action) => action.type)).toEqual(['NO_OP']);
+  });
+});
+
+describe('what a provider plans, held to its schema', () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-plan-result-'));
+  });
+
+  afterEach(async () => {
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it('refuses a value of another type than its schema names, at the resource', async () => {
+    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
+    engine.registerProvider(new MistypingProvider());
+
+    await expect(engine.plan('\nresource "loud" "a" { label = "a" }')).rejects.toMatchObject({
+      message: 'loud planned what its schema does not hold, which is a bug in the provider: label is a list, where its type is a string',
+      position: { file: 'main.clay', line: 2, column: 1 },
+    });
+  });
 });
 
 describe('what a data source reads', () => {
@@ -296,6 +396,38 @@ describe('what a data source reads', () => {
   ])('refuses %s, at the data block', async (_, returned, line) => {
     await expect(plan(new DataReader(returned))).rejects.toMatchObject({
       message: `vague read what the data source cannot hold, which is a bug in the provider:\n  ${line}`,
+      position: { file: 'main.clay', line: 2, column: 1 },
+    });
+  });
+
+  it('takes a name the read gives no value as one it left out', async () => {
+    await expect(plan(new DataReader({ content: 'x', size: undefined }))).resolves.toMatchObject({ actions: [] });
+  });
+
+  // Left out, given no value and given null are the one thing to what reads it.
+  it.each([
+    ['leaves out', {}],
+    ['gives no value', { content: undefined }],
+    ['gives null', { content: null }],
+  ])('reads as null a name its schema has that the read %s', async (_, returned) => {
+    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
+    engine.registerProvider(new DataReader(returned));
+
+    const { outputs } = await engine.plan('data "vague" "v" {}\noutput "content" { value = data.vague.v.content }');
+
+    expect(outputs).toEqual({ content: { old: undefined, new: null } });
+  });
+
+  it('refuses a name its schema does not have, where it is read', async () => {
+    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
+    engine.registerProvider(new DataReader({ content: 'x' }));
+
+    await expect(engine.plan('data "vague" "v" {}\noutput "size" { value = data.vague.v.size }')).rejects.toThrow('Attribute "size" not found on data source "data.vague.v"');
+  });
+
+  it('refuses a value of another type than its schema names, at the data block', async () => {
+    await expect(plan(new DataReader({ content: ['x'] }))).rejects.toMatchObject({
+      message: 'vague read what its schema does not hold, which is a bug in the provider: content is a list, where its type is a string',
       position: { file: 'main.clay', line: 2, column: 1 },
     });
   });

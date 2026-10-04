@@ -10,11 +10,11 @@ type Block = ResourceBlock | DataBlock;
 
 const typeOf = (block: Block): string => (block.type === 'Resource' ? block.resourceType : block.dataSourceType);
 
-/** A value only the provider makes would show in the plan as the configuration set it and then never be applied. */
+/** A value only the provider makes would show in the plan as the configuration set it and then never be applied. A name set to `null` is left out, so it sets none. */
 function computedSet(block: Block, schema: Schema): { message: string; position: Position } | undefined {
   for (const [name, value] of Object.entries(block.attributes)) {
-    const definition = schema[name];
-    if (definition.computed && !definition.optional) return { message: `${name} is computed by ${typeOf(block)} and cannot be set`, position: value.position };
+    const { computed, optional } = schema[name];
+    if (value.type !== 'Null' && computed && !optional) return { message: `${name} is computed by ${typeOf(block)} and cannot be set`, position: value.position };
   }
 
   return undefined;

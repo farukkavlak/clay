@@ -1,4 +1,4 @@
-import { Address, State, STATE_VERSION, UNKNOWN } from '@clay/contracts';
+import { Address, Schema, State, STATE_VERSION, types, UNKNOWN } from '@clay/contracts';
 import { parseReference, ResourceReference } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
@@ -6,6 +6,7 @@ import { Instances } from '../../src/Instances';
 import { Planned } from '../../src/Planned';
 import { ResourceResolver } from '../../src/resolvers/ResourceResolver';
 import { UnresolvedReferenceError } from '../../src/resolvers/UnresolvedReferenceError';
+import { valueOf } from '../../src/Value';
 
 const ref = (spelled: string) => parseReference(spelled.split('.')) as ResourceReference;
 
@@ -31,17 +32,25 @@ describe('ResourceResolver', () => {
 
   it('should resolve simple attribute', () => {
     const { value: result } = resolver.resolve(ref('resource.test.simple'), context, mockState);
-    expect(result).toBe('value');
+    expect(result).toEqual(valueOf(types.string, 'value'));
   });
 
-  it('should return a map from state as it is, keys named type and value included', () => {
+  // No schema names its type, so it has the one its data gives it.
+  it('should return a map from state as it is, keys named type and value included, as an object', () => {
     const { value: result } = resolver.resolve(ref('resource.test.settings'), context, mockState);
-    expect(result).toEqual({ type: 'a', value: 'b' });
+    expect(result).toEqual(valueOf(types.object({ type: types.string, value: types.string }), { type: 'a', value: 'b' }));
+  });
+
+  it('reads a value as the type its schema names', () => {
+    const schemas = new Map<string, Schema>([['resource', { settings: { type: types.map(types.string) } }]]);
+    const { value: result } = new ResourceResolver(new Instances(), new Planned(), schemas).resolve(ref('resource.test.settings'), context, mockState);
+
+    expect(result).toEqual(valueOf(types.map(types.string), { type: 'a', value: 'b' }));
   });
 
   it('reads the id as it reads any value the resource holds', () => {
     const { value: result } = resolver.resolve(ref('resource.test.id'), context, mockState);
-    expect(result).toBe('res-123');
+    expect(result.data).toBe('res-123');
   });
 
   it('should throw if resource not found', () => {
@@ -57,21 +66,36 @@ describe('ResourceResolver', () => {
     expect(read).not.toThrow(UnresolvedReferenceError);
   });
 
+  // State holds every value the resource has, so a name its schema has that state does not hold was left out.
+  it('reads a name its schema has and state does not hold as null, of the type the schema names', () => {
+    const named = new ResourceResolver(new Instances(), new Planned(), new Map([['resource', { note: { type: types.string } }]]));
+
+    expect(named.resolve(ref('resource.test.note'), context, mockState).value).toEqual(valueOf(types.string, null));
+  });
+
   // A resource the plan creates or changes is read as the plan knows it, over what state holds.
   describe('an instance the plan will create or change', () => {
     const planned = new Planned();
     planned.set('resource.test', { simple: 'new', later: UNKNOWN, made: UNKNOWN });
-    const planning = new ResourceResolver(new Instances(), planned, new Map());
+    const planning = new ResourceResolver(new Instances(), planned, new Map([['resource', { made: { type: types.list(types.string), computed: true } }]]));
 
     it('reads what its configuration sets, not what state holds', () => {
-      expect(planning.resolve(ref('resource.test.simple'), context, mockState).value).toBe('new');
+      expect(planning.resolve(ref('resource.test.simple'), context, mockState).value.data).toBe('new');
     });
 
+    // The steps still to take into it say what is read, so it comes back not known, for them to be taken.
     it.each([
-      ['a value its configuration does not know yet', 'resource.test.later'],
-      ['a value its provider computes', 'resource.test.made'],
-    ])('leaves %s to the apply', (_, spelled) => {
-      expect(() => planning.resolve(ref(spelled), context, mockState)).toThrow(UnresolvedReferenceError);
+      ['a value its configuration does not know yet', 'resource.test.later', types.dynamic],
+      ['a value its provider computes', 'resource.test.made', types.list(types.string)],
+    ])('reads %s as not known yet, with the type its schema names', (_, spelled, type) => {
+      expect(planning.resolve(ref(spelled), context, mockState).value).toEqual(valueOf(type, UNKNOWN));
+    });
+
+    // Its schema has the name and neither the configuration nor the provider gives it a value, so it is left out.
+    it('reads a name its schema has and nothing sets as null, of the type the schema names', () => {
+      const named = new ResourceResolver(new Instances(), planned, new Map([['resource', { note: { type: types.string } }]]));
+
+      expect(named.resolve(ref('resource.test.note'), context, mockState).value).toEqual(valueOf(types.string, null));
     });
 
     // State holds settings, but the plan will make the instance anew from its configuration.

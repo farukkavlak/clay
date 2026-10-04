@@ -3,8 +3,8 @@ import { CONFIG_FILE, ConfigError, DataBlock, Lexer, Parser, spell, Statement } 
 
 import { checkNames } from '../checkAttributes';
 import { conformValues, writtenAt } from '../conformValues';
-import { checkDataSourceRead } from '../providerResult';
-import { setsMarked } from '../setOrder';
+import { checkDataSourceRead, heldBy } from '../providerResult';
+import { plainOf, Value, valueOf } from '../Value';
 import { Instances } from '../Instances';
 import { ModuleInstances } from '../ModuleInstances';
 import { Planned } from '../Planned';
@@ -13,7 +13,6 @@ import { dataSourceKey, scopeOf } from '../keys';
 import { tryAt, withPlace } from '../place';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { ScopeManager } from '../scope/ScopeManager';
-import { plain } from '../SetValue';
 import { LoadedModule, LoadedResource, ModuleLoader } from './ModuleLoader';
 
 /** A configuration with its modules read, its variables declared and its data sources read. */
@@ -35,7 +34,7 @@ export class ConfigLoader {
   constructor(
     private moduleLoader: ModuleLoader,
     private scopeManager: ScopeManager,
-    private dataSources: Map<string, Record<string, unknown>>,
+    private dataSources: Map<string, Record<string, Value>>,
     // A Map because a resource type may be named `constructor`: an object would already hold a value there, and the real schema would be dropped.
     private schemas: Map<string, Schema>,
     private resolver: ReferenceResolver,
@@ -68,7 +67,7 @@ export class ConfigLoader {
     return { mainProgram, loadedResources, loadedModules, schemas: this.schemas };
   }
 
-  /** Read before any value is, since reading a resource's value needs to know which are sets, and a provider plans with what it computed kept from state. */
+  /** Read before any value is, since reading a resource's value needs the type its schema names, and a provider plans with what it computed kept from state. */
   private async loadSchemas(loaded: LoadedResource[]): Promise<void> {
     this.schemas.clear();
 
@@ -117,14 +116,17 @@ export class ConfigLoader {
     }
   }
 
-  private async readDataSource(stmt: DataBlock, { provider, schema }: Reader, inputs: Record<string, unknown>, scopeAddress: ModuleAddress): Promise<Record<string, unknown>> {
+  private async readDataSource(stmt: DataBlock, { provider, schema }: Reader, inputs: Record<string, Value>, scopeAddress: ModuleAddress): Promise<Record<string, Value>> {
     try {
       const conformed = conformValues(stmt.dataSourceType, schema, inputs);
       await provider.validateDataSource(stmt.dataSourceType, conformed);
       const read = await provider.readDataSource(stmt.dataSourceType, conformed);
-      checkDataSourceRead(stmt.dataSourceType, schema, read);
+      const held = heldBy(stmt.dataSourceType, 'read', schema, read);
+      checkDataSourceRead(stmt.dataSourceType, schema, plainOf(held));
 
-      return setsMarked(schema, read);
+      // A name its schema has that the read does not give was left out, and reads as null.
+      const leftOut = Object.entries(schema).map(([name, { type }]) => [name, valueOf(type, null)]);
+      return { ...Object.fromEntries(leftOut), ...held };
     } catch (error) {
       throw withPlace(error, writtenAt(error, stmt), spell(stmt), scopeAddress);
     }
@@ -140,12 +142,12 @@ export class ConfigLoader {
   }
 
   /** One value at a time, so an error points at the value that caused it and not at the block around it. */
-  private resolveInputs(stmt: DataBlock, state: State, scopeAddress: ModuleAddress): Record<string, unknown> {
+  private resolveInputs(stmt: DataBlock, state: State, scopeAddress: ModuleAddress): Record<string, Value> {
     const declaration = spell(stmt);
-    const inputs: Record<string, unknown> = {};
+    const inputs: Record<string, Value> = {};
 
     for (const [key, value] of Object.entries(stmt.attributes))
-      inputs[key] = plain(tryAt(value.position, declaration, scopeAddress, () => this.resolver.resolveValue(value, state, scopeAddress)));
+      inputs[key] = tryAt(value.position, declaration, scopeAddress, () => this.resolver.resolveValue(value, state, scopeAddress));
 
     return inputs;
   }

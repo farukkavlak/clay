@@ -1,17 +1,19 @@
 import { ModuleAddress } from '@clay/contracts';
+import { AttributeValue } from '@clay/parser';
 
 import { ModuleCall } from '../keys';
+import { Value } from '../Value';
 
 /** A variable's value as written, and where it is read: in the module itself for a default, in the call for an input. */
 export interface VariableValue {
-  value: unknown;
+  value: AttributeValue;
   context: ModuleAddress | ModuleCall;
 }
 
 /** Variables by the module as the configuration writes it, since each instance reads the same values; outputs by the instance, since each comes to its own. */
 export class ScopeManager {
   private variables: Map<string, Map<string, VariableValue>> = new Map();
-  private outputs: Map<string, Map<string, unknown>> = new Map();
+  private outputs: Map<string, Map<string, Value>> = new Map();
   private directories: Map<string, string> = new Map();
 
   setVariable(scope: string, name: string, value: VariableValue): void {
@@ -23,12 +25,12 @@ export class ScopeManager {
     return this.variables.get(scope)?.get(name);
   }
 
-  setOutput(scope: string, name: string, value: unknown): void {
+  setOutput(scope: string, name: string, value: Value): void {
     if (!this.outputs.has(scope)) this.outputs.set(scope, new Map());
     this.outputs.get(scope)!.set(name, value);
   }
 
-  getOutput(scope: string, name: string): unknown | undefined {
+  getOutput(scope: string, name: string): Value | undefined {
     return this.outputs.get(scope)?.get(name);
   }
 

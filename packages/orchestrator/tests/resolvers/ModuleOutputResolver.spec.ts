@@ -1,10 +1,11 @@
-import { Address, ModuleAddress } from '@clay/contracts';
+import { Address, ExactNumber, ModuleAddress, types } from '@clay/contracts';
 import { ModuleOutputReference, parseReference, Step } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
 import { ModuleInstances } from '../../src/ModuleInstances';
 import { ModuleOutputResolver } from '../../src/resolvers/ModuleOutputResolver';
 import { ScopeManager } from '../../src/scope/ScopeManager';
+import { valueOf } from '../../src/Value';
 
 const ref = (...parts: Step[]) => parseReference(parts) as ModuleOutputReference;
 
@@ -17,28 +18,29 @@ describe('ModuleOutputResolver', () => {
   const context = Address.root('resource', 'main');
 
   it('should resolve existing output in module', () => {
-    scopeManager.setOutput('module.app', 'ip_address', '10.0.0.1');
+    scopeManager.setOutput('module.app', 'ip_address', valueOf(types.string, '10.0.0.1'));
 
-    expect(resolver.resolve(ref('module', 'app', 'ip_address'), context)).toEqual({ value: '10.0.0.1', path: [] });
+    expect(resolver.resolve(ref('module', 'app', 'ip_address'), context)).toEqual({ value: valueOf(types.string, '10.0.0.1'), path: [] });
   });
 
   it('should resolve output in nested module from parent scope', () => {
-    scopeManager.setOutput('module.parent.module.child', 'value', 42);
+    scopeManager.setOutput('module.parent.module.child', 'value', valueOf(types.number, ExactNumber.parse('42')));
 
     const nestedContext = new Address(ModuleAddress.root.child('parent'), 'resource', 'main');
-    expect(resolver.resolve(ref('module', 'child', 'value'), nestedContext).value).toBe(42);
+    expect(resolver.resolve(ref('module', 'child', 'value'), nestedContext).value.data).toEqual(ExactNumber.parse('42'));
   });
 
   it('reads the output of the instance an index names, and gives back the steps into it', () => {
-    scopeManager.setOutput('module.web[1]', 'tags', { env: 'b' });
+    const tags = valueOf(types.object({ env: types.string }), { env: 'b' });
+    scopeManager.setOutput('module.web[1]', 'tags', tags);
 
-    expect(resolver.resolve(ref('module', 'web', 1, 'tags', 'env'), context)).toEqual({ value: { env: 'b' }, path: ['env'] });
+    expect(resolver.resolve(ref('module', 'web', 1, 'tags', 'env'), context)).toEqual({ value: tags, path: ['env'] });
   });
 
   it('reads the output of the instance a key names', () => {
-    scopeManager.setOutput('module.db["eu"]', 'url', 'eu-url');
+    scopeManager.setOutput('module.db["eu"]', 'url', valueOf(types.string, 'eu-url'));
 
-    expect(resolver.resolve(ref('module', 'db', 'eu', 'url'), context)).toEqual({ value: 'eu-url', path: [] });
+    expect(resolver.resolve(ref('module', 'db', 'eu', 'url'), context).value.data).toBe('eu-url');
   });
 
   it.each([
