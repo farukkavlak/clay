@@ -156,11 +156,10 @@ describe('a value only the provider knows', () => {
 
   // The map is not known at plan, and what is read out of it is a string, not a map.
   it.each([
-    ['from the resource', (read: string) => `content = ${read}`, 'stamp.a.tags.a'],
-    ['from the resource, by a key in brackets', (read: string) => `content = ${read}`, 'stamp.a.tags["a"]'],
-    ['through a variable', (read: string) => `content = var.v.a\n}\nvariable "v" {\n  default = ${read}`, 'stamp.a.tags'],
-  ])('reads into a value the provider makes, %s', async (_, written, read) => {
-    await apply(`resource "stamp" "a" { label = "x" }\nresource "local_file" "copy" {\n  path = "${file}"\n  ${written(read)}\n}`, new TaggedStampProvider());
+    ['from the resource', 'stamp.a.tags.a'],
+    ['from the resource, by a key in brackets', 'stamp.a.tags["a"]'],
+  ])('reads into a value the provider makes, %s', async (_, read) => {
+    await apply(`resource "stamp" "a" { label = "x" }\nresource "local_file" "copy" {\n  path = "${file}"\n  content = ${read}\n}`, new TaggedStampProvider());
 
     expect(await fs.readFile(file, 'utf8')).toBe('one');
   });

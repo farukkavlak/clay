@@ -290,7 +290,6 @@ describe('a resource with for_each', () => {
     ['a resource that has neither', 'resource "local_file" "a" { path = "a" content = "${each.key}" }', 'each.key'],
     ['a resource that has count', 'resource "local_file" "a" { count = 1 path = "a" content = "${each.value}" }', 'each.value'],
     ['an output', 'output "o" { value = "${each.key}" }', 'each.key'],
-    ['a variable', 'variable "v" { default = "${each.value}" }', 'each.value'],
     ['the for_each it would come from', 'resource "local_file" "a" { for_each = ["${each.key}"] path = "a" content = "a" }', 'each.key'],
     ['a data source', 'data "local_file" "d" { path = "${each.key}" }', 'each.key'],
     // The output is not read at plan time, since it waits on a value only an apply makes.

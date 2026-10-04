@@ -143,6 +143,17 @@ describe('validate against real files', () => {
     expect(output).toContain('\n  3:   descriptoin = "typo"\n                     ^');
   });
 
+  it('refuses a reference in a default its module call gives a value in place of, and points into the module', async () => {
+    await fs.mkdir(path.join(dir, 'm'));
+    await fs.writeFile(path.join(dir, 'm', 'main.clay'), 'variable "x" {\n  default = var.nope\n}', 'utf8');
+
+    const output = await validate('module "m" {\n  source = "./m"\n  x      = "given"\n}');
+
+    expect(output).toContain("A variable's default is a constant, so it cannot hold var.nope");
+    expect(output).toContain('on m/main.clay line 2:');
+    expect(output).toContain('\n  2:   default = var.nope\n                 ^');
+  });
+
   it('refuses a module that declares a variable its caller could never set, and points into the module', async () => {
     await fs.mkdir(path.join(dir, 'm'), { recursive: true });
     await fs.writeFile(path.join(dir, 'm', 'main.clay'), 'variable "source" { default = "x" }', 'utf8');

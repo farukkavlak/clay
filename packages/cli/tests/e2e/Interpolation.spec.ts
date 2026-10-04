@@ -78,10 +78,9 @@ describe('a string with an interpolation', () => {
     expect(await fs.readFile(path.join(dir, 'f.txt'), 'utf8')).toBe('a\tb\nprice ${price}');
   });
 
-  // The same list, read from five places: each error has to name the block that reads it and point at the reference.
+  // The same list, read from four places: each error has to name the block that reads it and point at the reference.
   it.each([
     ['a resource', 'resource "null_resource" "t" { triggers = { label = "tags: ${var.tags}" } }', 'resource "null_resource" "t"', 62],
-    ['a variable default', 'variable "v" { default = "tags: ${var.tags}" }', 'variable "v"', 35],
     ['an output', 'output "o" { value = "tags: ${var.tags}" }', 'output "o"', 31],
     ['a module input', 'module "m" { source = "./m" text = "tags: ${var.tags}" }', 'module "m"', 45],
     ['a data source', 'data "local_file" "f" { path = "tags: ${var.tags}" }', 'data "local_file" "f"', 41],
