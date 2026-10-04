@@ -232,8 +232,8 @@ describe('Orchestrator: Advanced Features', () => {
       const outputs = await apply(orchestrator, config);
 
       expect(outputs).toEqual({
-        my_string: 'test_value',
-        my_number: ExactNumber.parse('42'),
+        my_string: { value: 'test_value', type: types.string },
+        my_number: { value: ExactNumber.parse('42'), type: types.number },
       });
     });
 
@@ -249,7 +249,7 @@ describe('Orchestrator: Advanced Features', () => {
 
       const outputs = await apply(orchestrator, config);
 
-      expect(outputs.resource_name).toBe('my_resource');
+      expect(outputs.resource_name.value).toBe('my_resource');
     });
 
     it('should process outputs with string interpolation', async () => {
@@ -264,7 +264,7 @@ describe('Orchestrator: Advanced Features', () => {
 
       const outputs = await apply(orchestrator, config);
 
-      expect(outputs.message).toBe('Environment: production');
+      expect(outputs.message.value).toBe('Environment: production');
     });
   });
 

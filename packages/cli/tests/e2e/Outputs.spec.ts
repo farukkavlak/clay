@@ -1,4 +1,4 @@
-import { isUnknown } from '@clay/contracts';
+import { types, UNKNOWN } from '@clay/contracts';
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
@@ -62,15 +62,16 @@ describe('outputs in the state file', () => {
     const plan = await newOrchestrator().plan(withOutput('message'));
 
     expect(plan.actions.every((action) => action.type === 'NO_OP')).toBe(true);
-    expect(plan.outputs).toEqual({ greeting: { old: 'hello', new: undefined }, message: { old: undefined, new: 'hello' } });
+    const hello = { value: 'hello', type: types.string };
+    expect(plan.outputs).toEqual({ greeting: { old: hello, new: undefined }, message: { old: undefined, new: hello } });
   });
 
   // The configuration sets the content, but only the apply makes the id.
   it('plans an output that a resource to be created feeds with what its configuration sets, and with the id its provider plans', async () => {
     const plan = await newOrchestrator().plan(`${withOutput('greeting')}\noutput "id" { value = "\${local_file.a.id}" }`);
 
-    expect(plan.outputs.greeting.new).toBe('hello');
-    expect(plan.outputs.id.new).toBe(path.join(dir, 'a.txt'));
+    expect(plan.outputs.greeting.new?.value).toBe('hello');
+    expect(plan.outputs.id.new?.value).toBe(path.join(dir, 'a.txt'));
   });
 
   // What the configuration sets is known only as far as what it reads is; text around it does not make it known.
@@ -86,7 +87,7 @@ describe('outputs in the state file', () => {
 
     const plan = await newOrchestrator().plan(config);
 
-    expect(isUnknown(plan.outputs.o.new)).toBe(true);
+    expect(plan.outputs.o.new).toEqual({ value: UNKNOWN, type: types.string });
   });
 
   it('plans no output change when the state already has it', async () => {
@@ -115,7 +116,7 @@ describe('outputs in the state file', () => {
     }
 
     const state = await stored();
-    expect(state.outputs).toEqual({ message: 'hello' });
+    expect(state.outputs).toEqual({ message: { value: 'hello', type: types.string } });
   });
 
   it('keeps no outputs from before a run that failed', async () => {

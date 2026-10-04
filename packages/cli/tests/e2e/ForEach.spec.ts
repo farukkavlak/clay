@@ -1,3 +1,4 @@
+import { types } from '@clay/contracts';
 import { DiskFiles, Orchestrator, RunEvent } from '@clay/orchestrator';
 import { ConfigError } from '@clay/parser';
 import { parsePlanFile, serializePlan } from '@clay/planner';
@@ -167,7 +168,7 @@ describe('a resource with for_each', () => {
     const events = await apply(config);
 
     expect(await read('reader.txt')).toBe('80');
-    expect(events.at(-1)).toEqual({ type: 'done', outputs: { api: '8080' } });
+    expect(events.at(-1)).toEqual({ type: 'done', outputs: { api: { value: '8080', type: types.string } } });
   });
 
   const withReader = (web: string) => `${files(`{ web = "${web}", api = "8080" }`)}

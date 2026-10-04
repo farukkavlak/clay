@@ -1,3 +1,4 @@
+import { types } from '@clay/contracts';
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { ConfigError } from '@clay/parser';
 import { LocalProvider } from '@clay/provider-local';
@@ -71,7 +72,8 @@ describe('null', () => {
     await apply(config);
 
     const state = await new LocalBackend(dir).read();
-    expect(state.outputs).toEqual({ set: null, left: null });
+    const none = { value: null, type: types.map(types.dynamic) };
+    expect(state.outputs).toEqual({ set: none, left: none });
     const plan = await newOrchestrator().plan(config);
     expect(plan.outputs).toEqual({});
   });
@@ -110,7 +112,7 @@ describe('null', () => {
     await apply('output "o" { value = null }');
 
     const { outputs } = await new LocalBackend(dir).read();
-    expect(outputs).toEqual({ o: null });
+    expect(outputs).toEqual({ o: { value: null, type: types.dynamic } });
   });
 
   it.each([

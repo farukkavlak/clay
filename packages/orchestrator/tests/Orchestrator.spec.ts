@@ -481,7 +481,7 @@ describe('Orchestrator', () => {
 
       // Verify root output contains module value
       // This confirms that module output was resolved and passed to root
-      expect(result.root_val).toBe('hello_module');
+      expect(result.root_val.value).toBe('hello_module');
     });
   });
 });

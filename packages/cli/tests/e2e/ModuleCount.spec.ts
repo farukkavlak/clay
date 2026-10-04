@@ -1,4 +1,4 @@
-import { Address } from '@clay/contracts';
+import { Address, Output } from '@clay/contracts';
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { ConfigError } from '@clay/parser';
 import { parsePlanFile, serializePlan } from '@clay/planner';
@@ -38,8 +38,8 @@ describe('a module called with count', () => {
     return engine;
   };
 
-  const apply = async (config: string): Promise<Record<string, unknown>> => {
-    let outputs: Record<string, unknown> = {};
+  const apply = async (config: string): Promise<Record<string, Output>> => {
+    let outputs: Record<string, Output> = {};
     for await (const event of start(newOrchestrator(), config)) {
       if (event.type === 'failed') throw event.error;
       if (event.type === 'done') outputs = event.outputs;
@@ -134,7 +134,7 @@ describe('a module called with count', () => {
   it('gives the output of one instance to what reads it by index', async () => {
     const outputs = await apply(web('2', 'output "second" { value = "${module.web[1].path}" }'));
 
-    expect(outputs.second).toBe(path.join(dir, 'site-1.txt'));
+    expect(outputs.second.value).toBe(path.join(dir, 'site-1.txt'));
   });
 
   // Two in each of two: the inner module has an instance for each index in each instance of the outer one.
@@ -156,7 +156,7 @@ describe('a module called with count', () => {
 
     expect(await pages()).toEqual(['o0-0.txt', 'o0-1.txt', 'o1-0.txt', 'o1-1.txt']);
     expect(await stateKeys()).toContain('module.outer[1].module.inner[0].local_file.page');
-    expect(outputs.o).toBe(path.join(dir, 'o1-1.txt'));
+    expect(outputs.o.value).toBe(path.join(dir, 'o1-1.txt'));
   });
 
   // Each instance of the outer module reads the inner call's count with its own input.

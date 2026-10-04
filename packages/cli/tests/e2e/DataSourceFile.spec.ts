@@ -34,7 +34,7 @@ describe('a local_file data source', () => {
 
     const { outputs } = await newOrchestrator().plan(config);
 
-    expect(outputs.greeting.new).toBe('hello clay');
+    expect(outputs.greeting.new?.value).toBe('hello clay');
   });
 
   it('refuses a file that is not there, placed in its block', async () => {

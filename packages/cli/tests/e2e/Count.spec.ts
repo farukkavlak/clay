@@ -1,3 +1,4 @@
+import { types } from '@clay/contracts';
 import { DiskFiles, Orchestrator, RunEvent } from '@clay/orchestrator';
 import { ConfigError } from '@clay/parser';
 import { parsePlanFile, serializePlan } from '@clay/planner';
@@ -118,7 +119,7 @@ describe('a resource with count', () => {
     const events = await apply(config);
 
     expect(await fs.readFile(path.join(dir, 'reader.txt'), 'utf8')).toBe('log 1');
-    expect(events.at(-1)).toEqual({ type: 'done', outputs: { first: 'log 0' } });
+    expect(events.at(-1)).toEqual({ type: 'done', outputs: { first: { value: 'log 0', type: types.string } } });
   });
 
   // Only the new instance is unknown; the one read is in state, so its reader has nothing to change.

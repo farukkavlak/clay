@@ -80,6 +80,12 @@ class RegroupingPool extends PoolProvider {
 
 const pool = (members: string) => `resource "pool" "p" { members = ${members} }`;
 
+const withOutput = (members: string) => `${pool(members)}\noutput "m" { value = pool.p.members }`;
+
+/** A pool with its members and its order, and an output that reads `attribute`, one or the other. */
+const reading = (attribute: string, members: string, order: string) =>
+  `resource "pool" "p" {\n  members = ${members}\n  order = ${order}\n}\noutput "m" { value = pool.p.${attribute} }`;
+
 describe('a set attribute', () => {
   let dir: string;
 
@@ -228,7 +234,7 @@ describe('a set attribute', () => {
     await apply(`data "pool" "d" { names = ["b", "a"] }\noutput "m" { value = data.pool.d.members }`);
 
     const { outputs } = await new LocalBackend(dir).read();
-    expect(outputs).toEqual({ m: ['a', 'b'] });
+    expect(outputs).toEqual({ m: { value: ['a', 'b'], type: types.set(types.string) } });
   });
 
   it('refuses a map where it takes a set', async () => {
@@ -317,7 +323,7 @@ describe('a set attribute', () => {
     await apply(`data "pool" "d" { names = ["b", "a"] }\ndata "pool" "e" { names = data.pool.d.members }\noutput "names" { value = data.pool.e.names }`);
 
     const { outputs } = await new LocalBackend(dir).read();
-    expect(outputs).toEqual({ names: ['a', 'b'] });
+    expect(outputs).toEqual({ names: { value: ['a', 'b'], type: types.list(types.string) } });
   });
 
   it('plans no change to an output that holds the same members', async () => {
@@ -340,7 +346,7 @@ describe('a set attribute', () => {
     await apply(`resource "pool" "p" {\n  members = []\n  groups = [["c"], ["b", "a"]]\n}\noutput "g" { value = pool.p.groups }`);
 
     const { outputs } = await new LocalBackend(dir).read();
-    expect(outputs).toEqual({ g: [['a', 'b'], ['c']] });
+    expect(outputs).toEqual({ g: { value: [['a', 'b'], ['c']], type: types.set(types.set(types.dynamic)) } });
   });
 
   it('gives for_each one instance for each member', async () => {
@@ -378,5 +384,52 @@ describe('a set attribute', () => {
 
     const at = lines.indexOf('  ~ pool.p was changed outside Clay');
     expect(lines.slice(at + 1, at + 5)).toEqual(['      members:', '        - "a"', '        + "x"', '        (1 unchanged)']);
+  });
+
+  it('shows the members an output loses and gains, not the whole set', async () => {
+    await apply(withOutput('["a", "b"]'));
+
+    const lines = await shown(withOutput('["b", "c"]'));
+
+    const at = lines.indexOf('  ~ m:');
+    expect(lines.slice(at, at + 4)).toEqual(['  ~ m:', '      - "a"', '      + "c"', '      (1 unchanged)']);
+  });
+
+  it('shows an output that comes to a set whole, having no members before to compare', async () => {
+    const lines = await shown(withOutput('["b", "a"]'));
+
+    expect(lines).toContain('  + m = ["a","b"]');
+  });
+
+  // The values print the same, so the line would read as no change without the types.
+  it('shows an output whose members stay and whose type changes by the types', async () => {
+    const config = reading('members', '["a", "b"]', '["a", "b"]');
+    await apply(reading('order', '["a", "b"]', '["a", "b"]'));
+
+    const planned = await newOrchestrator().plan(config);
+    const lines = await shown(config);
+
+    expect(planned.actions.map((action) => action.type)).toEqual(['NO_OP']);
+    expect(lines).toContain('  ~ m = ["a","b"] (list(string) -> set(string))');
+  });
+
+  it('shows a list that becomes a set with other members whole, since a list has an order to lose', async () => {
+    await apply(reading('order', '["b", "c"]', '["b", "a"]'));
+
+    const lines = await shown(reading('members', '["b", "c"]', '["b", "a"]'));
+
+    expect(lines).toContain('  ~ m = ["b","a"] -> ["b","c"]');
+  });
+
+  it('keeps the type of an output through a saved plan and into state', async () => {
+    const config = withOutput('["b", "a"]');
+    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), config, {}), 'plan.json');
+
+    for await (const event of newOrchestrator().runPlan(saved, config)) if (event.type === 'failed') throw event.error;
+
+    const kept = { value: ['a', 'b'], type: types.set(types.string) };
+    expect(saved.outputs).toEqual({ m: { old: undefined, new: kept } });
+    const state = await new LocalBackend(dir).read();
+    expect(state.outputs).toEqual({ m: kept });
   });
 });

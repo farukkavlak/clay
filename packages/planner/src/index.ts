@@ -5,6 +5,7 @@ import {
   ExactNumber,
   InstanceKey,
   isInstanceKey,
+  isOutput,
   isModulePath,
   isRecord,
   isType,
@@ -12,6 +13,7 @@ import {
   ModuleAddress,
   ModuleStep,
   NumberError,
+  Output,
   own,
   readResources,
   Resource,
@@ -46,6 +48,9 @@ export interface DesiredResource {
 /** What each named value was and would become; a missing `old` is an addition, a missing `new` a removal. */
 export type Changes = Record<string, { old: unknown; new: unknown }>;
 
+/** What each root output was and would become, each side with its type. */
+export type OutputChanges = Record<string, { old: Output | undefined; new: Output | undefined }>;
+
 export interface PlanAction {
   type: ActionType;
   resourceType: string;
@@ -67,7 +72,7 @@ export interface PlanAction {
 export interface Plan {
   serial: number;
   actions: PlanAction[];
-  outputs: Changes;
+  outputs: OutputChanges;
   /** The resources as state held them when the plan was made. */
   prevRun: Record<string, Resource>;
   /** The same resources as their providers read them then, which the actions run against; one not found is left out. */
@@ -77,7 +82,7 @@ export interface Plan {
 }
 
 /** Bumped when the shape below changes once a Clay is released, so a plan file from an older version is refused instead of misread. */
-export const PLAN_FILE_VERSION = '16.0';
+export const PLAN_FILE_VERSION = '17.0';
 
 export interface PlanFile extends Plan {
   version: string;
@@ -144,9 +149,12 @@ function placeUnknown(value: unknown, path: AttributePath): unknown {
   return value;
 }
 
-function readChanges(saved: Record<string, { old?: unknown; new?: unknown; unknown?: AttributePath[] }>): Changes {
+function readChanges<T>(saved: Record<string, { old?: T; new?: T; unknown?: AttributePath[] }>): Record<string, { old: T | undefined; new: T | undefined }> {
   return Object.fromEntries(
-    Object.entries(saved).map(([name, change]) => [name, { old: change.old, new: (change.unknown ?? []).reduce<unknown>((value, path) => placeUnknown(value, path), change.new) }])
+    Object.entries(saved).map(([name, change]) => [
+      name,
+      { old: change.old, new: (change.unknown ?? []).reduce<unknown>((value, path) => placeUnknown(value, path), change.new) as T },
+    ])
   );
 }
 
@@ -188,6 +196,18 @@ function isUnknownPaths(change: Record<string, unknown>): boolean {
 /** Each change is read for what it held, so one that is not a record would fail far from the file it came from. */
 function isChanges(changes: unknown): boolean {
   return isRecord(changes) && Object.values(changes).every((change) => isRecord(change) && isUnknownPaths(change));
+}
+
+/** A side of an output change that is there holds a value with its type, and only the value may be not known yet. */
+function isOutputChange(change: unknown): boolean {
+  if (!isRecord(change)) return false;
+
+  const inValue = !Array.isArray(change.unknown) || change.unknown.every((path) => Array.isArray(path) && path[0] === 'value');
+  return inValue && [change.old, change.new].every((side) => side === undefined || isOutput(side));
+}
+
+function isOutputChanges(changes: unknown): boolean {
+  return isChanges(changes) && Object.values(changes as Record<string, unknown>).every((change) => isOutputChange(change));
 }
 
 function isModuleFiles(modules: unknown): modules is Record<string, string> {
@@ -242,7 +262,9 @@ function isSchemas(schemas: unknown): schemas is Record<string, Schema> {
 
 /** What a plan holds, apart from the file around it and the resources it carries, which are read as state's are. */
 function isPlan(plan: Partial<Plan>): plan is Plan {
-  return typeof plan.serial === 'number' && Array.isArray(plan.actions) && plan.actions.every((action) => isAction(action)) && isChanges(plan.outputs) && isSchemas(plan.schemas);
+  return (
+    typeof plan.serial === 'number' && Array.isArray(plan.actions) && plan.actions.every((action) => isAction(action)) && isOutputChanges(plan.outputs) && isSchemas(plan.schemas)
+  );
 }
 
 export function validatePlanFile(planFile: unknown): planFile is PlanFile {
@@ -381,10 +403,10 @@ function valueChanged(oldValue: unknown, newValue: unknown): boolean {
 }
 
 /** Maps throughout: a name every object answers to would otherwise be read from the side that never set it, and `__proto__` would set a prototype instead of a key. */
-function calculateDiff(oldAttrs: Record<string, unknown>, newAttrs: Record<string, unknown>): Changes | null {
+function calculateDiff<T>(oldAttrs: Record<string, T>, newAttrs: Record<string, T>): Record<string, { old: T | undefined; new: T | undefined }> | null {
   const before = new Map(Object.entries(oldAttrs));
   const after = new Map(Object.entries(newAttrs));
-  const changes = new Map<string, { old: unknown; new: unknown }>();
+  const changes = new Map<string, { old: T | undefined; new: T | undefined }>();
 
   for (const key of new Set([...before.keys(), ...after.keys()])) {
     const oldValue = before.get(key);
@@ -396,7 +418,8 @@ function calculateDiff(oldAttrs: Record<string, unknown>, newAttrs: Record<strin
   return changes.size > 0 ? Object.fromEntries(changes) : null;
 }
 
-export function outputChanges(current: Record<string, unknown>, desired: Record<string, unknown>): Changes {
+/** An output changes when its value does or its type does: the same members as a set and as a list are two values. */
+export function outputChanges(current: Record<string, Output>, desired: Record<string, Output>): OutputChanges {
   return calculateDiff(current, desired) ?? {};
 }
 

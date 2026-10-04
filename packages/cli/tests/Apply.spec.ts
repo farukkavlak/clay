@@ -1,3 +1,4 @@
+import { Output, types } from '@clay/contracts';
 import { InMemoryFiles, Orchestrator } from '@clay/orchestrator';
 import { PLAN_FILE_VERSION } from '@clay/planner';
 import fs from 'node:fs/promises';
@@ -22,7 +23,9 @@ vi.mock('@clay/orchestrator', async () => {
 });
 vi.mock('../src/confirm');
 
-const doneWith = (outputs: Record<string, unknown>) =>
+const text = (value: string): Output => ({ value, type: types.string });
+
+const doneWith = (outputs: Record<string, Output>) =>
   async function* () {
     yield { type: 'done', outputs };
   };
@@ -201,12 +204,12 @@ describe('CLI: apply command', () => {
       const planMock = vi.fn().mockResolvedValue({
         serial: 0,
         actions: [{ type: 'NO_OP', resourceType: 'test', name: 't' }],
-        outputs: { greeting: { old: undefined, new: 'hi' } },
+        outputs: { greeting: { old: undefined, new: text('hi') } },
         prevRun: {},
         prior: {},
         schemas: { test: {} },
       });
-      const runMock = vi.fn(doneWith({ greeting: 'hi' }));
+      const runMock = vi.fn(doneWith({ greeting: text('hi') }));
 
       vi.mocked(Orchestrator.create).mockImplementation(function () {
         return {
@@ -233,7 +236,7 @@ describe('CLI: apply command', () => {
       const planMock = vi
         .fn()
         .mockResolvedValue({ serial: 0, actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }], outputs: {}, prevRun: {}, prior: {}, schemas: { test: {} } });
-      const runMock = vi.fn(doneWith({ my_output: 'test_value', another_output: 42 }));
+      const runMock = vi.fn(doneWith({ my_output: text('test_value'), another_output: { value: 42, type: types.number } }));
 
       vi.mocked(Orchestrator.create).mockImplementation(function () {
         return {
@@ -250,6 +253,8 @@ describe('CLI: apply command', () => {
 
       expect(runMock).toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Outputs:'));
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('my_output = "test_value"'));
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('another_output = 42'));
 
       consoleSpy.mockRestore();
     });
@@ -385,7 +390,7 @@ describe('CLI: apply command', () => {
         return 'config content';
       });
 
-      const runPlanMock = vi.fn(doneWith({ planOutput: 'value' }));
+      const runPlanMock = vi.fn(doneWith({ planOutput: text('value') }));
 
       vi.mocked(Orchestrator.create).mockImplementation(function () {
         return {
@@ -400,6 +405,7 @@ describe('CLI: apply command', () => {
 
       expect(runPlanMock).toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Outputs:'));
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('planOutput = "value"'));
 
       consoleSpy.mockRestore();
     });

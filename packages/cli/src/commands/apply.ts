@@ -1,4 +1,4 @@
-import { Address } from '@clay/contracts';
+import { Address, Output } from '@clay/contracts';
 import { ConfigFiles, DiskFiles, InMemoryFiles, RunEvent } from '@clay/orchestrator';
 import { CONFIG_FILE } from '@clay/parser';
 import { changedOutside, parsePlanFile, Plan, PlanAction, PlanFile } from '@clay/planner';
@@ -42,7 +42,7 @@ async function runAndReport(events: AsyncGenerator<RunEvent>, forgotten: number)
   console.log(styleText('blue', '\napplying...'));
 
   const applied: PlanAction[] = [];
-  let outputs: Record<string, unknown> = {};
+  let outputs: Record<string, Output> = {};
   for await (const event of events) {
     reportEvent(event);
     if (event.type === 'applied') applied.push(event.action);
@@ -53,7 +53,7 @@ async function runAndReport(events: AsyncGenerator<RunEvent>, forgotten: number)
 
   if (Object.keys(outputs).length > 0) {
     console.log(styleText('cyan', '\nOutputs:'));
-    for (const [key, value] of Object.entries(outputs)) console.log(styleText('white', `  ${key} = ${JSON.stringify(value)}`));
+    for (const [key, { value }] of Object.entries(outputs)) console.log(styleText('white', `  ${key} = ${JSON.stringify(value)}`));
   }
 }
 

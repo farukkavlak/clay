@@ -21,6 +21,8 @@ vi.mock('@clay/orchestrator', async () => {
   };
 });
 
+const text = (value: string) => ({ value, type: types.string });
+
 describe('CLI: plan command', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -70,7 +72,7 @@ describe('CLI: plan command', () => {
     vi.mocked(fs.access).mockResolvedValue(void 0);
     vi.mocked(fs.readFile).mockResolvedValue('');
 
-    const outputs = { gone: { old: 'a', new: undefined }, added: { old: undefined, new: 'b' }, moved: { old: 'a', new: 'b' } };
+    const outputs = { gone: { old: text('a'), new: undefined }, added: { old: undefined, new: text('b') }, moved: { old: text('a'), new: text('b') } };
     const planMock = vi
       .fn()
       .mockResolvedValue({ serial: 0, actions: [{ type: 'NO_OP', resourceType: 'test', name: 't1' }], outputs, prevRun: {}, prior: {}, schemas: { test: {} } });
