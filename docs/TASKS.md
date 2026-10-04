@@ -207,8 +207,7 @@ length below 1.
       map as `triggers`, since it only compares them
 - [x] A schema type can be a `set`, whose order is not a change. A set from the
       configuration and from every provider answer is held in one order, with each member
-      once, so every comparison sees the same members as the same value. One with a
-      member not known yet is not known as a whole
+      once, so every comparison sees the same members as the same value
 - [x] A set member is refused by index, since its members are held sorted and
       `pool.p.members[0]` would read whichever sorts first. A set read from a resource
       or a data source stays a set through variables, module inputs and outputs, so
@@ -219,8 +218,42 @@ length below 1.
       attributes are required unless it lists them as optional, and a tuple with a type
       for each position. A type a provider gives is checked whole when its schema is read.
       Terraform: `object({ a = string, b = optional(number) })`
+- [x] Every value carries its type through the engine, not only where a schema names it.
+      A written list is a tuple and a written map an object; a value from a provider or a
+      state has the type its schema names; a value not known yet has the type it will
+      have, so one of a kind the attribute does not take is refused at plan. Messages
+      name the type: `content is a tuple, where local_file takes a string`. Terraform:
+      cty, where a value and its type travel together
+- [x] A provider that plans, makes or reads a value its schema does not hold is refused
+      as its bug, named by the steps to the value. A resource it made is kept in state
+      first, since it exists. A name it gives no value, `{ tags: undefined }`, is a name
+      left out, as the state file drops it; in a list it is refused
+- [x] A set with a member not known yet keeps the members it knows, and the unknown one
+      after them; its size is known at apply. The apply holds it to the plan by its
+      members, not by where each sorts. Terraform does the same. Taken as a list, or
+      where no type is named, it is not known as a whole until then: it has no order yet
+- [x] `null`. An attribute set to it is left out, so a required one is refused where it
+      is written; inside a list, a map or a set it stays. Reading into it, joining it into
+      a string, or giving it to `count` or `for_each` is refused where it is written.
+      `null` is a keyword, so no block is named it. An attribute only the provider makes
+      takes `null`, and is made as if nothing were written. An attribute of a resource
+      or a data source that the schema has and nothing sets reads as `null`. Terraform:
+      "behaves as though you had completely omitted it"
 - [ ] The plan shows a set change as the members added and removed, `+ "c"`. Today it
       prints the whole set before and after, and the reader finds the difference
+- [ ] A value not known yet is refused at plan where its type can never be joined into
+      a string: `"x-${thing.a.tags}"` with `tags` a map. Today the plan passes and the
+      apply fails after `thing.a` is made. Terraform also waits for the apply
+- [ ] A step into a value not known yet is refused at plan where its type can never take
+      it: an index into a set or a map, a key into a list, any step into a string. Today
+      the apply refuses it. Terraform refuses at plan: "Can't access attributes on a
+      primitive-typed value (string)"
+- [ ] A provider that says it computes a value and does not return it at apply is not
+      refused: the value is left out and reads as `null`. What reads it then fails
+      without naming the provider: `content = stamp.a.made` ends in
+      `local_file requires "content"`. To weigh: refuse it as the provider's bug when the
+      plan showed it as known after apply and the schema does not mark it optional.
+      Terraform lets a value not known at plan come to null
 
 ### Data sources in the graph
 
@@ -390,7 +423,7 @@ Nothing here changes what Clay does. Each is a place the next change has to work
 
 ### Test health
 
-- [ ] `ReferenceResolver.spec.ts` has a test titled "resolve Array of References
+- [x] `ReferenceResolver.spec.ts` has a test titled "resolve Array of References
       recursively" that asserts the array comes back unresolved, under a 28-line
       transcript of someone reading the code, naming an `Orchestrator.convertAttributes`
       that does not exist. It feeds a raw array, which the resolver is never handed;

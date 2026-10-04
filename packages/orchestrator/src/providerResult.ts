@@ -1,22 +1,10 @@
-import { ExactNumber, isRecord, isType, isUnknown, Schema, unknownPaths } from '@clay/contracts';
+import { isType, isUnknown, Schema, unknownPaths } from '@clay/contracts';
 import { Mismatch } from '@clay/planner';
 
 import { shown } from './shown';
 import { spelled } from './spelled';
-
-export function kind(value: unknown): string {
-  if (value instanceof ExactNumber) return 'an exact number';
-  if (typeof value === 'number') return 'a JavaScript number';
-  if (Array.isArray(value)) return 'a list';
-  if (isRecord(value)) return 'a map';
-
-  return value === null ? 'null' : `a ${typeof value}`;
-}
-
-/** Two values that show the same and differ, such as a JavaScript number and an exact one, are told apart by what they are. */
-function kinds(planned: unknown, returned: unknown): string {
-  return shown(planned) === shown(returned) ? ` (${kind(returned)} where the plan has ${kind(planned)})` : '';
-}
+import { TypeMismatch, typedValues } from './typed';
+import { Value } from './Value';
 
 function differs({ path, planned, returned }: Mismatch): string {
   const at = spelled(path);
@@ -24,7 +12,7 @@ function differs({ path, planned, returned }: Mismatch): string {
   if (planned === undefined) return `${at} = ${shown(returned)}, which the plan did not have`;
   if (returned === undefined) return `${at} is missing, where the plan showed ${shown(planned)}`;
 
-  return `${at} = ${shown(returned)}, where the plan showed ${shown(planned)}${kinds(planned, returned)}`;
+  return `${at} = ${shown(returned)}, where the plan showed ${shown(planned)}`;
 }
 
 /** How each check names its step, and a value it found not known. */
@@ -92,4 +80,14 @@ export function checkDataSourceSchema(type: string, schema: Schema): Schema {
   }
 
   return schema;
+}
+
+/** What a provider gave, each value read as the type its schema names; one of another type is the provider's bug, as `did` says it gave it. */
+export function heldBy(type: string, did: string, schema: Schema, values: Record<string, unknown>): Record<string, Value> {
+  try {
+    return typedValues(schema, values);
+  } catch (error) {
+    if (error instanceof TypeMismatch) throw new Error(`${type} ${did} what its schema does not hold, which is a bug in the provider: ${error.message}`, { cause: error });
+    throw error;
+  }
 }

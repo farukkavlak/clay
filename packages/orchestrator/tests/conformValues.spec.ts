@@ -1,7 +1,8 @@
 import { ExactNumber, Schema, types, UNKNOWN } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { conformValues, SchemaMismatch } from '../src/conformValues';
+import { conformValues as conform, SchemaMismatch } from '../src/conformValues';
+import { inferred, valueOf } from '../src/Value';
 
 const schema: Schema = {
   name: { type: types.string },
@@ -16,6 +17,10 @@ const schema: Schema = {
 };
 
 const n = (text: string) => ExactNumber.parse(text);
+
+/** Each value as the configuration writes it: a list a tuple and a map an object, with the type its items have. */
+const conformValues = (resource: string, held: Schema, config: Record<string, unknown>) =>
+  conform(resource, held, Object.fromEntries(Object.entries(config).map(([name, data]) => [name, valueOf(inferred(data), data)])));
 
 describe('conformValues', () => {
   it('takes a value of each type the schema names', () => {
@@ -51,21 +56,21 @@ describe('conformValues', () => {
     ['a string that is not a boolean where it takes one', { on: 'yes' }, 'on: "yes" is not a boolean, which is "true" or "false"'],
     ['a number where it takes a boolean', { on: n('1') }, 'on is a number, where thing takes a boolean'],
     ['a boolean where it takes a number', { size: true }, 'size is a boolean, where thing takes a number'],
-    ['a list where it takes a string', { name: ['a'] }, 'name is a list, where thing takes a string'],
-    ['a map where it takes a list', { ports: { a: n('1') } }, 'ports is a map, where thing takes a list'],
-    ['a list where it takes a map', { tags: ['x'] }, 'tags is a list, where thing takes a map'],
-    ['a list where it takes an object', { settings: ['m'] }, 'settings is a list, where thing takes an object'],
+    ['a tuple where it takes a string', { name: ['a'] }, 'name is a tuple, where thing takes a string'],
+    ['an object where it takes a list', { ports: { a: n('1') } }, 'ports is an object, where thing takes a list'],
+    ['a tuple where it takes a map', { tags: ['x'] }, 'tags is a tuple, where thing takes a map'],
+    ['a tuple where it takes an object', { settings: ['m'] }, 'settings is a tuple, where thing takes an object'],
     ['an item of a list', { ports: [n('80'), 'http'] }, 'ports[1]: "http" is not a number'],
     ['a member of a set', { ids: [n('80'), 'http'] }, 'ids[1]: "http" is not a number'],
-    ['a map where it takes a set', { ids: { a: n('1') } }, 'ids is a map, where thing takes a set'],
-    ['a value of a map', { tags: { a: 'x', b: [true] } }, 'tags["b"] is a list, where thing takes a string'],
+    ['an object where it takes a set', { ids: { a: n('1') } }, 'ids is an object, where thing takes a set'],
+    ['a value of a map', { tags: { a: 'x', b: [true] } }, 'tags["b"] is a tuple, where thing takes a string'],
     ['a value inside an object', { settings: { mode: 'm', depth: 'deep' } }, 'settings["depth"]: "deep" is not a number'],
     ['a name an object does not have', { settings: { mode: 'm', moed: 'x' } }, 'thing has no attribute "moed" in settings'],
     ['a name an object requires and is not given', { settings: { depth: n('1') } }, 'thing requires "mode" in settings'],
     ['an item of a tuple', { pair: ['a', 'b'] }, 'pair[1]: "b" is not a number'],
     ['a tuple with too few items', { pair: ['a'] }, 'pair holds 1 item, where thing takes 2 items'],
     ['a tuple with too many items', { pair: ['a', n('1'), n('2')] }, 'pair holds 3 items, where thing takes 2 items'],
-    ['a map where it takes a tuple', { pair: { a: 'x' } }, 'pair is a map, where thing takes a tuple'],
+    ['an object where it takes a tuple', { pair: { a: 'x' } }, 'pair is an object, where thing takes a tuple'],
   ])('refuses %s, and names the attribute', (_, config, message) => {
     const attribute = Object.keys(config)[0];
 
@@ -102,14 +107,15 @@ describe('conformValues', () => {
     expect(conformValues('thing', schema, { ids: ['80', n('443'), n('80')] })).toEqual({ ids: [n('80'), n('443')] });
   });
 
-  it('checks a known member of a set beside one not known, and takes the set as not known', () => {
-    expect(conformValues('thing', schema, { ids: [UNKNOWN, '80'] })).toEqual({ ids: UNKNOWN });
+  // A member not known yet may come to any value, so the set keeps it apart from the members it knows, after them.
+  it('checks a known member of a set beside one not known, and keeps both', () => {
+    expect(conformValues('thing', schema, { ids: [UNKNOWN, '80'] })).toEqual({ ids: [n('80'), UNKNOWN] });
     expect(() => conformValues('thing', schema, { ids: [UNKNOWN, 'http'] })).toThrow('ids[1]: "http" is not a number');
   });
 
   it('checks and converts what is known beside what is not', () => {
     expect(conformValues('thing', schema, { tags: { a: UNKNOWN, b: n('1') } })).toEqual({ tags: { a: UNKNOWN, b: '1' } });
-    expect(() => conformValues('thing', schema, { tags: { a: UNKNOWN, b: ['x'] } })).toThrow('tags["b"] is a list, where thing takes a string');
+    expect(() => conformValues('thing', schema, { tags: { a: UNKNOWN, b: ['x'] } })).toThrow('tags["b"] is a tuple, where thing takes a string');
   });
 
   // dynamic names no type, so nothing is converted.
@@ -117,5 +123,54 @@ describe('conformValues', () => {
     const config = { meta: { any: 'x', thing: n('1') }, items: ['1', n('1'), [true]] };
 
     expect(conformValues('thing', { meta: { type: types.map(types.dynamic) }, items: { type: types.list(types.dynamic) } }, config)).toEqual(config);
+  });
+
+  it('leaves out a name set to null, as if it were not set', () => {
+    expect(conformValues('thing', schema, { name: null, size: n('1') })).toEqual({ size: n('1') });
+  });
+
+  // The name is written, so the error goes where it is.
+  it('refuses null for a name the schema requires, and names the attribute', () => {
+    const required: Schema = { path: { type: types.string, required: true } };
+
+    expect(() => conformValues('thing', required, { path: null })).toThrow(expect.objectContaining({ message: 'thing requires "path"', attribute: 'path' }));
+  });
+
+  it('keeps null inside a list, a map and a set, as null of the type its place names', () => {
+    expect(conformValues('thing', schema, { ports: [null, '80'], tags: { a: null }, ids: [null, '1'] })).toEqual({
+      ports: [null, n('80')],
+      tags: { a: null },
+      ids: [n('1'), null],
+    });
+  });
+
+  // Its kind is known before its value, so a value that could never fit is refused at the plan.
+  it('refuses a value not known yet whose kind the schema does not take', () => {
+    expect(() => conform('thing', schema, { ports: valueOf(types.string, UNKNOWN) })).toThrow(
+      expect.objectContaining({ message: 'ports is a string known only after apply, where thing takes a list', attribute: 'ports' })
+    );
+  });
+
+  it('takes a value not known yet of a kind that converts, as not known', () => {
+    expect(conform('thing', schema, { size: valueOf(types.string, UNKNOWN), ports: valueOf(types.dynamic, UNKNOWN) })).toEqual({ size: UNKNOWN, ports: UNKNOWN });
+  });
+
+  it('takes a set where a list goes, as its members in order', () => {
+    expect(conform('thing', schema, { ports: valueOf(types.set(types.string), ['1', '2']) })).toEqual({ ports: [n('1'), n('2')] });
+  });
+
+  // A member not known yet may sort anywhere, or come to a member the set has, so the list has no order or length to show before the apply.
+  it('takes a set with a member not known yet as not known, anywhere but where a set goes', () => {
+    const members = valueOf(types.set(types.string), ['1', UNKNOWN]);
+    const three = valueOf(types.set(types.string), ['1', 'a', UNKNOWN]);
+
+    expect(conform('thing', schema, { ports: members, ids: members, pair: three })).toEqual({ ports: UNKNOWN, ids: [n('1'), UNKNOWN], pair: UNKNOWN });
+  });
+
+  it('takes such a set as not known at any depth of a value whose type is dynamic', () => {
+    const members = types.set(types.string);
+    const meta = valueOf(types.object({ m: members, k: types.tuple([members, members]) }), { m: ['z', UNKNOWN], k: [['a'], [UNKNOWN]] });
+
+    expect(conform('thing', { meta: { type: types.dynamic } }, { meta })).toEqual({ meta: { m: UNKNOWN, k: [['a'], UNKNOWN] } });
   });
 });

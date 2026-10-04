@@ -37,9 +37,10 @@ export class Lexer {
 
   private heredoc = /<<(-?)([A-Z_a-z][\w-]*)\n/y;
 
-  // Boolean sits before Identifier, or true and false would lex as identifiers.
+  // Boolean and Null sit before Identifier, or true, false and null would lex as identifiers.
   private specs: TokenSpec[] = [
     { type: TokenType.Boolean, regex: /(true|false)(?![\w-])/y },
+    { type: TokenType.Null, regex: /null(?![\w-])/y },
     { type: TokenType.Identifier, regex: /[A-Z_a-z][\w-]*/y },
     { type: TokenType.OQuote, regex: /"/y },
     // Looser than a number, so `1.` and `1e` come whole to the parser and are refused as what they are.

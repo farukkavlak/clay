@@ -157,7 +157,7 @@ describe('validate against real files', () => {
   it('checks a resource that holds a map spelled like the unknown marker', async () => {
     const output = await validate('resource "local_file" "a" {\n  path    = "a.txt"\n  content = { "@@clay/unknown" = true }\n}');
 
-    expect(output).toContain('content is a map, where local_file takes a string');
+    expect(output).toContain('content is an object, where local_file takes a string');
   });
 
   it('refuses a variable with no value', async () => {

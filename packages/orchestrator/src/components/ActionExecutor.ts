@@ -1,11 +1,13 @@
-import { Address, Provider, Resource, State } from '@clay/contracts';
+import { Address, Provider, Resource, Schema, State } from '@clay/contracts';
 import { offApply, offFinal, offPlan, PlanAction } from '@clay/planner';
 
-import { inconsistent } from '../providerResult';
-import { setsOrdered } from '../setOrder';
+import { conformValues } from '../conformValues';
+import { heldBy, inconsistent } from '../providerResult';
 import { ProviderRegistry } from '../ProviderRegistry';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { shown } from '../shown';
+import { TypeMismatch, typedValues } from '../typed';
+import { plainOf, Value } from '../Value';
 import { ResourcePlan, ResourcePlanner } from './ResourcePlanner';
 
 /** The resource as state holds it, which is how its provider finds it. */
@@ -17,10 +19,11 @@ function held(action: PlanAction, state: State): Resource {
   return resource;
 }
 
-/** What an action sends its provider, and what the provider planned at apply it would make of them. */
+/** What an action sends its provider, what the provider planned at apply it would make of them, and the schema both are held to. */
 interface Sending {
   inputs: Record<string, unknown>;
   after: Record<string, unknown>;
+  schema: Schema;
 }
 
 export class ActionExecutor {
@@ -74,35 +77,43 @@ export class ActionExecutor {
     if (!action.planned) throw new Error(`${action.type} action missing the values it was planned with`);
     if (!action.after) throw new Error(`${action.type} action missing what its provider planned`);
 
+    const type = action.resourceType;
+    const schema = await this.providers.schema(type);
     const inputs = this.resolver.resolveAttributes(action.attributes, currentState, Address.of(action));
-    const off = offPlan(action.planned, inputs);
+    const off = offPlan(schema, action.planned, conformValues(type, schema, inputs));
     if (off) throw new Error(`the plan showed ${off.name} = ${shown(off.planned)}, but it now comes to ${shown(off.resolved)}. Plan again.`);
 
-    const final = await this.finalPlan(action, action.after, inputs, currentState);
-    return { inputs: final.config, after: final.after };
+    const final = await this.finalPlan(action, schema, action.after, inputs, currentState);
+    return { inputs: final.config, after: final.after, schema };
   }
 
   /** A replaced resource is planned as one to create, since the old one goes. What the plan knew was approved, so the plan made now has to agree with it. */
-  private async finalPlan(action: PlanAction, after: Record<string, unknown>, inputs: Record<string, unknown>, currentState: State): Promise<ResourcePlan> {
+  private async finalPlan(action: PlanAction, schema: Schema, after: Record<string, unknown>, inputs: Record<string, Value>, currentState: State): Promise<ResourcePlan> {
     const type = action.resourceType;
     const current = action.type === 'UPDATE' ? held(action, currentState) : undefined;
-    const final = await this.planner.plan(type, await this.providers.schema(type), current, inputs);
+    const final = await this.planner.plan(type, schema, current, inputs);
     if (final.replace) throw new Error(`${type} planned at apply to replace what the plan changed in place, which is a bug in the provider`);
 
-    const mismatches = offFinal(after, final.after);
+    const mismatches = offFinal(schema, after, final.after);
     if (mismatches.length > 0) throw inconsistent(type, 'plan', mismatches);
 
     return final;
   }
 
-  /** What a provider made, with each set in the order a plan holds it, so the two compare. */
-  private async returned(type: string, attributes: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return setsOrdered(await this.providers.schema(type), attributes);
+  /** What a provider made, with each set in the order a plan holds it, so the two compare. The resource exists whatever it holds, so what its schema does not hold is kept as it came. */
+  private returned({ schema }: Sending, attributes: Record<string, unknown>): Record<string, unknown> {
+    try {
+      return plainOf(typedValues(schema, attributes));
+    } catch (error) {
+      if (!(error instanceof TypeMismatch)) throw error;
+      return attributes;
+    }
   }
 
-  /** Checked once what it returned is in state: the resource exists as the provider made it, whatever the plan showed. */
-  private holdToPlan(type: string, { inputs, after }: Sending, returned: Record<string, unknown>): void {
-    const mismatches = offApply(after, inputs, returned);
+  /** Checked once what it returned is in state: the resource exists as the provider made it, whatever its schema or the plan said. */
+  private holdToPlan(type: string, { inputs, after, schema }: Sending, returned: Record<string, unknown>): void {
+    heldBy(type, 'returned', schema, returned);
+    const mismatches = offApply(schema, after, inputs, returned);
     if (mismatches.length > 0) throw inconsistent(type, 'apply', mismatches);
   }
 
@@ -113,7 +124,7 @@ export class ActionExecutor {
   private async create(action: PlanAction, provider: Provider, currentState: State, sending: Sending): Promise<void> {
     const contextAddress = Address.of(action);
 
-    const attributes = await this.returned(action.resourceType, await provider.create(action.resourceType, { config: sending.inputs, planned: sending.after }));
+    const attributes = this.returned(sending, await provider.create(action.resourceType, { config: sending.inputs, planned: sending.after }));
 
     const key = contextAddress.toString();
     currentState.resources[key] = {
@@ -130,7 +141,7 @@ export class ActionExecutor {
     const currentResource = held(action, currentState);
     const request = { prior: currentResource.attributes, config: sending.inputs, planned: sending.after };
 
-    currentResource.attributes = await this.returned(action.resourceType, await provider.update(action.resourceType, request));
+    currentResource.attributes = this.returned(sending, await provider.update(action.resourceType, request));
     currentResource.dependencies = action.dependencies ?? [];
     this.holdToPlan(action.resourceType, sending, currentResource.attributes);
   }

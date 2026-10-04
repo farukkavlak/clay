@@ -5,6 +5,7 @@ import { ModuleInstances } from '../ModuleInstances';
 import { ScopeManager } from '../scope/ScopeManager';
 import { readCall } from './instance';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
+import { Value } from '../Value';
 
 export class ModuleOutputResolver {
   constructor(
@@ -13,7 +14,7 @@ export class ModuleOutputResolver {
   ) {}
 
   /** The output the reference reads, of the instance its index names, and the steps still to take into it. */
-  resolve(reference: ModuleOutputReference, context: Context, position?: Position): { value: unknown; path: Step[] } {
+  resolve(reference: ModuleOutputReference, context: Context, position?: Position): { value: Value; path: Step[] } {
     const caller = moduleOf(context);
     const { key, output, path } = readCall(reference, this.modules.repetitionOf(caller.child(reference.module).withoutKeys()), position);
     const scope = scopeOf(caller.child(reference.module, key));

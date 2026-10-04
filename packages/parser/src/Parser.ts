@@ -10,6 +10,9 @@ import { Token, TokenType } from './tokens';
 /** Words a reference already spells: `var.x`, `data.t.n`, `module.m`, `count.index`, `each.key`, `path.module`. */
 const RESERVED_TYPES = new Set(['module', 'var', 'data', 'count', 'each', 'path']);
 
+/** Words that lex as values, so a name spelled like one could never be read back by a reference. */
+const KEYWORDS = new Set(['true', 'false', 'null']);
+
 /** What makes a block many instances; a module call keeps these for itself, so they name no module input. */
 const INSTANCE_ARGUMENTS = ['count', 'for_each'];
 
@@ -175,6 +178,7 @@ export class Parser {
     if (this.matchToken(TokenType.Number)) return { type: 'Number', value: this.exactNumber(this.previous().value, position), position };
     if (this.matchToken(TokenType.Minus)) return this.parseNegative(position);
     if (this.matchToken(TokenType.Boolean)) return { type: 'Boolean', value: this.previous().value === 'true', position };
+    if (this.matchToken(TokenType.Null)) return { type: 'Null', position };
 
     if (this.matchToken(TokenType.LBracket)) return this.parseList(position);
     if (this.matchToken(TokenType.LBrace)) return this.parseMap(position);
@@ -329,7 +333,7 @@ export class Parser {
   private consumeName(message: string, word: 'name' | 'type' = 'name'): Token {
     const quote = this.consume(TokenType.OQuote, message);
     const token = { ...quote, value: this.plainText(quote, 'label').value };
-    if (!NAME.test(token.value) || token.value === 'true' || token.value === 'false')
+    if (!NAME.test(token.value) || KEYWORDS.has(token.value))
       throw new ConfigError(`Invalid ${word} "${token.value}": a ${word} starts with a letter or underscore, then letters, digits, underscores and dashes.`, token.position);
 
     return token;

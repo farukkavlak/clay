@@ -1,4 +1,4 @@
-import { Address, isUnknown, ModuleAddress, Resource, Schema, State, UNKNOWN } from '@clay/contracts';
+import { Address, ModuleAddress, Resource, Schema, State, UNKNOWN } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { AttributeValue, ResourceBlock, spell, spellReference, Statement } from '@clay/parser';
 import { DesiredResource, hasChanges } from '@clay/planner';
@@ -17,8 +17,8 @@ import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { Reference, ReferenceScanner } from '../resolvers/ReferenceScanner';
 import { UnresolvedReferenceError } from '../resolvers/UnresolvedReferenceError';
 import { ScopeManager } from '../scope/ScopeManager';
-import { plain } from '../SetValue';
-import { DependencyGraphBuilder, GraphNode, ValueNode } from './DependencyGraphBuilder';
+import { Value, valueOf } from '../Value';
+import { DependencyGraphBuilder, GraphNode, OutputNode, ValueNode } from './DependencyGraphBuilder';
 import { LoadedResource } from './ModuleLoader';
 import { ResourcePlan, ResourcePlanner } from './ResourcePlanner';
 
@@ -112,21 +112,20 @@ export class DesiredStateBuilder {
   }
 
   /** The count or for_each, read before any instance is, so it has no key. */
-  private readAt<T>(value: AttributeValue, block: Statement, context: Context, state: State, read: (value: unknown) => T): T {
+  private readAt<T>(value: AttributeValue, block: Statement, context: Context, state: State, read: (value: Value) => T): T {
     return tryAt(value.position, spell(block), context, () => read(this.resolveOrUnknown(value, state, context)));
   }
 
   private async planInstance(address: Address, block: ResourceBlock, dependencies: string[], state: State): Promise<DesiredResource> {
     const movedFrom = tryAt(block.position, spell(block), address, () => this.moveIn(address, state));
-    const attributes = this.resolveForPlan(block, state, address);
     const current = state.resources[address.toString()];
-    const change = await this.askProvider(address, block, current, attributes);
+    const change = await this.askProvider(address, block, current, this.resolveForPlan(block, state, address));
     if (!current || change.replace || hasChanges(current.attributes, change.after)) this.planned.set(address.toString(), change.after);
 
-    return { address, block, attributes, after: change.after, replace: change.replace, dependencies, ...(movedFrom && { movedFrom }) };
+    return { address, block, attributes: change.config, after: change.after, replace: change.replace, dependencies, ...(movedFrom && { movedFrom }) };
   }
 
-  private async askProvider(address: Address, block: ResourceBlock, current: Resource | undefined, attributes: Record<string, unknown>): Promise<ResourcePlan> {
+  private async askProvider(address: Address, block: ResourceBlock, current: Resource | undefined, attributes: Record<string, Value>): Promise<ResourcePlan> {
     try {
       return await this.resourcePlanner.plan(block.resourceType, this.schemas.get(block.resourceType) ?? {}, current, attributes);
     } catch (error) {
@@ -176,42 +175,41 @@ export class DesiredStateBuilder {
     return keys.map((key) => new Address(block.module, block.resourceType, block.name, key).toString());
   }
 
-  private planValue(node: ValueNode & { kind: 'variable' | 'output' }, instance: ModuleAddress, state: State, rootOutputs: Record<string, unknown>): void {
+  private planValue(node: Extract<GraphNode, { kind: 'variable' | 'output' }>, instance: ModuleAddress, state: State, rootOutputs: Record<string, unknown>): void {
     if (node.kind === 'variable') this.planVariable(node, instance, state);
     else this.planOutput(node, instance, state, rootOutputs);
   }
 
   /** Resolved so an error in it is found at plan; a reader resolves it again where it reads it. */
   private planVariable(node: ValueNode, instance: ModuleAddress, state: State): void {
-    if (node.value !== undefined) this.resolveNode(node, instance, state);
+    if (node.value !== undefined) this.resolveNode(node, node.value, instance, state);
   }
 
-  /** Gives an output its value so the resources reading it can be planned; an output with a value only the apply makes keeps none. */
-  private planOutput(node: ValueNode, instance: ModuleAddress, state: State, rootOutputs: Record<string, unknown>): void {
-    const value = this.resolveNode(node, instance, state);
-    if (!isUnknown(value)) this.scopeManager.setOutput(instance.toString(), node.name, value);
+  /** Gives an output its value, known or not yet, so the resources reading it can be planned. */
+  private planOutput(node: OutputNode, instance: ModuleAddress, state: State, rootOutputs: Record<string, unknown>): void {
+    const value = this.resolveNode(node, node.value, instance, state);
+    this.scopeManager.setOutput(instance.toString(), node.name, value);
 
-    if (instance.isRoot()) rootOutputs[node.name] = plain(value);
+    if (instance.isRoot()) rootOutputs[node.name] = value.data;
   }
 
-  /** Resolves config values the way the diff needs them, as a provider takes them; what an apply has to produce first stays UNKNOWN. */
-  private resolveForPlan(block: ResourceBlock, state: State, context: Context): Record<string, unknown> {
-    const resolved: Record<string, unknown> = {};
+  /** Resolves config values with their types; what an apply has to produce first stays UNKNOWN. */
+  private resolveForPlan(block: ResourceBlock, state: State, context: Context): Record<string, Value> {
+    const resolved: Record<string, Value> = {};
     const declaration = spell(block);
 
-    for (const [key, value] of Object.entries(block.attributes))
-      resolved[key] = plain(tryAt(value.position, declaration, context, () => this.resolveOrUnknown(value, state, context)));
+    for (const [key, value] of Object.entries(block.attributes)) resolved[key] = tryAt(value.position, declaration, context, () => this.resolveOrUnknown(value, state, context));
 
     return resolved;
   }
 
-  private resolveNode(node: ValueNode, instance: ModuleAddress, state: State): unknown {
+  private resolveNode(node: ValueNode, value: AttributeValue, instance: ModuleAddress, state: State): Value {
     const context = contextIn(node.context, instance);
-    return tryAt(node.position, node.declaration, context, () => this.resolveOrUnknown(node.value, state, context));
+    return tryAt(node.position, node.declaration, context, () => this.resolveOrUnknown(value, state, context));
   }
 
   /** An index past a count, or a key for_each does not give, is refused before anything is read, since an instance not made yet reads as unknown rather than as missing. */
-  private resolveOrUnknown(value: unknown, state: State, context: Context): unknown {
+  private resolveOrUnknown(value: AttributeValue, state: State, context: Context): Value {
     for (const reference of this.scanner.referencesIn(value, context)) {
       if (reference.kind === 'count' || reference.kind === 'each') continue;
       if (reference.kind === 'resource') this.checkIndex(reference);
@@ -222,7 +220,7 @@ export class DesiredStateBuilder {
       return this.resolver.resolveValue(value, state, context);
     } catch (error) {
       if (!(error instanceof UnresolvedReferenceError)) throw error;
-      return UNKNOWN;
+      return valueOf(error.type, UNKNOWN);
     }
   }
 

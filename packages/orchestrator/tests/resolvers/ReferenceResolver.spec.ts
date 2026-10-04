@@ -1,153 +1,132 @@
-import { Address, ExactNumber, ModuleAddress, State, STATE_VERSION } from '@clay/contracts';
+import { Address, ExactNumber, ModuleAddress, State, STATE_VERSION, types, UNKNOWN } from '@clay/contracts';
+import { AttributeValue, ConfigError, TemplatePart } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
-import { ReferenceResolver } from '../../src/resolvers/ReferenceResolver';
 import { Instances } from '../../src/Instances';
 import { ModuleInstances } from '../../src/ModuleInstances';
 import { Planned } from '../../src/Planned';
+import { ReferenceResolver } from '../../src/resolvers/ReferenceResolver';
+import { UnresolvedReferenceError } from '../../src/resolvers/UnresolvedReferenceError';
 import { ScopeManager } from '../../src/scope/ScopeManager';
+import { Value, valueOf } from '../../src/Value';
+import { ref, str } from '../ast';
+
+const position = { file: 'main.clay', line: 1, column: 1 };
+const num = (text: string): AttributeValue => ({ type: 'Number', value: ExactNumber.parse(text), position });
+const list = (...value: AttributeValue[]): AttributeValue => ({ type: 'List', value, position });
+const map = (value: Record<string, AttributeValue>): AttributeValue => ({ type: 'Map', value, position });
+const template = (...value: TemplatePart[]): AttributeValue => ({ type: 'Template', value, position });
+const reference = (...value: (string | number)[]) => ({ type: 'Reference' as const, value, position });
 
 const inInstance = (module: ModuleAddress) => new Address(module, 'resource', 'main');
-const reference = (...value: (string | number)[]) => ({ type: 'Reference', value });
+const context = Address.root('resource', 'main');
+
+const state: State = {
+  version: STATE_VERSION,
+  serial: 0,
+  resources: { 'resource.test': { resourceType: 'resource', name: 'test', attributes: { id: 'res-123', val: 'resolved' } } },
+};
+
+const resolverWith = (scopes = new ScopeManager(), planned = new Planned(), dataSources = new Map<string, Record<string, Value>>()) =>
+  new ReferenceResolver(scopes, dataSources, new Map(), new Instances(), new ModuleInstances(), planned);
+
+/** A template around a resource state does not hold, which only the apply makes. */
+const readLater = () => resolverWith().resolveValue(template('id: ', reference('resource', 'later', 'id')), state, context);
 
 describe('ReferenceResolver', () => {
-  const scopeManager = new ScopeManager();
-  const dataSources = new Map<string, Record<string, unknown>>();
-  const resolver = new ReferenceResolver(scopeManager, dataSources, new Map(), new Instances(), new ModuleInstances(), new Planned());
-  const context = Address.root('resource', 'main');
-
-  const mockState: State = {
-    version: STATE_VERSION,
-    serial: 0,
-    resources: {
-      'resource.test': {
-        resourceType: 'resource',
-        name: 'test',
-        attributes: {
-          id: 'res-123',
-          val: 'resolved',
-        },
-      },
-    },
-  };
-
-  // Setup Variable
-  scopeManager.setVariable('', 'my_var', { value: 'var_value', context: ModuleAddress.root });
-
-  it('should resolve simple string value as is', () => {
-    expect(resolver.resolveValue('simple', mockState, context)).toBe('simple');
+  it.each([
+    ['a string', str('simple'), valueOf(types.string, 'simple')],
+    ['a number', num('42'), valueOf(types.number, ExactNumber.parse('42'))],
+    ['a boolean', { type: 'Boolean', value: true, position } as AttributeValue, valueOf(types.bool, true)],
+    ['null, of no type yet', { type: 'Null', position } as AttributeValue, valueOf(types.dynamic, null)],
+  ])('reads %s with its type', (_, node, value) => {
+    expect(resolverWith().resolveValue(node, state, context)).toEqual(value);
   });
 
-  it('should resolve number value as is', () => {
-    expect(resolver.resolveValue(123, mockState, context)).toBe(123);
+  // Its items may be of different types, which a list's are not.
+  it('reads a list as a tuple, each item with its own type', () => {
+    expect(resolverWith().resolveValue(list(str('a'), num('1')), state, context)).toEqual(valueOf(types.tuple([types.string, types.number]), ['a', ExactNumber.parse('1')]));
   });
 
-  it('should resolve Reference object recursively', () => {
-    const ref = {
-      type: 'Reference',
-      value: ['resource', 'test', 'val'],
-    };
-    expect(resolver.resolveValue(ref, mockState, context)).toBe('resolved');
+  it('reads a map as an object, each value with its own type', () => {
+    expect(resolverWith().resolveValue(map({ a: str('x'), b: list() }), state, context)).toEqual(valueOf(types.object({ a: types.string, b: types.tuple([]) }), { a: 'x', b: [] }));
   });
 
-  it('should resolve Array of References recursively', () => {
-    const arr = ['static', { type: 'Reference', value: ['resource', 'test', 'val'] }];
-    // ReferenceResolver does NOT iterate arrays automatically in resolveValue?
-    // Let's check implementation.
-    // implementation: if (!value || typeof value !== 'object') return value;
-    // It does not seem to handle arrays explicitly, returning the array object as is?
-    // Wait, let's check code:
-    // resolveValue(value, ...)
-    // if (!value || typeof value !== 'object') return value;
-    // const valueObj = value as ...
-    // if (valueObj.type === 'Reference' && Array.isArray(valueObj.value)) ...
-    // It DOES NOT seem to iterate over array unless the array itself is passed to something that iterates.
-    // However, Resource attributes can be arrays.
-    // If ReferenceResolver is called on an array, it returns the array.
-    // BUT DependencyGraphBuilder iterates arrays.
-    // Orchestrator.convertAttributes iterates object.values.
-    // But does anyone call resolveValue on an array?
-    // If I pass an array to resolveValue, it returns it as is (because it's an object but doesn't have type/value props usually).
-
-    // Let's verify what happens if I pass an array with a reference inside.
-    // Since resolveValue doesn't seem to map arrays, this test might show it returns raw array.
-    // But `Orchestrator.convertAttributes` -> `result[key] = this.resolveValue(value, ...)`
-    // If `value` is array, `resolveValue` returns array.
-    // So if attribute is array of refs, they are NOT resolved?
-    // This looks like a bug or intended limitation?
-    // `DependencyGraphBuilder` handles arrays recursively.
-    // `ReferenceResolver` does NOT seem to handle arrays recursively.
-    // Ideally it should?
-    // Or maybe the input payload is already transformed?
-    // Let's write the test enabling verification of current behavior.
-
-    const result = resolver.resolveValue(arr, mockState, context);
-    expect(result).toEqual(arr);
+  it('reads a reference to a resource', () => {
+    expect(resolverWith().resolveValue(ref('resource', 'test', 'val'), state, context).data).toBe('resolved');
   });
 
-  it('should join a template into text', () => {
-    const template = { type: 'Template', value: ['Var: ', { type: 'Reference', value: ['var', 'my_var'] }, ', Res: ', { type: 'Reference', value: ['resource', 'test', 'val'] }] };
+  it('joins a template into text', () => {
+    const scopes = new ScopeManager();
+    scopes.setVariable('', 'my_var', { value: str('var_value'), context: ModuleAddress.root });
 
-    expect(resolver.resolveValue(template, mockState, context)).toBe('Var: var_value, Res: resolved');
+    expect(resolverWith(scopes).resolveValue(template('Var: ', reference('var', 'my_var'), ', Res: ', reference('resource', 'test', 'val')), state, context)).toEqual(
+      valueOf(types.string, 'Var: var_value, Res: resolved')
+    );
   });
 
-  it('should give a template of one reference as the value itself', () => {
-    scopeManager.setVariable('', 'n', { value: ExactNumber.parse('8'), context: ModuleAddress.root });
+  it('gives a template of one reference as the value itself, type and all', () => {
+    const scopes = new ScopeManager();
+    scopes.setVariable('', 'n', { value: num('8'), context: ModuleAddress.root });
 
-    expect(resolver.resolveValue({ type: 'Template', value: [{ type: 'Reference', value: ['var', 'n'] }] }, mockState, context)).toEqual(ExactNumber.parse('8'));
+    expect(resolverWith(scopes).resolveValue(template(reference('var', 'n')), state, context)).toEqual(valueOf(types.number, ExactNumber.parse('8')));
   });
 
   // The parser has already read every interpolation out of a string, so what is left is text, whatever it spells.
-  it('should leave a string that spells an interpolation as text', () => {
-    expect(resolver.resolveValue({ type: 'String', value: 'Value is ${resource.test.val}' }, mockState, context)).toBe('Value is ${resource.test.val}');
+  it('leaves a string that spells an interpolation as text', () => {
+    expect(resolverWith().resolveValue(str('Value is ${resource.test.val}'), state, context).data).toBe('Value is ${resource.test.val}');
   });
 
-  it('should unwrap a number or a boolean node', () => {
-    expect(resolver.resolveValue({ type: 'Number', value: 42 }, mockState, context)).toBe(42);
-    expect(resolver.resolveValue({ type: 'Boolean', value: true }, mockState, context)).toBe(true);
+  it.each([
+    ['a tuple', list(str('a')), 'var.x is a tuple and cannot be joined into a string'],
+    ['an object', map({ a: str('x') }), 'var.x is an object and cannot be joined into a string'],
+    ['null', { type: 'Null', position } as AttributeValue, 'var.x is null and cannot be joined into a string'],
+  ])('refuses to join %s into text', (_, value, message) => {
+    const scopes = new ScopeManager();
+    scopes.setVariable('', 'x', { value, context: ModuleAddress.root });
+
+    expect(() => resolverWith(scopes).resolveValue(template('a ', reference('var', 'x')), state, context)).toThrow(new ConfigError(message, position));
   });
 
-  it('should leave a map that happens to have type and value keys alone', () => {
-    const settings = { type: 'a', value: 'b' };
+  // A state holds what a provider made even when its schema does not, so the reference that reads it names the resource.
+  it('refuses a value in state that its schema does not hold, naming the resource', () => {
+    const schemas = new Map([['resource', { val: { type: types.number } }]]);
+    const resolver = new ReferenceResolver(new ScopeManager(), new Map(), schemas, new Instances(), new ModuleInstances(), new Planned());
 
-    expect(resolver.resolveValue(settings, mockState, context)).toBe(settings);
+    expect(() => resolver.resolveValue(reference('resource', 'test', 'val'), state, context)).toThrow(
+      new ConfigError('resource.test holds what its schema does not: val is a string, where its type is a number', position)
+    );
   });
 
-  it('should resolve variable reference', () => {
-    const ref = {
-      type: 'Reference',
-      value: ['var', 'my_var'],
-    };
-    expect(resolver.resolveValue(ref, mockState, context)).toBe('var_value');
+  // Its for_each is read before anything in an instance is, so a key with no value is a fault in the engine, not in the configuration.
+  it('refuses each.value in an instance its for_each gave no value', () => {
+    const instance = new Address(ModuleAddress.root, 'resource', 'main', 'k');
+
+    expect(() => resolverWith().resolveValue(reference('each', 'value'), state, instance)).toThrow('each.value of "k" was read before its for_each');
   });
 
-  it('should default to resource resolver if type unknown in path', () => {
-    // path: ['custom_resource', 'name', 'attr'] -> defaults to resource resolver
-    // But ResourceResolver expects path to be parsed.
-    // ReferenceResolver.resolve:
-    // const refType = pathParts[0]; (='custom_resource')
-    // resolver = resolvers.get(refType); (undefined)
-    // resourceResolver.resolve(...)
-    // ResourceResolver.resolve checks pathParts.length >= 3.
-    // And parses address.
+  // A provider may read null where its schema names a string, which has a kind that joins and no text.
+  it('refuses to join a null of a type that joins into text', () => {
+    const sources = new Map([['src.s', { v: valueOf(types.string, null) }]]);
+    const read = () => resolverWith(new ScopeManager(), new Planned(), sources).resolveValue(template('a ', reference('data', 'src', 's', 'v')), state, context);
 
-    // Let's mock a resource with custom type
-    const customState: State = {
-      ...mockState,
-      resources: {
-        'custom.name': {
-          resourceType: 'custom',
-          name: 'name',
-          attributes: { id: 'c-1', attr: 'ok' },
-        },
-      },
-    };
+    expect(read).toThrow(new ConfigError('data.src.s.v is null and cannot be joined into a string', position));
+  });
 
-    const ref = {
-      type: 'Reference',
-      value: ['custom', 'name', 'attr'],
-    };
-    expect(resolver.resolveValue(ref, customState, context)).toBe('ok');
+  // Text around it makes it a string, whatever the reference comes to.
+  it('leaves a template that reads a value not known yet to the apply, as a string', () => {
+    expect(readLater).toThrow(UnresolvedReferenceError);
+    expect(readLater).toThrow(expect.objectContaining({ type: types.string }));
+  });
+
+  // While planning, an item only the apply can read stands on its own, with the type it will have.
+  it('reads an item not known yet in a list as unknown, of the type it will have', () => {
+    const planned = new Planned();
+    planned.begin();
+
+    expect(resolverWith(new ScopeManager(), planned).resolveValue(list(str('a'), template('x', reference('resource', 'later', 'id'))), state, context)).toEqual(
+      valueOf(types.tuple([types.string, types.string]), ['a', UNKNOWN])
+    );
   });
 
   // Every instance of a module reads the values declared once for it, and the resources and outputs of its own instance.
@@ -155,7 +134,7 @@ describe('ReferenceResolver', () => {
     it('reads the instance of a resource in that instance of the module', () => {
       const instances = new Instances();
       instances.declare('module.app.resource.dep', 'count');
-      const state: State = {
+      const held: State = {
         version: STATE_VERSION,
         serial: 0,
         resources: { 'module.app[0].resource.dep[1]': { resourceType: 'resource', name: 'dep', attributes: { id: 'one' } } },
@@ -163,38 +142,30 @@ describe('ReferenceResolver', () => {
 
       const read = new ReferenceResolver(new ScopeManager(), new Map(), new Map(), instances, new ModuleInstances(), new Planned()).resolveValue(
         reference('resource', 'dep', 1, 'id'),
-        state,
+        held,
         inInstance(ModuleAddress.root.child('app', 0))
       );
 
-      expect(read).toBe('one');
+      expect(read.data).toBe('one');
     });
 
     it('reads an input in the instance of the calling module it sits in', () => {
       const scopes = new ScopeManager();
       scopes.setVariable('module.a.module.b', 'x', { value: reference('module', 'c', 'out'), context: ModuleAddress.root.child('a') });
-      scopes.setOutput('module.a[1].module.c', 'out', 'from a[1]');
-      scopes.setOutput('module.a.module.c', 'out', 'from a');
+      scopes.setOutput('module.a[1].module.c', 'out', valueOf(types.string, 'from a[1]'));
+      scopes.setOutput('module.a.module.c', 'out', valueOf(types.string, 'from a'));
 
-      const read = new ReferenceResolver(scopes, new Map(), new Map(), new Instances(), new ModuleInstances(), new Planned()).resolveValue(
-        reference('var', 'x'),
-        mockState,
-        inInstance(ModuleAddress.root.child('a', 1).child('b', 0))
-      );
+      const read = resolverWith(scopes).resolveValue(reference('var', 'x'), state, inInstance(ModuleAddress.root.child('a', 1).child('b', 0)));
 
-      expect(read).toBe('from a[1]');
+      expect(read.data).toBe('from a[1]');
     });
 
     it('reads a data source once for the module as the configuration writes it', () => {
-      const sources = new Map([['module.app.src.s', { v: 'read' }]]);
+      const sources = new Map([['module.app.src.s', { v: valueOf(types.string, 'read') }]]);
 
-      const read = new ReferenceResolver(new ScopeManager(), sources, new Map(), new Instances(), new ModuleInstances(), new Planned()).resolveValue(
-        reference('data', 'src', 's', 'v'),
-        mockState,
-        inInstance(ModuleAddress.root.child('app', 0))
-      );
+      const read = resolverWith(new ScopeManager(), new Planned(), sources).resolveValue(reference('data', 'src', 's', 'v'), state, inInstance(ModuleAddress.root.child('app', 0)));
 
-      expect(read).toBe('read');
+      expect(read.data).toBe('read');
     });
   });
 });

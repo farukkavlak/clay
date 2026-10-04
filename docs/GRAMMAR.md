@@ -7,7 +7,7 @@ in a directory; a module is another directory with its own `main.clay`.
 
 | Token             | Pattern                               | Notes                                                                   |
 | ----------------- | ------------------------------------- | ----------------------------------------------------------------------- |
-| `IDENTIFIER`      | `[A-Za-z_][A-Za-z0-9_-]*`             | Block kinds, attribute names, reference parts; not `true` or `false`    |
+| `IDENTIFIER`      | `[A-Za-z_][A-Za-z0-9_-]*`             | Block kinds, names, reference parts; not `true`, `false`, `null`        |
 | `OQUOTE`          | `"`                                   | Opens a string                                                          |
 | `QUOTED_LIT`      | Text up to `"` or `${`                | Escapes as written, read below; `\"` and `$${` are text; no line breaks |
 | `TEMPLATE_INTERP` | `${`                                  | Inside a string                                                         |
@@ -19,6 +19,7 @@ in a directory; a module is another directory with its own `main.clay`.
 | `NUMBER`          | `[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?` | No sign; `007` is `7`; at most 1000 places either side of the point     |
 | `MINUS`           | `-`                                   | Only before a number                                                    |
 | `BOOLEAN`         | `true`, `false`                       |                                                                         |
+| `NULL`            | `null`                                |                                                                         |
 | `LBRACE`          | `{`                                   |                                                                         |
 | `RBRACE`          | `}`                                   |                                                                         |
 | `LBRACKET`        | `[`                                   |                                                                         |
@@ -90,7 +91,7 @@ absolute path, is refused where it is written.
 ## Values
 
 ```
-value   = string | heredoc | [ "-" ] NUMBER | BOOLEAN | reference | list | map
+value   = string | heredoc | [ "-" ] NUMBER | BOOLEAN | NULL | reference | list | map
 string  = OQUOTE { QUOTED_LIT | TEMPLATE_INTERP reference TEMPLATE_END } CQUOTE
 heredoc = OHEREDOC { STRING_LIT | TEMPLATE_INTERP reference TEMPLATE_END } CHEREDOC
 list    = "[" [ value { "," value } [ "," ] ] "]"
@@ -108,8 +109,27 @@ A minus may stand apart from its number: `- 5` is `-5`. A name keeps its dash, s
 
 A list needs a comma between items and may end with one. A map does not need commas.
 A map key may be a bare identifier or a quoted string, and appears once; a block kind is
-a fine identifier, `true` and `false` are not, and neither is `__proto__`, for an attribute
-name either.
+a fine identifier, `true`, `false` and `null` are not, and neither is `__proto__`, for an
+attribute name either. A block is not named `true`, `false` or `null`, since a reference to
+it would read as the value.
+
+### Types
+
+Every value has a type. A string, a number and a boolean have theirs; a list is a tuple,
+with a type for each item, and a map is an object, with a type for each key. `null` has no
+type until it is used where one is named. A value read from a resource or a data source
+has the type its schema names, `set(string)` or `list(number)`, and keeps it through
+variables, module inputs and outputs.
+
+Where a schema names a type, a value is converted to it: a tuple, a list and a set to one
+another, an object and a map to one another, a number or a boolean to its text, and a
+string to the number or boolean it spells. Anything else is refused where it is written:
+`content is a tuple, where local_file takes a string`. An attribute set to `null` is left
+out, as if it were not written; inside a list or a map, `null` stays.
+
+A value not known until apply still has its type, so one of a type the attribute does not
+take is refused at plan. A set with a member not known yet keeps the members it knows;
+taken as a list, it is not known as a whole until apply, since it has no order yet.
 
 ### References
 
@@ -143,8 +163,11 @@ After what it names, a reference may read into the value: `.name` or `["key"]` r
 key of a map, and `[0]` an item of a list, counted from 0. So `local_file.a.tags.env`,
 `var.names[0]` and `module.app.info["url"]` each read one value. An index is written in
 digits; a quoted key reads escapes as a map key does. A key the map does not have, an
-index past the end of the list, or a step into a string, number or bool is refused where
-the reference is written. A value not known until apply is read into at apply.
+index past the end of the list, or a step into a string, number, bool or null is refused
+where the reference is written. So is an index into a set, whose members have no order.
+A value not known until apply is read into at apply. An attribute of a resource or a
+data source that its schema has and nothing sets reads as `null`; a name the schema does
+not have is refused.
 
 The parts before that name what is read, so each is a name even when it is quoted:
 `var["region"]` is `var.region`, and `module["a.module.b"]` is refused.
@@ -298,6 +321,7 @@ type AttributeValue =
   | { type: 'Template'; value: (string | Reference)[]; position: Position }
   | { type: 'Number'; value: ExactNumber; position: Position }
   | { type: 'Boolean'; value: boolean; position: Position }
+  | { type: 'Null'; position: Position }
   | Reference
   | { type: 'List'; value: AttributeValue[]; position: Position }
   | { type: 'Map'; value: Record<string, AttributeValue>; position: Position };

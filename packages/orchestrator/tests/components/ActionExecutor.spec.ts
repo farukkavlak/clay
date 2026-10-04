@@ -328,7 +328,7 @@ describe('ActionExecutor', () => {
 
     it('stops an update that returns a value the plan did not have, and keeps what it returned in state', async () => {
       mockState.resources[context.toString()] = { resourceType: 'test', name: 'main', attributes: { path: 'old' } };
-      vi.mocked(mockProvider.update).mockResolvedValueOnce({ path: 'p', extra: 1 });
+      vi.mocked(mockProvider.update).mockResolvedValueOnce({ path: 'p', extra: 'x' });
       const action: PlanAction = {
         type: 'UPDATE',
         resourceType: 'test',
@@ -338,8 +338,8 @@ describe('ActionExecutor', () => {
         after: { path: 'p' },
       };
 
-      await expect(executor.execute(action, mockState)).rejects.toThrow(`${bug}\n  extra = 1, which the plan did not have`);
-      expect(mockState.resources[context.toString()].attributes).toEqual({ path: 'p', extra: 1 });
+      await expect(executor.execute(action, mockState)).rejects.toThrow(`${bug}\n  extra = "x", which the plan did not have`);
+      expect(mockState.resources[context.toString()].attributes).toEqual({ path: 'p', extra: 'x' });
     });
 
     it('stops a replace whose create returns another value, and keeps the new resource in state', async () => {
@@ -369,17 +369,22 @@ describe('ActionExecutor', () => {
       ['a value missing', { path: 'p' }, { result: 'r' }, 'result is missing, where the plan showed "r"'],
       ['a value not known', { path: 'p', result: UNKNOWN }, { result: 'r' }, 'result is not known; an apply returns every value'],
       ['an item of a list', { path: 'p', l: ['a', 'x'] }, { l: ['a', 'b'] }, 'l[1] = "x", where the plan showed "b"'],
-      [
-        'a number made in JavaScript',
-        { path: 'p', n: 5 },
-        { n: ExactNumber.parse('5') },
-        'n = 5, where the plan showed 5 (a JavaScript number where the plan has an exact number)',
-      ],
     ])('names %s', async (_, returned, planned, line) => {
       plansAtApply(planned);
       created(returned);
 
       await expect(executor.execute(create({ path: 'p', ...planned }), mockState)).rejects.toThrow(`${bug}\n  ${line}`);
+    });
+
+    // The resource exists, so what it holds is kept, and the run stops on the provider's bug.
+    it('refuses a value its schema does not hold, and keeps what it made in state', async () => {
+      plansAtApply({ n: ExactNumber.parse('5') });
+      created({ path: 'p', n: 5 });
+
+      await expect(executor.execute(create({ path: 'p', n: ExactNumber.parse('5') }), mockState)).rejects.toThrow(
+        'test returned what its schema does not hold, which is a bug in the provider: n is a JavaScript number, where its type is a number'
+      );
+      expect(mockState.resources[context.toString()].attributes).toEqual({ path: 'p', n: 5 });
     });
 
     it('names every value that differs', async () => {

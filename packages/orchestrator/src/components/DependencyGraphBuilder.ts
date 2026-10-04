@@ -24,10 +24,13 @@ export interface ValueNode extends InModule {
   declaration: string;
 }
 
+/** An output always has a value; a variable may have none, until a call gives it one. */
+export type OutputNode = ValueNode & { value: AttributeValue };
+
 export type GraphNode =
   | ({ kind: 'resource' } & InModule)
   | ({ kind: 'variable' } & ValueNode)
-  | ({ kind: 'output' } & ValueNode)
+  | ({ kind: 'output' } & OutputNode)
   | ({ kind: 'module'; block: ModuleBlock } & InModule);
 
 /** A node by its address, `module.m.var.x`; a resource's key already is one, and a key is never taken apart. */

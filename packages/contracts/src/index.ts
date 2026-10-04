@@ -4,13 +4,14 @@ import { Address, isInstanceKey, isModulePath } from './Address';
 import type { InstanceKey, ModuleStep } from './Address';
 import { ExactNumber, NumberError } from './ExactNumber';
 import { isRecord } from './isRecord';
+import { types } from './Type';
 import type { Type } from './Type';
 
 export { Address, isInstanceKey, isModulePath, ModuleAddress } from './Address';
 export type { InstanceKey, ModuleStep } from './Address';
 export { ExactNumber, NumberError } from './ExactNumber';
 export { isRecord } from './isRecord';
-export { isType, types } from './Type';
+export { isType, typeAt, types } from './Type';
 export type { Type } from './Type';
 
 /** Stands for a value that only exists once the resources it depends on are created. A symbol, so no value a configuration or a file holds can pass for it. */
@@ -146,6 +147,11 @@ export interface SchemaDefinition {
 }
 
 export type Schema = Record<string, SchemaDefinition>;
+
+/** The type the schema names for a value, or `dynamic` where it names none. */
+export function typeIn(schema: Schema, name: string): Type {
+  return Object.hasOwn(schema, name) ? schema[name].type : types.dynamic;
+}
 
 /** The steps from an attribute into what it holds: its name, then a key of a map or an index into a list. */
 export type AttributePath = (string | number)[];

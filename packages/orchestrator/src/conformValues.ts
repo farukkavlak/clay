@@ -1,9 +1,10 @@
-import { AttributePath, ExactNumber, isRecord, isUnknown, NumberError, Schema, Type } from '@clay/contracts';
+import { AttributePath, containsUnknown, ExactNumber, isRecord, isUnknown, NumberError, Schema, Type, UNKNOWN } from '@clay/contracts';
 import { DataBlock, Position, ResourceBlock } from '@clay/parser';
 
-import { setsOrdered } from './setOrder';
+import { setOf } from './setMembers';
 import { shown } from './shown';
-import { spelled } from './spelled';
+import { items, spelled } from './spelled';
+import { article, child, described, Value, valueOf } from './Value';
 
 /** A value the schema does not take, with the attribute it is in, so the caller can say where that was written. One left out is in none. */
 export class SchemaMismatch extends Error {
@@ -54,40 +55,23 @@ export function nameProblem(resource: string, { known, required }: Names, names:
   return missing === undefined ? undefined : { message: `${resource} requires "${missing}"${where}` };
 }
 
-const articles: Record<Type['kind'], string> = {
-  string: 'a string',
-  number: 'a number',
-  bool: 'a boolean',
-  dynamic: 'any value',
-  list: 'a list',
-  set: 'a set',
-  map: 'a map',
-  object: 'an object',
-  tuple: 'a tuple',
-};
-
-function kindOf(value: unknown): string {
-  if (value instanceof ExactNumber) return 'a number';
-  if (Array.isArray(value)) return 'a list';
-  if (isRecord(value)) return 'a map';
-
-  return `a ${typeof value}`;
-}
-
-function holds(kind: Type['kind'], value: unknown): boolean {
-  if (kind === 'dynamic') return true;
-  if (kind === 'string') return typeof value === 'string';
-  if (kind === 'bool') return typeof value === 'boolean';
-  if (kind === 'number') return value instanceof ExactNumber;
-  if (kind === 'list' || kind === 'set' || kind === 'tuple') return Array.isArray(value);
-
-  return isRecord(value);
-}
-
 /** A mismatch in a value, named by the attribute it is in. */
 function mismatchAt(path: AttributePath, message: string): SchemaMismatch {
   return new SchemaMismatch(message, String(path[0]));
 }
+
+/** The kinds a value of each kind can be taken as: a number or a boolean as its text, a string as the number or boolean it spells, and a collection as another. */
+const TAKES: Record<Type['kind'], readonly Type['kind'][]> = {
+  string: ['string', 'number', 'bool'],
+  number: ['number', 'string'],
+  bool: ['bool', 'string'],
+  dynamic: [],
+  list: ['list', 'set', 'tuple'],
+  set: ['list', 'set', 'tuple'],
+  tuple: ['list', 'set', 'tuple'],
+  map: ['map', 'object'],
+  object: ['map', 'object'],
+};
 
 function numberIn(text: string, path: AttributePath): ExactNumber {
   try {
@@ -104,68 +88,97 @@ function booleanIn(text: string, path: AttributePath): boolean {
   throw mismatchAt(path, `${spelled(path)}: ${shown(text)} is not a boolean, which is "true" or "false"`);
 }
 
-/** A number or a boolean goes where a string does as its text, and a string where a number or a boolean does as the one it spells. */
-function converted(kind: Type['kind'], value: unknown, path: AttributePath): unknown {
-  if (kind === 'string' && (value instanceof ExactNumber || typeof value === 'boolean')) return String(value);
-  if (typeof value !== 'string') return value;
-  if (kind === 'number') return numberIn(value, path);
-  if (kind === 'bool') return booleanIn(value, path);
+/** A primitive as the kind it is taken as. */
+function primitive(kind: Type['kind'], data: unknown, path: AttributePath): unknown {
+  if (kind === 'string') return String(data);
+  if (typeof data !== 'string') return data;
 
-  return value;
+  return kind === 'number' ? numberIn(data, path) : booleanIn(data, path);
 }
 
-function entriesMapped(value: Record<string, unknown>, map: (name: string, item: unknown) => unknown): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(value).map(([name, item]) => [name, map(name, item)]));
+type Convert = (value: Value, to: Type, path: AttributePath) => Value;
+
+function entriesConverted(value: Value, typeOf: (name: string) => Type, path: AttributePath, convert: Convert): Record<string, unknown> {
+  return Object.fromEntries(Object.keys(value.data as Record<string, unknown>).map((name) => [name, convert(child(value, name), typeOf(name), [...path, name]).data]));
 }
 
-type Conform = (type: Type, value: unknown, path: AttributePath) => unknown;
-
-/** What a value holds, each held to the type its place in the value names. */
-function itemsConformed(type: Type, value: unknown, path: AttributePath, conform: Conform): unknown {
-  if (type.kind === 'tuple') return (value as unknown[]).map((item, index) => conform(type.elements[index], item, [...path, index]));
-  if (type.kind === 'object') return entriesMapped(value as Record<string, unknown>, (name, item) => conform(type.attributes[name], item, [...path, name]));
-  if (type.kind !== 'list' && type.kind !== 'set' && type.kind !== 'map') return value;
-
-  const { element } = type;
-  if (Array.isArray(value)) return value.map((item, index) => conform(element, item, [...path, index]));
-  return entriesMapped(value as Record<string, unknown>, (key, item) => conform(element, item, [...path, key]));
+function itemsConverted(value: Value, typeOf: (index: number) => Type, path: AttributePath, convert: Convert): unknown[] {
+  return (value.data as unknown[]).map((_, index) => convert(child(value, index), typeOf(index), [...path, index]).data);
 }
 
-const items = (count: number): string => `${count} ${count === 1 ? 'item' : 'items'}`;
+/** What a collection holds, each item converted to the type its place names; a set's then held once each and in order. */
+function collection(resource: string, value: Value, to: Type, path: AttributePath, convert: Convert): unknown {
+  if (to.kind === 'list' || to.kind === 'set') {
+    const elements = itemsConverted(value, () => to.element, path, convert);
+    return to.kind === 'set' ? setOf(elements) : elements;
+  }
+  if (to.kind === 'map') return entriesConverted(value, () => to.element, path, convert);
 
-/** What the value's shape lacks for its type: an object's names, or a tuple's length. */
-function shapeProblem(resource: string, type: Type, value: unknown, path: AttributePath): string | undefined {
-  if (type.kind === 'object') return nameProblem(resource, namesOfObject(type), Object.keys(value as Record<string, unknown>), path)?.message;
-  if (type.kind !== 'tuple') return undefined;
+  if (to.kind === 'tuple') {
+    const { length } = value.data as unknown[];
+    if (length !== to.elements.length) throw mismatchAt(path, `${spelled(path)} holds ${items(length)}, where ${resource} takes ${items(to.elements.length)}`);
+    return itemsConverted(value, (index) => to.elements[index], path, convert);
+  }
 
-  const { length } = value as unknown[];
-  return length === type.elements.length ? undefined : `${spelled(path)} holds ${items(length)}, where ${resource} takes ${items(type.elements.length)}`;
+  const named = nameProblem(resource, namesOfObject(to as Extract<Type, { kind: 'object' }>), Object.keys(value.data as Record<string, unknown>), path);
+  if (named) throw mismatchAt(path, named.message);
+  return entriesConverted(value, (name) => (to as Extract<Type, { kind: 'object' }>).attributes[name], path, convert);
 }
 
-function conformed(resource: string, type: Type, written: unknown, path: AttributePath): unknown {
-  if (isUnknown(written)) return written;
+/** A set with a member not known yet has no order or size until the apply, so only a set can hold it before then. */
+function unordered(value: Value): boolean {
+  return value.type.kind === 'set' && Array.isArray(value.data) && value.data.some((member) => containsUnknown(member));
+}
 
-  const value = converted(type.kind, written, path);
-  if (!holds(type.kind, value)) throw mismatchAt(path, `${spelled(path)} is ${kindOf(value)}, where ${resource} takes ${articles[type.kind]}`);
+/** Whether nothing of the value can be held as `to` before the apply. */
+function knownLater(value: Value, to: Type): boolean {
+  return isUnknown(value.data) || (to.kind !== 'set' && unordered(value));
+}
 
-  const problem = shapeProblem(resource, type, value, path);
-  if (problem) throw mismatchAt(path, problem);
+/** The value's data as it is, where no type is named for it, with each such set in it not known as a whole: the data alone would read as a list. */
+function ordered(value: Value): unknown {
+  if (unordered(value)) return UNKNOWN;
+  if (Array.isArray(value.data)) return value.data.map((_, index) => ordered(child(value, index)));
+  if (isRecord(value.data)) return Object.fromEntries(Object.keys(value.data).map((name) => [name, ordered(child(value, name))]));
 
-  return itemsConformed(type, value, path, (held, item, at) => conformed(resource, held, item, at));
+  return value.data;
 }
 
 /**
- * Holds what the configuration sets to the schema: its names, and each value to the type the schema names, in every item it holds. A number or a boolean
- * where a string goes, and a string that spells a number or a boolean where one goes, is taken as that type. Only what is known is checked; a value the
- * apply makes is checked when the apply knows it. A saved plan's values reach the apply without the load's check, so the names are checked here too.
- * Each set comes back in one order, with each member once.
+ * The value as the type `to` names, or a mismatch named by its path. A null is a null of that type. A value not known yet is checked only for its kind,
+ * since what it holds is known only at the apply, where it is checked again.
  */
-export function conformValues(resource: string, schema: Schema, config: Record<string, unknown>): Record<string, unknown> {
-  const named = nameProblem(resource, namesOf(schema), Object.keys(config));
+function converted(resource: string, value: Value, to: Type, path: AttributePath): Value {
+  if (to.kind === 'dynamic') return valueOf(value.type, ordered(value));
+  if (value.data === null) return valueOf(to, null);
+
+  const from = value.type.kind;
+  if (from !== 'dynamic' && !TAKES[to.kind].includes(from)) throw mismatchAt(path, `${spelled(path)} is ${described(value)}, where ${resource} takes ${article(to.kind)}`);
+  if (knownLater(value, to)) return valueOf(to, UNKNOWN);
+
+  const convert: Convert = (item, type, at) => converted(resource, item, type, at);
+  const isPrimitive = to.kind === 'string' || to.kind === 'number' || to.kind === 'bool';
+  return valueOf(to, isPrimitive ? primitive(to.kind, value.data, path) : collection(resource, value, to, path, convert));
+}
+
+/** The names it sets, and of those the ones it gives a value: null is a name left out, so one it requires is refused where it was written. */
+function checkNames(resource: string, schema: Schema, config: Record<string, Value>): void {
+  const named = nameProblem(resource, { known: Object.keys(schema), required: [] }, Object.keys(config));
   if (named) throw new SchemaMismatch(named.message, named.set);
 
-  return setsOrdered(
-    schema,
-    entriesMapped(config, (name, value) => conformed(resource, schema[name].type, value, [name]))
-  );
+  const missing = namesOf(schema).required.find((name) => !Object.hasOwn(config, name) || config[name].data === null);
+  if (missing !== undefined) throw new SchemaMismatch(`${resource} requires "${missing}"`, Object.hasOwn(config, missing) ? missing : undefined);
+}
+
+/**
+ * Holds what the configuration sets to the schema, as the provider is sent it: its names, and each value as the type the schema names, in every item it
+ * holds. A number or a boolean where a string goes, and a string that spells a number or a boolean where one goes, is taken as that type. A name set to
+ * null is left out. A value the apply makes is checked once the apply knows it. A saved plan's values reach the apply without the load's check, so the
+ * names are checked here too. Each set comes back in one order, with each member once.
+ */
+export function conformValues(resource: string, schema: Schema, config: Record<string, Value>): Record<string, unknown> {
+  checkNames(resource, schema, config);
+
+  const given = Object.entries(config).filter(([, value]) => value.data !== null);
+  return Object.fromEntries(given.map(([name, value]) => [name, converted(resource, value, schema[name].type, [name]).data]));
 }

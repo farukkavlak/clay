@@ -43,3 +43,12 @@ export function isType(value: unknown): value is Type {
 
   return kind === 'tuple' && Array.isArray(value.elements) && value.elements.every((element) => isType(element));
 }
+
+/** The type of what one step into a value of `type` finds: an element, a tuple's item, or an object's attribute. `dynamic` where the type names none. */
+export function typeAt(type: Type, step: string | number): Type {
+  if (type.kind === 'list' || type.kind === 'set' || type.kind === 'map') return type.element;
+  if (type.kind === 'tuple' && typeof step === 'number') return type.elements[step] ?? types.dynamic;
+  if (type.kind === 'object' && typeof step === 'string' && Object.hasOwn(type.attributes, step)) return type.attributes[step];
+
+  return types.dynamic;
+}

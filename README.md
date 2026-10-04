@@ -46,9 +46,15 @@ in place.
 
 ## The language
 
-A file is a list of blocks. Values are strings, numbers, booleans, lists and maps, and a
-string can read other values with `${...}`. A string over many lines is a heredoc:
+A file is a list of blocks. Values are strings, numbers, booleans, lists, maps and `null`,
+and a string can read other values with `${...}`. A string over many lines is a heredoc:
 `<<-EOT`, the lines, then `EOT`.
+
+Every value carries its type. A written list is a tuple, `["a", 1]` is
+`tuple([string, number])`, and a written map is an object; a value read from a resource or a
+data source has the type its schema names, and keeps it through variables, module inputs
+and outputs. An attribute set to `null` is left out, as if it were not written, so a
+required one is refused. `null` inside a list or a map stays there.
 
 | Block                            | Does                                                           |
 | -------------------------------- | -------------------------------------------------------------- |
@@ -76,12 +82,13 @@ list with `.key`, `["key"]` and `[0]`: `var.tags.env`, `var.names[0]`. A resourc
 created or changed is read at plan time as its provider plans it, so `random_string.s.length`
 is known, and so is `local_file.a.id` when only its content changes; what only the apply
 makes, such as the id of a new resource or `random_string.s.result`, is unknown and shown
-as such. A name the resource will never have, one the configuration does not set and the
-provider does not compute, is refused at plan. A list or a map is known as far as its
-items are:
+as such. It still has its type, so one of a type the attribute does not take is refused
+at plan. A name the schema does not have is refused at plan; one it has that nothing sets
+reads as `null`. A list or a map is known as far as its items are:
 `{ a = random_string.s.id, b = "x" }` plans as `{"a":(known after apply),"b":"x"}`.
-A set is unknown as a whole while one member is, since that member may turn out the
-same as another.
+A set keeps the members it knows while one is unknown; that one may turn out the same as
+another, so how many members it holds is known only after apply. Taken as a list, such a
+set is unknown as a whole until then, since it has no order yet.
 Reaching inside a module (`module.m.local_file.a`) is not allowed; a module speaks
 through its outputs. `path.module` is the directory of the module it is written in,
 relative to the root, so `"${path.module}/index.html"` names a file next to the module.
@@ -121,15 +128,16 @@ that differs.
 
 Each has an `id` the provider makes and keeps until the resource is replaced: the file's
 full path, the string, or a random UUID. Only the provider makes `id`, `result` and
-`stdout`, so setting one in the configuration is refused.
+`stdout`, so setting one in the configuration is refused; `null` sets none.
 
 Each resource is held to its schema. A name the schema does not have, a required one
 left out, or a value of another type is refused where it is written. A number or a bool
 where a string is wanted becomes its text: `5` is `"5"`, `1.50` is `"1.5"`. A string
 where a number or a bool is wanted is read as one when it spells one: `"8"` is `8`,
-`"true"` is `true`, and `"8 MB"` is refused. Nothing else is converted. The plan, the
-provider and the state all see the converted value. A schema may call a list a set: its
-order is not a change, and a member written twice is held once.
+`"true"` is `true`, and `"8 MB"` is refused. A list and a set are taken as one another,
+and so are a map and an object. Nothing else is converted. The plan, the provider and the
+state all see the converted value. A schema may call a list a set: its order is not a
+change, and a member written twice is held once.
 
 A data source reads something that already exists. `data "local_file" "f" { path = "x" }`
 reads a file, and `data.local_file.f.content` is what it holds. A data source has a schema
@@ -169,7 +177,7 @@ the schema does not have, stops the run as a bug in the provider.
 An error says where it was written:
 
 ```
-Planning failed: var.tags is a list and cannot be joined into a string
+Planning failed: var.tags is a tuple and cannot be joined into a string
 
   on modules/app/main.clay line 4, in resource "local_file" "a":
 

@@ -1,21 +1,31 @@
-import { ExactNumber, UNKNOWN } from '@clay/contracts';
+import { ExactNumber, types, UNKNOWN } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { eachFrom } from '../src/forEach';
-import { SetValue } from '../src/SetValue';
+import { inferred, Value, valueOf } from '../src/Value';
+
+/** Data as the configuration writes it: a list a tuple, a map an object. */
+const written = (data: unknown): Value => valueOf(inferred(data), data);
+
+/** The key of each instance and the data of the value it is given. */
+const made = (value: Value) => [...eachFrom(value)].map(([key, given]) => [key, given.data]);
 
 describe('the instances a for_each makes', () => {
   it('makes one for each key of a map, given its value', () => {
     const port = ExactNumber.parse('80');
 
-    expect([...eachFrom({ web: port, api: 'x' })]).toEqual([
+    expect(made(written({ web: port, api: 'x' }))).toEqual([
       ['api', 'x'],
       ['web', port],
     ]);
   });
 
+  it('gives each instance its value with the type its place names', () => {
+    expect(eachFrom(valueOf(types.map(types.set(types.string)), { a: ['x'] })).get('a')).toEqual(valueOf(types.set(types.string), ['x']));
+  });
+
   it('makes one for each string of a list, given the string as its value', () => {
-    expect([...eachFrom(['b', 'a'])]).toEqual([
+    expect(made(written(['b', 'a']))).toEqual([
       ['a', 'a'],
       ['b', 'b'],
     ]);
@@ -23,25 +33,27 @@ describe('the instances a for_each makes', () => {
 
   // An object lists a key like "1" first whatever order it was written in, so only a sort gives one order for both.
   it('orders the keys by their characters, whatever order they are written in', () => {
-    expect([...eachFrom({ b: 1, 10: 2, a: 3, 9: 4 }).keys()]).toEqual(['10', '9', 'a', 'b']);
-    expect([...eachFrom(['b', '10', 'a', '9']).keys()]).toEqual(['10', '9', 'a', 'b']);
+    const one = ExactNumber.parse('1');
+
+    expect([...eachFrom(written({ b: one, 10: one, a: one, 9: one })).keys()]).toEqual(['10', '9', 'a', 'b']);
+    expect([...eachFrom(written(['b', '10', 'a', '9'])).keys()]).toEqual(['10', '9', 'a', 'b']);
   });
 
   it('makes none from an empty map or list', () => {
-    expect(eachFrom({}).size).toBe(0);
-    expect(eachFrom([]).size).toBe(0);
+    expect(eachFrom(written({})).size).toBe(0);
+    expect(eachFrom(written([])).size).toBe(0);
   });
 
   // A map's keys are known before its values, so a value only an apply makes leaves them known.
   it('makes one for each key of a map whose values are not known yet, given what it has of them', () => {
-    expect([...eachFrom({ b: UNKNOWN, a: { id: UNKNOWN, name: 'x' } })]).toEqual([
+    expect(made(written({ b: UNKNOWN, a: { id: UNKNOWN, name: 'x' } }))).toEqual([
       ['a', { id: UNKNOWN, name: 'x' }],
       ['b', UNKNOWN],
     ]);
   });
 
   it('makes one for each member of a set', () => {
-    expect([...eachFrom(new SetValue(['a', 'b']))]).toEqual([
+    expect(made(valueOf(types.set(types.string), ['a', 'b']))).toEqual([
       ['a', 'a'],
       ['b', 'b'],
     ]);
@@ -49,27 +61,37 @@ describe('the instances a for_each makes', () => {
 
   // A set's members have no index, so the one that is not a string is named by what it is.
   it('refuses a set that holds what is not a string, without an index', () => {
-    expect(() => eachFrom(new SetValue(['a', ExactNumber.parse('1')]))).toThrow('for_each is a set of strings, but it holds a number');
+    expect(() => eachFrom(valueOf(types.set(types.dynamic), ['a', ExactNumber.parse('1')]))).toThrow('for_each is a set of strings, but it holds a number');
   });
 
   it('takes an empty string as a key', () => {
-    expect([...eachFrom([''])]).toEqual([['', '']]);
+    expect(made(written(['']))).toEqual([['', '']]);
   });
 
   it.each([
-    ['a value only an apply makes', UNKNOWN, 'for_each must be known when planning: it reads a value only an apply makes'],
+    ['a value only an apply makes', valueOf(types.dynamic, UNKNOWN), 'for_each must be known when planning: it reads a value only an apply makes'],
     // A list's items are its keys.
     [
       'a list with an item only an apply makes',
-      ['a', UNKNOWN],
+      written(['a', UNKNOWN]),
       'for_each must be known when planning: item [1] reads a value only an apply makes, and a list names its instances by its items',
     ],
-    ['a string', 'a', 'for_each is a map, or a list or a set of strings, not a string'],
-    ['a number', ExactNumber.parse('2'), 'for_each is a map, or a list or a set of strings, not a number'],
-    ['a bool', true, 'for_each is a map, or a list or a set of strings, not a bool'],
-    ['a list with a number in it', ['a', ExactNumber.parse('1')], 'for_each is a list of strings, but item [1] is a number'],
-    ['a list with a list in it', [['a']], 'for_each is a list of strings, but item [0] is a list'],
-    ['a list with a string twice', ['a', 'b', 'a'], 'for_each holds "a" twice; each instance needs a key of its own'],
+    // The set knows its other members, but not which keys the one not known yet adds.
+    [
+      'a set with a member only an apply makes',
+      valueOf(types.set(types.string), ['a', UNKNOWN]),
+      'for_each must be known when planning: a member reads a value only an apply makes, and a set names its instances by its members',
+    ],
+    ['a string', written('a'), 'for_each is a map, or a list or a set of strings, not a string'],
+    ['a number', written(ExactNumber.parse('2')), 'for_each is a map, or a list or a set of strings, not a number'],
+    ['a boolean', written(true), 'for_each is a map, or a list or a set of strings, not a boolean'],
+    ['null', valueOf(types.dynamic, null), 'for_each is a map, or a list or a set of strings, not null'],
+    ['null of a type it takes', valueOf(types.map(types.string), null), 'for_each is a map, or a list or a set of strings, not null'],
+    ['a list with a number in it', written(['a', ExactNumber.parse('1')]), 'for_each is a list of strings, but item [1] is a number'],
+    ['a list with a list in it', written([['a']]), 'for_each is a list of strings, but item [0] is a tuple'],
+    ['a list with null in it', written(['a', null]), 'for_each is a list of strings, but item [1] is null'],
+    ['a set with null in it', valueOf(types.set(types.string), ['a', null]), 'for_each is a set of strings, but it holds null'],
+    ['a list with a string twice', written(['a', 'b', 'a']), 'for_each holds "a" twice; each instance needs a key of its own'],
   ])('refuses %s', (_, value, message) => {
     expect(() => eachFrom(value)).toThrow(message);
   });

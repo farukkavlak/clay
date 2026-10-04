@@ -20,6 +20,7 @@ export type AttributeValue =
   | (Node & { type: 'Template'; value: TemplatePart[] })
   | (Node & { type: 'Number'; value: ExactNumber })
   | (Node & { type: 'Boolean'; value: boolean })
+  | (Node & { type: 'Null' })
   | ReferenceNode
   | (Node & { type: 'List'; value: AttributeValue[] })
   | (Node & { type: 'Map'; value: Record<string, AttributeValue> });

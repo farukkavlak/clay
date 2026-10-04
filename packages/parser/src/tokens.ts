@@ -13,6 +13,7 @@ export enum TokenType {
   Number = 'NUMBER', // 123, 1.5, 1e3
   Minus = 'MINUS', // - (before a number)
   Boolean = 'BOOLEAN', // true, false
+  Null = 'NULL', // null
   LBrace = 'LBRACE', // {
   RBrace = 'RBRACE', // }
   Assign = 'ASSIGN', // =

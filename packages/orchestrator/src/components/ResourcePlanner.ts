@@ -2,9 +2,10 @@ import { AttributePath, containsUnknown, own, PlannedChange, PlanRequest, Provid
 import { isDeepStrictEqual } from 'node:util';
 
 import { conformValues } from '../conformValues';
-import { setsOrdered } from '../setOrder';
+import { heldBy } from '../providerResult';
 import { ProviderRegistry } from '../ProviderRegistry';
 import { shown } from '../shown';
+import { plainOf, Value } from '../Value';
 
 /** A resource as its provider plans it, whether the change replaces it, and the configuration as the schema takes it, which is what the provider is sent. */
 export interface ResourcePlan {
@@ -55,7 +56,7 @@ export class ResourcePlanner {
   constructor(private providers: ProviderRegistry) {}
 
   /** The values are checked first, since a plan of values the provider would refuse means nothing. A value not known yet is checked again once the apply knows it. */
-  async plan(type: string, schema: Schema, current: Resource | undefined, written: Record<string, unknown>): Promise<ResourcePlan> {
+  async plan(type: string, schema: Schema, current: Resource | undefined, written: Record<string, Value>): Promise<ResourcePlan> {
     const provider = this.providers.get(type);
     const config = conformValues(type, schema, written);
     await provider.validate(type, config);
@@ -79,7 +80,7 @@ export class ResourcePlanner {
 
   private async ask(provider: Provider, type: string, schema: Schema, request: PlanRequest): Promise<PlannedChange> {
     const change = await provider.plan(type, request);
-    const after = setsOrdered(schema, change.after);
+    const after = plainOf(heldBy(type, 'planned', schema, change.after));
     checkPlanned(type, schema, request.config, after);
 
     return { ...change, after };

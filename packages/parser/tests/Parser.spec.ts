@@ -68,6 +68,21 @@ describe('Clay Parser', () => {
       expect((result[0] as ResourceBlock).attributes.enabled).toMatchObject({ type: 'Boolean', value: false });
     });
 
+    it('should parse null, alone and in a list', () => {
+      const result = makeParser('resource "mock_resource" "test" {\n  a = null\n  b = [null, 1]\n}').parse();
+      const { attributes } = result[0] as ResourceBlock;
+
+      expect(attributes.a).toEqual({ type: 'Null', position: { file: CONFIG_FILE, line: 2, column: 7 } });
+      expect(attributes.b).toMatchObject({ type: 'List', value: [{ type: 'Null' }, { type: 'Number' }] });
+    });
+
+    // Only the word on its own is null; a name that starts with it is a name.
+    it('should read a name that starts with null as a reference', () => {
+      const result = makeParser('resource "null_resource" "test" { a = null_thing.b.c }').parse();
+
+      expect((result[0] as ResourceBlock).attributes.a).toMatchObject({ type: 'Reference', value: ['null_thing', 'b', 'c'] });
+    });
+
     it('should parse multiple resources', () => {
       const input = `
       resource "valid" "one" { key = "value" }
@@ -658,6 +673,7 @@ describe('Clay Parser', () => {
       ['an empty name', 'resource "local_file" "" {}', 'Invalid name ""', at(1, 23)],
       ['a name that starts with a digit', 'resource "local_file" "1a" {}', 'Invalid name "1a"', at(1, 23)],
       ['a name a reference would read as a boolean', 'resource "local_file" "true" {}', 'Invalid name "true"', at(1, 23)],
+      ['a name a reference would read as null', 'resource "local_file" "null" {}', 'Invalid name "null"', at(1, 23)],
     ])('refuses %s that is no identifier', (_, input, message, position) => {
       const error = errorOf(input);
 

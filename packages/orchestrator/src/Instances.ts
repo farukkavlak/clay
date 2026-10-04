@@ -1,6 +1,7 @@
 import { InstanceKey } from '@clay/contracts';
 
 import { indexesOf } from './count';
+import { Value } from './Value';
 
 /** How a block makes many instances: numbered by `count`, or keyed by `for_each`. */
 export type Repetition = 'count' | 'for_each';
@@ -19,7 +20,7 @@ export function repetitionOfKey(key: InstanceKey | undefined): Repetition | unde
 export class Instances {
   private repetitions = new Map<string, Repetition>();
   private keys = new Map<string, InstanceKey[]>();
-  private values = new Map<string, Map<string, unknown>>();
+  private values = new Map<string, Map<string, Value>>();
 
   clear(): void {
     this.repetitions.clear();
@@ -40,7 +41,7 @@ export class Instances {
   }
 
   /** The value each key gives its instance, read as `each.value`. */
-  setEach(block: string, values: Map<string, unknown>): void {
+  setEach(block: string, values: Map<string, Value>): void {
     this.keys.set(block, [...values.keys()]);
     this.values.set(block, values);
   }
@@ -51,7 +52,7 @@ export class Instances {
   }
 
   /** A plan and an apply both read the for_each, and check the keys they run, before any instance reads its value. */
-  eachValue(block: string, key: string): unknown {
+  eachValue(block: string, key: string): Value | undefined {
     return this.values.get(block)?.get(key);
   }
 }

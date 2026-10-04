@@ -115,27 +115,27 @@ describe('a configuration held to the schema', () => {
 
   it('refuses a value of a type the resource does not take, where it is written', async () => {
     await expect(newOrchestrator().plan('resource "local_file" "a" {\n  path    = "a.txt"\n  content = [5]\n}')).rejects.toMatchObject({
-      message: 'content is a list, where local_file takes a string',
+      message: 'content is a tuple, where local_file takes a string',
       position: { file: 'main.clay', line: 3, column: 13 },
       block: 'resource "local_file" "a"',
     });
   });
 
   it('refuses an item of a type the resource does not take', async () => {
-    await expect(newOrchestrator().plan('resource "tally" "t" {\n  labels = { a = [1] }\n}')).rejects.toThrow('labels["a"] is a list, where tally takes a string');
+    await expect(newOrchestrator().plan('resource "tally" "t" {\n  labels = { a = [1] }\n}')).rejects.toThrow('labels["a"] is a tuple, where tally takes a string');
   });
 
   // A value the apply makes used to leave the whole resource unchecked.
   it('checks a known value beside one the apply makes', async () => {
     const config = `resource "random_string" "r" { length = 4 }\nresource "local_file" "a" {\n  path    = random_string.r.result\n  content = [5]\n}`;
 
-    await expect(newOrchestrator().plan(config)).rejects.toThrow('content is a list, where local_file takes a string');
+    await expect(newOrchestrator().plan(config)).rejects.toThrow('content is a tuple, where local_file takes a string');
   });
 
   it('checks a known item beside one the apply makes', async () => {
     const config = `resource "random_string" "r" { length = 4 }\nresource "tally" "t" {\n  labels = { a = random_string.r.result, b = [true] }\n}`;
 
-    await expect(newOrchestrator().plan(config)).rejects.toThrow('labels["b"] is a list, where tally takes a string');
+    await expect(newOrchestrator().plan(config)).rejects.toThrow('labels["b"] is a tuple, where tally takes a string');
   });
 
   it('refuses at apply a value the plan did not know, once it is known, before the provider is sent it', async () => {
@@ -238,7 +238,7 @@ describe('a data block held to the schema', () => {
   it.each([
     ['a name it does not have', '  path    = "a.txt"\n  contnet = "x"', 'local_file has no attribute "contnet"', { line: 3, column: 13 }],
     ['a name written in place of one it requires', '  paht = "a.txt"', 'local_file has no attribute "paht"', { line: 2, column: 10 }],
-    ['a value of a type it does not take', '  path = [5]', 'path is a list, where local_file takes a string', { line: 2, column: 10 }],
+    ['a value of a type it does not take', '  path = [5]', 'path is a tuple, where local_file takes a string', { line: 2, column: 10 }],
     ['a value it computes', '  path    = "a.txt"\n  content = "x"', 'content is computed by local_file and cannot be set', { line: 3, column: 13 }],
   ])('refuses %s, where it is written', async (_, body, message, at) => {
     await expect(plan(`data "local_file" "f" {\n${body}\n}`)).rejects.toMatchObject({

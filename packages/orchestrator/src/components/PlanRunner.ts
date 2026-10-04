@@ -13,10 +13,9 @@ import { tryAt } from '../place';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { RunEvent } from '../RunEvent';
 import { ScopeManager } from '../scope/ScopeManager';
-import { plain } from '../SetValue';
 import { ActionExecutor } from './ActionExecutor';
 import { LoadedConfig } from './ConfigLoader';
-import { GraphNode, ValueNode } from './DependencyGraphBuilder';
+import { GraphNode, OutputNode } from './DependencyGraphBuilder';
 
 function undeclared(address: Address): Error {
   return new Error(`The plan has "${address.toString()}", which the configuration does not declare`);
@@ -78,9 +77,10 @@ export class PlanRunner {
    * A data source is read again for the run, so a saved plan may name a key for_each no longer gives.
    */
   private readEach(address: Address, block: ResourceBlock, actions: PlanAction[], state: State): void {
-    if (!block.forEach) return;
+    const { forEach } = block;
+    if (!forEach) return;
 
-    const values = tryAt(block.forEach.position, spell(block), address, () => eachFrom(this.resolver.resolveValue(block.forEach, state, address)));
+    const values = tryAt(forEach.position, spell(block), address, () => eachFrom(this.resolver.resolveValue(forEach, state, address)));
     this.instances.setEach(address.toString(), values);
 
     for (const action of actions) if (typeof action.key !== 'string' || !values.has(action.key)) throw undeclared(Address.of(action));
@@ -190,14 +190,14 @@ export class PlanRunner {
     for (const stmt of program)
       if (stmt.type === 'Output') {
         const resolved = this.resolver.resolveValue(stmt.value, state, context);
-        outputs[stmt.name] = plain(resolved);
+        outputs[stmt.name] = resolved.data;
         this.scopeManager.setOutput(scope, stmt.name, resolved);
       }
 
     return outputs;
   }
 
-  private resolveOutput(node: ValueNode, instance: ModuleAddress, state: State): void {
+  private resolveOutput(node: OutputNode, instance: ModuleAddress, state: State): void {
     const context = contextIn(node.context, instance);
     const value = tryAt(node.position, node.declaration, context, () => this.resolver.resolveValue(node.value, state, context));
 

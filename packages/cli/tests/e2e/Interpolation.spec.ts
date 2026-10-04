@@ -94,7 +94,7 @@ describe('a string with an interpolation', () => {
 
     await expect(planned).rejects.toBeInstanceOf(ConfigError);
     await expect(planned).rejects.toMatchObject({
-      message: 'var.tags is a list and cannot be joined into a string',
+      message: 'var.tags is a tuple and cannot be joined into a string',
       block: declaration,
       position: { file: CONFIG_FILE, line: 2, column },
     });
@@ -103,7 +103,7 @@ describe('a string with an interpolation', () => {
   // A string may hold many references; an error about one has to point at that one, not at the string.
   it.each([
     ['one that is not declared', 'resource "null_resource" "t" { triggers = { label = "a ${var.tags} b ${var.nope}" } }', 'variable "nope" is not defined', 72],
-    ['one that reads a key a list does not have', 'resource "null_resource" "t" { triggers = { label = "a ${var.tags.x}" } }', 'var.tags is a list and has no key "x"', 58],
+    ['one that reads a key a list does not have', 'resource "null_resource" "t" { triggers = { label = "a ${var.tags.x}" } }', 'var.tags is a tuple and has no key "x"', 58],
   ])('points at the reference in a string for %s', async (_, block, message, column) => {
     const planned = newOrchestrator().plan(`variable "tags" { default = ["a", "b"] }\n${block}`);
 
