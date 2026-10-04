@@ -46,12 +46,13 @@ export class Lexer {
     { type: TokenType.Null, regex: /null(?![\w-])/y },
     { type: TokenType.Identifier, regex: /[A-Z_a-z][\w-]*/y },
     { type: TokenType.OQuote, regex: /"/y },
-    // Looser than a number, so `1.` and `1e` come whole to the parser and are refused as what they are.
-    { type: TokenType.Number, regex: /\d+(?:\.\d*)?(?:[Ee][+-]?\d*)?/y },
+    // Looser than a number, so `1.` and `1e` come whole to the parser and are refused as what they are; the dots of `1...` are an ellipsis.
+    { type: TokenType.Number, regex: /\d+(?:\.(?!\.\.)\d*)?(?:[Ee][+-]?\d*)?/y },
     // Its own token, as in HCL, so a number never swallows the minus of a subtraction.
     { type: TokenType.Minus, regex: /-/y },
     { type: TokenType.LBrace, regex: /{/y },
     { type: TokenType.RBrace, regex: /}/y },
+    { type: TokenType.Ellipsis, regex: /\.\.\./y },
     { type: TokenType.Dot, regex: /\./y },
     { type: TokenType.LBracket, regex: /\[/y },
     { type: TokenType.RBracket, regex: /]/y },
@@ -59,6 +60,7 @@ export class Lexer {
     { type: TokenType.RParen, regex: /\)/y },
     { type: TokenType.Comma, regex: /,/y },
     { type: TokenType.Colon, regex: /:/y },
+    { type: TokenType.FatArrow, regex: /=>/y },
     { type: TokenType.Assign, regex: /=/y },
   ];
 

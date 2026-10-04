@@ -17,14 +17,14 @@ import {
   TemplatePart,
 } from '@clay/parser';
 
-import { checkCollection, forItems, ForItem } from '../forItems';
+import { checkCollection, forItems, ForItem, forObject } from '../forItems';
 import { Instances } from '../Instances';
 import { functionCalled } from '../functions';
 import { Context, instanceKeyOf, ModuleCall, moduleOf, scopeOf } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
 import { Planned } from '../Planned';
 import { ScopeManager } from '../scope/ScopeManager';
-import { described, unordered, Value, valueOf } from '../Value';
+import { described, hasText, objectOf, tupleOf, unordered, Value, valueOf } from '../Value';
 import { DataSourceResolver } from './DataSourceResolver';
 import { COUNT_INDEX_OUTSIDE, eachOutside } from './instance';
 import { ModuleOutputResolver } from './ModuleOutputResolver';
@@ -109,15 +109,20 @@ export class ReferenceResolver {
     return readPath(given.get(String(name))!, String(name), path, node.position);
   }
 
-  /** The body read once for each item, a tuple of what each comes to. */
+  /** The body read once for each item, a tuple of what each comes to, or with a key an object of them. */
   private resolveFor(node: ForNode, state: State, context: Context | undefined, given: Given): Value {
     const items = forItems(this.collectionOf(node, state, context, given), node.collection.position);
-    const values = items.map((item) => this.resolveItem(node.body, state, context, withNames(given, node, item)));
+    const names = items.map((item) => withNames(given, node, item));
+    if (node.key) return this.resolveForObject(node, node.key, names, state, context);
 
-    return valueOf(
-      types.tuple(values.map((value) => value.type)),
-      values.map((value) => value.data)
-    );
+    return tupleOf(names.map((itemNames) => this.resolveItem(node.body, state, context, itemNames)));
+  }
+
+  /** Every key and value is read before the object is made, so a mistake in any item is found while another's key is not known yet. */
+  private resolveForObject(node: ForNode, key: AttributeValue, names: Given[], state: State, context: Context | undefined): Value {
+    const entries = names.map((itemNames): ForItem => [this.resolveItem(key, state, context, itemNames), this.resolveItem(node.body, state, context, itemNames)]);
+
+    return forObject(entries, node.grouped === true, key.position);
   }
 
   /**
@@ -131,7 +136,7 @@ export class ReferenceResolver {
     } catch (error) {
       if (!(error instanceof UnresolvedReferenceError)) throw error;
       checkCollection(valueOf(error.type, UNKNOWN), node.collection.position);
-      // A for gives a tuple, whatever type its collection has.
+      // A for gives a tuple or an object, whatever type its collection has.
       throw new UnresolvedReferenceError(error.message);
     }
 
@@ -195,18 +200,11 @@ export class ReferenceResolver {
   }
 
   private resolveList(items: AttributeValue[], state: State, context: Context | undefined, given: Given): Value {
-    const values = items.map((item) => this.resolveItem(item, state, context, given));
-
-    return valueOf(
-      types.tuple(values.map((item) => item.type)),
-      values.map((item) => item.data)
-    );
+    return tupleOf(items.map((item) => this.resolveItem(item, state, context, given)));
   }
 
   private resolveMap(entries: Record<string, AttributeValue>, state: State, context: Context | undefined, given: Given): Value {
-    const values = Object.entries(entries).map(([key, item]) => [key, this.resolveItem(item, state, context, given)] as const);
-
-    return valueOf(types.object(Object.fromEntries(values.map(([key, item]) => [key, item.type]))), Object.fromEntries(values.map(([key, item]) => [key, item.data])));
+    return objectOf(Object.entries(entries).map(([key, item]) => [key, this.resolveItem(item, state, context, given)]));
   }
 
   /** At plan time an item only an apply can read is UNKNOWN on its own, of the type it will have, so the list or map around it keeps what is known. */
@@ -235,9 +233,7 @@ export class ReferenceResolver {
   /** Only a string, a number or a boolean has a text to join. */
   private joined(part: ReferenceNode | CallNode | BoundNode, state: State, context: Context | undefined, given: Given): string {
     const resolved = this.resolveIn(part, state, context, given);
-    const { kind } = resolved.type;
-    if (resolved.data === null || (kind !== 'string' && kind !== 'number' && kind !== 'bool'))
-      throw new ConfigError(`${spellNamed(part)} is ${described(resolved)} and cannot be joined into a string`, part.position);
+    if (resolved.data === null || !hasText(resolved.type)) throw new ConfigError(`${spellNamed(part)} is ${described(resolved)} and cannot be joined into a string`, part.position);
 
     return String(resolved.data);
   }

@@ -117,8 +117,8 @@ configuration hits each of these early.
 - [x] A `for` expression that makes a list: `[for i, n in var.names : "${i}-${n}"]`. A
       set with a member not known yet leaves the whole for to the apply, where Terraform
       gives it item by item and an apply that sorts the new member first moves every item
-- [ ] A `for` expression that makes a map, `{for k, v in m : k => v}`, with a key twice
-      refused where Terraform groups them only with `...`
+- [x] A `for` expression that makes an object, `{for k, v in m : k => v}`. A key two
+      items give is refused, and `...` after the value groups them
 - [ ] `if` in a `for` expression, once operators can write a condition
 - [ ] A variable names its type: `variable "x" { type = set(string) }`. A module input
       takes whatever it is given today, so a list passed where a set is meant keeps its

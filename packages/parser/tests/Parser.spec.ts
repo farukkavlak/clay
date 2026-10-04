@@ -826,6 +826,57 @@ describe('Clay Parser', () => {
     });
   });
 
+  describe('For expressions that make an object', () => {
+    const bound = (parts: (string | number)[], column: number) => ({ type: 'Bound', value: parts, position: at(1, column) });
+
+    it('reads a key and a value for each item, both with the names the for gives', () => {
+      expect(valueOf('{for k, v in var.m : k => v}')).toEqual({
+        type: 'For',
+        keyName: 'k',
+        valueName: 'v',
+        collection: reference(['var', 'm'], 37),
+        key: bound(['k'], 45),
+        body: bound(['v'], 50),
+        position: at(1, 24),
+      });
+    });
+
+    it('groups the values of one key when the value has ... after it', () => {
+      expect(valueOf('{for n in var.l : n => n...}')).toMatchObject({ key: bound(['n'], 42), body: bound(['n'], 47), grouped: true });
+    });
+
+    it('reads a number right before ... as the number', () => {
+      expect(valueOf('{for n in var.l : n => 1...}')).toMatchObject({ body: { type: 'Number', value: ExactNumber.parse('1') }, grouped: true });
+    });
+
+    it('does not group without ...', () => {
+      expect(valueOf('{for n in var.l : n => n}')).not.toHaveProperty('grouped');
+    });
+
+    it('keeps a map with a key named for', () => {
+      expect(valueOf('{ for = 1 }')).toEqual({ type: 'Map', value: { for: { type: 'Number', value: ExactNumber.parse('1'), position: at(1, 32) } }, position: at(1, 24) });
+    });
+
+    it('finds the references in its key', () => {
+      const found = namedIn(valueOf('{for n in var.x : var.k => n}'));
+
+      expect(found.map((node) => spellNamed(node))).toEqual(['var.x', 'var.k']);
+    });
+
+    it.each([
+      ['a for with no =>', '{for n in var.x : n n}', "Expect '=>' after the key in a for expression.", at(1, 44)],
+      ['a for closed with ]', '{for n in var.x : n => n]', "Expect '}' after the for expression.", at(1, 48)],
+      ['a => in a for that makes a list', '[for n in var.x : n => n]', "Expect ']' after the for expression.", at(1, 44)],
+      ['... in a for that makes a list', '[for n in var.x : n...]', "Expect ']' after the for expression.", at(1, 43)],
+      ['... outside a for', '...', 'Unexpected value: ...', at(1, 24)],
+    ])('refuses %s where it is written', (_, written, message, position) => {
+      const error = errorOf(`resource "t" "n" { v = ${written} }`);
+
+      expect(error.message).toBe(message);
+      expect(error.position).toEqual(position);
+    });
+  });
+
   describe('Error Cases', () => {
     it('refuses a second block with the same name, at its position', () => {
       const twice = {

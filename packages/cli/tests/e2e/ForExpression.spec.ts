@@ -198,4 +198,79 @@ describe('a for expression', () => {
     const held = await outputs();
     expect(held?.first.value).toBe('m-a');
   });
+
+  describe('that makes an object', () => {
+    it('makes an instance for each key it gives, with the value it gives that key', async () => {
+      await apply(`${names}
+        resource "local_file" "f" {
+          for_each = {for n in var.names : "app-\${n}" => "c-\${n}"}
+          path = "${path.join(dir, '${each.key}.txt')}"
+          content = each.value
+        }
+      `);
+
+      expect(await textFiles()).toEqual(['app-a.txt', 'app-b.txt']);
+      expect(await fs.readFile(path.join(dir, 'app-b.txt'), 'utf8')).toBe('c-b');
+    });
+
+    it('gives an object, in an output', async () => {
+      await apply(`${names}\noutput "o" { value = {for n in var.names : n => "x-\${n}"} }`);
+
+      expect(await outputs()).toEqual({ o: { value: { a: 'x-a', b: 'x-b' }, type: types.object({ a: types.string, b: types.string }) } });
+    });
+
+    it('groups the values of one key, in an output', async () => {
+      await apply(`output "o" { value = {for n in ["a", "b", "a"] : n => "x-\${n}"...} }`);
+
+      const held = await outputs();
+      expect(held?.o.value).toEqual({ a: ['x-a', 'x-a'], b: ['x-b'] });
+    });
+
+    it('leaves a value only the apply makes to the apply, and plans its key', async () => {
+      const config = `${random}\noutput "o" { value = {for n in ["k"] : n => random_string.s.result} }`;
+
+      const plan = await newOrchestrator().plan(config);
+      await apply(config);
+
+      expect(plan.outputs.o.new).toEqual({ value: { k: UNKNOWN }, type: types.object({ k: types.string }) });
+      const held = await outputs();
+      expect(held?.o.value).toEqual({ k: await result() });
+    });
+
+    it('leaves the whole for to the apply while a key only the apply makes is not known', async () => {
+      const config = `${random}\noutput "o" { value = {for n in ["v"] : random_string.s.result => n} }`;
+
+      const plan = await newOrchestrator().plan(config);
+      await apply(config);
+
+      expect(plan.outputs.o.new).toEqual({ value: UNKNOWN, type: types.dynamic });
+      const held = await outputs();
+      expect(held?.o.value).toEqual({ [await result()]: 'v' });
+    });
+
+    it('refuses a key two items give, where the key is written', async () => {
+      const config = `output "o" {\n  value = {for n in ["a", "a"] : n => n}\n}`;
+
+      const error = await planError(config);
+
+      expect(error.message).toBe('Two items give the key "a"; write "..." after the value to group them');
+      expect(error.position).toMatchObject(placeOf(config, 'n => n'));
+      expect(error.block).toBe('output "o"');
+    });
+
+    it('runs a saved plan whose instances it gives', async () => {
+      const config = `${names}
+        resource "local_file" "f" {
+          for_each = {for i, n in var.names : n => "\${i}"}
+          path = "${path.join(dir, '${each.key}.txt')}"
+          content = each.value
+        }
+      `;
+      const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), config, {}), 'plan.json');
+
+      for await (const event of newOrchestrator().runPlan(saved, config)) if (event.type === 'failed') throw event.error;
+
+      expect(await fs.readFile(path.join(dir, 'b.txt'), 'utf8')).toBe('1');
+    });
+  });
 });

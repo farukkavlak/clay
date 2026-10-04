@@ -4,6 +4,7 @@ import {
   BoundNode,
   CallNode,
   DataBlock,
+  ForNode,
   ModuleBlock,
   namedIn,
   OutputBlock,
@@ -28,6 +29,9 @@ const RESERVED_TYPES = new Set(['module', 'var', 'data', 'count', 'each', 'path'
 
 /** Words that lex as values, so a name spelled like one could never be read back by a reference. */
 const KEYWORDS = new Set(['true', 'false', 'null']);
+
+/** The bracket that closes a for, by the token for it. */
+const CLOSING = { [TokenType.RBracket]: ']', [TokenType.RBrace]: '}' };
 
 /** What makes a block many instances; a module call keeps these for itself, so they name no module input. */
 const INSTANCE_ARGUMENTS = ['count', 'for_each'];
@@ -288,7 +292,7 @@ export class Parser {
 
   private parseList(position: Position): AttributeValue {
     // `for.` still starts a reference, to a resource of that type.
-    if (this.checkWord('for') && this.tokens[this.current + 1].type !== TokenType.Dot) return this.parseFor(position);
+    if (this.checkWord('for') && this.tokens[this.current + 1].type !== TokenType.Dot) return this.parseFor(position, TokenType.RBracket);
 
     const values: AttributeValue[] = [];
     while (!this.check(TokenType.RBracket) && !this.isAtEnd()) {
@@ -299,8 +303,11 @@ export class Parser {
     return { type: 'List', value: values, position };
   }
 
-  /** `[for key, value in collection : body]`, with `[` read and `for` next. The names stand for the item in the body only. */
-  private parseFor(position: Position): AttributeValue {
+  /**
+   * `[for key, value in collection : body]`, or `{for … : key => body}` for an object, with the bracket read and `for` next.
+   * The names stand for the item in the key and the body only.
+   */
+  private parseFor(position: Position, closing: keyof typeof CLOSING): ForNode {
     this.advance();
     const names = this.parseForNames();
     if (!this.checkWord('in')) return this.error("Expect 'in' after the names in a for expression.");
@@ -310,12 +317,21 @@ export class Parser {
     this.consume(TokenType.Colon, "Expect ':' after the collection in a for expression.");
 
     this.bound.push(...names.map((name) => name.value));
-    const body = this.parseValue();
+    const made = closing === TokenType.RBrace ? this.parseEntry() : { body: this.parseValue() };
     this.bound.splice(-names.length);
 
-    this.consume(TokenType.RBracket, "Expect ']' after the for expression.");
+    this.consume(closing, `Expect '${CLOSING[closing]}' after the for expression.`);
     const [keyName, valueName] = names.length === 2 ? names.map((name) => name.value) : [undefined, names[0].value];
-    return { type: 'For', ...(keyName && { keyName }), valueName, collection, body, position };
+    return { type: 'For', ...(keyName && { keyName }), valueName, collection, ...made, position };
+  }
+
+  /** `key => body` in a for that makes an object, with `...` after the body to group the items of one key. */
+  private parseEntry(): Pick<ForNode, 'key' | 'body' | 'grouped'> {
+    const key = this.parseValue();
+    this.consume(TokenType.FatArrow, "Expect '=>' after the key in a for expression.");
+    const body = this.parseValue();
+
+    return { key, body, ...(this.matchToken(TokenType.Ellipsis) && { grouped: true }) };
   }
 
   private parseForNames(): Token[] {
@@ -339,6 +355,9 @@ export class Parser {
   }
 
   private parseMap(position: Position): AttributeValue {
+    // `{ for = 1 }` is still a map with a key named for.
+    if (this.checkWord('for') && this.tokens[this.current + 1].type !== TokenType.Assign) return this.parseFor(position, TokenType.RBrace);
+
     const map: Record<string, AttributeValue> = {};
     while (!this.check(TokenType.RBrace) && !this.isAtEnd()) {
       const key = this.matchToken(TokenType.OQuote) ? this.stringKey(this.previous()) : this.consume(TokenType.Identifier, 'Expect key in map.');
