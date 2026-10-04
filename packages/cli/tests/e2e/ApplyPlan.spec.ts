@@ -1,3 +1,4 @@
+import { Output, types } from '@clay/contracts';
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
@@ -38,7 +39,7 @@ describe('apply and plan against real files', () => {
   `;
 
   const apply = async (engine: Orchestrator, config: string) => {
-    let outputs: Record<string, unknown> = {};
+    let outputs: Record<string, Output> = {};
     for await (const event of start(engine, config)) {
       if (event.type === 'failed') throw event.error;
       if (event.type === 'done') outputs = event.outputs;
@@ -391,7 +392,7 @@ describe('apply and plan against real files', () => {
     await apply(orchestrator, config);
 
     const state = await new LocalBackend(dir).read();
-    expect(state.outputs).toEqual({ echo: 'hello' });
+    expect(state.outputs).toEqual({ echo: { value: 'hello', type: types.string } });
   });
 
   it('refuses a reference that reaches into a module, as an output the module does not have', async () => {

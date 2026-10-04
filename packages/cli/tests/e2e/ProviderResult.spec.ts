@@ -345,7 +345,7 @@ describe('a name an apply returns with no value', () => {
 
     const state = await new LocalBackend(dir).read();
     expect(state.resources['noteless.a'].attributes).toEqual({ label: 'new' });
-    expect(state.outputs).toEqual({ note: null });
+    expect(state.outputs).toEqual({ note: { value: null, type: types.string } });
     const plan = await newOrchestrator().plan(noteless('new'));
     expect(plan.actions.map((action) => action.type)).toEqual(['NO_OP']);
   });
@@ -415,7 +415,7 @@ describe('what a data source reads', () => {
 
     const { outputs } = await engine.plan('data "vague" "v" {}\noutput "content" { value = data.vague.v.content }');
 
-    expect(outputs).toEqual({ content: { old: undefined, new: null } });
+    expect(outputs).toEqual({ content: { old: undefined, new: { value: null, type: types.string } } });
   });
 
   it('refuses a name its schema does not have, where it is read', async () => {

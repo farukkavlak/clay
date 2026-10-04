@@ -61,9 +61,9 @@ describe('a value known in part', () => {
   it('plans a map with what is known, the rest as known after apply', async () => {
     const { outputs } = await newOrchestrator().plan(config);
 
-    expect(outputs.whole.new).toEqual({ a: UNKNOWN, b: 'fixed' });
-    expect(outputs.known.new).toBe('fixed');
-    expect(isUnknown(outputs.later.new)).toBe(true);
+    expect(outputs.whole.new?.value).toEqual({ a: UNKNOWN, b: 'fixed' });
+    expect(outputs.known.new?.value).toBe('fixed');
+    expect(isUnknown(outputs.later.new?.value)).toBe(true);
   });
 
   it('shows what is known of it, and where the rest goes', async () => {
@@ -93,7 +93,12 @@ describe('a value known in part', () => {
     expect(printed).toContain('Applying from saved plan');
     expect(printed).toContain('whole = {"a":(known after apply),"b":"fixed"}');
     const { outputs, resources } = await new LocalBackend(dir).read();
-    expect(outputs).toEqual({ whole: { a: resources['random_string.s'].attributes.id, b: 'fixed' }, known: 'fixed', later: `read ${resources['random_string.s'].attributes.id}` });
+    const { id } = resources['random_string.s'].attributes;
+    expect(Object.fromEntries(Object.entries(outputs ?? {}).map(([name, output]) => [name, output.value]))).toEqual({
+      whole: { a: id, b: 'fixed' },
+      known: 'fixed',
+      later: `read ${id}`,
+    });
   });
 
   // The provider checks what it knows now, and the rest once the apply knows it.
@@ -121,7 +126,7 @@ describe('a value known in part', () => {
   it('reads into what is not known yet as not known yet', async () => {
     const { outputs } = await newOrchestrator().plan(`${config}\noutput "into" { value = "\${var.m.a.x}" }`);
 
-    expect(isUnknown(outputs.into.new)).toBe(true);
+    expect(isUnknown(outputs.into.new?.value)).toBe(true);
   });
 
   const applyAll = async (config: string) => {
@@ -150,8 +155,8 @@ describe('a value known in part', () => {
       ['CREATE', 'local_file.f["a"]'],
       ['CREATE', 'local_file.f["b"]'],
     ]);
-    expect(outputs.a.new).toEqual({ path: path.join(dir, 'a.txt'), content: UNKNOWN });
-    expect(outputs.b.new).toBe('fixed');
+    expect(outputs.a.new?.value).toEqual({ path: path.join(dir, 'a.txt'), content: UNKNOWN });
+    expect(outputs.b.new?.value).toBe('fixed');
 
     await applyAll(config);
     const { resources } = await new LocalBackend(dir).read();
@@ -193,8 +198,8 @@ describe('a value known in part', () => {
       ['CREATE', 'module.page["a"].local_file.page'],
       ['CREATE', 'module.page["b"].local_file.page'],
     ]);
-    expect(isUnknown(outputs.a.new)).toBe(true);
-    expect(outputs.b.new).toBe('fixed');
+    expect(isUnknown(outputs.a.new?.value)).toBe(true);
+    expect(outputs.b.new?.value).toBe('fixed');
 
     await applyAll(config);
     const { resources } = await new LocalBackend(dir).read();
@@ -212,6 +217,6 @@ describe('a value known in part', () => {
       output "triggers" { value = null_resource.n["a"].triggers }
     `);
 
-    expect(outputs.triggers.new).toEqual({ id: UNKNOWN, name: 'x' });
+    expect(outputs.triggers.new?.value).toEqual({ id: UNKNOWN, name: 'x' });
   });
 });

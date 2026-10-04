@@ -4,7 +4,7 @@ import { Address, isInstanceKey, isModulePath } from './Address';
 import type { InstanceKey, ModuleStep } from './Address';
 import { ExactNumber, NumberError } from './ExactNumber';
 import { isRecord } from './isRecord';
-import { types } from './Type';
+import { isType, types } from './Type';
 import type { Type } from './Type';
 
 export { Address, isInstanceKey, isModulePath, ModuleAddress } from './Address';
@@ -65,18 +65,29 @@ export interface Resource {
   dependencies?: string[];
 }
 
+/** A root output with the type its value has, which no schema names, so a reader can tell a set from a list. */
+export interface Output {
+  value: unknown;
+  type: Type;
+}
+
+/** An output read from a file: a value, null among them, beside a whole type. */
+export function isOutput(output: unknown): output is Output {
+  return isRecord(output) && Object.hasOwn(output, 'value') && isType(output.type);
+}
+
 /** The state file. */
 export interface State {
   version: number;
   /** Counts the writes. A saved plan records it, so a state written after the plan is caught. */
   serial: number;
   /** What the root module's outputs came to on the last run. */
-  outputs?: Record<string, unknown>;
+  outputs?: Record<string, Output>;
   resources: Record<string, Resource>;
 }
 
 /** The shape this version of Clay writes, bumped when it changes once a Clay is released. A state that names a higher one was written by a Clay that knows something this one does not. */
-export const STATE_VERSION = 2;
+export const STATE_VERSION = 3;
 
 export function emptyState(): State {
   return { version: STATE_VERSION, serial: 0, resources: {} };

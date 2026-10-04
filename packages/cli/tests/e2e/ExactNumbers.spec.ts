@@ -91,6 +91,6 @@ describe('a number past what JavaScript holds exactly', () => {
 
     const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), config, {}), 'plan.json');
 
-    expect(String(saved.outputs.id.new)).toBe(LARGE);
+    expect(String(saved.outputs.id.new?.value)).toBe(LARGE);
   });
 });

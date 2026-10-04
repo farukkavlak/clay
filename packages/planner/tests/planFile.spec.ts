@@ -40,14 +40,14 @@ describe('reading a plan file', () => {
           changes: { triggers: { old: 'x', new: UNKNOWN } },
         },
       ],
-      outputs: { id: { old: undefined, new: UNKNOWN } },
+      outputs: { id: { old: undefined, new: { value: UNKNOWN, type: types.string } } },
     };
 
     const read = parsePlanFile(aPlanFile(plan), 'tfplan.json');
 
     expect(isUnknown(read.actions[0].changes!.triggers.new)).toBe(true);
     expect(read.actions[0].changes!.triggers.old).toBe('x');
-    expect(isUnknown(read.outputs.id.new)).toBe(true);
+    expect(read.outputs.id.new).toEqual({ value: UNKNOWN, type: types.string });
   });
 
   it('reads a map that only looks like the unknown marker back as that map', () => {
@@ -111,9 +111,9 @@ describe('reading a plan file', () => {
   // A value known in part keeps what is known, exactly, and says where the rest is.
   it('reads a value known in part back as it was written', () => {
     const tags = { env: UNKNOWN, list: ['a', UNKNOWN], size: ExactNumber.parse('12345678901234567890'), unknown: [['env']] };
-    const plan: Plan = { serial: 0, actions: [], outputs: { tags: { old: undefined, new: tags } }, prevRun: {}, prior: {}, schemas };
+    const plan: Plan = { serial: 0, actions: [], outputs: { tags: { old: undefined, new: { value: tags, type: types.dynamic } } }, prevRun: {}, prior: {}, schemas };
 
-    expect(parsePlanFile(aPlanFile(plan), 'tfplan.json').outputs.tags.new).toEqual(tags);
+    expect(parsePlanFile(aPlanFile(plan), 'tfplan.json').outputs.tags.new?.value).toEqual(tags);
   });
 
   it.each([
@@ -127,13 +127,35 @@ describe('reading a plan file', () => {
     ['a path through another', [['list'], ['list', 1]]],
     ['the same path twice', [['env'], ['env']]],
   ])('refuses a change that says a value is unknown with %s', (_, unknown) => {
-    const content = { ...fields(), outputs: { tags: { new: { env: null, list: ['a', null] }, unknown } } };
+    const changes = { tags: { new: { env: null, list: ['a', null] }, unknown } };
+    const content = { ...fields(), actions: [{ type: 'UPDATE', resourceType: 'x', name: 'a', planned: {}, after: {}, changes }] };
 
     expect(read(content)).toThrow(/^tfplan\.json is not a plan file$/);
   });
 
+  it.each([
+    ['a bare value', { old: 'a' }],
+    ['a value with no type', { new: { value: 'a' } }],
+    ['a type with no value', { new: { type: { kind: 'string' } } }],
+    ['a type that is none', { new: { value: 'a', type: { kind: 'text' } } }],
+    ['a type said to be not known yet', { new: { value: 'a', type: { kind: 'string' } }, unknown: [['type']] }],
+    ['a side said to be not known yet, type and all', { new: { value: 'a', type: { kind: 'string' } }, unknown: [[]] }],
+    ['a value said to be not known yet where it holds nothing', { new: { value: { env: null }, type: { kind: 'dynamic' } }, unknown: [['value', 'nope']] }],
+    ['a value said to be not known yet twice', { new: { value: { env: null }, type: { kind: 'dynamic' } }, unknown: [['value'], ['value', 'env']] }],
+    ['steps to what is not known yet that are no list', { new: { value: { env: null }, type: { kind: 'dynamic' } }, unknown: 'value' }],
+  ])('refuses an output change that holds %s', (_, change) => {
+    expect(read({ ...fields(), outputs: { o: change } })).toThrow(/^tfplan\.json is not a plan file$/);
+  });
+
   it('keeps a change whose name every object has, rather than setting a prototype', () => {
-    const plan: Plan = { serial: 0, actions: [], outputs: JSON.parse('{"__proto__": {"old": "a", "new": "b"}}'), prevRun: {}, prior: {}, schemas };
+    const plan: Plan = {
+      serial: 0,
+      actions: [],
+      outputs: JSON.parse('{"__proto__": {"old": {"value": "a", "type": {"kind": "string"}}, "new": {"value": "b", "type": {"kind": "string"}}}}'),
+      prevRun: {},
+      prior: {},
+      schemas,
+    };
 
     const outputs = parsePlanFile(aPlanFile(plan), 'tfplan.json').outputs;
 

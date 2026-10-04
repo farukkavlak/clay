@@ -1,3 +1,4 @@
+import { types } from '@clay/contracts';
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { CONFIG_FILE } from '@clay/parser';
 import { LocalProvider } from '@clay/provider-local';
@@ -96,7 +97,7 @@ describe('what plan refuses before anything runs', () => {
 
     const plan = await newOrchestrator().plan(config);
 
-    expect(plan.outputs).toEqual({ echo: { old: undefined, new: 'given' } });
+    expect(plan.outputs).toEqual({ echo: { old: undefined, new: { value: 'given', type: types.string } } });
   });
 
   it('nothing about a value that is not known yet', async () => {

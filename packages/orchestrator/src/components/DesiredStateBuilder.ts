@@ -1,4 +1,4 @@
-import { Address, ModuleAddress, Resource, Schema, State, UNKNOWN } from '@clay/contracts';
+import { Address, ModuleAddress, Output, Resource, Schema, State, UNKNOWN } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { AttributeValue, ResourceBlock, spell, spellReference, Statement } from '@clay/parser';
 import { DesiredResource, hasChanges } from '@clay/planner';
@@ -25,7 +25,7 @@ import { ResourcePlan, ResourcePlanner } from './ResourcePlanner';
 /** What the configuration asks for, with every value resolved against the state or left UNKNOWN. */
 export interface DesiredState {
   resources: DesiredResource[];
-  outputs: Record<string, unknown>;
+  outputs: Record<string, Output>;
 }
 
 /** The deepest module both sit in: `module.a` for `module.a.module.b` and `module.a.module.c`. */
@@ -62,7 +62,7 @@ export class DesiredStateBuilder {
     this.schemas = schemas;
     const byKey = new Map(loadedResources.map((r) => [r.address.toString(), r]));
     const resources: DesiredResource[] = [];
-    const outputs: Record<string, unknown> = {};
+    const outputs: Record<string, Output> = {};
 
     for (const layer of graph.topologicalSort())
       for (const key of layer) {
@@ -175,7 +175,7 @@ export class DesiredStateBuilder {
     return keys.map((key) => new Address(block.module, block.resourceType, block.name, key).toString());
   }
 
-  private planValue(node: Extract<GraphNode, { kind: 'variable' | 'output' }>, instance: ModuleAddress, state: State, rootOutputs: Record<string, unknown>): void {
+  private planValue(node: Extract<GraphNode, { kind: 'variable' | 'output' }>, instance: ModuleAddress, state: State, rootOutputs: Record<string, Output>): void {
     if (node.kind === 'variable') this.planVariable(node, instance, state);
     else this.planOutput(node, instance, state, rootOutputs);
   }
@@ -186,11 +186,11 @@ export class DesiredStateBuilder {
   }
 
   /** Gives an output its value, known or not yet, so the resources reading it can be planned. */
-  private planOutput(node: OutputNode, instance: ModuleAddress, state: State, rootOutputs: Record<string, unknown>): void {
+  private planOutput(node: OutputNode, instance: ModuleAddress, state: State, rootOutputs: Record<string, Output>): void {
     const value = this.resolveNode(node, node.value, instance, state);
     this.scopeManager.setOutput(instance.toString(), node.name, value);
 
-    if (instance.isRoot()) rootOutputs[node.name] = value.data;
+    if (instance.isRoot()) rootOutputs[node.name] = { value: value.data, type: value.type };
   }
 
   /** Resolves config values with their types; what an apply has to produce first stays UNKNOWN. */

@@ -1,4 +1,10 @@
-import { ExactNumber, isRecord, NumberError, readResources, State, STATE_VERSION } from '@clay/contracts';
+import { ExactNumber, isOutput, isRecord, NumberError, readResources, State, STATE_VERSION } from '@clay/contracts';
+
+function checkOutputs(outputs: unknown, say: (problem: string) => never): void {
+  if (!isRecord(outputs)) say('its outputs are not a record');
+
+  for (const [name, output] of Object.entries(outputs)) if (!isOutput(output)) say(`its output "${name}" is not a value with its type`);
+}
 
 /** Only what the engine goes on to trust: a state is read to be planned against, and a wrong shape plans the wrong actions. */
 function check(state: unknown, source: string): asserts state is State {
@@ -14,7 +20,7 @@ function check(state: unknown, source: string): asserts state is State {
   if (version > STATE_VERSION) throw new Error(`${source} was written by a newer Clay, version ${version}`);
   if (version < STATE_VERSION) throw new Error(`${source} was written by an older Clay, version ${version}`);
   if (typeof serial !== 'number') say('its serial is not a number');
-  if (outputs !== undefined && !isRecord(outputs)) say('its outputs are not a record');
+  if (outputs !== undefined) checkOutputs(outputs, say);
   readResources(resources, 'its resources', say);
 }
 

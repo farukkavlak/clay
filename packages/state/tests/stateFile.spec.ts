@@ -108,6 +108,23 @@ describe('reading a state file', () => {
     expect(read(content)).toThrow(/clay\.state\.json is not valid state/);
   });
 
+  it.each([
+    ['a bare value', 'hello'],
+    ['a value with no type', { value: 'hello' }],
+    ['a type with no value', { type: { kind: 'string' } }],
+    ['a type that is none', { value: 'hello', type: { kind: 'text' } }],
+  ])('refuses an output that is %s', (_, output) => {
+    const content = { version: STATE_VERSION, serial: 0, resources: {}, outputs: { o: output } };
+
+    expect(read(content)).toThrow('clay.state.json is not valid state: its output "o" is not a value with its type');
+  });
+
+  it('reads an output of null, which is a value', () => {
+    const outputs = { o: { value: null, type: { kind: 'dynamic' } } };
+
+    expect(read({ version: STATE_VERSION, serial: 0, resources: {}, outputs })().outputs).toEqual(outputs);
+  });
+
   // The entry would be refused later for the address it holds too, so the reason is what pins this.
   it.each([
     ['text', 'local_file.a', 'm'],

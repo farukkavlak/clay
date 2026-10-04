@@ -103,7 +103,7 @@ relative to the root, so `"${path.module}/index.html"` names a file next to the 
 | `clay validate`          | Resolves references and checks values with the schema and the provider; reads no state |
 | `clay plan [--out file]` | Shows what `apply` would do; `--out` saves the plan with its configuration             |
 | `clay apply [plan] [-y]` | Runs the plan it shows, or a saved one; `-y` skips the question                        |
-| `clay output [--json]`   | Prints the root outputs from the last apply                                            |
+| `clay output [--json]`   | Prints the root outputs from the last apply; `--json` gives each with its type         |
 | `clay state list`        | Lists the resources in state                                                           |
 | `clay state show <addr>` | Prints one resource as it is in state                                                  |
 | `clay state mv <a> <b>`  | Renames a resource in state, so the next plan does not recreate it                     |
@@ -137,7 +137,13 @@ where a number or a bool is wanted is read as one when it spells one: `"8"` is `
 `"true"` is `true`, and `"8 MB"` is refused. A list and a set are taken as one another,
 and so are a map and an object. Nothing else is converted. The plan, the provider and the
 state all see the converted value. A schema may call a list a set: its order is not a
-change, and a member written twice is held once.
+change, and a member written twice is held once. A plan shows a change to a set as the
+members it loses and gains.
+
+No schema names the type of an output, so state and a plan hold each root output as its
+value and its type: `{ "value": ["a", "b"], "type": { "kind": "set", ... } }`. A set
+output changes by its members too. An output whose value stays and whose type changes is
+a change, shown by the two types: `m = ["a","b"] (list(string) -> set(string))`.
 
 A data source reads something that already exists. `data "local_file" "f" { path = "x" }`
 reads a file, and `data.local_file.f.content` is what it holds. A data source has a schema

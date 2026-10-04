@@ -1,4 +1,4 @@
-import { Address, ModuleAddress, State } from '@clay/contracts';
+import { Address, ModuleAddress, Output, State } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { ResourceBlock, spell, Statement } from '@clay/parser';
 import { PlanAction } from '@clay/planner';
@@ -183,14 +183,14 @@ export class PlanRunner {
     }
   }
 
-  private resolveOutputs(program: Statement[], state: State, context: ModuleAddress): Record<string, unknown> {
-    const outputs: Record<string, unknown> = {};
+  private resolveOutputs(program: Statement[], state: State, context: ModuleAddress): Record<string, Output> {
+    const outputs: Record<string, Output> = {};
     const scope = scopeOf(context);
 
     for (const stmt of program)
       if (stmt.type === 'Output') {
         const resolved = this.resolver.resolveValue(stmt.value, state, context);
-        outputs[stmt.name] = resolved.data;
+        outputs[stmt.name] = { value: resolved.data, type: resolved.type };
         this.scopeManager.setOutput(scope, stmt.name, resolved);
       }
 

@@ -106,6 +106,10 @@ hits each of these early.
 - [ ] A variable names its type: `variable "x" { type = set(string) }`. A module input
       takes whatever it is given today, so a list passed where a set is meant keeps its
       order and its duplicates
+- [ ] `sensitive = true` on an output: its value is hidden in what `plan`, `apply` and
+      `clay output` print, and `clay output --json` still gives it. Terraform prints
+      `<sensitive>` and keeps the flag beside the value and its type in state, where the
+      value stays in plain text
 - [x] A module `source` has a kind. Terraform reads a local path only when it starts with
       `./` or `../` and treats anything else as a registry address; Clay joins whatever it
       is onto the parent directory, so an absolute path is read as well
@@ -239,8 +243,12 @@ length below 1.
       takes `null`, and is made as if nothing were written. An attribute of a resource
       or a data source that the schema has and nothing sets reads as `null`. Terraform:
       "behaves as though you had completely omitted it"
-- [ ] The plan shows a set change as the members added and removed, `+ "c"`. Today it
-      prints the whole set before and after, and the reader finds the difference
+- [x] The plan shows a set change as the members it loses and gains, `- "a"` and
+      `+ "c"`, for an attribute and for an output. State and a plan hold each root
+      output with its type, as Terraform's state does, and `clay output --json` prints
+      it. An output whose type alone changes is a change and is shown by the two types;
+      Terraform counts it as a change too, but its plan shows nothing for it. Terraform
+      shows a changed set output item by item, by index
 - [ ] A value not known yet is refused at plan where its type can never be joined into
       a string: `"x-${thing.a.tags}"` with `tags` a map. Today the plan passes and the
       apply fails after `thing.a` is made. Terraform also waits for the apply
@@ -326,8 +334,8 @@ Terraform has it since backends replaced `-state`.
 ### Format
 
 - [ ] A state a newer Clay wrote is refused, which is right, but an older one has no way
-      forward either. Version 2 needs an upgrade step that reads version 1, the way
-      Terraform's `states/statefile` upgrades on read
+      forward either. Each version needs an upgrade step that reads the one before, the
+      way Terraform's `states/statefile` upgrades on read
 
 ### Commands
 

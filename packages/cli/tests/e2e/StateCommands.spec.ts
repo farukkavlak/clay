@@ -255,7 +255,7 @@ describe('state and output against a real state file', () => {
 
     await createOutputCommand().parseAsync(['node', 'clay', '--json']);
 
-    expect(JSON.parse(printed.join('\n'))).toEqual({ file: path.join(dir, 'a.txt') });
+    expect(JSON.parse(printed.join('\n'))).toEqual({ file: { value: path.join(dir, 'a.txt'), type: { kind: 'string' } } });
   });
 
   it('does not take a variable for an output', async () => {

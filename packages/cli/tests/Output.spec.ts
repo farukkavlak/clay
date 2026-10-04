@@ -1,4 +1,4 @@
-import { emptyState } from '@clay/contracts';
+import { emptyState, types } from '@clay/contracts';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -57,7 +57,7 @@ describe('Output Command', () => {
   });
 
   it('should display outputs from state in formatted table', async () => {
-    const mockState = { ...emptyState(), outputs: { myOutput: 'test_value', anotherOutput: 42 } };
+    const mockState = { ...emptyState(), outputs: { myOutput: { value: 'test_value', type: types.string }, anotherOutput: { value: 42, type: types.number } } };
 
     vi.mocked(fs.access).mockResolvedValue(void 0);
     readMock.mockResolvedValue(mockState);
@@ -67,10 +67,8 @@ describe('Output Command', () => {
 
     const allCalls = consoleLogSpy.mock.calls.map((call: unknown[]) => call[0]).join('\n');
     expect(allCalls).toContain('Outputs:');
-    expect(allCalls).toContain('myOutput');
-    expect(allCalls).toContain('test_value');
-    expect(allCalls).toContain('anotherOutput');
-    expect(allCalls).toContain('42');
+    expect(allCalls).toContain('myOutput = "test_value"');
+    expect(allCalls).toContain('anotherOutput = 42');
   });
 
   it('should handle empty state gracefully', async () => {
@@ -101,7 +99,7 @@ describe('Output Command', () => {
   });
 
   it('should read the state next to the working directory', async () => {
-    const mockState = { ...emptyState(), outputs: { defaultOut: 'default' } };
+    const mockState = { ...emptyState(), outputs: { defaultOut: { value: 'default', type: types.string } } };
     vi.mocked(fs.access).mockResolvedValue(void 0);
     readMock.mockResolvedValue(mockState);
 

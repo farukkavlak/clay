@@ -1,4 +1,4 @@
-import { Address, isUnknown, ModuleAddress, State, STATE_VERSION, UNKNOWN } from '@clay/contracts';
+import { Address, isUnknown, ModuleAddress, Output, State, STATE_VERSION, types, UNKNOWN } from '@clay/contracts';
 import { AttributeValue, CONFIG_FILE } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
@@ -7,6 +7,7 @@ import { DesiredResource, hasChanges, outputChanges, plan, PLAN_FILE_VERSION, Pl
 /** A plan is built from parsed blocks, and a test that builds one by hand still has to say where they came from. */
 const position = { file: CONFIG_FILE, line: 1, column: 1 };
 const str = (value: string): AttributeValue => ({ type: 'String', value, position });
+const text = (value: string): Output => ({ value, type: types.string });
 
 function desiredResource(name: string, attributes: Record<string, string>, modulePath: string[] = []): DesiredResource {
   return {
@@ -135,11 +136,18 @@ describe('Planner', () => {
 
   // A name every object answers to used to come back as its inherited function instead of undefined, so an addition read as a change from that function.
   it('should report an output named after something every object has as an addition', () => {
-    expect(outputChanges({}, { constructor: 'hello' })).toEqual({ constructor: { old: undefined, new: 'hello' } });
+    expect(outputChanges({}, { constructor: text('hello') })).toEqual({ constructor: { old: undefined, new: text('hello') } });
+  });
+
+  it('should report an output whose type alone changes, since the same members as a set and as a list are two values', () => {
+    const list = { value: ['a'], type: types.list(types.string) };
+    const set = { value: ['a'], type: types.set(types.string) };
+
+    expect(outputChanges({ o: list }, { o: set })).toEqual({ o: { old: list, new: set } });
   });
 
   it('should report an output named that way as a removal when it goes away', () => {
-    expect(outputChanges({ toString: 'bye' }, {})).toEqual({ toString: { old: 'bye', new: undefined } });
+    expect(outputChanges({ toString: text('bye') }, {})).toEqual({ toString: { old: text('bye'), new: undefined } });
   });
 
   // A state file can hold `__proto__` as a name of its own, and assigning it into a plain object sets a prototype rather than a key.

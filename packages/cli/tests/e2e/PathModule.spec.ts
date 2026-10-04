@@ -62,11 +62,11 @@ describe('a module naming its own directory', () => {
 
     const { outputs } = await newOrchestrator().plan(config);
 
-    expect(outputs.root_dir.new).toBe('.');
-    expect(outputs.web_dir.new).toBe('web');
-    expect(outputs.web_root.new).toBe('.');
-    expect(outputs.shared_dir.new).toBe('shared');
-    expect(outputs.shared_from.new).toBe('web');
+    expect(outputs.root_dir.new?.value).toBe('.');
+    expect(outputs.web_dir.new?.value).toBe('web');
+    expect(outputs.web_root.new?.value).toBe('.');
+    expect(outputs.shared_dir.new?.value).toBe('shared');
+    expect(outputs.shared_from.new?.value).toBe('web');
   });
 
   it('reads the same directory in every instance of a module called with count', async () => {
@@ -81,7 +81,7 @@ describe('a module naming its own directory', () => {
 
     const { outputs } = await newOrchestrator().plan(config);
 
-    expect(outputs.dirs.new).toEqual(['web', 'web']);
+    expect(outputs.dirs.new?.value).toEqual(['web', 'web']);
   });
 
   // apply reads the current directory, so the commands run from the temp one.

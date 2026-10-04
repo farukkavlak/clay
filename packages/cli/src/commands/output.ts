@@ -1,3 +1,4 @@
+import { Output } from '@clay/contracts';
 import { StateManager } from '@clay/state';
 import { Command } from 'commander';
 import { styleText } from 'node:util';
@@ -5,7 +6,8 @@ import { styleText } from 'node:util';
 import { exists } from '../exists';
 import { stateFile } from '../stateFile';
 
-function displayOutputs(outputs: Record<string, unknown>, json: boolean): void {
+/** As JSON each output comes with its type, for a script to tell a set from a list; a reader gets the values. */
+function displayOutputs(outputs: Record<string, Output>, json: boolean): void {
   if (json) {
     console.log(JSON.stringify(outputs, null, 2));
     return;
@@ -14,7 +16,7 @@ function displayOutputs(outputs: Record<string, unknown>, json: boolean): void {
   if (Object.keys(outputs).length === 0) console.log(styleText('yellow', 'No outputs found in state.'));
   else {
     console.log(styleText('bold', '\nOutputs:\n'));
-    for (const [key, value] of Object.entries(outputs)) console.log(`${styleText('cyan', key)} = ${styleText('green', JSON.stringify(value))}`);
+    for (const [key, { value }] of Object.entries(outputs)) console.log(`${styleText('cyan', key)} = ${styleText('green', JSON.stringify(value))}`);
 
     console.log();
   }

@@ -1,5 +1,5 @@
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
-import { Address } from '@clay/contracts';
+import { Address, Output } from '@clay/contracts';
 import { ConfigError } from '@clay/parser';
 import { parsePlanFile, serializePlan } from '@clay/planner';
 import { LocalProvider } from '@clay/provider-local';
@@ -37,8 +37,8 @@ describe('a module called with for_each', () => {
     return engine;
   };
 
-  const apply = async (config: string): Promise<Record<string, unknown>> => {
-    let outputs: Record<string, unknown> = {};
+  const apply = async (config: string): Promise<Record<string, Output>> => {
+    let outputs: Record<string, Output> = {};
     for await (const event of start(newOrchestrator(), config)) {
       if (event.type === 'failed') throw event.error;
       if (event.type === 'done') outputs = event.outputs;
@@ -132,7 +132,7 @@ describe('a module called with for_each', () => {
   ])('gives the output of the instance a key names %s', async (_, reference) => {
     const outputs = await apply(web('["ali", "can"]', `output "o" { value = "\${${reference}}" }`));
 
-    expect(outputs.o).toBe(path.join(dir, 'ali.txt'));
+    expect(outputs.o.value).toBe(path.join(dir, 'ali.txt'));
   });
 
   // Each instance of the outer module reads the inner call's for_each with its own input.

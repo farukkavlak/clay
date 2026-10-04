@@ -1,4 +1,4 @@
-import { emptyState, Provider, Resource, Schema, State } from '@clay/contracts';
+import { emptyState, Output, Provider, Resource, Schema, State } from '@clay/contracts';
 import { DesiredResource, outputChanges, plan, Plan } from '@clay/planner';
 import { StateManager } from '@clay/state';
 
@@ -148,7 +148,7 @@ export class Orchestrator {
     }
   }
 
-  private async resolveAndCheck(configContent: string, state: State): Promise<{ desiredResources: DesiredResource[]; outputs: Record<string, unknown> }> {
+  private async resolveAndCheck(configContent: string, state: State): Promise<{ desiredResources: DesiredResource[]; outputs: Record<string, Output> }> {
     const { loadedResources, loadedModules, schemas } = await this.loader.load(configContent, state);
 
     const graph = this.graphBuilder.buildExecutionGraph(loadedResources, loadedModules);

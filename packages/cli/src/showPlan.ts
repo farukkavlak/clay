@@ -1,6 +1,8 @@
-import { Address, isRecord, isUnknown, Schema } from '@clay/contracts';
-import { changedOutside, Changes, Drift, Plan, PlanAction } from '@clay/planner';
+import { Address, isRecord, isUnknown, Output, Schema } from '@clay/contracts';
+import { changedOutside, Changes, Drift, OutputChanges, Plan, PlanAction } from '@clay/planner';
 import { isDeepStrictEqual, styleText } from 'node:util';
+
+import { typeName } from './typeName';
 
 /** A move changes where state keeps a resource, so a plan that only moves still has work to do. */
 function changes(action: PlanAction): boolean {
@@ -58,22 +60,24 @@ function without(members: unknown[], others: unknown[]): unknown[] {
   return members.filter((member) => !others.some((other) => isDeepStrictEqual(member, other)));
 }
 
-/** A set's members have no order, so a change to one is the members it loses and gains. */
-function displaySetChange(key: string, old: unknown[], next: unknown[]): void {
+/** A set's members have no order, so a change to one is the members it loses and gains, each under `indent`. */
+function displayMembers(old: unknown[], next: unknown[], indent: string): void {
   const removed = without(old, next);
   const unchanged = old.length - removed.length;
 
-  console.log(`      ${key}:`);
-  for (const member of removed) console.log(`        ${styleText('red', '-')} ${show(member)}`);
-  for (const member of without(next, old)) console.log(`        ${styleText('green', '+')} ${show(member)}`);
-  if (unchanged > 0) console.log(`        (${unchanged} unchanged)`);
+  for (const member of removed) console.log(`${indent}${styleText('red', '-')} ${show(member)}`);
+  for (const member of without(next, old)) console.log(`${indent}${styleText('green', '+')} ${show(member)}`);
+  if (unchanged > 0) console.log(`${indent}(${unchanged} unchanged)`);
 }
 
 /** Each changed value, a set by its members where the schema names one. */
 function displayChanges(changes: Changes, schema: Schema): void {
   for (const [key, change] of Object.entries(changes)) {
     const isSet = Object.hasOwn(schema, key) && schema[key].type.kind === 'set';
-    if (isSet && Array.isArray(change.old) && Array.isArray(change.new)) displaySetChange(key, change.old, change.new);
+    if (isSet && Array.isArray(change.old) && Array.isArray(change.new)) {
+      console.log(`      ${key}:`);
+      displayMembers(change.old, change.new, '        ');
+    }
     // A set not known yet, or one that comes or goes, has no members on one side to compare.
     else console.log(`      ${key}: ${showOr(change.old, '(none)')} -> ${showOr(change.new, '(removed)')}`);
   }
@@ -102,16 +106,34 @@ function displayDrift(drift: Drift[], plan: Plan): void {
   for (const found of drift) displayChangedOutside(found, plan);
 }
 
-function displayOutputChanges(outputs: Changes): void {
+/** The members of a set that is known, and nothing for any other output. */
+function membersOf({ type, value }: Output): unknown[] | undefined {
+  return type.kind === 'set' && Array.isArray(value) ? value : undefined;
+}
+
+/** A set by its members; a value that stays by its two types, since the values alone would show no change. */
+function displayOutputChange(name: string, old: Output, next: Output): void {
+  const changed = `  ${styleText('yellow', '~')} ${name}`;
+  const was = membersOf(old);
+  const now = membersOf(next);
+
+  if (isDeepStrictEqual(old.value, next.value)) console.log(`${changed} = ${show(next.value)} (${typeName(old.type)} -> ${typeName(next.type)})`);
+  else if (was && now) {
+    console.log(`${changed}:`);
+    displayMembers(was, now, '      ');
+  } else console.log(`${changed} = ${show(old.value)} -> ${show(next.value)}`);
+}
+
+function displayOutputChanges(outputs: OutputChanges): void {
   const names = Object.keys(outputs);
   if (names.length === 0) return;
 
   console.log(styleText('bold', '\nChanges to outputs:\n'));
   for (const name of names) {
     const { old, new: next } = outputs[name];
-    if (old === undefined) console.log(`  ${styleText('green', '+')} ${name} = ${show(next)}`);
-    else if (next === undefined) console.log(`  ${styleText('red', '-')} ${name}`);
-    else console.log(`  ${styleText('yellow', '~')} ${name} = ${show(old)} -> ${show(next)}`);
+    if (next === undefined) console.log(`  ${styleText('red', '-')} ${name}`);
+    else if (old === undefined) console.log(`  ${styleText('green', '+')} ${name} = ${show(next.value)}`);
+    else displayOutputChange(name, old, next);
   }
 }
 

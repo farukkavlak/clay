@@ -221,7 +221,7 @@ describe('a value only the provider knows', () => {
   it('reads the id of a resource still to be made as known after apply', async () => {
     const { outputs } = await newOrchestrator().plan('resource "stamp" "a" { label = "x" }\noutput "o" { value = stamp.a.id }');
 
-    expect(isUnknown(outputs.o.new)).toBe(true);
+    expect(isUnknown(outputs.o.new?.value)).toBe(true);
   });
 
   it('keeps what the provider returns in state', async () => {

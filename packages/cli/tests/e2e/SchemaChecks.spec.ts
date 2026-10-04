@@ -231,7 +231,7 @@ describe('a data block held to the schema', () => {
   it('reads what the schema takes', async () => {
     const { outputs } = await plan(`data "local_file" "f" { path = "${file}" }\noutput "c" { value = data.local_file.f.content }`);
 
-    expect(outputs).toEqual({ c: { old: undefined, new: 'hi' } });
+    expect(outputs).toEqual({ c: { old: undefined, new: { value: 'hi', type: types.string } } });
   });
 
   // Each is refused before the file is read, so the path need not be there.
@@ -255,7 +255,7 @@ describe('a data block held to the schema', () => {
     const { outputs } = await plan('data "tally" "t" { size = "5" }\noutput "s" { value = data.tally.t.size }', provider);
 
     expect(validate).toHaveBeenCalledWith('tally', { size: ExactNumber.parse('5') });
-    expect(outputs).toEqual({ s: { old: undefined, new: ExactNumber.parse('5') } });
+    expect(outputs).toEqual({ s: { old: undefined, new: { value: ExactNumber.parse('5'), type: types.number } } });
   });
 
   it('refuses a block without a value it requires, at the block', async () => {
