@@ -225,7 +225,6 @@ describe('apply and plan against real files', () => {
   });
 
   it.each([
-    ['variables', {}, 'variable "a" { default = var.b }\nvariable "b" { default = var.a }', 'var.a -> var.b -> var.a'],
     [
       'a module call and its output',
       { 'm/main.clay': 'output "y" { value = 1 }' },
@@ -355,25 +354,6 @@ describe('apply and plan against real files', () => {
     `;
     await apply(orchestrator, config);
 
-    expect(await changes(config)).toEqual([]);
-  });
-
-  it('resolves a variable default that reads a resource', async () => {
-    const config = `
-      variable "id" { default = "\${local_file.a.id}" }
-      resource "local_file" "a" {
-        path = "${path.join(dir, 'a.txt')}"
-        content = "hello"
-      }
-      resource "local_file" "b" {
-        path = "${path.join(dir, 'b.txt')}"
-        content = "\${var.id}"
-      }
-    `;
-
-    await apply(orchestrator, config);
-
-    expect(await fs.readFile(path.join(dir, 'b.txt'), 'utf8')).toBe(path.join(dir, 'a.txt'));
     expect(await changes(config)).toEqual([]);
   });
 

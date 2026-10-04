@@ -1,5 +1,20 @@
 import { ExactNumber, NumberError } from '@clay/contracts';
-import { AttributeValue, CallNode, DataBlock, ModuleBlock, OutputBlock, Program, ReferenceNode, ResourceBlock, spell, Statement, TemplatePart, VariableBlock } from './ast';
+import {
+  AttributeValue,
+  CallNode,
+  DataBlock,
+  ModuleBlock,
+  namedIn,
+  OutputBlock,
+  Program,
+  ReferenceNode,
+  ResourceBlock,
+  spell,
+  spellNamed,
+  Statement,
+  TemplatePart,
+  VariableBlock,
+} from './ast';
 import { ConfigError } from './ConfigError';
 import { readEscapes } from './escapes';
 import { flushed } from './heredoc';
@@ -104,6 +119,10 @@ export class Parser {
     // `default` is the whole of what a variable is read for, so another name would be parsed and never read.
     for (const [key, value] of Object.entries(attributes))
       if (key !== 'default') throw new ConfigError(`Variable "${nameToken.value}" takes only "default", not "${key}".`, value.position);
+
+    // A module call's input replaces the default, so a reference or a call in it would never be checked.
+    const [named] = attributes.default ? namedIn(attributes.default) : [];
+    if (named) throw new ConfigError(`A variable's default is a constant, so it cannot hold ${spellNamed(named)}`, named.position);
 
     return {
       type: 'Variable',

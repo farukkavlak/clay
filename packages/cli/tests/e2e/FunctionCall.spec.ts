@@ -166,17 +166,6 @@ describe('a function call', () => {
     expect(error.position).toMatchObject({ file: path.join('empty', 'main.clay'), ...placeOf(module, 'lenght') });
   });
 
-  it('refuses a name no function has in a default its module call gives a value in place of', async () => {
-    await fs.mkdir(path.join(dir, 'm'));
-    const module = 'variable "x" {\n  default = lenght(1)\n}\noutput "n" { value = var.x }';
-    await fs.writeFile(path.join(dir, 'm', 'main.clay'), module, 'utf8');
-
-    const error = await planError('module "m" {\n  source = "./m"\n  x = "given"\n}');
-
-    expect(error.message).toBe('There is no function "lenght"');
-    expect(error.position).toMatchObject({ file: path.join('m', 'main.clay'), ...placeOf(module, 'lenght') });
-  });
-
   it('refuses a name no function has inside the argument of another, in a module nothing is made of', async () => {
     await fs.mkdir(path.join(dir, 'empty'));
     const module = 'output "n" {\n  value = length(lenght("abc"))\n}';

@@ -202,7 +202,6 @@ describe('a resource with count', () => {
   it.each([
     ['a resource that has no count', 'resource "local_file" "a" { path = "a" content = "${count.index}" }'],
     ['an output', 'output "o" { value = "${count.index}" }'],
-    ['a variable', 'variable "v" { default = "${count.index}" }'],
     ['the count it would come from', 'resource "local_file" "a" { count = "${count.index}" path = "a" content = "a" }'],
     ['a data source', 'data "local_file" "d" { path = "${count.index}" }'],
     // The output is not read at plan time, since it waits on a value only an apply makes.

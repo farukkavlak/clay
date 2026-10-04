@@ -81,7 +81,7 @@ What the engine reads from each:
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `resource` | `count` or `for_each`, read by the engine; every other attribute goes to the provider                                        |
 | `data`     | Every attribute goes to the provider that reads that type of data source                                                     |
-| `variable` | `default`, and nothing else; another attribute is refused where it is written                                                |
+| `variable` | `default`, a constant: no reference or function call; another attribute is refused where it is written                       |
 | `output`   | `value`                                                                                                                      |
 | `module`   | `source`, a literal string naming a directory relative to the file; `count` or `for_each`; every other attribute is an input |
 

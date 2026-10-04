@@ -89,11 +89,16 @@ function valuesIn(value: AttributeValue): AttributeValue[] {
   return [];
 }
 
+/** Every reference and call written in a value, at any depth, the outer one before those in its arguments. */
+export function namedIn(value: AttributeValue): (ReferenceNode | CallNode)[] {
+  const inside = valuesIn(value).flatMap((item) => namedIn(item));
+
+  return value.type === 'Reference' || value.type === 'Call' ? [value, ...inside] : inside;
+}
+
 /** Every call written in a value, at any depth, the outer one before those in its arguments. */
 export function callsIn(value: AttributeValue): CallNode[] {
-  const inside = valuesIn(value).flatMap((item) => callsIn(item));
-
-  return value.type === 'Call' ? [value, ...inside] : inside;
+  return namedIn(value).filter((node) => node.type === 'Call');
 }
 
 /** A reference or a call as a message names it, a call without its arguments: `var.names[0]`, `length(...)`. */

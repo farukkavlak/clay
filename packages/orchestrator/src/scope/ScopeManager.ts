@@ -4,7 +4,7 @@ import { AttributeValue } from '@clay/parser';
 import { ModuleCall } from '../keys';
 import { Value } from '../Value';
 
-/** A variable's value as written, and where it is read: in the module itself for a default, in the call for an input. */
+/** A variable's value as written, and where it is resolved: an input in the call that gives it, a default in its own module. */
 export interface VariableValue {
   value: AttributeValue;
   context: ModuleAddress | ModuleCall;

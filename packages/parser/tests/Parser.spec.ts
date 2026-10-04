@@ -793,6 +793,27 @@ describe('Clay Parser', () => {
       expect(error.position).toEqual(position);
     });
 
+    it.each([
+      ['a reference', 'variable "v" { default = var.p }', 'var.p', at(1, 26)],
+      ['a call', 'variable "v" { default = length("ab") }', 'length(...)', at(1, 26)],
+      ['a reference in a string', 'variable "v" { default = "x-${var.p}" }', 'var.p', at(1, 31)],
+      ['a call in a heredoc', 'variable "v" {\n  default = <<EOT\n${length("ab")}\nEOT\n}', 'length(...)', at(3, 3)],
+      ['a reference in a list', 'variable "v" { default = ["a", var.p] }', 'var.p', at(1, 32)],
+      ['a call before the reference it is given', 'variable "v" { default = length(var.p) }', 'length(...)', at(1, 26)],
+      ['a reference deep in a map', 'variable "v" { default = { a = { b = var.p } } }', 'var.p', at(1, 38)],
+    ])('refuses %s in a variable default, where it is written', (_, input, named, position) => {
+      const error = errorOf(input);
+
+      expect(error.message).toBe(`A variable's default is a constant, so it cannot hold ${named}`);
+      expect(error.position).toEqual(position);
+    });
+
+    it('takes a default of literals at any depth', () => {
+      const [variable] = makeParser('variable "v" { default = { a = ["x", 1, true, null] } }').parse();
+
+      expect(variable).toMatchObject({ attributes: { default: { type: 'Map', value: { a: { type: 'List' } } } } });
+    });
+
     it('refuses a variable named "source", which a module call reads as its path', () => {
       const error = errorOf('variable "source" { default = "x" }');
 

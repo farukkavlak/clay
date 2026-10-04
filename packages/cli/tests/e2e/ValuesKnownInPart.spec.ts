@@ -11,12 +11,20 @@ import { createApplyCommand } from '../../src/commands/apply';
 import { createPlanCommand } from '../../src/commands/plan';
 import { start } from './start';
 
-/** A map with one value only the apply makes and one the configuration sets, read whole and in parts. */
+/** A map with one value only the apply makes and one the configuration sets, given to a module and read whole and in parts. */
 const config = `
   resource "random_string" "s" { length = 4 }
-  variable "m" {
-    default = { a = "\${random_string.s.id}", b = "fixed" }
+  module "k" {
+    source = "./k"
+    m      = { a = "\${random_string.s.id}", b = "fixed" }
   }
+  output "whole" { value = module.k.whole }
+  output "known" { value = module.k.known }
+  output "later" { value = module.k.later }
+`;
+
+const module = `
+  variable "m" {}
   output "whole" { value = var.m }
   output "known" { value = var.m.b }
   output "later" { value = "read \${var.m.a}" }
@@ -52,6 +60,8 @@ describe('a value known in part', () => {
 
   beforeEach(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-known-in-part-'));
+    await fs.mkdir(path.join(dir, 'k'));
+    await fs.writeFile(path.join(dir, 'k', 'main.clay'), module, 'utf8');
   });
 
   afterEach(async () => {
@@ -124,7 +134,7 @@ describe('a value known in part', () => {
   });
 
   it('reads into what is not known yet as not known yet', async () => {
-    const { outputs } = await newOrchestrator().plan(`${config}\noutput "into" { value = "\${var.m.a.x}" }`);
+    const { outputs } = await newOrchestrator().plan(`${config}\noutput "into" { value = "\${module.k.whole.a.x}" }`);
 
     expect(isUnknown(outputs.into.new?.value)).toBe(true);
   });

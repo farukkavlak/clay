@@ -87,7 +87,6 @@ export class DependencyGraphBuilder {
 
     for (const { uniqueId, address } of loadedResources) graph.addNode(uniqueId, { kind: 'resource', module: address.module });
     for (const [key, node] of this.valueNodes(loadedModules)) graph.addNode(key, node);
-    this.checkDefaults(loadedModules);
 
     const moduleScopes = new Set(loadedModules.map((mod) => scopeOf(mod.address)));
     for (const [key, node] of graph.entries()) this.addNodeDependencies(key, node, graph, moduleScopes);
@@ -116,7 +115,7 @@ export class DependencyGraphBuilder {
   }
 
   private addValueDependencies(key: string, node: ValueNode, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
-    // A variable with no default reads nothing until a call gives it a value.
+    // A variable with no default has no value until a call gives it one.
     const { value } = node;
     if (!value) return;
 
@@ -217,15 +216,6 @@ export class DependencyGraphBuilder {
         position: stmt.attributes[name].position,
         declaration,
       });
-  }
-
-  /** A default a module call gives a value in place of is in no node, and never read, so its calls are checked on their own. */
-  private checkDefaults(loadedModules: LoadedModule[]): void {
-    for (const mod of loadedModules)
-      for (const stmt of mod.program) {
-        const value = stmt.type === 'Variable' ? stmt.attributes.default : undefined;
-        if (value) tryAt(value.position, spell(stmt), mod.address, () => this.checkCalls(value));
-      }
   }
 
   /** Checked here, as well as where it is called, since a value in a module nothing is made of is never read. */

@@ -48,12 +48,13 @@ change each.
 - [x] An integer above 2^53 is rounded in silence: `12345678901234567890` plans as
       `12345678901234567000`. A number is kept exactly from the configuration to state,
       a plan file and a provider, as Terraform keeps it
-- [ ] A reference in a `variable` default that a module call gives a value in place of
+- [x] A reference in a `variable` default that a module call gives a value in place of
       is never checked. `default = var.nope` in a module called with `x = "given"` is
       valid to `clay validate` and plans, while the same module called without `x` is
       refused with `variable "nope" is not defined`. The graph keeps the caller's input
-      under the variable's key and drops the default, so nothing reads it. A function
-      call there is checked already
+      under the variable's key and drops the default, so nothing reads it. A default is
+      a constant now, as in Terraform: a reference or a function call in it is refused
+      where it is written
 
 ## 1. Language
 
@@ -115,6 +116,9 @@ configuration hits each of these early.
 - [ ] A variable names its type: `variable "x" { type = set(string) }`. A module input
       takes whatever it is given today, so a list passed where a set is meant keeps its
       order and its duplicates
+- [ ] `locals { name = "${var.prefix}-x" }`: a value a module works out once and reads by
+      name as `local.name`. A variable default is a constant, so today such a value is
+      written out again wherever it is read
 - [ ] `sensitive = true` on an output: its value is hidden in what `plan`, `apply` and
       `clay output` print, and `clay output --json` still gives it. Terraform prints
       `<sensitive>` and keeps the flag beside the value and its type in state, where the
