@@ -71,6 +71,11 @@ export function spellReference(parts: Step[]): string {
   return parts.map((part, i) => spellStep(part, i === 0)).join('');
 }
 
+/** Steps as they would be written after what they read into: `.tags["a.b"][0]`. */
+export function spellSteps(steps: Step[]): string {
+  return steps.map((step) => spellStep(step, false)).join('');
+}
+
 /** Without a position the engine adds one where the value was read. */
 function refuse(message: string, position?: Position): never {
   throw position ? new ConfigError(message, position) : new Error(message);

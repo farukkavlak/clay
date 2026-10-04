@@ -1,6 +1,6 @@
 import { ExactNumber } from '@clay/contracts';
 import { Position } from './Position';
-import { Step } from './reference';
+import { spellReference, spellSteps, Step } from './reference';
 
 /** Every configuration lives under this name, the root one and a module's alike. */
 export const CONFIG_FILE = 'main.clay';
@@ -12,8 +12,11 @@ interface Node {
 
 export type ReferenceNode = Node & { type: 'Reference'; value: Step[] };
 
-/** A piece of a string with `${ … }` in it: text, or the reference an interpolation reads. */
-export type TemplatePart = string | ReferenceNode;
+/** A function called with its arguments, `length(var.names)`, and the steps written after it, read into what it gives. */
+export type CallNode = Node & { type: 'Call'; name: string; args: AttributeValue[]; path: Step[] };
+
+/** A piece of a string with `${ … }` in it: text, or the reference or the call an interpolation reads. */
+export type TemplatePart = string | ReferenceNode | CallNode;
 
 export type AttributeValue =
   | (Node & { type: 'String'; value: string })
@@ -22,6 +25,7 @@ export type AttributeValue =
   | (Node & { type: 'Boolean'; value: boolean })
   | (Node & { type: 'Null' })
   | ReferenceNode
+  | CallNode
   | (Node & { type: 'List'; value: AttributeValue[] })
   | (Node & { type: 'Map'; value: Record<string, AttributeValue> });
 
@@ -73,4 +77,26 @@ export function spell(statement: Statement): string {
   if (statement.type === 'Resource') return `resource "${statement.resourceType}" "${statement.name}"`;
   if (statement.type === 'Data') return `data "${statement.dataSourceType}" "${statement.name}"`;
   return `${statement.type.toLowerCase()} "${statement.name}"`;
+}
+
+/** What a value holds one level in: a list's items, a map's values, a string's interpolations and a call's arguments. */
+function valuesIn(value: AttributeValue): AttributeValue[] {
+  if (value.type === 'List') return value.value;
+  if (value.type === 'Call') return value.args;
+  if (value.type === 'Map') return Object.values(value.value);
+  if (value.type === 'Template') return value.value.filter((part) => typeof part !== 'string');
+
+  return [];
+}
+
+/** Every call written in a value, at any depth, the outer one before those in its arguments. */
+export function callsIn(value: AttributeValue): CallNode[] {
+  const inside = valuesIn(value).flatMap((item) => callsIn(item));
+
+  return value.type === 'Call' ? [value, ...inside] : inside;
+}
+
+/** A reference or a call as a message names it, a call without its arguments: `var.names[0]`, `length(...)`. */
+export function spellNamed(node: ReferenceNode | CallNode): string {
+  return node.type === 'Call' ? `${node.name}(...)${spellSteps(node.path)}` : spellReference(node.value);
 }

@@ -7,8 +7,11 @@ interface TokenSpec {
   regex: RegExp;
 }
 
-/** Inside quotes or a heredoc the text is a string's until `${` opens an interpolation, which reads tokens until its `}`. */
-type Mode = { kind: 'string' | 'interpolation'; opened: Position } | Heredoc;
+/**
+ * Inside quotes or a heredoc the text is a string's until `${` opens an interpolation, which reads tokens until its `}`.
+ * A `{` inside an interpolation opens a map, so the `}` that closes the map is not taken for the interpolation's.
+ */
+type Mode = { kind: 'string' | 'interpolation' | 'map'; opened: Position } | Heredoc;
 
 /** A heredoc ends at a line holding only its name. */
 interface Heredoc {
@@ -52,6 +55,8 @@ export class Lexer {
     { type: TokenType.Dot, regex: /\./y },
     { type: TokenType.LBracket, regex: /\[/y },
     { type: TokenType.RBracket, regex: /]/y },
+    { type: TokenType.LParen, regex: /\(/y },
+    { type: TokenType.RParen, regex: /\)/y },
     { type: TokenType.Comma, regex: /,/y },
     { type: TokenType.Assign, regex: /=/y },
   ];
@@ -111,10 +116,11 @@ export class Lexer {
     const inside = this.mode();
 
     if (token.type === TokenType.OQuote) this.modes.push({ kind: 'string', opened: token.position });
+    if (inside && token.type === TokenType.LBrace) this.modes.push({ kind: 'map', opened: token.position });
 
     if (inside && token.type === TokenType.RBrace) {
       this.modes.pop();
-      return { ...token, type: TokenType.TemplateEnd };
+      if (inside.kind === 'interpolation') return { ...token, type: TokenType.TemplateEnd };
     }
 
     return token;

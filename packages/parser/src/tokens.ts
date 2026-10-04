@@ -20,6 +20,8 @@ export enum TokenType {
   Dot = 'DOT', // . (for references)
   LBracket = 'LBRACKET', // [
   RBracket = 'RBRACKET', // ]
+  LParen = 'LPAREN',
+  RParen = 'RPAREN',
   Comma = 'COMMA', // ,
   EOF = 'EOF', // End of File
 }

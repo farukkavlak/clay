@@ -1,5 +1,5 @@
 import { isUnknown, Type, typeAt } from '@clay/contracts';
-import { ConfigError, Position, spellReference, Step } from '@clay/parser';
+import { ConfigError, Position, spellSteps, Step } from '@clay/parser';
 
 import { child, described, Value } from '../Value';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
@@ -37,29 +37,29 @@ export function typeInto(type: Type, steps: Step[]): Type {
 }
 
 /** A value not known yet is read as nothing yet, with the type the steps still to take will find, so what reads it can still check that much. */
-function checkKnown(value: Value, read: Step[], rest: Step[]): void {
+function checkKnown(value: Value, read: string, rest: Step[]): void {
   if (!isUnknown(value.data)) return;
 
-  throw new UnresolvedReferenceError(`${spellReference(read)} is known only after apply`, typeInto(value.type, rest));
+  throw new UnresolvedReferenceError(`${read} is known only after apply`, typeInto(value.type, rest));
 }
 
 /**
  * Reads each step into what the one before it found. A step that finds nothing is a mistake in the configuration, not a value to come, so it is refused where the reference is written.
- * A value known in part may hold what only an apply makes; reading that, or into it, reads nothing yet.
+ * A value known in part may hold what only an apply makes; reading that, or into it, reads nothing yet. `target` is what the value is, as it is written.
  */
-export function readPath(value: Value, target: Step[], path: Step[], position: Position): Value {
+export function readPath(value: Value, target: string, path: Step[], position: Position): Value {
   let current = value;
 
   for (const [i, step] of path.entries()) {
-    const read = [...target, ...path.slice(0, i)];
+    const read = `${target}${spellSteps(path.slice(0, i))}`;
     checkKnown(current, read, path.slice(i));
 
     const problem = missing(current, step);
-    if (problem) throw new ConfigError(`${spellReference(read)} ${problem}`, position);
+    if (problem) throw new ConfigError(`${read} ${problem}`, position);
 
     current = child(current, step);
   }
 
-  checkKnown(current, [...target, ...path], []);
+  checkKnown(current, `${target}${spellSteps(path)}`, []);
   return current;
 }

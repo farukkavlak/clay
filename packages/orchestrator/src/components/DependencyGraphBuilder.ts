@@ -1,8 +1,9 @@
 import { ModuleAddress } from '@clay/contracts';
 import { Graph } from '@clay/graph';
-import { AttributeValue, ModuleBlock, Position, spell } from '@clay/parser';
+import { AttributeValue, callsIn, ModuleBlock, Position, spell } from '@clay/parser';
 
 import { Instances, Repetition } from '../Instances';
+import { functionCalled } from '../functions';
 import { callKey, Context, ModuleCall, outputKey, scopeOf, variableKey } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
 import { placed, tryAt, withPlace } from '../place';
@@ -86,6 +87,7 @@ export class DependencyGraphBuilder {
 
     for (const { uniqueId, address } of loadedResources) graph.addNode(uniqueId, { kind: 'resource', module: address.module });
     for (const [key, node] of this.valueNodes(loadedModules)) graph.addNode(key, node);
+    this.checkDefaults(loadedModules);
 
     const moduleScopes = new Set(loadedModules.map((mod) => scopeOf(mod.address)));
     for (const [key, node] of graph.entries()) this.addNodeDependencies(key, node, graph, moduleScopes);
@@ -114,11 +116,14 @@ export class DependencyGraphBuilder {
   }
 
   private addValueDependencies(key: string, node: ValueNode, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
-    const repetition = node.context instanceof ModuleCall ? this.modules.repetitionOf(node.module) : undefined;
+    // A variable with no default reads nothing until a call gives it a value.
+    const { value } = node;
+    if (!value) return;
 
+    const repetition = node.context instanceof ModuleCall ? this.modules.repetitionOf(node.module) : undefined;
     const dependent = { key, declaration: node.declaration, context: node.context };
 
-    tryAt(node.position, node.declaration, node.context, () => this.addDependencies(node.value, graph, dependent, moduleScopes, repetition));
+    tryAt(node.position, node.declaration, node.context, () => this.addDependencies(value, graph, dependent, moduleScopes, repetition));
   }
 
   /** A call's count or for_each is read in the module that calls it, before any instance of the module is made. */
@@ -214,7 +219,23 @@ export class DependencyGraphBuilder {
       });
   }
 
-  private addDependencies(value: unknown, graph: Graph<GraphNode>, dependent: Dependent, moduleScopes: Set<string>, repetition?: Repetition): void {
+  /** A default a module call gives a value in place of is in no node, and never read, so its calls are checked on their own. */
+  private checkDefaults(loadedModules: LoadedModule[]): void {
+    for (const mod of loadedModules)
+      for (const stmt of mod.program) {
+        const value = stmt.type === 'Variable' ? stmt.attributes.default : undefined;
+        if (value) tryAt(value.position, spell(stmt), mod.address, () => this.checkCalls(value));
+      }
+  }
+
+  /** Checked here, as well as where it is called, since a value in a module nothing is made of is never read. */
+  private checkCalls(value: AttributeValue): void {
+    for (const call of callsIn(value)) functionCalled(call);
+  }
+
+  private addDependencies(value: AttributeValue, graph: Graph<GraphNode>, dependent: Dependent, moduleScopes: Set<string>, repetition?: Repetition): void {
+    this.checkCalls(value);
+
     for (const reference of this.scanner.referencesIn(value, dependent.context)) {
       if (reference.kind === 'count' || reference.kind === 'each') {
         checkInstanceReference(reference, repetition);

@@ -1,5 +1,5 @@
 import { ExactNumber, NumberError } from '@clay/contracts';
-import { AttributeValue, DataBlock, ModuleBlock, OutputBlock, Program, ReferenceNode, ResourceBlock, spell, Statement, TemplatePart, VariableBlock } from './ast';
+import { AttributeValue, CallNode, DataBlock, ModuleBlock, OutputBlock, Program, ReferenceNode, ResourceBlock, spell, Statement, TemplatePart, VariableBlock } from './ast';
 import { ConfigError } from './ConfigError';
 import { readEscapes } from './escapes';
 import { flushed } from './heredoc';
@@ -183,7 +183,7 @@ export class Parser {
     if (this.matchToken(TokenType.LBracket)) return this.parseList(position);
     if (this.matchToken(TokenType.LBrace)) return this.parseMap(position);
 
-    if (this.check(TokenType.Identifier)) return this.parseReference(position);
+    if (this.check(TokenType.Identifier)) return this.parseNamed(position);
 
     return this.error(`Unexpected value: ${this.peek().value}`);
   }
@@ -194,7 +194,7 @@ export class Parser {
     return { type: 'Number', value: this.exactNumber(`-${number.value}`, position), position };
   }
 
-  /** A string with `${ … }` in it is a template: its text, and the references read into it, each where it was written. */
+  /** A string with `${ … }` in it is a template: its text, and what its interpolations read, each where it was written. */
   private parseString(position: Position): AttributeValue {
     const parts: TemplatePart[] = [];
 
@@ -218,7 +218,7 @@ export class Parser {
     return this.template(text, position);
   }
 
-  /** Text next to text is one piece, and a string with no reference in it is a `String`. */
+  /** Text next to text is one piece, and a string with no `${ … }` in it is a `String`. */
   private template(parts: TemplatePart[], position: Position): AttributeValue {
     const joined: TemplatePart[] = [];
 
@@ -233,15 +233,15 @@ export class Parser {
     return { type: 'Template', value: joined, position };
   }
 
-  /** What one `${ … }` holds: a reference and nothing else. The lexer has put `${` next. */
-  private parseInterpolation(): ReferenceNode {
+  /** What one `${ … }` holds: a reference or a call, and nothing else. The lexer has put `${` next. */
+  private parseInterpolation(): ReferenceNode | CallNode {
     this.advance();
-    if (!this.check(TokenType.Identifier)) return this.error("Expect a reference inside '${'.");
+    if (!this.check(TokenType.Identifier)) return this.error("Expect a reference or a function call inside '${'.");
 
-    const reference = this.parseReference(this.peek().position);
-    this.consume(TokenType.TemplateEnd, "Expect '}' after the reference.");
+    const named = this.parseNamed(this.peek().position);
+    this.consume(TokenType.TemplateEnd, `Expect '}' after the ${named.type === 'Call' ? 'function call' : 'reference'}.`);
 
-    return reference;
+    return named;
   }
 
   /** The text of a string that has no `${ … }` in it, as written; `quote` is the one that opened it. The lexer puts `"` after it. */
@@ -290,13 +290,32 @@ export class Parser {
     if (Object.hasOwn(entries, key.value)) throw new ConfigError(`${key.value} is set twice`, key.position);
   }
 
-  private parseReference(position: Position): ReferenceNode {
-    const parts: Step[] = [this.advance().value];
+  /** A name with `(` after it calls a function; any other name starts a reference. */
+  private parseNamed(position: Position): ReferenceNode | CallNode {
+    const name = this.advance().value;
+    if (this.matchToken(TokenType.LParen)) return { type: 'Call', name, args: this.parseArguments(), path: this.parseSteps(), position };
+
+    return { type: 'Reference', value: [name, ...this.parseSteps()], position };
+  }
+
+  /** Written as a list's items are, with a comma between and one allowed after the last. The `(` is already read. */
+  private parseArguments(): AttributeValue[] {
+    const args: AttributeValue[] = [];
+    while (!this.check(TokenType.RParen) && !this.isAtEnd()) {
+      args.push(this.parseValue());
+      if (!this.matchToken(TokenType.Comma)) break;
+    }
+    this.consume(TokenType.RParen, "Expect ')' after the arguments.");
+    return args;
+  }
+
+  private parseSteps(): Step[] {
+    const steps: Step[] = [];
 
     while (this.matchToken(TokenType.Dot, TokenType.LBracket))
-      parts.push(this.previous().type === TokenType.Dot ? this.consume(TokenType.Identifier, 'Expect property name after dot.').value : this.parseBracket());
+      steps.push(this.previous().type === TokenType.Dot ? this.consume(TokenType.Identifier, 'Expect property name after dot.').value : this.parseBracket());
 
-    return { type: 'Reference', value: parts, position };
+    return steps;
   }
 
   /** What follows a `[`: an index into a list, or a key, which reads its escapes as a map key does. */
