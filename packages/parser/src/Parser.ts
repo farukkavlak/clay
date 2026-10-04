@@ -1,6 +1,7 @@
 import { ExactNumber, NumberError } from '@clay/contracts';
 import {
   AttributeValue,
+  BoundNode,
   CallNode,
   DataBlock,
   ModuleBlock,
@@ -34,6 +35,10 @@ const INSTANCE_ARGUMENTS = ['count', 'for_each'];
 export class Parser {
   private tokens: Token[];
   private current: number = 0;
+  /** The names the for expressions around the value being read give, innermost last. */
+  private bound: string[] = [];
+  /** Every name a for gives, checked against the resource types once every block is read. */
+  private forNames: Token[] = [];
 
   constructor(tokens: Token[]) {
     this.tokens = tokens;
@@ -55,7 +60,16 @@ export class Parser {
       program.push(statement);
     }
 
+    this.checkForNames(program);
     return program;
+  }
+
+  /** In a for's body its names come first, so one spelled as a resource type would hide every reference to that type. */
+  private checkForNames(program: Program): void {
+    const types = new Set(program.flatMap((statement) => (statement.type === 'Resource' ? [statement.resourceType] : [])));
+    const shadowing = this.forNames.find((name) => types.has(name.value));
+    if (shadowing)
+      throw new ConfigError(`"${shadowing.value}" cannot name an item in a for: a reference reads "${shadowing.value}." as a resource of that type`, shadowing.position);
   }
 
   // No keywords: a kind is only special at the start of a statement.
@@ -252,8 +266,8 @@ export class Parser {
     return { type: 'Template', value: joined, position };
   }
 
-  /** What one `${ … }` holds: a reference or a call, and nothing else. The lexer has put `${` next. */
-  private parseInterpolation(): ReferenceNode | CallNode {
+  /** What one `${ … }` holds: a reference, a call or a name a for gives, and nothing else. The lexer has put `${` next. */
+  private parseInterpolation(): ReferenceNode | CallNode | BoundNode {
     this.advance();
     if (!this.check(TokenType.Identifier)) return this.error("Expect a reference or a function call inside '${'.");
 
@@ -273,6 +287,9 @@ export class Parser {
   }
 
   private parseList(position: Position): AttributeValue {
+    // `for.` still starts a reference, to a resource of that type.
+    if (this.checkWord('for') && this.tokens[this.current + 1].type !== TokenType.Dot) return this.parseFor(position);
+
     const values: AttributeValue[] = [];
     while (!this.check(TokenType.RBracket) && !this.isAtEnd()) {
       values.push(this.parseValue());
@@ -280,6 +297,45 @@ export class Parser {
     }
     this.consume(TokenType.RBracket, "Expect ']' after list.");
     return { type: 'List', value: values, position };
+  }
+
+  /** `[for key, value in collection : body]`, with `[` read and `for` next. The names stand for the item in the body only. */
+  private parseFor(position: Position): AttributeValue {
+    this.advance();
+    const names = this.parseForNames();
+    if (!this.checkWord('in')) return this.error("Expect 'in' after the names in a for expression.");
+    this.advance();
+
+    const collection = this.parseValue();
+    this.consume(TokenType.Colon, "Expect ':' after the collection in a for expression.");
+
+    this.bound.push(...names.map((name) => name.value));
+    const body = this.parseValue();
+    this.bound.splice(-names.length);
+
+    this.consume(TokenType.RBracket, "Expect ']' after the for expression.");
+    const [keyName, valueName] = names.length === 2 ? names.map((name) => name.value) : [undefined, names[0].value];
+    return { type: 'For', ...(keyName && { keyName }), valueName, collection, body, position };
+  }
+
+  private parseForNames(): Token[] {
+    const names = [this.forName("Expect a name after 'for'.")];
+    if (!this.matchToken(TokenType.Comma)) return names;
+
+    const second = this.forName("Expect a name after ','.");
+    if (second.value === names[0].value) throw new ConfigError('The key and the value of a for need names of their own', second.position);
+
+    return [...names, second];
+  }
+
+  /** A name a for gives hides any reference that starts with it, so it cannot be one a reference already spells. */
+  private forName(message: string): Token {
+    const name = this.consume(TokenType.Identifier, message);
+    if (RESERVED_TYPES.has(name.value)) throw new ConfigError(`"${name.value}" cannot name an item in a for: a reference reads "${name.value}." as something else`, name.position);
+    if (this.bound.includes(name.value)) throw new ConfigError(`"${name.value}" is named by a for around this one already`, name.position);
+
+    this.forNames.push(name);
+    return name;
   }
 
   private parseMap(position: Position): AttributeValue {
@@ -309,10 +365,11 @@ export class Parser {
     if (Object.hasOwn(entries, key.value)) throw new ConfigError(`${key.value} is set twice`, key.position);
   }
 
-  /** A name with `(` after it calls a function; any other name starts a reference. */
-  private parseNamed(position: Position): ReferenceNode | CallNode {
+  /** A name with `(` after it calls a function, one a for around it gives stands for its item, and any other name starts a reference. */
+  private parseNamed(position: Position): ReferenceNode | CallNode | BoundNode {
     const name = this.advance().value;
     if (this.matchToken(TokenType.LParen)) return { type: 'Call', name, args: this.parseArguments(), path: this.parseSteps(), position };
+    if (this.bound.includes(name)) return { type: 'Bound', value: [name, ...this.parseSteps()], position };
 
     return { type: 'Reference', value: [name, ...this.parseSteps()], position };
   }
@@ -403,6 +460,11 @@ export class Parser {
 
   private error(message: string): never {
     throw new ConfigError(message, this.peek().position);
+  }
+
+  /** A word special only where it is written, as `for` and `in` are in a for expression. */
+  private checkWord(word: string): boolean {
+    return this.check(TokenType.Identifier) && this.peek().value === word;
   }
 
   private check(type: TokenType): boolean {

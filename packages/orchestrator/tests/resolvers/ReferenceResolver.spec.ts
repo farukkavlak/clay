@@ -1,5 +1,5 @@
 import { Address, ExactNumber, ModuleAddress, State, STATE_VERSION, types, UNKNOWN } from '@clay/contracts';
-import { AttributeValue, ConfigError, TemplatePart } from '@clay/parser';
+import { AttributeValue, CONFIG_FILE, ConfigError, Lexer, OutputBlock, Parser, TemplatePart } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
 import { Instances } from '../../src/Instances';
@@ -32,6 +32,20 @@ const resolverWith = (scopes = new ScopeManager(), planned = new Planned(), data
 
 /** A template around a resource state does not hold, which only the apply makes. */
 const readLater = () => resolverWith().resolveValue(template('id: ', reference('resource', 'later', 'id')), state, context);
+
+/** A value as an output writes it, at column 22 of line 1. */
+const written = (value: string) => (new Parser(new Lexer(`output "o" { value = ${value} }`, CONFIG_FILE).tokenize()).parse()[0] as OutputBlock).value;
+const atColumn = (column: number) => ({ file: CONFIG_FILE, line: 1, column });
+const planning = () => {
+  const planned = new Planned();
+  planned.begin();
+  return planned;
+};
+const readWith = (value: string, sources = new Map<string, Record<string, Value>>(), planned = new Planned()) =>
+  resolverWith(new ScopeManager(), planned, sources).resolveValue(written(value), state, context);
+const read = (value: string) => readWith(value);
+const source = (value: Value) => new Map([['src.s', { v: value }]]);
+const n = (text: string) => ExactNumber.parse(text);
 
 describe('ReferenceResolver', () => {
   it.each([
@@ -127,6 +141,113 @@ describe('ReferenceResolver', () => {
     expect(resolverWith(new ScopeManager(), planned).resolveValue(list(str('a'), template('x', reference('resource', 'later', 'id'))), state, context)).toEqual(
       valueOf(types.tuple([types.string, types.string]), ['a', UNKNOWN])
     );
+  });
+
+  describe('a for expression', () => {
+    it('reads the body once for each item of a tuple, with its index as the key', () => {
+      expect(read('[for i, s in ["a", "b"] : "${i}-${s}"]')).toEqual(valueOf(types.tuple([types.string, types.string]), ['0-a', '1-b']));
+    });
+
+    it('gives each item the type its body has', () => {
+      expect(read('[for i, s in ["a", 1] : s]')).toEqual(valueOf(types.tuple([types.string, types.number]), ['a', n('1')]));
+    });
+
+    it('gives an index as a number', () => {
+      expect(read('[for i, s in ["a"] : i]')).toEqual(valueOf(types.tuple([types.number]), [n('0')]));
+    });
+
+    it('reads a list of a type, each item of that type', () => {
+      expect(readWith('[for s in data.src.s.v : s]', source(valueOf(types.list(types.bool), [true, false])))).toEqual(
+        valueOf(types.tuple([types.bool, types.bool]), [true, false])
+      );
+    });
+
+    it('gives a member of a set as its key and its value', () => {
+      expect(readWith('[for k, v in data.src.s.v : "${k}${v}"]', source(valueOf(types.set(types.string), ['a', 'b'])))).toEqual(
+        valueOf(types.tuple([types.string, types.string]), ['aa', 'bb'])
+      );
+    });
+
+    it('reads an object by its keys in order, however they were written', () => {
+      expect(read('[for k, v in { b = 1, "1" = 2, a = 3 } : "${k}=${v}"]').data).toEqual(['1=2', 'a=3', 'b=1']);
+    });
+
+    it('reads a map by its keys, each value of the type the map holds', () => {
+      expect(readWith('[for v in data.src.s.v : v]', source(valueOf(types.map(types.string), { y: '2', x: '1' })))).toEqual(
+        valueOf(types.tuple([types.string, types.string]), ['1', '2'])
+      );
+    });
+
+    it('reads the steps into an item', () => {
+      expect(read('[for o in [{ p = ["x", "y"] }] : o.p[1]]').data).toEqual(['y']);
+    });
+
+    it('reads a for inside the body of another, with the names of both', () => {
+      expect(read('[for a in [["x", "y"], ["z"]] : [for b in a : "${b}${length(a)}"]]').data).toEqual([['x2', 'y2'], ['z1']]);
+    });
+
+    it.each([
+      ['a list', '[for s in ["a"] : [s]]', valueOf(types.tuple([types.tuple([types.string])]), [['a']])],
+      ['a map', '[for s in ["a"] : { k = s }]', valueOf(types.tuple([types.object({ k: types.string })]), [{ k: 'a' }])],
+      ['one interpolation alone, with its type', '[for s in [1] : "${s}"]', valueOf(types.tuple([types.number]), [n('1')])],
+    ])('reads a name the for gives inside %s in its body', (_, value, expected) => {
+      expect(read(value)).toEqual(expected);
+    });
+
+    it('gives an empty tuple for an empty collection', () => {
+      expect(read('[for s in [] : s]')).toEqual(valueOf(types.tuple([]), []));
+    });
+
+    it('refuses a step an item does not have, where the step is written', () => {
+      expect(() => read('[for o in [{ p = "x" }] : o.q]')).toThrow(new ConfigError('o has no key "q"', atColumn(48)));
+    });
+
+    it('refuses to join an item that has no text, naming it as written', () => {
+      expect(() => read('[for s in [["a"]] : "x${s}"]')).toThrow(new ConfigError('s is a tuple and cannot be joined into a string', atColumn(46)));
+    });
+
+    it.each([
+      ['null', 'null', 'null'],
+      ['a string', '"ab"', 'a string'],
+      ['a number', '1', 'a number'],
+      ['a boolean', 'true', 'a boolean'],
+    ])('refuses %s as the collection, where it is written', (_, collection, described) => {
+      expect(() => read(`[for s in ${collection} : s]`)).toThrow(new ConfigError(`A for goes over a list, a tuple, a set, a map or an object, not ${described}`, atColumn(32)));
+    });
+
+    it('refuses a null of a type it could go over', () => {
+      expect(() => readWith('[for s in data.src.s.v : s]', source(valueOf(types.list(types.string), null)))).toThrow(
+        new ConfigError('A for goes over a list, a tuple, a set, a map or an object, not null', atColumn(32))
+      );
+    });
+
+    it('leaves the whole for to the apply while neither its collection nor its type is known', () => {
+      expect(() => readWith('[for s in resource.later.ids : s]', new Map(), planning())).toThrow(UnresolvedReferenceError);
+    });
+
+    it('refuses a collection not known yet whose type it cannot go over, while planning', () => {
+      expect(() => readWith('[for s in data.src.s.v : s]', source(valueOf(types.string, UNKNOWN)), planning())).toThrow(
+        new ConfigError('A for goes over a list, a tuple, a set, a map or an object, not a string known only after apply', atColumn(32))
+      );
+    });
+
+    it('reads an item not known yet as unknown on its own while planning', () => {
+      expect(readWith('[for s in ["a", resource.later.id] : "x-${s}"]', new Map(), planning())).toEqual(valueOf(types.tuple([types.string, types.string]), ['x-a', UNKNOWN]));
+    });
+
+    // What it gives is a tuple, whatever type the collection has.
+    it('leaves the whole for to the apply while its list is not known, with no type for what it gives', () => {
+      expect(() => readWith('[for s in data.src.s.v : s]', source(valueOf(types.list(types.string), UNKNOWN)), planning())).toThrow(
+        expect.objectContaining({ name: 'UnresolvedReferenceError', type: types.dynamic })
+      );
+    });
+
+    // The member to come may sort before the others, which would move every item the plan showed.
+    it('leaves the whole for to the apply while a member of its set is not known', () => {
+      expect(() => readWith('[for s in data.src.s.v : s]', source(valueOf(types.set(types.string), ['a', UNKNOWN])), planning())).toThrow(
+        expect.objectContaining({ message: 'The set a for goes over has a member known only after apply, so it has no order yet', type: types.dynamic })
+      );
+    });
   });
 
   // Every instance of a module reads the values declared once for it, and the resources and outputs of its own instance.

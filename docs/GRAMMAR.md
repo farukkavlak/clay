@@ -27,6 +27,7 @@ in a directory; a module is another directory with its own `main.clay`.
 | `LPAREN`          | `(`                                   | Opens a call's arguments                                                |
 | `RPAREN`          | `)`                                   |                                                                         |
 | `COMMA`           | `,`                                   |                                                                         |
+| `COLON`           | `:`                                   | Only in a for expression                                                |
 | `ASSIGN`          | `=`                                   |                                                                         |
 | `DOT`             | `.`                                   |                                                                         |
 | `EOF`             |                                       | Ends every token stream                                                 |
@@ -49,7 +50,8 @@ it opens.
 
 There are no keywords. `resource`, `data`, `variable`, `output` and `module` start a
 block only at the top level; anywhere else they are ordinary identifiers, so
-`data = "x"` inside a block is an attribute.
+`data = "x"` inside a block is an attribute. `for` right after `[`, and `in` after its
+names, start a for expression; `[for.a.id]` is still a list holding a reference.
 
 ## Blocks
 
@@ -94,7 +96,7 @@ absolute path, is refused where it is written.
 ## Values
 
 ```
-value   = string | heredoc | [ "-" ] NUMBER | BOOLEAN | NULL | reference | call | list | map
+value   = string | heredoc | [ "-" ] NUMBER | BOOLEAN | NULL | reference | call | list | for | map
 string  = OQUOTE { QUOTED_LIT | TEMPLATE_INTERP ( reference | call ) TEMPLATE_END } CQUOTE
 heredoc = OHEREDOC { STRING_LIT | TEMPLATE_INTERP ( reference | call ) TEMPLATE_END } CHEREDOC
 list    = "[" [ value { "," value } [ "," ] ] "]"
@@ -221,6 +223,38 @@ known yet keeps the members it knows.
 A name no function has, or a call with another number of arguments than the function
 takes, is refused where the call is written, in a module nothing is made of too.
 
+### For
+
+```
+for = "[" "for" IDENTIFIER [ "," IDENTIFIER ] "in" value ":" value "]"
+```
+
+`[for n in var.names : "app-${n}"]` reads the body after the `:` once for each item of
+the collection, and gives a tuple of what each comes to. With one name, the name is the
+item. With two, the first is its key and the second its value:
+
+| Collection         | Key                 | Value      |
+| ------------------ | ------------------- | ---------- |
+| A list or a tuple  | The index, a number | The item   |
+| A set              | The member          | The member |
+| A map or an object | The key, a string   | Its value  |
+
+A map or an object is read in the order of its keys. A string, a number, a boolean or
+`null` is refused where the collection is written, at plan too when the value is known
+only after apply but its type is known.
+
+A name the for gives is read in its body only, with steps after it as a reference's:
+`[for f in var.files : f.path]`. In the collection, and after the `]`, the same name is a
+reference again. A name cannot be one a reference starts with, `var`, `data`, `module`,
+`count`, `each` or `path`, nor the type of a resource in the same file, nor one a for
+around it gives; the key and the value need names of their own. Terraform lets such a
+name hide what it spells; Clay refuses it where it is written.
+
+An item not known until apply is not known in what the for gives either, and the rest is
+known. A collection not known at all leaves the whole for to the apply, and so does a set
+with a member not known yet: that member may sort before the others and move every item.
+A for over a constant may be a variable's default.
+
 ### Count
 
 A resource with `count = n` makes `n` instances, addressed `type.name[0]` to
@@ -315,11 +349,11 @@ resource; `clay state mv` keeps each resource.
 
 ### Interpolation
 
-A `${...}` in a string holds one reference or one call and nothing else, and is read as
-the file is parsed: one that never closes, is empty or holds anything else is refused
-where it is written. A string with one is a `Template` node, its text and what its
-interpolations read in order, and each of those keeps its own position. A comment cannot
-sit inside one, and a map key is plain text and cannot hold one.
+A `${...}` in a string holds one reference, one call or one name a for gives, and nothing
+else, and is read as the file is parsed: one that never closes, is empty or holds anything
+else is refused where it is written. A string with one is a `Template` node, its text and
+what its interpolations read in order, and each of those keeps its own position. A comment
+cannot sit inside one, and a map key is plain text and cannot hold one.
 
 A string that is one `${...}` and nothing else is the value it reads, with its type:
 `length = "${var.n}"` is a number if `var.n` is one. Anything else, text around it
@@ -340,8 +374,8 @@ line may be the last in the file with no line break after it. Its value is the l
 between, each with its line break.
 
 Its text is read as written: no escapes, so `\n` stays two characters, and `#` or `"` is
-text. `${...}` reads a reference or a call as in a quoted string, and `$${` is the text
-`${`.
+text. `${...}` reads a reference, a call or a name a for gives as in a quoted string, and
+`$${` is the text `${`.
 
 `<<-` finds the smallest indent among the lines with text on them and takes it off every
 such line, so the text can sit at the block's indent. A tab counts as one character, as a
@@ -364,18 +398,24 @@ interface Position {
 
 type AttributeValue =
   | { type: 'String'; value: string; position: Position }
-  | { type: 'Template'; value: (string | Reference | Call)[]; position: Position }
+  | { type: 'Template'; value: (string | Reference | Call | Bound)[]; position: Position }
   | { type: 'Number'; value: ExactNumber; position: Position }
   | { type: 'Boolean'; value: boolean; position: Position }
   | { type: 'Null'; position: Position }
   | Reference
   | Call
+  | Bound
+  | For
   | { type: 'List'; value: AttributeValue[]; position: Position }
   | { type: 'Map'; value: Record<string, AttributeValue>; position: Position };
 
 type Reference = { type: 'Reference'; value: (string | number)[]; position: Position };
 
 type Call = { type: 'Call'; name: string; args: AttributeValue[]; path: (string | number)[]; position: Position };
+
+type Bound = { type: 'Bound'; value: (string | number)[]; position: Position };
+
+type For = { type: 'For'; keyName?: string; valueName: string; collection: AttributeValue; body: AttributeValue; position: Position };
 
 interface ResourceBlock {
   type: 'Resource';
@@ -425,7 +465,8 @@ type Program = Statement[];
 A `Reference` holds its parts in order, a key as a string and an index as a number:
 `local_file.a.tags["env"]` is `['local_file', 'a', 'tags', 'env']` and `var.names[0]` is
 `['var', 'names', 0]`. A `Call` holds its arguments in order, and in `path` the steps
-written after it, as a reference holds its own.
+written after it, as a reference holds its own. A `Bound` is a name a for gives, read in
+its body, with its steps as a reference holds them.
 
 ## Errors
 
@@ -436,7 +477,8 @@ throws the same for a character it does not know, a string not closed on its lin
 
 ## Not in the language
 
-- Operators and `for` expressions; a value is a literal, a reference or a function call
+- Operators; a value is a literal, a reference, a function call or a for expression
+- A for that makes a map, `{for k, v in m : k => v}`, and one that filters with `if`
 - `count` or `for_each` on a data source, `depends_on`, lifecycle blocks, provisioners
 - Nested blocks inside a block
 - Any file other than `main.clay`

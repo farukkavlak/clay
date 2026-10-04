@@ -1,9 +1,11 @@
 import { Address, ExactNumber, ModuleAddress, Schema, State, types, UNKNOWN } from '@clay/contracts';
 import {
   AttributeValue,
+  BoundNode,
   CallNode,
   ConfigError,
   EachReference,
+  ForNode,
   ParsedReference,
   PathReference,
   parseReference,
@@ -15,13 +17,14 @@ import {
   TemplatePart,
 } from '@clay/parser';
 
+import { checkCollection, forItems, ForItem } from '../forItems';
 import { Instances } from '../Instances';
 import { functionCalled } from '../functions';
 import { Context, instanceKeyOf, ModuleCall, moduleOf, scopeOf } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
 import { Planned } from '../Planned';
 import { ScopeManager } from '../scope/ScopeManager';
-import { described, Value, valueOf } from '../Value';
+import { described, unordered, Value, valueOf } from '../Value';
 import { DataSourceResolver } from './DataSourceResolver';
 import { COUNT_INDEX_OUTSIDE, eachOutside } from './instance';
 import { ModuleOutputResolver } from './ModuleOutputResolver';
@@ -35,6 +38,18 @@ const LITERALS = { String: types.string, Number: types.number, Boolean: types.bo
 /** A literal's value with its type; `null` is null of no type yet. */
 function literal(node: Extract<AttributeValue, { type: 'String' | 'Number' | 'Boolean' | 'Null' }>): Value {
   return node.type === 'Null' ? valueOf(types.dynamic, null) : valueOf(LITERALS[node.type], node.value);
+}
+
+/** The values the for expressions around a value give their names, for the item each is reading. */
+type Given = ReadonlyMap<string, Value>;
+
+const NOTHING_GIVEN: Given = new Map();
+
+/** The names `node` gives, standing for `item`, beside those the for expressions around it give. */
+function withNames(given: Given, node: ForNode, [key, value]: ForItem): Given {
+  const names = new Map(given).set(node.valueName, value);
+
+  return node.keyName === undefined ? names : names.set(node.keyName, key);
 }
 
 /** The instance of a resource or of a module being made names its index; anything else read outside one has none. */
@@ -81,10 +96,47 @@ export class ReferenceResolver {
   }
 
   /** The function is found before its argument is read, so a name no function has is refused whatever the argument is. */
-  private resolveCall(node: CallNode, state: State, context?: Context): Value {
-    const result = functionCalled(node)(this.resolveItem(node.args[0], state, context));
+  private resolveCall(node: CallNode, state: State, context: Context | undefined, given: Given): Value {
+    const result = functionCalled(node)(this.resolveItem(node.args[0], state, context, given));
 
     return readPath(result, spellNamed({ ...node, path: [] }), node.path, node.position);
+  }
+
+  /** The parser reads a name as one a for gives only inside that for, so the for has given it a value. */
+  private resolveBound(node: BoundNode, given: Given): Value {
+    const [name, ...path] = node.value;
+
+    return readPath(given.get(String(name))!, String(name), path, node.position);
+  }
+
+  /** The body read once for each item, a tuple of what each comes to. */
+  private resolveFor(node: ForNode, state: State, context: Context | undefined, given: Given): Value {
+    const items = forItems(this.collectionOf(node, state, context, given), node.collection.position);
+    const values = items.map((item) => this.resolveItem(node.body, state, context, withNames(given, node, item)));
+
+    return valueOf(
+      types.tuple(values.map((value) => value.type)),
+      values.map((value) => value.data)
+    );
+  }
+
+  /**
+   * How many items a collection not known yet has is not known either, nor the order of a set with a member not known yet, so the for is left to the apply.
+   * A collection not known yet whose type the for cannot go over is refused now, as a known one is.
+   */
+  private collectionOf(node: ForNode, state: State, context: Context | undefined, given: Given): Value {
+    let collection: Value;
+    try {
+      collection = this.resolveIn(node.collection, state, context, given);
+    } catch (error) {
+      if (!(error instanceof UnresolvedReferenceError)) throw error;
+      checkCollection(valueOf(error.type, UNKNOWN), node.collection.position);
+      // A for gives a tuple, whatever type its collection has.
+      throw new UnresolvedReferenceError(error.message);
+    }
+
+    if (unordered(collection)) throw new UnresolvedReferenceError('The set a for goes over has a member known only after apply, so it has no order yet');
+    return collection;
   }
 
   /** What the reference names, and the steps still to take into it. */
@@ -125,19 +177,25 @@ export class ReferenceResolver {
     return Object.fromEntries(Object.entries(attributes).map(([name, value]) => [name, this.resolveValue(value, state, context)]));
   }
 
-  /** A literal list is a tuple and a literal map an object, each item with the type it has. */
   resolveValue(node: AttributeValue, state: State, context?: Context): Value {
+    return this.resolveIn(node, state, context, NOTHING_GIVEN);
+  }
+
+  /** A literal list is a tuple and a literal map an object, each item with the type it has. */
+  private resolveIn(node: AttributeValue, state: State, context: Context | undefined, given: Given): Value {
     if (node.type === 'Reference') return this.resolve(node, state, context);
-    if (node.type === 'Call') return this.resolveCall(node, state, context);
-    if (node.type === 'Template') return this.resolveTemplate(node.value, state, context);
-    if (node.type === 'List') return this.resolveList(node.value, state, context);
-    if (node.type === 'Map') return this.resolveMap(node.value, state, context);
+    if (node.type === 'Bound') return this.resolveBound(node, given);
+    if (node.type === 'Call') return this.resolveCall(node, state, context, given);
+    if (node.type === 'For') return this.resolveFor(node, state, context, given);
+    if (node.type === 'Template') return this.resolveTemplate(node.value, state, context, given);
+    if (node.type === 'List') return this.resolveList(node.value, state, context, given);
+    if (node.type === 'Map') return this.resolveMap(node.value, state, context, given);
 
     return literal(node);
   }
 
-  private resolveList(items: AttributeValue[], state: State, context?: Context): Value {
-    const values = items.map((item) => this.resolveItem(item, state, context));
+  private resolveList(items: AttributeValue[], state: State, context: Context | undefined, given: Given): Value {
+    const values = items.map((item) => this.resolveItem(item, state, context, given));
 
     return valueOf(
       types.tuple(values.map((item) => item.type)),
@@ -145,16 +203,16 @@ export class ReferenceResolver {
     );
   }
 
-  private resolveMap(entries: Record<string, AttributeValue>, state: State, context?: Context): Value {
-    const values = Object.entries(entries).map(([key, item]) => [key, this.resolveItem(item, state, context)] as const);
+  private resolveMap(entries: Record<string, AttributeValue>, state: State, context: Context | undefined, given: Given): Value {
+    const values = Object.entries(entries).map(([key, item]) => [key, this.resolveItem(item, state, context, given)] as const);
 
     return valueOf(types.object(Object.fromEntries(values.map(([key, item]) => [key, item.type]))), Object.fromEntries(values.map(([key, item]) => [key, item.data])));
   }
 
   /** At plan time an item only an apply can read is UNKNOWN on its own, of the type it will have, so the list or map around it keeps what is known. */
-  private resolveItem(value: AttributeValue, state: State, context?: Context): Value {
+  private resolveItem(value: AttributeValue, state: State, context: Context | undefined, given: Given): Value {
     try {
-      return this.resolveValue(value, state, context);
+      return this.resolveIn(value, state, context, given);
     } catch (error) {
       if (!(error instanceof UnresolvedReferenceError && this.planned.isPlanning())) throw error;
       return valueOf(error.type, UNKNOWN);
@@ -162,12 +220,12 @@ export class ReferenceResolver {
   }
 
   /** A template that is one interpolation is the value itself, type and all; text around it makes it a string, which is not known while a part is not. */
-  private resolveTemplate(parts: TemplatePart[], state: State, context?: Context): Value {
+  private resolveTemplate(parts: TemplatePart[], state: State, context: Context | undefined, given: Given): Value {
     const [first] = parts;
-    if (parts.length === 1 && typeof first !== 'string') return this.resolveValue(first, state, context);
+    if (parts.length === 1 && typeof first !== 'string') return this.resolveIn(first, state, context, given);
 
     try {
-      return valueOf(types.string, parts.map((part) => (typeof part === 'string' ? part : this.joined(part, state, context))).join(''));
+      return valueOf(types.string, parts.map((part) => (typeof part === 'string' ? part : this.joined(part, state, context, given))).join(''));
     } catch (error) {
       if (!(error instanceof UnresolvedReferenceError)) throw error;
       throw new UnresolvedReferenceError(error.message, types.string);
@@ -175,8 +233,8 @@ export class ReferenceResolver {
   }
 
   /** Only a string, a number or a boolean has a text to join. */
-  private joined(part: ReferenceNode | CallNode, state: State, context?: Context): string {
-    const resolved = this.resolveValue(part, state, context);
+  private joined(part: ReferenceNode | CallNode | BoundNode, state: State, context: Context | undefined, given: Given): string {
+    const resolved = this.resolveIn(part, state, context, given);
     const { kind } = resolved.type;
     if (resolved.data === null || (kind !== 'string' && kind !== 'number' && kind !== 'bool'))
       throw new ConfigError(`${spellNamed(part)} is ${described(resolved)} and cannot be joined into a string`, part.position);

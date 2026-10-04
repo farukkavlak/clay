@@ -1,7 +1,7 @@
 import { ExactNumber } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { callsIn, CONFIG_FILE, ModuleBlock, ReferenceNode, ResourceBlock, spellNamed, VariableBlock } from '../src/ast';
+import { BoundNode, callsIn, CONFIG_FILE, ModuleBlock, namedIn, ReferenceNode, ResourceBlock, spellNamed, VariableBlock } from '../src/ast';
 import { ConfigError } from '../src/ConfigError';
 import { Lexer } from '../src/Lexer';
 import { Parser } from '../src/Parser';
@@ -704,6 +704,125 @@ describe('Clay Parser', () => {
       ['a reference as it is written', 'var.m["a.b"][0]', 'var.m["a.b"][0]'],
     ])('spells %s', (_, written, spelled) => {
       expect(spellNamed(valueOf(written) as ReferenceNode)).toBe(spelled);
+    });
+  });
+
+  describe('For expressions', () => {
+    const bound = (parts: (string | number)[], column: number, line = 1) => ({ type: 'Bound', value: parts, position: at(line, column) });
+
+    it('reads a for over a collection, with the name it gives each item read in its body', () => {
+      expect(valueOf('[for n in var.names : n]')).toEqual({
+        type: 'For',
+        valueName: 'n',
+        collection: reference(['var', 'names'], 34),
+        body: bound(['n'], 46),
+        position: at(1, 24),
+      });
+    });
+
+    it('reads a key name before the value name, both read in the body', () => {
+      expect(valueOf('[for i, n in var.names : "${i}-${n}"]')).toMatchObject({
+        type: 'For',
+        keyName: 'i',
+        valueName: 'n',
+        body: { type: 'Template', value: [bound(['i'], 52), '-', bound(['n'], 57)] },
+      });
+    });
+
+    it('reads the steps written after a name the for gives', () => {
+      expect(valueOf('[for f in var.files : f.paths["a.b"][0]]')).toMatchObject({ body: bound(['f', 'paths', 'a.b', 0], 46) });
+    });
+
+    it('reads a name it does not give in its body as a reference', () => {
+      expect(valueOf('[for n in var.names : local_file.a.id]')).toMatchObject({ body: reference(['local_file', 'a', 'id'], 46) });
+    });
+
+    it('reads its own name in its collection as a reference, since it names the items only in the body', () => {
+      expect(valueOf('[for n in n.a.id : n]')).toMatchObject({ collection: reference(['n', 'a', 'id'], 34) });
+    });
+
+    it('reads a name it gives as a reference again after the for', () => {
+      expect(valueOf('[[for n in var.x : n], n.a.id]')).toMatchObject({ value: [{ type: 'For' }, reference(['n', 'a', 'id'], 47)] });
+    });
+
+    it('reads the names of a for around it in the body of one inside it', () => {
+      expect(valueOf('[for a in var.l : [for b in a : "${a}${b}"]]')).toMatchObject({
+        body: {
+          type: 'For',
+          collection: bound(['a'], 52),
+          body: { type: 'Template', value: [bound(['a'], 59), bound(['b'], 63)] },
+        },
+      });
+    });
+
+    it('reads a call in the body, with a name the for gives as its argument', () => {
+      expect(valueOf('[for n in var.l : length(n)]')).toMatchObject({ body: { type: 'Call', name: 'length', args: [bound(['n'], 49)] } });
+    });
+
+    it('reads a for written over several lines', () => {
+      expect(valueOf('[\n  for n in var.names :\n  n\n]')).toMatchObject({ type: 'For', body: bound(['n'], 3, 3) });
+    });
+
+    it('keeps a list whose first item is a reference into a resource named for a list', () => {
+      expect(valueOf('[for.a.id]')).toEqual({ type: 'List', value: [reference(['for', 'a', 'id'], 25)], position: at(1, 24) });
+    });
+
+    it('finds the references and calls in its collection and its body, and not the names it gives', () => {
+      const found = namedIn(valueOf('[for n in var.x : "${n}${length(var.y)}"]'));
+
+      expect(found.map((node) => spellNamed(node))).toEqual(['var.x', 'length(...)', 'var.y']);
+    });
+
+    it('spells a name the for gives as it is written', () => {
+      expect(spellNamed(bound(['f', 'paths', 'a.b', 0], 1) as BoundNode)).toBe('f.paths["a.b"][0]');
+    });
+
+    it('takes a for over a constant as a variable default', () => {
+      const [variable] = makeParser('variable "v" { default = [for n in ["a"] : n] }').parse() as VariableBlock[];
+
+      expect(variable.attributes.default).toMatchObject({ type: 'For', collection: { type: 'List' } });
+    });
+
+    it('refuses a for over a variable as a variable default, where the variable is read', () => {
+      const error = errorOf('variable "v" { default = [for n in var.x : n] }');
+
+      expect(error.message).toBe("A variable's default is a constant, so it cannot hold var.x");
+      expect(error.position).toEqual(at(1, 36));
+    });
+
+    it.each([
+      ['a for with no name', '[for 1 in var.x : 1]', "Expect a name after 'for'.", at(1, 29)],
+      ['a for with no value name after its comma', '[for i, 1 in var.x : i]', "Expect a name after ','.", at(1, 32)],
+      ['a for with no in', '[for n of var.x : n]', "Expect 'in' after the names in a for expression.", at(1, 31)],
+      ['a for with no colon', '[for n in var.x n]', "Expect ':' after the collection in a for expression.", at(1, 40)],
+      ['a for with more than its body', '[for n in var.x : n n]', "Expect ']' after the for expression.", at(1, 44)],
+      ['a for that filters with if', '[for n in var.x : n if n]', "Expect ']' after the for expression.", at(1, 44)],
+      ['a for never closed', '[for n in var.x : n', "Expect ']' after the for expression.", at(1, 44)],
+      ['a key and a value of one name', '[for i, i in var.x : i]', 'The key and the value of a for need names of their own', at(1, 32)],
+      ['a name a for around it gives', '[for n in var.x : [for n in n : n]]', '"n" is named by a for around this one already', at(1, 47)],
+      ['a colon outside a for', ':', 'Unexpected value: :', at(1, 24)],
+    ])('refuses %s where it is written', (_, written, message, position) => {
+      const error = errorOf(`resource "t" "n" { v = ${written} }`);
+
+      expect(error.message).toBe(message);
+      expect(error.position).toEqual(position);
+    });
+
+    it.each(['var', 'data', 'module', 'count', 'each', 'path'])('refuses "%s" as a name a for gives, which a reference reads as something else', (word) => {
+      const error = errorOf(`resource "t" "n" { v = [for ${word} in ["a"] : ${word}] }`);
+
+      expect(error.message).toBe(`"${word}" cannot name an item in a for: a reference reads "${word}." as something else`);
+      expect(error.position).toEqual(at(1, 29));
+    });
+
+    it.each([
+      ['declared before the for', 'resource "local_file" "a" {}\noutput "o" { value = [for local_file in ["a"] : local_file] }', at(2, 27)],
+      ['declared after the for', 'output "o" { value = [for i, local_file in ["a"] : i] }\nresource "local_file" "a" {}', at(1, 30)],
+    ])('refuses the type of a resource %s as a name a for gives', (_, input, position) => {
+      const error = errorOf(input);
+
+      expect(error.message).toBe('"local_file" cannot name an item in a for: a reference reads "local_file." as a resource of that type');
+      expect(error.position).toEqual(position);
     });
   });
 
