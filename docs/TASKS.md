@@ -48,11 +48,17 @@ change each.
 - [x] An integer above 2^53 is rounded in silence: `12345678901234567890` plans as
       `12345678901234567000`. A number is kept exactly from the configuration to state,
       a plan file and a provider, as Terraform keeps it
+- [ ] A reference in a `variable` default that a module call gives a value in place of
+      is never checked. `default = var.nope` in a module called with `x = "given"` is
+      valid to `clay validate` and plans, while the same module called without `x` is
+      refused with `variable "nope" is not defined`. The graph keeps the caller's input
+      under the variable's key and drops the default, so nothing reads it. A function
+      call there is checked already
 
 ## 1. Language
 
-The parser takes literals and references, with no expressions yet. A real configuration
-hits each of these early.
+The parser takes literals, references and function calls, with no operators yet. A real
+configuration hits each of these early.
 
 - [x] Negative and decimal numbers, with an exponent, as HCL writes them; the minus is a
       token of its own, so a number never swallows the minus of a subtraction
@@ -101,8 +107,11 @@ hits each of these early.
       relative to the root, where `clay` runs, so a plan or a state reads the same on
       another machine
 - [ ] `path.cwd`, once Clay can run from a directory other than the root
-- [ ] `tolist`, `toset` and `length`, and a `for` expression. A set has no index, so
-      today no configuration can read one of its members. Terraform: `tolist(x)[0]`
+- [x] A function is called by its name, `length(var.names)`, as a value or inside
+      `${...}`. `length` counts the items of a list, a set or a map and the characters of
+      a string. A name no function has is refused where it is written
+- [ ] `tolist` and `toset`, and a `for` expression. A set has no index, so today no
+      configuration can read one of its members. Terraform: `tolist(x)[0]`
 - [ ] A variable names its type: `variable "x" { type = set(string) }`. A module input
       takes whatever it is given today, so a list passed where a set is meant keeps its
       order and its duplicates

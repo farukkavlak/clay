@@ -1,4 +1,4 @@
-import { ExactNumber, isRecord, isUnknown, own, Type, typeAt, types } from '@clay/contracts';
+import { containsUnknown, ExactNumber, isRecord, isUnknown, own, Type, typeAt, types } from '@clay/contracts';
 
 /**
  * A value with its type. `data` is plain: a string, an `ExactNumber`, a boolean or null; an array for a list, a set or a tuple; a record for a map or an
@@ -31,6 +31,11 @@ export function child(value: Value, step: string | number): Value {
   const type = typeAt(value.type, step);
 
   return valueOf(type.kind === 'dynamic' ? inferred(data) : type, data);
+}
+
+/** A set with a member not known yet has no order or size until the apply. */
+export function unordered(value: Value): boolean {
+  return value.type.kind === 'set' && Array.isArray(value.data) && value.data.some((member) => containsUnknown(member));
 }
 
 const ARTICLES: Record<Type['kind'], string> = {

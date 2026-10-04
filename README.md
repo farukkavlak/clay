@@ -93,6 +93,10 @@ Reaching inside a module (`module.m.local_file.a`) is not allowed; a module spea
 through its outputs. `path.module` is the directory of the module it is written in,
 relative to the root, so `"${path.module}/index.html"` names a file next to the module.
 
+A function is called by its name: `count = length(var.names)`, or `"${length(var.names)}"`
+inside a string. `length` counts the items of a list, a set or a map, and the characters
+of a string. It is the only function yet.
+
 `docs/GRAMMAR.md` has the full grammar.
 
 ## Commands

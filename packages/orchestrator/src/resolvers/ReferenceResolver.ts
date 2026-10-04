@@ -1,6 +1,7 @@
 import { Address, ExactNumber, ModuleAddress, Schema, State, types, UNKNOWN } from '@clay/contracts';
 import {
   AttributeValue,
+  CallNode,
   ConfigError,
   EachReference,
   ParsedReference,
@@ -8,12 +9,14 @@ import {
   parseReference,
   Position,
   ReferenceNode,
+  spellNamed,
   spellReference,
   Step,
   TemplatePart,
 } from '@clay/parser';
 
 import { Instances } from '../Instances';
+import { functionCalled } from '../functions';
 import { Context, instanceKeyOf, ModuleCall, moduleOf, scopeOf } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
 import { Planned } from '../Planned';
@@ -74,7 +77,14 @@ export class ReferenceResolver {
     const { value, path } = this.resolveTarget(parseReference(node.value), state, context ?? ModuleAddress.root, node.position);
     const target = node.value.slice(0, node.value.length - path.length);
 
-    return readPath(value, target, path, node.position);
+    return readPath(value, spellReference(target), path, node.position);
+  }
+
+  /** The function is found before its argument is read, so a name no function has is refused whatever the argument is. */
+  private resolveCall(node: CallNode, state: State, context?: Context): Value {
+    const result = functionCalled(node)(this.resolveItem(node.args[0], state, context));
+
+    return readPath(result, spellNamed({ ...node, path: [] }), node.path, node.position);
   }
 
   /** What the reference names, and the steps still to take into it. */
@@ -118,6 +128,7 @@ export class ReferenceResolver {
   /** A literal list is a tuple and a literal map an object, each item with the type it has. */
   resolveValue(node: AttributeValue, state: State, context?: Context): Value {
     if (node.type === 'Reference') return this.resolve(node, state, context);
+    if (node.type === 'Call') return this.resolveCall(node, state, context);
     if (node.type === 'Template') return this.resolveTemplate(node.value, state, context);
     if (node.type === 'List') return this.resolveList(node.value, state, context);
     if (node.type === 'Map') return this.resolveMap(node.value, state, context);
@@ -153,7 +164,7 @@ export class ReferenceResolver {
   /** A template that is one interpolation is the value itself, type and all; text around it makes it a string, which is not known while a part is not. */
   private resolveTemplate(parts: TemplatePart[], state: State, context?: Context): Value {
     const [first] = parts;
-    if (parts.length === 1 && typeof first !== 'string') return this.resolve(first, state, context);
+    if (parts.length === 1 && typeof first !== 'string') return this.resolveValue(first, state, context);
 
     try {
       return valueOf(types.string, parts.map((part) => (typeof part === 'string' ? part : this.joined(part, state, context))).join(''));
@@ -164,11 +175,11 @@ export class ReferenceResolver {
   }
 
   /** Only a string, a number or a boolean has a text to join. */
-  private joined(reference: ReferenceNode, state: State, context?: Context): string {
-    const resolved = this.resolve(reference, state, context);
+  private joined(part: ReferenceNode | CallNode, state: State, context?: Context): string {
+    const resolved = this.resolveValue(part, state, context);
     const { kind } = resolved.type;
     if (resolved.data === null || (kind !== 'string' && kind !== 'number' && kind !== 'bool'))
-      throw new ConfigError(`${spellReference(reference.value)} is ${described(resolved)} and cannot be joined into a string`, reference.position);
+      throw new ConfigError(`${spellNamed(part)} is ${described(resolved)} and cannot be joined into a string`, part.position);
 
     return String(resolved.data);
   }

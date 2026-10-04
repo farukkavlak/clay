@@ -24,6 +24,8 @@ in a directory; a module is another directory with its own `main.clay`.
 | `RBRACE`          | `}`                                   |                                                                         |
 | `LBRACKET`        | `[`                                   |                                                                         |
 | `RBRACKET`        | `]`                                   |                                                                         |
+| `LPAREN`          | `(`                                   | Opens a call's arguments                                                |
+| `RPAREN`          | `)`                                   |                                                                         |
 | `COMMA`           | `,`                                   |                                                                         |
 | `ASSIGN`          | `=`                                   |                                                                         |
 | `DOT`             | `.`                                   |                                                                         |
@@ -40,7 +42,8 @@ reads a key, and a comment there is refused. A string still open at the end of i
 is refused where it opens; write `\n` for a line break, or use a heredoc. When a `${` is
 open too, the first open `${` is named: a `}` left out opens a string at the quote meant
 to close, and that looks the same as a key not closed on its line, so the message names
-both. Inside a `${` a line break is whitespace. A heredoc is read the same
+both. Inside a `${` a line break is whitespace, and a `{` opens a map, so the `}` that
+closes the map does not close the `${`. A heredoc is read the same
 way, a line at a time, until its closing line; one still open at the end is refused where
 it opens.
 
@@ -91,9 +94,9 @@ absolute path, is refused where it is written.
 ## Values
 
 ```
-value   = string | heredoc | [ "-" ] NUMBER | BOOLEAN | NULL | reference | list | map
-string  = OQUOTE { QUOTED_LIT | TEMPLATE_INTERP reference TEMPLATE_END } CQUOTE
-heredoc = OHEREDOC { STRING_LIT | TEMPLATE_INTERP reference TEMPLATE_END } CHEREDOC
+value   = string | heredoc | [ "-" ] NUMBER | BOOLEAN | NULL | reference | call | list | map
+string  = OQUOTE { QUOTED_LIT | TEMPLATE_INTERP ( reference | call ) TEMPLATE_END } CQUOTE
+heredoc = OHEREDOC { STRING_LIT | TEMPLATE_INTERP ( reference | call ) TEMPLATE_END } CHEREDOC
 list    = "[" [ value { "," value } [ "," ] ] "]"
 map     = "{" { key "=" value [ "," ] } "}"
 key     = IDENTIFIER | string
@@ -134,7 +137,8 @@ taken as a list, it is not known as a whole until apply, since it has no order y
 ### References
 
 ```
-reference = IDENTIFIER { "." IDENTIFIER | "[" ( NUMBER | string ) "]" }
+reference = IDENTIFIER { step }
+step      = "." IDENTIFIER | "[" ( NUMBER | string ) "]"
 ```
 
 A bare reference is a value on its own: `path = var.dir`. Inside a string it is written
@@ -175,6 +179,31 @@ The parts before that name what is read, so each is a name even when it is quote
 A module is read through its outputs, so `module.app.local_file.a` names an output
 called `local_file`, and is refused when the module has none. A module called with count
 or for_each is read one instance at a time: `module.app[0].url`, `module.app["eu"].url`.
+
+### Functions
+
+```
+call = IDENTIFIER "(" [ value { "," value } [ "," ] ] ")" { step }
+```
+
+A name with `(` after it calls a function; any other name starts a reference, so a
+resource type may be spelled as a function is. An argument is any value, a call too. The
+steps after the `)` read into what the function gives, as a reference's do.
+
+| Function        | Gives                                                                                          |
+| --------------- | ---------------------------------------------------------------------------------------------- |
+| `length(value)` | How many items a list, a tuple or a set holds, keys a map or an object, or characters a string |
+
+A character is what a reader counts as one: a letter with its accent, or an emoji made of
+several code points, is one. A number, a boolean or `null` is refused where the argument
+is written.
+
+A list or a map has its length while an item in it is not known until apply. A set with
+a member not known yet does not, since that member may turn out to be one the set already
+holds; its length is known at apply, and so is the length of a value not known at all.
+
+A name no function has, or a call with another number of arguments than the function
+takes, is refused where the call is written, in a module nothing is made of too.
 
 ### Count
 
@@ -270,14 +299,14 @@ resource; `clay state mv` keeps each resource.
 
 ### Interpolation
 
-A `${...}` in a string holds one reference and nothing else, and is read as the file is
-parsed: one that never closes, is empty or holds anything else is refused where it is
-written. A string with one is a `Template` node, its text and its references in order, and
-each reference keeps its own position. A comment cannot sit inside one, and a map key is
-plain text and cannot hold one.
+A `${...}` in a string holds one reference or one call and nothing else, and is read as
+the file is parsed: one that never closes, is empty or holds anything else is refused
+where it is written. A string with one is a `Template` node, its text and what its
+interpolations read in order, and each of those keeps its own position. A comment cannot
+sit inside one, and a map key is plain text and cannot hold one.
 
-A string that is one `${...}` and nothing else is the referenced value itself, with its
-type: `length = "${var.n}"` is a number if `var.n` is one. Anything else, text around it
+A string that is one `${...}` and nothing else is the value it reads, with its type:
+`length = "${var.n}"` is a number if `var.n` is one. Anything else, text around it
 or a second `${...}`, makes a string, and a list or map in such a string is an error.
 
 ### Heredoc
@@ -295,7 +324,8 @@ line may be the last in the file with no line break after it. Its value is the l
 between, each with its line break.
 
 Its text is read as written: no escapes, so `\n` stays two characters, and `#` or `"` is
-text. `${...}` reads a reference as in a quoted string, and `$${` is the text `${`.
+text. `${...}` reads a reference or a call as in a quoted string, and `$${` is the text
+`${`.
 
 `<<-` finds the smallest indent among the lines with text on them and takes it off every
 such line, so the text can sit at the block's indent. A tab counts as one character, as a
@@ -318,15 +348,18 @@ interface Position {
 
 type AttributeValue =
   | { type: 'String'; value: string; position: Position }
-  | { type: 'Template'; value: (string | Reference)[]; position: Position }
+  | { type: 'Template'; value: (string | Reference | Call)[]; position: Position }
   | { type: 'Number'; value: ExactNumber; position: Position }
   | { type: 'Boolean'; value: boolean; position: Position }
   | { type: 'Null'; position: Position }
   | Reference
+  | Call
   | { type: 'List'; value: AttributeValue[]; position: Position }
   | { type: 'Map'; value: Record<string, AttributeValue>; position: Position };
 
 type Reference = { type: 'Reference'; value: (string | number)[]; position: Position };
+
+type Call = { type: 'Call'; name: string; args: AttributeValue[]; path: (string | number)[]; position: Position };
 
 interface ResourceBlock {
   type: 'Resource';
@@ -375,7 +408,8 @@ type Program = Statement[];
 
 A `Reference` holds its parts in order, a key as a string and an index as a number:
 `local_file.a.tags["env"]` is `['local_file', 'a', 'tags', 'env']` and `var.names[0]` is
-`['var', 'names', 0]`.
+`['var', 'names', 0]`. A `Call` holds its arguments in order, and in `path` the steps
+written after it, as a reference holds its own.
 
 ## Errors
 
@@ -386,7 +420,7 @@ throws the same for a character it does not know, a string not closed on its lin
 
 ## Not in the language
 
-- Expressions, operators and functions; a value is a literal or a reference
+- Operators and `for` expressions; a value is a literal, a reference or a function call
 - `count` or `for_each` on a data source, `depends_on`, lifecycle blocks, provisioners
 - Nested blocks inside a block
 - Any file other than `main.clay`

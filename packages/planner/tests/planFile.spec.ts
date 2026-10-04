@@ -94,6 +94,7 @@ describe('reading a plan file', () => {
             tags: { type: 'List', value: [{ type: 'Map', value: { n: { type: 'Number', value: ExactNumber.parse('1'), position: at } }, position: at }], position: at },
             label: { type: 'Template', value: ['id ', { type: 'Reference', value: ['var', 'ids', 0], position: at }], position: at },
             first: { type: 'Reference', value: ['var', 'ids', 1, 'name'], position: at },
+            size: { type: 'Call', name: 'length', args: [{ type: 'Reference', value: ['var', 'ids', 2], position: at }], path: [0, 'a'], position: at },
           },
           planned: {},
           after: {},

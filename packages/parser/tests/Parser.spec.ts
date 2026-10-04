@@ -1,7 +1,7 @@
 import { ExactNumber } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { CONFIG_FILE, ModuleBlock, ResourceBlock, VariableBlock } from '../src/ast';
+import { callsIn, CONFIG_FILE, ModuleBlock, ReferenceNode, ResourceBlock, spellNamed, VariableBlock } from '../src/ast';
 import { ConfigError } from '../src/ConfigError';
 import { Lexer } from '../src/Lexer';
 import { Parser } from '../src/Parser';
@@ -434,8 +434,8 @@ describe('Clay Parser', () => {
 
     it.each([
       ['one that is never closed', '"a ${var.x"', "This '${' is never closed with '}'", at(1, 27)],
-      ['one that is empty', '"${}"', "Expect a reference inside '${'", at(1, 27)],
-      ['one that holds no reference', '"${1}"', "Expect a reference inside '${'", at(1, 27)],
+      ['one that is empty', '"${}"', "Expect a reference or a function call inside '${'", at(1, 27)],
+      ['one that holds no reference', '"${1}"', "Expect a reference or a function call inside '${'", at(1, 27)],
       ['one with more than a reference', '"${var.x y}"', "Expect '}' after the reference", at(1, 33)],
       ['one whose reference ends on a dot', '"${var.}"', 'Expect property name after dot', at(1, 31)],
       ['one holding a character the lexer knows nothing about', '"${a+b}"', 'Unexpected character: "+"', at(1, 28)],
@@ -463,7 +463,7 @@ describe('Clay Parser', () => {
 
     it.each([
       ['a key that holds an interpolation', '"${var.m["${var.k}"]}"', 'A map key is plain text; it cannot hold an interpolation', at(1, 33)],
-      ['a string where a reference should be', '"${"x"}"', "Expect a reference inside '${'.", at(1, 27)],
+      ['a string where a reference should be', '"${"x"}"', "Expect a reference or a function call inside '${'.", at(1, 27)],
     ])('refuses %s inside an interpolation, where it is written', (_, written, message, position) => {
       const error = errorOf(`resource "t" "n" { v = ${written} }`);
 
@@ -618,6 +618,92 @@ describe('Clay Parser', () => {
 
       expect(error.message).toContain(message);
       expect(error.position).toEqual(position);
+    });
+  });
+
+  describe('Function calls', () => {
+    const call = (name: string, args: unknown[], path: (string | number)[] = [], column = 24) => ({ type: 'Call', name, args, path, position: at(1, column) });
+
+    it('reads a name with parentheses after it as a call, with its argument where it was written', () => {
+      expect(valueOf('length(var.x)')).toEqual(call('length', [reference(['var', 'x'], 31)]));
+    });
+
+    it('reads a call with no argument', () => {
+      expect(valueOf('now()')).toEqual(call('now', []));
+    });
+
+    it('reads arguments as a list writes its items, with a comma allowed after the last', () => {
+      expect(valueOf('f("a", 1,)')).toMatchObject(
+        call('f', [
+          { type: 'String', value: 'a', position: at(1, 26) },
+          { type: 'Number', position: at(1, 31) },
+        ])
+      );
+    });
+
+    it('reads a call as an argument of another', () => {
+      expect(valueOf('f(g(var.x))')).toEqual(call('f', [call('g', [reference(['var', 'x'], 28)], [], 26)]));
+    });
+
+    it('reads the steps into what a call gives', () => {
+      expect(valueOf('tolist(var.x)[0].name["k"]')).toMatchObject({ type: 'Call', name: 'tolist', path: [0, 'name', 'k'] });
+    });
+
+    it('reads a call with a space before its parentheses', () => {
+      expect(valueOf('length (var.x)')).toEqual(call('length', [reference(['var', 'x'], 32)]));
+    });
+
+    it('keeps a name with no parentheses after it a reference, a function name too', () => {
+      expect(valueOf('length.a.id')).toEqual(reference(['length', 'a', 'id'], 24));
+    });
+
+    it('reads a call inside an interpolation, with the text around it', () => {
+      expect(valueOf('"n ${length(var.x)} m"')).toEqual({ type: 'Template', value: ['n ', call('length', [reference(['var', 'x'], 36)], [], 29), ' m'], position: at(1, 24) });
+    });
+
+    it.each([
+      ['a map', '"${f({ a = 1 })} x"', { a: { type: 'Number' } }],
+      ['a map in a map', '"${f({ a = { b = 1 } })} x"', { a: { type: 'Map', value: { b: { type: 'Number' } } } }],
+    ])("reads %s as an argument inside an interpolation, whose closing brace is not the interpolation's", (_, written, map) => {
+      expect(valueOf(written)).toMatchObject({ type: 'Template', value: [{ type: 'Call', args: [{ type: 'Map', value: map }] }, ' x'] });
+    });
+
+    it('refuses a call never closed at the end of the file where the file ends', () => {
+      const error = errorOf('resource "t" "n" { v = length("a"');
+
+      expect(error.message).toBe("Expect ')' after the arguments.");
+      expect(error.position).toEqual(at(1, 34));
+    });
+
+    it('names a map never closed inside an interpolation by the interpolation', () => {
+      const error = errorOf('resource "t" "n" { v = "${f({ a = 1 )}" }');
+
+      expect(error.message).toBe("This '${' is never closed with '}', or a string inside it is not closed on its line");
+      expect(error.position).toEqual(at(1, 25));
+    });
+
+    it.each([
+      ['a call never closed', 'length(var.x', "Expect ')' after the arguments.", at(1, 37)],
+      ['arguments with no comma between', 'length(var.x var.y)', "Expect ')' after the arguments.", at(1, 37)],
+      ['a comma with no argument before it', 'length(,)', 'Unexpected value: ,', at(1, 31)],
+      ['a closing parenthesis on its own', ')', 'Unexpected value: )', at(1, 24)],
+      ['more than a call inside an interpolation', '"${length(var.x) y}"', "Expect '}' after the function call.", at(1, 41)],
+    ])('refuses %s where it is written', (_, written, message, position) => {
+      const error = errorOf(`resource "t" "n" { v = ${written} }`);
+
+      expect(error.message).toBe(message);
+      expect(error.position).toEqual(position);
+    });
+
+    it('finds every call in a value, the outer one before those in its arguments', () => {
+      expect(callsIn(valueOf('[f(1), { a = "x ${g(h(2))}" }, var.x]')).map((found) => found.name)).toEqual(['f', 'g', 'h']);
+    });
+
+    it.each([
+      ['a call without its arguments, with its steps', 'f(1, 2)[0].a', 'f(...)[0].a'],
+      ['a reference as it is written', 'var.m["a.b"][0]', 'var.m["a.b"][0]'],
+    ])('spells %s', (_, written, spelled) => {
+      expect(spellNamed(valueOf(written) as ReferenceNode)).toBe(spelled);
     });
   });
 

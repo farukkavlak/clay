@@ -1,10 +1,10 @@
-import { AttributePath, containsUnknown, ExactNumber, isRecord, isUnknown, NumberError, Schema, Type, UNKNOWN } from '@clay/contracts';
+import { AttributePath, ExactNumber, isRecord, isUnknown, NumberError, Schema, Type, UNKNOWN } from '@clay/contracts';
 import { DataBlock, Position, ResourceBlock } from '@clay/parser';
 
 import { setOf } from './setMembers';
 import { shown } from './shown';
 import { items, spelled } from './spelled';
-import { article, child, described, Value, valueOf } from './Value';
+import { article, child, described, unordered, Value, valueOf } from './Value';
 
 /** A value the schema does not take, with the attribute it is in, so the caller can say where that was written. One left out is in none. */
 export class SchemaMismatch extends Error {
@@ -125,12 +125,7 @@ function collection(resource: string, value: Value, to: Type, path: AttributePat
   return entriesConverted(value, (name) => (to as Extract<Type, { kind: 'object' }>).attributes[name], path, convert);
 }
 
-/** A set with a member not known yet has no order or size until the apply, so only a set can hold it before then. */
-function unordered(value: Value): boolean {
-  return value.type.kind === 'set' && Array.isArray(value.data) && value.data.some((member) => containsUnknown(member));
-}
-
-/** Whether nothing of the value can be held as `to` before the apply. */
+/** Whether nothing of the value can be held as `to` before the apply: only a set can hold a set with a member not known yet. */
 function knownLater(value: Value, to: Type): boolean {
   return isUnknown(value.data) || (to.kind !== 'set' && unordered(value));
 }
