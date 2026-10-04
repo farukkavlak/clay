@@ -24,6 +24,8 @@ export enum TokenType {
   RParen = 'RPAREN',
   Comma = 'COMMA', // ,
   Colon = 'COLON',
+  FatArrow = 'FAT_ARROW', // =>
+  Ellipsis = 'ELLIPSIS', // ...
   EOF = 'EOF', // End of File
 }
 

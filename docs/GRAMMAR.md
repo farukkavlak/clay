@@ -28,6 +28,8 @@ in a directory; a module is another directory with its own `main.clay`.
 | `RPAREN`          | `)`                                   |                                                                         |
 | `COMMA`           | `,`                                   |                                                                         |
 | `COLON`           | `:`                                   | Only in a for expression                                                |
+| `FAT_ARROW`       | `=>`                                  | Only in a for expression that makes an object                           |
+| `ELLIPSIS`        | `...`                                 | Only in a for expression that makes an object                           |
 | `ASSIGN`          | `=`                                   |                                                                         |
 | `DOT`             | `.`                                   |                                                                         |
 | `EOF`             |                                       | Ends every token stream                                                 |
@@ -50,8 +52,9 @@ it opens.
 
 There are no keywords. `resource`, `data`, `variable`, `output` and `module` start a
 block only at the top level; anywhere else they are ordinary identifiers, so
-`data = "x"` inside a block is an attribute. `for` right after `[`, and `in` after its
-names, start a for expression; `[for.a.id]` is still a list holding a reference.
+`data = "x"` inside a block is an attribute. `for` right after `[` or `{`, and `in` after
+its names, start a for expression; `[for.a.id]` is still a list holding a reference, and
+`{ for = 1 }` a map with a key named `for`.
 
 ## Blocks
 
@@ -226,7 +229,9 @@ takes, is refused where the call is written, in a module nothing is made of too.
 ### For
 
 ```
-for = "[" "for" IDENTIFIER [ "," IDENTIFIER ] "in" value ":" value "]"
+for = "[" "for" names "in" value ":" value "]"
+    | "{" "for" names "in" value ":" value "=>" value [ "..." ] "}"
+names = IDENTIFIER [ "," IDENTIFIER ]
 ```
 
 `[for n in var.names : "app-${n}"]` reads the body after the `:` once for each item of
@@ -254,6 +259,20 @@ An item not known until apply is not known in what the for gives either, and the
 known. A collection not known at all leaves the whole for to the apply, and so does a set
 with a member not known yet: that member may sort before the others and move every item.
 A for over a constant may be a variable's default.
+
+`{for n in var.names : n => "app-${n}"}` makes an object: the key before `=>` and the
+value after it are read once for each item. Each value keeps its own type. A key is a
+string; a number or a boolean becomes its text, and anything else, `null` too, is
+refused where the key is written, at plan too when the key is known only after apply but
+its type is known. `__proto__` is refused as a key, as in a map.
+
+A key two items give is refused where the key is written. With `...` after the value,
+`{for f in var.files : f.dir => f.name...}`, the items of one key are grouped instead:
+the key holds a tuple of their values, in the order of the items.
+
+A value not known until apply is not known in the object either, under a key the plan
+shows. A key not known until apply leaves the whole for to the apply, since the keys say
+what the object holds; a mistake in another item is still refused at plan.
 
 ### Count
 
@@ -415,7 +434,16 @@ type Call = { type: 'Call'; name: string; args: AttributeValue[]; path: (string 
 
 type Bound = { type: 'Bound'; value: (string | number)[]; position: Position };
 
-type For = { type: 'For'; keyName?: string; valueName: string; collection: AttributeValue; body: AttributeValue; position: Position };
+type For = {
+  type: 'For';
+  keyName?: string;
+  valueName: string;
+  collection: AttributeValue;
+  key?: AttributeValue;
+  body: AttributeValue;
+  grouped?: true;
+  position: Position;
+};
 
 interface ResourceBlock {
   type: 'Resource';
@@ -466,7 +494,8 @@ A `Reference` holds its parts in order, a key as a string and an index as a numb
 `local_file.a.tags["env"]` is `['local_file', 'a', 'tags', 'env']` and `var.names[0]` is
 `['var', 'names', 0]`. A `Call` holds its arguments in order, and in `path` the steps
 written after it, as a reference holds its own. A `Bound` is a name a for gives, read in
-its body, with its steps as a reference holds them.
+its body, with its steps as a reference holds them. A `For` that makes an object holds
+its key in `key`, and `grouped` when `...` follows the value.
 
 ## Errors
 
@@ -478,7 +507,7 @@ throws the same for a character it does not know, a string not closed on its lin
 ## Not in the language
 
 - Operators; a value is a literal, a reference, a function call or a for expression
-- A for that makes a map, `{for k, v in m : k => v}`, and one that filters with `if`
+- A for that filters with `if`
 - `count` or `for_each` on a data source, `depends_on`, lifecycle blocks, provisioners
 - Nested blocks inside a block
 - Any file other than `main.clay`

@@ -1,7 +1,8 @@
-import { ExactNumber, types } from '@clay/contracts';
+import { ExactNumber, isUnknown, types } from '@clay/contracts';
 import { ConfigError, Position } from '@clay/parser';
 
-import { child, described, Value, valueOf } from './Value';
+import { UnresolvedReferenceError } from './resolvers/UnresolvedReferenceError';
+import { child, described, hasText, objectOf, tupleOf, Value, valueOf } from './Value';
 
 /** What a for gives one item: its key and its value. */
 export type ForItem = [key: Value, value: Value];
@@ -30,4 +31,33 @@ export function forItems(collection: Value, position: Position): ForItem[] {
 
   const items = (collection.data as unknown[]).map((_, index) => child(collection, index));
   return items.map((item, index) => [kind === 'set' ? item : indexOf(index), item]);
+}
+
+/** A key is text, so one of a type no key can have is refused at `position` even before it is known. */
+function checkKey(key: Value, position: Position): void {
+  if (key.data === null || !(hasText(key.type) || key.type.kind === 'dynamic'))
+    throw new ConfigError(`A key in a for is a string, a number or a boolean, not ${described(key)}`, position);
+  // Refused as in a map, where code that sets it as a property would set a prototype.
+  if (key.data === '__proto__') throw new ConfigError('__proto__ cannot be a name', position);
+}
+
+/**
+ * The object a for makes from each item's key and value; with `grouped`, each key holds the values of its items in a tuple, and without it a key given
+ * twice is refused at `position`. Every key that can be checked is, before one not known yet leaves the whole for to the apply.
+ */
+export function forObject(entries: ForItem[], grouped: boolean, position: Position): Value {
+  const keys = new Map<string, Value[]>();
+  for (const [key, value] of entries) {
+    checkKey(key, position);
+    if (isUnknown(key.data)) continue;
+
+    const text = String(key.data);
+    const values = keys.get(text) ?? [];
+    if (values.length > 0 && !grouped) throw new ConfigError(`Two items give the key "${text}"; write "..." after the value to group them`, position);
+    keys.set(text, [...values, value]);
+  }
+
+  // How many keys there are, and so what the object holds, waits on the one not known yet.
+  if (entries.some(([key]) => isUnknown(key.data))) throw new UnresolvedReferenceError('A key in a for is known only after apply, so what the for gives is not known yet');
+  return objectOf([...keys].map(([key, values]) => [key, grouped ? tupleOf(values) : values[0]]));
 }

@@ -18,8 +18,11 @@ export type CallNode = Node & { type: 'Call'; name: string; args: AttributeValue
 /** A name a `for` gives each item, read in its body, and the steps written after it. */
 export type BoundNode = Node & { type: 'Bound'; value: Step[] };
 
-/** `[for key, value in collection : body]`: the body read once for each item, with the names given to the item. */
-export type ForNode = Node & { type: 'For'; keyName?: string; valueName: string; collection: AttributeValue; body: AttributeValue };
+/**
+ * `[for key, value in collection : body]`: the body read once for each item, with the names given to the item.
+ * `{for … : key => body}` makes an object instead, `key` read for each item too; with `grouped`, `body...`, the items of one key go in a tuple under it.
+ */
+export type ForNode = Node & { type: 'For'; keyName?: string; valueName: string; collection: AttributeValue; key?: AttributeValue; body: AttributeValue; grouped?: true };
 
 /** A piece of a string with `${ … }` in it: text, or the reference, the call or the name an interpolation reads. */
 export type TemplatePart = string | ReferenceNode | CallNode | BoundNode;
@@ -87,11 +90,11 @@ export function spell(statement: Statement): string {
   return `${statement.type.toLowerCase()} "${statement.name}"`;
 }
 
-/** What a value holds one level in: a list's items, a map's values, a string's interpolations, a call's arguments and a for's collection and body. */
+/** What a value holds one level in: a list's items, a map's values, a string's interpolations, a call's arguments and a for's collection, key and body. */
 function valuesIn(value: AttributeValue): AttributeValue[] {
   if (value.type === 'List') return value.value;
   if (value.type === 'Call') return value.args;
-  if (value.type === 'For') return [value.collection, value.body];
+  if (value.type === 'For') return [value.collection, ...(value.key ? [value.key] : []), value.body];
   if (value.type === 'Map') return Object.values(value.value);
   if (value.type === 'Template') return value.value.filter((part) => typeof part !== 'string');
 

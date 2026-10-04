@@ -14,6 +14,22 @@ export function valueOf(type: Type, data: unknown): Value {
   return { type, data };
 }
 
+/** A string, a number or a boolean: a value with a text of its own. */
+export function hasText(type: Type): boolean {
+  return type.kind === 'string' || type.kind === 'number' || type.kind === 'bool';
+}
+
+export function tupleOf(values: Value[]): Value {
+  return valueOf(
+    types.tuple(values.map((value) => value.type)),
+    values.map((value) => value.data)
+  );
+}
+
+export function objectOf(entries: [name: string, value: Value][]): Value {
+  return valueOf(types.object(Object.fromEntries(entries.map(([name, value]) => [name, value.type]))), Object.fromEntries(entries.map(([name, value]) => [name, value.data])));
+}
+
 /** The type plain data has when nothing names one: a list of values is a tuple, and a record an object. */
 export function inferred(data: unknown): Type {
   if (typeof data === 'string') return types.string;

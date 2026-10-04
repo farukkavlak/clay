@@ -103,6 +103,8 @@ beside a boolean, or objects with other names, are refused.
 A for expression makes a list from a collection: `[for n in var.names : "app-${n}"]`.
 With two names it reads a key too: a list's index, a map's key, or a set's member again,
 as in `[for i, n in var.names : "${i}-${n}"]`.
+With braces and `=>` it makes an object instead: `{for n in var.names : n => "app-${n}"}`.
+A key two items give is refused, unless `...` after the value groups them.
 
 `docs/GRAMMAR.md` has the full grammar.
 

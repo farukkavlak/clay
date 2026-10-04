@@ -82,7 +82,7 @@ export interface Plan {
 }
 
 /** Bumped when the shape below changes once a Clay is released, so a plan file from an older version is refused instead of misread. */
-export const PLAN_FILE_VERSION = '19.0';
+export const PLAN_FILE_VERSION = '20.0';
 
 export interface PlanFile extends Plan {
   version: string;
@@ -292,7 +292,7 @@ function childrenOf(node: Record<string, unknown>): unknown[] {
   if ((node.type === 'List' || node.type === 'Template') && Array.isArray(node.value)) return node.value;
   if (node.type === 'Map' && isRecord(node.value)) return Object.values(node.value);
   if (node.type === 'Call' && Array.isArray(node.args)) return node.args;
-  if (node.type === 'For') return [node.collection, node.body];
+  if (node.type === 'For') return [node.collection, node.key, node.body];
 
   return [];
 }

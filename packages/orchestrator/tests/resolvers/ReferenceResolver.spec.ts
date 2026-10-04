@@ -250,6 +250,86 @@ describe('ReferenceResolver', () => {
     });
   });
 
+  describe('a for expression that makes an object', () => {
+    const keyNotKnown = expect.objectContaining({ message: 'A key in a for is known only after apply, so what the for gives is not known yet', type: types.dynamic });
+
+    it('gives each item its key, with the value its body comes to', () => {
+      expect(read('{for k, v in { a = "x", b = "y" } : k => "${v}${k}"}')).toEqual(valueOf(types.object({ a: types.string, b: types.string }), { a: 'xa', b: 'yb' }));
+    });
+
+    it('gives each value the type it has', () => {
+      expect(read('{for v in ["s", 1] : "${v}" => v}')).toEqual(valueOf(types.object({ s: types.string, 1: types.number }), { s: 's', 1: n('1') }));
+    });
+
+    it('takes a number or a boolean key as its text', () => {
+      expect(read('{for v in [1, true] : v => v}')).toEqual(valueOf(types.object({ 1: types.number, true: types.bool }), { 1: n('1'), true: true }));
+    });
+
+    it('groups the values of one key in a tuple, in the order of the items', () => {
+      expect(read('{for i, v in ["a", "b", "a"] : v => i...}')).toEqual(
+        valueOf(types.object({ a: types.tuple([types.number, types.number]), b: types.tuple([types.number]) }), { a: [n('0'), n('2')], b: [n('1')] })
+      );
+    });
+
+    it('gives an empty object for an empty collection', () => {
+      expect(read('{for v in [] : v => v}')).toEqual(valueOf(types.object({}), {}));
+    });
+
+    it('reads a for that makes a list in its value, with the names of both', () => {
+      expect(read('{for k, v in { a = ["x", "y"] } : k => [for s in v : "${k}${s}"]}').data).toEqual({ a: ['ax', 'ay'] });
+    });
+
+    it('refuses a key two items give, where the key is written', () => {
+      expect(() => read('{for v in ["a", "a"] : v => v}')).toThrow(new ConfigError('Two items give the key "a"; write "..." after the value to group them', atColumn(45)));
+    });
+
+    it.each([
+      ['a tuple', '[v]'],
+      ['null', 'null'],
+      ['an object', '{ k = v }'],
+    ])('refuses %s as a key, where the key is written', (described, key) => {
+      expect(() => read(`{for v in ["a"] : ${key} => v}`)).toThrow(new ConfigError(`A key in a for is a string, a number or a boolean, not ${described}`, atColumn(40)));
+    });
+
+    it('refuses __proto__ as a key, which would set the prototype', () => {
+      expect(() => read('{for v in ["__proto__"] : v => v}')).toThrow(new ConfigError('__proto__ cannot be a name', atColumn(48)));
+    });
+
+    it('reads a value not known yet as unknown on its own while planning', () => {
+      expect(readWith('{for v in ["a"] : v => "x-${resource.later.id}"}', new Map(), planning())).toEqual(valueOf(types.object({ a: types.string }), { a: UNKNOWN }));
+    });
+
+    it('leaves the whole for to the apply while a key the apply makes is not known', () => {
+      expect(() => readWith('{for v in ["a"] : resource.later.id => v}', new Map(), planning())).toThrow(keyNotKnown);
+    });
+
+    it('says why a key cannot be read, outside a plan', () => {
+      expect(() => read('{for v in ["a"] : resource.later.id => v}')).toThrow('Resource "resource.later" not found in state');
+    });
+
+    it('leaves the whole for to the apply while a key is not known, grouped too', () => {
+      expect(() => readWith('{for v in ["a", resource.later.id] : v => 1...}', new Map(), planning())).toThrow(keyNotKnown);
+    });
+
+    it('leaves the whole for to the apply while an item read as a key is not known', () => {
+      expect(() => readWith('{for v in ["a", resource.later.id] : v => 1}', new Map(), planning())).toThrow(keyNotKnown);
+    });
+
+    it.each([
+      ['a key of a type no key can have', '{for v in [resource.later.id, ["a"]] : v => 1}', 'A key in a for is a string, a number or a boolean, not a tuple', 61],
+      ['a key two items give', '{for v in ["a", resource.later.id, "a"] : v => 1}', 'Two items give the key "a"; write "..." after the value to group them', 64],
+      ['a mistake in a value', '{for v in [resource.later.id, "a"] : v => [for s in v : s]}', 'A for goes over a list, a tuple, a set, a map or an object, not a string', 74],
+    ])('refuses %s in a later item while an earlier key is not known yet', (_, value, message, column) => {
+      expect(() => readWith(value, new Map(), planning())).toThrow(new ConfigError(message, atColumn(column)));
+    });
+
+    it('refuses a key not known yet whose type no key can have, while planning', () => {
+      expect(() => readWith('{for v in ["a"] : data.src.s.v => v}', source(valueOf(types.list(types.string), UNKNOWN)), planning())).toThrow(
+        new ConfigError('A key in a for is a string, a number or a boolean, not a list known only after apply', atColumn(40))
+      );
+    });
+  });
+
   // Every instance of a module reads the values declared once for it, and the resources and outputs of its own instance.
   describe('in an instance of a module', () => {
     it('reads the instance of a resource in that instance of the module', () => {
