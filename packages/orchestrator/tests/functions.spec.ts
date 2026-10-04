@@ -10,23 +10,26 @@ const at = (column: number) => ({ file: 'main.clay', line: 1, column });
 /** `length(null)` as the parser reads it; what the argument is written as does not matter, since the function is handed its value. */
 const call: CallNode = { type: 'Call', name: 'length', args: [{ type: 'Null', position: at(8) }], path: [], position: at(1) };
 
-const length = (value: Value) => functionCalled(call)(value);
+/** `name(null)` as the parser reads it, called with `value`. */
+const called = (name: string, value: Value) => functionCalled({ ...call, name })(value);
+
+const length = (value: Value) => called('length', value);
 
 /** Data as the configuration writes it: a list a tuple, a map an object. */
 const written = (data: unknown): Value => valueOf(inferred(data), data);
 
 const number = (text: string) => valueOf(types.number, ExactNumber.parse(text));
 
-const errorOf = (value: Value): ConfigError => {
+const errorOf = (name: string, value: Value): ConfigError => {
   try {
-    length(value);
+    called(name, value);
   } catch (error) {
     if (error instanceof ConfigError) return error;
 
     throw error;
   }
 
-  throw new Error('Expected length to refuse the value');
+  throw new Error(`Expected ${name} to refuse the value`);
 };
 
 describe('length', () => {
@@ -74,9 +77,72 @@ describe('length', () => {
     ['a list that is null', valueOf(types.list(types.string), null), 'null'],
     ['a number not known yet', valueOf(types.number, UNKNOWN), 'a number known only after apply'],
   ])('refuses %s where the argument is written', (_, value, described) => {
-    const error = errorOf(value);
+    const error = errorOf('length', value);
 
     expect(error.message).toBe(`length takes a string, a list, a tuple, a set, a map or an object, not ${described}`);
+    expect(error.position).toEqual(at(8));
+  });
+});
+
+const strings = (...data: unknown[]) => valueOf(types.list(types.string), data);
+
+describe('tolist', () => {
+  it.each([
+    ['a tuple of strings, in its order', written(['b', 'a', 'b']), strings('b', 'a', 'b')],
+    ['a tuple of a string and a number, each as a string', written(['a', ExactNumber.parse('1')]), strings('a', '1')],
+    ['a set, in the order its members are held', valueOf(types.set(types.string), ['a', 'b']), strings('a', 'b')],
+    ['a list, as it is', strings('a'), strings('a')],
+    ['an empty tuple, as a list of no type', written([]), valueOf(types.list(types.dynamic), [])],
+    [
+      'a tuple of objects, each attribute as the type they share',
+      written([{ a: ExactNumber.parse('1') }, { a: 'x' }]),
+      valueOf(types.list(types.object({ a: types.string })), [{ a: '1' }, { a: 'x' }]),
+    ],
+    ['a tuple with null, as the type the rest are', written([null, 'a']), strings(null, 'a')],
+  ])('gives %s', (_, value, list) => {
+    expect(called('tolist', value)).toEqual(list);
+  });
+
+  it.each([
+    ['a tuple with an item not known yet, which keeps the rest', written(['a', UNKNOWN]), strings('a', UNKNOWN)],
+    ['a list not known yet', valueOf(types.list(types.string), UNKNOWN), valueOf(types.list(types.string), UNKNOWN)],
+    ['a tuple not known yet, as a list of what its items share', valueOf(types.tuple([types.string, types.number]), UNKNOWN), valueOf(types.list(types.string), UNKNOWN)],
+    ['a value not known yet whose type nothing names', valueOf(types.dynamic, UNKNOWN), valueOf(types.list(types.dynamic), UNKNOWN)],
+    ['a set with a member not known yet, which has no order yet', valueOf(types.set(types.string), ['z', UNKNOWN]), valueOf(types.list(types.string), UNKNOWN)],
+    ['null', valueOf(types.dynamic, null), valueOf(types.list(types.dynamic), null)],
+  ])('gives %s', (_, value, list) => {
+    expect(called('tolist', value)).toEqual(list);
+  });
+
+  it.each([
+    ['an object', written({ a: 'x' }), 'tolist takes a list, a tuple or a set, not an object'],
+    ['a string', written('a'), 'tolist takes a list, a tuple or a set, not a string'],
+    ['a map not known yet', valueOf(types.map(types.string), UNKNOWN), 'tolist takes a list, a tuple or a set, not a map known only after apply'],
+    ['a number and a boolean', written([ExactNumber.parse('1'), true]), 'tolist cannot join a number and a boolean into one type'],
+    ['objects with other names', written([{ a: 'x' }, { b: 'x' }]), 'tolist cannot join an object with "b" and one without it into one type'],
+  ])('refuses %s where the argument is written', (_, value, message) => {
+    const error = errorOf('tolist', value);
+
+    expect(error.message).toBe(message);
+    expect(error.position).toEqual(at(8));
+  });
+});
+
+describe('toset', () => {
+  it.each([
+    ['each member once, in one order', written(['b', 'a', 'b']), valueOf(types.set(types.string), ['a', 'b'])],
+    ['a number and the string that spells it as one member', written([ExactNumber.parse('1'), '1']), valueOf(types.set(types.string), ['1'])],
+    ['an item not known yet after the members known', written([UNKNOWN, 'a']), valueOf(types.set(types.string), ['a', UNKNOWN])],
+    ['a set, as it is', valueOf(types.set(types.string), ['a']), valueOf(types.set(types.string), ['a'])],
+    ['null', valueOf(types.dynamic, null), valueOf(types.set(types.dynamic), null)],
+  ])('gives %s', (_, value, set) => {
+    expect(called('toset', value)).toEqual(set);
+  });
+
+  it('refuses a map where the argument is written', () => {
+    const error = errorOf('toset', valueOf(types.map(types.string), { a: 'x' }));
+
+    expect(error.message).toBe('toset takes a list, a tuple or a set, not a map');
     expect(error.position).toEqual(at(8));
   });
 });

@@ -143,7 +143,7 @@ function ordered(value: Value): unknown {
  * The value as the type `to` names, or a mismatch named by its path. A null is a null of that type. A value not known yet is checked only for its kind,
  * since what it holds is known only at the apply, where it is checked again.
  */
-function converted(resource: string, value: Value, to: Type, path: AttributePath): Value {
+export function converted(resource: string, value: Value, to: Type, path: AttributePath): Value {
   if (to.kind === 'dynamic') return valueOf(value.type, ordered(value));
   if (value.data === null) return valueOf(to, null);
 

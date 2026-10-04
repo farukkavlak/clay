@@ -193,6 +193,8 @@ steps after the `)` read into what the function gives, as a reference's do.
 | Function        | Gives                                                                                          |
 | --------------- | ---------------------------------------------------------------------------------------------- |
 | `length(value)` | How many items a list, a tuple or a set holds, keys a map or an object, or characters a string |
+| `tolist(value)` | A list, a tuple or a set as a list of the one type its items share                             |
+| `toset(value)`  | A list, a tuple or a set as a set of the one type its items share, each member once            |
 
 A character is what a reader counts as one: a letter with its accent, or an emoji made of
 several code points, is one. A number, a boolean or `null` is refused where the argument
@@ -201,6 +203,20 @@ is written.
 A list or a map has its length while an item in it is not known until apply. A set with
 a member not known yet does not, since that member may turn out to be one the set already
 holds; its length is known at apply, and so is the length of a value not known at all.
+
+`tolist` and `toset` find the one type every item can be taken as. Items of one type keep
+it. A number or a boolean beside a string becomes its text; a number and a boolean alone
+are refused, since they have no text in common. Tuples of one length stay tuples, position
+by position; other lists are a list of what their items share, and a set among them makes
+it a set. Objects with the same names share each attribute's type; objects with other
+names are refused, where Terraform would make them a map. An object beside a map is a
+map. A `null` item takes the type the others have. Anything else is refused where the argument is written, and so is an argument that is
+not a list, a tuple or a set. `null` gives `null`.
+
+`toset(["b", "a", "b"])` holds `"a"` and `"b"`: a set holds each member once, in one order.
+`tolist` of a set gives its members in that order. A set with a member not known yet has
+no order, so `tolist` of it is not known until apply; `toset` of a list with an item not
+known yet keeps the members it knows.
 
 A name no function has, or a call with another number of arguments than the function
 takes, is refused where the call is written, in a module nothing is made of too.
