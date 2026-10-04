@@ -111,8 +111,11 @@ configuration hits each of these early.
 - [x] A function is called by its name, `length(var.names)`, as a value or inside
       `${...}`. `length` counts the items of a list, a set or a map and the characters of
       a string. A name no function has is refused where it is written
-- [ ] `tolist` and `toset`, and a `for` expression. A set has no index, so today no
-      configuration can read one of its members. Terraform: `tolist(x)[0]`
+- [x] `tolist` and `toset`, so a configuration can read a member of a set:
+      `tolist(x)[0]`. Their items take one type; a number beside a boolean, and objects with
+      other names, are refused where Terraform refuses the first and makes the second a map
+- [ ] A `for` expression. Terraform gives a `for` over a set with a member not known yet
+      item by item, where `tolist` of it is not known as a whole
 - [ ] A variable names its type: `variable "x" { type = set(string) }`. A module input
       takes whatever it is given today, so a list passed where a set is meant keeps its
       order and its duplicates

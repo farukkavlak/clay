@@ -1,6 +1,8 @@
-import { ExactNumber, isUnknown, types, UNKNOWN } from '@clay/contracts';
+import { ExactNumber, isUnknown, Type, types, UNKNOWN } from '@clay/contracts';
 import { CallNode, ConfigError } from '@clay/parser';
 
+import { converted } from './conformValues';
+import { isSequence, itemTypes, unified, Unjoinable } from './unify';
 import { described, unordered, Value, valueOf } from './Value';
 
 /** Given its argument, which may be not known yet in whole or in part, and `refuse`, which says the argument is one it does not take. */
@@ -26,7 +28,33 @@ function length(value: Value, refuse: (message: string) => never): Value {
   return valueOf(types.number, ExactNumber.parse(String(sizeOf(value.data))));
 }
 
-const FUNCTIONS = new Map<string, ClayFunction>([['length', length]]);
+/** The one type every item can be taken as. */
+function elementOf(name: string, type: Type, refuse: (message: string) => never): Type {
+  try {
+    return unified(itemTypes(type));
+  } catch (error) {
+    if (error instanceof Unjoinable) return refuse(`${name} ${error.message}`);
+    throw error;
+  }
+}
+
+/** A list, a tuple or a set as a list or a set of the one type its items share. A set has no order until each member is known, so as a list it is not known until then. */
+function converter(kind: 'list' | 'set'): ClayFunction {
+  const name = `to${kind}`;
+
+  return (value, refuse) => {
+    if (value.type.kind === 'dynamic') return valueOf(types[kind](types.dynamic), value.data);
+    if (!isSequence(value.type.kind)) return refuse(`${name} takes a list, a tuple or a set, not ${described(value)}`);
+
+    return converted(name, value, types[kind](elementOf(name, value.type, refuse)), [name]);
+  };
+}
+
+const FUNCTIONS = new Map<string, ClayFunction>([
+  ['length', length],
+  ['tolist', converter('list')],
+  ['toset', converter('set')],
+]);
 
 /** The function a call names, ready for its argument. A name no function has, or another number of arguments than one, is refused where the call is written. */
 export function functionCalled(call: CallNode): (argument: Value) => Value {

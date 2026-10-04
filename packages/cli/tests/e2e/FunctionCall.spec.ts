@@ -231,6 +231,52 @@ describe('a function call', () => {
     expect(await read('f')).toBe('7 long');
   });
 
+  it('reads a member of a set by its place in a list', async () => {
+    await apply(`resource "pool" "p" { members = ["b", "a"] }\n${file('f', 'tolist(pool.p.members)[1]')}`);
+
+    expect(await read('f')).toBe('b');
+  });
+
+  it('makes an instance for each member toset keeps', async () => {
+    await apply(`
+      resource "local_file" "f" {
+        for_each = toset(["b", "a", "b"])
+        path = "${path.join(dir, 'f-${each.key}.txt')}"
+        content = each.value
+      }
+    `);
+
+    expect(await textFiles()).toEqual(['f-a.txt', 'f-b.txt']);
+  });
+
+  it('gives a list of a set whose member is not known once the apply knows it', async () => {
+    const config = `${unsized}\noutput "l" { value = tolist(pool.p.members) }`;
+
+    const plan = await newOrchestrator().plan(config);
+    await apply(config);
+
+    expect(plan.outputs.l.new).toEqual({ value: UNKNOWN, type: types.list(types.string) });
+    expect(await outputs()).toEqual({ l: { value: ['pool', 'z'], type: types.list(types.string) } });
+  });
+
+  it('refuses items with no type in common where the argument is written', async () => {
+    const config = 'output "l" {\n  value = tolist([1, true])\n}';
+
+    const error = await planError(config);
+
+    expect(error.message).toBe('tolist cannot join a number and a boolean into one type');
+    expect(error.position).toMatchObject(placeOf(config, '[1, true]'));
+  });
+
+  it('runs a saved plan that reads into what a function gives', async () => {
+    const config = `variable "v" { default = ["b", "a", "b"] }\n${file('f', 'tolist(toset(var.v))[0]')}`;
+    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), config, {}), 'plan.json');
+
+    for await (const event of newOrchestrator().runPlan(saved, config)) if (event.type === 'failed') throw event.error;
+
+    expect(await read('f')).toBe('a');
+  });
+
   it('runs a saved plan whose values call a function', async () => {
     const config = `variable "lists" { default = [["a"], ["b", "c", "d"]] }\n${file('f', '"${length(var.lists[1])} items"')}`;
     const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), config, {}), 'plan.json');

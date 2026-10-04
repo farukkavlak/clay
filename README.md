@@ -95,7 +95,10 @@ relative to the root, so `"${path.module}/index.html"` names a file next to the 
 
 A function is called by its name: `count = length(var.names)`, or `"${length(var.names)}"`
 inside a string. `length` counts the items of a list, a set or a map, and the characters
-of a string. It is the only function yet.
+of a string. `tolist` and `toset` turn a list, a tuple or a set into a list or a set, so
+`tolist(pool.p.members)[0]` reads a member of a set; `toset` keeps each member once. Their
+items take one type: a number or a boolean beside a string becomes its text, and a number
+beside a boolean, or objects with other names, are refused.
 
 `docs/GRAMMAR.md` has the full grammar.
 
