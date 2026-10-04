@@ -95,6 +95,13 @@ describe('reading a plan file', () => {
             label: { type: 'Template', value: ['id ', { type: 'Reference', value: ['var', 'ids', 0], position: at }], position: at },
             first: { type: 'Reference', value: ['var', 'ids', 1, 'name'], position: at },
             size: { type: 'Call', name: 'length', args: [{ type: 'Reference', value: ['var', 'ids', 2], position: at }], path: [0, 'a'], position: at },
+            names: {
+              type: 'For',
+              valueName: 'n',
+              collection: { type: 'Reference', value: ['var', 'ids', 3], position: at },
+              body: { type: 'Bound', value: ['n', 4], position: at },
+              position: at,
+            },
           },
           planned: {},
           after: {},

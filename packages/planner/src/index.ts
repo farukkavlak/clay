@@ -82,7 +82,7 @@ export interface Plan {
 }
 
 /** Bumped when the shape below changes once a Clay is released, so a plan file from an older version is refused instead of misread. */
-export const PLAN_FILE_VERSION = '18.0';
+export const PLAN_FILE_VERSION = '19.0';
 
 export interface PlanFile extends Plan {
   version: string;
@@ -292,6 +292,7 @@ function childrenOf(node: Record<string, unknown>): unknown[] {
   if ((node.type === 'List' || node.type === 'Template') && Array.isArray(node.value)) return node.value;
   if (node.type === 'Map' && isRecord(node.value)) return Object.values(node.value);
   if (node.type === 'Call' && Array.isArray(node.args)) return node.args;
+  if (node.type === 'For') return [node.collection, node.body];
 
   return [];
 }
@@ -303,9 +304,9 @@ function readSteps(path: unknown): unknown {
   return path.map((step: unknown) => (step instanceof ExactNumber ? step.toSafeInteger('an index') : step));
 }
 
-/** An index is a place in a list, not a value, so it reads back as a JavaScript number too, in a reference and in the steps after a call. */
+/** An index is a place in a list, not a value, so it reads back as a JavaScript number too, in a reference, after a name a for gives and in the steps after a call. */
 function readIndexes(node: Record<string, unknown>): void {
-  if (node.type === 'Reference') node.value = readSteps(node.value);
+  if (node.type === 'Reference' || node.type === 'Bound') node.value = readSteps(node.value);
   if (node.type === 'Call') node.path = readSteps(node.path);
 }
 

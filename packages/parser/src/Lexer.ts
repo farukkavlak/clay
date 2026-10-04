@@ -58,6 +58,7 @@ export class Lexer {
     { type: TokenType.LParen, regex: /\(/y },
     { type: TokenType.RParen, regex: /\)/y },
     { type: TokenType.Comma, regex: /,/y },
+    { type: TokenType.Colon, regex: /:/y },
     { type: TokenType.Assign, regex: /=/y },
   ];
 

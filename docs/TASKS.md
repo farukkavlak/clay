@@ -114,8 +114,12 @@ configuration hits each of these early.
 - [x] `tolist` and `toset`, so a configuration can read a member of a set:
       `tolist(x)[0]`. Their items take one type; a number beside a boolean, and objects with
       other names, are refused where Terraform refuses the first and makes the second a map
-- [ ] A `for` expression. Terraform gives a `for` over a set with a member not known yet
-      item by item, where `tolist` of it is not known as a whole
+- [x] A `for` expression that makes a list: `[for i, n in var.names : "${i}-${n}"]`. A
+      set with a member not known yet leaves the whole for to the apply, where Terraform
+      gives it item by item and an apply that sorts the new member first moves every item
+- [ ] A `for` expression that makes a map, `{for k, v in m : k => v}`, with a key twice
+      refused where Terraform groups them only with `...`
+- [ ] `if` in a `for` expression, once operators can write a condition
 - [ ] A variable names its type: `variable "x" { type = set(string) }`. A module input
       takes whatever it is given today, so a list passed where a set is meant keeps its
       order and its duplicates

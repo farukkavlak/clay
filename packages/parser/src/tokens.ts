@@ -23,6 +23,7 @@ export enum TokenType {
   LParen = 'LPAREN',
   RParen = 'RPAREN',
   Comma = 'COMMA', // ,
+  Colon = 'COLON',
   EOF = 'EOF', // End of File
 }
 

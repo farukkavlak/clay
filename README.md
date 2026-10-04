@@ -100,6 +100,10 @@ of a string. `tolist` and `toset` turn a list, a tuple or a set into a list or a
 items take one type: a number or a boolean beside a string becomes its text, and a number
 beside a boolean, or objects with other names, are refused.
 
+A for expression makes a list from a collection: `[for n in var.names : "app-${n}"]`.
+With two names it reads a key too: a list's index, a map's key, or a set's member again,
+as in `[for i, n in var.names : "${i}-${n}"]`.
+
 `docs/GRAMMAR.md` has the full grammar.
 
 ## Commands
