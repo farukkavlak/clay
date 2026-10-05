@@ -1149,6 +1149,9 @@ describe('Clay Parser', () => {
       ['tuple([])', types.tuple([])],
       ['object({ a = string, b = list(number) })', types.object({ a: types.string, b: types.list(types.number) })],
       ['object({\n a = string\n b = bool\n})', types.object({ a: types.string, b: types.bool })],
+      ['object({ a = string, b = optional(number) })', types.object({ a: types.string, b: types.number }, ['b'])],
+      ['object({ a = optional(string, "x") })', types.object({ a: types.string }, ['a'])],
+      ['list(object({ a = optional(object({ b = optional(bool) })) }))', types.list(types.object({ a: types.object({ b: types.bool }, ['b']) }, ['a']))],
     ])('reads %s', (written, type) => {
       expect(typeOf(written)).toEqual(type);
     });
@@ -1158,6 +1161,28 @@ describe('Clay Parser', () => {
 
       expect(variable.valueType).toEqual(types.set(types.string));
       expect(variable.attributes).toEqual({ default: { type: 'List', value: [{ type: 'String', value: 'a', position: at(3, 14) }], position: at(3, 13) } });
+    });
+
+    it('keeps the defaults an object type gives, laid out as the type is', () => {
+      const [variable] = makeParser(
+        'variable "v" {\n  type = list(object({ a = optional(object({ b = optional(bool, true) }), {}), c = optional(tuple([string, object({ d = optional(number, 1) })])) }))\n}'
+      ).parse() as VariableBlock[];
+
+      expect(variable.defaults).toEqual({
+        element: {
+          values: { a: { type: 'Map', value: {}, position: at(2, 75) } },
+          within: {
+            a: { values: { b: { type: 'Boolean', value: true, position: at(2, 65) } } },
+            c: { within: { 1: { values: { d: { type: 'Number', value: ExactNumber.parse('1'), position: at(2, 138) } } } } },
+          },
+        },
+      });
+    });
+
+    it('keeps no defaults where an optional attribute names none', () => {
+      const [variable] = makeParser('variable "v" { type = object({ a = optional(string) }) }').parse() as VariableBlock[];
+
+      expect(Object.hasOwn(variable, 'defaults')).toBe(false);
     });
 
     it('leaves the type out of a variable that names none', () => {
@@ -1178,7 +1203,22 @@ describe('Clay Parser', () => {
       ['an object attribute named twice', 'object({ a = string, a = number })', 'a is set twice', at(1, 44)],
       ['an object attribute named __proto__', 'object({ __proto__ = string })', '__proto__ cannot be a name', at(1, 32)],
       ['a value where a type goes', '1', 'Expect a type: string, number, bool, any', at(1, 23)],
-      ['an optional attribute, which is not read yet', 'object({ a = optional(string) })', '"optional" is not a type', at(1, 36)],
+      ["optional as a variable's type", 'optional(string)', "optional(...) is written only as the type of an object's attribute", at(1, 23)],
+      ['optional as what a list holds', 'list(optional(string))', "optional(...) is written only as the type of an object's attribute", at(1, 28)],
+      ['optional without its type', 'object({ a = optional })', "Expect '(' after optional.", at(1, 45)],
+      ['optional given three arguments', 'object({ a = optional(number, 1, 2) })', "Expect ')' after the type of optional, or its default.", at(1, 54)],
+      [
+        "a reference in an optional attribute's default",
+        'object({ a = optional(number, var.z) })',
+        "An optional attribute's default is a constant, so it cannot hold var.z",
+        at(1, 53),
+      ],
+      [
+        "a call in an optional attribute's default",
+        'object({ a = optional(number, length("ab")) })',
+        "An optional attribute's default is a constant, so it cannot hold length(...)",
+        at(1, 53),
+      ],
     ])('refuses %s, where it is written', (_, written, message, position) => {
       const error = errorOf(`variable "v" { type = ${written}\n}`);
 

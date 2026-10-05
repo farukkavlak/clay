@@ -1,5 +1,5 @@
 import { ModuleAddress, Type } from '@clay/contracts';
-import { AttributeValue } from '@clay/parser';
+import { AttributeValue, TypeDefaults } from '@clay/parser';
 
 import { ModuleCall } from '../keys';
 import { Value } from '../Value';
@@ -9,6 +9,7 @@ export interface VariableValue {
   value: AttributeValue;
   context: ModuleAddress | ModuleCall;
   type?: Type;
+  defaults?: TypeDefaults;
   block: string;
 }
 

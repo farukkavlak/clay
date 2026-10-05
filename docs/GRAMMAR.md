@@ -145,7 +145,8 @@ taken as a list, it is not known as a whole until apply, since it has no order y
 type = "string" | "number" | "bool" | "any"
      | ( "list" | "set" | "map" ) "(" type ")"
      | "tuple" "(" "[" [ type { "," type } [ "," ] ] "]" ")"
-     | "object" "(" "{" { IDENTIFIER "=" type [ "," ] } "}" ")"
+     | "object" "(" "{" { IDENTIFIER "=" attribute [ "," ] } "}" ")"
+attribute = type | "optional" "(" type [ "," value ] ")"
 ```
 
 The words are bare: `type = string`, not `type = "string"`. A word that names no type, or
@@ -158,6 +159,14 @@ block. A default is checked even where a module call gives a value in its place.
 input with no reference in it is checked even where `count` or `for_each` makes no
 instance. An object given an attribute its type does not name is refused, since that is
 most often a name misspelled. `null` is taken, as a null of the type.
+
+Every attribute an object type names is required, unless `optional(...)` is around its
+type. One left out is `null`, or the default written after its type:
+`object({ name = string, port = optional(number, 80) })` given `{ name = "a" }` is
+`{ name = "a", port = 80 }`. An attribute given `null` takes the default too. A default is
+a constant, held to its attribute's type when the configuration is loaded, and the
+defaults inside it are filled in as well. `optional` is written only as the type of an
+object's attribute.
 
 `any` takes a value as it is. In a list, a set or a map, the items are joined into one
 type as `tolist` joins them: `[1, "x"]` given to `list(any)` is `["1", "x"]`. A variable

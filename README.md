@@ -55,7 +55,8 @@ Every value carries its type. A written list is a tuple, `["a", 1]` is
 data source has the type its schema names, and keeps it through variables, module inputs
 and outputs. An attribute set to `null` is left out, as if it were not written, so a
 required one is refused. `null` inside a list or a map stays there. A variable may name its
-type, `type = set(string)`, and takes what it is given as that type.
+type, `type = set(string)`, and takes what it is given as that type. An attribute of an
+object type can be optional, with a default: `object({ port = optional(number, 80) })`.
 
 | Block                            | Does                                                           |
 | -------------------------------- | -------------------------------------------------------------- |

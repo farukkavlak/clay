@@ -209,6 +209,77 @@ describe('a variable that names its type', () => {
     expect(plan.outputs.mixed.new).toEqual({ value: ['1', 'x'], type: types.list(types.string) });
   });
 
+  it('gives an optional attribute a module input leaves out its default, which a resource then reads', async () => {
+    const file = path.join(dir, 'port.txt');
+    await writeModule(
+      `variable "site" {\n  type = object({\n    name = string\n    port = optional(number, 80)\n    tags = optional(list(string))\n  })\n}\nresource "local_file" "f" {\n  path    = ${JSON.stringify(file)}\n  content = "\${var.site.port}"\n}\noutput "site" { value = var.site }`
+    );
+    const config = 'module "m" {\n  source = "./m"\n  site   = { name = "a" }\n}\noutput "site" { value = module.m.site }';
+
+    await apply(config);
+
+    expect(await fs.readFile(file, 'utf8')).toBe('80');
+    const state = JSON.parse(await fs.readFile(path.join(dir, 'clay.state.json'), 'utf8'));
+    expect(state.outputs.site.value).toEqual({ name: 'a', port: 80, tags: null });
+  });
+
+  it('fills in an optional attribute beside one not known yet', async () => {
+    await writeModule('variable "site" { type = object({ name = string, port = optional(number, 80) }) }\noutput "site" { value = var.site }');
+    const config =
+      'resource "random_string" "r" { length = 4 }\nmodule "m" {\n  source = "./m"\n  site   = { name = random_string.r.result }\n}\noutput "site" { value = module.m.site }';
+
+    const plan = await newOrchestrator().plan(config);
+
+    expect(plan.outputs.site.new).toEqual({ value: { name: UNKNOWN, port: ExactNumber.parse('80') }, type: types.object({ name: types.string, port: types.number }) });
+  });
+
+  it.each([
+    ['a call that makes an instance', ''],
+    ['a call with count = 0', '\n  count  = 0'],
+  ])('refuses an optional attribute default of the wrong type, though no value leaves it out, in %s', async (_, repeat) => {
+    const module = 'variable "site" {\n  type = object({ port = optional(number, "eighty") })\n}';
+    await writeModule(module);
+    const config = `module "m" {\n  source = "./m"${repeat}\n  site   = { port = 1 }\n}`;
+
+    const error = await errorOf(() => newOrchestrator().plan(config));
+
+    expect(error.message).toBe('port: "eighty" is not a number');
+    expect(error.position).toEqual({ file: path.join('m', 'main.clay'), ...placeOf(module, '"eighty"') });
+    expect(error.block).toBe('variable "site"');
+  });
+
+  it.each([
+    ['nothing reads the variable', 'variable "v" { type = list(object({ x = optional(any, true) })) }', ''],
+    ['the call makes no instance', 'variable "v" { type = list(object({ x = optional(any, true) })) }\noutput "v" { value = var.v }', '\n  count  = 0'],
+  ])('refuses an input whose items cannot join once its defaults fill them in, where %s', async (_, module, repeat) => {
+    await writeModule(module);
+    const config = `module "m" {\n  source = "./m"${repeat}\n  v      = [{}, { x = 1 }]\n}`;
+
+    const error = await errorOf(() => newOrchestrator().plan(config));
+
+    expect(error.message).toBe('variable "v" cannot join a number and a boolean into one type, at .x in each item');
+    expect(error.position).toEqual({ file: 'main.clay', ...placeOf(config, '[{}') });
+  });
+
+  it('refuses at plan an input that reads another variable, whose items cannot join once its defaults fill them in, though nothing reads it', async () => {
+    await writeModule('variable "v" { type = list(object({ x = optional(any, true) })) }');
+    const config = 'variable "one" { default = 1 }\nmodule "m" {\n  source = "./m"\n  v      = [{}, { x = var.one }]\n}';
+
+    const error = await errorOf(() => newOrchestrator().plan(config));
+
+    expect(error.message).toBe('variable "v" cannot join a number and a boolean into one type, at .x in each item');
+    expect(error.position).toEqual({ file: 'main.clay', ...placeOf(config, '[{}') });
+  });
+
+  it('takes a set as it takes a list where a default of another type fills in a member', async () => {
+    await writeModule('variable "v" { type = set(object({ x = optional(string, 1) })) }\noutput "v" { value = var.v }');
+    const config = 'module "m" {\n  source = "./m"\n  v      = toset([{ x = null }, { x = true }])\n}\noutput "v" { value = module.m.v }';
+
+    const plan = await newOrchestrator().plan(config);
+
+    expect(plan.outputs.v.new).toEqual({ value: [{ x: '1' }, { x: 'true' }], type: types.set(types.object({ x: types.string })) });
+  });
+
   it('keeps a number exact through a string type and back', async () => {
     const config = 'variable "big" {\n  type    = number\n  default = "12345678901234567890.5"\n}\noutput "big" { value = var.big }';
 

@@ -15,6 +15,7 @@ import {
   spellNamed,
   Statement,
   TemplatePart,
+  TypeDefaults,
   VariableBlock,
 } from './ast';
 import { ConfigError } from './ConfigError';
@@ -46,6 +47,24 @@ const HOLDING_TYPES = new Set(['list', 'set', 'map', 'tuple', 'object']);
 
 /** What makes a block many instances; a module call keeps these for itself, so they name no module input. */
 const INSTANCE_ARGUMENTS = ['count', 'for_each'];
+
+/** A type, with the defaults it gives an optional attribute anywhere in it. */
+interface ParsedType {
+  type: Type;
+  defaults?: TypeDefaults;
+}
+
+/** An attribute's type in an object type, with what `optional(...)` around it says. */
+interface AttributeType extends ParsedType {
+  optional?: true;
+  default?: AttributeValue;
+}
+
+/** Defaults with nothing in them left out, so a type without any keeps none. */
+function defaultsFrom(found: { values?: Record<string, AttributeValue>; within?: Record<string, TypeDefaults> }): Pick<ParsedType, 'defaults'> {
+  const defaults = Object.fromEntries(Object.entries(found).filter(([, record]) => Object.keys(record).length > 0));
+  return Object.keys(defaults).length > 0 ? { defaults } : {};
+}
 
 export class Parser {
   private tokens: Token[];
@@ -143,27 +162,32 @@ export class Parser {
     if (INSTANCE_ARGUMENTS.includes(nameToken.value))
       throw new ConfigError(`"${nameToken.value}" cannot be a variable name: a module call keeps it for itself.`, nameToken.position);
 
-    const { attributes, valueType } = this.parseVariableBody(nameToken.value);
+    const { attributes, declared } = this.parseVariableBody(nameToken.value);
 
     // A module call's input replaces the default, so a reference or a call in it would never be checked.
-    const [named] = attributes.default ? namedIn(attributes.default) : [];
-    if (named) throw new ConfigError(`A variable's default is a constant, so it cannot hold ${spellNamed(named)}`, named.position);
+    if (attributes.default) this.checkConstant(attributes.default, "A variable's default");
 
     return {
       type: 'Variable',
       name: nameToken.value,
       attributes,
-      ...(valueType && { valueType }),
+      ...(declared && { valueType: declared.type }),
+      ...(declared?.defaults && { defaults: declared.defaults }),
       position,
     };
   }
 
+  private checkConstant(value: AttributeValue, what: string): void {
+    const [named] = namedIn(value);
+    if (named) throw new ConfigError(`${what} is a constant, so it cannot hold ${spellNamed(named)}`, named.position);
+  }
+
   /** `default` and `type` are the whole of what a variable is read for, so another name would be parsed and never read. */
-  private parseVariableBody(name: string): Pick<VariableBlock, 'attributes' | 'valueType'> {
+  private parseVariableBody(name: string): { attributes: Record<string, AttributeValue>; declared?: ParsedType } {
     this.consume(TokenType.LBrace, "Expect '{' after variable name.");
 
     const attributes: Record<string, AttributeValue> = {};
-    let valueType: Type | undefined;
+    let declared: ParsedType | undefined;
     const seen: Record<string, true> = {};
     while (!this.check(TokenType.RBrace) && !this.isAtEnd()) {
       const key = this.consume(TokenType.Identifier, 'Expect attribute name.');
@@ -172,7 +196,7 @@ export class Parser {
       this.consume(TokenType.Assign, "Expect '=' after attribute name.");
 
       if (key.value === 'type') {
-        valueType = this.parseType();
+        declared = this.parseType();
         continue;
       }
 
@@ -182,58 +206,88 @@ export class Parser {
     }
 
     this.consume(TokenType.RBrace, "Expect '}' after block body.");
-    return { attributes, valueType };
+    return { attributes, declared };
   }
 
-  private parseType(): Type {
+  private parseType(): ParsedType {
     if (this.check(TokenType.OQuote)) return this.error('A type is written without quotes: string, not "string"');
     const name = this.consume(TokenType.Identifier, 'Expect a type: string, number, bool, any, list(...), set(...), map(...), tuple([...]) or object({...}).');
+    if (name.value === 'optional') throw new ConfigError("optional(...) is written only as the type of an object's attribute", name.position);
 
     const primitive = PRIMITIVE_TYPES.get(name.value);
     if (primitive && this.check(TokenType.LParen)) throw new ConfigError(`${name.value} holds no other type, so it takes no '('`, this.peek().position);
-    if (primitive) return primitive;
+    if (primitive) return { type: primitive };
     if (!HOLDING_TYPES.has(name.value)) throw new ConfigError(`"${name.value}" is not a type: a type is string, number, bool, any, list, set, map, tuple or object`, name.position);
 
     this.consume(TokenType.LParen, `Expect '(' after ${name.value}.`);
-    const type = this.parseTypeArgument(name);
+    const parsed = this.parseTypeArgument(name);
     this.consume(TokenType.RParen, `Expect ')' after the type ${name.value} holds.`);
-    return type;
+    return parsed;
   }
 
-  private parseTypeArgument(name: Token): Type {
-    if (name.value === 'list' || name.value === 'set' || name.value === 'map') return types[name.value](this.parseType());
+  private parseTypeArgument(name: Token): ParsedType {
+    if (name.value === 'list' || name.value === 'set' || name.value === 'map') {
+      const { type, defaults } = this.parseType();
+      return { type: types[name.value](type), ...(defaults && { defaults: { element: defaults } }) };
+    }
 
-    return name.value === 'tuple' ? types.tuple(this.parseTupleTypes()) : types.object(this.parseObjectTypes());
+    return name.value === 'tuple' ? this.parseTupleTypes() : this.parseObjectTypes();
   }
 
-  private parseTupleTypes(): Type[] {
+  private parseTupleTypes(): ParsedType {
     this.consume(TokenType.LBracket, "Expect '[' after 'tuple('.");
 
     const elements: Type[] = [];
+    const within: Record<string, TypeDefaults> = {};
     while (!this.check(TokenType.RBracket) && !this.isAtEnd()) {
-      elements.push(this.parseType());
+      const { type, defaults } = this.parseType();
+      if (defaults) within[elements.length] = defaults;
+      elements.push(type);
       if (!this.matchToken(TokenType.Comma)) break;
     }
 
     this.consume(TokenType.RBracket, "Expect ']' after the types in a tuple.");
-    return elements;
+    return { type: types.tuple(elements), ...defaultsFrom({ within }) };
   }
 
   /** Written as a map is, with an identifier for each name. */
-  private parseObjectTypes(): Record<string, Type> {
+  private parseObjectTypes(): ParsedType {
     this.consume(TokenType.LBrace, "Expect '{' after 'object('.");
 
     const attributes: Record<string, Type> = {};
+    const optional: string[] = [];
+    const values: Record<string, AttributeValue> = {};
+    const within: Record<string, TypeDefaults> = {};
     while (!this.check(TokenType.RBrace) && !this.isAtEnd()) {
       const key = this.consume(TokenType.Identifier, 'Expect an attribute name in an object type.');
       this.checkKey(attributes, key);
       this.consume(TokenType.Assign, "Expect '=' after the attribute name.");
-      attributes[key.value] = this.parseType();
+
+      const attribute = this.parseAttributeType();
+      attributes[key.value] = attribute.type;
+      if (attribute.optional) optional.push(key.value);
+      if (attribute.default) values[key.value] = attribute.default;
+      if (attribute.defaults) within[key.value] = attribute.defaults;
       this.matchToken(TokenType.Comma);
     }
 
     this.consume(TokenType.RBrace, "Expect '}' after the attributes of an object type.");
-    return attributes;
+    return { type: types.object(attributes, optional.length > 0 ? optional : undefined), ...defaultsFrom({ values, within }) };
+  }
+
+  /** `optional(type)`, or `optional(type, default)` for the value it takes when left out or null. */
+  private parseAttributeType(): AttributeType {
+    if (!this.check(TokenType.Identifier) || this.peek().value !== 'optional') return this.parseType();
+    this.advance();
+    this.consume(TokenType.LParen, "Expect '(' after optional.");
+
+    const parsed = this.parseType();
+    const value = this.matchToken(TokenType.Comma) ? this.parseValue() : undefined;
+    // A type is read where the variable is declared, before any value a reference could read.
+    if (value) this.checkConstant(value, "An optional attribute's default");
+
+    this.consume(TokenType.RParen, "Expect ')' after the type of optional, or its default.");
+    return { ...parsed, optional: true, ...(value && { default: value }) };
   }
 
   private parseOutput(position: Position): OutputBlock {
