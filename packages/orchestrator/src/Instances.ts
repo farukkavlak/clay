@@ -42,7 +42,7 @@ export class Instances {
     this.values.set(block, values);
   }
 
-  /** Undefined until count or for_each is read. An apply reads only for_each, for `each.value`, and runs the instances its plan listed. */
+  /** Undefined until count or for_each is read. */
   keysOf(block: string): InstanceKey[] | undefined {
     return this.keys.get(block);
   }

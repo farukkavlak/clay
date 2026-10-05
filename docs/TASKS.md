@@ -63,6 +63,14 @@ change each.
       attribute or variable it is given to: a reference is not known yet, of the type its
       variable or schema names, and a for over a collection not known yet reads its body
       once. Terraform reads each block once the same way
+- [x] A saved plan made an instance its `count` no longer gave. With
+      `count = length(data.local_file.size.content)` and the file shorter by the apply, the
+      plan's last index was still created. An apply read `for_each` again and never
+      `count`; it reads both now and refuses an index or a key they do not give
+- [ ] A saved plan is held to the instances the apply reads in one direction only. With
+      `count = length(data.local_file.size.content)` and the file longer by the apply, the
+      new index is skipped in silence; with the plan deleting the last index and the file
+      longer again, it is deleted though the count gives it. `for_each` does the same
 
 ## 1. Language
 
@@ -113,8 +121,7 @@ configuration hits each of these early.
 - [x] A whole instance as a value: `local_file.a`, `local_file.a[0]` and
       `local_file.a["key"]` are each an object of every attribute in the schema
 - [ ] Every instance of a resource as one value: `local_file.a` as the list of its
-      instances under `count`, and as a map by key under `for_each`. An apply does not read
-      `count`, so it has to learn the instances another way
+      instances under `count`, and as a map by key under `for_each`
 - [x] `path.module` and `path.root`, so a module can name a file next to itself. Both are
       relative to the root, where `clay` runs, so a plan or a state reads the same on
       another machine
@@ -431,7 +438,7 @@ by resource type, and no `provider` block exists yet.
       nodes, the graph refuses the undeclared one
 - [ ] An output that fails to resolve reports a failure. `resolveOutput` runs outside the
       step's `try`, so a throw there ends the run with no `failed` event and nothing said.
-      `readEach`, which reads a `for_each` again at apply, runs there too, and so do
+      `readKeys`, which reads a `count` or a `for_each` again at apply, runs there too, and so do
       `expandCall`, which reads a module's `count` or `for_each` again, and the refusal of
       a saved plan's action in an instance of a module the configuration does not make
 - [ ] An output may be named `__proto__`. The runner collects outputs into a plain object,
