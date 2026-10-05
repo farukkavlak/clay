@@ -104,7 +104,7 @@ export class ModuleLoader {
       const variable = declared.get(key);
       if (!variable) throw new ConfigError(`module "${stmt.name}" has no variable "${key}"`, value.position, { block, module: scopeOf(parentAddress) || undefined });
 
-      this.scopeManager.setVariable(childScope, key, { value, context: new ModuleCall(childAddress), type: variable.valueType, block });
+      this.scopeManager.setVariable(childScope, key, { value, context: new ModuleCall(childAddress), type: variable.valueType, defaults: variable.defaults, block });
     }
   }
 
@@ -116,7 +116,7 @@ export class ModuleLoader {
       if (stmt.type !== 'Variable' || this.scopeManager.getVariable(scope, stmt.name)) continue;
       if (stmt.attributes.default === undefined) throw new ConfigError(`variable "${stmt.name}" has no value`, stmt.position, { block: spell(stmt), module: scope || undefined });
 
-      this.scopeManager.setVariable(scope, stmt.name, { value: stmt.attributes.default, context: address, type: stmt.valueType, block: spell(stmt) });
+      this.scopeManager.setVariable(scope, stmt.name, { value: stmt.attributes.default, context: address, type: stmt.valueType, defaults: stmt.defaults, block: spell(stmt) });
     }
   }
 }

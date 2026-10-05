@@ -6,7 +6,7 @@ import { moveResource } from '@clay/state';
 
 import { writtenAt } from '../conformValues';
 import { countFrom } from '../count';
-import { declaredAs } from '../declared';
+import { givenTo } from '../declared';
 import { eachFrom } from '../forEach';
 import { Instances } from '../Instances';
 import { Context, contextIn, enclosing, scopeOf } from '../keys';
@@ -185,9 +185,10 @@ export class DesiredStateBuilder {
   private planVariable(node: ValueNode, instance: ModuleAddress, state: State): void {
     if (node.value === undefined) return;
 
-    const type = this.scopeManager.getVariable(scopeOf(node.module), node.name)?.type;
+    const declared = this.scopeManager.getVariable(scopeOf(node.module), node.name) ?? {};
     const value = this.resolveNode(node, node.value, instance, state);
-    if (type) tryAt(node.position, node.declaration, contextIn(node.context, instance), () => declaredAs(node.name, value, type));
+    const read = (constant: AttributeValue) => this.resolveNode(node, constant, instance, state);
+    tryAt(node.position, node.declaration, contextIn(node.context, instance), () => givenTo(node.name, value, declared, read));
   }
 
   /** Gives an output its value, known or not yet, so the resources reading it can be planned. */

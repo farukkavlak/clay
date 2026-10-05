@@ -130,8 +130,9 @@ configuration hits each of these early.
 - [ ] `if` in a `for` expression, once operators can write a condition
 - [x] A variable names its type: `variable "x" { type = set(string) }`. An object given
       an attribute its type does not name is refused, where Terraform drops it in silence
-- [ ] `optional(type)` and `optional(type, default)` on an attribute of a variable's
-      object type. Today every attribute it names is required
+- [x] `optional(type)` and `optional(type, default)` on an attribute of a variable's
+      object type. One left out, or given `null`, takes its default, or `null` where it
+      names none
 - [ ] `locals { name = "${var.prefix}-x" }`: a value a module works out once and reads by
       name as `local.name`. A variable default is a constant, so today such a value is
       written out again wherever it is read

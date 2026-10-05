@@ -57,6 +57,18 @@ export interface VariableBlock extends Node {
   attributes: Record<string, AttributeValue>;
   /** What every value it is given is taken as; a variable without one takes a value as it is. */
   valueType?: Type;
+  /** What its type gives an optional attribute left out or null, where the type names a value for it. */
+  defaults?: TypeDefaults;
+}
+
+/** The defaults a type gives, laid out as the type is: an object's by the attribute, and those of the types it holds further in. */
+export interface TypeDefaults {
+  /** A constant for each optional attribute of this object that names one. */
+  values?: Record<string, AttributeValue>;
+  /** Those of what a list, a set or a map holds. */
+  element?: TypeDefaults;
+  /** Those of a tuple's items by position, or of an object's attributes by name. */
+  within?: Record<string, TypeDefaults>;
 }
 
 export interface OutputBlock extends Node {
