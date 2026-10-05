@@ -37,7 +37,7 @@ describe('an apply that does what the plan showed', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
-  // The data source is read again for the run, and now reads what the plan never showed.
+  // The data source is read again at apply and now returns a value the plan never showed.
   it('stops before a resource whose value the plan showed as known comes to another', async () => {
     const engine = newOrchestrator();
     const planned = await engine.plan(config);
@@ -64,7 +64,7 @@ describe('an apply that does what the plan showed', () => {
     expect(await fs.readFile(path.join(dir, 'copy.txt'), 'utf8')).toBe('one');
   });
 
-  // A value only an apply makes may come to anything.
+  // An unknown may become anything.
   it('runs a value the plan showed as known after apply, whatever it comes to', async () => {
     config = `
       resource "random_string" "r" { length = 4 }

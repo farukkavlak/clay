@@ -99,7 +99,6 @@ describe('Complex Types Parsing', () => {
 
     const resource = ast[0] as ResourceBlock;
 
-    // Check nested list
     const matrix = resource.attributes.matrix;
     expect(matrix.type).toBe('List');
     if (matrix.type === 'List') {
@@ -108,7 +107,6 @@ describe('Complex Types Parsing', () => {
       if (firstRow.type === 'List') expect(firstRow.value[0]).toMatchObject({ type: 'Number', value: ExactNumber.parse('1') });
     }
 
-    // Check nested map
     const meta = resource.attributes.meta;
     expect(meta.type).toBe('Map');
     if (meta.type === 'Map') {

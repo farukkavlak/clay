@@ -43,7 +43,7 @@ describe('plain data read as its type', () => {
     });
   });
 
-  // The inner sets are ordered first, so the outer set compares them as the same member.
+  // The inner sets are ordered first, so the outer set sees one member.
   it('holds two inner sets with the same members as one member', () => {
     expect(typedValues(schema, { nested: [[{ b: 'x', a: 'y' }], [{ a: 'y', b: 'x' }]] }).nested.data).toEqual([[{ a: 'y', b: 'x' }]]);
   });
@@ -57,12 +57,12 @@ describe('plain data read as its type', () => {
     expect(typed(types.list(types.string), null, ['l'])).toEqual(valueOf(types.list(types.string), null));
   });
 
-  // Nothing names its type, so a list is read as a tuple and a map as an object, as the configuration writes them.
+  // No declared type, so a list is a tuple and a map an object.
   it('gives a value of a dynamic type the type its shape has', () => {
     expect(typedValues({}, { meta: { a: ['x', n('1')] } }).meta.type).toEqual(types.object({ a: types.tuple([types.string, types.number]) }));
   });
 
-  // A provider that spreads what it was given and names a value again gives the name with no value.
+  // A provider that spreads its input may return a name as undefined.
   it('takes a name given no value as one left out, at any depth', () => {
     const values = { ports: undefined, rule: { cidrs: [], note: undefined }, meta: { a: undefined, b: [{ c: undefined }] } };
 

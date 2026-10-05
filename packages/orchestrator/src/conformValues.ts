@@ -6,7 +6,7 @@ import { shown } from './shown';
 import { items, spelled } from './spelled';
 import { article, child, described, unordered, Value, valueOf } from './Value';
 
-/** A value the schema does not take, with the attribute it is in, so the caller can say where that was written. One left out is in none. */
+/** Carries the attribute, so the caller can report its position; undefined for a missing attribute. */
 export class SchemaMismatch extends Error {
   constructor(
     message: string,
@@ -17,18 +17,16 @@ export class SchemaMismatch extends Error {
   }
 }
 
-/** Where an error in a block's values was written: a mismatch at its value, anything else at the block. */
 export function writtenAt(error: unknown, block: ResourceBlock | DataBlock): Position {
   return error instanceof SchemaMismatch && error.attribute !== undefined ? block.attributes[error.attribute].position : block.position;
 }
 
-/** What is wrong with the names a resource, or an object in it, sets: `set` is the name when it is one written, so it has a place. */
+/** `set` is the offending name when it was written, so it has a position. */
 export interface NameProblem {
   message: string;
   set?: string;
 }
 
-/** The names a resource or an object in it has, and those of them it requires. */
 interface Names {
   known: string[];
   required: string[];
@@ -44,7 +42,7 @@ function namesOfObject(type: Extract<Type, { kind: 'object' }>): Names {
   return { known, required: known.filter((name) => !type.optional?.includes(name)) };
 }
 
-/** A name it does not have comes first, then one it requires that is left out. */
+/** Reports an unknown name before a missing required one. */
 export function nameProblem(resource: string, { known, required }: Names, names: string[], within: AttributePath = []): NameProblem | undefined {
   const where = within.length > 0 ? ` in ${spelled(within)}` : '';
 
@@ -55,12 +53,11 @@ export function nameProblem(resource: string, { known, required }: Names, names:
   return missing === undefined ? undefined : { message: `${resource} requires "${missing}"${where}` };
 }
 
-/** A mismatch in a value, named by the attribute it is in. */
 function mismatchAt(path: AttributePath, message: string): SchemaMismatch {
   return new SchemaMismatch(message, String(path[0]));
 }
 
-/** The kinds a value of each kind can be taken as: a number or a boolean as its text, a string as the number or boolean it spells, and a collection as another. */
+/** Allowed conversions: a number or bool to its text, a string to the number or bool it spells, and a collection to another. */
 const TAKES: Record<Type['kind'], readonly Type['kind'][]> = {
   string: ['string', 'number', 'bool'],
   number: ['number', 'string'],
@@ -88,7 +85,6 @@ function booleanIn(text: string, path: AttributePath): boolean {
   throw mismatchAt(path, `${spelled(path)}: ${shown(text)} is not a boolean, which is "true" or "false"`);
 }
 
-/** A primitive as the kind it is taken as. */
 function primitive(kind: Type['kind'], data: unknown, path: AttributePath): unknown {
   if (kind === 'string') return String(data);
   if (typeof data !== 'string') return data;
@@ -106,7 +102,7 @@ function itemsConverted(value: Value, typeOf: (index: number) => Type, path: Att
   return (value.data as unknown[]).map((_, index) => convert(child(value, index), typeOf(index), [...path, index]).data);
 }
 
-/** What a collection holds, each item converted to the type its place names; a set's then held once each and in order. */
+/** A set is deduplicated and ordered after conversion. */
 function collection(resource: string, value: Value, to: Type, path: AttributePath, convert: Convert): unknown {
   if (to.kind === 'list' || to.kind === 'set') {
     const elements = itemsConverted(value, () => to.element, path, convert);
@@ -125,12 +121,12 @@ function collection(resource: string, value: Value, to: Type, path: AttributePat
   return entriesConverted(value, (name) => (to as Extract<Type, { kind: 'object' }>).attributes[name], path, convert);
 }
 
-/** Whether nothing of the value can be held as `to` before the apply: only a set can hold a set with a member not known yet. */
+/** Only a set can hold a set with an unknown member before apply. */
 function knownLater(value: Value, to: Type): boolean {
   return isUnknown(value.data) || (to.kind !== 'set' && unordered(value));
 }
 
-/** The value's data as it is, where no type is named for it, with each such set in it not known as a whole: the data alone would read as a list. */
+/** For `dynamic`, a set with an unknown member becomes UNKNOWN, since its data alone would read as a list. */
 function ordered(value: Value): unknown {
   if (unordered(value)) return UNKNOWN;
   if (Array.isArray(value.data)) return value.data.map((_, index) => ordered(child(value, index)));
@@ -139,10 +135,7 @@ function ordered(value: Value): unknown {
   return value.data;
 }
 
-/**
- * The value as the type `to` names, or a mismatch named by its path. A null is a null of that type. A value not known yet is checked only for its kind,
- * since what it holds is known only at the apply, where it is checked again.
- */
+/** An unknown is checked only for its kind here; it is checked again at apply. */
 export function converted(resource: string, value: Value, to: Type, path: AttributePath): Value {
   if (to.kind === 'dynamic') return valueOf(value.type, ordered(value));
   if (value.data === null) return valueOf(to, null);
@@ -156,7 +149,7 @@ export function converted(resource: string, value: Value, to: Type, path: Attrib
   return valueOf(to, isPrimitive ? primitive(to.kind, value.data, path) : collection(resource, value, to, path, convert));
 }
 
-/** The names it sets, and of those the ones it gives a value: null is a name left out, so one it requires is refused where it was written. */
+/** A name set to null counts as missing, so a required one is refused at its position. */
 function checkNames(resource: string, schema: Schema, config: Record<string, Value>): void {
   const named = nameProblem(resource, { known: Object.keys(schema), required: [] }, Object.keys(config));
   if (named) throw new SchemaMismatch(named.message, named.set);
@@ -166,10 +159,8 @@ function checkNames(resource: string, schema: Schema, config: Record<string, Val
 }
 
 /**
- * Holds what the configuration sets to the schema, as the provider is sent it: its names, and each value as the type the schema names, in every item it
- * holds. A number or a boolean where a string goes, and a string that spells a number or a boolean where one goes, is taken as that type. A name set to
- * null is left out. A value the apply makes is checked once the apply knows it. A saved plan's values reach the apply without the load's check, so the
- * names are checked here too. Each set comes back in one order, with each member once.
+ * Converts configuration values to the schema's types, as the provider receives them. A name set to null is dropped.
+ * Names are checked here too, since a saved plan's values reach the apply without the load-time check.
  */
 export function conformValues(resource: string, schema: Schema, config: Record<string, Value>): Record<string, unknown> {
   checkNames(resource, schema, config);

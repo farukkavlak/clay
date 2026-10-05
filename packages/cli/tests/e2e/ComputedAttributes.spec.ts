@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { start } from './start';
 
-/** A resource whose `made` the provider makes, once it has made or changed the resource, unless the configuration sets it. */
+/** Computes `made` on create and update, unless the configuration sets it. */
 class StampProvider implements Provider {
   readonly resources = ['stamp'];
   readonly dataSources: string[] = [];
@@ -54,7 +54,7 @@ class StampProvider implements Provider {
   }
 }
 
-/** Makes `tags`, a map of strings, with the resource. */
+/** Computes `tags`, a map of strings. */
 class TaggedStampProvider extends StampProvider {
   override async getSchema(): Promise<Schema> {
     return { ...(await super.getSchema()), tags: { type: types.map(types.string), computed: true } };
@@ -65,14 +65,14 @@ class TaggedStampProvider extends StampProvider {
   }
 }
 
-/** Says it computes `made`, then does not return it. */
+/** Declares `made` computed, then does not return it. */
 class ForgetfulStampProvider extends StampProvider {
   override async create(_type: string, { config }: CreateRequest): Promise<Record<string, unknown>> {
     return { ...config, id: 'stamp-id' };
   }
 }
 
-/** Makes a `serial` from its `size`, which replaces it, so the serial is the same until the resource is replaced. */
+/** Computes a `kept` `serial`; a change to `size` replaces the resource. */
 class SerialStampProvider extends StampProvider {
   override async getSchema(): Promise<Schema> {
     return { ...(await super.getSchema()), size: { type: types.string, forceNew: true }, serial: { type: types.string, computed: true, kept: true } };
@@ -87,7 +87,7 @@ class SerialStampProvider extends StampProvider {
   }
 }
 
-/** Plans `made` itself, then makes the resource from that plan, and keeps what it was asked. */
+/** Plans `made` itself, creates from that plan, and records each create request. */
 class PlannedStampProvider extends StampProvider {
   readonly creates: CreateRequest[] = [];
   readonly updates: UpdateRequest[] = [];
@@ -154,7 +154,7 @@ describe('a value only the provider knows', () => {
     expect(state.resources['random_string.r'].attributes.result).toHaveLength(5);
   });
 
-  // The map is not known at plan, and what is read out of it is a string, not a map.
+  // The map is unknown at plan, but a value read from it is a string, not a map.
   it.each([
     ['from the resource', 'stamp.a.tags.a'],
     ['from the resource, by a key in brackets', 'stamp.a.tags["a"]'],
@@ -164,7 +164,7 @@ describe('a value only the provider knows', () => {
     expect(await fs.readFile(file, 'utf8')).toBe('one');
   });
 
-  // An output not known yet still has the type it will have, so the caller's mistake is refused at plan.
+  // An unknown output still has its type, so the mismatch is refused at plan.
   it('refuses, at plan, a module output not known yet of a type the attribute does not take', async () => {
     await fs.mkdir(path.join(dir, 'm'));
     await fs.writeFile(path.join(dir, 'm', 'main.clay'), 'resource "stamp" "a" { label = "x" }\noutput "t" { value = stamp.a.tags }', 'utf8');
@@ -176,7 +176,7 @@ describe('a value only the provider knows', () => {
     });
   });
 
-  // A name the schema does not have is never known; one it has and nothing sets reads as null.
+  // A name outside the schema is refused; one in it that nothing sets reads as null.
   it('refuses a reference to a name the resource does not have, where it is written', async () => {
     const config = 'resource "stamp" "a" { label = "x" }\noutput "o" { value = stamp.a.nope }';
 
@@ -186,7 +186,7 @@ describe('a value only the provider knows', () => {
     });
   });
 
-  // The provider may leave out what it said it would make, and a name left out is null.
+  // The provider may omit a computed value, and an omitted name is null.
   it('reads as null an item the plan left for the apply, when the provider does not return it', async () => {
     await apply('resource "stamp" "a" { label = "x" }\nresource "null_resource" "n" {\n  triggers = { a = stamp.a.made }\n}', new ForgetfulStampProvider());
 
@@ -203,7 +203,7 @@ describe('a value only the provider knows', () => {
     });
   });
 
-  // Only the provider makes it, so a value the configuration gave it would show in the plan and never be applied.
+  // Computed-only, so a configured value would show in the plan and never be applied.
   it.each([
     ['random_string', 'result', 'length = 4'],
     ['command_exec', 'stdout', 'command = "echo x"'],
@@ -230,7 +230,7 @@ describe('a value only the provider knows', () => {
     expect(state.resources['stamp.a'].attributes).toEqual({ id: 'stamp-id', label: 'x', made: 'made x' });
   });
 
-  // The configuration never sets it, so it is no change that the configuration does not have it.
+  // A computed value absent from the configuration is not a change.
   it('plans nothing for a value only the provider knows', async () => {
     await apply('resource "stamp" "a" { label = "x" }');
 
@@ -247,7 +247,7 @@ describe('a value only the provider knows', () => {
     expect(actions.map(({ type, changes }) => ({ type, changes }))).toEqual([{ type: 'UPDATE', changes: { made: { old: 'made x', new: 'mine' } } }]);
   });
 
-  // Any change makes the provider compute its values again, so what it made before is known only after apply.
+  // Any change recomputes the provider's values, so they are unknown until apply.
   it('still plans a value the configuration stops setting as removed', async () => {
     await apply('resource "stamp" "a" {\n  label = "x"\n  note = "n"\n}');
 
@@ -305,7 +305,7 @@ describe('a value only the provider knows', () => {
     expect(await fs.readFile(file, 'utf8')).toBe('serial 2');
   });
 
-  // The provider may make it again on a change, so the plan cannot say what it will be.
+  // The provider may recompute it on a change, so the plan cannot know it.
   it('plans the value as known after apply for a resource that changes, and keeps what the provider returns', async () => {
     await apply(withCopy('resource "stamp" "a" { label = "x" }'));
     const config = withCopy('resource "stamp" "a" { label = "y" }');

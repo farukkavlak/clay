@@ -15,13 +15,12 @@ function differs({ path, planned, returned }: Mismatch): string {
   return `${at} = ${shown(returned)}, where the plan showed ${shown(planned)}`;
 }
 
-/** How each check names its step, and a value it found not known. */
 const steps = {
   apply: { did: 'returned', unknown: () => 'is not known; an apply returns every value' },
   plan: { did: 'planned at apply', unknown: (planned: unknown) => `is not known, where the plan showed ${shown(planned)}` },
 };
 
-/** The plan was approved as shown, so a provider that plans or makes something else has a bug, and the run stops on it. */
+/** The plan was approved as shown, so any deviation is a provider bug and stops the run. */
 export function inconsistent(type: string, step: keyof typeof steps, mismatches: Mismatch[]): Error {
   const { did, unknown } = steps[step];
   const line = (mismatch: Mismatch) => (isUnknown(mismatch.returned) ? `${spelled(mismatch.path)} ${unknown(mismatch.planned)}` : differs(mismatch));
@@ -45,23 +44,23 @@ function refuse(type: string, what: string, schema: Schema, read: Record<string,
   if (lines.length > 0) throw new Error([`${type} read what the ${what} cannot hold, which is a bug in the provider:`, ...lines.map((odd) => `  ${odd}`)].join('\n'));
 }
 
-/** A value a read returns is planned against, so one not known, or a name the next plan would read as removed, is refused. */
+/** Plans are made against a read, so an unknown or a name outside the schema is refused. */
 export function checkRead(type: string, schema: Schema, read: Record<string, unknown>): void {
   refuse(type, 'resource', schema, read);
 }
 
-/** What a read returns is what a reference to the data source reads, so a value not known, or a name the schema does not have, is refused. */
+/** References read this directly, so an unknown or a name outside the schema is refused. */
 export function checkDataSourceRead(type: string, schema: Schema, read: Record<string, unknown>): void {
   refuse(type, 'data source', schema, read);
 }
 
-/** A type is checked whole, since one a provider gets wrong would be refused only when a saved plan holding it is read back. */
+/** Otherwise a bad type would only fail when a saved plan holding it is read back. */
 function checkTypes(named: string, schema: Schema): void {
   for (const [name, definition] of Object.entries(schema))
     if (!isType(definition.type)) throw new Error(`${named} gives ${name} a type Clay cannot read, which is a bug in the provider`);
 }
 
-/** A schema comes from the provider, so one that says what cannot be is its bug, refused before anything is planned with it. */
+/** An invalid schema is a provider bug, refused before anything is planned with it. */
 export function checkSchema(type: string, schema: Schema): Schema {
   checkTypes(type, schema);
   for (const [name, definition] of Object.entries(schema))
@@ -71,7 +70,7 @@ export function checkSchema(type: string, schema: Schema): Schema {
   return schema;
 }
 
-/** A data source is only read, never made or changed, so a schema that says when to remake it or what to keep is the provider's bug. */
+/** A data source is only read, so `forceNew` or `kept` in its schema is a provider bug. */
 export function checkDataSourceSchema(type: string, schema: Schema): Schema {
   checkTypes(`data source ${type}`, schema);
   for (const [name, definition] of Object.entries(schema)) {
@@ -82,7 +81,7 @@ export function checkDataSourceSchema(type: string, schema: Schema): Schema {
   return schema;
 }
 
-/** What a provider gave, each value read as the type its schema names; one of another type is the provider's bug, as `did` says it gave it. */
+/** A value of the wrong type is a provider bug; `did` names the step in the message. */
 export function heldBy(type: string, did: string, schema: Schema, values: Record<string, unknown>): Record<string, Value> {
   try {
     return typedValues(schema, values);

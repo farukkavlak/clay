@@ -72,7 +72,7 @@ describe('a plan that reads each resource back first', () => {
     expect(changedOutside(dropped)).toEqual([{ address: 'local_file.a' }]);
   });
 
-  // The configuration now asks for what was written by hand, so there is nothing to do but record it.
+  // The configuration now matches the hand edit, so the apply only records the refresh.
   it('records what it read when an apply has nothing else to do', async () => {
     await fs.writeFile(file, 'by hand', 'utf8');
     config = config.replace('applied', 'by hand');
@@ -93,14 +93,14 @@ describe('a plan that reads each resource back first', () => {
     expect(actions.map(({ type }) => type)).toEqual(['NO_OP']);
   });
 
-  // The plan carries each type's schema, so a resource in state needs its provider even when nothing is read.
+  // The plan carries each type's schema, so a resource in state needs its provider even without a refresh.
   it('refuses a resource in state that no provider handles, when told not to read', async () => {
     const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
 
     await expect(engine.plan('', { refresh: false })).rejects.toThrow('No provider handles "local_file"');
   });
 
-  // A plan only looks, so what it read is not written.
+  // A plan never writes state.
   it('leaves the state as it was', async () => {
     const before = await stateFile();
     await fs.unlink(file);
@@ -172,12 +172,12 @@ describe('a plan that reads each resource back first', () => {
       expect(state.resources).toEqual({});
     });
 
-    // It is made again, so the state keeps it.
+    // It is recreated, so state keeps it.
     it('does not count a resource found gone as forgotten when the apply makes it again', async () => {
       expect(await run(createApplyCommand, ['-y'])).toContain('Apply complete! Resources: 1 added, 0 changed, 0 destroyed.');
     });
 
-    // Nothing is left to do but record what was read, which is still work for an apply.
+    // Recording the refresh is still work for an apply.
     it('applies a plan whose only change is a value changed outside Clay', async () => {
       await fs.writeFile(file, 'by hand', 'utf8');
       await fs.writeFile(path.join(dir, 'main.clay'), config.replace('applied', 'by hand'), 'utf8');
@@ -200,7 +200,7 @@ describe('a plan that reads each resource back first', () => {
       expect(planned).not.toContain('Changed outside Clay');
     });
 
-    // The action is filed where count moves it, but the state keeps it, so it is not forgotten.
+    // The action is at the address count moves it to, and state keeps it, so it is not forgotten.
     it('does not count a resource changed by hand and moved by count as forgotten', async () => {
       await fs.writeFile(file, 'by hand', 'utf8');
       await fs.writeFile(path.join(dir, 'main.clay'), config.replace('{', '{ count = 1').replace('applied', 'by hand'), 'utf8');

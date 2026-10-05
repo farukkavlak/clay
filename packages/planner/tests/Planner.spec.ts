@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 
 import { DesiredResource, hasChanges, outputChanges, plan, PLAN_FILE_VERSION, PlanAction, serializePlan, validatePlanFile } from '../src/index';
 
-/** A plan is built from parsed blocks, and a test that builds one by hand still has to say where they came from. */
 const position = { file: CONFIG_FILE, line: 1, column: 1 };
 const str = (value: string): AttributeValue => ({ type: 'String', value, position });
 const text = (value: string): Output => ({ value, type: types.string });
@@ -55,7 +54,7 @@ describe('Planner', () => {
     expect(actions[0].attributes!.path).toEqual(str('x'));
   });
 
-  // The whole of what was planned, the values that change and the ones that do not, so the apply can hold each to it.
+  // Every planned value, changed or not, so the apply can check each one.
   it('carries every value it planned on a create, an update and a replace, and none on the others', () => {
     const planned = { path: 'x', size: 'large' };
     const after = { ...planned, made: UNKNOWN };
@@ -68,7 +67,7 @@ describe('Planner', () => {
     expect(plan([], stateWith('r', planned))[0]).not.toHaveProperty('after');
   });
 
-  // The configuration sets the same path; what changes is what the provider will make again.
+  // The configuration is unchanged; the change comes from the provider's plan.
   it('plans the change from what the provider plans, not from the configuration alone', () => {
     const desired = { ...desiredResource('r', { path: 'x' }), after: { path: 'x', made: UNKNOWN } };
     const [action] = plan([desired], stateWith('r', { path: 'x', made: 'before' }));
@@ -134,7 +133,7 @@ describe('Planner', () => {
     expect(actions[0].changes).toBeUndefined();
   });
 
-  // A name every object answers to used to come back as its inherited function instead of undefined, so an addition read as a change from that function.
+  // An inherited name like `constructor` used to read as a change from the inherited function.
   it('should report an output named after something every object has as an addition', () => {
     expect(outputChanges({}, { constructor: text('hello') })).toEqual({ constructor: { old: undefined, new: text('hello') } });
   });
@@ -150,7 +149,7 @@ describe('Planner', () => {
     expect(outputChanges({ toString: text('bye') }, {})).toEqual({ toString: { old: text('bye'), new: undefined } });
   });
 
-  // A state file can hold `__proto__` as a name of its own, and assigning it into a plain object sets a prototype rather than a key.
+  // A state file can hold `__proto__` as a key, which a plain object would treat as its prototype.
   it('should see a change to an attribute named __proto__, which a state file can carry', () => {
     expect(hasChanges(JSON.parse('{"__proto__":"old"}'), { __proto__: 'new' })).toBe(true);
   });
@@ -164,7 +163,7 @@ describe('Planner', () => {
     expect(actions[0].changes!.path).toEqual({ old: 'path', new: UNKNOWN });
   });
 
-  // Only the engine can make the marker; a value the configuration spells, whatever its keys, is a value.
+  // UNKNOWN is a symbol, so a map spelled like a marker is an ordinary value.
   it('plans no change for a map that only looks like the unknown marker', () => {
     const lookalike = { '@@clay/unknown': true };
 
@@ -181,7 +180,7 @@ describe('Planner', () => {
     expect(actions[0].changes).toEqual({ path: { old: 'old_path', new: 'new_path' } });
   });
 
-  // The provider decides; a resource it plans to replace is replaced even when it would come out holding the same values.
+  // The provider decides: a replace happens even when no value changes.
   it('plans a REPLACE the provider asks for with no value changing', () => {
     const [action] = plan([{ ...desiredResource('r', { path: 'x' }), replace: true }], stateWith('r', { path: 'x' }));
 
@@ -247,7 +246,7 @@ describe('Planner', () => {
     it('should reject invalid plan file', () => {
       expect(validatePlanFile(null)).toBe(false);
       expect(validatePlanFile({})).toBe(false);
-      expect(validatePlanFile({ version: 1 })).toBe(false); // wrong type
+      expect(validatePlanFile({ version: 1 })).toBe(false);
     });
 
     it('should reject a plan file from an older version', () => {

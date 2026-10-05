@@ -1,7 +1,6 @@
 import { ConfigError } from './ConfigError';
 import { Position } from './Position';
 
-/** A part of a reference: a name or key, from `.name` or `["key"]`, or an index into a list, from `[0]`. */
 export type Step = string | number;
 
 export interface VariableReference {
@@ -18,14 +17,14 @@ export interface DataReference {
   path: Step[];
 }
 
-/** A module is read through its outputs. Whether the first step is an instance index or the output depends on the module call, which the engine reads. */
+/** Whether the first step is an instance key or an output depends on the module call, which only the engine knows. */
 export interface ModuleOutputReference {
   kind: 'module';
   module: string;
   path: Step[];
 }
 
-/** Whether the first step is an instance key or an attribute depends on the block, which the engine reads. */
+/** Whether the first step is an instance key or an attribute depends on the block, which only the engine knows. */
 export interface ResourceReference {
   kind: 'resource';
   type: string;
@@ -33,30 +32,26 @@ export interface ResourceReference {
   path: Step[];
 }
 
-/** `count.index`, the index of the instance being made. */
 export interface CountReference {
   kind: 'count';
   path: Step[];
 }
 
-/** `each.key` and `each.value`, the key of the instance being made and the value `for_each` gives it. */
 export interface EachReference {
   kind: 'each';
   name: 'key' | 'value';
   path: Step[];
 }
 
-/** `path.module` and `path.root`, the directory of the module being read and of the root module. */
 export interface PathReference {
   kind: 'path';
   name: 'module' | 'root';
   path: Step[];
 }
 
-/** A reference as the language reads it: what it names, and the steps into the value it names. */
 export type ParsedReference = VariableReference | DataReference | ModuleOutputReference | ResourceReference | CountReference | EachReference | PathReference;
 
-/** What a reference can spell after a dot, so a declared name can always be read back. */
+/** What a reference can spell after a dot, so every declared name can be referenced. */
 export const NAME = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 
 function spellStep(step: Step, first: boolean): string {
@@ -66,22 +61,22 @@ function spellStep(step: Step, first: boolean): string {
   return first ? step : `.${step}`;
 }
 
-/** A reference as it would be written: `var.names[0]`, `local_file.a.tags["a.b"]`. */
+/** `var.names[0]`, `local_file.a.tags["a.b"]`. */
 export function spellReference(parts: Step[]): string {
   return parts.map((part, i) => spellStep(part, i === 0)).join('');
 }
 
-/** Steps as they would be written after what they read into: `.tags["a.b"][0]`. */
+/** `.tags["a.b"][0]`. */
 export function spellSteps(steps: Step[]): string {
   return steps.map((step) => spellStep(step, false)).join('');
 }
 
-/** Without a position the engine adds one where the value was read. */
+/** Without a position, the engine adds one where the value was read. */
 function refuse(message: string, position?: Position): never {
   throw position ? new ConfigError(message, position) : new Error(message);
 }
 
-/** The parts that name the target have to be names, since scope keys join them with dots; the rest is the path into its value. */
+/** The target's parts must be names, since scope keys join them with dots; the rest is the path into its value. */
 function split(parts: Step[], count: number, position?: Position): { names: string[]; path: Step[] } {
   const names = parts.slice(0, count);
   const spelled = () => spellReference(parts);
@@ -146,7 +141,7 @@ function pathReference(parts: Step[], position?: Position): PathReference {
   return { kind: 'path', name, path };
 }
 
-/** The one place that says what a reference's parts mean: which name its target, and which read into the target's value. */
+/** Splits a reference into its target and the path into the target's value. */
 export function parseReference(parts: Step[], position?: Position): ParsedReference {
   if (parts[0] === 'var') return variableReference(parts, position);
   if (parts[0] === 'data') return dataReference(parts, position);

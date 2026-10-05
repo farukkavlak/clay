@@ -11,7 +11,7 @@ import { start } from './start';
 
 const command = (text: string) => `resource "command_exec" "c" { command = "echo ${text}" }`;
 
-/** Plans a path as it would clean it up, which is not what the configuration sets. */
+/** Plans a normalized path, unlike what the configuration sets. */
 class TidyProvider implements Provider {
   readonly resources = ['tidy'];
   readonly dataSources: string[] = [];

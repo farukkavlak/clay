@@ -6,13 +6,9 @@ import { eachFrom } from './forEach';
 import { Repetition } from './Instances';
 import { Value } from './Value';
 
-/** Reads a call's count or for_each in one instance of the module that calls it, and parses what it reads. */
 export type ReadIn = <T>(value: AttributeValue, parse: (value: Value) => T, caller: ModuleAddress) => T;
 
-/**
- * Which modules are called with count or for_each, by the module as the configuration writes it, and the instances of each once its call has run.
- * The root has one instance; a module has one for each instance of the module that calls it, or one per key its call gives there.
- */
+/** Each module has one instance per instance of its caller, or one per key its call gives there. */
 export class ModuleInstances {
   private repetitions = new Map<string, Repetition>();
   private instances = new Map<string, ModuleAddress[]>();
@@ -34,7 +30,7 @@ export class ModuleInstances {
     return this.repetitions.get(module.toString());
   }
 
-  /** `keysIn` reads the call in one instance of the module that calls it, and gives nothing for a call with neither count nor for_each. */
+  /** `keysIn` returns undefined for a call with neither count nor for_each. */
   expand(caller: ModuleAddress, name: string, keysIn: (instance: ModuleAddress) => InstanceKey[] | undefined): void {
     const made = this.of(caller).flatMap((instance) => {
       const keys = keysIn(instance);
@@ -47,7 +43,6 @@ export class ModuleInstances {
     this.instances.set(caller.child(name).toString(), made);
   }
 
-  /** Makes the instances a call's count or for_each gives in each instance of the module that calls it, keeping the value for_each gives each. */
   expandCall(caller: ModuleAddress, block: ModuleBlock, read: ReadIn): void {
     const { count, forEach } = block;
 
@@ -60,19 +55,18 @@ export class ModuleInstances {
     });
   }
 
-  /** A graph runs a module's call before anything in it, so a module asked for has had its instances made. */
+  /** The graph runs a module's call before anything in it, so its instances already exist. */
   of(module: ModuleAddress): ModuleAddress[] {
     if (module.isRoot()) return [module];
 
     return this.instances.get(module.toString())!;
   }
 
-  /** The keys a call gives in one instance of the module that calls it, named as `module.a[1].module.b`; nothing for a call with neither count nor for_each. */
+  /** `call` is the call in one caller instance, as `module.a[1].module.b`. */
   keysOf(call: ModuleAddress): InstanceKey[] | undefined {
     return this.keys.get(call.toString());
   }
 
-  /** The value for_each gives the instance `key` of a call, read as `each.value` in its inputs. */
   eachValue(call: ModuleAddress, key: string): Value | undefined {
     return this.values.get(call.toString())?.get(key);
   }

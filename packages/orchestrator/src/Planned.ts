@@ -1,15 +1,11 @@
 import { isUnknown } from '@clay/contracts';
 
-/** An instance as the plan knows it: the values its provider planned and knows, and the names only the apply will give a value. */
 export interface PlannedInstance {
   known: Record<string, unknown>;
   later: Set<string>;
 }
 
-/**
- * What a plan knows of each instance it will create or change, by address.
- * A value its provider planned as UNKNOWN only the apply makes. An apply reads state, so it is cleared before one.
- */
+/** Planned values by address, so a reference reads what the plan will make. Cleared before an apply, which reads state. */
 export class Planned {
   private instances = new Map<string, PlannedInstance>();
   private planning = false;
@@ -19,12 +15,12 @@ export class Planned {
     this.planning = false;
   }
 
-  /** A plan is being made: an item of a list or a map that only an apply can read is UNKNOWN where it sits, and the rest of the value is known. */
+  /** While planning, an item only the apply knows is UNKNOWN and the rest of the value stays known. */
   begin(): void {
     this.planning = true;
   }
 
-  /** An apply reads every value in full, so a value it cannot read is an error there. */
+  /** An apply reads every value in full, so an unknown there is an error. */
   isPlanning(): boolean {
     return this.planning;
   }

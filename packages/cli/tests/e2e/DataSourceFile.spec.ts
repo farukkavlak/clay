@@ -24,7 +24,7 @@ describe('a local_file data source', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
-  // A resource of the same type wants content to write; a data source only reads.
+  // The resource of the same type requires content; the data source does not.
   it('reads the content of a file, given only its path', async () => {
     await fs.writeFile(path.join(dir, 'name.txt'), 'clay', 'utf8');
     const config = `
@@ -47,7 +47,7 @@ describe('a local_file data source', () => {
     });
   });
 
-  // The module is named by the place under the error, so the name is the one written in the module.
+  // The error's place names the module, so the message uses the name as written in it.
   it.each([
     ['at the root', (config: string) => config],
     ['in a module', () => 'module "m" { source = "./m" }'],

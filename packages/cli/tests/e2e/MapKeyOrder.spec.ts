@@ -31,7 +31,7 @@ describe('a map attribute whose keys are written in another order', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
-  // State holds the keys in the order they were first written, so a plan against a reordered config used to show an update that never settled.
+  // State keeps the first written key order, so a reordered config used to plan an update every time.
   it('plans nothing, having gone through a real apply and a state file', async () => {
     await apply(withTriggers('{ a = "1" b = "2" }'));
 

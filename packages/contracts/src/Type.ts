@@ -1,9 +1,8 @@
 import { isRecord } from './isRecord';
 
 /**
- * What a value is. A list, a set and a map hold one element type, and a set's members have no order and each is held once. An object names a type
- * for each attribute, all required unless `optional` lists it, which is unlike a schema definition's `optional` flag; a tuple has a type for each
- * position. `dynamic` names no type, so it is read from the value itself.
+ * A set's members are unordered and unique. An object's attributes are required unless `optional` lists them, unlike a schema's `optional` flag.
+ * `dynamic` means the type comes from the value itself.
  */
 export type Type =
   | { readonly kind: 'string' | 'number' | 'bool' | 'dynamic' }
@@ -31,7 +30,7 @@ function isOptionalList(optional: unknown, attributes: Record<string, unknown>):
   return optional === undefined || (Array.isArray(optional) && optional.every((name) => typeof name === 'string' && Object.hasOwn(attributes, name)));
 }
 
-/** A type read from a file, checked whole, since one wrong step inside it would check every value against the wrong thing. */
+/** Checks the whole type, since one wrong part would check values against the wrong type. */
 export function isType(value: unknown): value is Type {
   if (!isRecord(value)) return false;
 
@@ -44,7 +43,7 @@ export function isType(value: unknown): value is Type {
   return kind === 'tuple' && Array.isArray(value.elements) && value.elements.every((element) => isType(element));
 }
 
-/** The type of what one step into a value of `type` finds: an element, a tuple's item, or an object's attribute. `dynamic` where the type names none. */
+/** The type one step inside `type`; `dynamic` where it names none. */
 export function typeAt(type: Type, step: string | number): Type {
   if (type.kind === 'list' || type.kind === 'set' || type.kind === 'map') return type.element;
   if (type.kind === 'tuple' && typeof step === 'number') return type.elements[step] ?? types.dynamic;

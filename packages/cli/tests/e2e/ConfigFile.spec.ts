@@ -46,7 +46,7 @@ describe('a config with a module', () => {
     expect(await fs.readFile(path.join(dir, 'a.txt'), 'utf8')).toBe('from the module');
   });
 
-  // Providers get plain values, so a relative path means relative to cwd.
+  // Providers get plain values, so a relative path is relative to cwd.
   it('leaves a relative path in a module relative to where clay runs', async () => {
     await fs.mkdir(path.join(dir, 'm'));
     await fs.writeFile(path.join(dir, 'm', 'main.clay'), 'resource "local_file" "inner" { path = "./inner.txt"  content = "x" }', 'utf8');

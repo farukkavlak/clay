@@ -69,7 +69,7 @@ describe('a string with an interpolation', () => {
     expect(resources['local_file.f'].attributes.content).toBe('n=8');
   });
 
-  // `$${` is text by the time the engine sees the string, so nothing reads it as a reference.
+  // The parser turns `$${` into text, so the engine never reads it as a reference.
   it('writes an escape as what it stands for, and $${ as text', async () => {
     const config = `resource "local_file" "f" { path = "${path.join(dir, 'f.txt')}" content = "a\\tb\\nprice $\${price}" }`;
 
@@ -78,7 +78,7 @@ describe('a string with an interpolation', () => {
     expect(await fs.readFile(path.join(dir, 'f.txt'), 'utf8')).toBe('a\tb\nprice ${price}');
   });
 
-  // The same list, read from four places: each error has to name the block that reads it and point at the reference.
+  // Each error must name the block that reads the list and point at the reference.
   it.each([
     ['a resource', 'resource "null_resource" "t" { triggers = { label = "tags: ${var.tags}" } }', 'resource "null_resource" "t"', 62],
     ['an output', 'output "o" { value = "tags: ${var.tags}" }', 'output "o"', 31],
@@ -99,7 +99,7 @@ describe('a string with an interpolation', () => {
     });
   });
 
-  // A string may hold many references; an error about one has to point at that one, not at the string.
+  // An error about one reference in a string points at that reference, not the string.
   it.each([
     ['one that is not declared', 'resource "null_resource" "t" { triggers = { label = "a ${var.tags} b ${var.nope}" } }', 'variable "nope" is not defined', 72],
     ['one that reads a key a list does not have', 'resource "null_resource" "t" { triggers = { label = "a ${var.tags.x}" } }', 'var.tags is a tuple and has no key "x"', 58],
@@ -110,7 +110,7 @@ describe('a string with an interpolation', () => {
     await expect(planned).rejects.toMatchObject({ message: expect.stringContaining(message) as string, position: { file: CONFIG_FILE, line: 2, column } });
   });
 
-  // The parser reads every interpolation out of a string, so a module's path that has one is not a path.
+  // An interpolation makes the source a template, not a string, so the source check refuses it.
   it('refuses a module source with an interpolation', async () => {
     await expect(newOrchestrator().plan('variable "v" { default = "m" }\nmodule "m" { source = "./${var.v}" }')).rejects.toMatchObject({
       message: 'Module "m" is missing a valid "source" attribute.',

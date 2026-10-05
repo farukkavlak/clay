@@ -27,7 +27,7 @@ describe('outputs in the state file', () => {
     output "${name}" { value = "\${local_file.a.content}" }
   `;
 
-  // b's path sits under a file, so its create fails after a's update has succeeded.
+  // b's path is under a file, so its create fails after a's update succeeds.
   const failing = () => `
     resource "local_file" "a" {
       path = "${path.join(dir, 'a.txt')}"
@@ -66,7 +66,7 @@ describe('outputs in the state file', () => {
     expect(plan.outputs).toEqual({ greeting: { old: hello, new: undefined }, message: { old: undefined, new: hello } });
   });
 
-  // The configuration sets the content, but only the apply makes the id.
+  // The configuration sets the content, but only the apply knows the id.
   it('plans an output that a resource to be created feeds with what its configuration sets, and with the id its provider plans', async () => {
     const plan = await newOrchestrator().plan(`${withOutput('greeting')}\noutput "id" { value = "\${local_file.a.id}" }`);
 
@@ -74,7 +74,7 @@ describe('outputs in the state file', () => {
     expect(plan.outputs.id.new?.value).toBe(path.join(dir, 'a.txt'));
   });
 
-  // What the configuration sets is known only as far as what it reads is; text around it does not make it known.
+  // A value is only as known as what it reads; surrounding text does not make it known.
   it('plans a value set from one only an apply makes as known after apply, read through another resource', async () => {
     const config = `
       resource "random_string" "s" { length = 4 }

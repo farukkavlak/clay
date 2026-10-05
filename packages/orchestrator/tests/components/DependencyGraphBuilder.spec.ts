@@ -62,7 +62,7 @@ describe('DependencyGraphBuilder', () => {
     expect(() => builder.buildExecutionGraph([main], [])).toThrow('"resource.typo" is not declared in the configuration');
   });
 
-  // A string may hold several references, so an error has to name the place of the one that is missing.
+  // A string may hold several references, so the error points at the missing one.
   it('should point at the missing reference, not at the template it sits in', () => {
     const typo: ReferenceNode = { type: 'Reference', value: ['resource', 'typo', 'id'], position: { file: 'main.clay', line: 3, column: 9 } };
     const main = resource('main', { line: { type: 'Template', value: ['id ', typo], position: { file: 'main.clay', line: 3, column: 1 } } });
@@ -70,7 +70,7 @@ describe('DependencyGraphBuilder', () => {
     expect(() => builder.buildExecutionGraph([main], [])).toThrow(expect.objectContaining({ position: typo.position }));
   });
 
-  // A value built by hand may carry no position of its own; the value it sits in still places it.
+  // A hand-built value may have no position; the enclosing value supplies one.
   it('should place a missing reference with no position at the value it sits in', () => {
     const at = { file: 'main.clay', line: 3, column: 1 };
     const typo = { type: 'Reference', value: ['resource', 'typo', 'id'] } as ReferenceNode;
@@ -87,7 +87,7 @@ describe('DependencyGraphBuilder', () => {
     expect(graph.topologicalSort()).toEqual([['resource.dep'], ['vars:id']]);
   });
 
-  // A resource's key is its address, so a variable named like one would take its node if both spelled their kind the same way.
+  // A resource's key is its address, so the keys must differ for a variable with a similar name.
   it('keeps a variable and a resource whose address reads like one apart', () => {
     const address = Address.root('vars', 'x');
     const named: LoadedResource = { uniqueId: address.toString(), address, block: resourceBlock('vars', 'x', {}) };
@@ -104,7 +104,7 @@ describe('DependencyGraphBuilder', () => {
     expect(kinds).toEqual(['resource', 'variable']);
   });
 
-  // The call makes the instances of its module, so nothing in one runs before it, even what reads nothing.
+  // The call creates the module's instances, so everything in the module runs after it.
   it('runs everything in a module after the call that makes its instances, a call in it too', () => {
     const root = module([], [moduleBlock('m', { source: str('./m') })]);
     const child = module(['m'], [moduleBlock('n', { source: str('./n') }), variableBlock('v', { default: str('1') })]);

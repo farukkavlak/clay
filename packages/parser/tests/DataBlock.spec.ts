@@ -64,7 +64,6 @@ describe('Parser - Data Blocks', () => {
 
   it('should throw error for incomplete data block', () => {
     const input = `data "type"`;
-    // Missing name and body
     const tokens = new Lexer(input, CONFIG_FILE).tokenize();
     const parser = new Parser(tokens);
 

@@ -36,15 +36,15 @@ import { WrittenTypes } from './WrittenTypes';
 
 const LITERALS = { String: types.string, Number: types.number, Boolean: types.bool };
 
-/** A literal's value with its type; `null` is null of no type yet. */
+/** `null` gets no type yet. */
 function literal(node: Extract<AttributeValue, { type: 'String' | 'Number' | 'Boolean' | 'Null' }>): Value {
   return node.type === 'Null' ? valueOf(types.dynamic, null) : valueOf(LITERALS[node.type], node.value);
 }
 
-/** The values the for expressions around a value give their names, for the item each is reading. */
+/** Values bound by enclosing for expressions. */
 type Given = ReadonlyMap<string, Value>;
 
-/** How a value is read: with what the for expressions around it give, and with each reference read as not known yet, of the type it will have, where `asWritten`. */
+/** With `asWritten`, every reference reads as unknown of the type it will have. */
 interface Reading {
   given: Given;
   asWritten: boolean;
@@ -52,14 +52,12 @@ interface Reading {
 
 const READING: Reading = { given: new Map(), asWritten: false };
 
-/** The names `node` gives, standing for `item`, beside those the for expressions around it give. */
 function withNames(reading: Reading, node: ForNode, [key, value]: ForItem): Reading {
   const names = new Map(reading.given).set(node.valueName, value);
 
   return { ...reading, given: node.keyName === undefined ? names : names.set(node.keyName, key) };
 }
 
-/** The instance of a resource or of a module being made names its index; anything else read outside one has none. */
 function countIndex(where: Context, position: Position): Value {
   const key = instanceKeyOf(where);
   if (typeof key !== 'number') throw new ConfigError(COUNT_INDEX_OUTSIDE, position);
@@ -106,21 +104,20 @@ export class ReferenceResolver {
     return readPath(value, spellReference(target), path, node.position);
   }
 
-  /** The function is found before its argument is read, so a name no function has is refused whatever the argument is. */
+  /** Looks up the function first, so an unknown name is refused whatever the argument is. */
   private resolveCall(node: CallNode, state: State, context: Context | undefined, reading: Reading): Value {
     const result = functionCalled(node)(this.resolveItem(node.args[0], state, context, reading));
 
     return readPath(result, spellNamed({ ...node, path: [] }), node.path, node.position);
   }
 
-  /** The parser reads a name as one a for gives only inside that for, so the for has given it a value. */
+  /** The parser only binds a name inside its for, so it always has a value here. */
   private resolveBound(node: BoundNode, given: Given): Value {
     const [name, ...path] = node.value;
 
     return readPath(given.get(String(name))!, String(name), path, node.position);
   }
 
-  /** The body read once for each item, a tuple of what each comes to, or with a key an object of them. */
   private resolveFor(node: ForNode, state: State, context: Context | undefined, reading: Reading): Value {
     const items = forItems(this.collectionOf(node, state, context, reading), node.collection.position);
     const names = items.map((item) => withNames(reading, node, item));
@@ -129,7 +126,7 @@ export class ReferenceResolver {
     return tupleOf(names.map((itemNames) => this.resolveItem(node.body, state, context, itemNames)));
   }
 
-  /** Every key and value is read before the object is made, so a mistake in any item is found while another's key is not known yet. */
+  /** Resolves every key and value first, so an error in any item is found even when another key is unknown. */
   private resolveForObject(node: ForNode, key: AttributeValue, names: Reading[], state: State, context: Context | undefined): Value {
     const entries = names.map((itemNames): ForItem => [this.resolveItem(key, state, context, itemNames), this.resolveItem(node.body, state, context, itemNames)]);
 
@@ -137,8 +134,8 @@ export class ReferenceResolver {
   }
 
   /**
-   * How many items a collection not known yet has is not known either, nor the order of a set with a member not known yet, so the for is left to the apply.
-   * A collection not known yet whose type the for cannot go over is refused now, as a known one is.
+   * An unknown collection, or a set with an unknown member, has no known items or order, so the for waits for apply.
+   * Its type is still checked now.
    */
   private collectionOf(node: ForNode, state: State, context: Context | undefined, reading: Reading): Value {
     let collection: Value;
@@ -148,7 +145,7 @@ export class ReferenceResolver {
       if (!(error instanceof UnresolvedReferenceError)) throw error;
       checkCollection(valueOf(error.type, UNKNOWN), node.collection.position);
       this.readBodyOnce(node, valueOf(error.type, UNKNOWN), state, context, reading);
-      // A for gives a tuple or an object, whatever type its collection has.
+      // Rethrown without the collection's type: a for makes a tuple or an object whatever it iterates.
       throw new UnresolvedReferenceError(error.message);
     }
 
@@ -159,7 +156,7 @@ export class ReferenceResolver {
     return collection;
   }
 
-  /** Read as written, the body is read once for an item not known yet, so a mistake in it is found before the collection is known. */
+  /** In `asWritten` mode, resolves the body once with an unknown item, so its errors are found before the collection is known. */
   private readBodyOnce(node: ForNode, collection: Value, state: State, context: Context | undefined, reading: Reading): void {
     if (!reading.asWritten) return;
 
@@ -168,7 +165,6 @@ export class ReferenceResolver {
     this.resolveItem(node.body, state, context, names);
   }
 
-  /** What the reference names, and the steps still to take into it. */
   private resolveTarget(reference: ParsedReference, state: State, where: Context, position: Position): { value: Value; path: Step[] } {
     if (reference.kind === 'variable') return { value: this.variables.resolve(reference, where, state), path: reference.path };
     if (reference.kind === 'data') return { value: this.dataSources.resolve(reference, where), path: reference.path };
@@ -180,37 +176,34 @@ export class ReferenceResolver {
     return this.resources.resolve(reference, where, state, position);
   }
 
-  /** A data source is read at load and a directory is the module's, so both are known as written; anything else is not known yet. */
+  /** Data sources and paths are known at load; anything else is unknown. */
   private writtenTarget(reference: ParsedReference, where: Context, position: Position): { value: Value; path: Step[] } {
-    // Neither reads the state.
     if (reference.kind === 'data' || reference.kind === 'path') return this.resolveTarget(reference, emptyState(), where, position);
 
     const { type, path } = this.written.typeOf(reference, where, position);
     return { value: valueOf(type, UNKNOWN), path };
   }
 
-  /** The instance of a resource or of a module being made names its key, and the value for_each gives that key; anything else read outside one has neither. */
   private each(reference: EachReference, where: Context, position: Position): Value {
     const key = instanceKeyOf(where);
     if (typeof key !== 'string') throw new ConfigError(eachOutside(reference.name), position);
     if (reference.name === 'key') return valueOf(types.string, key);
 
-    // Only an instance of a resource or a module call has a key, and its for_each is read before anything in the instance is.
+    // Only a resource instance or a module call has a key, and its for_each is read before anything in the instance.
     const value = where instanceof ModuleCall ? this.modules.eachValue(where.call, key) : this.instances.eachValue((where as Address).withoutKey().toString(), key);
     if (value === undefined) throw new Error(`each.value of "${key}" was read before its for_each`);
 
     return value;
   }
 
-  /** A module's directory is where its config sits, relative to the root, so a state or a plan made on one machine reads the same on another. */
+  /** Relative to the root, so a state or a plan reads the same on another machine. */
   private directory(reference: PathReference, where: Context): string {
     if (reference.name === 'root') return '.';
 
-    // Every module the config calls was loaded, and its directory kept, before anything in it is read.
+    // Every called module is loaded, with its directory, before anything in it is read.
     return this.scopeManager.getDirectory(scopeOf(moduleOf(where).withoutKeys()))!;
   }
 
-  /** A block's values, each with its type. */
   resolveAttributes(attributes: Record<string, AttributeValue>, state: State, context?: Context): Record<string, Value> {
     return Object.fromEntries(Object.entries(attributes).map(([name, value]) => [name, this.resolveValue(value, state, context)]));
   }
@@ -219,13 +212,13 @@ export class ReferenceResolver {
     return this.resolveIn(node, state, context, READING);
   }
 
-  /** A value as written, each reference in it not known yet, of the type it will have; read once, it holds what any instance of its block would read. */
+  /** Every reference reads as unknown of the type it will have, so one read covers every instance of the block. */
   readAsWritten(node: AttributeValue, context: Context): Value {
-    // Read as written, nothing reads the state.
+    // Nothing reads the state here.
     return this.resolveItem(node, emptyState(), context, { ...READING, asWritten: true });
   }
 
-  /** A literal list is a tuple and a literal map an object, each item with the type it has. */
+  /** A literal list is a tuple and a literal map an object. */
   private resolveIn(node: AttributeValue, state: State, context: Context | undefined, reading: Reading): Value {
     if (node.type === 'Reference') return this.resolve(node, state, context, reading);
     if (node.type === 'Bound') return this.resolveBound(node, reading.given);
@@ -246,7 +239,7 @@ export class ReferenceResolver {
     return objectOf(Object.entries(entries).map(([key, item]) => [key, this.resolveItem(item, state, context, reading)]));
   }
 
-  /** At plan time an item only an apply can read is UNKNOWN on its own, of the type it will have, so the list or map around it keeps what is known. */
+  /** At plan time an item only the apply knows becomes UNKNOWN by itself, so the rest of its list or map stays known. */
   private resolveItem(value: AttributeValue, state: State, context: Context | undefined, reading: Reading): Value {
     try {
       return this.resolveIn(value, state, context, reading);
@@ -256,12 +249,12 @@ export class ReferenceResolver {
     }
   }
 
-  /** A template that is one interpolation is the value itself, type and all; text around it makes it a string, which is not known while a part is not. */
+  /** A lone interpolation keeps its value and type; with any text it becomes a string, unknown if any part is. */
   private resolveTemplate(parts: TemplatePart[], state: State, context: Context | undefined, reading: Reading): Value {
     const [first] = parts;
     if (parts.length === 1 && typeof first !== 'string') return this.resolveIn(first, state, context, reading);
 
-    // Every part is read, so a mistake after one not known yet is still found.
+    // Every part is resolved, so an error after an unknown part is still found.
     const unresolved: UnresolvedReferenceError[] = [];
     const texts = parts.map((part) => (typeof part === 'string' ? part : this.textOf(part, state, context, reading, unresolved)));
     if (unresolved.length > 0) throw new UnresolvedReferenceError(unresolved[0].message, types.string);
@@ -269,7 +262,7 @@ export class ReferenceResolver {
     return valueOf(types.string, texts.join(''));
   }
 
-  /** The part's text, or none while it is not known yet, which is kept in `unresolved`. */
+  /** Collects an unknown part into `unresolved`. */
   private textOf(part: ReferenceNode | CallNode | BoundNode, state: State, context: Context | undefined, reading: Reading, unresolved: UnresolvedReferenceError[]): string {
     try {
       return this.joined(part, state, context, reading);
@@ -280,7 +273,7 @@ export class ReferenceResolver {
     }
   }
 
-  /** Only a string, a number or a boolean has a text to join. */
+  /** Only a string, a number or a boolean can be joined. */
   private joined(part: ReferenceNode | CallNode | BoundNode, state: State, context: Context | undefined, reading: Reading): string {
     const resolved = this.resolveIn(part, state, context, reading);
     if (resolved.data === null || !hasText(resolved.type)) throw new ConfigError(`${spellNamed(part)} is ${described(resolved)} and cannot be joined into a string`, part.position);

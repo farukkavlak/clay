@@ -7,15 +7,14 @@ import { inferred, Value, valueOf } from '../src/Value';
 
 const at = (column: number) => ({ file: 'main.clay', line: 1, column });
 
-/** `length(null)` as the parser reads it; what the argument is written as does not matter, since the function is handed its value. */
+/** `length(null)`; the written argument does not matter, since the function gets a value. */
 const call: CallNode = { type: 'Call', name: 'length', args: [{ type: 'Null', position: at(8) }], path: [], position: at(1) };
 
-/** `name(null)` as the parser reads it, called with `value`. */
 const called = (name: string, value: Value) => functionCalled({ ...call, name })(value);
 
 const length = (value: Value) => called('length', value);
 
-/** Data as the configuration writes it: a list a tuple, a map an object. */
+/** As the configuration writes it: a list is a tuple and a map an object. */
 const written = (data: unknown): Value => valueOf(inferred(data), data);
 
 const number = (text: string) => valueOf(types.number, ExactNumber.parse(text));

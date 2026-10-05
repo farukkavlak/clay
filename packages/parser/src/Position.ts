@@ -1,11 +1,10 @@
-/** Where something was written: the file it came from, and the line and column in it. */
 export interface Position {
   file: string;
   line: number;
   column: number;
 }
 
-/** Where `text`, written from `position` on, ends: a line break starts the next line, anything else moves one column. */
+/** The position after `text`. */
 export function advanced(position: Position, text: string): Position {
   let { line, column } = position;
 

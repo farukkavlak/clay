@@ -1,7 +1,7 @@
 import { Position } from './Position';
 
 export enum TokenType {
-  Identifier = 'IDENTIFIER', // Block kinds, attribute names, reference parts
+  Identifier = 'IDENTIFIER',
   OQuote = 'OQUOTE',
   QuotedLit = 'QUOTED_LIT', // escapes as written
   TemplateInterp = 'TEMPLATE_INTERP',
@@ -10,23 +10,23 @@ export enum TokenType {
   OHeredoc = 'OHEREDOC',
   StringLit = 'STRING_LIT', // no escapes
   CHeredoc = 'CHEREDOC',
-  Number = 'NUMBER', // 123, 1.5, 1e3
-  Minus = 'MINUS', // - (before a number)
-  Boolean = 'BOOLEAN', // true, false
-  Null = 'NULL', // null
-  LBrace = 'LBRACE', // {
-  RBrace = 'RBRACE', // }
-  Assign = 'ASSIGN', // =
-  Dot = 'DOT', // . (for references)
-  LBracket = 'LBRACKET', // [
-  RBracket = 'RBRACKET', // ]
+  Number = 'NUMBER',
+  Minus = 'MINUS',
+  Boolean = 'BOOLEAN',
+  Null = 'NULL',
+  LBrace = 'LBRACE',
+  RBrace = 'RBRACE',
+  Assign = 'ASSIGN',
+  Dot = 'DOT',
+  LBracket = 'LBRACKET',
+  RBracket = 'RBRACKET',
   LParen = 'LPAREN',
   RParen = 'RPAREN',
-  Comma = 'COMMA', // ,
+  Comma = 'COMMA',
   Colon = 'COLON',
-  FatArrow = 'FAT_ARROW', // =>
-  Ellipsis = 'ELLIPSIS', // ...
-  EOF = 'EOF', // End of File
+  FatArrow = 'FAT_ARROW',
+  Ellipsis = 'ELLIPSIS',
+  EOF = 'EOF',
 }
 
 export interface Token {

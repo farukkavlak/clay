@@ -12,7 +12,7 @@ import { ReferenceResolver } from '../../src/resolvers/ReferenceResolver';
 import { ScopeManager } from '../../src/scope/ScopeManager';
 import { str } from '../ast';
 
-/** A create of a map the plan knew in part: `a` only the apply makes, `b` known. */
+/** A map known in part: `a` unknown, `b` known. */
 const withTags = (tags: Record<string, string>): PlanAction => ({
   type: 'CREATE',
   resourceType: 'test',
@@ -22,7 +22,7 @@ const withTags = (tags: Record<string, string>): PlanAction => ({
   after: { tags: { a: UNKNOWN, b: 'x' } },
 });
 
-/** A create of a list the plan knew in part: its first item known, its second only the apply makes. */
+/** A list known in part: the first item known, the second unknown. */
 const withList = (items: string[]): PlanAction => ({
   type: 'CREATE',
   resourceType: 'test',
@@ -32,7 +32,6 @@ const withList = (items: string[]): PlanAction => ({
   after: { l: ['a', UNKNOWN] },
 });
 
-/** What the tests set, and what a provider makes of its own. */
 const schema: Schema = {
   path: { type: types.string },
   old: { type: types.string },
@@ -44,7 +43,6 @@ const schema: Schema = {
   n: { type: types.number, computed: true },
 };
 
-/** A create of `path = "p"` whose provider planned `after`. */
 const create = (after: Record<string, unknown>): PlanAction => ({
   type: 'CREATE',
   resourceType: 'test',
@@ -76,7 +74,7 @@ describe('ActionExecutor', () => {
       validateDataSource: vi.fn(),
       readDataSource: vi.fn(),
       getSchema: vi.fn(async () => schema),
-      // Plans the configuration as it is set, unless a test says what else it plans.
+      // Plans the configuration as set, unless a test overrides it.
       plan: vi.fn(async (_type: string, request: PlanRequest) => ({ after: request.config, replace: [] })),
     };
 
@@ -92,12 +90,10 @@ describe('ActionExecutor', () => {
 
   const context = Address.root('test', 'main');
 
-  /** The plan at apply holds these, with what the configuration sets. */
   function plansAtApply(after: Record<string, unknown>, replace: (string | number)[][] = []): void {
     vi.mocked(mockProvider.plan).mockImplementationOnce(async (_type, request) => ({ after: { ...after, ...request.config }, replace }));
   }
 
-  /** The next create returns these. */
   function created(attributes: Record<string, unknown>): void {
     vi.mocked(mockProvider.create).mockResolvedValueOnce(attributes);
   }
@@ -122,7 +118,7 @@ describe('ActionExecutor', () => {
         attributes: {},
       };
 
-      // An action type the plan never produces, so the type is forced.
+      // The planner never produces this type, so the cast forces it.
       await expect(executor.execute(action as unknown as PlanAction, mockState)).rejects.toThrow('Unknown action type');
     });
 
@@ -256,7 +252,7 @@ describe('ActionExecutor', () => {
       );
     });
 
-    // A replace deletes first, so a value off the plan found after the delete would leave nothing.
+    // A replace deletes first, so finding an off-plan value after the delete would leave nothing.
     it('leaves a resource to be replaced as it was when a value is off the plan', async () => {
       mockState.resources[context.toString()] = { resourceType: 'test', name: 'main', attributes: { path: 'old' } };
       const action: PlanAction = {
@@ -308,7 +304,7 @@ describe('ActionExecutor', () => {
     });
   });
 
-  // The plan made at apply can know a value the first plan did not, so that is the one the provider is given.
+  // The plan at apply may know a value the first plan did not, so the provider gets that one.
   it('gives the provider what it planned at apply', async () => {
     plansAtApply({ result: 'r' });
     created({ path: 'p', result: 'r' });
@@ -376,7 +372,7 @@ describe('ActionExecutor', () => {
       await expect(executor.execute(create({ path: 'p', ...planned }), mockState)).rejects.toThrow(`${bug}\n  ${line}`);
     });
 
-    // The resource exists, so what it holds is kept, and the run stops on the provider's bug.
+    // The resource exists, so state keeps it, and the run stops on the provider bug.
     it('refuses a value its schema does not hold, and keeps what it made in state', async () => {
       plansAtApply({ n: ExactNumber.parse('5') });
       created({ path: 'p', n: 5 });
@@ -467,7 +463,7 @@ describe('ActionExecutor', () => {
       expect(mockState.resources[key]).toMatchObject({ attributes: { path: 'new' } });
     });
 
-    // A value not known at plan was not checked then, so the check comes before the delete or a refused value would leave nothing.
+    // A value unknown at plan is only checked now, so the check must come before the delete.
     it('leaves the old resource as it was when the provider refuses the new values', async () => {
       const key = context.toString();
       mockState.resources[key] = { resourceType: 'test', name: 'main', attributes: { path: 'old' } };

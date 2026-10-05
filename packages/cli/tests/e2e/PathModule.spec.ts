@@ -31,7 +31,7 @@ describe('a module naming its own directory', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
-  // An input is written in the call, so it reads the directory of the module that calls.
+  // An input is read in the call, so it gets the caller's directory.
   it('reads the directory of the module it is written in, relative to the root', async () => {
     await write(
       path.join(dir, 'web', 'main.clay'),

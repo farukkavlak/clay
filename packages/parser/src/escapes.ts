@@ -1,7 +1,6 @@
 import { ConfigError } from './ConfigError';
 import { advanced, Position } from './Position';
 
-/** What one place in a string's text stands for, with the raw text it was written as. */
 type Step = { text: string; raw: string };
 
 const ESCAPES = new Map([
@@ -19,7 +18,7 @@ const HEX_DIGITS = new Map([
 
 const KNOWN = '\\n, \\r, \\t, \\", \\\\, \\uNNNN, \\UNNNNNNNN and $${';
 
-/** A character by number; half of a pair JavaScript writes a character in two with is none. */
+/** Undefined for a lone surrogate. */
 function character(hex: string, digits: number): string | undefined {
   if (hex.length !== digits || !/^[\dA-Fa-f]+$/.test(hex)) return undefined;
 
@@ -29,7 +28,7 @@ function character(hex: string, digits: number): string | undefined {
   return String.fromCodePoint(code);
 }
 
-// A character that does not print would garble the message it is shown in, so it is named by number.
+// A non-printing character would garble the message, so it is shown by code point.
 function unknown(letter: string): string {
   if (!/\p{C}/u.test(letter)) return `Unknown escape "\\${letter}"`;
 
@@ -60,7 +59,7 @@ function stepAt(raw: string, cursor: number, position: Position): Step {
   return { text: char, raw: char };
 }
 
-/** The text a string's literal stands for, its escapes read. `start` is where the literal begins, so an escape it refuses is placed. */
+/** `start` places the error for a bad escape. */
 export function readEscapes(raw: string, start: Position): string {
   let text = '';
   let cursor = 0;

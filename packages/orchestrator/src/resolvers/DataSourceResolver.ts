@@ -6,10 +6,10 @@ export class DataSourceResolver {
   constructor(private dataSources: Map<string, Record<string, Value>>) {}
 
   resolve(reference: DataReference, context: Context): Value {
-    // Read once for the module as the configuration writes it, since the config loads before any module has instances.
+    // Keyed by the module as written, since data sources are read at load, before modules have instances.
     const key = dataSourceKey(scopeOf(moduleOf(context).withoutKeys()), reference.type, reference.name);
     const attrName = reference.attribute;
-    // The scope is left out: the place under the error names the module.
+    // No scope: the error's place names the module.
     const spelled = `data.${reference.type}.${reference.name}`;
 
     const dataAttributes = this.dataSources.get(key);

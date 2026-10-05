@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, Mock, vi } from 'vitest';
 
 import { createOutputCommand } from '../src/commands/output';
 
-// Mock StateManager
 vi.mock('@clay/state', () => {
   return {
     LocalBackend: vi.fn(() => ({ path: '/tmp/clay.state.json' })),
@@ -18,7 +17,7 @@ vi.mock('@clay/state', () => {
   };
 });
 
-// The command asks the file system whether a state file is there before reading it.
+// The command checks that the state file exists before reading it.
 vi.mock('node:fs/promises', () => ({ default: { access: vi.fn() } }));
 
 describe('Output Command', () => {
@@ -38,7 +37,6 @@ describe('Output Command', () => {
 
     vi.clearAllMocks();
 
-    // Setup Mock StateManager
     readMock = vi.fn().mockResolvedValue(emptyState());
     vi.mocked(StateManager).mockImplementation(function () {
       return {
@@ -108,7 +106,6 @@ describe('Output Command', () => {
 
     expect(LocalBackend).toHaveBeenCalledWith(process.cwd());
 
-    // Check output
     expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('defaultOut'));
   });
 

@@ -86,7 +86,7 @@ describe('a reference that reads into a list or a map', () => {
     expect(await written('f.txt')).toBe('http://x:443');
   });
 
-  // A key that is not there is a typo; planned as a value to come, it would read as fine until the apply.
+  // A missing key is a typo; planning it as unknown would hide it until apply.
   it('refuses a key the map does not have, where it is written, rather than plan it as unknown', async () => {
     await apply('resource "null_resource" "a" { triggers = { env = "prod" } }');
 
@@ -102,7 +102,7 @@ describe('a reference that reads into a list or a map', () => {
     expect(error.message).toBe('var.names has no item [1]: it holds 1');
   });
 
-  // Scope keys join names with dots, so a quoted part naming a target could spell a module two levels down.
+  // Scope keys join names with dots, so a quoted part like `"a.b"` could reach a module two levels down.
   it('refuses a quoted key where the reference needs a name, rather than read a module the caller never called', async () => {
     await fs.mkdir(path.join(dir, 'a', 'b'), { recursive: true });
     await fs.writeFile(path.join(dir, 'a', 'b', 'main.clay'), 'output "secret" { value = "inner" }', 'utf8');
@@ -114,7 +114,7 @@ describe('a reference that reads into a list or a map', () => {
     expect(error.position).toMatchObject({ line: 2 });
   });
 
-  // A saved plan is JSON, where every number reads back as a value; an index has to come back as one the apply can read a list with.
+  // Every number in a saved plan reads back as an ExactNumber; an index must come back as a plain number.
   it('runs an index out of a saved plan', async () => {
     const config = `variable "names" { default = ["ana", "bo"] }\n${file('f', 'var.names[1]')}`;
     const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), config, {}), 'plan.json');

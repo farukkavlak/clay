@@ -15,16 +15,13 @@ import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { ScopeManager } from '../scope/ScopeManager';
 import { LoadedModule, LoadedResource, ModuleLoader } from './ModuleLoader';
 
-/** A configuration with its modules read, its variables declared and its data sources read. */
 export interface LoadedConfig {
   mainProgram: Statement[];
   loadedResources: LoadedResource[];
   loadedModules: LoadedModule[];
-  /** Each resource type's schema, by type. */
   schemas: Map<string, Schema>;
 }
 
-/** A data source type's provider, with the schema its blocks are held to. */
 interface Reader {
   provider: Provider;
   schema: Schema;
@@ -35,7 +32,7 @@ export class ConfigLoader {
     private moduleLoader: ModuleLoader,
     private scopeManager: ScopeManager,
     private dataSources: Map<string, Record<string, Value>>,
-    // A Map because a resource type may be named `constructor`: an object would already hold a value there, and the real schema would be dropped.
+    // A Map, since a resource type may be named `constructor`, which a plain object already has.
     private schemas: Map<string, Schema>,
     private resolver: ReferenceResolver,
     private providers: ProviderRegistry,
@@ -51,7 +48,7 @@ export class ConfigLoader {
     const { resources: loadedResources, modules: loadedModules } = await this.moduleLoader.loadModuleTree(mainProgram);
 
     this.instances.clear();
-    // A plan's values are its own; the next plan makes its own, and an apply reads state.
+    // Planned values belong to one plan; the next plan makes its own, and an apply reads state.
     this.planned.clear();
     for (const { uniqueId, block } of loadedResources) {
       if (block.count) this.instances.declare(uniqueId, 'count');
@@ -67,7 +64,7 @@ export class ConfigLoader {
     return { mainProgram, loadedResources, loadedModules, schemas: this.schemas };
   }
 
-  /** Read before any value is, since reading a resource's value needs the type its schema names, and a provider plans with what it computed kept from state. */
+  /** Loaded before any value is resolved, since resolving needs the schema's types. */
   private async loadSchemas(loaded: LoadedResource[]): Promise<void> {
     this.schemas.clear();
 
@@ -124,7 +121,7 @@ export class ConfigLoader {
       const held = heldBy(stmt.dataSourceType, 'read', schema, read);
       checkDataSourceRead(stmt.dataSourceType, schema, plainOf(held));
 
-      // A name its schema has that the read does not give was left out, and reads as null.
+      // A schema attribute the read omits is null.
       const leftOut = Object.entries(schema).map(([name, { type }]) => [name, valueOf(type, null)]);
       return { ...Object.fromEntries(leftOut), ...held };
     } catch (error) {
@@ -132,7 +129,7 @@ export class ConfigLoader {
     }
   }
 
-  /** A data source is read once, as the config loads and before any module has instances, so a module whose instances each want their own cannot have one yet. */
+  /** A data source is read once at load, before modules have instances, so a repeated module cannot have one yet. */
   private checkReadOnce(stmt: DataBlock, module: ModuleAddress): void {
     const repeated = module.path.some((_, depth) => this.modules.repetitionOf(new ModuleAddress(module.path.slice(0, depth + 1))) !== undefined);
     if (!repeated) return;
@@ -141,7 +138,7 @@ export class ConfigLoader {
     throw new ConfigError(`${spell(stmt)} is in a module called with count or for_each, where a data source cannot be read yet`, stmt.position, place);
   }
 
-  /** One value at a time, so an error points at the value that caused it and not at the block around it. */
+  /** One value at a time, so an error points at the value, not the block. */
   private resolveInputs(stmt: DataBlock, state: State, scopeAddress: ModuleAddress): Record<string, Value> {
     const declaration = spell(stmt);
     const inputs: Record<string, Value> = {};

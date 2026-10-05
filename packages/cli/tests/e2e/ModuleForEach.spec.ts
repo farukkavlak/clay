@@ -11,13 +11,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { start } from './start';
 
-/** The line and column `needle` is first written at, as an error would point at it. */
+/** Where an error would point at the first `needle`. */
 const placeOf = (config: string, needle: string) => {
   const before = config.slice(0, config.indexOf(needle)).split('\n');
   return { line: before.length, column: before.at(-1)!.length + 1 };
 };
 
-/** The call of `web` over `forEach`, each instance named by its key and given its value. */
 const web = (forEach: string, rest = '') => `
   module "web" {
     source = "./web"
@@ -63,7 +62,6 @@ describe('a module called with for_each', () => {
     await fs.writeFile(path.join(dir, name, 'main.clay'), body, 'utf8');
   };
 
-  /** A module that writes one page, named by what it is given and holding what else it is given. */
   const page = () => `
     variable "name" {}
     variable "body" { default = "" }
@@ -107,7 +105,7 @@ describe('a module called with for_each', () => {
     expect(await fs.readFile(path.join(dir, 'can.txt'), 'utf8')).toBe('can');
   });
 
-  // The for_each is read once the output it reads has its value, so the call waits on the other module.
+  // The call waits for the other module's output before reading for_each.
   it('reads for_each from the output of another module', async () => {
     await writeModule('names', 'output "list" { value = ["ali", "can"] }');
 
@@ -135,7 +133,6 @@ describe('a module called with for_each', () => {
     expect(outputs.o.value).toBe(path.join(dir, 'ali.txt'));
   });
 
-  // Each instance of the outer module reads the inner call's for_each with its own input.
   it('reads the for_each of a call in a module in each instance of that module', async () => {
     await writeModule(
       'outer',
@@ -159,7 +156,7 @@ describe('a module called with for_each', () => {
     expect(await stateKeys()).toContain('module.outer[1].module.inner["b"].local_file.page');
   });
 
-  // No key stands for the module the way [0] does for a count, so what was there is destroyed and made again.
+  // No key matches the bare module as count's [0] does, so it is destroyed and recreated.
   it.each([
     ['added', 'module "web" {\n source = "./web"\n name = "ali"\n}', web('["ali"]'), 'module.web["ali"].local_file.page', 'module.web.local_file.page'],
     ['taken off', web('["ali"]'), 'module "web" {\n source = "./web"\n name = "ali"\n}', 'module.web.local_file.page', 'module.web["ali"].local_file.page'],
@@ -174,7 +171,7 @@ describe('a module called with for_each', () => {
     ]);
   });
 
-  // A saved plan is read back from its file and run against the configuration it carries, which gives each instance its value again.
+  // A saved plan runs against its own configuration, which gives each instance its value again.
   it('runs a saved plan, each instance given its value', async () => {
     const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(web('{ ali = "80" }')), web('{ ali = "80" }'), {}), 'plan.json');
 
@@ -214,7 +211,7 @@ describe('a module called with for_each', () => {
     expect(error.position).toMatchObject(placeOf(config, reference));
   });
 
-  // The module is written once for every way it may be called, so it takes its key as an input.
+  // A module may be called in any way, so it must take its key as an input.
   it('refuses each.key inside the module, where it is written in the module', async () => {
     const body = 'variable "name" {}\nvariable "body" {}\noutput "o" { value = "${each.key}" }';
     await writeModule('web', body);

@@ -10,7 +10,7 @@ import { TypeMismatch, typedValues } from '../typed';
 import { plainOf, Value } from '../Value';
 import { ResourcePlan, ResourcePlanner } from './ResourcePlanner';
 
-/** The resource as state holds it, which is how its provider finds it. */
+/** As state holds it, which is how the provider finds it. */
 function held(action: PlanAction, state: State): Resource {
   const key = Address.of(action).toString();
   const resource = Object.hasOwn(state.resources, key) ? state.resources[key] : undefined;
@@ -19,7 +19,6 @@ function held(action: PlanAction, state: State): Resource {
   return resource;
 }
 
-/** What an action sends its provider, what the provider planned at apply it would make of them, and the schema both are held to. */
 interface Sending {
   inputs: Record<string, unknown>;
   after: Record<string, unknown>;
@@ -34,7 +33,7 @@ export class ActionExecutor {
   ) {}
 
   async execute(action: PlanAction, currentState: State): Promise<void> {
-    // An unchanged resource only refreshes what it reads from, so it needs no provider.
+    // A no-op only updates its dependencies, so it needs no provider.
     if (action.type === 'NO_OP') {
       this.recordDependencies(action, currentState);
       return;
@@ -52,7 +51,7 @@ export class ActionExecutor {
         break;
       }
       case 'REPLACE': {
-        // Checked before the delete, so a value off the plan or one the provider refuses leaves the resource as it was.
+        // Checked before the delete, so a value off the plan or refused by the provider leaves the resource untouched.
         const sending = await this.sendingFor(action, currentState);
         await this.executeDelete(action, provider, currentState);
         await this.create(action, provider, currentState, sending);
@@ -69,8 +68,8 @@ export class ActionExecutor {
   }
 
   /**
-   * The plan resolved these against an older state, so they are resolved again, and each value the plan showed as known has to come to the same.
-   * The provider plans again with what is known now, before anything is changed, and checks the values first, since the plan could not check one it did not know.
+   * Resolved again now that earlier actions have run, and each value the plan knew must match.
+   * The provider then validates and plans again before anything changes, since the plan could not validate unknown values.
    */
   private async sendingFor(action: PlanAction, currentState: State): Promise<Sending> {
     if (!action.attributes) throw new Error(`${action.type} action missing attributes`);
@@ -87,7 +86,7 @@ export class ActionExecutor {
     return { inputs: final.config, after: final.after, schema };
   }
 
-  /** A replaced resource is planned as one to create, since the old one goes. What the plan knew was approved, so the plan made now has to agree with it. */
+  /** A replace is planned as a create. The approved plan's known values must still hold. */
   private async finalPlan(action: PlanAction, schema: Schema, after: Record<string, unknown>, inputs: Record<string, Value>, currentState: State): Promise<ResourcePlan> {
     const type = action.resourceType;
     const current = action.type === 'UPDATE' ? held(action, currentState) : undefined;
@@ -100,7 +99,7 @@ export class ActionExecutor {
     return final;
   }
 
-  /** What a provider made, with each set in the order a plan holds it, so the two compare. The resource exists whatever it holds, so what its schema does not hold is kept as it came. */
+  /** Sets are reordered as a plan holds them, so the two compare. The resource exists whatever it holds, so data outside the schema is kept as returned. */
   private returned({ schema }: Sending, attributes: Record<string, unknown>): Record<string, unknown> {
     try {
       return plainOf(typedValues(schema, attributes));
@@ -110,7 +109,7 @@ export class ActionExecutor {
     }
   }
 
-  /** Checked once what it returned is in state: the resource exists as the provider made it, whatever its schema or the plan said. */
+  /** Runs after the result is in state, since the resource exists whatever its schema or the plan said. */
   private holdToPlan(type: string, { inputs, after, schema }: Sending, returned: Record<string, unknown>): void {
     heldBy(type, 'returned', schema, returned);
     const mismatches = offApply(schema, after, inputs, returned);
@@ -146,7 +145,7 @@ export class ActionExecutor {
     this.holdToPlan(action.resourceType, sending, currentResource.attributes);
   }
 
-  /** What a resource reads from can change while its values do not, so an unchanged resource still refreshes its list. */
+  /** Dependencies can change while values do not, so a no-op still updates them. */
   private recordDependencies(action: PlanAction, currentState: State): void {
     held(action, currentState).dependencies = action.dependencies ?? [];
   }

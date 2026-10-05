@@ -1,9 +1,8 @@
 import { containsUnknown, ExactNumber, isRecord, own, Type, typeAt, types } from '@clay/contracts';
 
 /**
- * A value with its type. `data` is plain: a string, an `ExactNumber`, a boolean or null; an array for a list, a set or a tuple; a record for a map or an
- * object. UNKNOWN stands wherever only the apply makes a value, at any depth. A set's array holds each member once, in one order.
- * The type is the one the data has, so it is `dynamic` only for a value not known yet or null, whose type nothing names.
+ * `data` is a string, an `ExactNumber`, a boolean, null, an array (list, set, tuple) or a record (map, object), with UNKNOWN at any depth.
+ * A set's array holds each member once, in a fixed order. `type` is `dynamic` only for an unknown or a null of no type.
  */
 export interface Value {
   readonly type: Type;
@@ -14,7 +13,7 @@ export function valueOf(type: Type, data: unknown): Value {
   return { type, data };
 }
 
-/** A string, a number or a boolean: a value with a text of its own. */
+/** A string, a number or a boolean. */
 export function hasText(type: Type): boolean {
   return type.kind === 'string' || type.kind === 'number' || type.kind === 'bool';
 }
@@ -30,7 +29,7 @@ export function objectOf(entries: [name: string, value: Value][]): Value {
   return valueOf(types.object(Object.fromEntries(entries.map(([name, value]) => [name, value.type]))), Object.fromEntries(entries.map(([name, value]) => [name, value.data])));
 }
 
-/** The type plain data has when nothing names one: a list of values is a tuple, and a record an object. */
+/** An array is a tuple and a record an object. */
 export function inferred(data: unknown): Type {
   if (typeof data === 'string') return types.string;
   if (data instanceof ExactNumber) return types.number;
@@ -41,7 +40,7 @@ export function inferred(data: unknown): Type {
   return types.dynamic;
 }
 
-/** What one step into the value finds, with its type: an element, a tuple's item or an object's attribute. A step it has nothing at finds nothing. */
+/** Undefined data where the step finds nothing. */
 export function child(value: Value, step: string | number): Value {
   const data = Array.isArray(value.data) ? value.data[step as number] : own(value.data as Record<string, unknown>, String(step));
   const type = typeAt(value.type, step);
@@ -49,7 +48,7 @@ export function child(value: Value, step: string | number): Value {
   return valueOf(type.kind === 'dynamic' ? inferred(data) : type, data);
 }
 
-/** A set with a member not known yet has no order or size until the apply. */
+/** A set with an unknown member has no order or size until apply. */
 export function unordered(value: Value): boolean {
   return value.type.kind === 'set' && Array.isArray(value.data) && value.data.some((member) => containsUnknown(member));
 }
@@ -66,17 +65,16 @@ const ARTICLES: Record<Type['kind'], string> = {
   tuple: 'a tuple',
 };
 
-/** A type's kind as a message says it: `a list`, `an object`. */
+/** `a list`, `an object`. */
 export function article(kind: Type['kind']): string {
   return ARTICLES[kind];
 }
 
-/** What a value is, as a message says it: its kind, known yet or not. */
 export function described(value: Value): string {
   return value.data === null ? 'null' : article(value.type.kind);
 }
 
-/** Values as a provider, a plan and a state hold them: the data alone, typed again by the schema where it is read. */
+/** The data alone, as providers, plans and state hold it; the schema types it again when read. */
 export function plainOf(values: Record<string, Value>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(values).map(([name, value]) => [name, value.data]));
 }

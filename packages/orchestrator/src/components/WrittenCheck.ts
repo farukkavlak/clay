@@ -10,7 +10,7 @@ import { ScopeManager } from '../scope/ScopeManager';
 import { Value } from '../Value';
 import { LoadedModule, LoadedResource } from './ModuleLoader';
 
-/** Reads every value once as written, each reference in it not known yet, and holds it to the type it is given to, so a block is checked whatever instances it makes, none included. */
+/** Checks every value once with references unknown, so a block is checked even when it makes no instance. */
 export class WrittenCheck {
   constructor(
     private resolver: ReferenceResolver,
@@ -18,7 +18,7 @@ export class WrittenCheck {
     private schemas: Map<string, Schema>
   ) {}
 
-  /** Run once the names a resource sets are checked, so each has a type in its schema. */
+  /** Runs after names are checked, so each has a type in its schema. */
   check(loadedResources: LoadedResource[], loadedModules: LoadedModule[]): void {
     for (const loaded of loadedResources) this.checkResource(loaded);
 
@@ -32,7 +32,7 @@ export class WrittenCheck {
 
   private checkResource({ address, block }: LoadedResource): void {
     const declaration = spell(block);
-    // Every resource type's schema is read at load.
+    // Every schema is loaded by now.
     const schema = this.schemas.get(block.resourceType)!;
 
     for (const value of [block.count, block.forEach]) if (value) this.read(value, declaration, address);
@@ -42,17 +42,16 @@ export class WrittenCheck {
     }
   }
 
-  /** A call's count and for_each are read in the module that calls; an input in the call, given to the module's variable. */
   private checkCall(block: ModuleBlock, module: ModuleAddress): void {
     const declaration = spell(block);
     const call = new ModuleCall(module);
 
     for (const value of [block.count, block.forEach]) if (value) this.read(value, declaration, call.caller);
-    // `source` is read too: it is a string, and no module declares a variable by that name.
+    // `source` is checked too: it is a string, and no variable may take that name.
     for (const [name, value] of Object.entries(block.attributes)) this.checkGiven(name, value, declaration, call, module);
   }
 
-  /** Its default, and each default its type gives an optional attribute, though no value takes them. */
+  /** Checks defaults even when no value uses them. */
   private checkVariable(block: VariableBlock, module: ModuleAddress): void {
     const declaration = spell(block);
     if (block.attributes.default) this.checkGiven(block.name, block.attributes.default, declaration, module, module);
@@ -62,7 +61,6 @@ export class WrittenCheck {
       checkDefaults(block.name, block.valueType, { tree: block.defaults, read }, (node, check) => tryAt(node.position, declaration, module, check));
   }
 
-  /** A value given to a variable, held to the type the variable names. */
   private checkGiven(name: string, value: AttributeValue, declaration: string, context: Context, module: ModuleAddress): void {
     const read = this.read(value, declaration, context);
     const declared = this.scopeManager.getVariable(scopeOf(module), name) ?? {};

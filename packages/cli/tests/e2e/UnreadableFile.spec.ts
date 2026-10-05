@@ -8,7 +8,7 @@ import { createOutputCommand } from '../../src/commands/output';
 import { createPlanCommand } from '../../src/commands/plan';
 import { createValidateCommand } from '../../src/commands/validate';
 
-// A link to itself is there but cannot be opened, which is not the same as not being there.
+// A link to itself exists but cannot be opened, which differs from a missing file.
 describe('a file that is there but cannot be opened', () => {
   let dir: string;
   let cwd: string;

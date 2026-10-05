@@ -17,7 +17,6 @@ export interface LoadedModule {
   program: Statement[];
 }
 
-/** What the loader has found so far; each module adds to it where it is called. */
 export interface Loaded {
   resources: LoadedResource[];
   modules: LoadedModule[];
@@ -64,18 +63,17 @@ export class ModuleLoader {
       } else if (childStmt.type === 'Module') await this.loadChildModule(childStmt, moduleDir, childAddress, loaded, [...loadingDirs, moduleDir]);
   }
 
-  /** The directory a module call names and the configuration in it. */
   private readModule(stmt: ModuleBlock, parentDir: string, parentAddress: ModuleAddress, loadingDirs: string[]): { moduleDir: string; moduleProgram: Statement[] } {
     const source = stmt.attributes.source;
     const place = { block: spell(stmt), module: scopeOf(parentAddress) || undefined };
 
     if (source?.type !== 'String') throw new ConfigError(`Module "${stmt.name}" is missing a valid "source" attribute.`, (source ?? stmt).position, place);
 
-    // Anything else names a registry or a remote module, which is not fetched, and an absolute path ties the configuration to one machine.
+    // Registry and remote modules are not supported, and an absolute path ties the configuration to one machine.
     if (!/^\.\.?\//.test(source.value))
       throw new ConfigError(`module "${stmt.name}" has source "${source.value}", which is not a local path: a source starts with ./ or ../`, source.position, place);
 
-    // The trailing "." leaves one spelling per directory, so a cycle is seen on the hop that closes it.
+    // The trailing "." normalizes the path, so a cycle is detected on the hop that closes it.
     const moduleDir = path.posix.join(parentDir, source.value, '.');
     if (loadingDirs.includes(moduleDir)) throw new ConfigError(`Module source cycle detected: ${[...loadingDirs, moduleDir].join(' -> ')}`, source.position, place);
 
@@ -93,7 +91,6 @@ export class ModuleLoader {
     return new Parser(new Lexer(moduleContent, moduleFile).tokenize()).parse();
   }
 
-  // An input is read in the call.
   private declareInputs(stmt: ModuleBlock, program: Statement[], childAddress: ModuleAddress, parentAddress: ModuleAddress): void {
     const declared = new Map(program.filter((moduleStmt) => moduleStmt.type === 'Variable').map((variable) => [variable.name, variable]));
     const childScope = scopeOf(childAddress);
@@ -111,7 +108,7 @@ export class ModuleLoader {
   private declareVariables(program: Statement[], address: ModuleAddress): void {
     const scope = scopeOf(address);
 
-    // A caller's input beats the default; neither one is a missing input, read or not.
+    // A variable with an input or a default is not missing.
     for (const stmt of program) {
       if (stmt.type !== 'Variable' || this.scopeManager.getVariable(scope, stmt.name)) continue;
       if (stmt.attributes.default === undefined) throw new ConfigError(`variable "${stmt.name}" has no value`, stmt.position, { block: spell(stmt), module: scope || undefined });

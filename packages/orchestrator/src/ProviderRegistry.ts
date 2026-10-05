@@ -2,7 +2,6 @@ import { Provider, Schema } from '@clay/contracts';
 
 import { checkDataSourceSchema, checkSchema } from './providerResult';
 
-/** The providers a run can use, each under the resource types it handles and the data source types it reads. */
 export class ProviderRegistry {
   private providers: Map<string, Provider> = new Map();
   private readers: Map<string, Provider> = new Map();
@@ -21,7 +20,7 @@ export class ProviderRegistry {
     }
   }
 
-  /** A type may be a resource and not a data source, so the two are looked up apart. */
+  /** Looked up apart from resources, since a type may be one and not the other. */
   reader(type: string): Provider {
     const provider = this.readers.get(type);
     if (!provider) throw new Error(`No provider reads data source "${type}"`);

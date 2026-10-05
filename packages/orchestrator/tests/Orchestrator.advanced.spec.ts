@@ -8,7 +8,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { InMemoryFiles, Orchestrator } from '../src/index';
 import { apply } from './apply';
 
-// Mock Provider for testing
 class MockProvider implements Provider {
   readonly resources = ['mock_resource'];
   readonly dataSources: string[] = [];
@@ -29,9 +28,7 @@ class MockProvider implements Provider {
     return planFromSchema(await this.getSchema(type), request);
   }
 
-  async validate(_type: string, _inputs: Record<string, unknown>): Promise<void> {
-    // Always valid for testing
-  }
+  async validate(_type: string, _inputs: Record<string, unknown>): Promise<void> {}
 
   async create(_type: string, { config }: CreateRequest): Promise<Record<string, unknown>> {
     const id = `mock_${Date.now()}_${Math.random()}`;
@@ -188,7 +185,7 @@ describe('Orchestrator: Advanced Features', () => {
 
       await apply(orchestrator, config1);
 
-      // Second apply with reference - this should add dependency edge
+      // The reference adds a dependency.
       const config2 = `
         resource "mock_resource" "first" {
           name = "first_resource"

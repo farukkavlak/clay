@@ -12,7 +12,6 @@ describe('CLI: init command', () => {
   });
 
   it('should initialize state', async () => {
-    // Mock StateManager
     const writeIfAbsentMock = vi.fn().mockResolvedValue(true);
     vi.mocked(StateManager).mockImplementation(function () {
       return {
@@ -23,7 +22,6 @@ describe('CLI: init command', () => {
       } as Partial<StateManager> as StateManager;
     });
 
-    // Execute command action directly (commander action handler)
     await createInitCommand().parseAsync(['node', 'clay', 'init']);
 
     expect(StateManager).toHaveBeenCalledWith(expect.any(Object));
@@ -35,7 +33,6 @@ describe('CLI: init command', () => {
       return { writeIfAbsent: vi.fn().mockRejectedValue(new Error('Permission denied')) } as Partial<StateManager> as StateManager;
     });
 
-    // Mock process.exit to prevent test exit
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 

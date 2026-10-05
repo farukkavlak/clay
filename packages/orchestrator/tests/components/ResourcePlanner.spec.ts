@@ -5,12 +5,11 @@ import { ResourcePlanner } from '../../src/components/ResourcePlanner';
 import { ProviderRegistry } from '../../src/ProviderRegistry';
 import { inferred, Value, valueOf } from '../../src/Value';
 
-/** Values as the configuration writes them: a list a tuple and a map an object, with the type their items have. */
+/** As the configuration writes them: a list is a tuple and a map an object. */
 const written = (config: Record<string, unknown>): Record<string, Value> => Object.fromEntries(Object.entries(config).map(([name, data]) => [name, valueOf(inferred(data), data)]));
 
 const schema: Schema = { path: { type: types.string, forceNew: true }, tags: { type: types.map(types.dynamic) }, made: { type: types.string, computed: true } };
 
-/** Plans from the schema, unless a test gives it a plan of its own. */
 function fakeProvider(plan: (request: PlanRequest) => PlannedChange = (request) => planFromSchema(schema, request)) {
   return {
     resources: ['thing'],
@@ -54,7 +53,7 @@ describe('ResourcePlanner', () => {
     expect(provider.plan).toHaveBeenLastCalledWith('thing', { prior: null, proposed: config, config });
   });
 
-  // The provider is sent the values as the schema takes them, and so plans them, and the apply sends them again.
+  // The provider plans with converted values, and the apply sends them again.
   it('sends the provider a value converted to the type the schema names, and gives it back', async () => {
     const provider = fakeProvider();
     const converted = { path: '5', tags: {} };

@@ -7,26 +7,26 @@ import { ProviderRegistry } from '../ProviderRegistry';
 import { shown } from '../shown';
 import { plainOf, Value } from '../Value';
 
-/** A resource as its provider plans it, whether the change replaces it, and the configuration as the schema takes it, which is what the provider is sent. */
+/** `config` is converted to the schema, as the provider receives it. */
 export interface ResourcePlan {
   after: Record<string, unknown>;
   replace: boolean;
   config: Record<string, unknown>;
 }
 
-/** What the configuration asks for, with what the provider computed kept as the refresh read it, since the configuration never sets that. */
+/** The configuration plus computed values from the refresh that the configuration does not set. */
 function proposed(prior: Record<string, unknown>, config: Record<string, unknown>, schema: Schema): Record<string, unknown> {
   const kept = Object.entries(prior).filter(([name]) => Object.hasOwn(schema, name) && schema[name].computed && !Object.hasOwn(config, name));
 
   return { ...config, ...Object.fromEntries(kept) };
 }
 
-/** A place the provider says would replace the resource replaces it only where the value there changes. */
+/** Only replaces where the value at the path actually changes. */
 function replaces(paths: AttributePath[], prior: Record<string, unknown>, after: Record<string, unknown>): boolean {
   return paths.some((path) => !isDeepStrictEqual(valueAt(prior, path), valueAt(after, path)));
 }
 
-/** A provider makes only what the configuration leaves to it: a value the configuration sets stays as set, and one it does not set is one the provider computes. */
+/** The provider may not change a value the configuration sets. */
 function checkPlanned(type: string, schema: Schema, config: Record<string, unknown>, after: Record<string, unknown>): void {
   for (const [name, value] of Object.entries(config)) {
     const got = own(after, name);
@@ -38,7 +38,7 @@ function checkPlanned(type: string, schema: Schema, config: Record<string, unkno
       throw new Error(`${type} planned ${name}, which the configuration does not set and ${type} does not compute`);
 }
 
-/** A kept value stays as it was made until the resource is replaced, so a change in place has it already. */
+/** An update may not plan a `kept` value as unknown: it is fixed from create until replace. */
 function checkKept(type: string, schema: Schema, prior: Record<string, unknown>, after: Record<string, unknown>): void {
   for (const name of Object.keys(schema)) {
     if (!schema[name].kept || !containsUnknown(own(after, name))) continue;
@@ -51,11 +51,10 @@ function checkKept(type: string, schema: Schema, prior: Record<string, unknown>,
   }
 }
 
-/** Asks a resource's provider what it will hold once applied, and holds the answer to what the configuration sets. */
 export class ResourcePlanner {
   constructor(private providers: ProviderRegistry) {}
 
-  /** The values are checked first, since a plan of values the provider would refuse means nothing. A value not known yet is checked again once the apply knows it. */
+  /** Validates first, since planning invalid values means nothing. Unknown values are validated again at apply. */
   async plan(type: string, schema: Schema, current: Resource | undefined, written: Record<string, Value>): Promise<ResourcePlan> {
     const provider = this.providers.get(type);
     const config = conformValues(type, schema, written);
@@ -68,7 +67,7 @@ export class ResourcePlanner {
       return { after: change.after, replace: false, config };
     }
 
-    // What the old resource holds goes with it, so the new one is planned as if made from nothing.
+    // The old resource's values go with it, so the new one is planned from nothing.
     return { ...(await this.create(provider, type, schema, config)), replace: true };
   }
 

@@ -11,8 +11,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { start } from './start';
 
 /**
- * Counts to a `total` only the apply makes, a number, and keeps `labels`, a map of strings, `rule`, an object with an optional `port`, and `pair`, a
- * string and a number. As a data source it reads back the `size` it is given.
+ * Computes a numeric `total` at apply, and holds `labels` (map of strings), `rule` (object with an optional `port`) and `pair` (string, number).
+ * As a data source it returns the `size` it is given.
  */
 class TallyProvider implements Provider {
   readonly resources = ['tally'];
@@ -99,7 +99,7 @@ describe('a configuration held to the schema', () => {
     });
   });
 
-  // A name does not hang on a value, so it is checked once for the block, even one that makes no instance.
+  // Names are checked once per block, even one that makes no instance.
   it('refuses a name the resource does not have in a block with count = 0', async () => {
     const config = `resource "local_file" "a" {\n  count = 0\n  path = "${file}"\n  content = "hi"\n  contnet = "x"\n}`;
 
@@ -125,7 +125,7 @@ describe('a configuration held to the schema', () => {
     await expect(newOrchestrator().plan('resource "tally" "t" {\n  labels = { a = [1] }\n}')).rejects.toThrow('labels["a"] is a tuple, where tally takes a string');
   });
 
-  // A value the apply makes used to leave the whole resource unchecked.
+  // An unknown value used to leave the whole resource unchecked.
   it('checks a known value beside one the apply makes', async () => {
     const config = `resource "random_string" "r" { length = 4 }\nresource "local_file" "a" {\n  path    = random_string.r.result\n  content = [5]\n}`;
 
@@ -234,7 +234,7 @@ describe('a data block held to the schema', () => {
     expect(outputs).toEqual({ c: { old: undefined, new: { value: 'hi', type: types.string } } });
   });
 
-  // Each is refused before the file is read, so the path need not be there.
+  // Each is refused before the file is read, so the path need not exist.
   it.each([
     ['a name it does not have', '  path    = "a.txt"\n  contnet = "x"', 'local_file has no attribute "contnet"', { line: 3, column: 13 }],
     ['a name written in place of one it requires', '  paht = "a.txt"', 'local_file has no attribute "paht"', { line: 2, column: 10 }],
@@ -265,7 +265,7 @@ describe('a data block held to the schema', () => {
     });
   });
 
-  // The names are checked before any value is resolved, so the wrong name is what is reported.
+  // Names are checked before values resolve, so the wrong name is reported.
   it('refuses a name it does not have before a value in it that does not resolve', async () => {
     await expect(plan(`data "local_file" "f" {\n  path    = "${file}"\n  contnet = var.missing\n}`)).rejects.toThrow('local_file has no attribute "contnet"');
   });

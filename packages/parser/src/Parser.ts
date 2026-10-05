@@ -25,16 +25,14 @@ import { Position } from './Position';
 import { NAME, Step } from './reference';
 import { Token, TokenType } from './tokens';
 
-/** Words a reference already spells: `var.x`, `data.t.n`, `module.m`, `count.index`, `each.key`, `path.module`. */
+/** Reference prefixes, so no resource type or for name may use them. */
 const RESERVED_TYPES = new Set(['module', 'var', 'data', 'count', 'each', 'path']);
 
-/** Words that lex as values, so a name spelled like one could never be read back by a reference. */
+/** A name spelled like one could never be referenced. */
 const KEYWORDS = new Set(['true', 'false', 'null']);
 
-/** The bracket that closes a for, by the token for it. */
 const CLOSING = { [TokenType.RBracket]: ']', [TokenType.RBrace]: '}' };
 
-/** The types a variable names by a word alone; `any` takes a value as it is. */
 const PRIMITIVE_TYPES = new Map<string, Type>([
   ['string', types.string],
   ['number', types.number],
@@ -42,25 +40,22 @@ const PRIMITIVE_TYPES = new Map<string, Type>([
   ['any', types.dynamic],
 ]);
 
-/** The types written with the types they hold in parentheses after the name. */
 const HOLDING_TYPES = new Set(['list', 'set', 'map', 'tuple', 'object']);
 
-/** What makes a block many instances; a module call keeps these for itself, so they name no module input. */
+/** Reserved by a module call, so no module input may use them. */
 const INSTANCE_ARGUMENTS = ['count', 'for_each'];
 
-/** A type, with the defaults it gives an optional attribute anywhere in it. */
 interface ParsedType {
   type: Type;
   defaults?: TypeDefaults;
 }
 
-/** An attribute's type in an object type, with what `optional(...)` around it says. */
 interface AttributeType extends ParsedType {
   optional?: true;
   default?: AttributeValue;
 }
 
-/** Defaults with nothing in them left out, so a type without any keeps none. */
+/** Drops empty records, so a type without defaults has no `defaults`. */
 function defaultsFrom(found: { values?: Record<string, AttributeValue>; within?: Record<string, TypeDefaults> }): Pick<ParsedType, 'defaults'> {
   const defaults = Object.fromEntries(Object.entries(found).filter(([, record]) => Object.keys(record).length > 0));
   return Object.keys(defaults).length > 0 ? { defaults } : {};
@@ -69,9 +64,9 @@ function defaultsFrom(found: { values?: Record<string, AttributeValue>; within?:
 export class Parser {
   private tokens: Token[];
   private current: number = 0;
-  /** The names the for expressions around the value being read give, innermost last. */
+  /** Names bound by enclosing for expressions, innermost last. */
   private bound: string[] = [];
-  /** Every name a for gives, checked against the resource types once every block is read. */
+  /** Checked against resource types once every block is read. */
   private forNames: Token[] = [];
 
   constructor(tokens: Token[]) {
@@ -86,7 +81,7 @@ export class Parser {
       const start = this.peek();
       const statement = this.parseStatement();
 
-      // A second block with the same name would replace the first in silence.
+      // A duplicate would silently replace the first.
       const label = spell(statement);
       if (declared.has(label)) throw new ConfigError(`${label} is declared twice`, start.position);
       declared.add(label);
@@ -98,7 +93,7 @@ export class Parser {
     return program;
   }
 
-  /** In a for's body its names come first, so one spelled as a resource type would hide every reference to that type. */
+  /** A for name that equals a resource type would shadow every reference to that type. */
   private checkForNames(program: Program): void {
     const types = new Set(program.flatMap((statement) => (statement.type === 'Resource' ? [statement.resourceType] : [])));
     const shadowing = this.forNames.find((name) => types.has(name.value));
@@ -106,7 +101,7 @@ export class Parser {
       throw new ConfigError(`"${shadowing.value}" cannot name an item in a for: a reference reads "${shadowing.value}." as a resource of that type`, shadowing.position);
   }
 
-  // No keywords: a kind is only special at the start of a statement.
+  // Not keywords: a block kind is only special at the start of a statement.
   private blockParsers = new Map<string, (position: Position) => Statement>([
     ['resource', this.parseResource.bind(this)],
     ['variable', this.parseVariable.bind(this)],
@@ -164,7 +159,7 @@ export class Parser {
 
     const { attributes, declared } = this.parseVariableBody(nameToken.value);
 
-    // A module call's input replaces the default, so a reference or a call in it would never be checked.
+    // A module input replaces the default, so a reference or a call in it might never be checked.
     if (attributes.default) this.checkConstant(attributes.default, "A variable's default");
 
     return {
@@ -182,7 +177,7 @@ export class Parser {
     if (named) throw new ConfigError(`${what} is a constant, so it cannot hold ${spellNamed(named)}`, named.position);
   }
 
-  /** `default` and `type` are the whole of what a variable is read for, so another name would be parsed and never read. */
+  /** Only `default` and `type`; any other name is refused, since nothing would read it. */
   private parseVariableBody(name: string): { attributes: Record<string, AttributeValue>; declared?: ParsedType } {
     this.consume(TokenType.LBrace, "Expect '{' after variable name.");
 
@@ -250,7 +245,6 @@ export class Parser {
     return { type: types.tuple(elements), ...defaultsFrom({ within }) };
   }
 
-  /** Written as a map is, with an identifier for each name. */
   private parseObjectTypes(): ParsedType {
     this.consume(TokenType.LBrace, "Expect '{' after 'object('.");
 
@@ -275,7 +269,6 @@ export class Parser {
     return { type: types.object(attributes, optional.length > 0 ? optional : undefined), ...defaultsFrom({ values, within }) };
   }
 
-  /** `optional(type)`, or `optional(type, default)` for the value it takes when left out or null. */
   private parseAttributeType(): AttributeType {
     if (!this.check(TokenType.Identifier) || this.peek().value !== 'optional') return this.parseType();
     this.advance();
@@ -283,7 +276,7 @@ export class Parser {
 
     const parsed = this.parseType();
     const value = this.matchToken(TokenType.Comma) ? this.parseValue() : undefined;
-    // A type is read where the variable is declared, before any value a reference could read.
+    // Types are read at declaration, before any reference has a value.
     if (value) this.checkConstant(value, "An optional attribute's default");
 
     this.consume(TokenType.RParen, "Expect ')' after the type of optional, or its default.");
@@ -326,12 +319,11 @@ export class Parser {
     };
   }
 
-  /** A data source makes no instances yet; there `count` or `for_each` would be taken for an input. */
+  /** Data sources do not support instances yet; `count` or `for_each` would otherwise pass as inputs. */
   private refuseInstances(attributes: Record<string, AttributeValue>, block: string): void {
     for (const name of INSTANCE_ARGUMENTS) if (Object.hasOwn(attributes, name)) throw new ConfigError(`${block} cannot have ${name} yet`, attributes[name].position);
   }
 
-  /** The `{ name = value ... }` body every block but output has. */
   private parseAttributes(block: string): Record<string, AttributeValue> {
     this.consume(TokenType.LBrace, `Expect '{' after ${block} name.`);
 
@@ -371,7 +363,6 @@ export class Parser {
     return { type: 'Number', value: this.exactNumber(`-${number.value}`, position), position };
   }
 
-  /** A string with `${ … }` in it is a template: its text, and what its interpolations read, each where it was written. */
   private parseString(position: Position): AttributeValue {
     const parts: TemplatePart[] = [];
 
@@ -382,7 +373,7 @@ export class Parser {
     return this.template(parts, position);
   }
 
-  /** A heredoc's text is read as written but for `$${`; `<<-` takes off the indent its lines share. */
+  /** Escapes are not decoded, except `$${`. */
   private parseHeredoc(position: Position): AttributeValue {
     const flush = this.previous().value.startsWith('<<-');
     const parts: TemplatePart[] = [];
@@ -395,7 +386,7 @@ export class Parser {
     return this.template(text, position);
   }
 
-  /** Text next to text is one piece, and a string with no `${ … }` in it is a `String`. */
+  /** Merges adjacent text; a template with no interpolation becomes a `String`. */
   private template(parts: TemplatePart[], position: Position): AttributeValue {
     const joined: TemplatePart[] = [];
 
@@ -410,7 +401,7 @@ export class Parser {
     return { type: 'Template', value: joined, position };
   }
 
-  /** What one `${ … }` holds: a reference, a call or a name a for gives, and nothing else. The lexer has put `${` next. */
+  /** Only a reference, a call or a for name. */
   private parseInterpolation(): ReferenceNode | CallNode | BoundNode {
     this.advance();
     if (!this.check(TokenType.Identifier)) return this.error("Expect a reference or a function call inside '${'.");
@@ -421,7 +412,6 @@ export class Parser {
     return named;
   }
 
-  /** The text of a string that has no `${ … }` in it, as written; `quote` is the one that opened it. The lexer puts `"` after it. */
   private plainText(quote: Token, what: string): Token {
     const text = this.matchToken(TokenType.QuotedLit) ? this.previous() : { type: TokenType.QuotedLit, value: '', position: this.peek().position };
     if (this.check(TokenType.TemplateInterp)) throw new ConfigError(`A ${what} is plain text; it cannot hold an interpolation`, quote.position);
@@ -431,7 +421,7 @@ export class Parser {
   }
 
   private parseList(position: Position): AttributeValue {
-    // `for.` still starts a reference, to a resource of that type.
+    // `for.x` is a reference to a resource of type `for`.
     if (this.checkWord('for') && this.tokens[this.current + 1].type !== TokenType.Dot) return this.parseFor(position, TokenType.RBracket);
 
     const values: AttributeValue[] = [];
@@ -443,10 +433,7 @@ export class Parser {
     return { type: 'List', value: values, position };
   }
 
-  /**
-   * `[for key, value in collection : body]`, or `{for … : key => body}` for an object, with the bracket read and `for` next.
-   * The names stand for the item in the key and the body only.
-   */
+  /** The names are bound in the key and the body only. */
   private parseFor(position: Position, closing: keyof typeof CLOSING): ForNode {
     this.advance();
     const names = this.parseForNames();
@@ -465,7 +452,6 @@ export class Parser {
     return { type: 'For', ...(keyName && { keyName }), valueName, collection, ...made, position };
   }
 
-  /** `key => body` in a for that makes an object, with `...` after the body to group the items of one key. */
   private parseEntry(): Pick<ForNode, 'key' | 'body' | 'grouped'> {
     const key = this.parseValue();
     this.consume(TokenType.FatArrow, "Expect '=>' after the key in a for expression.");
@@ -484,7 +470,7 @@ export class Parser {
     return [...names, second];
   }
 
-  /** A name a for gives hides any reference that starts with it, so it cannot be one a reference already spells. */
+  /** A for name shadows references that start with it, so it cannot be a reference prefix. */
   private forName(message: string): Token {
     const name = this.consume(TokenType.Identifier, message);
     if (RESERVED_TYPES.has(name.value)) throw new ConfigError(`"${name.value}" cannot name an item in a for: a reference reads "${name.value}." as something else`, name.position);
@@ -495,7 +481,7 @@ export class Parser {
   }
 
   private parseMap(position: Position): AttributeValue {
-    // `{ for = 1 }` is still a map with a key named for.
+    // `{ for = 1 }` is a map with a key named `for`.
     if (this.checkWord('for') && this.tokens[this.current + 1].type !== TokenType.Assign) return this.parseFor(position, TokenType.RBrace);
 
     const map: Record<string, AttributeValue> = {};
@@ -511,20 +497,19 @@ export class Parser {
     return { type: 'Map', value: map, position };
   }
 
-  /** A quoted key is the text its escapes stand for, so one key spelled two ways is still one key. */
+  /** Escapes are decoded, so one key spelled two ways is still one key. */
   private stringKey(quote: Token): Token {
     const text = this.plainText(quote, 'map key');
 
     return { ...quote, value: readEscapes(text.value, text.position) };
   }
 
-  // A second value under one name would replace the first in silence, and `__proto__` would set a prototype, not a key.
+  // A duplicate would silently replace the first, and `__proto__` would set a prototype, not a key.
   private checkKey(entries: object, key: Token): void {
     if (key.value === '__proto__') throw new ConfigError('__proto__ cannot be a name', key.position);
     if (Object.hasOwn(entries, key.value)) throw new ConfigError(`${key.value} is set twice`, key.position);
   }
 
-  /** A name with `(` after it calls a function, one a for around it gives stands for its item, and any other name starts a reference. */
   private parseNamed(position: Position): ReferenceNode | CallNode | BoundNode {
     const name = this.advance().value;
     if (this.matchToken(TokenType.LParen)) return { type: 'Call', name, args: this.parseArguments(), path: this.parseSteps(), position };
@@ -533,7 +518,6 @@ export class Parser {
     return { type: 'Reference', value: [name, ...this.parseSteps()], position };
   }
 
-  /** Written as a list's items are, with a comma between and one allowed after the last. The `(` is already read. */
   private parseArguments(): AttributeValue[] {
     const args: AttributeValue[] = [];
     while (!this.check(TokenType.RParen) && !this.isAtEnd()) {
@@ -553,7 +537,6 @@ export class Parser {
     return steps;
   }
 
-  /** What follows a `[`: an index into a list, or a key, which reads its escapes as a map key does. */
   private parseBracket(): Step {
     let step: Step;
 
@@ -565,7 +548,7 @@ export class Parser {
     return step;
   }
 
-  /** A place in a list is counted, so it is written in digits and fits a JavaScript number. */
+  /** Digits only, and must fit a safe integer. */
   private index(token: Token): number {
     const index = Number(token.value);
     if (!/^\d+$/.test(token.value) || !Number.isSafeInteger(index))
@@ -583,7 +566,7 @@ export class Parser {
     return false;
   }
 
-  /** A name travels into an address, which reads "." as a separator, so a name is an identifier, as a reference to it has to be. */
+  /** Names end up in addresses, which split on dots, so a name must be an identifier. */
   private consumeName(message: string, word: 'name' | 'type' = 'name'): Token {
     const quote = this.consume(TokenType.OQuote, message);
     const token = { ...quote, value: this.plainText(quote, 'label').value };
@@ -593,7 +576,7 @@ export class Parser {
     return token;
   }
 
-  /** A type shares the name rule, and cannot be a word a reference already spells. */
+  /** Same rule as a name, and it cannot be a reference prefix. */
   private consumeType(message: string): Token {
     const token = this.consumeName(message, 'type');
     if (RESERVED_TYPES.has(token.value)) throw new ConfigError(`"${token.value}" cannot be a type: a reference reads "${token.value}." as something else.`, token.position);
@@ -601,7 +584,7 @@ export class Parser {
     return token;
   }
 
-  /** A literal that is no number, or past what one can hold, is the configuration's mistake, so it is refused where it was written. */
+  /** Refused at its position, as a configuration error. */
   private exactNumber(text: string, position: Position): ExactNumber {
     try {
       return ExactNumber.parse(text);
@@ -621,7 +604,7 @@ export class Parser {
     throw new ConfigError(message, this.peek().position);
   }
 
-  /** A word special only where it is written, as `for` and `in` are in a for expression. */
+  /** A contextual keyword, like `for` and `in`. */
   private checkWord(word: string): boolean {
     return this.check(TokenType.Identifier) && this.peek().value === word;
   }

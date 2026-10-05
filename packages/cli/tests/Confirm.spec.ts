@@ -27,7 +27,6 @@ describe('the confirm prompt', () => {
   });
 
   it('refuses when the input ends before an answer', async () => {
-    // An answer that never comes.
     terminal.question.mockImplementation(async () => {
       await once(terminal, 'answer');
       return 'yes';

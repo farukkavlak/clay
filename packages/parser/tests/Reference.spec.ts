@@ -39,13 +39,13 @@ describe('a reference read into a value', () => {
     expect(parse(spelled)).toEqual(expected);
   });
 
-  // Whether a resource's first step is an instance key or an attribute depends on its block, which only the engine knows.
+  // Whether the first step is an instance key depends on the block, which only the engine knows.
   it('reads what follows a resource name as steps, an index and all', () => {
     expect(parseReference(['local_file', 'a', 0, 'content'], position)).toEqual({ kind: 'resource', type: 'local_file', name: 'a', path: [0, 'content'] });
     expect(parseReference(['local_file', 'a', 'tags.env'], position)).toEqual({ kind: 'resource', type: 'local_file', name: 'a', path: ['tags.env'] });
   });
 
-  // Whether a module's first step is an instance index or the output depends on its call, which only the engine knows.
+  // Whether the first step is an instance key depends on the module call, which only the engine knows.
   it('reads what follows a module name as steps, an index and all', () => {
     expect(parseReference(['module', 'app', 0, 'url'], position)).toEqual({ kind: 'module', module: 'app', path: [0, 'url'] });
   });
@@ -54,13 +54,13 @@ describe('a reference read into a value', () => {
     expect(parseReference(['var', 'names', 0, 'first'], position)).toEqual({ kind: 'variable', name: 'names', path: [0, 'first'] });
   });
 
-  // A key is any text; only a part that names the target has to be a name.
+  // A key is any text; only the target's parts must be names.
   it('reads a key that is no name as a step', () => {
     expect(parseReference(['var', 'tags', ''], position)).toEqual({ kind: 'variable', name: 'tags', path: [''] });
     expect(parseReference(['module', 'app', 'url', 'a.b'], position)).toEqual({ kind: 'module', module: 'app', path: ['url', 'a.b'] });
   });
 
-  // The engine resolves values long after the file is read, and adds the place itself.
+  // The engine resolves values later and adds the position itself.
   it('refuses a reference with a plain error when it is given no position', () => {
     expect(() => parseReference(['local_file', 'a'])).toThrow('Resource reference must include attribute: local_file.a');
     expect(() => parseReference(['local_file', 'a'])).not.toThrow(ConfigError);

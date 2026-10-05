@@ -34,7 +34,7 @@ describe('a module with more than one output', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
-  // `early` is ready in the first layer; `late` waits for the module input that a root resource feeds.
+  // `early` is ready in the first layer; `late` waits on a root resource through a module input.
   it('runs when one output is ready long before another', async () => {
     await fs.writeFile(
       path.join(dir, 'm', 'main.clay'),

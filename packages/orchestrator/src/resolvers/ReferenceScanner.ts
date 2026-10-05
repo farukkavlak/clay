@@ -5,7 +5,7 @@ import { repetitionOfKey } from '../Instances';
 import { ModuleInstances } from '../ModuleInstances';
 import { blockKey, Context, moduleOf, outputKey, scopeOf, variableKey } from '../keys';
 
-/** Every AST node carries one, but this walks plain objects too, so a value of another shape is no position. */
+/** It also walks plain objects, which may have no position. */
 function positionOf(value: unknown): Position | undefined {
   if (!value || typeof value !== 'object') return undefined;
   const candidate = value as Partial<Position>;
@@ -14,9 +14,8 @@ function positionOf(value: unknown): Position | undefined {
 }
 
 /**
- * What a config value reads from, with the key it is addressed by, and where it was written: read in an instance of a module, a variable or an output is keyed in that instance.
- * A resource's key is its block in the graph, which every instance of it shares; `block` is that block in the module instance read from.
- * An output's key is its node in the graph; `call` is the call that makes the instance read, and `instanceKey` the index or key it is read at.
+ * A resource's `key` is its block in the graph, shared by every instance; `block` is that block in the module instance read from.
+ * An output's `call` makes the instance read, and `instanceKey` is the index or key it is read at.
  */
 export type Reference = (
   | { kind: 'resource'; key: string; block: string; reference: ResourceReference }
@@ -58,7 +57,7 @@ export class ReferenceScanner {
     const scope = scopeOf(context);
 
     switch (reference.kind) {
-      // A data source is read where the config loads, and a directory is known once it does, so neither is a node of its own.
+      // Data sources and paths are known at load, so neither is a graph node.
       case 'data':
       case 'path': {
         return undefined;
@@ -81,7 +80,7 @@ export class ReferenceScanner {
     }
   }
 
-  /** The output, and the instance a first step names on a call with count or for_each; whether the steps are right is the graph's to say, once it knows the module is there. */
+  /** The graph checks the steps later, once it knows the module exists. */
   private outputOf(reference: ModuleOutputReference, context: Context): Omit<Extract<Reference, { kind: 'output' }>, 'kind' | 'position'> {
     const caller = moduleOf(context);
     const call = caller.child(reference.module);
@@ -103,7 +102,7 @@ export class ReferenceScanner {
     };
   }
 
-  /** The block in the graph, and the block in the module instance read from; whether the steps are right is the graph's to say. */
+  /** The graph checks the steps later. */
   private addressesOf(reference: ResourceReference, context: Context): { key: string; block: string } {
     const block = new Address(moduleOf(context), reference.type, reference.name);
 

@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { start } from './start';
 
-// The CLI reads process.cwd() and parses on import, so these tests drive the orchestrator instead.
+// The CLI reads process.cwd() and parses on import, so these tests drive the orchestrator.
 describe('apply and plan against real files', () => {
   let dir: string;
   let orchestrator: Orchestrator;
@@ -132,7 +132,7 @@ describe('apply and plan against real files', () => {
     expect(actions[0].changes).toEqual({ content: { old: 'hello', new: 'bye' } });
   });
 
-  // The configuration sets what `a` changes to, so the plan reads that, not what state holds.
+  // The plan reads `a`'s new value from the configuration, not from state.
   it('plans an update for a resource that reads a value changing in the same run, to the value it changes to', async () => {
     await apply(orchestrator, chained('one'));
 
@@ -189,7 +189,7 @@ describe('apply and plan against real files', () => {
     await expect(newOrchestrator().plan(config)).rejects.toMatchObject({ position: { file: 'main.clay', line: 3, column: 9 } });
   });
 
-  // The engine builds a graph for each run, so a place from an earlier one is no place in this one.
+  // Each run builds its own graph, so a position from an earlier run must not leak in.
   it('points at a reference in this run, not one an earlier run on the same engine read', async () => {
     const engine = newOrchestrator();
     await engine.plan(`resource "null_resource" "b" {}\nresource "null_resource" "a" { triggers = { x = null_resource.b.id } }`);
@@ -488,7 +488,7 @@ describe('apply and plan against real files', () => {
     expect(await destroyedNames('')).toEqual(['a', 'b']);
   });
 
-  // b's path sits under a file, so its create fails after a's has succeeded.
+  // b's path is under a file, so its create fails after a's succeeds.
   const secondFails = () => `
     resource "local_file" "a" {
       path = "${path.join(dir, 'a.txt')}"

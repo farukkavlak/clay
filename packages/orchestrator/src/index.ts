@@ -28,7 +28,7 @@ export type { RunEvent } from './RunEvent';
 export { DiskFiles, InMemoryFiles, RecordingFiles } from './ConfigFiles';
 export type { ConfigFiles } from './ConfigFiles';
 
-/** Planning and running move entries and rewrite what each depends on, so each works on its own copy. */
+/** Plan and apply move entries and rewrite dependencies, so each works on its own copy. */
 function copyResources(resources: Record<string, Resource>): Record<string, Resource> {
   return Object.fromEntries(Object.entries(resources).map(([key, resource]) => [key, { ...resource }]));
 }
@@ -44,7 +44,6 @@ export class Orchestrator {
     private runner: PlanRunner
   ) {}
 
-  /** Builds the engine and everything it is made of, reading modules through `files` and the state through `stateManager`. */
   static create(stateManager: StateManager, files: ConfigFiles): Orchestrator {
     const providers = new ProviderRegistry();
     const scopes = new ScopeManager();
@@ -73,16 +72,16 @@ export class Orchestrator {
     this.providers.register(provider);
   }
 
-  /** Plans against each resource as its provider reads it now, unless `refresh` is false. What it reads is not written: a plan only looks. */
+  /** A plan never writes state, even what the refresh read. */
   async plan(configContent: string, { refresh = true }: { refresh?: boolean } = {}): Promise<Plan> {
     const prevRun = await this.stateManager.read();
     const prior = refresh ? await this.refresh(prevRun) : prevRun;
-    // Planning moves what gained or lost count, so the actions are planned against the resources where they now are; the plan keeps them where they were.
+    // Planning applies count moves to a copy; the plan keeps the resources at their old addresses.
     const currentState = { ...prior, resources: copyResources(prior.resources) };
     const { desiredResources, outputs } = await this.resolveAndCheck(configContent, currentState);
 
     const actions = plan(desiredResources, currentState);
-    // The refresh only drops what it finds gone, so prior holds no type prevRun does not.
+    // The refresh only drops resources, so prior has no type prevRun lacks.
     const held = [...actions, ...Object.values(prevRun.resources)];
 
     return {
@@ -100,20 +99,20 @@ export class Orchestrator {
     return Object.fromEntries(await Promise.all(unique.map(async (type) => [type, await this.providers.schema(type)] as const)));
   }
 
-  /** Checks the configuration the way a plan would, against an empty state, so a value a resource would give is unknown and everything else is checked. */
+  /** Plans against an empty state, so resource values are unknown and everything else is checked. */
   async validate(configContent: string): Promise<void> {
     await this.resolveAndCheck(configContent, emptyState());
   }
 
-  /** Runs a plan under the state lock. The plan is what the caller saw and approved; a state written since would make it a different plan. */
+  /** Holds the state lock. A state written since the plan was made is refused, since the approved plan no longer matches it. */
   async *runPlan(saved: Plan, configContent: string): AsyncGenerator<RunEvent> {
     await this.stateManager.lock();
 
-    // Released on the way out however the run ends: done, failed, thrown, or dropped by the caller.
+    // Released however the run ends: done, failed, thrown, or abandoned by the caller.
     try {
       const state = await this.stateManager.read();
       if (state.serial !== saved.serial) throw new Error('The state has changed since the plan was made. Plan again.');
-      // The actions were planned against what the refresh read, so that is what they run on and what is written.
+      // The actions were planned against the refreshed resources, so they run on those.
       state.resources = copyResources(saved.prior);
 
       const config = await this.loader.load(configContent, state);
@@ -124,7 +123,7 @@ export class Orchestrator {
     }
   }
 
-  /** A resource its provider no longer finds is left out; the plan makes it again if the configuration still has it. */
+  /** A resource the provider no longer finds is dropped; the plan recreates it if the configuration still has it. */
   private async refresh(state: State): Promise<State> {
     const resources: State['resources'] = {};
 

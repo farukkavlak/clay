@@ -7,7 +7,6 @@ import { str } from './ast';
 
 const none = (): undefined => {};
 
-/** What a for_each reads to, handed to the parse the call asks for. */
 const read: ReadIn = (_, parse) => parse(valueOf(types.object({ b: types.string, a: types.string }), { b: 'two', a: 'one' }));
 
 describe('ModuleInstances', () => {
@@ -36,7 +35,6 @@ describe('ModuleInstances', () => {
     expect(modules.keysOf(ModuleAddress.root.child('a', 1).child('c'))).toBeUndefined();
   });
 
-  // The read is the caller's to make: at plan it may be unknown, at apply it is resolved.
   it('makes an instance for each key the for_each of a call gives, and keeps the value of each', () => {
     const modules = new ModuleInstances();
     const block = { type: 'Module', name: 'web', attributes: {}, forEach: str('x'), position: str('x').position } as const;

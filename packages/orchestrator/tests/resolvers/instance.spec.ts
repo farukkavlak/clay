@@ -36,7 +36,7 @@ describe('a key checked against a for_each', () => {
 });
 
 describe('an instance of a resource with for_each read by a reference', () => {
-  // `.web` and `["web"]` are one step, so both name the instance.
+  // `.web` and `["web"]` are the same step, so both name the instance.
   it('reads the first step as the key, the next as the attribute and the rest as the path', () => {
     expect(readInstance(keyed('web', 'tags', 'env'), 'for_each')).toEqual({ key: 'web', attribute: 'tags', path: ['env'] });
     expect(readInstance(keyed('a.b', 'id'), 'for_each')).toEqual({ key: 'a.b', attribute: 'id', path: [] });

@@ -12,8 +12,8 @@ const cliPackage = path.resolve(__dirname, '../..');
 const clay = path.join(cliPackage, 'bin/clay.js');
 const declaredVersion = async () => (JSON.parse(await fs.readFile(path.join(cliPackage, 'package.json'), 'utf8')) as { version: string }).version;
 
-// These run the command the way a user does, in its own process, so the entry point is covered too.
-// It runs what the build wrote, which is why the package builds before its tests.
+// Runs the built command in its own process, so the entry point is covered too.
+// That is why the package builds before its tests.
 describe('the clay command', () => {
   let dir: string;
 
@@ -26,14 +26,14 @@ describe('the clay command', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
-  // A guard against the version drifting back into the source, where it was typed by hand.
+  // Guards against the version being typed into the source again.
   it('prints the version the package declares', async () => {
     const { stdout } = await run('node', [clay, '--version'], { cwd: dir });
 
     expect(stdout.trim()).toBe(await declaredVersion());
   });
 
-  // `true` reads nothing and closes the pipe at once, so the first line written hits a closed reader.
+  // `true` closes the pipe at once, so the first write hits a closed reader.
   it('says nothing about a reader that stops before it starts', async () => {
     const { stderr } = await run('sh', ['-c', `node ${clay} plan | true`], { cwd: dir });
 

@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vite
 import { InMemoryFiles, Orchestrator } from '../src/index';
 import { apply } from './apply';
 
-/** Fresh per test: apply writes into whatever this returns, so one shared object would carry a test's resources into the next. */
+/** Fresh per test: apply writes into what this returns, so a shared object would leak resources between tests. */
 const readMock = vi.fn();
 const writeMock = vi.fn().mockResolvedValue(undefined);
 
@@ -33,7 +33,6 @@ vi.mock('@clay/state', () => {
   return { StateManager, LocalBackend };
 });
 
-// Mock Planner
 vi.mock('@clay/planner', async () => ({
   ...(await vi.importActual<object>('@clay/planner')),
   plan: vi.fn(() => []),
@@ -65,7 +64,6 @@ describe('Orchestrator - Phase 4: Data Flow', () => {
     readMock.mockResolvedValue(emptyState());
     tmpDir = await fsPromises.mkdtemp(path.join(os.tmpdir(), 'orchestrator-dataflow-test-'));
 
-    // Setup mock provider
     mockProvider = {
       resources: ['test_resource'],
       dataSources: [],
@@ -88,7 +86,6 @@ describe('Orchestrator - Phase 4: Data Flow', () => {
     orchestrator = Orchestrator.create(stateManager, new InMemoryFiles(files));
     orchestrator.registerProvider(mockProvider);
 
-    // Ensure plan returns empty array by default
     (plan as Mock).mockReturnValue([]);
   });
 
@@ -97,7 +94,6 @@ describe('Orchestrator - Phase 4: Data Flow', () => {
   });
 
   it('should use default variable value in root scope', async () => {
-    // Variable defined in root with default
     const config = `
             variable "region" {
                 default = "us-east-1"
@@ -107,7 +103,6 @@ describe('Orchestrator - Phase 4: Data Flow', () => {
 }
 `;
 
-    // Mock Plan to return action
     (plan as Mock).mockReturnValue([
       {
         type: 'CREATE',
@@ -127,9 +122,6 @@ describe('Orchestrator - Phase 4: Data Flow', () => {
 
     const resource = stateArg.resources['test_resource.res'];
     expect(resource).toBeDefined();
-    // Variables are stored as { value: ..., context: ... } in state if they were passed,
-    // but default variables are just values in the simplest case?
-    // Let's check what Orchestrator.ts does for root variables.
     expect(resource.attributes.region).toBe('us-east-1');
   });
 
@@ -152,7 +144,6 @@ module "app" {
 
     files['app/main.clay'] = appConfig;
 
-    // Mock Plan
     (plan as Mock).mockReturnValue([
       {
         type: 'CREATE',
@@ -171,12 +162,12 @@ module "app" {
     const stateArg = writeMock.mock.calls[0][0];
     const resource = stateArg.resources['module.app.test_resource.server'];
 
-    // Should be "production" (passed input), not "dev" (default)
+    // The input wins over the default.
     expect(resource.attributes.tags).toBe('production');
   });
 
   it('should handle nested variable scopes correctly', async () => {
-    // Root (region=us) -> L2 (region=eu) -> Resource uses var.region
+    // root (region=us) -> L2 (region=eu) -> resource reads var.region
     const rootConfig = `
 module "L2" {
   source = "./L2"
@@ -192,7 +183,6 @@ module "L2" {
 
     files['L2/main.clay'] = l2Config;
 
-    // Mock Plan
     (plan as Mock).mockReturnValue([
       {
         type: 'CREATE',
@@ -235,7 +225,6 @@ resource "test_resource" "instance" {
 
     files['db/main.clay'] = dbConfig;
 
-    // Mock Plan
     (plan as Mock).mockReturnValue([
       {
         type: 'CREATE',

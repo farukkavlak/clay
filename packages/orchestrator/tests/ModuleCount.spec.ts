@@ -10,7 +10,6 @@ import { apply } from './apply';
 
 const schema: Schema = { value: { type: types.string } };
 
-/** Keeps what it is given, so state holds the inputs. */
 const recorder: Provider = {
   resources: ['rec'],
   dataSources: [],
@@ -106,7 +105,7 @@ describe('a module called with count', () => {
     });
   });
 
-  // Each instance's outputs and inputs are read in that instance, so what an apply made plans as it is.
+  // Each instance reads its own inputs and outputs, so a second plan is a no-op.
   it('plans no change once applied', async () => {
     await apply(orchestrator(dir, modules()), root('top'));
 
@@ -121,11 +120,11 @@ describe('a module called with count', () => {
     const { resources } = await stored();
     expect(resources['module.m[1].rec.c'].dependencies).toEqual(['module.m[1].module.o.rec.r', 'module.m[1].rec.a[0]', 'module.m[1].rec.a[1]']);
     expect(resources['module.m[0].rec.a[0]'].dependencies).toEqual(['rec.top']);
-    // Two modules side by side sit in the same instance of the module that calls both.
+    // Sibling modules share their caller's instance.
     expect(resources['module.m[1].module.n.rec.s'].dependencies).toEqual(['module.m[1].module.o.rec.r']);
   });
 
-  // The input reads a resource the plan will change, so every instance reading the input plans against the value it changes to, not the one in state.
+  // Every instance must plan against the changed value, not the one in state.
   it('plans an input fed by a changing resource with the value it changes to, in every instance', async () => {
     await apply(orchestrator(dir, modules()), root('top'));
 

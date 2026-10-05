@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 
 const LENGTH_REQUIRED = 'random_string requires "length" attribute (number > 0)';
 
-/** A number reaches a provider exactly; a length has to be a whole one a JavaScript array can be made with. */
+/** Numbers arrive exact; a length must be a safe whole number. */
 function lengthOf(inputs: Record<string, unknown>): number {
   const { length } = inputs;
   if (!(length instanceof ExactNumber)) throw new Error(LENGTH_REQUIRED);
@@ -32,7 +32,7 @@ export class RandomStringResource implements ResourceHandler {
     return planFromSchema(await this.getSchema(), request);
   }
 
-  // Nothing outside the state holds it, so it is as it was applied.
+  // It exists only in state, so it is as applied.
   async read(prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
     return prior;
   }
@@ -56,7 +56,7 @@ export class RandomStringResource implements ResourceHandler {
     return { ...planned, id: result, result };
   }
 
-  // The value is kept, so the plan already holds it.
+  // `result` is kept, so the plan already holds it.
   async update({ planned }: UpdateRequest): Promise<Record<string, unknown>> {
     return planned;
   }

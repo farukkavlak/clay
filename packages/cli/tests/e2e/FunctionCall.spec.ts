@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { start } from './start';
 
-/** Holds `members`, a set of strings, and makes its id at the apply. */
+/** Holds `members`, a set of strings, and computes its id at apply. */
 class PoolProvider implements Provider {
   readonly resources = ['pool'];
   readonly dataSources = [];
@@ -51,7 +51,7 @@ class PoolProvider implements Provider {
   }
 }
 
-/** The line and column `needle` is first written at, as an error would point at it. */
+/** Where an error would point at the first `needle`. */
 const placeOf = (config: string, needle: string) => {
   const before = config.slice(0, config.indexOf(needle)).split('\n');
   return { line: before.length, column: before.at(-1)!.length + 1 };

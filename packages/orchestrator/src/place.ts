@@ -3,22 +3,20 @@ import { ConfigError, Position } from '@clay/parser';
 import { asError } from './asError';
 import { Context, scopeOf } from './keys';
 
-/** A value that holds no position is placed by the caller, at the value around it. */
+/** Without a position, the caller adds one. */
 export function placed(message: string, position?: Position): Error {
   return position ? new ConfigError(message, position) : new Error(message);
 }
 
-/** A resolve error names the reference; this adds where it was read. */
 export function withPlace(error: unknown, position: Position, block: string, address: Context): ConfigError {
   const place = { block, module: scopeOf(address) || undefined };
 
-  // An error that already knows a position knows a closer one than this; the block around it is still news.
+  // An existing position is more precise; only the block is added.
   if (error instanceof ConfigError) return error.block ? error : new ConfigError(error.message, error.position, place, { cause: error });
 
   return new ConfigError(asError(error).message, position, place, { cause: error });
 }
 
-/** Runs the work and, if it fails, says where the value it was working on was written. */
 export function tryAt<T>(position: Position, block: string, address: Context, work: () => T): T {
   try {
     return work();

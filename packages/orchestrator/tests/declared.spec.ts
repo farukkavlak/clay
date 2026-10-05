@@ -6,7 +6,7 @@ import { SchemaMismatch } from '../src/conformValues';
 import { checkDefaults, declaredAs } from '../src/declared';
 import { inferred, Value, valueOf } from '../src/Value';
 
-/** Data as the configuration writes it: a list a tuple, a map an object. */
+/** As the configuration writes it: a list is a tuple and a map an object. */
 const written = (data: unknown): Value => valueOf(inferred(data), data);
 
 const n = (text: string) => ExactNumber.parse(text);
@@ -82,7 +82,6 @@ describe('a value held to the type its variable names', () => {
 const place = { file: 'main.clay', line: 1, column: 1 };
 const constants = new Map<AttributeValue, Value>();
 
-/** A default as a type writes it, and what reading it gives. */
 const constant = (data: unknown): AttributeValue => {
   const node: AttributeValue = { type: 'String', value: JSON.stringify(data), position: place };
   constants.set(node, written(data));
@@ -242,7 +241,6 @@ describe('the optional attributes of an object type', () => {
   });
 });
 
-/** The first default a type gives that is refused, and what the refusal says. */
 function refusalOf(type: Type, tree: TypeDefaults): { node: AttributeValue; message: string } {
   let refusal: { node: AttributeValue; message: string } | undefined;
   checkDefaults('v', type, { tree, read }, (node, check) => {

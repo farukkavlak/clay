@@ -3,10 +3,8 @@ import { InstanceKey } from '@clay/contracts';
 import { indexesOf } from './count';
 import { Value } from './Value';
 
-/** How a block makes many instances: numbered by `count`, or keyed by `for_each`. */
 export type Repetition = 'count' | 'for_each';
 
-/** The repetition an instance key belongs to: an index to count, a string to for_each, and none to a block with neither. */
 export function repetitionOfKey(key: InstanceKey | undefined): Repetition | undefined {
   if (key === undefined) return undefined;
 
@@ -14,8 +12,7 @@ export function repetitionOfKey(key: InstanceKey | undefined): Repetition | unde
 }
 
 /**
- * Which resource blocks make many instances, by the block as the configuration writes it, and which keys each makes once its count or for_each is read.
- * The keys and the values are by the block in one instance of its module, since each instance of the module reads its own count or for_each.
+ * Repetition is stored per block, keys and values per block in one module instance, since each module instance reads its own count or for_each.
  */
 export class Instances {
   private repetitions = new Map<string, Repetition>();
@@ -40,18 +37,17 @@ export class Instances {
     this.keys.set(block, indexesOf(count));
   }
 
-  /** The value each key gives its instance, read as `each.value`. */
   setEach(block: string, values: Map<string, Value>): void {
     this.keys.set(block, [...values.keys()]);
     this.values.set(block, values);
   }
 
-  /** Nothing until a plan reads the count or for_each. An apply reads only for_each, for each.value, and runs the instances its plan listed. */
+  /** Undefined until count or for_each is read. An apply reads only for_each, for `each.value`, and runs the instances its plan listed. */
   keysOf(block: string): InstanceKey[] | undefined {
     return this.keys.get(block);
   }
 
-  /** A plan and an apply both read the for_each, and check the keys they run, before any instance reads its value. */
+  /** Both plan and apply read for_each before any instance reads `each.value`. */
   eachValue(block: string, key: string): Value | undefined {
     return this.values.get(block)?.get(key);
   }

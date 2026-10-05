@@ -27,14 +27,14 @@ export class Graph<T> {
     return this.nodes.entries();
   }
 
-  /** The nodes with an edge into this one: what it depends on. */
+  /** Nodes with an edge into this one. */
   dependenciesOf(id: string): string[] {
     if (!this.nodes.has(id)) throw new Error(`Node ${id} does not exist`);
 
     return [...this.adjacencyList.entries()].filter(([, neighbors]) => neighbors.has(id)).map(([from]) => from);
   }
 
-  /** Layers in dependency order: a layer depends only on earlier layers, so it could run in parallel. */
+  /** Layers in dependency order; the nodes of one layer could run in parallel. */
   topologicalSort(): string[][] {
     const inDegree = this.calculateInDegrees();
     const result: string[][] = [];
@@ -66,7 +66,7 @@ export class Graph<T> {
     return result;
   }
 
-  /** The first cycle a depth-first walk comes back around, each node followed by one it depends on, or nothing when there is none. */
+  /** The first cycle found, each node followed by one it depends on. */
   findCycle(): string[] | undefined {
     const visiting = new Set<string>();
     const visited = new Set<string>();

@@ -14,14 +14,14 @@ export { isRecord } from './isRecord';
 export { isType, typeAt, types } from './Type';
 export type { Type } from './Type';
 
-/** Stands for a value that only exists once the resources it depends on are created. A symbol, so no value a configuration or a file holds can pass for it. */
+/** A value known only after apply. A symbol, so no value from a configuration or a file can pass for it. */
 export const UNKNOWN: unique symbol = Symbol('unknown');
 
 export function isUnknown(value: unknown): boolean {
   return value === UNKNOWN;
 }
 
-/** Whether a value, or anything a list or a map in it holds, is not known yet: a plan may know a map and not one of its values. */
+/** Searches nested values: a plan may know a map but not one of its values. */
 export function containsUnknown(value: unknown): boolean {
   if (isUnknown(value)) return true;
   if (Array.isArray(value)) return value.some((item) => containsUnknown(item));
@@ -29,7 +29,7 @@ export function containsUnknown(value: unknown): boolean {
   return isRecord(value) && Object.values(value).some((item) => containsUnknown(item));
 }
 
-/** Where a value holds what is not known yet, as the steps to each; `[[]]` when the whole of it is not. */
+/** `[[]]` when the whole value is unknown. */
 export function unknownPaths(value: unknown, at: AttributePath = []): AttributePath[] {
   if (isUnknown(value)) return [at];
   if (Array.isArray(value)) return value.flatMap((item, index) => unknownPaths(item, [...at, index]));
@@ -37,12 +37,11 @@ export function unknownPaths(value: unknown, at: AttributePath = []): AttributeP
   return isRecord(value) ? Object.entries(value).flatMap(([key, item]) => unknownPaths(item, [...at, key])) : [];
 }
 
-/** A value the record holds itself, so a name like `toString` finds nothing rather than what every object inherits. */
+/** Own properties only, so `toString` finds nothing. */
 export function own(values: Record<string, unknown>, name: string): unknown {
   return Object.hasOwn(values, name) ? values[name] : undefined;
 }
 
-/** What the steps lead to, or undefined where the value holds nothing there. */
 export function valueAt(value: unknown, path: AttributePath): unknown {
   let at = value;
 
@@ -54,46 +53,44 @@ export function valueAt(value: unknown, path: AttributePath): unknown {
   return at;
 }
 
-/** A resource as state records it. Its address finds it; whatever its provider finds it by, an id among them, is one of its attributes. */
+/** Whatever the provider finds it by, such as an id, is one of its attributes. */
 export interface Resource {
   resourceType: string;
   name: string;
   modulePath?: readonly ModuleStep[];
   key?: InstanceKey;
   attributes: Record<string, unknown>;
-  /** Addresses of the resources this one reads from, kept so it can be deleted before them once the config drops it. */
+  /** Kept so it can be deleted before them once the config drops it. */
   dependencies?: string[];
 }
 
-/** A root output with the type its value has, which no schema names, so a reader can tell a set from a list. */
+/** Carries its type, which no schema names, so a reader can tell a set from a list. */
 export interface Output {
   value: unknown;
   type: Type;
 }
 
-/** An output read from a file: a value, null among them, beside a whole type. */
 export function isOutput(output: unknown): output is Output {
   return isRecord(output) && Object.hasOwn(output, 'value') && isType(output.type);
 }
 
-/** The state file. */
 export interface State {
   version: number;
-  /** Counts the writes. A saved plan records it, so a state written after the plan is caught. */
+  /** Bumped on each write. A saved plan records it, so a state written after the plan is caught. */
   serial: number;
-  /** What the root module's outputs came to on the last run. */
+  /** Root outputs from the last run. */
   outputs?: Record<string, Output>;
   resources: Record<string, Resource>;
 }
 
-/** The shape this version of Clay writes, bumped when it changes once a Clay is released. A state that names a higher one was written by a Clay that knows something this one does not. */
+/** Bump on any change to the shape after a release. A higher version was written by a newer Clay and is refused. */
 export const STATE_VERSION = 3;
 
 export function emptyState(): State {
   return { version: STATE_VERSION, serial: 0, resources: {} };
 }
 
-/** What the engine goes on to read without asking: an address is built from the type, the name and the module path, the planner walks `attributes`, and the runner walks `dependencies`. */
+/** Checks what the engine reads without asking: the address fields, `attributes` and `dependencies`. */
 function isResource(value: unknown): value is Resource {
   return (
     isRecord(value) &&
@@ -105,7 +102,7 @@ function isResource(value: unknown): value is Resource {
   );
 }
 
-/** An instance key names a resource or a module, as an address does, so it is a JavaScript number too. */
+/** Instance keys are part of the address, so they read back as plain numbers. */
 function readKeys(resources: Record<string, unknown>): void {
   for (const [address, resource] of Object.entries(resources)) {
     if (!isRecord(resource)) continue;
@@ -121,16 +118,13 @@ function checkResources(resources: Record<string, unknown>, say: (problem: strin
     if (!isResource(resource)) say(`"${address}" is not a resource`);
     if (resource.key !== undefined && !isInstanceKey(resource.key)) say(`the key of "${address}" is not a key: a key is a whole number or a string`);
 
-    // A step finds an entry by where it is filed, but a delete is built from what it holds.
+    // Lookups use the key, but a delete is built from the entry's own fields, so they must agree.
     const held = Address.of(resource).toString();
     if (held !== address) say(`"${address}" holds ${held}`);
   }
 }
 
-/**
- * Resources as a file holds them, a state's or a plan's, read from JSON with every number exact: keys become JavaScript numbers, then each is checked for what the engine goes on to trust.
- * `field` names them when they are not a record, and `say` reports a problem as the file's reader words it.
- */
+/** Resources from a state or plan file, read with exact numbers: keys become plain numbers, then each resource is checked. */
 export function readResources(resources: unknown, field: string, say: (problem: string) => never): asserts resources is Record<string, Resource> {
   if (!isRecord(resources)) say(`${field} are not a record`);
 
@@ -148,60 +142,56 @@ export function readResources(resources: unknown, field: string, say: (problem: 
 export interface SchemaDefinition {
   type: Type;
   required?: boolean;
-  forceNew?: boolean; // If true, a change to this attribute forces replacement (Delete -> Create)
-  /** Made by the provider, and the configuration cannot set it unless `optional` says so. A plan with no change keeps it as read; a change makes it again unless it is `kept`. */
+  /** A change to it replaces the resource. */
+  forceNew?: boolean;
+  /** Set by the provider; the configuration may set it only with `optional`. A plan with no change keeps it as read; any change recomputes it unless `kept`. */
   computed?: boolean;
-  /** With `computed`: the configuration may set it, and the provider makes it when the configuration does not. */
+  /** With `computed`: the configuration may set it, and the provider computes it otherwise. */
   optional?: boolean;
-  /** With `computed`: made with the resource and the same until it is replaced, so a change in place keeps it as it was read. */
+  /** With `computed`: fixed at create until replace, so an update keeps it as read. */
   kept?: boolean;
 }
 
 export type Schema = Record<string, SchemaDefinition>;
 
-/** The type the schema names for a value, or `dynamic` where it names none. */
 export function typeIn(schema: Schema, name: string): Type {
   return Object.hasOwn(schema, name) ? schema[name].type : types.dynamic;
 }
 
-/** The steps from an attribute into what it holds: its name, then a key of a map or an index into a list. */
+/** The attribute name, then map keys and list indexes. */
 export type AttributePath = (string | number)[];
 
-/** What a provider is asked to plan: a resource to create when `prior` is null, else one to change. */
+/** A create when `prior` is null, else a change. */
 export interface PlanRequest {
-  /** The resource as the refresh read it. */
+  /** As the refresh read it. */
   prior: Record<string, unknown> | null;
-  /** The configuration's values, with what the provider computed kept from `prior` where the configuration does not set it. */
+  /** The configuration's values, plus computed values from `prior` the configuration does not set. */
   proposed: Record<string, unknown>;
-  /** The configuration's values alone, so an optional computed value it sets can be told from one kept from `prior`. */
+  /** The configuration's values alone, to tell an optional computed value it sets from one kept from `prior`. */
   config: Record<string, unknown>;
 }
 
-/** What a resource will hold once applied, as its provider plans it. */
 export interface PlannedChange {
-  /** Every value it will hold, UNKNOWN where only the apply makes one. A value the configuration sets stays as it is set. */
+  /** UNKNOWN where only the apply knows a value. A value the configuration sets must stay as set. */
   after: Record<string, unknown>;
-  /** Where a change replaces the resource rather than changing it in place. */
+  /** Attributes whose change forces a replace. */
   replace: AttributePath[];
 }
 
-/** What a provider is asked to make. */
 export interface CreateRequest {
-  /** The configuration's values. */
   config: Record<string, unknown>;
-  /** What the resource will hold, as the provider planned it at apply, UNKNOWN where only the apply makes a value. */
+  /** The provider's plan at apply; UNKNOWN where only the apply knows a value. */
   planned: Record<string, unknown>;
 }
 
-/** What a provider is asked to change, with what it held so the provider can find it. */
 export interface UpdateRequest extends CreateRequest {
-  /** What state holds for it. */
+  /** As state holds it, so the provider can find it. */
   prior: Record<string, unknown>;
 }
 
 /**
- * A plan from the schema alone: with nothing changed the resource stays as it was read, and with anything changed, what the provider computes and the
- * configuration does not set is made again unless it is kept, and a changed `forceNew` attribute replaces it.
+ * A plan from the schema alone. With no change the resource stays as read. With a change, computed values the configuration does not set
+ * become UNKNOWN unless `kept`, and a changed `forceNew` attribute replaces the resource.
  */
 export function planFromSchema(schema: Schema, { prior, proposed, config }: PlanRequest): PlannedChange {
   if (prior !== null && isDeepStrictEqual(prior, proposed)) return { after: prior, replace: [] };
@@ -215,41 +205,38 @@ export function planFromSchema(schema: Schema, { prior, proposed, config }: Plan
   return { after, replace: replacing.map((name) => [name]) };
 }
 
-/** The engine's contract with a provider. A number in the inputs it is given arrives as an `ExactNumber`, never rounded. */
+/** Numbers in inputs arrive as `ExactNumber`, never rounded. */
 export interface Provider {
-  /** The resource types it handles. */
   readonly resources: string[];
 
-  /** The data source types it reads. A type may be both, as a file is written by one and read by the other. */
+  /** A type may also be a resource type, as a file is both written and read. */
   readonly dataSources: string[];
 
   getSchema(type: string): Promise<Schema>;
 
-  /** Throws when the inputs would not make a valid resource. An input may be UNKNOWN until the apply, and is checked then. */
+  /** Throws on invalid inputs. An input may be UNKNOWN until apply, and is checked then. */
   validate(type: string, inputs: Record<string, unknown>): Promise<void>;
 
-  /** What the resource will hold once applied. `planFromSchema` plans from the schema alone. */
+  /** `planFromSchema` is a default that plans from the schema alone. */
   plan(type: string, request: PlanRequest): Promise<PlannedChange>;
 
-  /** The resource as it is now, found by what was last applied, or `null` when it is gone. */
+  /** The resource as it is now, or `null` when it no longer exists. */
   read(type: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null>;
 
-  /** A data source type's names, apart from a resource's, since one type may be both and take different names as each. */
+  /** Separate from the resource schema, since one type may be both with different attributes. */
   getDataSourceSchema(type: string): Promise<Schema>;
 
-  /** Throws when the inputs would not read a data source. */
   validateDataSource(type: string, inputs: Record<string, unknown>): Promise<void>;
 
   readDataSource(type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>>;
 
-  /** The whole of the resource as made, what the provider computed included. */
+  /** Returns the whole resource, computed values included. */
   create(type: string, request: CreateRequest): Promise<Record<string, unknown>>;
-  /** The whole of the resource as changed. */
+  /** Returns the whole resource. */
   update(type: string, request: UpdateRequest): Promise<Record<string, unknown>>;
   delete(type: string, prior: Record<string, unknown>): Promise<void>;
 }
 
-/** One resource type's side of a provider. */
 export interface ResourceHandler {
   getSchema(): Promise<Schema>;
 
@@ -259,16 +246,15 @@ export interface ResourceHandler {
 
   read(prior: Record<string, unknown>): Promise<Record<string, unknown> | null>;
 
-  /** The whole of the resource as made. */
+  /** Returns the whole resource, computed values included. */
   create(request: CreateRequest): Promise<Record<string, unknown>>;
 
-  /** The whole of the resource as changed. */
+  /** Returns the whole resource. */
   update(request: UpdateRequest): Promise<Record<string, unknown>>;
 
   delete(prior: Record<string, unknown>): Promise<void>;
 }
 
-/** One data source type's side of a provider. */
 export interface DataSourceHandler {
   getSchema(): Promise<Schema>;
 

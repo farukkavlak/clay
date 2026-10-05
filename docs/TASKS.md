@@ -460,7 +460,7 @@ Nothing here changes what Clay does. Each is a place the next change has to work
       state", but `action.attributes` is the parsed block and was never resolved;
       `executeCreate` does the same resolve with no comment
 - [ ] `LoadedResource.uniqueId` is `address.toString()` under a second name
-- [ ] Comments that restate the code: the `// e.g., "my_file"` trailers in `ast.ts`, the
+- [x] Comments that restate the code: the `// e.g., "my_file"` trailers in `ast.ts`, the
       `// {` and `// }` trailers in `tokens.ts`, the `forceNew` explanations in the local
       provider
 
@@ -474,7 +474,7 @@ Nothing here changes what Clay does. Each is a place the next change has to work
 - [ ] Two `Orchestrator.advanced` tests are titled for dependency order and for a
       reference to another resource, and each asserts only that two resources were
       created; both pass with every graph edge removed
-- [ ] Comments in `ModuleLoading.spec.ts` and `ModuleDataFlow.spec.ts` name
+- [x] Comments in `ModuleLoading.spec.ts` and `ModuleDataFlow.spec.ts` name
       `Orchestrator.run` and `Orchestrator.ts`, which do not exist, and ask questions
       rather than state reasons
 - [ ] `describe` titles say "Phase 4" and "Phase 5", which mean nothing in the repo
@@ -483,7 +483,7 @@ Nothing here changes what Clay does. Each is a place the next change has to work
 - [ ] `Graph.spec.ts` hedges that a sort "depends on implementation details" and asserts
       the flattened list, where the layers are deterministic and should be asserted
 - [ ] Regression tests explain what used to happen; a comment says what the test pins
-- [ ] Test comments of the `// Setup`, `// Verify`, `// Mock X` kind restate the line
+- [x] Test comments of the `// Setup`, `// Verify`, `// Mock X` kind restate the line
       below them, across `Orchestrator.spec.ts`, `StateManager.spec.ts`, `Graph.spec.ts`
       and others
 - [ ] No test puts a reference inside a list: `tags = [local_file.a.id]`. With

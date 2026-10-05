@@ -8,7 +8,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { InMemoryFiles, Orchestrator } from '../src/index';
 import { apply } from './apply';
 
-// Mock Provider for testing Data Sources
 class MockDataProvider implements Provider {
   readonly resources = ['mock_resource'];
   readonly dataSources = ['mock_data'];
@@ -53,7 +52,6 @@ class MockDataProvider implements Provider {
     throw new Error(`Data source mock_data with id ${id} not found`);
   }
 
-  // Helper to setup mock data
   setMockData(id: string, data: Record<string, unknown>) {
     this.data.set(id, data);
   }
@@ -78,7 +76,6 @@ describe('Orchestrator - Data Sources', () => {
   });
 
   it('should resolve data source and use its attributes', async () => {
-    // Setup mock data
     mockProvider.setMockData('user-123', {
       username: 'testuser',
       email: 'test@example.com',
@@ -96,10 +93,8 @@ describe('Orchestrator - Data Sources', () => {
       }
     `;
 
-    // Apply
     await apply(orchestrator, config);
 
-    // Verify
     const backend = new LocalBackend(tmpDir);
     const stateManager = new StateManager(backend);
     const state = await stateManager.read();
@@ -150,8 +145,7 @@ describe('Orchestrator - Data Sources', () => {
   });
 
   it('should throw error if data reference is incomplete', async () => {
-    // Reference without attribute: data.type.name
-    // Must use valid ID so data source loading succeeds
+    // The ID must be valid so the data source loads.
     mockProvider.setMockData('valid-id', { val: 'ok' });
     const config = `
       data "mock_data" "test" {

@@ -98,7 +98,7 @@ describe('a plan saved to a file', () => {
     expect(printed.join('\n')).toContain('\n  1: resource "local_file" {\n                           ^');
   });
 
-  // What `serializePlan` really writes has to be what `parsePlanFile` really reads; a stub for either would agree with itself and prove nothing.
+  // Uses the real `serializePlan` and `parsePlanFile`; a stub would only agree with itself.
   it('writes a file the apply side can read back, and says where it put it', async () => {
     await fs.writeFile(path.join(dir, 'main.clay'), fileConfig('planned'), 'utf8');
 
@@ -121,7 +121,7 @@ describe('a plan saved to a file', () => {
     expect(parsePlanFile(written, 'plan.json').actions.map((action) => action.name)).toEqual(['a']);
   });
 
-  // An output that reads a resource not created yet is unknown in the plan; the file has to carry that, since a symbol has no JSON form.
+  // The file must carry an unknown output, though UNKNOWN has no JSON form.
   it('shows a value not known yet as one when the plan is applied from its file', async () => {
     const config = `
       resource "random_string" "a" { length = 4 }
@@ -148,7 +148,7 @@ describe('a plan saved to a file', () => {
     expect(printed.join('\n')).toContain('id = (known after apply)');
   });
 
-  // A relative path lands where the apply runs, which the plan cannot know.
+  // A relative path resolves where the apply runs, which the plan cannot know.
   it('is applied from another directory with a file at a relative path', async () => {
     const [planned, applied] = [path.join(dir, 'planned'), path.join(dir, 'applied')];
     await fs.mkdir(planned);
@@ -219,7 +219,7 @@ describe('a plan saved to a file', () => {
     );
   });
 
-  // The block is declared, so only the instance of its module says the configuration does not make it.
+  // The block exists; only its module instance is gone from the configuration.
   it('stops when it names an instance of a module the configuration does not make', async () => {
     await fs.mkdir(path.join(dir, 'm'));
     await fs.writeFile(path.join(dir, 'm', 'main.clay'), fileConfig('hello'), 'utf8');
@@ -233,7 +233,7 @@ describe('a plan saved to a file', () => {
     await expect(fs.access(path.join(dir, 'a.txt'))).rejects.toThrow();
   });
 
-  // The load checks the names the configuration writes; a plan file carries its own, so the apply checks them again.
+  // A plan file carries its own names, so the apply checks them again.
   it('stops on a name the schema does not have that the plan file carries, before the provider is sent it', async () => {
     const saved = await save(fileConfig('hello'));
     const misspelled = saved.actions.map((action) => ({

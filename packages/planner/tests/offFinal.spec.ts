@@ -21,7 +21,7 @@ describe('offFinal', () => {
   });
 });
 
-// A set's members have no place, so a member the plan did not know may sort anywhere, or come to one the set already has.
+// Sets have no positions, so an unknown member may sort anywhere or duplicate an existing one.
 describe('a set held to the plan', () => {
   const schema: Schema = {
     members: { type: types.set(types.string) },

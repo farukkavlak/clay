@@ -14,9 +14,9 @@ export class StateManager {
   }
 
   /**
-   * Named field by field, so a key an older version wrote is dropped. A field added to the state belongs here too.
-   * The serial is bumped on the given state, so the caller keeps writing from the serial on disk.
-   * The version is this Clay's: a state read from an older file may now hold what that version cannot.
+   * Copies known fields only, so a key from an older version is dropped; a new state field goes here too.
+   * Bumps the serial on the given state, so the caller keeps writing from the serial on disk.
+   * Writes this Clay's version, since the state may now hold what an older one cannot read.
    */
   async write(state: State): Promise<void> {
     state.serial += 1;

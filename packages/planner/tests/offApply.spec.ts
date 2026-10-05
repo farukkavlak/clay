@@ -68,7 +68,7 @@ describe('what an apply returned, held to the plan', () => {
     ]);
   });
 
-  // Every object answers to `constructor`, so the plan has to hold the name itself to have planned it.
+  // Every object inherits `constructor`, so only an own key counts as planned.
   it('names a value the plan did not have, whatever its name', () => {
     expect(offApply({}, {}, {}, { constructor: 'x' })).toEqual([{ path: ['constructor'], planned: undefined, returned: 'x' }]);
   });

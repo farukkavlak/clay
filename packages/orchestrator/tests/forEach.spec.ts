@@ -4,10 +4,9 @@ import { describe, expect, it } from 'vitest';
 import { eachFrom } from '../src/forEach';
 import { inferred, Value, valueOf } from '../src/Value';
 
-/** Data as the configuration writes it: a list a tuple, a map an object. */
+/** As the configuration writes it: a list is a tuple and a map an object. */
 const written = (data: unknown): Value => valueOf(inferred(data), data);
 
-/** The key of each instance and the data of the value it is given. */
 const made = (value: Value) => [...eachFrom(value)].map(([key, given]) => [key, given.data]);
 
 describe('the instances a for_each makes', () => {
@@ -31,7 +30,7 @@ describe('the instances a for_each makes', () => {
     ]);
   });
 
-  // An object lists a key like "1" first whatever order it was written in, so only a sort gives one order for both.
+  // An object lists a key like "1" first whatever the written order, so only sorting gives a stable order.
   it('orders the keys by their characters, whatever order they are written in', () => {
     const one = ExactNumber.parse('1');
 
@@ -44,7 +43,7 @@ describe('the instances a for_each makes', () => {
     expect(eachFrom(written([])).size).toBe(0);
   });
 
-  // A map's keys are known before its values, so a value only an apply makes leaves them known.
+  // A map's keys are known before its values, so unknown values leave the keys known.
   it('makes one for each key of a map whose values are not known yet, given what it has of them', () => {
     expect(made(written({ b: UNKNOWN, a: { id: UNKNOWN, name: 'x' } }))).toEqual([
       ['a', { id: UNKNOWN, name: 'x' }],
@@ -59,7 +58,7 @@ describe('the instances a for_each makes', () => {
     ]);
   });
 
-  // A set's members have no index, so the one that is not a string is named by what it is.
+  // A set's members have no index, so the message names the member's type.
   it('refuses a set that holds what is not a string, without an index', () => {
     expect(() => eachFrom(valueOf(types.set(types.dynamic), ['a', ExactNumber.parse('1')]))).toThrow('for_each is a set of strings, but it holds a number');
   });
@@ -76,7 +75,7 @@ describe('the instances a for_each makes', () => {
       written(['a', UNKNOWN]),
       'for_each must be known when planning: item [1] reads a value only an apply makes, and a list names its instances by its items',
     ],
-    // The set knows its other members, but not which keys the one not known yet adds.
+    // The unknown member may add any key.
     [
       'a set with a member only an apply makes',
       valueOf(types.set(types.string), ['a', UNKNOWN]),

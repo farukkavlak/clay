@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { start } from './start';
 
-// 2^53 + 1: the first whole number a JavaScript number cannot hold.
+// 2^53 + 1, the first integer a JavaScript number cannot hold.
 const PAST_2_53 = '9007199254740993';
 const LARGE = '12345678901234567890';
 
@@ -43,7 +43,7 @@ describe('a number past what JavaScript holds exactly', () => {
     expect(written).toContain(`"next": ${PAST_2_53}`);
   });
 
-  // Read back from state, a number has to meet the configuration's as the same value, or every plan would change it again.
+  // The number read from state must equal the configuration's, or every plan would update it.
   it('plans no change once applied, small or large', async () => {
     const config = `
       resource "null_resource" "a" { triggers = { id = ${LARGE}, count = 3, ratio = 007 } }
@@ -64,7 +64,7 @@ describe('a number past what JavaScript holds exactly', () => {
     expect(actions.map((action) => action.type)).toEqual(['UPDATE']);
   });
 
-  // -0.10000000000000000001 is -0.1 to JavaScript; state has to keep every digit.
+  // -0.10000000000000000001 is -0.1 to JavaScript; state must keep every digit.
   it('keeps a negative decimal as it was written, and plans no change for it once applied', async () => {
     const config = `resource "null_resource" "a" { triggers = { d = -0.10000000000000000001, e = 2.5e-3 } }`;
     await apply(config);

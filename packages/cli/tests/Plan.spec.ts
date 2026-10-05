@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPlanCommand } from '../src/commands/plan';
 
 vi.mock('node:fs/promises');
-// The engine is mocked; Address is a plain value type the commands print with, so it stays real.
+// Address is a plain value type the commands print with, so it stays real.
 vi.mock('@clay/orchestrator', async () => {
   const actual = await vi.importActual<typeof import('@clay/orchestrator')>('@clay/orchestrator');
   return {
@@ -43,7 +43,7 @@ describe('CLI: plan command', () => {
     consoleSpy.mockRestore();
   });
 
-  // The planner lists every resource, so a plan with nothing to do is all NO_OP, never empty.
+  // The planner lists every resource, so a plan with nothing to do is all NO_OP, not empty.
   it('should display "No changes" when every action is a NO_OP', async () => {
     vi.mocked(fs.access).mockResolvedValue(void 0);
     vi.mocked(fs.readFile).mockResolvedValue('');
@@ -156,7 +156,6 @@ describe('CLI: plan command', () => {
     consoleSpy.mockRestore();
   });
 
-  // Only a set whose members are known on both sides is shown by member; anything else is shown whole.
   it('shows a set by member only when both sides are known sets', async () => {
     vi.mocked(fs.access).mockResolvedValue(void 0);
     vi.mocked(fs.readFile).mockResolvedValue('resource "test" "t" {}');
@@ -331,7 +330,7 @@ describe('CLI: plan command', () => {
 
     await createPlanCommand().parseAsync(['node', 'clay', 'plan']);
 
-    // A kind the CLI does not know gets a blank where the symbol goes, and the tense it falls back to.
+    // An unknown action type gets no symbol and the fallback tense.
     expect(consoleSpy.mock.calls.flat().join('\n')).toMatch(/ {2}test\.t will be .*destroyed/);
 
     consoleSpy.mockRestore();

@@ -16,14 +16,14 @@ async function reportEmpty(path: string): Promise<void> {
   console.log(styleText('yellow', found ? `No resources in ${path}` : `No state file found at ${path}`));
 }
 
-/** A name on Object.prototype must not pass for a state key. */
+/** Own keys only, so `toString` is not a resource. */
 function findResource(state: State, address: string): Resource | undefined {
   const key = Address.parse(address).toString();
 
   return Object.hasOwn(state.resources, key) ? state.resources[key] : undefined;
 }
 
-/** The type is what the provider manages, so a move keeps it. */
+/** A move may not change the type, which decides the provider. */
 function checkedMove(state: State, source: string, destination: string): void {
   const from = Address.parse(source);
   const to = Address.parse(destination);
@@ -100,7 +100,7 @@ export function createStateCommand(): Command {
           console.log(styleText('yellow', `Moving ${source} to ${destination}...`));
 
           checkedMove(state, source, destination);
-          // Outputs come from a finished run; the next one writes them again.
+          // Outputs belong to a finished run; the next one writes them again.
           delete state.outputs;
 
           await manager.write(state);
