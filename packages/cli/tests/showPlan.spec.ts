@@ -9,7 +9,15 @@ const members = types.set(types.string);
 
 /** What the CLI prints for a plan that changes only one output. */
 function shown(old: unknown, next: unknown): string[] {
-  const plan: Plan = { serial: 0, actions: [], outputs: { m: { old: { value: old, type: members }, new: { value: next, type: members } } }, prevRun: {}, prior: {}, schemas: {} };
+  const plan: Plan = {
+    serial: 0,
+    actions: [],
+    outputs: { m: { old: { value: old, type: members }, new: { value: next, type: members } } },
+    prevRun: {},
+    prior: {},
+    schemas: {},
+    dataSources: {},
+  };
   const printed: string[] = [];
   vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => printed.push(stripVTControlCharacters(args.join(' '))));
 

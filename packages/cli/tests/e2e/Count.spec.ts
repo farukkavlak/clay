@@ -17,6 +17,8 @@ const placeOf = (config: string, needle: string) => {
   return { line: before.length, column: before.at(-1)!.length + 1 };
 };
 
+const call = (n: number) => `module "m" {\n  source = "./m"\n  for_each = ["a"]\n  n = ${n}\n}`;
+
 describe('a resource with count', () => {
   let dir: string;
 
@@ -173,16 +175,12 @@ describe('a resource with count', () => {
     await expect(run()).rejects.toThrow('The plan has "local_file.logs[0]", which the configuration does not declare');
   });
 
-  // A data source is read again at apply, so the count it gives may be smaller than the plan's.
-  it('refuses a saved plan with an index its count no longer makes, before any instance of it runs', async () => {
-    const size = path.join(dir, 'size');
-    const config = `data "local_file" "size" { path = "${size}" }\n${logs('length(data.local_file.size.content)')}`;
-    await fs.writeFile(size, 'abc');
-    const saved = await newOrchestrator().plan(config);
-    await fs.writeFile(size, 'ab');
+  // An apply reads the count again, from the configuration it is given.
+  it('refuses a saved plan with an index its count does not make, before any instance of it runs', async () => {
+    const saved = await newOrchestrator().plan(logs('3'));
 
     const run = async () => {
-      for await (const event of newOrchestrator().runPlan(saved, config)) if (event.type === 'failed') throw event.error;
+      for await (const event of newOrchestrator().runPlan(saved, logs('2'))) if (event.type === 'failed') throw event.error;
     };
 
     await expect(run()).rejects.toThrow('The plan has "local_file.logs[2]", which the configuration does not declare');
@@ -202,20 +200,16 @@ describe('a resource with count', () => {
     expect(await files()).toEqual([]);
   });
 
-  it('refuses a saved plan with an index a count in a module no longer makes', async () => {
-    const size = path.join(dir, 'size');
+  it('refuses a saved plan with an index a count in a module does not make', async () => {
     await fs.mkdir(path.join(dir, 'm'));
     await fs.writeFile(
       path.join(dir, 'm', 'main.clay'),
       `variable "n" {}\nresource "local_file" "logs" {\n  count = var.n\n  path = "${path.join(dir, 'm-${count.index}.txt')}"\n  content = "x"\n}`
     );
-    const config = `data "local_file" "size" { path = "${size}" }\nmodule "m" {\n  source = "./m"\n  for_each = ["a"]\n  n = length(data.local_file.size.content)\n}`;
-    await fs.writeFile(size, 'abc');
-    const saved = await newOrchestrator().plan(config);
-    await fs.writeFile(size, 'ab');
+    const saved = await newOrchestrator().plan(call(3));
 
     const run = async () => {
-      for await (const event of newOrchestrator().runPlan(saved, config)) if (event.type === 'failed') throw event.error;
+      for await (const event of newOrchestrator().runPlan(saved, call(2))) if (event.type === 'failed') throw event.error;
     };
 
     await expect(run()).rejects.toThrow('The plan has "module.m["a"].local_file.logs[2]", which the configuration does not declare');

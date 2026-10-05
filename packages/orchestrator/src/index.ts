@@ -78,7 +78,7 @@ export class Orchestrator {
     const prior = refresh ? await this.refresh(prevRun) : prevRun;
     // Planning applies count moves to a copy; the plan keeps the resources at their old addresses.
     const currentState = { ...prior, resources: copyResources(prior.resources) };
-    const { desiredResources, outputs } = await this.resolveAndCheck(configContent, currentState);
+    const { desiredResources, outputs, dataSources } = await this.resolveAndCheck(configContent, currentState);
 
     const actions = plan(desiredResources, currentState);
     // The refresh only drops resources, so prior has no type prevRun lacks.
@@ -91,6 +91,7 @@ export class Orchestrator {
       prevRun: prevRun.resources,
       prior: prior.resources,
       schemas: await this.schemasOf(held.map((resource) => resource.resourceType)),
+      dataSources,
     };
   }
 
@@ -115,7 +116,7 @@ export class Orchestrator {
       // The actions were planned against the refreshed resources, so they run on those.
       state.resources = copyResources(saved.prior);
 
-      const config = await this.loader.load(configContent, state);
+      const config = await this.loader.load(configContent, state, saved.dataSources);
       const graph = this.graphBuilder.buildExecutionGraph(config.loadedResources, config.loadedModules);
       yield* this.runner.run(saved.actions, config, graph, state);
     } finally {
@@ -150,14 +151,17 @@ export class Orchestrator {
     }
   }
 
-  private async resolveAndCheck(configContent: string, state: State): Promise<{ desiredResources: DesiredResource[]; outputs: Record<string, Output> }> {
-    const { loadedResources, loadedModules, schemas } = await this.loader.load(configContent, state);
+  private async resolveAndCheck(
+    configContent: string,
+    state: State
+  ): Promise<{ desiredResources: DesiredResource[]; outputs: Record<string, Output>; dataSources: Plan['dataSources'] }> {
+    const { loadedResources, loadedModules, schemas, dataSources } = await this.loader.load(configContent, state);
 
     const graph = this.graphBuilder.buildExecutionGraph(loadedResources, loadedModules);
     checkAttributes(loadedResources, schemas);
     this.writtenCheck.check(loadedResources, loadedModules);
     const { resources: desiredResources, outputs } = await this.desiredStateBuilder.build(loadedResources, graph, state, schemas);
 
-    return { desiredResources, outputs };
+    return { desiredResources, outputs, dataSources };
   }
 }
