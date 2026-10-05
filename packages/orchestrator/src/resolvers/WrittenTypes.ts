@@ -10,6 +10,10 @@ import { noAttribute, readInstance } from './instance';
 /** Data sources and paths are known at load, so they are not here. */
 type Unread = VariableReference | ModuleOutputReference | ResourceReference | CountReference | EachReference;
 
+function instanceType(schema: Schema): Type {
+  return types.object(Object.fromEntries(Object.entries(schema).map(([name, attribute]) => [name, attribute.type])));
+}
+
 /** Types for references read as written, before any instance exists. */
 export class WrittenTypes {
   constructor(
@@ -28,14 +32,16 @@ export class WrittenTypes {
     // Outputs have no declared type.
     if (reference.kind === 'module') return { type: types.dynamic, path: reference.path };
 
-    return this.attributeType(reference, where, position);
+    return this.resourceType(reference, where, position);
   }
 
-  private attributeType(reference: ResourceReference, where: Context, position: Position): { type: Type; path: Step[] } {
+  /** The type of the attribute, or of the whole instance where the reference names none. */
+  private resourceType(reference: ResourceReference, where: Context, position: Position): { type: Type; path: Step[] } {
     const block = blockKey(new Address(moduleOf(where), reference.type, reference.name));
     const { attribute, path } = readInstance(reference, this.instances.repetitionOf(block), position);
     // Every schema is loaded by now.
     const schema = this.schemas.get(reference.type)!;
+    if (attribute === undefined) return { type: instanceType(schema), path };
     if (!Object.hasOwn(schema, attribute)) throw placed(noAttribute(reference.type, attribute), position);
 
     return { type: schema[attribute].type, path };

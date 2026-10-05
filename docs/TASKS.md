@@ -110,8 +110,11 @@ configuration hits each of these early.
 - [x] A `for_each` map whose keys are known and whose values are not plans its keys:
       `{ a = random_string.s.id }` plans `["a"]` with `each.value` unknown. A list needs its
       items, since they are its keys
-- [ ] A whole resource as a value: `local_file.a[0]` as a map, and `local_file.a` as the
-      list of its instances. Worth it once there are functions or splats to read one with
+- [x] A whole instance as a value: `local_file.a`, `local_file.a[0]` and
+      `local_file.a["key"]` are each an object of every attribute in the schema
+- [ ] Every instance of a resource as one value: `local_file.a` as the list of its
+      instances under `count`, and as a map by key under `for_each`. An apply does not read
+      `count`, so it has to learn the instances another way
 - [x] `path.module` and `path.root`, so a module can name a file next to itself. Both are
       relative to the root, where `clay` runs, so a plan or a state reads the same on
       another machine

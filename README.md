@@ -80,7 +80,9 @@ way. A module call takes `for_each` too, `module.web["eu"]`, with `each.key` and
 
 References: `var.name`, `local_file.a.content`, `module.m.out`, `module.web[0].out`, and
 `random_string.s.id` for what the provider assigned. A reference reads into a map or a
-list with `.key`, `["key"]` and `[0]`: `var.tags.env`, `var.names[0]`. A resource to be
+list with `.key`, `["key"]` and `[0]`: `var.tags.env`, `var.names[0]`. A resource named
+with no attribute is an object of all its attributes: `local_file.a`, or one instance as
+`local_file.logs[0]` and `local_file.f["key"]`. A resource to be
 created or changed is read at plan time as its provider plans it, so `random_string.s.length`
 is known, and so is `local_file.a.id` when only its content changes; what only the apply
 makes, such as the id of a new resource or `random_string.s.result`, is unknown and shown

@@ -26,6 +26,7 @@ describe('a reference read into a value', () => {
     ['data.local_file.f.content', { kind: 'data', type: 'local_file', name: 'f', attribute: 'content', path: [] }],
     ['module.app.url', { kind: 'module', module: 'app', path: ['url'] }],
     ['local_file.a.content', { kind: 'resource', type: 'local_file', name: 'a', path: ['content'] }],
+    ['local_file.a', { kind: 'resource', type: 'local_file', name: 'a', path: [] }],
     ['count.index', { kind: 'count', path: [] }],
     ['each.key', { kind: 'each', name: 'key', path: [] }],
     ['each.value.port', { kind: 'each', name: 'value', path: ['port'] }],
@@ -62,15 +63,15 @@ describe('a reference read into a value', () => {
 
   // The engine resolves values later and adds the position itself.
   it('refuses a reference with a plain error when it is given no position', () => {
-    expect(() => parseReference(['local_file', 'a'])).toThrow('Resource reference must include attribute: local_file.a');
-    expect(() => parseReference(['local_file', 'a'])).not.toThrow(ConfigError);
+    expect(() => parseReference(['local_file'])).toThrow('Reference "local_file" names nothing: a resource is read as its type and its name, as in local_file.a');
+    expect(() => parseReference(['local_file'])).not.toThrow(ConfigError);
   });
 
   it.each([
     [['var'], 'Variable reference must include a name: var'],
     [['data', 'local_file', 'f'], 'Data source reference must include attribute: data.local_file.f'],
     [['module', 'app'], 'Module output reference must include output name: module.app'],
-    [['local_file', 'a'], 'Resource reference must include attribute: local_file.a'],
+    [['local_file'], 'Reference "local_file" names nothing: a resource is read as its type and its name, as in local_file.a'],
     [['local_file', '', 'id'], 'Reference "local_file[""].id" has "" where it needs a name'],
     [['var', '', 'name'], 'Reference "var[""].name" has "" where it needs a name'],
     [['var', 'a b'], 'Reference "var["a b"]" has "a b" where it needs a name'],
