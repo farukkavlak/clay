@@ -6,9 +6,10 @@ import { moveResource } from '@clay/state';
 
 import { writtenAt } from '../conformValues';
 import { countFrom } from '../count';
+import { declaredAs } from '../declared';
 import { eachFrom } from '../forEach';
 import { Instances } from '../Instances';
-import { Context, contextIn, enclosing } from '../keys';
+import { Context, contextIn, enclosing, scopeOf } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
 import { Planned } from '../Planned';
 import { tryAt, withPlace } from '../place';
@@ -180,9 +181,13 @@ export class DesiredStateBuilder {
     else this.planOutput(node, instance, state, rootOutputs);
   }
 
-  /** Resolved so an error in it is found at plan; a reader resolves it again where it reads it. */
+  /** Resolved and held to its type so an error in it is found at plan, though nothing reads it; a reader resolves it again where it reads it. */
   private planVariable(node: ValueNode, instance: ModuleAddress, state: State): void {
-    if (node.value !== undefined) this.resolveNode(node, node.value, instance, state);
+    if (node.value === undefined) return;
+
+    const type = this.scopeManager.getVariable(scopeOf(node.module), node.name)?.type;
+    const value = this.resolveNode(node, node.value, instance, state);
+    if (type) tryAt(node.position, node.declaration, contextIn(node.context, instance), () => declaredAs(node.name, value, type));
   }
 
   /** Gives an output its value, known or not yet, so the resources reading it can be planned. */

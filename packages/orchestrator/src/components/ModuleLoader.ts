@@ -95,15 +95,16 @@ export class ModuleLoader {
 
   // An input is read in the call.
   private declareInputs(stmt: ModuleBlock, program: Statement[], childAddress: ModuleAddress, parentAddress: ModuleAddress): void {
-    const declared = new Set(program.filter((moduleStmt) => moduleStmt.type === 'Variable').map((variable) => variable.name));
+    const declared = new Map(program.filter((moduleStmt) => moduleStmt.type === 'Variable').map((variable) => [variable.name, variable]));
     const childScope = scopeOf(childAddress);
+    const block = spell(stmt);
 
     for (const [key, value] of Object.entries(stmt.attributes)) {
       if (key === 'source') continue;
-      if (!declared.has(key))
-        throw new ConfigError(`module "${stmt.name}" has no variable "${key}"`, value.position, { block: spell(stmt), module: scopeOf(parentAddress) || undefined });
+      const variable = declared.get(key);
+      if (!variable) throw new ConfigError(`module "${stmt.name}" has no variable "${key}"`, value.position, { block, module: scopeOf(parentAddress) || undefined });
 
-      this.scopeManager.setVariable(childScope, key, { value, context: new ModuleCall(childAddress) });
+      this.scopeManager.setVariable(childScope, key, { value, context: new ModuleCall(childAddress), type: variable.valueType, block });
     }
   }
 
@@ -115,7 +116,7 @@ export class ModuleLoader {
       if (stmt.type !== 'Variable' || this.scopeManager.getVariable(scope, stmt.name)) continue;
       if (stmt.attributes.default === undefined) throw new ConfigError(`variable "${stmt.name}" has no value`, stmt.position, { block: spell(stmt), module: scope || undefined });
 
-      this.scopeManager.setVariable(scope, stmt.name, { value: stmt.attributes.default, context: address });
+      this.scopeManager.setVariable(scope, stmt.name, { value: stmt.attributes.default, context: address, type: stmt.valueType, block: spell(stmt) });
     }
   }
 }

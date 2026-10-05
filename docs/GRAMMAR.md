@@ -86,7 +86,7 @@ What the engine reads from each:
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `resource` | `count` or `for_each`, read by the engine; every other attribute goes to the provider                                        |
 | `data`     | Every attribute goes to the provider that reads that type of data source                                                     |
-| `variable` | `default`, a constant: no reference or function call; another attribute is refused where it is written                       |
+| `variable` | `default`, a constant: no reference or function call; `type`, read below; another attribute is refused where it is written   |
 | `output`   | `value`                                                                                                                      |
 | `module`   | `source`, a literal string naming a directory relative to the file; `count` or `for_each`; every other attribute is an input |
 
@@ -138,6 +138,34 @@ out, as if it were not written; inside a list or a map, `null` stays.
 A value not known until apply still has its type, so one of a type the attribute does not
 take is refused at plan. A set with a member not known yet keeps the members it knows;
 taken as a list, it is not known as a whole until apply, since it has no order yet.
+
+### Variable types
+
+```
+type = "string" | "number" | "bool" | "any"
+     | ( "list" | "set" | "map" ) "(" type ")"
+     | "tuple" "(" "[" [ type { "," type } [ "," ] ] "]" ")"
+     | "object" "(" "{" { IDENTIFIER "=" type [ "," ] } "}" ")"
+```
+
+The words are bare: `type = string`, not `type = "string"`. A word that names no type, or
+`(` after one that holds none, is refused where it is written.
+
+A variable with a type takes every value it is given as that type, converted as a schema
+converts it: `["b", "a", "a"]` given to `set(string)` is `["a", "b"]`. A value it cannot
+take is refused where it is written, a module input in the call and a default in its own
+block. A default is checked even where a module call gives a value in its place. A module
+input with no reference in it is checked even where `count` or `for_each` makes no
+instance. An object given an attribute its type does not name is refused, since that is
+most often a name misspelled. `null` is taken, as a null of the type.
+
+`any` takes a value as it is. In a list, a set or a map, the items are joined into one
+type as `tolist` joins them: `[1, "x"]` given to `list(any)` is `["1", "x"]`. A variable
+without a type takes any value as it is.
+
+A value not known until apply has the variable's type at plan, so one of a type the
+variable can never take is refused there; what it holds is checked once the apply knows
+it. `any` keeps the type of what it is given.
 
 ### References
 
@@ -467,6 +495,7 @@ interface VariableBlock {
   type: 'Variable';
   name: string;
   attributes: Record<string, AttributeValue>;
+  valueType?: Type;
   position: Position;
 }
 
@@ -495,7 +524,8 @@ A `Reference` holds its parts in order, a key as a string and an index as a numb
 `['var', 'names', 0]`. A `Call` holds its arguments in order, and in `path` the steps
 written after it, as a reference holds its own. A `Bound` is a name a for gives, read in
 its body, with its steps as a reference holds them. A `For` that makes an object holds
-its key in `key`, and `grouped` when `...` follows the value.
+its key in `key`, and `grouped` when `...` follows the value. A `VariableBlock` holds its
+type in `valueType` as the `Type` a schema names, `any` as `dynamic`.
 
 ## Errors
 

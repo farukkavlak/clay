@@ -1,4 +1,4 @@
-import { ExactNumber, NumberError } from '@clay/contracts';
+import { ExactNumber, NumberError, Type, types } from '@clay/contracts';
 import {
   AttributeValue,
   BoundNode,
@@ -32,6 +32,17 @@ const KEYWORDS = new Set(['true', 'false', 'null']);
 
 /** The bracket that closes a for, by the token for it. */
 const CLOSING = { [TokenType.RBracket]: ']', [TokenType.RBrace]: '}' };
+
+/** The types a variable names by a word alone; `any` takes a value as it is. */
+const PRIMITIVE_TYPES = new Map<string, Type>([
+  ['string', types.string],
+  ['number', types.number],
+  ['bool', types.bool],
+  ['any', types.dynamic],
+]);
+
+/** The types written with the types they hold in parentheses after the name. */
+const HOLDING_TYPES = new Set(['list', 'set', 'map', 'tuple', 'object']);
 
 /** What makes a block many instances; a module call keeps these for itself, so they name no module input. */
 const INSTANCE_ARGUMENTS = ['count', 'for_each'];
@@ -132,11 +143,7 @@ export class Parser {
     if (INSTANCE_ARGUMENTS.includes(nameToken.value))
       throw new ConfigError(`"${nameToken.value}" cannot be a variable name: a module call keeps it for itself.`, nameToken.position);
 
-    const attributes = this.parseAttributes('variable');
-
-    // `default` is the whole of what a variable is read for, so another name would be parsed and never read.
-    for (const [key, value] of Object.entries(attributes))
-      if (key !== 'default') throw new ConfigError(`Variable "${nameToken.value}" takes only "default", not "${key}".`, value.position);
+    const { attributes, valueType } = this.parseVariableBody(nameToken.value);
 
     // A module call's input replaces the default, so a reference or a call in it would never be checked.
     const [named] = attributes.default ? namedIn(attributes.default) : [];
@@ -146,8 +153,87 @@ export class Parser {
       type: 'Variable',
       name: nameToken.value,
       attributes,
+      ...(valueType && { valueType }),
       position,
     };
+  }
+
+  /** `default` and `type` are the whole of what a variable is read for, so another name would be parsed and never read. */
+  private parseVariableBody(name: string): Pick<VariableBlock, 'attributes' | 'valueType'> {
+    this.consume(TokenType.LBrace, "Expect '{' after variable name.");
+
+    const attributes: Record<string, AttributeValue> = {};
+    let valueType: Type | undefined;
+    const seen: Record<string, true> = {};
+    while (!this.check(TokenType.RBrace) && !this.isAtEnd()) {
+      const key = this.consume(TokenType.Identifier, 'Expect attribute name.');
+      this.checkKey(seen, key);
+      seen[key.value] = true;
+      this.consume(TokenType.Assign, "Expect '=' after attribute name.");
+
+      if (key.value === 'type') {
+        valueType = this.parseType();
+        continue;
+      }
+
+      const value = this.parseValue();
+      if (key.value !== 'default') throw new ConfigError(`Variable "${name}" takes only "default" and "type", not "${key.value}".`, value.position);
+      attributes.default = value;
+    }
+
+    this.consume(TokenType.RBrace, "Expect '}' after block body.");
+    return { attributes, valueType };
+  }
+
+  private parseType(): Type {
+    if (this.check(TokenType.OQuote)) return this.error('A type is written without quotes: string, not "string"');
+    const name = this.consume(TokenType.Identifier, 'Expect a type: string, number, bool, any, list(...), set(...), map(...), tuple([...]) or object({...}).');
+
+    const primitive = PRIMITIVE_TYPES.get(name.value);
+    if (primitive && this.check(TokenType.LParen)) throw new ConfigError(`${name.value} holds no other type, so it takes no '('`, this.peek().position);
+    if (primitive) return primitive;
+    if (!HOLDING_TYPES.has(name.value)) throw new ConfigError(`"${name.value}" is not a type: a type is string, number, bool, any, list, set, map, tuple or object`, name.position);
+
+    this.consume(TokenType.LParen, `Expect '(' after ${name.value}.`);
+    const type = this.parseTypeArgument(name);
+    this.consume(TokenType.RParen, `Expect ')' after the type ${name.value} holds.`);
+    return type;
+  }
+
+  private parseTypeArgument(name: Token): Type {
+    if (name.value === 'list' || name.value === 'set' || name.value === 'map') return types[name.value](this.parseType());
+
+    return name.value === 'tuple' ? types.tuple(this.parseTupleTypes()) : types.object(this.parseObjectTypes());
+  }
+
+  private parseTupleTypes(): Type[] {
+    this.consume(TokenType.LBracket, "Expect '[' after 'tuple('.");
+
+    const elements: Type[] = [];
+    while (!this.check(TokenType.RBracket) && !this.isAtEnd()) {
+      elements.push(this.parseType());
+      if (!this.matchToken(TokenType.Comma)) break;
+    }
+
+    this.consume(TokenType.RBracket, "Expect ']' after the types in a tuple.");
+    return elements;
+  }
+
+  /** Written as a map is, with an identifier for each name. */
+  private parseObjectTypes(): Record<string, Type> {
+    this.consume(TokenType.LBrace, "Expect '{' after 'object('.");
+
+    const attributes: Record<string, Type> = {};
+    while (!this.check(TokenType.RBrace) && !this.isAtEnd()) {
+      const key = this.consume(TokenType.Identifier, 'Expect an attribute name in an object type.');
+      this.checkKey(attributes, key);
+      this.consume(TokenType.Assign, "Expect '=' after the attribute name.");
+      attributes[key.value] = this.parseType();
+      this.matchToken(TokenType.Comma);
+    }
+
+    this.consume(TokenType.RBrace, "Expect '}' after the attributes of an object type.");
+    return attributes;
   }
 
   private parseOutput(position: Position): OutputBlock {
@@ -379,7 +465,7 @@ export class Parser {
   }
 
   // A second value under one name would replace the first in silence, and `__proto__` would set a prototype, not a key.
-  private checkKey(entries: Record<string, AttributeValue>, key: Token): void {
+  private checkKey(entries: object, key: Token): void {
     if (key.value === '__proto__') throw new ConfigError('__proto__ cannot be a name', key.position);
     if (Object.hasOwn(entries, key.value)) throw new ConfigError(`${key.value} is set twice`, key.position);
   }

@@ -1,13 +1,15 @@
-import { ModuleAddress } from '@clay/contracts';
+import { ModuleAddress, Type } from '@clay/contracts';
 import { AttributeValue } from '@clay/parser';
 
 import { ModuleCall } from '../keys';
 import { Value } from '../Value';
 
-/** A variable's value as written, and where it is resolved: an input in the call that gives it, a default in its own module. */
+/** A variable's value as written, and where it is resolved: an input in the call that gives it, a default in its own module. `block` names it in a message. */
 export interface VariableValue {
   value: AttributeValue;
   context: ModuleAddress | ModuleCall;
+  type?: Type;
+  block: string;
 }
 
 /** Variables by the module as the configuration writes it, since each instance reads the same values; outputs by the instance, since each comes to its own. */
