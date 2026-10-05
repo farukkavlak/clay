@@ -4,9 +4,10 @@ import { ModuleOutputReference, NAME, Position, ResourceReference, spellReferenc
 import { Repetition } from '../Instances';
 import { placed } from '../place';
 
+/** With no attribute, the whole instance is read. */
 export interface InstanceRead {
   key?: InstanceKey;
-  attribute: string;
+  attribute?: string;
   path: Step[];
 }
 
@@ -24,11 +25,11 @@ function refuse(message: string, position?: Position): never {
   throw placed(message, position);
 }
 
-function readAttribute(reference: ResourceReference, steps: Step[], position?: Position): string {
+function readAttribute(reference: ResourceReference, steps: Step[], position?: Position): string | undefined {
   const [attribute] = steps;
   const spelled = spellReference([reference.type, reference.name, ...reference.path]);
 
-  if (attribute === undefined) refuse(`Resource reference must include attribute: ${spelled}`, position);
+  if (attribute === undefined) return undefined;
   if (typeof attribute === 'number') refuse(`Reference "${spelled}" has an index where it needs a name`, position);
   if (!NAME.test(attribute)) refuse(`Reference "${spelled}" has ${JSON.stringify(attribute)} where it needs a name`, position);
 
@@ -37,7 +38,7 @@ function readAttribute(reference: ResourceReference, steps: Step[], position?: P
 
 /**
  * With count or for_each the first step must be an index or a key; without either there is none.
- * `.name` and `["name"]` are the same, so under for_each `local_file.a.web.id` reads the instance "web".
+ * `.name` and `["name"]` are the same, so under for_each `local_file.a.web.id` reads the instance "web" and `local_file.a.content` the instance "content".
  */
 export function readInstance(reference: ResourceReference, repetition: Repetition | undefined, position?: Position): InstanceRead {
   const block = spellReference([reference.type, reference.name]);
@@ -51,12 +52,6 @@ export function readInstance(reference: ResourceReference, repetition: Repetitio
   // The step is not echoed: it may be an attribute, or a key meant as the index.
   if (repetition === 'count' && typeof first !== 'number') refuse(`${block} has count, so name one of it by index, as in ${block}[0]`, position);
   if (repetition === 'for_each' && typeof first !== 'string') refuse(`${block} has for_each, so name one of it by key, as in ${block}["key"]`, position);
-  // `local_file.a.content` reads "content" as the key, though the author may have meant the attribute.
-  if (repetition === 'for_each' && rest.length === 0)
-    refuse(
-      `Reference "${spellReference([reference.type, reference.name, ...reference.path])}" names an instance and no attribute: ${block} has for_each, so its key comes first, as in ${block}["key"].id`,
-      position
-    );
 
   return { key: first, attribute: readAttribute(reference, rest, position), path: rest.slice(1) };
 }

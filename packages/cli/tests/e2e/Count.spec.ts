@@ -177,7 +177,6 @@ describe('a resource with count', () => {
     ['all of it where one is read', 'local_file.logs.content', 'local_file.logs has count, so name one of it by index, as in local_file.logs[0]'],
     ['an index past its count', 'local_file.logs[2].content', 'local_file.logs has 2 instances, [0] to [1]'],
     ['an index of a resource that has no count', 'local_file.single[0].content', 'local_file.single has no count, so it takes no index'],
-    ['an instance with no attribute', 'local_file.logs[0]', 'Resource reference must include attribute: local_file.logs[0]'],
     ['an instance with a second index where the attribute goes', 'local_file.logs[0][1]', 'Reference "local_file.logs[0][1]" has an index where it needs a name'],
     [
       'an instance with a key that is no name where the attribute goes',

@@ -199,6 +199,13 @@ A bare reference is a value on its own: `path = var.dir`. Inside a string it is 
 A resource's `id` is an attribute like any other, one its provider makes. Each local resource
 keeps its `id` until it is replaced.
 
+A resource named with no attribute is the whole instance: an object that holds every
+attribute of its schema, with `null` for one nothing sets. `local_file.a` reads a resource
+with no `count` or `for_each`, `local_file.logs[0]` one instance by its index and
+`local_file.f["key"]` one by its key. A resource with `count` or `for_each` named with no
+index or key is refused. Under `for_each`, `local_file.f.content` reads the instance
+with the key `content`, not an attribute.
+
 `path.module` is the directory of the module it is written in, relative to the root: `.`
 at the root, `web` in a module called with `source = "./web"`. In a call's inputs it is the
 directory of the module that calls. `path.root` is `.`. A relative path is read from where
@@ -377,8 +384,8 @@ call with for_each, and in `for_each` itself, they are refused where they are wr
 
 A reference names one instance by its key: `local_file.site["web"].content`. `.web` is
 the same step as `["web"]`, so `local_file.site.web.content` reads it too, and
-`local_file.site.content` reads the instance `content` and names no attribute. That, an
-index, and a key `for_each` does not give are refused where they are written.
+`local_file.site.content` reads the whole instance with the key `content`. An index, and
+a key `for_each` does not give, are refused where they are written.
 
 Adding `for_each` to a resource, or taking it off, moves nothing: no key stands for the
 resource the way `[0]` does for a count. `clay state mv 'type.name' 'type.name["key"]'`

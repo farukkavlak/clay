@@ -24,7 +24,7 @@ export interface ModuleOutputReference {
   path: Step[];
 }
 
-/** Whether the first step is an instance key or an attribute depends on the block, which only the engine knows. */
+/** Whether the first step is an instance key or an attribute depends on the block, which only the engine knows. With no attribute, it reads the whole instance. */
 export interface ResourceReference {
   kind: 'resource';
   type: string;
@@ -111,7 +111,7 @@ function moduleOutputReference(parts: Step[], position?: Position): ModuleOutput
 }
 
 function resourceReference(parts: Step[], position?: Position): ResourceReference {
-  if (parts.length < 3) refuse(`Resource reference must include attribute: ${spellReference(parts)}`, position);
+  if (parts.length < 2) refuse(`Reference "${spellReference(parts)}" names nothing: a resource is read as its type and its name, as in local_file.a`, position);
   const { names, path } = split(parts, 2, position);
 
   return { kind: 'resource', type: names[0], name: names[1], path };

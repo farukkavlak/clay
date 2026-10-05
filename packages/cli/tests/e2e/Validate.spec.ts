@@ -89,12 +89,12 @@ describe('validate against real files', () => {
     expect(output).toContain('\n  1: resource "local_file" "a.b" { path = "a.txt" content = "hi" }\n                           ^');
   });
 
-  it('refuses a reference with no attribute, and points at it', async () => {
-    const output = await validate('resource "local_file" "f" {\n  path = "a.txt"\n  content = "${local_file.other}"\n}');
+  it('refuses a reference that names no resource, and points at it', async () => {
+    const output = await validate('resource "local_file" "f" {\n  path = "a.txt"\n  content = "${local_file}"\n}');
 
-    expect(output).toContain('Resource reference must include attribute: local_file.other');
+    expect(output).toContain('Reference "local_file" names nothing: a resource is read as its type and its name, as in local_file.a');
     expect(output).toContain('on main.clay line 3, in resource "local_file" "f":');
-    expect(output).toContain('\n  3:   content = "${local_file.other}"\n                    ^');
+    expect(output).toContain('\n  3:   content = "${local_file}"\n                    ^');
   });
 
   // Data sources are read at load, without the scanner, but a module must still be read through its outputs.
