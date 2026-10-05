@@ -53,7 +53,7 @@ describe('planFromSchema', () => {
     expect(planFromSchema(keeping, { prior: null, proposed: config, config }).after).toEqual({ path: 'a', made: UNKNOWN, label: UNKNOWN, serial: UNKNOWN });
   });
 
-  // A resource made before the provider kept the value has none to keep.
+  // A resource made before the value was `kept` has nothing to keep.
   it('plans a kept value the resource does not hold as known after apply', () => {
     const config = { path: 'a', content: 'y' };
 

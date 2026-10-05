@@ -1,6 +1,6 @@
 import { Type, types } from '@clay/contracts';
 
-/** Thrown when a reference, or a call, reads something that only exists after an apply; `type` is what it will be, where that is known. */
+/** Thrown when a value is known only after apply; `type` is its future type, where known. */
 export class UnresolvedReferenceError extends Error {
   constructor(
     message: string,

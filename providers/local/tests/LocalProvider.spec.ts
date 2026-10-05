@@ -19,7 +19,7 @@ describe('LocalProvider', () => {
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
 
-  /** A create as the engine asks for one, where the plan holds what the configuration sets. */
+  /** As the engine calls it, with the plan equal to the configuration. */
   const create = (type: string, config: Record<string, unknown>) => provider.create(type, { config, planned: config });
 
   describe('Validation', () => {
@@ -32,7 +32,7 @@ describe('LocalProvider', () => {
       ).resolves.not.toThrow();
     });
 
-    // The engine holds the names and types to the schema first, so what is left is what a schema cannot say.
+    // The engine already checked names and types, so only rules a schema cannot express are left.
     it('should throw if path is empty', async () => {
       await expect(provider.validate('local_file', { path: '', content: 'Hello' })).rejects.toThrow('local_file "path" must not be empty');
     });
@@ -90,10 +90,8 @@ describe('LocalProvider', () => {
     it('should update file content', async () => {
       const filePath = path.join(tmpDir, 'test.txt');
 
-      // Create file first
       await fs.writeFile(filePath, 'Original content', 'utf8');
 
-      // Update
       const config = { path: filePath, content: 'Updated content' };
       await provider.update('local_file', { prior: { id: filePath, path: filePath, content: 'Original content' }, config, planned: { ...config, id: filePath } });
 
@@ -112,16 +110,12 @@ describe('LocalProvider', () => {
     it('should delete a file', async () => {
       const filePath = path.join(tmpDir, 'test.txt');
 
-      // Create file first
       await fs.writeFile(filePath, 'Content', 'utf8');
 
-      // Verify it exists
       await expect(fs.access(filePath)).resolves.not.toThrow();
 
-      // Delete
       await provider.delete('local_file', { id: filePath });
 
-      // Verify it's gone
       await expect(fs.access(filePath)).rejects.toThrow();
     });
 
@@ -159,7 +153,7 @@ describe('LocalProvider', () => {
       expect(created).toMatchObject({ ...config, from: 'plan' });
     });
 
-    // The id it was made with differs from the one planned, so only the plan can give what is returned.
+    // The id differs from the planned one, so the result must come from the plan.
     it.each([
       ['null_resource', { triggers: { a: 'c' } }, { id: 'from-plan' }, {}],
       ['random_string', { length: ExactNumber.parse('4') }, { id: 'from-plan', result: 'from-plan' }, {}],
@@ -273,12 +267,12 @@ describe('LocalProvider', () => {
       expect(await provider.read('local_file', created)).toBeNull();
     });
 
-    // A directory is there but is not a file, so reading it fails with something other than ENOENT.
+    // A directory exists but is not a file, so the read fails with something other than ENOENT.
     it('still fails as the system says when the file cannot be read for another reason', async () => {
       await expect(provider.read('local_file', { id: tmpDir, path: tmpDir, content: '' })).rejects.toMatchObject({ code: 'EISDIR' });
     });
 
-    // Nothing outside the state says what these hold, so what was applied is what they are.
+    // These exist only in state, so a read returns them as applied.
     it.each([
       ['random_string', { length: ExactNumber.parse('4') }],
       ['null_resource', { triggers: { a: 'b' } }],
@@ -307,7 +301,7 @@ describe('LocalProvider', () => {
       await expect(provider.validateDataSource('local_file', { path: 'a.txt' })).resolves.toBeUndefined();
     });
 
-    // The file it reads is given, not written, so the content is the one value it makes.
+    // The data source only reads, so `content` is its only computed value.
     it('has a schema of its own, apart from the resource of the same type', async () => {
       expect(await provider.getDataSourceSchema('local_file')).toEqual({ path: { type: types.string, required: true }, content: { type: types.string, computed: true } });
     });
@@ -332,7 +326,7 @@ describe('LocalProvider', () => {
       });
     });
 
-    // A directory is there but is not a file, so reading it fails with something other than ENOENT.
+    // A directory exists but is not a file, so the read fails with something other than ENOENT.
     it('still fails as the system says when the file cannot be read for another reason', async () => {
       await expect(provider.readDataSource('local_file', { path: tmpDir })).rejects.toMatchObject({ code: 'EISDIR' });
     });
@@ -358,7 +352,7 @@ describe('LocalProvider', () => {
       await expect(provider.validate('random_string', { length: UNKNOWN })).resolves.toBeUndefined();
     });
 
-    // A number reaches a provider exactly, and a length is refused rather than rounded or cut to fit.
+    // Numbers arrive exact, so a bad length is refused rather than rounded.
     it.each([
       ['a length that is not whole', ExactNumber.parse('1.5'), 'random_string "length": 1.5 is not a whole number'],
       [
@@ -428,7 +422,6 @@ describe('LocalProvider', () => {
 
   describe('delete (generic)', () => {
     it('should not throw when deleting non-file resources', async () => {
-      // Pass correct type, should be no-op for random_string
       await expect(provider.delete('random_string', { id: 'some-random-id' })).resolves.not.toThrow();
     });
 

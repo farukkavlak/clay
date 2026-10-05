@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-/** The line and column `needle` is first written at, as an error would point at it. */
+/** Where an error would point at the first `needle`. */
 const placeOf = (config: string, needle: string) => {
   const before = config.slice(0, config.indexOf(needle)).split('\n');
   return { line: before.length, column: before.at(-1)!.length + 1 };
@@ -26,7 +26,6 @@ const errorOf = async (run: () => Promise<unknown>): Promise<ConfigError> => {
 };
 
 const BROKEN = 'tolist([1, true])';
-/** Where the error points: the argument the function refuses. */
 const REFUSED = '[1, true]';
 const CANNOT_JOIN = 'tolist cannot join a number and a boolean into one type';
 const notList = (kind: string) => `tolist takes a list, a tuple or a set, not ${kind}`;

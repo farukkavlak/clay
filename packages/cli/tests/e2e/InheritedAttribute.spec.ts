@@ -31,7 +31,7 @@ describe('a reference to a name every object has', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
-  // It used to resolve to `Object.prototype.toString`, and the provider complained about the content instead.
+  // It used to resolve to `Object.prototype.toString`, and the provider failed on the content instead.
   it('says the attribute is not there, rather than handing a function to the provider', async () => {
     await run(fileA());
     const reads = `${fileA()}\nresource "local_file" "b" { path = "${path.join(dir, 'b.txt')}" content = "\${local_file.a.toString}" }`;

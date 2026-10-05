@@ -14,7 +14,7 @@ const at = (line: number, column: number) => ({ file: CONFIG_FILE, line, column 
 const STRING_IN_OPEN = "This '${' is never closed with '}', or a string inside it is not closed on its line";
 const LINE_ENDED = String.raw`This string is never closed on its line; write \n for a line break inside it, or use a heredoc`;
 
-/** The error a bad configuration throws, so a test can pin both what it says and where it points. */
+/** Returns the error, so a test can check both message and position. */
 function errorOf(input: string, file: string = CONFIG_FILE): ConfigError {
   try {
     makeParser(input, file).parse();
@@ -77,7 +77,7 @@ describe('Clay Parser', () => {
       expect(attributes.b).toMatchObject({ type: 'List', value: [{ type: 'Null' }, { type: 'Number' }] });
     });
 
-    // Only the word on its own is null; a name that starts with it is a name.
+    // Only the bare word is null; a name that starts with it is a name.
     it('should read a name that starts with null as a reference', () => {
       const result = makeParser('resource "null_resource" "test" { a = null_thing.b.c }').parse();
 
@@ -269,7 +269,7 @@ describe('Clay Parser', () => {
     expect(attributes.v).toEqual({ type: 'String', value: 'x', position: at(1, 36) });
   });
 
-  // Comments are skipped, but the lines and columns they take up still count.
+  // Comments are skipped, but their lines and columns still count.
   it.each([
     ['a line comment', '# first\nresource "null_resource" "a" { v = "x" }', at(2, 36)],
     ['a comment ending the line before', 'resource "null_resource" "a" { // here\n v = "x" }', at(2, 6)],
@@ -345,7 +345,7 @@ describe('Clay Parser', () => {
       expect(valueOf(written)).toEqual({ type: 'String', value, position: at(1, 24) });
     });
 
-    // An escaped backslash is done with, so the `${` after it opens an interpolation.
+    // The backslash escapes itself, so the `${` after it opens an interpolation.
     it('reads an interpolation after an escaped backslash', () => {
       expect(valueOf('"\\\\${var.x}"')).toEqual({ type: 'Template', value: ['\\', reference(['var', 'x'], 29)], position: at(1, 24) });
     });
@@ -381,7 +381,7 @@ describe('Clay Parser', () => {
       expect(error.position).toEqual(position);
     });
 
-    // A label travels into an address, which reads nothing into a name.
+    // A label becomes part of an address, so it must be a literal.
     it('refuses an interpolation in a block label', () => {
       const error = errorOf('resource "local_file" "a${var.x}" {}');
 
@@ -389,7 +389,7 @@ describe('Clay Parser', () => {
       expect(error.position).toEqual(at(1, 23));
     });
 
-    // A label travels into an address, which has no escapes, so one is refused rather than read.
+    // Addresses have no escapes, so an escape in a label is refused.
     it('refuses an escape in a block label', () => {
       const error = errorOf(String.raw`resource "local_file" "a\"b" {}`);
 
@@ -424,7 +424,7 @@ describe('Clay Parser', () => {
       expect(valueOf('"${ var.x }"')).toEqual({ type: 'Template', value: [reference(['var', 'x'], 28)], position: at(1, 24) });
     });
 
-    // Inside `${` is code, where a line break is whitespace.
+    // Inside `${`, a line break is whitespace.
     it('reads an interpolation over two lines, placing its reference on the line it was written on', () => {
       expect(valueOf('"a ${\n  local_file.f.id}"')).toEqual({ type: 'Template', value: ['a ', reference(['local_file', 'f', 'id'], 3, 2)], position: at(1, 24) });
     });
@@ -472,7 +472,7 @@ describe('Clay Parser', () => {
       expect(error.position).toEqual(position);
     });
 
-    // A quote left where a brace belongs opens a string, as a key's quote does, so whether the brace or the string is at fault cannot be told.
+    // A quote where a brace belongs opens a string, so the parser cannot tell which one is at fault.
     it.each([
       ['a quote where its brace belongs, not the quote', 'resource "t" "n" { v = "a ${var.x" }\nresource "t" "m" { w = "b" }', STRING_IN_OPEN, at(1, 27)],
       ['a key over two lines, not the key', 'resource "t" "n" { v = "${var.m["a\nb"]}" }', STRING_IN_OPEN, at(1, 25)],
@@ -486,7 +486,7 @@ describe('Clay Parser', () => {
       expect(error.position).toEqual(position);
     });
 
-    // A key is read as it is written, so an interpolation in one would be text that looks like a reference.
+    // A key is literal, so an interpolation would be text that looks like a reference.
     it('refuses an interpolation in a map key', () => {
       const error = errorOf('resource "t" "n" { m = { "${var.k}" = 1 } }');
 
@@ -538,7 +538,7 @@ describe('Clay Parser', () => {
       expect(valueOf('<<-EOT\n${var.x}\n  b\nEOT\n')).toEqual({ type: 'Template', value: [reference(['var', 'x'], 3, 2), '\n  b\n'], position: at(1, 24) });
     });
 
-    // One call given every indent at once would overflow the stack on a long heredoc.
+    // Spreading every indent into one call would overflow the stack on a long heredoc.
     it('reads a long one with <<-', () => {
       const lines = '  a\n'.repeat(200_000);
 
@@ -571,7 +571,7 @@ describe('Clay Parser', () => {
       expect(error.position).toEqual(position);
     });
 
-    // The block around a heredoc still has to close, so the error names the brace, not the heredoc.
+    // The enclosing block must still close, so the error names the brace, not the heredoc.
     it('closes one on the last line of the file, with no line break after it', () => {
       const error = errorOf('resource "t" "n" {\n  v = <<EOT\nhi\nEOT');
 
@@ -896,7 +896,7 @@ describe('Clay Parser', () => {
       }
     });
 
-    // The second would replace the first in silence, the way a second block once did.
+    // The second would silently replace the first.
     it.each([
       ['an attribute', 'resource "null_resource" "a" { v = 1 v = 2 }', 'v is set twice', at(1, 38)],
       ['a map key', 'resource "null_resource" "a" { m = { k = 1, k = 2 } }', 'k is set twice', at(1, 45)],
@@ -907,7 +907,7 @@ describe('Clay Parser', () => {
       expect(error.position).toEqual(position);
     });
 
-    // A plain object takes `__proto__` as its prototype, so the value would vanish in silence downstream.
+    // A plain object treats `__proto__` as its prototype, so the value would silently vanish.
     it.each([
       ['an attribute', 'resource "null_resource" "a" { __proto__ = 1 }', at(1, 32)],
       ['a map key', 'resource "null_resource" "a" { m = { __proto__ = 1 } }', at(1, 38)],
@@ -919,7 +919,7 @@ describe('Clay Parser', () => {
       expect(error.position).toEqual(position);
     });
 
-    // A name travels into an address, which reads "." as a separator.
+    // Names end up in addresses, which split on dots.
     it.each([
       ['a resource name', 'resource "local_file" "a.b" {}', 'Invalid name "a.b"', at(1, 23)],
       ['a resource type', 'resource "local.file" "a" {}', 'Invalid type "local.file"', at(1, 10)],
@@ -938,7 +938,7 @@ describe('Clay Parser', () => {
       expect(error.position).toEqual(position);
     });
 
-    // A reference reads these words as a variable, a data source or a module, never as a resource type.
+    // These words are reference prefixes, never resource types.
     it.each([
       ['module', 'resource "module" "a" {}', at(1, 10)],
       ['var', 'resource "var" "a" {}', at(1, 10)],
@@ -1021,7 +1021,7 @@ describe('Clay Parser', () => {
       expect(makeParser(input).parse()).toHaveLength(5);
     });
 
-    // Each case points at the token the parser stopped on, not at the block it was reading.
+    // Each error points at the token the parser stopped on, not the block.
     it.each([
       ['a resource with only one label', 'resource "name" { key = "val" }', 'Expect resource name string', at(1, 17)],
       ['a resource with no name', 'resource "type" { key = "val" }', 'Expect resource name string', at(1, 17)],

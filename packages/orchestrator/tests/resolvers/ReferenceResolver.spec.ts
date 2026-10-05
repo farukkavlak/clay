@@ -30,10 +30,10 @@ const state: State = {
 const resolverWith = (scopes = new ScopeManager(), planned = new Planned(), dataSources = new Map<string, Record<string, Value>>()) =>
   new ReferenceResolver(scopes, dataSources, new Map(), new Instances(), new ModuleInstances(), planned);
 
-/** A template around a resource state does not hold, which only the apply makes. */
+/** A template reading a resource not in state, so only the apply knows it. */
 const readLater = () => resolverWith().resolveValue(template('id: ', reference('resource', 'later', 'id')), state, context);
 
-/** A value as an output writes it, at column 22 of line 1. */
+/** Parsed as an output's value, starting at column 22. */
 const written = (value: string) => (new Parser(new Lexer(`output "o" { value = ${value} }`, CONFIG_FILE).tokenize()).parse()[0] as OutputBlock).value;
 const atColumn = (column: number) => ({ file: CONFIG_FILE, line: 1, column });
 const planning = () => {
@@ -57,7 +57,7 @@ describe('ReferenceResolver', () => {
     expect(resolverWith().resolveValue(node, state, context)).toEqual(value);
   });
 
-  // Its items may be of different types, which a list's are not.
+  // Its items may have different types, unlike a list's.
   it('reads a list as a tuple, each item with its own type', () => {
     expect(resolverWith().resolveValue(list(str('a'), num('1')), state, context)).toEqual(valueOf(types.tuple([types.string, types.number]), ['a', ExactNumber.parse('1')]));
   });
@@ -86,7 +86,7 @@ describe('ReferenceResolver', () => {
     expect(resolverWith(scopes).resolveValue(template(reference('var', 'n')), state, context)).toEqual(valueOf(types.number, ExactNumber.parse('8')));
   });
 
-  // The parser has already read every interpolation out of a string, so what is left is text, whatever it spells.
+  // The parser already extracted every interpolation, so what remains is text.
   it('leaves a string that spells an interpolation as text', () => {
     expect(resolverWith().resolveValue(str('Value is ${resource.test.val}'), state, context).data).toBe('Value is ${resource.test.val}');
   });
@@ -102,7 +102,7 @@ describe('ReferenceResolver', () => {
     expect(() => resolverWith(scopes).resolveValue(template('a ', reference('var', 'x')), state, context)).toThrow(new ConfigError(message, position));
   });
 
-  // A state holds what a provider made even when its schema does not, so the reference that reads it names the resource.
+  // State may hold data outside the schema, so the error names the resource.
   it('refuses a value in state that its schema does not hold, naming the resource', () => {
     const schemas = new Map([['resource', { val: { type: types.number } }]]);
     const resolver = new ReferenceResolver(new ScopeManager(), new Map(), schemas, new Instances(), new ModuleInstances(), new Planned());
@@ -112,14 +112,14 @@ describe('ReferenceResolver', () => {
     );
   });
 
-  // Its for_each is read before anything in an instance is, so a key with no value is a fault in the engine, not in the configuration.
+  // for_each is read before anything in an instance, so a missing value is an engine fault, not a configuration error.
   it('refuses each.value in an instance its for_each gave no value', () => {
     const instance = new Address(ModuleAddress.root, 'resource', 'main', 'k');
 
     expect(() => resolverWith().resolveValue(reference('each', 'value'), state, instance)).toThrow('each.value of "k" was read before its for_each');
   });
 
-  // A provider may read null where its schema names a string, which has a kind that joins and no text.
+  // A provider may return null where its schema names a string, which has no text to join.
   it('refuses to join a null of a type that joins into text', () => {
     const sources = new Map([['src.s', { v: valueOf(types.string, null) }]]);
     const read = () => resolverWith(new ScopeManager(), new Planned(), sources).resolveValue(template('a ', reference('data', 'src', 's', 'v')), state, context);
@@ -127,7 +127,7 @@ describe('ReferenceResolver', () => {
     expect(read).toThrow(new ConfigError('data.src.s.v is null and cannot be joined into a string', position));
   });
 
-  // Text around it makes it a string, whatever the reference comes to.
+  // Surrounding text makes it a string, whatever the reference resolves to.
   it('leaves a template that reads a value not known yet to the apply, as a string', () => {
     expect(readLater).toThrow(UnresolvedReferenceError);
     expect(readLater).toThrow(expect.objectContaining({ type: types.string }));
@@ -151,7 +151,7 @@ describe('ReferenceResolver', () => {
     );
   });
 
-  // While planning, an item only the apply can read stands on its own, with the type it will have.
+  // While planning, an unknown item stands alone with its future type.
   it('reads an item not known yet in a list as unknown, of the type it will have', () => {
     const planned = new Planned();
     planned.begin();
@@ -253,14 +253,14 @@ describe('ReferenceResolver', () => {
       expect(readWith('[for s in ["a", resource.later.id] : "x-${s}"]', new Map(), planning())).toEqual(valueOf(types.tuple([types.string, types.string]), ['x-a', UNKNOWN]));
     });
 
-    // What it gives is a tuple, whatever type the collection has.
+    // A for makes a tuple whatever the collection's type.
     it('leaves the whole for to the apply while its list is not known, with no type for what it gives', () => {
       expect(() => readWith('[for s in data.src.s.v : s]', source(valueOf(types.list(types.string), UNKNOWN)), planning())).toThrow(
         expect.objectContaining({ name: 'UnresolvedReferenceError', type: types.dynamic })
       );
     });
 
-    // The member to come may sort before the others, which would move every item the plan showed.
+    // The unknown member may sort before the others and shift every item.
     it('leaves the whole for to the apply while a member of its set is not known', () => {
       expect(() => readWith('[for s in data.src.s.v : s]', source(valueOf(types.set(types.string), ['a', UNKNOWN])), planning())).toThrow(
         expect.objectContaining({ message: 'The set a for goes over has a member known only after apply, so it has no order yet', type: types.dynamic })
@@ -348,7 +348,7 @@ describe('ReferenceResolver', () => {
     });
   });
 
-  // Every instance of a module reads the values declared once for it, and the resources and outputs of its own instance.
+  // Every module instance shares its variables but reads its own resources and outputs.
   describe('in an instance of a module', () => {
     it('reads the instance of a resource in that instance of the module', () => {
       const instances = new Instances();

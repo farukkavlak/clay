@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { start } from './start';
 
-/** The line and column `needle` is first written at, as an error would point at it. */
+/** Where an error would point at the first `needle`. */
 const placeOf = (config: string, needle: string) => {
   const before = config.slice(0, config.indexOf(needle)).split('\n');
   return { line: before.length, column: before.at(-1)!.length + 1 };
@@ -26,7 +26,6 @@ describe('a resource with count', () => {
     return engine;
   };
 
-  /** Applies the config and returns what it did, in order. */
   const apply = async (config: string): Promise<RunEvent[]> => {
     const events: RunEvent[] = [];
     for await (const event of start(newOrchestrator(), config)) {
@@ -54,7 +53,6 @@ describe('a resource with count', () => {
     return Object.keys(state.resources).sort();
   };
 
-  /** As many instances of logs as `count` says, and a resource that reads the first. */
   const withReader = (count: string, word = 'log') => `${logs(count, word)}
     resource "local_file" "reader" {
       path = "${path.join(dir, 'reader.txt')}"
@@ -122,7 +120,7 @@ describe('a resource with count', () => {
     expect(events.at(-1)).toEqual({ type: 'done', outputs: { first: { value: 'log 0', type: types.string } } });
   });
 
-  // Only the new instance is unknown; the one read is in state, so its reader has nothing to change.
+  // Only the new instance is unknown; the one read is in state, so its reader does not change.
   it('plans a reader of an instance that stays as it is with nothing to do', async () => {
     await apply(withReader('1'));
 
@@ -204,7 +202,7 @@ describe('a resource with count', () => {
     ['an output', 'output "o" { value = "${count.index}" }'],
     ['the count it would come from', 'resource "local_file" "a" { count = "${count.index}" path = "a" content = "a" }'],
     ['a data source', 'data "local_file" "d" { path = "${count.index}" }'],
-    // The output is not read at plan time, since it waits on a value only an apply makes.
+    // Not resolved at plan, since it waits on a value only the apply knows.
     ['an output that also reads a value still to come', 'resource "random_string" "s" { length = 4 }\noutput "o" { value = "${count.index}-${random_string.s.id}" }'],
   ])('refuses count.index in %s, where it is written', async (_, config) => {
     const error = await planError(config);
@@ -236,7 +234,7 @@ describe('a resource with count', () => {
     expect(error.position).toMatchObject(placeOf(config, `count = ${count}`.slice('count = '.length)));
   });
 
-  // The configuration sets the length, so the plan knows it before the string is made.
+  // The configuration sets the length, so the plan knows it before create.
   it('reads count from what the configuration sets on a resource still to be created', async () => {
     await apply(`resource "random_string" "s" { length = 3 }\n${logs('random_string.s.length')}`);
 

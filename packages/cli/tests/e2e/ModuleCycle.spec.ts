@@ -35,7 +35,7 @@ describe('a module source that is met twice', () => {
     await expect(planned(`module "a" { source = "./a" }`)).rejects.toThrow(/Module source cycle detected: \. -> a -> b -> a$/);
   });
 
-  // Two siblings inside a module load one after the other, each one level deep, so the second must not see the path the first walked.
+  // Sibling modules load one after another, so the second must not see the first's path as a cycle.
   it('is loaded again when two modules side by side name it', async () => {
     await fs.writeFile(path.join(dir, 'leaf', 'main.clay'), `resource "local_file" "one" { path = "${path.join(dir, 'one.txt')}" content = "one" }`, 'utf8');
     await fs.writeFile(path.join(dir, 'a', 'main.clay'), `module "leaf" { source = "../leaf" }`, 'utf8');

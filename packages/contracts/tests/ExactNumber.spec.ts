@@ -22,7 +22,7 @@ describe('ExactNumber', () => {
     expect(ExactNumber.parse(text).toString()).toBe(written);
   });
 
-  // The planner compares values structurally, so one number has to come out the same however it was written.
+  // The planner compares values structurally, so each number must have one form however it is written.
   it.each([
     ['1.50', '1.5'],
     ['1e3', '1000'],
@@ -40,7 +40,7 @@ describe('ExactNumber', () => {
     expect(() => ExactNumber.parse(text)).toThrow(`"${text}" is not a number`);
   });
 
-  // A place is a digit's distance from the point; a thousand either side is more than any value needs, and bounds what one can cost.
+  // A thousand places either side of the point is more than any value needs, and caps the cost.
   describe('its reach', () => {
     it.each([
       ['a whole number of a thousand digits', digits(1000), digits(1000)],
@@ -80,7 +80,7 @@ describe('ExactNumber', () => {
     expect(Math.sign(ExactNumber.parse(left).compare(ExactNumber.parse(right)))).toBe(order);
   });
 
-  // A caller catches this class and lets any other failure through, so every refusal has to be one.
+  // Callers catch NumberError and rethrow the rest, so every refusal must be one.
   it.each([
     ['a text that is no number', () => ExactNumber.parse('abc')],
     ['a number out of range', () => ExactNumber.parse('1e1000')],
@@ -118,7 +118,7 @@ describe('ExactNumber', () => {
       expect(() => ExactNumber.parse('1.5').toSafeInteger()).toThrow('1.5 is not a whole number');
     });
 
-    // The caller knows what the number is for, and the refusal is read far from where it was written.
+    // The refusal is read far from the number, so the caller labels it.
     it('names what the number is, when told', () => {
       expect(() => ExactNumber.parse('1.5').toSafeInteger('its serial')).toThrow('its serial: 1.5 is not a whole number');
     });

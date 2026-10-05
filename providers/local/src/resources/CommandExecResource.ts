@@ -14,7 +14,7 @@ export class CommandExecResource implements ResourceHandler {
   async getSchema(): Promise<Schema> {
     return {
       id: { type: types.string, computed: true, kept: true },
-      command: { type: types.string, required: true, forceNew: false }, // Re-exec allows update
+      command: { type: types.string, required: true, forceNew: false },
       cwd: { type: types.string, required: false, forceNew: false },
       stdout: { type: types.string, computed: true },
     };
@@ -28,7 +28,7 @@ export class CommandExecResource implements ResourceHandler {
     return planFromSchema(await this.getSchema(), request);
   }
 
-  // Nothing outside the state holds it, so it is as it was applied.
+  // It exists only in state, so it is as applied.
   async read(prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
     return prior;
   }

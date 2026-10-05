@@ -45,14 +45,14 @@ describe('the members of a set', () => {
     expect(setOf([null, 'b', null, 'a'])).toEqual(['a', 'b', null]);
   });
 
-  // Each may come to any value, another member's too, so none is taken for another.
+  // Each may become any value, including another member's, so none is merged.
   it('keeps every member not known yet, after the rest', () => {
     const partly = { id: UNKNOWN };
 
     expect(setOf([partly, 'b', UNKNOWN, null, UNKNOWN, 'a'])).toEqual(['a', 'b', null, UNKNOWN, UNKNOWN, partly]);
   });
 
-  // A provider may hand them back in another order, and the two are compared as they are held.
+  // A provider may return them in another order, and they are compared as stored.
   it('holds members known in part in one order, by what is known of them, and each of them', () => {
     const z = ['z', UNKNOWN];
     const a = ['a', UNKNOWN];

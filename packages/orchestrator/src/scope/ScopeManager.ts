@@ -4,7 +4,7 @@ import { AttributeValue, TypeDefaults } from '@clay/parser';
 import { ModuleCall } from '../keys';
 import { Value } from '../Value';
 
-/** A variable's value as written, and where it is resolved: an input in the call that gives it, a default in its own module. `block` names it in a message. */
+/** Resolved where it is written: an input in the call, a default in its own module. */
 export interface VariableValue {
   value: AttributeValue;
   context: ModuleAddress | ModuleCall;
@@ -13,7 +13,7 @@ export interface VariableValue {
   block: string;
 }
 
-/** Variables by the module as the configuration writes it, since each instance reads the same values; outputs by the instance, since each comes to its own. */
+/** Variables per module, since each instance reads the same values; outputs per instance, since each has its own. */
 export class ScopeManager {
   private variables: Map<string, Map<string, VariableValue>> = new Map();
   private outputs: Map<string, Map<string, Value>> = new Map();

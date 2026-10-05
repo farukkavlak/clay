@@ -57,7 +57,7 @@ describe('null', () => {
     expect(actions.map((action) => action.type)).toEqual(['NO_OP']);
   });
 
-  // Left out like any other, so the provider makes it as if nothing were written.
+  // Dropped like any null, so the provider computes it.
   it('takes null for an attribute only the provider makes', async () => {
     await apply('resource "random_string" "r" {\n  length = 4\n  result = null\n}');
 
@@ -65,7 +65,7 @@ describe('null', () => {
     expect(result).toHaveLength(4);
   });
 
-  // Set to null is left out, so the two read the same: before the resource is made, and from state after.
+  // Null is dropped, so null and absent read the same, both at plan and from state.
   it('reads an attribute set to null, or left out, as null', async () => {
     const config = `resource "null_resource" "a" { triggers = null }\nresource "null_resource" "b" {}
       output "set" { value = null_resource.a.triggers }\noutput "left" { value = null_resource.b.triggers }`;

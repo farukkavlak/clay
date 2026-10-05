@@ -19,7 +19,7 @@ describe('a name with a dash in it', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
-  // The name is written in one file and read back by the reference, the state key and the address a command takes.
+  // The name goes through a reference, a state key and a command's address.
   it('is applied, read by another resource and addressed in state', async () => {
     const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
     engine.registerProvider(new LocalProvider());

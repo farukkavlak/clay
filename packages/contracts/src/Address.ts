@@ -1,7 +1,6 @@
-/** Which instance of a resource or a module: a number under `count`, a string under `for_each`. */
+/** A number under `count`, a string under `for_each`. */
 export type InstanceKey = number | string;
 
-/** A key as a state or a plan file holds it: a string, or a whole number from 0. */
 export function isInstanceKey(value: unknown): value is InstanceKey {
   return typeof value === 'string' || (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0);
 }
@@ -10,13 +9,11 @@ function spellKey(key: InstanceKey | undefined): string {
   return key === undefined ? '' : `[${JSON.stringify(key)}]`;
 }
 
-/** One module call on the way from the root to a resource, and which instance of it, under count or for_each. */
 export interface ModuleStep {
   name: string;
   key?: InstanceKey;
 }
 
-/** A module path as a state or a plan file holds it. */
 export function isModulePath(value: unknown): value is ModuleStep[] {
   return (
     Array.isArray(value) &&
@@ -29,7 +26,6 @@ export function isModulePath(value: unknown): value is ModuleStep[] {
   );
 }
 
-/** An instance of a module: the root, or the module calls that lead to it from the root. */
 export class ModuleAddress {
   static readonly root = new ModuleAddress([]);
 
@@ -47,7 +43,6 @@ export class ModuleAddress {
     return this.path.length === 0;
   }
 
-  /** The module as the configuration writes it, which every instance of it shares. */
   withoutKeys(): ModuleAddress {
     return new ModuleAddress(this.path.map(({ name }) => ({ name })));
   }
@@ -62,7 +57,7 @@ const KEY_FORM = 'a key is a whole number or a quoted string, as in [0] or ["nam
 
 type Refuse = (reason: string) => never;
 
-/** `[0]` or `["name"]`, the string read as JSON writes it, so a key holding a dot or a quote reads back whole; one key has one spelling. */
+/** `[0]` or `["name"]`, the string JSON-quoted, so a key with a dot or a quote reads back whole and each key has one spelling. */
 function readKey(text: string, refuse: Refuse): InstanceKey {
   const inner = /^\[(.*)]$/s.exec(text)?.[1] ?? refuse(KEY_FORM);
 
@@ -85,10 +80,9 @@ function readKey(text: string, refuse: Refuse): InstanceKey {
   return JSON.stringify(key) === inner ? (key as string) : refuse(`a key is written as [${JSON.stringify(key)}]`);
 }
 
-/** A part between two dots, with the key written after it. */
 type Segment = ModuleStep;
 
-/** Where the key that opens at `start` ends, past its `]`. A quoted key may hold a `]` or a `"` of its own. */
+/** The index just past the key's `]`; a quoted key may itself hold `]` or `"`. */
 function keyEnd(text: string, start: number, refuse: Refuse): number {
   let at = start + 1;
 
@@ -101,7 +95,6 @@ function keyEnd(text: string, start: number, refuse: Refuse): number {
   return close === -1 ? refuse(KEY_FORM) : close + 1;
 }
 
-/** The segment that starts at `at`, and where the next one starts. A name never holds `.` or `[`, so either one ends it. */
 function readSegment(text: string, at: number, refuse: Refuse): { segment: Segment; next: number } {
   const stop = text.slice(at).search(/[.[]/);
   const end = stop === -1 ? text.length : at + stop;
@@ -128,7 +121,6 @@ function readSegments(text: string, refuse: Refuse): Segment[] {
   return segments;
 }
 
-/** The modules the segments lead through, then what is left for the type and the name. */
 function readModules(segments: Segment[], refuse: Refuse): { module: ModuleAddress; rest: Segment[] } {
   const path: ModuleStep[] = [];
   let read = 0;
@@ -154,23 +146,21 @@ export class Address {
     this.key = key;
   }
 
-  /** The address of anything that names a resource: a plan action, a state entry. */
   static of(resource: { modulePath?: readonly ModuleStep[]; resourceType: string; name: string; key?: InstanceKey }): Address {
     return new Address(new ModuleAddress(resource.modulePath || []), resource.resourceType, resource.name, resource.key);
   }
 
-  /** What a state entry or a plan action records of its address, the key with it, so no copy of the address drops a part. */
+  /** Every part of the address, so a state entry or plan action built from it drops none. */
   fields(): { modulePath: readonly ModuleStep[]; resourceType: string; name: string; key?: InstanceKey } {
     return { modulePath: this.module.path, resourceType: this.resourceType, name: this.name, key: this.key };
   }
 
-  /** The block an instance belongs to, which every instance of it shares. */
   withoutKey(): Address {
     return new Address(this.module, this.resourceType, this.name);
   }
 
   /**
-   * Where state may keep this instance when count came or went since, on the resource or on any module on its way.
+   * Where state may hold this instance if count was added or removed on the resource or a module above it since.
    * `a` for `a[0]`, `a[0]` for `a`, and `module.m[0].a[0]`, `module.m.a` or `module.m.a[0]` for `module.m[0].a`. `[1]` and `["x"]` have none.
    */
   countCounterparts(): Address[] {
@@ -187,11 +177,11 @@ export class Address {
           : [[...keys, key]]
       );
 
-    // The first is the instance itself, with no key changed.
+    // The first is the instance itself.
     return found.slice(1).map((keys) => this.withKeys(keys));
   }
 
-  /** The same instance with these keys, one for each module on its way and the last for the resource. */
+  /** One key per module on the path, then the resource's. */
   private withKeys(keys: (InstanceKey | undefined)[]): Address {
     const module = new ModuleAddress(this.module.path.map(({ name }, index) => (keys[index] === undefined ? { name } : { name, key: keys[index] })));
     return new Address(module, this.resourceType, this.name, keys.at(-1));

@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { start } from './start';
 
-/** Plans a label as the configuration sets it, then makes it upper case and adds a value it never planned. */
+/** Plans the label as configured, then upper-cases it and adds a value it never planned. */
 class LoudProvider implements Provider {
   readonly resources = ['loud'];
   readonly dataSources: string[] = [];
@@ -49,7 +49,7 @@ class LoudProvider implements Provider {
   }
 }
 
-/** Makes what it is told to and reads back what it was given, with `extra` added to it. */
+/** Creates as told and reads back its input plus `extra`. */
 class EchoProvider extends LoudProvider {
   override readonly resources = ['echo'];
 
@@ -66,7 +66,7 @@ class EchoProvider extends LoudProvider {
   }
 }
 
-/** Reads a data source whose schema holds the content it reads, and returns what it is told to. */
+/** A data source that returns what it is told to. */
 class DataReader extends LoudProvider {
   override readonly resources: string[] = [];
   override readonly dataSources = ['vague'];
@@ -87,7 +87,7 @@ class DataReader extends LoudProvider {
   }
 }
 
-/** Makes and changes a resource with a `note` it names and gives no value. */
+/** Declares `note` and never sets it. */
 class NotelessProvider extends LoudProvider {
   override readonly resources = ['noteless'];
 
@@ -104,14 +104,14 @@ class NotelessProvider extends LoudProvider {
   }
 }
 
-/** Says it keeps a value it does not compute. */
+/** Marks a non-computed value `kept`. */
 class MuddledEcho extends EchoProvider {
   override async getSchema(): Promise<Schema> {
     return { label: { type: types.string, required: true, kept: true } };
   }
 }
 
-/** Plans its id from the name it is given, then makes it with another. */
+/** Plans its id from the name, then creates it with another. */
 class MisnamingProvider extends LoudProvider {
   override readonly resources = ['named'];
 
@@ -129,7 +129,6 @@ class MisnamingProvider extends LoudProvider {
   }
 }
 
-/** Plans its label as a list, where its schema names a string. */
 class MistypingProvider extends LoudProvider {
   override async plan(_type: string, request: PlanRequest): Promise<PlannedChange> {
     const { after, replace } = planFromSchema(await this.getSchema(), request);
@@ -137,7 +136,7 @@ class MistypingProvider extends LoudProvider {
   }
 }
 
-/** Plans its id with a count of the plans it made, so no two plans agree. */
+/** Plans a different id every time. */
 class FickleProvider extends MisnamingProvider {
   private plans = 0;
 
@@ -223,7 +222,7 @@ describe('the plan made again at apply', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
-  // The name is not known at plan, so the plan cannot know the id; the plan at apply can.
+  // The name is unknown at plan, so only the plan at apply knows the id.
   it('holds what the apply returns to what the provider plans once the values are known', async () => {
     const failures = await failuresOf(
       `
@@ -297,7 +296,7 @@ describe('what a refresh reads, held to what a resource can hold', () => {
     );
   });
 
-  // A name with no value is one left out, so it is not a name the provider made up.
+  // An undefined value counts as absent, so it is not an unknown name.
   it('takes a name the read gives no value as one it left out', async () => {
     const config = 'resource "echo" "a" { label = "a" }';
     await apply(config);
@@ -336,7 +335,7 @@ describe('a name an apply returns with no value', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
-  // The output reads it in the same run, from what the apply returned, before any state file drops it.
+  // The output reads the apply's result in the same run, before the state file drops it.
   it.each([
     ['a create', []],
     ['an update', ['old']],
@@ -404,7 +403,7 @@ describe('what a data source reads', () => {
     await expect(plan(new DataReader({ content: 'x', size: undefined }))).resolves.toMatchObject({ actions: [] });
   });
 
-  // Left out, given no value and given null are the one thing to what reads it.
+  // Absent, undefined and null all read the same.
   it.each([
     ['leaves out', {}],
     ['gives no value', { content: undefined }],

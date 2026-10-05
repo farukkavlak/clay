@@ -11,7 +11,7 @@ import { createApplyCommand } from '../../src/commands/apply';
 import { createPlanCommand } from '../../src/commands/plan';
 import { start } from './start';
 
-/** A map with one value only the apply makes and one the configuration sets, given to a module and read whole and in parts. */
+/** A map with one unknown value and one known, passed to a module and read whole and in parts. */
 const config = `
   resource "random_string" "s" { length = 4 }
   module "k" {
@@ -30,7 +30,7 @@ const module = `
   output "later" { value = "read \${var.m.a}" }
 `;
 
-// A list or a map is known as far as its items are: one item only the apply makes leaves the rest known.
+// One unknown item leaves the rest of a list or map known.
 describe('a value known in part', () => {
   let dir: string;
 
@@ -40,7 +40,6 @@ describe('a value known in part', () => {
     return engine;
   };
 
-  /** Runs a CLI command from the temp directory and returns what it printed. */
   const cli = async (run: () => Promise<unknown>): Promise<string> => {
     const printed: string[] = [];
     const cwd = process.cwd();
@@ -84,7 +83,7 @@ describe('a value known in part', () => {
     expect(printed).toContain('whole = {"a":(known after apply),"b":"fixed"}');
   });
 
-  // Any text a value holds is shown as that text, however it reads.
+  // Text that looks like a marker is still shown as text.
   it('shows a value that holds what looks like a mark as the value it is', async () => {
     await fs.writeFile(path.join(dir, 'main.clay'), String.raw`output "x" { value = { a = "\u0000unknown", "\u0000unknown" = "k" } }`, 'utf8');
 
@@ -93,7 +92,7 @@ describe('a value known in part', () => {
     expect(printed).toContain(String.raw`x = {"a":"\u0000unknown","\u0000unknown":"k"}`);
   });
 
-  // A saved plan is read back from its file, where what is not known has no JSON form of its own.
+  // UNKNOWN has no JSON form, so this checks the saved plan's own encoding.
   it('shows it the same from a saved plan, and applies it in full', async () => {
     await fs.writeFile(path.join(dir, 'main.clay'), config, 'utf8');
     await cli(() => createPlanCommand().parseAsync(['node', 'clay', '--out', 'plan.json']));
@@ -111,7 +110,7 @@ describe('a value known in part', () => {
     });
   });
 
-  // The provider checks what it knows now, and the rest once the apply knows it.
+  // The provider validates the known part now and the rest at apply.
   it('gives the provider a value known in part to check, as it is', async () => {
     const withTriggers = `
       resource "random_string" "s" { length = 4 }
@@ -145,7 +144,7 @@ describe('a value known in part', () => {
 
   const read = (name: string) => fs.readFile(path.join(dir, name), 'utf8');
 
-  // A map's keys are known before its values, so its values can wait for the apply while its instances are planned.
+  // A map's keys are known before its values, so instances are planned while the values wait for apply.
   it('plans an instance for each key of a for_each whose values the apply makes, and applies them', async () => {
     const config = `
       resource "random_string" "s" { length = 4 }

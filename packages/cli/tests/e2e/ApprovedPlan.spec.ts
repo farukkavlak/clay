@@ -51,7 +51,7 @@ describe('the plan apply showed', () => {
 
   it('is refused when the state changes while the question is open', async () => {
     await fs.writeFile(path.join(dir, 'main.clay'), fileConfig('mine'), 'utf8');
-    // The answer comes after another run has written the state.
+    // Another run writes the state before the answer comes.
     const question = vi.fn(async () => {
       await applyElsewhere(fileConfig('theirs'));
       return 'yes';

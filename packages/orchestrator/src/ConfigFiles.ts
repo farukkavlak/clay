@@ -1,9 +1,9 @@
 import * as fs from 'node:fs';
 import path from 'node:path';
 
-/** Where module configurations are read from. A file is named by its path relative to the root configuration, with forward slashes. */
+/** Files are named by path relative to the root configuration, with forward slashes. */
 export interface ConfigFiles {
-  /** The file's content, or undefined when there is no such file. */
+  /** Undefined when the file does not exist. */
   read(file: string): string | undefined;
 }
 
@@ -14,7 +14,7 @@ export class DiskFiles implements ConfigFiles {
     try {
       return fs.readFileSync(path.resolve(this.rootDir, file), 'utf8');
     } catch (error) {
-      // Only a file that is not there is missing; one that is there and cannot be opened is reported as it is.
+      // Only ENOENT means missing; any other error is thrown.
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
 
       throw error;
@@ -30,7 +30,7 @@ export class InMemoryFiles implements ConfigFiles {
   }
 }
 
-/** Remembers every file read, so a plan can carry the configuration it was made from. */
+/** Records every file read, so a saved plan can carry its configuration. */
 export class RecordingFiles implements ConfigFiles {
   private files: Record<string, string> = {};
 

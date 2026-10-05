@@ -18,7 +18,7 @@ const schema: Schema = {
 
 const n = (text: string) => ExactNumber.parse(text);
 
-/** Each value as the configuration writes it: a list a tuple and a map an object, with the type its items have. */
+/** As the configuration writes them: a list is a tuple and a map an object. */
 const conformValues = (resource: string, held: Schema, config: Record<string, unknown>) =>
   conform(resource, held, Object.fromEntries(Object.entries(config).map(([name, data]) => [name, valueOf(inferred(data), data)])));
 
@@ -92,7 +92,7 @@ describe('conformValues', () => {
     expect(() => conformValues('thing', required, {})).toThrow(expect.objectContaining({ message: 'thing requires "path"', attribute: undefined }));
   });
 
-  // A value the apply makes is checked once it is known, so only what is known now is held to the schema.
+  // Unknown parts are checked at apply; only the known parts are checked now.
   it.each([
     ['a whole value', { name: UNKNOWN, settings: UNKNOWN }],
     ['an item of a list', { ports: [n('80'), UNKNOWN] }],
@@ -102,12 +102,12 @@ describe('conformValues', () => {
     expect(conformValues('thing', schema, config)).toEqual(config);
   });
 
-  // Converted first, so "80" and 80 are the one member they both spell.
+  // Converted first, so "80" and 80 become one member.
   it('converts each member of a set, then holds it once and in order', () => {
     expect(conformValues('thing', schema, { ids: ['80', n('443'), n('80')] })).toEqual({ ids: [n('80'), n('443')] });
   });
 
-  // A member not known yet may come to any value, so the set keeps it apart from the members it knows, after them.
+  // An unknown member may become anything, so it is kept after the known members.
   it('checks a known member of a set beside one not known, and keeps both', () => {
     expect(conformValues('thing', schema, { ids: [UNKNOWN, '80'] })).toEqual({ ids: [n('80'), UNKNOWN] });
     expect(() => conformValues('thing', schema, { ids: [UNKNOWN, 'http'] })).toThrow('ids[1]: "http" is not a number');
@@ -118,7 +118,7 @@ describe('conformValues', () => {
     expect(() => conformValues('thing', schema, { tags: { a: UNKNOWN, b: ['x'] } })).toThrow('tags["b"] is a tuple, where thing takes a string');
   });
 
-  // dynamic names no type, so nothing is converted.
+  // `dynamic` names no type, so nothing is converted.
   it('takes any value where the type is dynamic, as it is', () => {
     const config = { meta: { any: 'x', thing: n('1') }, items: ['1', n('1'), [true]] };
 
@@ -129,7 +129,7 @@ describe('conformValues', () => {
     expect(conformValues('thing', schema, { name: null, size: n('1') })).toEqual({ size: n('1') });
   });
 
-  // The name is written, so the error goes where it is.
+  // The name is written, so the error points at it.
   it('refuses null for a name the schema requires, and names the attribute', () => {
     const required: Schema = { path: { type: types.string, required: true } };
 
@@ -144,7 +144,7 @@ describe('conformValues', () => {
     });
   });
 
-  // Its kind is known before its value, so a value that could never fit is refused at the plan.
+  // Its type is known before its value, so a value that can never fit is refused at plan.
   it('refuses a value not known yet whose kind the schema does not take', () => {
     expect(() => conform('thing', schema, { ports: valueOf(types.string, UNKNOWN) })).toThrow(
       expect.objectContaining({ message: 'ports is a string, where thing takes a list', attribute: 'ports' })
@@ -159,7 +159,7 @@ describe('conformValues', () => {
     expect(conform('thing', schema, { ports: valueOf(types.set(types.string), ['1', '2']) })).toEqual({ ports: [n('1'), n('2')] });
   });
 
-  // A member not known yet may sort anywhere, or come to a member the set has, so the list has no order or length to show before the apply.
+  // An unknown member may sort anywhere or duplicate one, so as a list it has no order or length before apply.
   it('takes a set with a member not known yet as not known, anywhere but where a set goes', () => {
     const members = valueOf(types.set(types.string), ['1', UNKNOWN]);
     const three = valueOf(types.set(types.string), ['1', 'a', UNKNOWN]);

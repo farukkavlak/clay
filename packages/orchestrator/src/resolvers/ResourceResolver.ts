@@ -10,7 +10,7 @@ import { Value } from '../Value';
 import { noAttribute, readInstance } from './instance';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 
-/** What the provider computes, and a value the configuration does not know yet, only the apply makes; anything else nothing sets, and is null. A name its schema does not have was refused where it is written. */
+/** A name only the apply sets is unknown; any other unplanned name is null. Names outside the schema were refused earlier. */
 function plannedAttribute(instance: PlannedInstance, name: string): unknown {
   if (Object.hasOwn(instance.known, name)) return instance.known[name];
 
@@ -24,7 +24,7 @@ export class ResourceResolver {
     private schemas: Map<string, Schema>
   ) {}
 
-  /** The attribute the reference reads, as the type its schema names, and the steps still to take into it. */
+  /** Returns the attribute and the steps still to take into it. */
   resolve(reference: ResourceReference, context: Context, state: State, position?: Position): { value: Value; path: Step[] } {
     const schema = this.schemas.get(reference.type) ?? {};
     const { value, attribute, path } = this.read(reference, schema, context, state, position);
@@ -37,7 +37,7 @@ export class ResourceResolver {
     }
   }
 
-  /** An instance the plan will create or change is read as the plan knows it. */
+  /** An instance the plan creates or changes is read from the plan, not state. */
   private read(reference: ResourceReference, schema: Schema, context: Context, state: State, position?: Position): { value: unknown; attribute: string; path: Step[] } {
     const module = moduleOf(context);
     const block = blockKey(new Address(module, reference.type, reference.name));
@@ -54,7 +54,7 @@ export class ResourceResolver {
     return { value: this.getResolvedAttribute(resource, reference.type, schema, attribute, position), attribute, path };
   }
 
-  /** State holds all a resource has, so a name its schema has and it does not hold was left out, and is null; any other never will be read. */
+  /** A schema attribute missing from state is null; any other name is refused. */
   private getResolvedAttribute(resource: { attributes: Record<string, unknown> }, type: string, schema: Schema, attributeName: string, position?: Position): unknown {
     // Plain indexing would find inherited names like `toString`.
     if (Object.hasOwn(resource.attributes, attributeName)) return resource.attributes[attributeName];

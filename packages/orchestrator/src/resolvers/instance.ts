@@ -4,22 +4,18 @@ import { ModuleOutputReference, NAME, Position, ResourceReference, spellReferenc
 import { Repetition } from '../Instances';
 import { placed } from '../place';
 
-/** What a reference to a resource reads: which of its instances, the attribute on it, and the steps into that. */
 export interface InstanceRead {
   key?: InstanceKey;
   attribute: string;
   path: Step[];
 }
 
-/** `count.index` read where no instance is made by count. */
 export const COUNT_INDEX_OUTSIDE = 'count.index is only known inside a resource or a module call that has count';
 
-/** `each.key` or `each.value` read where no instance is made by for_each. */
 export function eachOutside(name: 'key' | 'value'): string {
   return `each.${name} is only known inside a resource or a module call that has for_each`;
 }
 
-/** A resource read for a name its schema does not have. */
 export function noAttribute(type: string, name: string): string {
   return `${type} has no attribute "${name}"`;
 }
@@ -40,8 +36,8 @@ function readAttribute(reference: ResourceReference, steps: Step[], position?: P
 }
 
 /**
- * A resource with count or for_each is read one instance at a time, so its first step is an index or a key; one with neither has none.
- * `.name` and `["name"]` read the same, so under for_each `local_file.a.web.id` reads the instance "web".
+ * With count or for_each the first step must be an index or a key; without either there is none.
+ * `.name` and `["name"]` are the same, so under for_each `local_file.a.web.id` reads the instance "web".
  */
 export function readInstance(reference: ResourceReference, repetition: Repetition | undefined, position?: Position): InstanceRead {
   const block = spellReference([reference.type, reference.name]);
@@ -52,10 +48,10 @@ export function readInstance(reference: ResourceReference, repetition: Repetitio
     return { attribute: readAttribute(reference, reference.path, position), path: rest };
   }
 
-  // What follows is not shown back: it may be an attribute, or a key meant as the index.
+  // The step is not echoed: it may be an attribute, or a key meant as the index.
   if (repetition === 'count' && typeof first !== 'number') refuse(`${block} has count, so name one of it by index, as in ${block}[0]`, position);
   if (repetition === 'for_each' && typeof first !== 'string') refuse(`${block} has for_each, so name one of it by key, as in ${block}["key"]`, position);
-  // `local_file.a.content` reads "content" as the key, which a reader may have meant as the attribute.
+  // `local_file.a.content` reads "content" as the key, though the author may have meant the attribute.
   if (repetition === 'for_each' && rest.length === 0)
     refuse(
       `Reference "${spellReference([reference.type, reference.name, ...reference.path])}" names an instance and no attribute: ${block} has for_each, so its key comes first, as in ${block}["key"].id`,
@@ -65,7 +61,6 @@ export function readInstance(reference: ResourceReference, repetition: Repetitio
   return { key: first, attribute: readAttribute(reference, rest, position), path: rest.slice(1) };
 }
 
-/** What a reference to a module reads: which of its instances, the output, and the steps into that. */
 export interface CallRead {
   key?: InstanceKey;
   output: string;
@@ -84,8 +79,8 @@ function readOutput(reference: ModuleOutputReference, steps: Step[], position?: 
 }
 
 /**
- * A module called with count or for_each is read one instance at a time, so its first step is an index or a key; one called with neither has none.
- * `.name` and `["name"]` read the same, so under for_each `module.web.ali.url` reads the instance "ali".
+ * With count or for_each the first step must be an index or a key; without either there is none.
+ * `.name` and `["name"]` are the same, so under for_each `module.web.ali.url` reads the instance "ali".
  */
 export function readCall(reference: ModuleOutputReference, repetition: Repetition | undefined, position?: Position): CallRead {
   const call = spellReference(['module', reference.module]);
@@ -98,7 +93,7 @@ export function readCall(reference: ModuleOutputReference, repetition: Repetitio
 
   if (repetition === 'count' && typeof first !== 'number') refuse(`${call} has count, so name one of it by index, as in ${call}[0]`, position);
   if (repetition === 'for_each' && typeof first !== 'string') refuse(`${call} has for_each, so name one of it by key, as in ${call}["key"]`, position);
-  // `module.web.url` reads "url" as the key, which a reader may have meant as the output.
+  // `module.web.url` reads "url" as the key, though the author may have meant the output.
   if (repetition === 'for_each' && rest.length === 0)
     refuse(
       `Reference "${spellReference(['module', reference.module, ...reference.path])}" names an instance and no output: ${call} has for_each, so its key comes first, as in ${call}["key"].out`,
@@ -108,7 +103,7 @@ export function readCall(reference: ModuleOutputReference, repetition: Repetitio
   return { key: first, output: readOutput(reference, rest, position), path: rest.slice(1) };
 }
 
-/** An index past the count names an instance the plan will not make, so it is refused rather than read as one still to come. `block` is as written: `local_file.a`, `module.m`. */
+/** Refused, since an instance that will never exist would otherwise read as unknown. */
 export function checkInRange(block: string, key: number, count: number | undefined, position?: Position): void {
   if (count === undefined || key < count) return;
 
@@ -117,7 +112,7 @@ export function checkInRange(block: string, key: number, count: number | undefin
   refuse(`${block} has ${count} ${count === 1 ? 'instance, [0]' : `instances, [0] to [${count - 1}]`}`, position);
 }
 
-/** A key for_each does not give names an instance the plan will not make, so it is refused rather than read as one still to come. */
+/** Refused, since an instance that will never exist would otherwise read as unknown. */
 export function checkHasKey(block: string, key: string, keys: InstanceKey[] | undefined, position?: Position): void {
   if (keys === undefined || keys.includes(key)) return;
 

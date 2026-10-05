@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 
-/** Only a missing file is missing; one that is there but cannot be reached is an error to report. */
+/** Only ENOENT means missing; any other error is thrown. */
 export async function exists(file: string): Promise<boolean> {
   try {
     await fs.access(file);

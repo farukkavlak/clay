@@ -128,7 +128,7 @@ describe('state and output against a real state file', () => {
     const moved = await stored();
     expect(moved.resources['local_file.renamed']).toMatchObject({ resourceType: 'local_file', name: 'renamed', modulePath: [] });
 
-    // The configuration drops the resource; the delete has to find the moved entry.
+    // The configuration drops the resource; the delete must find the moved entry.
     await run('');
     const emptied = await stored();
     expect(emptied.resources).toEqual({});
@@ -170,7 +170,7 @@ describe('state and output against a real state file', () => {
     expect(state.resources['module.m.local_file.a']).toMatchObject({ name: 'a', modulePath: [{ name: 'm' }] });
   });
 
-  // The key is read back from the file, where a number is no JavaScript number until it is made one.
+  // The key is read back from the file, where it must become a plain number again.
   it('moves a resource into an instance of a module with mv, so show and a later delete find it by that key', async () => {
     await applyConfig();
 

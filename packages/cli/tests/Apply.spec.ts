@@ -8,7 +8,7 @@ import { createApplyCommand } from '../src/commands/apply';
 import { confirm } from '../src/confirm';
 
 vi.mock('node:fs/promises');
-// The engine is mocked; Address is a plain value type the commands print with, so it stays real.
+// Address is a plain value type the commands print with, so it stays real.
 vi.mock('@clay/orchestrator', async () => {
   const actual = await vi.importActual<typeof import('@clay/orchestrator')>('@clay/orchestrator');
   return {
@@ -281,7 +281,7 @@ describe('CLI: apply command', () => {
 
       await createApplyCommand().parseAsync(['node', 'clay']);
 
-      // A kind the CLI does not know gets a blank where the symbol goes, and the tense it falls back to.
+      // An unknown action type gets no symbol and the fallback tense.
       expect(consoleSpy.mock.calls.flat().join('\n')).toMatch(/ {2}test\.t will be .*destroyed/);
       expect(runMock).toHaveBeenCalled();
 
@@ -418,7 +418,7 @@ describe('CLI: apply command', () => {
 
       await createApplyCommand().parseAsync(['node', 'clay', 'invalid.json']);
 
-      // The first thing reported has to be the refusal; the stubbed exit lets the run carry on and report more.
+      // The stubbed exit lets the run continue, so the refusal must be reported first.
       expect(consoleSpy.mock.calls[0].join(' ')).toContain('invalid.json is not a plan file');
       expect(exitSpy).toHaveBeenCalledWith(1);
 
@@ -465,7 +465,6 @@ describe('CLI: apply command', () => {
   it('should handle non-Error exceptions gracefully', async () => {
     vi.mocked(fs.access).mockResolvedValue(void 0);
 
-    // Mock fs.readFile to throw a string error
     vi.mocked(fs.readFile).mockRejectedValue('String Error');
 
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
@@ -473,7 +472,6 @@ describe('CLI: apply command', () => {
 
     await createApplyCommand().parseAsync(['node', 'clay']);
 
-    // Should use String(error)
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Apply failed:'), 'String Error');
     expect(exitSpy).toHaveBeenCalledWith(1);
 

@@ -78,7 +78,7 @@ describe('validate against real files', () => {
 
     expect(output).toContain('module "m" has no variable "contnet"');
     expect(output).toContain('on main.clay line 3, in module "m":');
-    // The caret sits under the value: an attribute name has no position of its own in the AST.
+    // The caret is under the value, since an attribute name has no position of its own in the AST.
     expect(output).toContain('\n  3:   contnet = "typo"\n                 ^');
   });
 
@@ -97,7 +97,7 @@ describe('validate against real files', () => {
     expect(output).toContain('\n  3:   content = "${local_file.other}"\n                    ^');
   });
 
-  // A data source is read as the configuration loads, so its values reach no scanner; a module is read through its outputs all the same.
+  // Data sources are read at load, without the scanner, but a module must still be read through its outputs.
   it('refuses a reference that reaches into a module from a data source', async () => {
     await fs.mkdir(path.join(dir, 'm'), { recursive: true });
     await fs.writeFile(path.join(dir, 'm', 'main.clay'), `resource "local_file" "a" { path = "a.txt" content = "hi" }`, 'utf8');
@@ -108,11 +108,11 @@ describe('validate against real files', () => {
     expect(output).toContain('on main.clay line 2, in data "local_file" "d":');
   });
 
-  // The graph knows the name is missing; the place comes from the attribute that reads it, not from the block around it.
+  // The position comes from the reference, not the block.
   it('points at a reference to a name the configuration never declares', async () => {
     const output = await validate('resource "local_file" "f" {\n  path    = "a.txt"\n  content = "${var.missing}"\n}');
 
-    // The `in resource` line names the block, so the message does not.
+    // The `in resource` line names the block, so the message does not repeat it.
     expect(output).toContain('Validation failed: variable "missing" is not defined\n');
     expect(output).toContain('on main.clay line 3, in resource "local_file" "f":');
     expect(output).toContain('\n  3:   content = "${var.missing}"\n                    ^');
@@ -164,7 +164,7 @@ describe('validate against real files', () => {
     expect(output).toContain('on m/main.clay line 1:');
   });
 
-  // Only the engine makes the unknown marker, so a map spelled like it is checked like any other value.
+  // UNKNOWN is a symbol, so a map spelled like a marker is an ordinary value.
   it('checks a resource that holds a map spelled like the unknown marker', async () => {
     const output = await validate('resource "local_file" "a" {\n  path    = "a.txt"\n  content = { "@@clay/unknown" = true }\n}');
 

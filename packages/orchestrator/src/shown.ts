@@ -1,6 +1,6 @@
 import { isUnknown } from '@clay/contracts';
 
-/** A value as a message shows it: one not known yet, or in part, says so where it is not. */
+/** For messages; marks unknown parts. */
 export function shown(value: unknown): string {
   if (value === undefined) return '(none)';
 

@@ -12,7 +12,7 @@ import { createApplyCommand } from '../../src/commands/apply';
 import { createPlanCommand } from '../../src/commands/plan';
 import { start } from './start';
 
-/** A random string is made anew on every create, so the same id after a run means it was kept, not made again. */
+/** A new random string on every create, so the same id after a run means it was kept. */
 const suffix = (count?: string) => `resource "random_string" "s" { ${count ? `count = ${count} ` : ''}length = 8 }`;
 
 describe('a resource that gains or loses count', () => {
@@ -28,7 +28,7 @@ describe('a resource that gains or loses count', () => {
     for await (const event of start(newOrchestrator(), config)) if (event.type === 'failed') throw event.error;
   };
 
-  /** A file named after what it reads; a path is replaced on change. */
+  /** A file named after what it reads; a path change replaces it. */
   const reader = (reference: string) => `resource "local_file" "f" { path = "${path.join(dir, '${' + reference + '}.txt')}" content = "x" }`;
 
   const ids = async () => {
@@ -76,7 +76,7 @@ describe('a resource that gains or loses count', () => {
     expect(Object.keys(await ids())).toEqual(['local_file.f[0]']);
   });
 
-  // The reader names the file after the id, and a path is replaced on change: a reader that saw the id as unknown would be made again.
+  // The file is named after the id, so a reader that saw the id as unknown would be replaced.
   it('plans what reads a moved resource with its value known, so it stays as it is', async () => {
     await apply(`${suffix()}\n${reader('random_string.s.id')}`);
 

@@ -25,7 +25,7 @@ describe('a replacement its provider refuses at apply', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
-  // The new length is not known at plan, so it is first checked at apply, where it comes to an id that spells no number.
+  // The new length is unknown at plan; at apply it resolves to an id that is not a number.
   it('leaves the old resource in state', async () => {
     await run('resource "random_string" "a" { length = 4 }');
     const before = await new LocalBackend(dir).read();

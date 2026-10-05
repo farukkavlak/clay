@@ -26,7 +26,7 @@ describe('ModuleLoader', () => {
     ]);
   });
 
-  // Handing every resource of a module to one call would overflow the stack on a large one.
+  // Spreading every resource into one call would overflow the stack on a large module.
   it('loads a large module two levels down', async () => {
     const count = 200_000;
     const big = Array.from({ length: count }, (_, i) => `resource "null_resource" "r${i}" {}`).join('\n');

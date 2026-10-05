@@ -5,10 +5,10 @@ import { converted } from './conformValues';
 import { isSequence, itemTypes, unified, Unjoinable } from './unify';
 import { described, unordered, Value, valueOf } from './Value';
 
-/** Given its argument, which may be not known yet in whole or in part, and `refuse`, which says the argument is one it does not take. */
+/** The argument may be wholly or partly unknown. */
 type ClayFunction = (argument: Value, refuse: (message: string) => never) => Value;
 
-/** What a reader counts as one character, so an accented letter or an emoji made of several code points is one. */
+/** Grapheme clusters, so an accented letter or a multi-code-point emoji counts as one. */
 const characters = new Intl.Segmenter('en', { granularity: 'grapheme' });
 
 function sizeOf(data: unknown): number {
@@ -19,7 +19,7 @@ function sizeOf(data: unknown): number {
 
 const COUNTED = new Set(['string', 'list', 'tuple', 'set', 'map', 'object']);
 
-/** A list or a map has its size while an item in it is not known; a set does not, since the member to come may be one it already holds. */
+/** A list or map with an unknown item has a known size; a set does not, since the unknown may duplicate a member. */
 function length(value: Value, refuse: (message: string) => never): Value {
   const takes = value.data !== null && (value.type.kind === 'dynamic' || COUNTED.has(value.type.kind));
   if (!takes) return refuse(`length takes a string, a list, a tuple, a set, a map or an object, not ${described(value)}`);
@@ -28,7 +28,6 @@ function length(value: Value, refuse: (message: string) => never): Value {
   return valueOf(types.number, ExactNumber.parse(String(sizeOf(value.data))));
 }
 
-/** The one type every item can be taken as. */
 function elementOf(name: string, type: Type, refuse: (message: string) => never): Type {
   try {
     return unified(itemTypes(type));
@@ -38,7 +37,7 @@ function elementOf(name: string, type: Type, refuse: (message: string) => never)
   }
 }
 
-/** A list, a tuple or a set as a list or a set of the one type its items share. A set has no order until each member is known, so as a list it is not known until then. */
+/** A set with an unknown member has no order, so converting it to a list gives UNKNOWN. */
 function converter(kind: 'list' | 'set'): ClayFunction {
   const name = `to${kind}`;
 
@@ -56,7 +55,7 @@ const FUNCTIONS = new Map<string, ClayFunction>([
   ['toset', converter('set')],
 ]);
 
-/** The function a call names, ready for its argument. A name no function has, or another number of arguments than one, is refused where the call is written. */
+/** Refuses an unknown function or a wrong argument count at the call's position. */
 export function functionCalled(call: CallNode): (argument: Value) => Value {
   const found = FUNCTIONS.get(call.name);
   if (!found) throw new ConfigError(`There is no function "${call.name}"`, call.position);

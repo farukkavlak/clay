@@ -13,14 +13,12 @@ describe('StateManager', () => {
   let stateManager: StateManager;
 
   beforeEach(async () => {
-    // Create a safe temporary directory for each test
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-state-test-'));
     const backend = new LocalBackend(tmpDir, 'test.state.json');
     stateManager = new StateManager(backend);
   });
 
   afterEach(async () => {
-    // Cleanup
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
 
@@ -44,11 +42,9 @@ describe('StateManager', () => {
 
     await stateManager.write(mockState);
 
-    // Verify file exists
     const fileContent = await fs.readFile(path.join(tmpDir, 'test.state.json'));
     expect(JSON.parse(fileContent.toString('utf8'))).toEqual(mockState);
 
-    // Verify read method
     const readState = await stateManager.read();
     expect(readState).toEqual(mockState);
   });
@@ -64,7 +60,7 @@ describe('StateManager', () => {
     expect(stored.serial).toBe(2);
   });
 
-  // A state read from an older file may now hold what that version cannot, so the file says which Clay wrote it.
+  // The state may now hold what the older version cannot read.
   it('writes the version of this Clay, whatever version the state was read at', async () => {
     const state: State = { version: STATE_VERSION - 1, serial: 0, resources: {} };
 
@@ -99,8 +95,7 @@ describe('StateManager', () => {
   });
 
   it('should throw error for non-ENOENT errors', async () => {
-    // Create a directory with the same name as the state file
-    // This will cause fs.readFile to throw EISDIR (Is a directory)
+    // A directory at the state path makes the read fail with EISDIR.
     const statePath = path.join(tmpDir, 'test.state.json');
     await fs.mkdir(statePath);
 
@@ -132,17 +127,14 @@ describe('StateManager', () => {
     });
 
     it('should re-throw generic errors during lock', async () => {
-      // Use a non-existent directory for workingDir
-      // This causes fs.writeFile to throw ENOENT, which is not EEXIST
-      // So it should be re-thrown
+      // A missing directory makes the write fail with ENOENT, which is not EEXIST, so it is rethrown.
       const invalidBackend = new LocalBackend('/non/existent/path/xyz/123');
       const invalidManager = new StateManager(invalidBackend);
       await expect(invalidManager.lock()).rejects.toThrow(/ENOENT/);
     });
 
     it('should re-throw generic errors during unlock', async () => {
-      // Create a directory at lock path
-      // This causes fs.unlink to throw EISDIR or EPERM
+      // A directory at the lock path makes the unlink fail with EISDIR or EPERM.
       const lockPath = path.join(tmpDir, 'test.state.json.lock');
       await fs.mkdir(lockPath);
 
@@ -155,12 +147,11 @@ describe('StateManager', () => {
       const state1 = { version: STATE_VERSION, serial: 0, resources: { a: { resourceType: 'rt', name: 'n', attributes: {} } } };
       const state2 = { version: STATE_VERSION, serial: 0, resources: {} };
 
-      // First write (no backup expected)
+      // The first write has nothing to back up.
       await stateManager.write(state1);
       const bakPath = path.join(tmpDir, 'test.state.json.bak');
       await expect(fs.stat(bakPath)).rejects.toThrow(/ENOENT/);
 
-      // Second write (backup expected)
       await stateManager.write(state2);
 
       const bakContent = await fs.readFile(bakPath);
@@ -178,7 +169,7 @@ describe('StateManager', () => {
       await stateManager.write(first);
       await stateManager.write(second);
 
-      // A directory where the backup goes makes the copy fail for a reason other than a first write.
+      // A directory at the backup path makes the copy fail with something other than ENOENT.
       const bakPath = path.join(tmpDir, 'test.state.json.bak');
       await fs.rm(bakPath);
       await fs.mkdir(bakPath);
@@ -196,7 +187,7 @@ describe('StateManager', () => {
       const before: State = { version: STATE_VERSION, serial: 0, resources: { 'mock_resource.a': { resourceType: 'mock_resource', name: 'a', attributes: {} } } };
       await stateManager.write(before);
 
-      // A directory in the way of the temporary file makes the write fail before the state file is touched.
+      // A directory at the temp path makes the write fail before the state file is touched.
       await fs.mkdir(path.join(tmpDir, 'test.state.json.tmp'));
 
       await expect(stateManager.write({ version: STATE_VERSION, serial: 5, resources: {} })).rejects.toThrow();

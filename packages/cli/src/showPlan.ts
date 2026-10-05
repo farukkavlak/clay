@@ -4,12 +4,12 @@ import { isDeepStrictEqual, styleText } from 'node:util';
 
 import { typeName } from './typeName';
 
-/** A move changes where state keeps a resource, so a plan that only moves still has work to do. */
+/** A move changes state, so a plan that only moves still has work to do. */
 function changes(action: PlanAction): boolean {
   return action.type !== 'NO_OP' || action.movedFrom !== undefined;
 }
 
-/** What the refresh found is written by an apply, so a plan that found something has work to do. */
+/** Apply writes drift into state, so a plan that found drift has work to do. */
 export function changesNothing(plan: Plan): boolean {
   return !plan.actions.some((action) => changes(action)) && Object.keys(plan.outputs).length === 0 && changedOutside(plan).length === 0;
 }
@@ -29,11 +29,11 @@ function pastTense(actionType: PlanAction['type']): string {
   return styleText('red', 'destroyed');
 }
 
-/** A value known in part shows what is known, and where the rest goes; built piece by piece, since no text a value holds can stand for what is not known. */
+/** Built by hand, since no JSON text can stand for an unknown inside a value. */
 function show(value: unknown): string {
   if (isUnknown(value)) return '(known after apply)';
   if (Array.isArray(value)) return `[${value.map((item) => show(item)).join(',')}]`;
-  // A number is an ExactNumber, which JSON writes itself.
+  // Numbers are ExactNumbers, which JSON.stringify writes exactly.
   if (isRecord(value))
     return `{${Object.entries(value)
       .map(([key, item]) => `${JSON.stringify(key)}:${show(item)}`)
@@ -46,7 +46,7 @@ function showOr(value: unknown, whenAbsent: string): string {
   return value === undefined ? whenAbsent : show(value);
 }
 
-/** One line for an action, as a plan says it will run (`will be created`) or an apply says it ran (`created`). */
+/** `will be created` when `planned`, `created` after apply. */
 export function actionLine(action: PlanAction, planned: boolean): string {
   const address = Address.of(action).toString();
   const will = planned ? 'will be ' : '';
@@ -60,7 +60,7 @@ function without(members: unknown[], others: unknown[]): unknown[] {
   return members.filter((member) => !others.some((other) => isDeepStrictEqual(member, other)));
 }
 
-/** A set's members have no order, so a change to one is the members it loses and gains, each under `indent`. */
+/** Sets have no order, so a change shows the members removed and added. */
 function displayMembers(old: unknown[], next: unknown[], indent: string): void {
   const removed = without(old, next);
   const unchanged = old.length - removed.length;
@@ -70,7 +70,6 @@ function displayMembers(old: unknown[], next: unknown[], indent: string): void {
   if (unchanged > 0) console.log(`${indent}(${unchanged} unchanged)`);
 }
 
-/** Each changed value, a set by its members where the schema names one. */
 function displayChanges(changes: Changes, schema: Schema): void {
   for (const [key, change] of Object.entries(changes)) {
     const isSet = Object.hasOwn(schema, key) && schema[key].type.kind === 'set';
@@ -78,7 +77,7 @@ function displayChanges(changes: Changes, schema: Schema): void {
       console.log(`      ${key}:`);
       displayMembers(change.old, change.new, '        ');
     }
-    // A set not known yet, or one that comes or goes, has no members on one side to compare.
+    // An unknown, added or removed set has no members on one side to compare.
     else console.log(`      ${key}: ${showOr(change.old, '(none)')} -> ${showOr(change.new, '(removed)')}`);
   }
 }
@@ -106,12 +105,11 @@ function displayDrift(drift: Drift[], plan: Plan): void {
   for (const found of drift) displayChangedOutside(found, plan);
 }
 
-/** The members of a set that is known, and nothing for any other output. */
 function membersOf({ type, value }: Output): unknown[] | undefined {
   return type.kind === 'set' && Array.isArray(value) ? value : undefined;
 }
 
-/** A set by its members; a value that stays by its two types, since the values alone would show no change. */
+/** A set by its members, a type-only change by both types (the values alone would look unchanged), anything else as old -> new. */
 function displayOutputChange(name: string, old: Output, next: Output): void {
   const changed = `  ${styleText('yellow', '~')} ${name}`;
   const was = membersOf(old);
@@ -137,7 +135,7 @@ function displayOutputChanges(outputs: OutputChanges): void {
   }
 }
 
-/** A replacement counts once as an add and once as a destroy; a move is counted when there is one. */
+/** A replace counts as one add and one destroy. */
 function displaySummary(actions: PlanAction[]): void {
   const count = (type: PlanAction['type']) => actions.filter((action) => action.type === type).length;
   const replaced = count('REPLACE');
@@ -147,7 +145,6 @@ function displaySummary(actions: PlanAction[]): void {
   console.log(styleText('bold', `\nPlan: ${summary}.`));
 }
 
-/** Shows what a plan would do, the same way whether it was just made, is about to run, or was saved to a file. */
 export function displayPlan(plan: Plan): void {
   if (changesNothing(plan)) {
     console.log(styleText('green', 'No changes. Your infrastructure matches the configuration.'));

@@ -7,13 +7,9 @@ interface TokenSpec {
   regex: RegExp;
 }
 
-/**
- * Inside quotes or a heredoc the text is a string's until `${` opens an interpolation, which reads tokens until its `}`.
- * A `{` inside an interpolation opens a map, so the `}` that closes the map is not taken for the interpolation's.
- */
+/** A `{` inside an interpolation opens a map mode, so the map's `}` does not close the interpolation. */
 type Mode = { kind: 'string' | 'interpolation' | 'map'; opened: Position } | Heredoc;
 
-/** A heredoc ends at a line holding only its name. */
 interface Heredoc {
   kind: 'heredoc';
   opened: Position;
@@ -21,7 +17,7 @@ interface Heredoc {
   closing: RegExp;
 }
 
-/** Every regex is sticky: it matches at the cursor and nowhere else, so nothing slices the input. */
+/** Every regex is sticky, matching only at the cursor, so the input is never sliced. */
 export class Lexer {
   private cursor: number = 0;
   private line: number = 1;
@@ -31,11 +27,10 @@ export class Lexer {
 
   private skip = /\s+|#[^\n]*|\/\/[^\n]*/y;
 
-  // A backslash takes the character after it along, so `\"` does not end the string, and `$${` is text; the parser reads what they mean.
-  // A line break ends the match: a quoted string is closed on its line.
+  // `\"` and `$${` stay raw text; the parser decodes them. A line break ends the match, so a quoted string must close on its line.
   private literal = /(?:[^"\\$\n]|\\[^\n]|\$\$\{|\$(?!\{))+/y;
 
-  // A heredoc's text is taken a line at a time, so each line can be checked for the closing name.
+  // One line at a time, so each line can be checked for the closing name.
   private heredocText = /(?:[^\n$]|\$\$\{|\$(?!\{))*\n?/y;
 
   private heredoc = /<<(-?)([A-Z_a-z][\w-]*)\n/y;
@@ -46,9 +41,9 @@ export class Lexer {
     { type: TokenType.Null, regex: /null(?![\w-])/y },
     { type: TokenType.Identifier, regex: /[A-Z_a-z][\w-]*/y },
     { type: TokenType.OQuote, regex: /"/y },
-    // Looser than a number, so `1.` and `1e` come whole to the parser and are refused as what they are; the dots of `1...` are an ellipsis.
+    // Looser than a number, so the parser refuses `1.` and `1e` whole; the dots of `1...` are an ellipsis.
     { type: TokenType.Number, regex: /\d+(?:\.(?!\.\.)\d*)?(?:[Ee][+-]?\d*)?/y },
-    // Its own token, as in HCL, so a number never swallows the minus of a subtraction.
+    // Its own token, so a number never swallows the minus of a subtraction.
     { type: TokenType.Minus, regex: /-/y },
     { type: TokenType.LBrace, regex: /{/y },
     { type: TokenType.RBrace, regex: /}/y },
@@ -64,7 +59,7 @@ export class Lexer {
     { type: TokenType.Assign, regex: /=/y },
   ];
 
-  // A checkout may write a line break as CRLF, and a heredoc's value must not change with it.
+  // Git may check out CRLF line endings, which must not change a heredoc's value.
   constructor(
     input: string,
     private file: string
@@ -96,11 +91,10 @@ export class Lexer {
     return this.codeToken();
   }
 
-  /** Outside quotes, and inside a `${`: whitespace and comments go, and each token may open or close a mode. */
   private codeToken(): Token | undefined {
     const skipped = this.matchHere(this.skip);
     if (skipped !== undefined) {
-      // Skipped, a comment would let the reference read as if it were not there.
+      // The comment would swallow the closing `}` and quote, so the error would point at the wrong place.
       if (this.mode() && !/^\s/.test(skipped)) throw new ConfigError("A comment cannot sit inside '${'", this.here());
 
       this.advance(skipped);
@@ -129,7 +123,6 @@ export class Lexer {
     return token;
   }
 
-  /** Inside quotes: the closing quote, a `${`, or the text up to either. */
   private stringToken(mode: Mode): Token {
     const position = this.here();
 
@@ -141,7 +134,7 @@ export class Lexer {
 
     if (this.input.startsWith('${', this.cursor)) return this.openInterpolation(position);
 
-    // Nothing matches at a line break, or at a backslash before one or at the end of the input.
+    // No match at a line break, a backslash before one, or the end of the input.
     const text = this.matchHere(this.literal);
     if (text === undefined) throw this.neverClosed(mode);
 
@@ -155,7 +148,6 @@ export class Lexer {
     return { type: TokenType.TemplateInterp, value: '${', position };
   }
 
-  /** `<<NAME` or `<<-NAME`, and the line break its text starts after. */
   private openHeredoc(): Token {
     const position = this.here();
     this.heredoc.lastIndex = this.cursor;
@@ -168,7 +160,6 @@ export class Lexer {
     return { type: TokenType.OHeredoc, value: `<<${flush}${name}`, position };
   }
 
-  /** Inside a heredoc: at the start of a line its closing name, else a `${`, or the text up to one or to the end of the line. */
   private heredocToken(mode: Heredoc): Token {
     const position = this.here();
 
@@ -181,7 +172,7 @@ export class Lexer {
 
     if (this.input.startsWith('${', this.cursor)) return this.openInterpolation(position);
 
-    // Never empty: the cursor is not at the end, and a `${` was taken above.
+    // Never empty: the cursor is not at the end, and a `${` was handled above.
     const text = this.matchHere(this.heredocText) as string;
     this.advance(text);
     return { type: TokenType.StringLit, value: text, position };
@@ -192,7 +183,7 @@ export class Lexer {
     if (innermost) throw this.neverClosed(innermost);
   }
 
-  /** A `}` left out opens a string at the quote meant to close, so the first open `${` is named. */
+  /** A missing `}` makes the closing quote open a new string, so the error names the first open `${`. */
   private neverClosed(innermost: Mode): ConfigError {
     const interpolation = this.modes.find((mode) => mode.kind === 'interpolation');
     if (interpolation) {

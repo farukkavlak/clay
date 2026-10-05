@@ -15,7 +15,6 @@ export class LocalBackend implements StateBackend {
     this.lockFilePath = `${this.filePath}.lock`;
   }
 
-  /** A caller that reports where it looked needs the name this backend settled on. */
   get path(): string {
     return this.filePath;
   }
@@ -36,7 +35,7 @@ export class LocalBackend implements StateBackend {
     try {
       await fs.copyFile(this.filePath, `${this.filePath}.bak`);
     } catch (error) {
-      // A missing state file is a first write, with nothing to back up; any other failure would leave no way back.
+      // No state file yet means nothing to back up; any other failure would leave no backup.
       const { code, message } = error as NodeJS.ErrnoException;
       if (code !== 'ENOENT') throw new Error(`Could not back up ${this.filePath} to ${this.filePath}.bak (${code ?? message}); the state was not written`, { cause: error });
     }
@@ -47,7 +46,7 @@ export class LocalBackend implements StateBackend {
     await fs.rename(tmpPath, this.filePath);
   }
 
-  /** The file system decides, so nothing can slip in between the check and the write. */
+  /** The `wx` flag makes check and write one step, so nothing can slip in between. */
   async writeIfAbsent(state: State): Promise<boolean> {
     try {
       await fs.writeFile(this.filePath, serializeState(state), { encoding: 'utf8', flag: 'wx' });

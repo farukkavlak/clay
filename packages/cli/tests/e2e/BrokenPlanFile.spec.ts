@@ -37,7 +37,6 @@ describe('a plan file that cannot be read', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
-  // Each of these reached the user as whatever Node threw: a JSON parser message, or an ENOENT.
   it.each([
     ['text that is not json', '{oops', 'tfplan.json is not a plan file: the file is not JSON'],
     ['json of the wrong shape', JSON.stringify({ version: PLAN_FILE_VERSION, actions: [] }), 'tfplan.json is not a plan file'],
@@ -53,7 +52,7 @@ describe('a plan file that cannot be read', () => {
     expect(exitCodes).toEqual([1]);
   });
 
-  // Planning again is no answer to a name that is not there, so that one branch says only what is wrong.
+  // "Plan again" does not help with a missing file, so this error says only what is wrong.
   it('says a plan file it cannot find is not there, rather than reporting an open that failed', async () => {
     const output = await applyWith('nosuch.json');
 

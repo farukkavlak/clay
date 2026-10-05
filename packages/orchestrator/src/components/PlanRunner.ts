@@ -21,7 +21,7 @@ function undeclared(address: Address): Error {
   return new Error(`The plan has "${address.toString()}", which the configuration does not declare`);
 }
 
-/** Grouped by `key`, in the order the plan lists them. */
+/** Keeps the plan's order within each group. */
 function groupBy(actions: PlanAction[], key: (address: Address) => string): Map<string, PlanAction[]> {
   const groups = new Map<string, PlanAction[]>();
 
@@ -34,7 +34,7 @@ function groupBy(actions: PlanAction[], key: (address: Address) => string): Map<
   return groups;
 }
 
-/** Runs a plan's actions in dependency order, reporting each step; the state file is rewritten after every action, so a failed run loses nothing done before it. */
+/** State is written after every action, so a failed run loses nothing done before it. */
 export class PlanRunner {
   constructor(
     private stateManager: StateManager,
@@ -50,18 +50,18 @@ export class PlanRunner {
 
     yield { type: 'planned', actions };
 
-    // Outputs belong to a finished run; every write before the last leaves them out.
+    // Outputs belong to a finished run, so every write before the last omits them.
     delete state.outputs;
     if (!(yield* this.applyInOrder(actions, config, graph, state))) return;
     if (!(yield* this.applyDeletes(actions, state))) return;
 
-    // Outputs are read after the last action, so they never name a half-applied resource.
+    // Resolved after the last action, so outputs never reflect a half-applied run.
     state.outputs = this.resolveOutputs(config.mainProgram, state, ModuleAddress.root);
     await this.stateManager.write(state);
     yield { type: 'done', outputs: state.outputs };
   }
 
-  /** An action with no block would be walked past in silence, and one keyed unlike its block would be run as another instance. A plan made from this configuration has neither; a saved plan may. */
+  /** A saved plan may hold an action with no block, which would be silently skipped, or a key unlike its block's, which would run another instance. */
   private checkActionsMatch(actions: PlanAction[], graph: Graph<GraphNode>): void {
     for (const action of actions) {
       const address = Address.of(action);
@@ -73,8 +73,8 @@ export class PlanRunner {
   }
 
   /**
-   * An instance reads `each.value` from what for_each gives now, which is read once what for_each reads has run.
-   * A data source is read again for the run, so a saved plan may name a key for_each no longer gives.
+   * for_each is read again at apply, after what it reads has run.
+   * Data sources are read again too, so a saved plan may name a key for_each no longer gives.
    */
   private readEach(address: Address, block: ResourceBlock, actions: PlanAction[], state: State): void {
     const { forEach } = block;
@@ -86,7 +86,6 @@ export class PlanRunner {
     for (const action of actions) if (typeof action.key !== 'string' || !values.has(action.key)) throw undeclared(Address.of(action));
   }
 
-  /** Creates, updates and replacements follow the graph, so a resource runs after what it reads from. */
   private async *applyInOrder(actions: PlanAction[], config: LoadedConfig, graph: Graph<GraphNode>, state: State): AsyncGenerator<RunEvent, boolean> {
     const blocks = new Map(config.loadedResources.map(({ uniqueId, block }) => [uniqueId, block]));
     const byBlock = groupBy(
@@ -99,7 +98,7 @@ export class PlanRunner {
         const node = graph.getNode(key)!;
 
         if (node.kind === 'module') this.expandCall(node, state);
-        // Only this output: a sibling of it may read a resource a later layer creates.
+        // Only this output: a sibling may read a resource a later layer creates.
         if (node.kind === 'output') for (const instance of this.modules.of(node.module)) this.resolveOutput(node, instance, state);
         if (node.kind === 'resource' && !(yield* this.applyBlock(blocks.get(key)!, node.module, byBlock.get(key) ?? [], state))) return false;
       }
@@ -107,15 +106,12 @@ export class PlanRunner {
     return true;
   }
 
-  /** The count or for_each is read again for the run, as a resource's for_each is: a data source it reads is read again. */
+  /** Read again at apply, as a resource's for_each is, since data sources are read again. */
   private expandCall({ module, block }: Extract<GraphNode, { kind: 'module' }>, state: State): void {
     this.modules.expandCall(module, block, (value, parse, caller) => tryAt(value.position, spell(block), caller, () => parse(this.resolver.resolveValue(value, state, caller))));
   }
 
-  /**
-   * One instance of the module at a time, and in each, the instances of the block.
-   * A saved plan may name an instance of a module the configuration no longer makes, which would be walked past in silence.
-   */
+  /** A saved plan may name a module instance the configuration no longer makes, which would otherwise be silently skipped. */
   private async *applyBlock(block: ResourceBlock, module: ModuleAddress, actions: PlanAction[], state: State): AsyncGenerator<RunEvent, boolean> {
     const blocks = this.modules.of(module).map((instance) => new Address(instance, block.resourceType, block.name));
     const byInstance = groupBy(actions, (address) => address.withoutKey().toString());
@@ -132,7 +128,7 @@ export class PlanRunner {
     return true;
   }
 
-  /** The config no longer knows a removed resource, so its dependencies come from state: a resource goes before what it reads from. */
+  /** Ordered by the dependencies in state, since the config no longer has the resource. */
   private async *applyDeletes(actions: PlanAction[], state: State): AsyncGenerator<RunEvent, boolean> {
     const deletes = new Map(actions.filter((action) => action.type === 'DELETE').map((action) => [Address.of(action).toString(), action]));
     const graph = this.deleteGraph(deletes, state);
@@ -153,12 +149,12 @@ export class PlanRunner {
   }
 
   private async *step(action: PlanAction, state: State): AsyncGenerator<RunEvent, boolean> {
-    // An unchanged resource has nothing to report; it only refreshes what it reads from, and the write that ends the run saves that. A move is a change of its own, reported and saved.
+    // A no-op is not reported; the final write saves its dependencies. A move is reported and saved.
     const quiet = action.type === 'NO_OP' && !action.movedFrom;
     if (!quiet) yield { type: 'started', action };
 
     try {
-      // Moved first, so the action finds the resource under the address it runs for.
+      // Moved first, so the action finds the resource at its new address.
       if (action.movedFrom) moveResource(state, Address.parse(action.movedFrom), Address.of(action));
       await this.executor.execute(action, state);
     } catch (error) {
@@ -173,7 +169,7 @@ export class PlanRunner {
     return true;
   }
 
-  /** A replacement may have deleted before it failed to create; what happened is saved either way. */
+  /** A replace may have deleted before its create failed; state is saved either way. */
   private async saveAfterFailure(state: State): Promise<Error | undefined> {
     try {
       await this.stateManager.write(state);

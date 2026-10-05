@@ -5,7 +5,7 @@ export class NullResource implements ResourceHandler {
   async getSchema(): Promise<Schema> {
     return {
       id: { type: types.string, computed: true, kept: true },
-      // A trigger is any value whose change matters, and Clay turns no number or bool into a string.
+      // `dynamic`, since a trigger may be any value and Clay does not turn numbers or bools into strings.
       triggers: { type: types.map(types.dynamic), required: false },
     };
   }
@@ -16,7 +16,7 @@ export class NullResource implements ResourceHandler {
     return planFromSchema(await this.getSchema(), request);
   }
 
-  // Nothing outside the state holds it, so it is as it was applied.
+  // It exists only in state, so it is as applied.
   async read(prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
     return prior;
   }

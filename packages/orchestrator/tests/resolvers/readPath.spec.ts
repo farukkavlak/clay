@@ -8,7 +8,7 @@ import { inferred, Value, valueOf } from '../../src/Value';
 
 const at = { file: 'main.clay', line: 2, column: 9 };
 
-/** Data as the configuration writes it: a list a tuple, a map an object. */
+/** As the configuration writes it: a list is a tuple and a map an object. */
 const written = (data: unknown): Value => valueOf(inferred(data), data);
 
 const errorOf = (value: Value, path: (string | number)[]): ConfigError => {
@@ -39,7 +39,7 @@ describe('reading a path into a value', () => {
     expect(readPath(written(JSON.parse('{"__proto__": "own"}')), 'var.m', ['__proto__'], at).data).toBe('own');
   });
 
-  // An element's type comes from the collection's, so a set inside a list is still a set.
+  // The element type comes from the collection, so a set inside a list stays a set.
   it('reads an item with the type its place names', () => {
     const groups = valueOf(types.list(types.set(types.string)), [['a']]);
 
@@ -74,7 +74,7 @@ describe('reading a path into a value', () => {
     expect(error.position).toEqual(at);
   });
 
-  // What reads it can check its kind before the apply knows its value.
+  // The reader can check its type before apply knows the value.
   it('reads a value not known yet as nothing yet, with the type it will have', () => {
     const read = () => readPath(valueOf(types.object({ id: types.string }), { id: UNKNOWN }), 'a.b', ['id'], at);
 
@@ -82,7 +82,7 @@ describe('reading a path into a value', () => {
     expect(read).toThrow(expect.objectContaining({ message: 'a.b.id is known only after apply', type: types.string }));
   });
 
-  // The map is what is not known, and the steps into it read one of its strings.
+  // The map is unknown, and the steps into it reach a string.
   it('reads into a value not known yet as the type the steps into it will find', () => {
     const tags = types.object({ tags: types.map(types.list(types.string)) });
     const read = () => readPath(valueOf(tags, { tags: UNKNOWN }), 'a.b', ['tags', 'x', 0], at);

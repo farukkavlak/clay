@@ -23,13 +23,12 @@ import { DependencyGraphBuilder, GraphNode, OutputNode, ValueNode } from './Depe
 import { LoadedResource } from './ModuleLoader';
 import { ResourcePlan, ResourcePlanner } from './ResourcePlanner';
 
-/** What the configuration asks for, with every value resolved against the state or left UNKNOWN. */
 export interface DesiredState {
   resources: DesiredResource[];
   outputs: Record<string, Output>;
 }
 
-/** The deepest module both sit in: `module.a` for `module.a.module.b` and `module.a.module.c`. */
+/** `module.a` for `module.a.module.b` and `module.a.module.c`. */
 function sharedModule(one: ModuleAddress, other: ModuleAddress): ModuleAddress {
   let depth = 0;
   while (depth < one.path.length && depth < other.path.length && one.path[depth].name === other.path[depth].name) depth += 1;
@@ -38,10 +37,8 @@ function sharedModule(one: ModuleAddress, other: ModuleAddress): ModuleAddress {
 }
 
 /**
- * Resolves each resource after the ones it reads from, so a value an earlier action will change is read as the plan knows it, not stale.
- * Each node is resolved once for every instance of its module.
- * Each instance is planned by its provider. One that will be created or changed is kept in `planned` as the provider planned it, so a resource that reads it
- * reads what it will hold: a value planned as UNKNOWN only the apply makes, and any other name is refused.
+ * Resolves resources in dependency order, once per module instance, so a reader sees what the plan will make, not stale state.
+ * Each created or changed instance is stored in `planned` as its provider planned it; a reader gets those values, UNKNOWN included.
  */
 export class DesiredStateBuilder {
   private schemas = new Map<string, Schema>();
@@ -57,7 +54,7 @@ export class DesiredStateBuilder {
     private resourcePlanner: ResourcePlanner
   ) {}
 
-  /** Moves are made in the state it is given, which a plan reads for itself and never writes, and then plans the actions against. The schemas say which values the provider computes. */
+  /** Applies count moves to `state`, a copy the plan never writes, and plans the actions against it. */
   async build(loadedResources: LoadedResource[], graph: Graph<GraphNode>, state: State, schemas: Map<string, Schema>): Promise<DesiredState> {
     this.planned.begin();
     this.schemas = schemas;
@@ -77,7 +74,6 @@ export class DesiredStateBuilder {
     return { resources, outputs };
   }
 
-  /** A call's count or for_each is read in each instance of the module that calls it, and makes its instances there. */
   private planCall({ module, block }: Extract<GraphNode, { kind: 'module' }>, state: State): void {
     this.modules.expandCall(module, block, (value, parse, caller) => this.readAt(value, block, caller, state, parse));
   }
@@ -96,7 +92,6 @@ export class DesiredStateBuilder {
     return planned;
   }
 
-  /** One desired resource for each instance the block makes in one instance of its module: one with neither count nor for_each, and one per index or key with either. */
   private async planBlock(address: Address, block: ResourceBlock, dependencies: string[], state: State): Promise<DesiredResource[]> {
     const key = address.toString();
 
@@ -112,7 +107,7 @@ export class DesiredStateBuilder {
     return planned;
   }
 
-  /** The count or for_each, read before any instance is, so it has no key. */
+  /** For count and for_each, read before any instance exists. */
   private readAt<T>(value: AttributeValue, block: Statement, context: Context, state: State, read: (value: Value) => T): T {
     return tryAt(value.position, spell(block), context, () => read(this.resolveOrUnknown(value, state, context)));
   }
@@ -135,8 +130,8 @@ export class DesiredStateBuilder {
   }
 
   /**
-   * Made before anything reads the instance, so a reader finds it where the configuration now names it and sees its value.
-   * Two places in state it may have been kept is a guess between two resources, so it is refused, not made.
+   * Moves the instance before anything reads it, so readers find it at its new address.
+   * Two possible old addresses would be a guess, so that is refused.
    */
   private moveIn(address: Address, state: State): string | undefined {
     if (Object.hasOwn(state.resources, address.toString())) return undefined;
@@ -153,8 +148,8 @@ export class DesiredStateBuilder {
   }
 
   /**
-   * The graph links blocks; state keeps what each instance read, so a delete runs after every instance of what it read from. Each block was planned before, so its keys are known.
-   * Only the instances in the same instance of the module both sit in as `reader`: `module.a[0]` reads from `module.a[0]`, never from `module.a[1]`.
+   * The graph links blocks, but state records instances, so a delete can run after every instance it read from.
+   * Only instances in the reader's own module instance: `module.a[0]` reads from `module.a[0]`, never `module.a[1]`.
    */
   private instancesOf(blocks: string[], reader: ModuleAddress): string[] {
     return blocks.flatMap((block) => {
@@ -181,7 +176,7 @@ export class DesiredStateBuilder {
     else this.planOutput(node, instance, state, rootOutputs);
   }
 
-  /** Resolved and held to its type so an error in it is found at plan, though nothing reads it; a reader resolves it again where it reads it. */
+  /** Resolved so an error is found at plan even if nothing reads it; each reader resolves it again. */
   private planVariable(node: ValueNode, instance: ModuleAddress, state: State): void {
     if (node.value === undefined) return;
 
@@ -191,7 +186,6 @@ export class DesiredStateBuilder {
     tryAt(node.position, node.declaration, contextIn(node.context, instance), () => givenTo(node.name, value, declared, read));
   }
 
-  /** Gives an output its value, known or not yet, so the resources reading it can be planned. */
   private planOutput(node: OutputNode, instance: ModuleAddress, state: State, rootOutputs: Record<string, Output>): void {
     const value = this.resolveNode(node, node.value, instance, state);
     this.scopeManager.setOutput(instance.toString(), node.name, value);
@@ -199,7 +193,6 @@ export class DesiredStateBuilder {
     if (instance.isRoot()) rootOutputs[node.name] = { value: value.data, type: value.type };
   }
 
-  /** Resolves config values with their types; what an apply has to produce first stays UNKNOWN. */
   private resolveForPlan(block: ResourceBlock, state: State, context: Context): Record<string, Value> {
     const resolved: Record<string, Value> = {};
     const declaration = spell(block);
@@ -214,7 +207,7 @@ export class DesiredStateBuilder {
     return tryAt(node.position, node.declaration, context, () => this.resolveOrUnknown(value, state, context));
   }
 
-  /** An index past a count, or a key for_each does not give, is refused before anything is read, since an instance not made yet reads as unknown rather than as missing. */
+  /** A bad index or key is refused first, since an instance not made yet would read as unknown, not missing. */
   private resolveOrUnknown(value: AttributeValue, state: State, context: Context): Value {
     for (const reference of this.scanner.referencesIn(value, context)) {
       if (reference.kind === 'count' || reference.kind === 'each') continue;

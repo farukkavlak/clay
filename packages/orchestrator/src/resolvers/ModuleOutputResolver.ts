@@ -13,7 +13,7 @@ export class ModuleOutputResolver {
     private modules: ModuleInstances
   ) {}
 
-  /** The output the reference reads, of the instance its index names, and the steps still to take into it. */
+  /** Returns the output and the steps still to take into it. */
   resolve(reference: ModuleOutputReference, context: Context, position?: Position): { value: Value; path: Step[] } {
     const caller = moduleOf(context);
     const { key, output, path } = readCall(reference, this.modules.repetitionOf(caller.child(reference.module).withoutKeys()), position);

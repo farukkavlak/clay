@@ -1,4 +1,4 @@
-// Node 22.13, the engines floor, has JSON.rawJSON and hands a reviver each value's source; the es2022 lib typings have neither.
+// Node 22.13, the engines floor, has JSON.rawJSON and the reviver's source; the es2022 lib typings have neither.
 declare global {
   interface JSON {
     rawJSON(text: string): unknown;
@@ -6,25 +6,25 @@ declare global {
   }
 }
 
-/** JSON's number, with leading zeros allowed, since a configuration may write `007`. */
+/** JSON's number syntax plus leading zeros, since a configuration may write `007`. */
 const NUMERAL = /^(-)?(\d+)(?:\.(\d+))?(?:[Ee]([+-]?\d+))?$/;
 
-/** Bounds the exponent, which would round past 2^53, and the length of the plain form. */
+/** Caps the exponent, which would round past 2^53, and the length of the plain form. */
 const MAX_PLACES = 1000;
 
-/** A text or a value `ExactNumber` refuses; its own class, so a caller can catch it and let any other failure through. */
+/** Its own class, so a caller can catch it and rethrow anything else. */
 export class NumberError extends Error {
   override name = 'NumberError';
 }
 
-/** A refused text is shown back, but a number of a thousand digits is not worth reading twice. */
+/** Shortens a long number in an error message. */
 function shown(text: string, quote = ''): string {
   return text.length <= 40 ? `${quote}${text}${quote}` : `${quote}${text.slice(0, 20)}…${quote} (${text.length} characters)`;
 }
 
 /**
- * A number kept exactly as it was written. JavaScript's own numbers round past 2^53 and in most decimals.
- * The value is `digits × 10^exponent`, with no zero at either end of `digits`, so one number has one form and compares equal however it was written.
+ * A number kept exactly as written; JavaScript numbers round past 2^53 and in most decimals.
+ * The value is `digits × 10^exponent` with no zero at either end of `digits`, so each number has one form and compares equal however it was written.
  */
 export class ExactNumber {
   private constructor(
@@ -67,7 +67,6 @@ export class ExactNumber {
     return point > 0 ? `${this.digits.slice(0, point)}.${this.digits.slice(point)}` : `0.${'0'.repeat(-point)}${this.digits}`;
   }
 
-  /** Below zero, zero or above zero, as this number is less than, equal to or greater than `other`. */
   compare(other: ExactNumber): number {
     const sign = this.sign() - other.sign();
     if (sign !== 0) return Math.sign(sign);
@@ -81,7 +80,7 @@ export class ExactNumber {
     return this.negative ? -1 : 1;
   }
 
-  /** The number with more places before its first digit is larger; with as many, the digits decide, read from the first, as no zero ends them. */
+  /** More integer places means larger; with as many, the digits decide, since none has trailing zeros. */
   private compareSize(other: ExactNumber): number {
     const places = this.digits.length + this.exponent - (other.digits.length + other.exponent);
     if (places !== 0) return Math.sign(places);
@@ -90,7 +89,7 @@ export class ExactNumber {
     return this.digits < other.digits ? -1 : 1;
   }
 
-  /** For whoever needs a JavaScript number, as a provider sizing something does; refused rather than rounded. `name` says what the number is. */
+  /** Throws rather than rounds; `name` labels the error. */
   toSafeInteger(name?: string): number {
     const refused = (problem: string) => new NumberError(`${name ? `${name}: ` : ''}${shown(this.toString())} ${problem}`);
     if (this.exponent < 0) throw refused('is not a whole number');
@@ -101,14 +100,14 @@ export class ExactNumber {
     return value;
   }
 
-  /** Written into JSON as the number it is, so a state or a plan file keeps it exactly. */
+  /** Written as a raw JSON number, so state and plan files keep it exactly. */
   toJSON(): unknown {
     return JSON.rawJSON(this.toString());
   }
 
-  /** JSON text with every number in it kept exactly; a file that holds numbers of its own turns those back itself. */
+  /** Every number becomes an ExactNumber; a caller turns its own counters back into plain numbers. */
   static readJSON(text: string): unknown {
-    // A number is a primitive, and a primitive always comes with its source.
+    // The reviver gets a source for every primitive, so a number always has one.
     return JSON.parse(text, (_, value, context) => (typeof value === 'number' ? ExactNumber.parse(context.source as string) : value));
   }
 }

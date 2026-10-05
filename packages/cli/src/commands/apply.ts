@@ -14,7 +14,7 @@ import { actionLine, changesNothing, displayPlan } from '../showPlan';
 import { exists } from '../exists';
 import { refreshOption } from '../refreshOption';
 
-/** A replacement counts once as an add and once as a destroy, and a move when there is one, as the plan summary counts them, and what was forgotten. */
+/** Counts as the plan summary does: a replace is one add and one destroy. */
 function summarize(applied: PlanAction[], forgotten: number): string {
   const count = (type: PlanAction['type']) => applied.filter((action) => action.type === type).length;
   const replaced = count('REPLACE');
@@ -23,7 +23,7 @@ function summarize(applied: PlanAction[], forgotten: number): string {
   return `${count('CREATE') + replaced} added, ${count('UPDATE')} changed, ${count('DELETE') + replaced} destroyed${moved > 0 ? `, ${moved} moved` : ''}${forgotten > 0 ? `, ${forgotten} forgotten` : ''}`;
 }
 
-/** Resources deleted outside Clay that an apply drops from state. One the configuration still has is made again, under the same address, since what is gone is never moved. */
+/** Resources deleted outside Clay that apply drops from state without an action. */
 function forgotten(plan: Plan): number {
   const acted = new Set(plan.actions.map((action) => Address.of(action).toString()));
 
@@ -80,7 +80,7 @@ async function executeApply(cwd: string, configPath: string, files: ConfigFiles,
   await runAndReport(orchestrator.runPlan(planned, configContent), forgotten(planned));
 }
 
-/** A plan file the user names is their file, so what is wrong with it is said with the file's name and what to do about it. */
+/** Errors name the user's file and say what to do. */
 async function readPlanFile(planFileArg: string, files: ConfigFiles): Promise<PlanFile> {
   let content: string;
 
@@ -99,7 +99,6 @@ async function readPlanFile(planFileArg: string, files: ConfigFiles): Promise<Pl
   }
 }
 
-/** A saved plan carries the configuration it was made from, so it runs against that and not against whatever is on disk now. */
 function filesInPlan(planFile: PlanFile): ConfigFiles {
   return new InMemoryFiles({ ...planFile.modules, [CONFIG_FILE]: planFile.config });
 }
@@ -128,7 +127,7 @@ export function createApplyCommand() {
 
       try {
         if (planFileArg && !planFileArg.startsWith('-')) {
-          // A saved plan read each resource when it was made, or chose not to; applying it reads nothing.
+          // The saved plan already chose whether to refresh.
           if (options.refresh !== undefined) throw new Error('--refresh is for a plan: a saved plan is applied as it was made');
           const planData = await readPlanFile(planFileArg, files);
 

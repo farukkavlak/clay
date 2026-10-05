@@ -13,7 +13,7 @@ const failingWith = (thrown: Error): ConfigFiles => ({
 });
 
 describe('describeError', () => {
-  // The file was read once to find the error; it may be gone or broken by the time the error is shown.
+  // The file may be gone or broken by the time the error is shown.
   it('still says what went wrong and where when the file cannot be read again', () => {
     const files = failingWith(Object.assign(new Error('ELOOP: too many symbolic links'), { code: 'ELOOP' }));
 

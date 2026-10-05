@@ -6,7 +6,7 @@ import { styleText } from 'node:util';
 import { exists } from '../exists';
 import { stateFile } from '../stateFile';
 
-/** As JSON each output comes with its type, for a script to tell a set from a list; a reader gets the values. */
+/** JSON includes each type, so a script can tell a set from a list. */
 function displayOutputs(outputs: Record<string, Output>, json: boolean): void {
   if (json) {
     console.log(JSON.stringify(outputs, null, 2));

@@ -13,7 +13,7 @@ import { createPlanCommand } from '../../src/commands/plan';
 import { createStateCommand } from '../../src/commands/state';
 import { start } from './start';
 
-/** The line and column `needle` is first written at, as an error would point at it. */
+/** Where an error would point at the first `needle`. */
 const placeOf = (config: string, needle: string) => {
   const before = config.slice(0, config.indexOf(needle)).split('\n');
   return { line: before.length, column: before.at(-1)!.length + 1 };
@@ -28,7 +28,6 @@ describe('a resource with for_each', () => {
     return engine;
   };
 
-  /** Applies the config and returns what it did, in order. */
   const apply = async (config: string): Promise<RunEvent[]> => {
     const events: RunEvent[] = [];
     for await (const event of start(newOrchestrator(), config)) {
@@ -38,7 +37,6 @@ describe('a resource with for_each', () => {
     return events;
   };
 
-  /** One file for each key, named after the key and holding its value. */
   const files = (forEach: string, content = '${each.value}') => `
     resource "local_file" "f" {
       for_each = ${forEach}
@@ -105,7 +103,7 @@ describe('a resource with for_each', () => {
     expect(await read('web.txt')).toBe('port 80');
   });
 
-  // An object lists a key like "1" first, so a plan in the written order would differ from one map to the next.
+  // An object lists a key like "1" first, so the written order is not stable.
   it('plans the instances in the order of their keys, whatever order they are written in', async () => {
     expect(await planned(files('{ b = "x", a = "x", "10" = "x" }'))).toEqual([
       ['CREATE', 'f', '10'],
@@ -178,7 +176,7 @@ describe('a resource with for_each', () => {
     }
   `;
 
-  // Only the instance that changes is unknown; the one read is in state, so its reader has nothing to change.
+  // Only the changing instance is unknown; the one read is in state, so its reader does not change.
   it('plans a reader of an instance that stays as it is with nothing to do, when another instance changes', async () => {
     await apply(withReader('80'));
 
@@ -208,7 +206,7 @@ describe('a resource with for_each', () => {
     expect(deleted).toEqual(['reader', 'f', 'f']);
   });
 
-  // No key stands for the resource as count's [0] does, so nothing is moved; `clay state mv` keeps it.
+  // No key matches the bare resource as count's [0] does, so nothing moves; `clay state mv` can.
   it.each([
     ['one with neither', '', undefined],
     ['one with count', 'count = 1', 0],
@@ -292,7 +290,7 @@ describe('a resource with for_each', () => {
     ['an output', 'output "o" { value = "${each.key}" }', 'each.key'],
     ['the for_each it would come from', 'resource "local_file" "a" { for_each = ["${each.key}"] path = "a" content = "a" }', 'each.key'],
     ['a data source', 'data "local_file" "d" { path = "${each.key}" }', 'each.key'],
-    // The output is not read at plan time, since it waits on a value only an apply makes.
+    // Not resolved at plan, since it waits on a value only the apply knows.
     ['an output that also reads a value still to come', 'resource "random_string" "s" { length = 4 }\noutput "o" { value = "${each.key}-${random_string.s.id}" }', 'each.key'],
   ])('refuses each in %s, where it is written', async (_, config, reference) => {
     const error = await planError(config);
@@ -324,7 +322,7 @@ describe('a resource with for_each', () => {
     ['a list with a number in it', '["a", 1]', 'for_each is a list of strings, but item [1] is a number'],
     ['a list with a string twice', '["a", "b", "a"]', 'for_each holds "a" twice; each instance needs a key of its own'],
     ['a value only an apply makes', 'random_string.s.id', 'for_each must be known when planning: it reads a value only an apply makes'],
-    // A list's items are its keys, so one still to come leaves an instance without a name.
+    // A list's items are its keys, so an unknown item leaves an instance without a key.
     [
       'a list with an item only an apply makes',
       '["a", random_string.s.id]',

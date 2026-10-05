@@ -9,7 +9,7 @@ import { InMemoryFiles, Orchestrator } from '../src/index';
 import { apply } from './apply';
 import { str } from './ast';
 
-/** Fresh per test: apply writes into whatever this returns, so one shared object would carry a test's resources into the next. */
+/** Fresh per test: apply writes into what this returns, so a shared object would leak resources between tests. */
 const readMock = vi.fn();
 const writeMock = vi.fn().mockResolvedValue(undefined);
 
@@ -34,7 +34,6 @@ vi.mock('@clay/state', () => {
   return { StateManager, LocalBackend };
 });
 
-// Mock Planner
 vi.mock('@clay/planner', async () => ({
   ...(await vi.importActual<object>('@clay/planner')),
   plan: vi.fn(() => []),
@@ -110,7 +109,6 @@ describe('Orchestrator - Module Loading', () => {
 
     files['modules/vpc/main.clay'] = vpcConfig;
 
-    // Mock Plan to return expected actions
     (plan as Mock).mockReturnValue([
       {
         type: 'CREATE',
@@ -125,7 +123,6 @@ describe('Orchestrator - Module Loading', () => {
 
     await apply(orchestrator, rootConfig);
 
-    // Check StateManager write using the exposed mock
     expect(writeMock).toHaveBeenCalled();
 
     const stateArg = writeMock.mock.calls[0][0];
@@ -143,10 +140,8 @@ describe('Orchestrator - Module Loading', () => {
     files['app/main.clay'] = appConfig;
     files['app/db/main.clay'] = dbConfig;
 
-    // Reset mock calls from previous tests or setup
     writeMock.mockClear();
 
-    // Mock Plan to return expected actions for nested module
     (plan as Mock).mockReturnValue([
       {
         type: 'CREATE',
@@ -170,7 +165,6 @@ describe('Orchestrator - Module Loading', () => {
   });
 
   it('should handle deep nesting (5 levels)', async () => {
-    // level1 -> level2 -> level3 -> level4 -> level5 (resource)
     const config1 = `module "L2" { source = "./L2" }`;
     const config2 = `module "L3" { source = "./L3" }`;
     const config3 = `module "L4" { source = "./L4" }`;
@@ -182,9 +176,7 @@ describe('Orchestrator - Module Loading', () => {
     files['L2/L3/L4/main.clay'] = config4;
     files['L2/L3/L4/L5/main.clay'] = config5;
 
-    // Reset mock calls
     writeMock.mockClear();
-    // Mock Plan to return expected actions
     (plan as Mock).mockReturnValue([
       {
         type: 'CREATE',
@@ -241,7 +233,7 @@ describe('Orchestrator - Module Loading', () => {
     });
   });
 
-  // A path is joined with forward slashes, so a backslash would be part of a directory's name.
+  // Paths are joined with forward slashes, so a backslash would be part of a directory name.
   it('refuses a source spelled with a backslash', async () => {
     await expect(apply(orchestrator, String.raw`module "app" { source = ".\\app" }`)).rejects.toMatchObject({
       message: String.raw`module "app" has source ".\app", which is not a local path: a source starts with ./ or ../`,

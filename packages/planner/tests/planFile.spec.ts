@@ -3,27 +3,26 @@ import { describe, expect, it } from 'vitest';
 
 import { parsePlanFile, Plan, serializePlan } from '../src/index';
 
-// Each resource type the tests hold, with nothing in it: these tests are about the file, not about what a schema says.
+// Empty schemas: these tests are about the file, not the schemas.
 const schemas = { null_resource: {}, x: {} };
 
 const emptyPlan: Plan = { serial: 0, actions: [], outputs: {}, prevRun: {}, prior: {}, schemas };
 
 const aPlanFile = (plan: Plan = emptyPlan) => serializePlan(plan, 'resource "a" "b" {}', { 'm/main.clay': '' });
 
-/** The file as JSON, for a test that has to break one of its fields. */
 const fields = () => JSON.parse(aPlanFile()) as Record<string, unknown>;
 
 const read = (content: unknown) => () => parsePlanFile(typeof content === 'string' ? content : JSON.stringify(content), 'tfplan.json');
 
 describe('reading a plan file', () => {
-  // Built once: `serializePlan` stamps the time, so two calls disagree whenever the clock ticks between them.
+  // Built once: `serializePlan` stamps the time, so two calls can differ.
   it('reads back what it wrote', () => {
     const written = aPlanFile();
 
     expect(parsePlanFile(written, 'tfplan.json')).toEqual(JSON.parse(written));
   });
 
-  // A value not known yet has no form in JSON, so it has to come back as itself and not as whatever it was written as.
+  // UNKNOWN has no JSON form, so it must come back as UNKNOWN, not as its placeholder.
   it('reads a value that is not known yet back as one, in an action and in an output', () => {
     const plan: Plan = {
       serial: 0,
@@ -76,7 +75,7 @@ describe('reading a plan file', () => {
     expect(change.new).toEqual(lookalike);
   });
 
-  // A saved action carries its attributes as parsed; a value in them is exact, while where it was written, and an index into a list, stay JavaScript numbers.
+  // Values in saved attributes stay exact; positions and indexes become plain numbers.
   it('reads the positions and indexes in saved attributes as numbers, and the values in them exactly, however deep', () => {
     const at = { file: 'main.clay', line: 3, column: 7 };
     const plan: Plan = {
@@ -125,7 +124,7 @@ describe('reading a plan file', () => {
     expect(read.actions[0].attributes).toEqual(plan.actions[0].attributes);
   });
 
-  // A value known in part keeps what is known, exactly, and says where the rest is.
+  // The known parts stay exact, and the unknown parts come back where they were.
   it('reads a value known in part back as it was written', () => {
     const tags = { env: UNKNOWN, list: ['a', UNKNOWN], size: ExactNumber.parse('12345678901234567890'), unknown: [['env']] };
     const plan: Plan = { serial: 0, actions: [], outputs: { tags: { old: undefined, new: { value: tags, type: types.dynamic } } }, prevRun: {}, prior: {}, schemas };
@@ -387,7 +386,7 @@ describe('reading a plan file', () => {
     expect(read('{oops')).toThrow(expect.objectContaining({ cause: expect.any(SyntaxError) }));
   });
 
-  // A plan file from an older Clay is the one a user is most likely to meet, and it deserves to be told apart from a broken one.
+  // An older plan file is the most likely bad file, so it gets its own message.
   it('says so when the plan was written by another version', () => {
     expect(read({ ...fields(), version: '4.0' })).toThrow('tfplan.json was written by another Clay, plan version 4.0');
   });

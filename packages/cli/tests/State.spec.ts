@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createStateCommand } from '../src/commands/state';
 
-// Only the manager: the helpers that change a state in memory run as they are.
+// Only the manager; the in-memory state helpers stay real.
 vi.mock('@clay/state', async (importOriginal) => ({ ...(await importOriginal<typeof import('@clay/state')>()), StateManager: vi.fn() }));
 
 describe('CLI: state command', () => {
@@ -104,7 +104,6 @@ describe('CLI: state command', () => {
           },
         })
       );
-      // test.t1 should be gone
       const writtenState = writeMock.mock.calls[0][0];
       expect(writtenState.resources['test.t1']).toBeUndefined();
       expect(unlockMock).toHaveBeenCalled();
@@ -161,7 +160,7 @@ describe('CLI: state command', () => {
       expect(consoleErrorSpy).toHaveBeenCalledWith(expect.anything(), expect.stringContaining('Source resource not found: test.missing'));
       expect(processExitSpy).toHaveBeenCalledWith(1);
       expect(writeMock).not.toHaveBeenCalled();
-      expect(unlockMock).toHaveBeenCalled(); // Should unlock even on error
+      expect(unlockMock).toHaveBeenCalled();
     });
 
     it('should fail if destination already exists', async () => {

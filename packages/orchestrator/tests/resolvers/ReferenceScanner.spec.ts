@@ -24,7 +24,7 @@ describe('ReferenceScanner', () => {
     ]);
   });
 
-  // The graph holds the block once for every instance of its module; the plan reads the one in the instance it is in.
+  // The graph holds the block once for all module instances; the plan reads the one in its own instance.
   it('keys a resource read in an instance of a module by its block, and names that block in the instance', () => {
     const inInstance = new Address(ModuleAddress.root.child('app', 0), 'resource', 'main');
 
@@ -39,7 +39,7 @@ describe('ReferenceScanner', () => {
     expect(keysOf(scanner.referencesIn({ type: 'Reference', value: ['var', 'x'] }, inInstance))).toEqual(['module.app[0].vars:x']);
   });
 
-  // The graph has one node for the output, shared by every instance of its module; the plan reads the output of the instance the index names, in the instance it is read in.
+  // One graph node per output, shared by all instances; the plan reads the instance the index names.
   it('keys an output read in an instance of a module by its node, and names the output of the instance read and the call that makes it', () => {
     const modules = new ModuleInstances();
     modules.declare(ModuleAddress.root.child('app').child('db'), 'count');
@@ -54,7 +54,7 @@ describe('ReferenceScanner', () => {
     });
   });
 
-  // `.web` and `["web"]` are one step, so under for_each the first name is the key and the output follows it.
+  // `.web` and `["web"]` are the same step, so under for_each the first name is the key.
   it('reads the first step of a module called with for_each as its key', () => {
     const modules = new ModuleInstances();
     modules.declare(ModuleAddress.root.child('db'), 'for_each');

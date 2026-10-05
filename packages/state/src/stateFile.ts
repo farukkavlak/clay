@@ -6,7 +6,7 @@ function checkOutputs(outputs: unknown, say: (problem: string) => never): void {
   for (const [name, output] of Object.entries(outputs)) if (!isOutput(output)) say(`its output "${name}" is not a value with its type`);
 }
 
-/** Only what the engine goes on to trust: a state is read to be planned against, and a wrong shape plans the wrong actions. */
+/** Checks what the engine relies on; a wrong shape would plan wrong actions. */
 function check(state: unknown, source: string): asserts state is State {
   const say: (problem: string) => never = (problem) => {
     throw new Error(`${source} is not valid state: ${problem}`);
@@ -28,7 +28,7 @@ export function serializeState(state: State): string {
   return JSON.stringify(state, null, 2);
 }
 
-/** The state's own counters are JavaScript numbers; every other number in it is a value, kept exactly. */
+/** The state's counters are plain numbers; every other number is a value and stays exact. */
 function readState(content: string): unknown {
   const read = ExactNumber.readJSON(content);
 
@@ -39,7 +39,6 @@ function readState(content: string): unknown {
   return read;
 }
 
-/** `source` names the state in the error, since a backend knows where it read from and this does not. */
 export function parseState(content: string, source: string): State {
   let parsed: unknown;
 

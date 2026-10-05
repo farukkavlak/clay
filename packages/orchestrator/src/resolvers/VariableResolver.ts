@@ -26,13 +26,13 @@ export class VariableResolver {
       return this.typed(reference.name, declared, this.referenceResolver.resolveValue(declared.value, state, where), where, state);
     } catch (error) {
       if (!(error instanceof UnresolvedReferenceError)) throw error;
-      // The type it has is the variable's; what reads into the variable reads the type its steps find.
+      // The unknown takes the variable's type, narrowed by the reference's steps.
       const type = this.typed(reference.name, declared, valueOf(error.type, UNKNOWN), where, state).type;
       throw new UnresolvedReferenceError(error.message, typeInto(type, reference.path));
     }
   }
 
-  /** A value of the wrong type is the mistake of where it is written, not of where it is read, so it is refused there. */
+  /** A wrong type is reported where the value is written, not where it is read. */
   private typed(name: string, declared: VariableValue, resolved: Value, where: Context, state: State): Value {
     try {
       return givenTo(name, resolved, declared, (node) => this.referenceResolver.resolveValue(node, state, where));

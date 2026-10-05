@@ -14,7 +14,7 @@ describe('a state that cannot be saved after a failed action', () => {
   let cwd: string;
   let printed: string[];
 
-  // The command fails, and leaves a directory where the state would be written next.
+  // The command fails and leaves a directory where the state file would go.
   const config = () => `
     resource "command_exec" "breaks" {
       command = "mkdir ${path.join(dir, 'clay.state.json.tmp')}; exit 1"

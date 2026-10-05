@@ -3,7 +3,6 @@ import { spellSteps, Step } from '@clay/parser';
 
 import { article } from './Value';
 
-/** Types no one type can hold the values of, said as the reason. */
 export class Unjoinable extends Error {
   constructor(message: string) {
     super(message);
@@ -23,7 +22,6 @@ const FAMILIES: Record<Type['kind'], string> = {
   object: 'mapping',
 };
 
-/** Whether a value of the kind is a list, a set or a tuple. */
 export function isSequence(kind: Type['kind']): boolean {
   return FAMILIES[kind] === 'sequence';
 }
@@ -32,7 +30,7 @@ function unjoinable(reason: string, at: Step[]): Unjoinable {
   return new Unjoinable(`cannot join ${reason} into one type${at.length > 0 ? `, at ${spellSteps(at)} in each item` : ''}`);
 }
 
-/** A string takes a number or a boolean as its text, so it holds both; a number and a boolean alone have no text in common, which is most often a mistake. */
+/** A string can hold numbers and bools as text; a number with a bool and no string is most often a mistake, so it is refused. */
 function primitive(found: readonly Type[], at: Step[]): Type {
   const kinds = new Set(found.map((type) => type.kind));
   if (kinds.size === 1) return found[0];
@@ -41,7 +39,6 @@ function primitive(found: readonly Type[], at: Step[]): Type {
   throw unjoinable('a number and a boolean', at);
 }
 
-/** The type of each item a value of `type` holds. */
 export function itemTypes(type: Type): readonly Type[] {
   if (type.kind === 'tuple') return type.elements;
   if (type.kind === 'object') return Object.values(type.attributes);
@@ -53,7 +50,7 @@ type Join = (found: readonly Type[], at: Step[]) => Type;
 
 type Tuple = Extract<Type, { kind: 'tuple' }>;
 
-/** Tuples of one length stay a tuple, position by position; anything else is a list of what every item is, or a set where one is a set. */
+/** Tuples of one length stay a tuple, unified by position; anything else becomes a list, or a set if any is a set. */
 function sequence(found: readonly Type[], at: Step[], join: Join): Type {
   const tuples = found.filter((type): type is Tuple => type.kind === 'tuple');
   const { length } = tuples[0]?.elements ?? [];
@@ -76,7 +73,7 @@ function sequence(found: readonly Type[], at: Step[], join: Join): Type {
 
 type ObjectType = Extract<Type, { kind: 'object' }>;
 
-/** Objects with other names are most often a name misspelled, so they are refused rather than taken as a map. */
+/** Objects with different names usually mean a typo, so they are refused rather than unified as a map. */
 function objects(found: readonly ObjectType[], at: Step[], join: Join): Type {
   const names = Object.keys(found[0].attributes);
   for (const type of found) {
@@ -108,10 +105,7 @@ function mapping(found: readonly Type[], at: Step[], join: Join): Type {
   );
 }
 
-/**
- * The one type values of each of `found` can all be taken as, or `Unjoinable`. A value whose type nothing names yet, not known or null, takes any.
- * `at` is the steps to these types inside the items being joined, for the message.
- */
+/** Throws `Unjoinable`. `dynamic` (an unknown or a null) fits any type. `at` locates the types for the message. */
 export function unified(found: readonly Type[], at: Step[] = []): Type {
   const named = found.filter((type) => type.kind !== 'dynamic');
   if (named.length === 0) return types.dynamic;

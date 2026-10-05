@@ -11,12 +11,12 @@ import { COUNT_INDEX_OUTSIDE, eachOutside, readCall, readInstance } from '../res
 import { Reference, ReferenceScanner } from '../resolvers/ReferenceScanner';
 import { LoadedModule, LoadedResource } from './ModuleLoader';
 
-/** Every node sits in a module, as the configuration writes it, and runs once for each instance of it; a module call sits in the module that calls it. */
+/** The module as written, not an instance; a node runs once per instance. A module call sits in its caller. */
 interface InModule {
   module: ModuleAddress;
 }
 
-/** `context` is where the value is read, not the module that declares it: a module input is read in the call. */
+/** `context` is where the value is read, not where it is declared: a module input is read in the call. */
 export interface ValueNode extends InModule {
   name: string;
   value: AttributeValue | undefined;
@@ -25,7 +25,7 @@ export interface ValueNode extends InModule {
   declaration: string;
 }
 
-/** An output always has a value; a variable may have none, until a call gives it one. */
+/** An output always has a value; a variable may not until a call gives it one. */
 export type OutputNode = ValueNode & { value: AttributeValue };
 
 export type GraphNode =
@@ -34,7 +34,7 @@ export type GraphNode =
   | ({ kind: 'output' } & OutputNode)
   | ({ kind: 'module'; block: ModuleBlock } & InModule);
 
-/** A node by its address, `module.m.var.x`; a resource's key already is one, and a key is never taken apart. */
+/** `module.m.var.x`; a resource's key already is its address. */
 function spellNode(key: string, node: GraphNode): string {
   if (node.kind === 'resource') return key;
   if (node.kind === 'module') return node.module.child(node.block.name).toString();
@@ -47,7 +47,7 @@ function inputNames(attributes: Record<string, AttributeValue>): string[] {
   return Object.keys(attributes).filter((name) => name !== 'source');
 }
 
-/** `count.index` and `each.key` read the instance being made, so only a block that makes instances of that kind knows them, and a module's inputs where its call does. */
+/** `count.index` and `each.*` are valid only in a block, or a module call's inputs, with the matching repetition. */
 function checkInstanceReference(reference: Extract<Reference, { kind: 'count' | 'each' }>, repetition: Repetition | undefined): void {
   if (reference.kind === 'count' && repetition !== 'count') throw placed(COUNT_INDEX_OUTSIDE, reference.position);
   if (reference.kind === 'each' && repetition !== 'for_each') throw placed(eachOutside(reference.name), reference.position);
@@ -60,14 +60,12 @@ function describeMissing(reference: Exclude<Reference, { kind: 'count' | 'each' 
   return moduleScopes.has(reference.scope) ? `module "${reference.module}" has no output "${reference.name}"` : `module "${reference.module}" is not declared`;
 }
 
-/** The node a value belongs to, and the block and module it is read in. */
 interface Dependent {
   key: string;
   declaration: string;
   context: Context;
 }
 
-/** Where a reference that makes an edge is written. */
 type ReferencePlace = Omit<Dependent, 'key'> & { position: Position };
 
 const edgeKey = (from: string, to: string) => `${from} -> ${to}`;
@@ -97,7 +95,7 @@ export class DependencyGraphBuilder {
     return graph;
   }
 
-  /** Refused at a reference in the cycle, so the error points at a line to change. An edge from a module call to its own nodes has no reference, but those edges alone never close a cycle. */
+  /** Reported at a reference in the cycle, so the error points at a line to change. A call's edges to its own nodes have no reference, but they alone never close a cycle. */
   private refuseCycle(graph: Graph<GraphNode>): void {
     const cycle = graph.findCycle();
     if (!cycle) return;
@@ -115,7 +113,6 @@ export class DependencyGraphBuilder {
   }
 
   private addValueDependencies(key: string, node: ValueNode, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
-    // A variable with no default has no value until a call gives it one.
     const { value } = node;
     if (!value) return;
 
@@ -125,7 +122,7 @@ export class DependencyGraphBuilder {
     tryAt(node.position, node.declaration, node.context, () => this.addDependencies(value, graph, dependent, moduleScopes, repetition));
   }
 
-  /** A call's count or for_each is read in the module that calls it, before any instance of the module is made. */
+  /** A call's count or for_each is read in the caller, before the module has instances. */
   private addCallDependencies(key: string, block: ModuleBlock, caller: ModuleAddress, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
     const dependent = { key, declaration: spell(block), context: caller };
 
@@ -133,7 +130,7 @@ export class DependencyGraphBuilder {
       if (value) tryAt(value.position, dependent.declaration, caller, () => this.addDependencies(value, graph, dependent, moduleScopes));
   }
 
-  /** One value at a time, so an error points at the value that reads, not at the block it sits in. The count or for_each is read before any instance is, so it has no key. */
+  /** One value at a time, so an error points at the value, not the block. count and for_each are read before any instance, so they have no key. */
   private addResourceDependencies({ address, block }: LoadedResource, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
     const dependent = { key: address.toString(), declaration: spell(block), context: address };
     const repetition = this.instances.repetitionOf(dependent.key);
@@ -144,7 +141,7 @@ export class DependencyGraphBuilder {
       tryAt(value.position, dependent.declaration, address, () => this.addDependencies(value, graph, dependent, moduleScopes, repetition));
   }
 
-  /** The resources a resource reads from, looking through the variables and outputs in between. */
+  /** Looks through the variables and outputs in between. */
   resourceDependencies(graph: Graph<GraphNode>, key: string): string[] {
     const found = new Set<string>();
     const seen = new Set<string>([key]);
@@ -162,7 +159,7 @@ export class DependencyGraphBuilder {
     return [...found].sort();
   }
 
-  /** Variables and outputs are nodes of their own: what they read runs before them, and they run before whoever reads them. */
+  /** Variables and outputs are nodes, so they run after what they read and before what reads them. */
   private valueNodes(loadedModules: LoadedModule[]): Map<string, GraphNode> {
     const nodes = new Map<string, GraphNode>();
 
@@ -199,7 +196,7 @@ export class DependencyGraphBuilder {
     return nodes;
   }
 
-  // An input is read in the call, and it wins over the default inside.
+  // An input is read in the call and overrides the default.
   private setCallNodes(stmt: ModuleBlock, nodes: Map<string, GraphNode>, context: ModuleAddress): void {
     const module = context.child(stmt.name);
     const declaration = spell(stmt);
@@ -218,7 +215,7 @@ export class DependencyGraphBuilder {
       });
   }
 
-  /** Checked here, as well as where it is called, since the body of a for over an empty collection is never read. */
+  /** Checked here too, since the body of a for over an empty collection is never evaluated. */
   private checkCalls(value: AttributeValue): void {
     for (const call of callsIn(value)) functionCalled(call);
   }
@@ -232,13 +229,13 @@ export class DependencyGraphBuilder {
         continue;
       }
 
-      // Once the module is known to be there, its call says whether the first step is an index, and a wrong one is refused for what it is.
+      // With the module known to exist, its call says whether the first step must be an index.
       if (reference.kind === 'output' && moduleScopes.has(reference.scope)) readCall(reference.reference, this.modules.repetitionOf(reference.call), reference.position);
 
-      // A string may hold several references, so the one missing is a closer place than the value it sits in; the block is added around it.
+      // A string may hold several references, so the error points at the missing one.
       if (!graph.hasNode(reference.key)) throw placed(describeMissing(reference, moduleScopes), reference.position);
 
-      // Checked here, as well as where it is read, since a reference to a resource still to come is never read at plan time.
+      // Checked here too, since a reference to a resource not yet created is never read at plan time.
       if (reference.kind === 'resource') readInstance(reference.reference, this.instances.repetitionOf(reference.key), reference.position);
 
       graph.addEdge(reference.key, dependent.key);

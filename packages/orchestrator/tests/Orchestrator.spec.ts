@@ -8,7 +8,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DiskFiles, InMemoryFiles, Orchestrator } from '../src/index';
 import { apply } from './apply';
 
-// Mock Provider for testing
 class MockProvider implements Provider {
   readonly resources = ['mock_resource'];
   readonly dataSources: string[] = [];
@@ -28,9 +27,7 @@ class MockProvider implements Provider {
     return planFromSchema(await this.getSchema(type), request);
   }
 
-  async validate(_type: string, _inputs: Record<string, unknown>): Promise<void> {
-    // Always valid for testing
-  }
+  async validate(_type: string, _inputs: Record<string, unknown>): Promise<void> {}
 
   async create(_type: string, { config }: CreateRequest): Promise<Record<string, unknown>> {
     const id = `mock_${Date.now()}_${Math.random()}`;
@@ -73,7 +70,6 @@ class MockProvider implements Provider {
   }
 }
 
-/** A provider that makes nothing and reads one data source type. */
 const reader = () => Object.assign(new MockProvider(), { resources: [], dataSources: ['mock_data'] });
 
 describe('Orchestrator', () => {
@@ -156,7 +152,6 @@ describe('Orchestrator', () => {
 
       await apply(orchestrator, config);
 
-      // Read state directly
       const backend = new LocalBackend(tmpDir);
       const stateManager = new StateManager(backend);
       const state = await stateManager.read();
@@ -180,7 +175,6 @@ describe('Orchestrator', () => {
       const created = mockProvider.getCreatedResources();
       const [, inputs] = [...created.entries()][0];
 
-      // All values should be extracted from AttributeValue format
       expect(inputs).toEqual({
         name: 'test',
         size: ExactNumber.parse('42'),
@@ -202,14 +196,12 @@ describe('Orchestrator', () => {
       expect(actions[0].resourceType).toBe('mock_resource');
       expect(actions[0].name).toBe('plan_test');
 
-      // Verify no changes were made to provider
       expect(mockProvider.getCreatedResources().size).toBe(0);
     });
   });
 
   describe('UPDATE Operations', () => {
     it('should update an existing resource', async () => {
-      // First, create a resource
       const createConfig = `
         resource "mock_resource" "test" {
           name = "original_value"
@@ -220,7 +212,6 @@ describe('Orchestrator', () => {
       const originalCreated = mockProvider.getCreatedResources();
       const [originalId] = [...originalCreated.keys()];
 
-      // Now update it
       const updateConfig = `
         resource "mock_resource" "test" {
           name = "updated_value"
@@ -228,7 +219,7 @@ describe('Orchestrator', () => {
       `;
       await apply(orchestrator, updateConfig);
 
-      // Should still have only 1 resource (updated, not recreated)
+      // Updated, not recreated.
       const updated = mockProvider.getCreatedResources();
       expect(updated.size).toBe(1);
       expect(updated.get(originalId)).toEqual({ name: 'updated_value' });
@@ -256,7 +247,6 @@ describe('Orchestrator', () => {
 
   describe('DELETE Operations', () => {
     it('should delete a removed resource', async () => {
-      // First, create a resource
       const createConfig = `
         resource "mock_resource" "test" {
           name = "value"
@@ -266,11 +256,9 @@ describe('Orchestrator', () => {
 
       expect(mockProvider.getCreatedResources().size).toBe(1);
 
-      // Now remove it from config
       const deleteConfig = ``;
       await apply(orchestrator, deleteConfig);
 
-      // Should be deleted
       expect(mockProvider.getCreatedResources().size).toBe(0);
     });
 
@@ -285,7 +273,6 @@ describe('Orchestrator', () => {
       const deleteConfig = ``;
       await apply(orchestrator, deleteConfig);
 
-      // Check state
       const backend = new LocalBackend(tmpDir);
       const stateManager = new StateManager(backend);
       const state = await stateManager.read();
@@ -295,7 +282,7 @@ describe('Orchestrator', () => {
   });
 
   describe('Refresh', () => {
-    // The caller may show the plan again after the run, so the run works on its own copy.
+    // The caller may show the plan again after the run.
     it('leaves the plan it runs as it was', async () => {
       await apply(orchestrator, 'resource "mock_resource" "a" { value = "x" }');
       const planned = await orchestrator.plan('resource "mock_resource" "a" { value = "y" }');
@@ -306,7 +293,7 @@ describe('Orchestrator', () => {
       expect(JSON.stringify(planned.prior)).toBe(before);
     });
 
-    // The provider finds the resource by what it holds, so it is asked with all of it, whether or not that holds an id.
+    // The provider finds the resource by its attributes, with or without an id.
     it('asks the provider for each resource with what state holds', async () => {
       const resource = { resourceType: 'mock_resource', name: 'a', attributes: { value: 'x' } };
       await new LocalBackend(tmpDir).write({ ...emptyState(), resources: { 'mock_resource.a': resource } });
@@ -343,7 +330,6 @@ describe('Orchestrator', () => {
 
   describe('Complex Scenarios', () => {
     it('should handle mixed operations (create, update, delete)', async () => {
-      // Initial state: create 3 resources
       const initial = `
         resource "mock_resource" "keep" {
           name = "keep_value"
@@ -358,7 +344,7 @@ describe('Orchestrator', () => {
       await apply(orchestrator, initial);
       expect(mockProvider.getCreatedResources().size).toBe(3);
 
-      // New state: keep one, update one, delete one, create one
+      // Keep one, update one, delete one, create one.
       const updated = `
         resource "mock_resource" "keep" {
           name = "keep_value"
@@ -374,13 +360,10 @@ describe('Orchestrator', () => {
 
       const final = mockProvider.getCreatedResources();
 
-      // Verify state matches config
       const backend = new LocalBackend(tmpDir);
       const stateManager = new StateManager(backend);
       const state = await stateManager.read();
 
-      // The provider should have exactly 3 resources
-      // (keep, update, create) - delete was removed
       expect(final.size).toBe(3);
 
       expect(state.resources['mock_resource.keep']).toBeDefined();
@@ -392,7 +375,6 @@ describe('Orchestrator', () => {
 
   describe('Edge Cases', () => {
     it('should handle UPDATE with multiple attribute changes', async () => {
-      // Create resource with multiple attributes
       const createConfig = `
         resource "mock_resource" "multi" {
           name = "original"
@@ -402,7 +384,6 @@ describe('Orchestrator', () => {
       `;
       await apply(orchestrator, createConfig);
 
-      // Update multiple attributes
       const updateConfig = `
         resource "mock_resource" "multi" {
           name = "updated"
@@ -450,11 +431,9 @@ describe('Orchestrator', () => {
 
   describe('Module Integration', () => {
     it('should resolve module outputs during execution', async () => {
-      // Create module directory
       const moduleDir = path.join(tmpDir, 'child_module');
       await fs.mkdir(moduleDir, { recursive: true });
 
-      // Create module config with output
       await fs.writeFile(
         path.join(moduleDir, 'main.clay'),
         `
@@ -464,7 +443,6 @@ describe('Orchestrator', () => {
       `
       );
 
-      // Create root config using module and outputting its value
       const rootConfig = `
         module "child" {
           source = "./child_module"
@@ -479,8 +457,6 @@ describe('Orchestrator', () => {
       engine.registerProvider(mockProvider);
       const result = await apply(engine, rootConfig);
 
-      // Verify root output contains module value
-      // This confirms that module output was resolved and passed to root
       expect(result.root_val.value).toBe('hello_module');
     });
   });

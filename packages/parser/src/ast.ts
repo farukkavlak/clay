@@ -2,29 +2,27 @@ import { ExactNumber, Type } from '@clay/contracts';
 import { Position } from './Position';
 import { spellReference, spellSteps, Step } from './reference';
 
-/** Every configuration lives under this name, the root one and a module's alike. */
+/** The config file name, for the root and every module. */
 export const CONFIG_FILE = 'main.clay';
 
-/** Every node remembers where it was written, so an error about it can point at the source. */
 interface Node {
   position: Position;
 }
 
 export type ReferenceNode = Node & { type: 'Reference'; value: Step[] };
 
-/** A function called with its arguments, `length(var.names)`, and the steps written after it, read into what it gives. */
+/** `path` is the steps after the call, as in `tolist(x)[0]`. */
 export type CallNode = Node & { type: 'Call'; name: string; args: AttributeValue[]; path: Step[] };
 
-/** A name a `for` gives each item, read in its body, and the steps written after it. */
+/** A name bound by a `for`, then the steps after it. */
 export type BoundNode = Node & { type: 'Bound'; value: Step[] };
 
 /**
- * `[for key, value in collection : body]`: the body read once for each item, with the names given to the item.
- * `{for … : key => body}` makes an object instead, `key` read for each item too; with `grouped`, `body...`, the items of one key go in a tuple under it.
+ * `[for key, value in collection : body]`, or `{for … : key => body}` for an object.
+ * With `grouped` (`body...`), the values of one key are collected into a tuple.
  */
 export type ForNode = Node & { type: 'For'; keyName?: string; valueName: string; collection: AttributeValue; key?: AttributeValue; body: AttributeValue; grouped?: true };
 
-/** A piece of a string with `${ … }` in it: text, or the reference, the call or the name an interpolation reads. */
 export type TemplatePart = string | ReferenceNode | CallNode | BoundNode;
 
 export type AttributeValue =
@@ -42,32 +40,31 @@ export type AttributeValue =
 
 export interface ResourceBlock extends Node {
   type: 'Resource';
-  resourceType: string; // e.g., "provider_resource"
-  name: string; // e.g., "my_file"
-  /** How many instances the block makes; the engine's to read, so it is no attribute a provider is sent. */
+  resourceType: string;
+  name: string;
+  /** Read by the engine, never sent to the provider. */
   count?: AttributeValue;
-  /** The keys to make an instance for, a map's or a list's; the engine's to read, as count is. */
+  /** Read by the engine, never sent to the provider. */
   forEach?: AttributeValue;
   attributes: Record<string, AttributeValue>;
 }
 
 export interface VariableBlock extends Node {
   type: 'Variable';
-  name: string; // e.g., "environment"
+  name: string;
   attributes: Record<string, AttributeValue>;
-  /** What every value it is given is taken as; a variable without one takes a value as it is. */
+  /** Without one, a value is taken as it is. */
   valueType?: Type;
-  /** What its type gives an optional attribute left out or null, where the type names a value for it. */
   defaults?: TypeDefaults;
 }
 
-/** The defaults a type gives, laid out as the type is: an object's by the attribute, and those of the types it holds further in. */
+/** The defaults of `optional(type, default)`, nested the way the type is. */
 export interface TypeDefaults {
-  /** A constant for each optional attribute of this object that names one. */
+  /** By attribute name, at this level. */
   values?: Record<string, AttributeValue>;
-  /** Those of what a list, a set or a map holds. */
+  /** Defaults for a list's, set's or map's element. */
   element?: TypeDefaults;
-  /** Those of a tuple's items by position, or of an object's attributes by name. */
+  /** A tuple's items by position, or an object's attributes by name. */
   within?: Record<string, TypeDefaults>;
 }
 
@@ -79,17 +76,17 @@ export interface OutputBlock extends Node {
 
 export interface DataBlock extends Node {
   type: 'Data';
-  dataSourceType: string; // e.g., "aws_ami"
-  name: string; // e.g., "ubuntu"
+  dataSourceType: string;
+  name: string;
   attributes: Record<string, AttributeValue>;
 }
 
 export interface ModuleBlock extends Node {
   type: 'Module';
   name: string;
-  /** How many instances of the module to make; the engine's to read, so it is no input. */
+  /** Read by the engine, never passed as an input. */
   count?: AttributeValue;
-  /** The keys to make an instance of the module for, as a resource's for_each. */
+  /** Read by the engine, never passed as an input. */
   forEach?: AttributeValue;
   attributes: Record<string, AttributeValue>;
 }
@@ -97,14 +94,14 @@ export interface ModuleBlock extends Node {
 export type Statement = ResourceBlock | VariableBlock | OutputBlock | DataBlock | ModuleBlock;
 export type Program = Statement[];
 
-/** A block as the config spells it: `resource "local_file" "a"`, `module "m"`. */
+/** `resource "local_file" "a"`, `module "m"`. */
 export function spell(statement: Statement): string {
   if (statement.type === 'Resource') return `resource "${statement.resourceType}" "${statement.name}"`;
   if (statement.type === 'Data') return `data "${statement.dataSourceType}" "${statement.name}"`;
   return `${statement.type.toLowerCase()} "${statement.name}"`;
 }
 
-/** What a value holds one level in: a list's items, a map's values, a string's interpolations, a call's arguments and a for's collection, key and body. */
+/** Direct children only. */
 function valuesIn(value: AttributeValue): AttributeValue[] {
   if (value.type === 'List') return value.value;
   if (value.type === 'Call') return value.args;
@@ -115,19 +112,18 @@ function valuesIn(value: AttributeValue): AttributeValue[] {
   return [];
 }
 
-/** Every reference and call written in a value, at any depth, the outer one before those in its arguments. */
+/** At any depth, an outer call before those in its arguments. */
 export function namedIn(value: AttributeValue): (ReferenceNode | CallNode)[] {
   const inside = valuesIn(value).flatMap((item) => namedIn(item));
 
   return value.type === 'Reference' || value.type === 'Call' ? [value, ...inside] : inside;
 }
 
-/** Every call written in a value, at any depth, the outer one before those in its arguments. */
 export function callsIn(value: AttributeValue): CallNode[] {
   return namedIn(value).filter((node) => node.type === 'Call');
 }
 
-/** A reference, a call or a name a for gives as a message names it, a call without its arguments: `var.names[0]`, `length(...)`. */
+/** For messages: `var.names[0]`, `length(...)`. */
 export function spellNamed(node: ReferenceNode | CallNode | BoundNode): string {
   return node.type === 'Call' ? `${node.name}(...)${spellSteps(node.path)}` : spellReference(node.value);
 }

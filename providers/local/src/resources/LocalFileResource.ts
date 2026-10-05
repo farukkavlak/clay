@@ -17,7 +17,7 @@ export class LocalFileResource implements ResourceHandler {
     if (inputs.path === '') throw new Error('local_file "path" must not be empty');
   }
 
-  // A relative path lands where the apply runs, so only an absolute one gives a known id.
+  // A relative path resolves where the apply runs, so only an absolute one gives a known id.
   async plan(request: PlanRequest): Promise<PlannedChange> {
     const change = planFromSchema(await this.getSchema(), request);
     const file = own(request.config, 'path');
@@ -55,7 +55,7 @@ export class LocalFileResource implements ResourceHandler {
   }
 
   async delete(prior: Record<string, unknown>): Promise<void> {
-    // A file removed by hand is already what a delete asks for.
+    // A file already removed by hand counts as deleted.
     await fs.unlink(idOf(prior)).catch((error: { code?: string }) => {
       if (error.code !== 'ENOENT') throw error;
     });

@@ -37,7 +37,6 @@ describe('a state file that is not valid state', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
-  // Each of these was read as a state and planned against: the string ones by the character, the empty one as a crash.
   it.each([
     ['resources that are not a record', `{"version":${STATE_VERSION},"serial":0,"resources":"oops"}`, 'its resources are not a record'],
     ['outputs that are not a record', `{"version":${STATE_VERSION},"serial":0,"outputs":"oops","resources":{}}`, 'its outputs are not a record'],

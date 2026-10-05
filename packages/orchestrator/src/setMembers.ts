@@ -1,10 +1,10 @@
 import { containsUnknown, ExactNumber, isRecord, isUnknown } from '@clay/contracts';
 
-/** One text per value, so two members are the same exactly when their texts are; a string is quoted, so none spells a number or a value not known yet. */
+/** Equal members have equal keys. Strings are quoted, so none collides with a number or an unknown. */
 function memberKey(value: unknown): string {
   if (value instanceof ExactNumber) return `#${value.toString()}`;
   if (isUnknown(value)) return '?';
-  // A set inside a member was put in order first, so the same members give the same text.
+  // Nested sets are already ordered, so equal members give equal text.
   if (Array.isArray(value)) return `[${value.map((item) => memberKey(item)).join(',')}]`;
   if (isRecord(value))
     return `{${Object.keys(value)
@@ -15,7 +15,7 @@ function memberKey(value: unknown): string {
   return JSON.stringify(value);
 }
 
-/** Numbers by their value, anything else by its key. Every number's key starts with `#`, as no other key does, so the numbers stay together among the rest. */
+/** Numbers by value, the rest by key. Only number keys start with `#`, so numbers stay together. */
 function byMember([leftKey, left]: [string, unknown], [rightKey, right]: [string, unknown]): number {
   if (left instanceof ExactNumber && right instanceof ExactNumber) return left.compare(right);
 
@@ -30,8 +30,8 @@ function inOrder(members: readonly unknown[]): unknown[] {
 }
 
 /**
- * A set's members in one order: the known ones by value and each once, then null, then those not known yet by what is known of them.
- * A member not known yet may turn out to be any value, another member's too, so none is taken for another and the set's size is not known until the apply.
+ * Known members sorted and deduplicated, then null, then unknown members.
+ * Unknown members are never deduplicated, since each may become any value, so the set's size is unknown until apply.
  */
 export function setOf(members: readonly unknown[]): unknown[] {
   const known = members.filter((member) => member !== null && !containsUnknown(member));

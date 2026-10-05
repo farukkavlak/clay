@@ -12,7 +12,7 @@ describe('reading a state file', () => {
     expect(parseState(serializeState(state), 'clay.state.json')).toEqual(state);
   });
 
-  // The counters are the file's own and stay JavaScript numbers; a value in it is kept exactly.
+  // Counters are plain numbers; values stay exact.
   it('reads its counters as numbers and every value exactly', () => {
     const text = `{"version": ${STATE_VERSION}, "serial": 3, "resources": {"null_resource.a": {"resourceType": "null_resource", "name": "a", "attributes": {"id": 12345678901234567890}}}}`;
 
@@ -85,7 +85,7 @@ describe('reading a state file', () => {
     expect(read('{oops')).toThrow('clay.state.json is not valid state: the file is not JSON');
   });
 
-  // Every one of these read as a state before, and a `resources` that is not a record planned a delete per character.
+  // These used to be accepted, and a string `resources` planned a delete per character.
   it.each([
     ['nothing at all', {}],
     ['a version that is not a number', { version: '1', serial: 0, resources: {} }],
@@ -95,7 +95,7 @@ describe('reading a state file', () => {
     ['a resource with no type', { version: STATE_VERSION, serial: 0, resources: { 'local_file.a': { name: 'a', attributes: {} } } }],
     ['a resource with no name', { version: STATE_VERSION, serial: 0, resources: { 'local_file.a': { resourceType: 'local_file', attributes: {} } } }],
     ['a resource with no attributes', { version: STATE_VERSION, serial: 0, resources: { 'local_file.a': { resourceType: 'local_file', name: 'a' } } }],
-    // A number in the file is read as an exact value, an object of its own, and still no record.
+    // An ExactNumber is an object, but not a record.
     ['attributes that are a number', { version: STATE_VERSION, serial: 0, resources: { 'local_file.a': { resourceType: 'local_file', name: 'a', attributes: 5 } } }],
     ['outputs that are a number', { version: STATE_VERSION, serial: 0, outputs: 5, resources: {} }],
     ['a serial that is not whole', { version: STATE_VERSION, serial: 1.5, resources: {} }],
@@ -125,7 +125,7 @@ describe('reading a state file', () => {
     expect(read({ version: STATE_VERSION, serial: 0, resources: {}, outputs })().outputs).toEqual(outputs);
   });
 
-  // The entry would be refused later for the address it holds too, so the reason is what pins this.
+  // A later check would also refuse the entry, so the test pins the message.
   it.each([
     ['text', 'local_file.a', 'm'],
     ['a list that holds no names', 'module.1.local_file.a', [1]],
@@ -141,7 +141,7 @@ describe('reading a state file', () => {
     expect(read({ version: STATE_VERSION + 1, serial: 0, resources: {} })).toThrow(`clay.state.json was written by a newer Clay, version ${STATE_VERSION + 1}`);
   });
 
-  // An older state kept the id beside the values; read now, every id would be lost in silence.
+  // An older state kept the id outside the attributes; reading it now would silently lose every id.
   it('refuses a state an older Clay wrote', () => {
     expect(read({ version: STATE_VERSION - 1, serial: 0, resources: {} })).toThrow(`clay.state.json was written by an older Clay, version ${STATE_VERSION - 1}`);
   });

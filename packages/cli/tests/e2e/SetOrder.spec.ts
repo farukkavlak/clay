@@ -15,7 +15,7 @@ import { start } from './start';
 
 const reversed = (value: unknown) => (Array.isArray(value) ? [...value].reverse() : value);
 
-/** Holds `members`, a set of strings, `order`, a list of them, and `groups`, a set of sets, and plans, makes and reads it in another order than it was given, as a remote API may. */
+/** Holds `members` (set of strings), `order` (list of strings) and `groups` (set of sets), and returns them reordered, as a remote API may. */
 class PoolProvider implements Provider {
   readonly resources = ['pool'];
   readonly dataSources = ['pool'];
@@ -61,7 +61,7 @@ class PoolProvider implements Provider {
   }
 }
 
-/** Reads `a` gone and `x` added, as if someone changed the members outside Clay. */
+/** Reads `a` removed and `x` added, as if changed outside Clay. */
 class ChangedPool extends PoolProvider {
   override async read(type: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
     const read = await super.read(type, prior);
@@ -70,7 +70,6 @@ class ChangedPool extends PoolProvider {
   }
 }
 
-/** Plans `groups` in another order than it was given. */
 class RegroupingPool extends PoolProvider {
   override async plan(type: string, request: PlanRequest): Promise<PlannedChange> {
     const change = await super.plan(type, request);
@@ -82,7 +81,6 @@ const pool = (members: string) => `resource "pool" "p" { members = ${members} }`
 
 const withOutput = (members: string) => `${pool(members)}\noutput "m" { value = pool.p.members }`;
 
-/** A pool with its members and its order, and an output that reads `attribute`, one or the other. */
 const reading = (attribute: string, members: string, order: string) =>
   `resource "pool" "p" {\n  members = ${members}\n  order = ${order}\n}\noutput "m" { value = pool.p.${attribute} }`;
 
@@ -124,7 +122,7 @@ describe('a set attribute', () => {
     await fs.mkdir(path.join(dir, 'm'));
   });
 
-  /** Plans, saves the plan to a file and reads it back, as `apply plan.json` would, and returns what the CLI prints for it. */
+  /** Round-trips the plan through a file, as `apply plan.json` would, and returns what the CLI prints. */
   const shown = async (config: string, poolProvider?: Provider) => {
     const saved = parsePlanFile(serializePlan(await newOrchestrator(poolProvider).plan(config), config, {}), 'plan.json');
     const printed: string[] = [];
@@ -146,7 +144,7 @@ describe('a set attribute', () => {
     expect(actions.map((action) => action.type)).toEqual(['NO_OP']);
   });
 
-  // The provider returns the members reversed; a list compared in order failed the apply as a provider bug, and every read planned an update.
+  // The provider returns the members reversed; comparing them in order used to fail the apply and plan an update on every read.
   it('takes members a provider returns in another order, and plans nothing after', async () => {
     await apply(pool('["a", "b", "c"]'));
 
@@ -155,7 +153,7 @@ describe('a set attribute', () => {
     expect(actions.map((action) => action.type)).toEqual(['NO_OP']);
   });
 
-  // Only create reached the provider's answer before; an update hands it back reversed too.
+  // The same for update, which also returns them reversed.
   it('takes members an update returns in another order, and plans nothing after', async () => {
     await apply(pool('["a", "b"]'));
 
@@ -166,7 +164,7 @@ describe('a set attribute', () => {
     expect(actions.map((action) => action.type)).toEqual(['NO_OP']);
   });
 
-  // The provider spreads what it was given and names `members` again, so one left out comes back as a key with no value.
+  // The provider returns `members` as undefined when it was not set.
   it('takes a name a provider gives no value as one it left out', async () => {
     await apply('resource "pool" "p" { order = ["a"] }');
 
@@ -180,21 +178,21 @@ describe('a set attribute', () => {
     expect(await members()).toEqual(['a', 'b']);
   });
 
-  // A member not known yet may come to any value, so the set keeps the members it knows, and that one after them.
+  // An unknown member may become anything, so the set keeps its known members and the unknown after them.
   it('keeps a set whose member is not known yet, with the members it knows', async () => {
     const { actions } = await newOrchestrator().plan(`resource "random_string" "r" { length = 4 }\n${pool('[random_string.r.result, "a"]')}`);
 
     expect(actions.find((action) => action.resourceType === 'pool')?.after?.members).toEqual(['a', UNKNOWN]);
   });
 
-  // pool.q's id is "pool" once made, which p already has; the set then holds one member where the plan showed two.
+  // pool.q's id becomes "pool", which p already has, so the set ends with one member where the plan showed two.
   it('applies a member the plan did not know that comes to one it has', async () => {
     await apply(`resource "pool" "q" { members = [] }\n${pool('[pool.q.id, "pool"]')}`);
 
     expect(await members()).toEqual(['pool']);
   });
 
-  // pool.q's id sorts before "z" once made, so a member is compared by what it is, not by where it sorts.
+  // pool.q's id sorts before "z", so members must be compared by value, not position.
   it('applies, from a saved plan, a member the plan did not know that sorts before one it knew', async () => {
     const config = `resource "pool" "q" { members = [] }\n${pool('["z", pool.q.id]')}`;
     const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), config, {}), 'plan.json');
@@ -204,7 +202,7 @@ describe('a set attribute', () => {
     expect(await members()).toEqual(['pool', 'z']);
   });
 
-  // Neither group is known whole, so neither can be put in order by what it holds once made; they are still held in one order.
+  // Neither group is fully known, so they cannot be sorted by value, but they still get a fixed order.
   it('takes members known in part that a provider plans in another order', async () => {
     const config = `resource "pool" "q" {\n  members = []\n  groups = []\n}\nresource "pool" "p" {\n  members = []\n  groups = [["z", pool.q.id], ["a", pool.q.id]]\n}`;
 
@@ -241,7 +239,7 @@ describe('a set attribute', () => {
     await expect(newOrchestrator().plan(pool('{ a = "1" }'))).rejects.toThrow('members is an object, where pool takes a set');
   });
 
-  // The members are held sorted, so an index reads whichever sorts first, and another member added moves it.
+  // Members are stored sorted, so an index would shift whenever a member is added.
   it('refuses an index into it, where it is written', async () => {
     const error = await planError(`${pool('["web", "api"]')}\n${file('pool.p.members[0]')}`);
 
@@ -270,7 +268,7 @@ describe('a set attribute', () => {
     expect(error.position).toMatchObject({ line: 2 });
   });
 
-  // The schema stays behind at the module call; the value has to say what it is on its own.
+  // The schema does not cross the module call, so the value must carry its own type.
   it('refuses an index into one a module input carries', async () => {
     await fs.writeFile(path.join(dir, 'm', 'main.clay'), `variable "members" {}\n${file('var.members[0]')}`, 'utf8');
 
@@ -296,7 +294,7 @@ describe('a set attribute', () => {
     expect(resources['pool.q'].attributes.order).toEqual(['a', 'b']);
   });
 
-  // pool.q's id sorts before "z" once made, so the list has no order to show until the apply knows every member.
+  // pool.q's id sorts before "z", so the list has no order until apply knows every member.
   it('applies a list taken from a set whose member the plan did not know', async () => {
     await apply(`resource "pool" "q" { members = [] }\n${pool('["z", pool.q.id]')}\nresource "pool" "o" {\n  members = []\n  order = pool.p.members\n}`);
 
@@ -311,7 +309,7 @@ describe('a set attribute', () => {
     expect(resources['null_resource.n'].attributes.triggers).toEqual({ m: ['pool', 'z'] });
   });
 
-  // Its value is not known at plan, but that it will be a string is.
+  // The value is unknown at plan, but its type is known to be string.
   it('refuses, at plan, a value not known yet of a type the attribute does not take', async () => {
     const error = await planError(`resource "pool" "q" { members = [] }\nresource "pool" "o" {\n  members = []\n  order = pool.q.id\n}`);
 
@@ -401,7 +399,7 @@ describe('a set attribute', () => {
     expect(lines).toContain('  + m = ["a","b"]');
   });
 
-  // The values print the same, so the line would read as no change without the types.
+  // The values print the same, so without the types the line would look like no change.
   it('shows an output whose members stay and whose type changes by the types', async () => {
     const config = reading('members', '["a", "b"]', '["a", "b"]');
     await apply(reading('order', '["a", "b"]', '["a", "b"]'));

@@ -31,24 +31,21 @@ import { isDeepStrictEqual } from 'node:util';
 
 export type ActionType = 'CREATE' | 'UPDATE' | 'REPLACE' | 'DELETE' | 'NO_OP';
 
-/** A resource from the config: where it lives, the block as parsed, its values with references resolved and held to its schema, and what its provider plans it to hold. */
 export interface DesiredResource {
   address: Address;
   block: ResourceBlock;
   attributes: Record<string, unknown>;
-  /** Every value it will hold once applied, as its provider plans it; UNKNOWN where only the apply makes one. */
+  /** As the provider plans it after apply; UNKNOWN where only the apply knows a value. */
   after: Record<string, unknown>;
-  /** The provider plans to replace it rather than change it in place. */
   replace: boolean;
   dependencies: string[];
-  /** Where state held it before count came or went; the state planned against already has it here. */
+  /** Its state address before count was added or removed; the state it was planned against already has the move. */
   movedFrom?: string;
 }
 
-/** What each named value was and would become; a missing `old` is an addition, a missing `new` a removal. */
+/** An undefined `old` means added, an undefined `new` means removed. */
 export type Changes = Record<string, { old: unknown; new: unknown }>;
 
-/** What each root output was and would become, each side with its type. */
 export type OutputChanges = Record<string, { old: Output | undefined; new: Output | undefined }>;
 
 export interface PlanAction {
@@ -57,39 +54,38 @@ export interface PlanAction {
   name: string;
   modulePath?: readonly ModuleStep[];
   key?: InstanceKey;
-  /** The address state holds the resource under, when count was added or taken off since: it moves before the action runs. */
+  /** Its state address before count was added or removed; the move runs before the action. */
   movedFrom?: string;
   attributes?: Record<string, AttributeValue>;
-  /** Every value a create, an update or a replace was planned with, some not known yet. The apply resolves the attributes again and holds each known one to this. */
+  /** Apply resolves the attributes again and checks each known value against these. */
   planned?: Record<string, unknown>;
-  /** What the resource will hold once applied, as its provider planned it. */
+  /** As the provider planned it after apply. */
   after?: Record<string, unknown>;
   changes?: Changes;
   dependencies?: string[];
 }
 
-/** The actions to take, how the root outputs would change, and the serial of the state it was planned against. */
 export interface Plan {
   serial: number;
   actions: PlanAction[];
   outputs: OutputChanges;
-  /** The resources as state held them when the plan was made. */
+  /** Resources as state held them before refresh. */
   prevRun: Record<string, Resource>;
-  /** The same resources as their providers read them then, which the actions run against; one not found is left out. */
+  /** Resources after refresh, which the actions run against; one that no longer exists is left out. */
   prior: Record<string, Resource>;
-  /** The schema of each resource type the plan holds, so a saved plan says which value is a set without a provider. */
+  /** Lets a saved plan tell sets from lists without the provider. */
   schemas: Record<string, Schema>;
 }
 
-/** Bumped when the shape below changes once a Clay is released, so a plan file from an older version is refused instead of misread. */
+/** Bump on any change to the file's shape after a release, so an older plan file is refused instead of misread. */
 export const PLAN_FILE_VERSION = '20.0';
 
 export interface PlanFile extends Plan {
   version: string;
   timestamp: string;
-  /** The configuration the plan was made from. A saved plan runs against it, not against whatever is on disk later. */
+  /** A saved plan applies this, not whatever is on disk later. */
   config: string;
-  /** The module files it read, by path relative to the root configuration. */
+  /** Keyed by path relative to the root configuration. */
   modules: Record<string, string>;
 }
 
@@ -100,10 +96,7 @@ function withoutUnknown(value: unknown): unknown {
   return isRecord(value) ? Object.fromEntries(Object.entries(value).map(([key, item]) => [key, withoutUnknown(item)])) : value;
 }
 
-/**
- * A value not known yet has no form in JSON, so a saved change holds null in its place and lists where each one is beside `new`.
- * A list of steps cannot be mistaken for anything the value holds, as a marker inside it could.
- */
+/** JSON has no unknown, so it is saved as null with its paths listed beside `new`; a marker inside the value could collide with real data. */
 function saveChange(change: { old: unknown; new: unknown }): Record<string, unknown> {
   const paths = unknownPaths(change.new);
   if (paths.length === 0) return change;
@@ -116,7 +109,7 @@ function saveChanges(changes: Changes): Record<string, unknown> {
   return Object.fromEntries(Object.entries(changes).map(([name, change]) => [name, saveChange(change)]));
 }
 
-/** Planned values are saved as changes from nothing, so a value not known yet is saved the one way. */
+/** Saved as changes from nothing, so unknowns are encoded one way. */
 function saveValues(values: Record<string, unknown>): Record<string, unknown> {
   return saveChanges(Object.fromEntries(Object.entries(values).map(([name, value]) => [name, { old: undefined, new: value }])));
 }
@@ -130,7 +123,7 @@ function saveAction(action: PlanAction): Record<string, unknown> {
   };
 }
 
-/** Whether the steps land on something in the value, so a saved unknown has a place to go back into. */
+/** Whether the path exists in the value, so a saved unknown has a place to go back into. */
 function lands(value: unknown, path: AttributePath): boolean {
   if (path.length === 0) return true;
 
@@ -158,7 +151,6 @@ function readChanges<T>(saved: Record<string, { old?: T; new?: T; unknown?: Attr
   );
 }
 
-/** The plan file's text, as `plan --out` writes it and `parsePlanFile` reads it. */
 export function serializePlan(plan: Plan, configContent: string, modules: Record<string, string>): string {
   const file = {
     version: PLAN_FILE_VERSION,
@@ -180,12 +172,12 @@ function isPath(path: unknown): path is AttributePath {
   return Array.isArray(path) && path.every((step) => typeof step === 'string' || typeof step === 'number');
 }
 
-/** One path that leads through another would put a value into what is not known yet. */
+/** A path that is a prefix of another would nest an unknown inside an unknown. */
 function overlaps(paths: AttributePath[]): boolean {
   return paths.some((path, i) => paths.some((other, j) => i !== j && path.length <= other.length && path.every((step, k) => other[k] === step)));
 }
 
-/** Where a saved change says a value is not known, there has to be a place in it to put one back, and only one. */
+/** Each unknown path must exist in the value, and no two may overlap. */
 function isUnknownPaths(change: Record<string, unknown>): boolean {
   const { unknown } = change;
   if (unknown === undefined) return true;
@@ -193,12 +185,12 @@ function isUnknownPaths(change: Record<string, unknown>): boolean {
   return Array.isArray(unknown) && unknown.every((path) => isPath(path) && lands(change.new, path)) && !overlaps(unknown as AttributePath[]);
 }
 
-/** Each change is read for what it held, so one that is not a record would fail far from the file it came from. */
+/** Checked here, so a malformed change fails at the file and not deep in the apply. */
 function isChanges(changes: unknown): boolean {
   return isRecord(changes) && Object.values(changes).every((change) => isRecord(change) && isUnknownPaths(change));
 }
 
-/** A side of an output change that is there holds a value with its type, and only the value may be not known yet. */
+/** Each side present holds a value and its type; only the value may be unknown. */
 function isOutputChange(change: unknown): boolean {
   if (!isRecord(change)) return false;
 
@@ -214,7 +206,7 @@ function isModuleFiles(modules: unknown): modules is Record<string, string> {
   return isRecord(modules) && Object.values(modules).every((content) => typeof content === 'string');
 }
 
-/** A move starts where count coming or going left the action's own resource, and nowhere else. */
+/** A move may only come from the action's own resource under its count counterpart. */
 function isMovedFrom(action: Record<string, unknown>): boolean {
   if (action.movedFrom === undefined) return true;
   if (typeof action.resourceType !== 'string' || typeof action.name !== 'string') return false;
@@ -224,10 +216,9 @@ function isMovedFrom(action: Record<string, unknown>): boolean {
   return address.countCounterparts().some((kept) => kept.toString() === action.movedFrom);
 }
 
-/** The actions that send values to a provider, and so are planned with them and planned by it. */
 const SENDS_VALUES = new Set<ActionType>(['CREATE', 'UPDATE', 'REPLACE']);
 
-/** A create, an update or a replace carries the values it was planned with and what its provider planned; any other action carries neither. */
+/** Create, update and replace carry `planned` and `after`; other actions carry neither. */
 function carriesValues(action: Record<string, unknown>): boolean {
   const sends = SENDS_VALUES.has(action.type as ActionType);
 
@@ -260,7 +251,7 @@ function isSchemas(schemas: unknown): schemas is Record<string, Schema> {
   return isRecord(schemas) && Object.values(schemas).every((schema) => isSchema(schema));
 }
 
-/** What a plan holds, apart from the file around it and the resources it carries, which are read as state's are. */
+/** Resources are checked separately, the same way state's are. */
 function isPlan(plan: Partial<Plan>): plan is Plan {
   return (
     typeof plan.serial === 'number' && Array.isArray(plan.actions) && plan.actions.every((action) => isAction(action)) && isOutputChanges(plan.outputs) && isSchemas(plan.schemas)
@@ -274,14 +265,14 @@ export function validatePlanFile(planFile: unknown): planFile is PlanFile {
   return pf.version === PLAN_FILE_VERSION && typeof pf.timestamp === 'string' && typeof pf.config === 'string' && isModuleFiles(pf.modules) && isPlan(pf);
 }
 
-/** A plan file is written by `plan`, never by hand, so the only answer to a broken one is to plan again: the reason it is broken would not help. */
+/** Plan files are machine-written, so a broken one only needs "plan again", not the reason. */
 function planVersion(parsed: unknown): string | undefined {
   if (!isRecord(parsed) || !Array.isArray(parsed.actions)) return undefined;
 
   return typeof parsed.version === 'string' ? parsed.version : undefined;
 }
 
-/** A position says where a value was written and is no value itself, so its line and column read back as JavaScript numbers. */
+/** Positions are metadata, not values, so they read back as plain numbers. */
 function readPosition(position: unknown): void {
   if (!isRecord(position)) return;
 
@@ -297,14 +288,14 @@ function childrenOf(node: Record<string, unknown>): unknown[] {
   return [];
 }
 
-/** An index among steps is a place in a list, so it reads back as a JavaScript number. */
+/** Step indexes read back as plain numbers. */
 function readSteps(path: unknown): unknown {
   if (!Array.isArray(path)) return path;
 
   return path.map((step: unknown) => (step instanceof ExactNumber ? step.toSafeInteger('an index') : step));
 }
 
-/** An index is a place in a list, not a value, so it reads back as a JavaScript number too, in a reference, after a name a for gives and in the steps after a call. */
+/** Indexes in references, for-bound names and steps after a call read back as plain numbers too. */
 function readIndexes(node: Record<string, unknown>): void {
   if (node.type === 'Reference' || node.type === 'Bound') node.value = readSteps(node.value);
   if (node.type === 'Call') node.path = readSteps(node.path);
@@ -334,7 +325,7 @@ function readAction(action: Record<string, unknown>): void {
   if (isRecord(action.attributes)) for (const node of Object.values(action.attributes)) readNode(node);
 }
 
-/** The plan's serial, the keys of its actions, the positions and indexes in its parsed attributes, and the indexes to values not known yet, are the file's own numbers; every other number in it is a value, kept exactly. */
+/** The serial, action keys, positions, indexes and unknown paths are plain numbers; every other number is a value and stays exact. */
 function readPlan(content: string): unknown {
   const read = ExactNumber.readJSON(content);
   if (!isRecord(read)) return read;
@@ -346,7 +337,6 @@ function readPlan(content: string): unknown {
   return read;
 }
 
-/** Values saved as changes from nothing, read back as the values. */
 function readValues(saved: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(readChanges(saved as Record<string, { new?: unknown; unknown?: AttributePath[] }>)).map(([name, change]) => [name, change.new]));
 }
@@ -360,14 +350,13 @@ function readSavedAction(action: PlanAction): PlanAction {
   };
 }
 
-/** A plan that holds a resource without its type's schema could not show which of its values are sets. */
+/** Without its type's schema, a resource's sets could not be shown as sets. */
 function checkSchemasCover(plan: Plan, say: (problem: string) => never): void {
   const types = [...plan.actions, ...Object.values(plan.prevRun), ...Object.values(plan.prior)].map((held) => held.resourceType);
   const missing = types.find((type) => !Object.hasOwn(plan.schemas, type));
   if (missing !== undefined) say(`it has no schema for ${missing}`);
 }
 
-/** `source` names the plan in the error, since the caller knows where it read from and this does not. */
 export function parsePlanFile(content: string, source: string): PlanFile {
   let parsed: unknown;
 
@@ -399,13 +388,13 @@ export function parsePlanFile(content: string, source: string): PlanFile {
   };
 }
 
-/** A map's keys written in another order is not a change. */
+/** Map key order is not a change. */
 function valueChanged(oldValue: unknown, newValue: unknown): boolean {
   if (isUnknown(newValue)) return true;
   return !isDeepStrictEqual(oldValue, newValue);
 }
 
-/** Maps throughout: a name every object answers to would otherwise be read from the side that never set it, and `__proto__` would set a prototype instead of a key. */
+/** Maps, so an inherited name like `toString` is absent and `__proto__` is an ordinary key. */
 function calculateDiff<T>(oldAttrs: Record<string, T>, newAttrs: Record<string, T>): Record<string, { old: T | undefined; new: T | undefined }> | null {
   const before = new Map(Object.entries(oldAttrs));
   const after = new Map(Object.entries(newAttrs));
@@ -421,18 +410,18 @@ function calculateDiff<T>(oldAttrs: Record<string, T>, newAttrs: Record<string, 
   return changes.size > 0 ? Object.fromEntries(changes) : null;
 }
 
-/** An output changes when its value does or its type does: the same members as a set and as a list are two values. */
+/** A type change is a change: a set and a list with the same members differ. */
 export function outputChanges(current: Record<string, Output>, desired: Record<string, Output>): OutputChanges {
   return calculateDiff(current, desired) ?? {};
 }
 
-/** A resource changed outside Clay: gone, when it has no changes, or read with values other than state held. */
+/** A resource changed outside Clay; without `changes` it was deleted. */
 export interface Drift {
   address: string;
   changes?: Changes;
 }
 
-/** What the refresh found that the last run did not leave, from the two states the plan carries. */
+/** Drift found by refresh: where `prior` differs from `prevRun`. */
 export function changedOutside(plan: Plan): Drift[] {
   return Object.entries(plan.prevRun).flatMap(([address, held]) => {
     if (!Object.hasOwn(plan.prior, address)) return [{ address }];
@@ -442,7 +431,6 @@ export function changedOutside(plan: Plan): Drift[] {
   });
 }
 
-/** A place a value comes to something other than the plan showed there, and the two values at that place. */
 export interface Mismatch {
   path: AttributePath;
   planned: unknown;
@@ -454,8 +442,8 @@ function includes(members: unknown[], member: unknown): boolean {
 }
 
 /**
- * A set's members have no place, so it holds to the plan when it has every member the plan knew, and no more others than the plan had members not
- * known yet: each of those may come to a member of its own, or to one the set already has.
+ * Sets have no positions. The set must hold every known planned member, plus at most one extra member per planned unknown,
+ * since an unknown may become a new member or one the set already has.
  */
 function setMismatches(planned: unknown[], actual: unknown, at: AttributePath): Mismatch[] {
   if (!Array.isArray(actual)) return [{ path: at, planned, returned: actual }];
@@ -481,7 +469,7 @@ function entryMismatches(type: Type, planned: Record<string, unknown>, actual: u
   return Object.keys(planned).flatMap((key) => compare(typeAt(type, key), planned[key], actual[key], [...at, key]));
 }
 
-/** A value the plan did not know yet may come to anything; a known one, and every known part of one known in part, comes to the same. */
+/** An unknown may become anything; every known part must match. */
 function mismatches(type: Type, planned: unknown, actual: unknown, at: AttributePath): Mismatch[] {
   if (isUnknown(planned)) return [];
   if (type.kind === 'set' && Array.isArray(planned)) return setMismatches(planned, actual, at);
@@ -491,14 +479,14 @@ function mismatches(type: Type, planned: unknown, actual: unknown, at: Attribute
   return isDeepStrictEqual(planned, actual) ? [] : [{ path: at, planned, returned: actual }];
 }
 
-/** Every place the plan made again at apply differs from what the plan showed. A value the plan did not know may come to anything, or stay not known. */
+/** Where the provider's plan at apply differs from the saved plan. An unknown may become anything or stay unknown. */
 export function offFinal(schema: Schema, after: Record<string, unknown>, final: Record<string, unknown>): Mismatch[] {
   return [...new Set([...Object.keys(after), ...Object.keys(final)])].flatMap((name) => mismatches(typeIn(schema, name), own(after, name), own(final, name), [name]));
 }
 
 /**
- * Every place what an apply returned differs from what the plan showed. A value the configuration sets is held to what it resolved to for the apply, which the
- * plan may not have known. Nothing returned may be unknown, since an apply returns the resource as it is.
+ * Where the applied result differs from the plan. A configured value is checked against what it resolved to at apply, which the plan
+ * may not have known. The result may hold no unknown.
  */
 export function offApply(schema: Schema, after: Record<string, unknown>, inputs: Record<string, unknown>, returned: Record<string, unknown>): Mismatch[] {
   const expected = { ...after, ...inputs };
@@ -511,7 +499,7 @@ export function offApply(schema: Schema, after: Record<string, unknown>, inputs:
   });
 }
 
-/** The first value a resource now resolves to that the plan showed otherwise, or nothing when every one holds to the plan. */
+/** The first attribute whose value at apply differs from the plan. */
 export function offPlan(schema: Schema, planned: Record<string, unknown>, resolved: Record<string, unknown>): { name: string; planned: unknown; resolved: unknown } | undefined {
   for (const name of new Set([...Object.keys(planned), ...Object.keys(resolved)]))
     if (mismatches(typeIn(schema, name), own(planned, name), own(resolved, name), [name]).length > 0) return { name, planned: own(planned, name), resolved: own(resolved, name) };
@@ -519,7 +507,6 @@ export function offPlan(schema: Schema, planned: Record<string, unknown>, resolv
   return undefined;
 }
 
-/** Tells whether a resource in state would change, without building the action for it. */
 export function hasChanges(currentAttrs: Record<string, unknown>, after: Record<string, unknown>): boolean {
   return calculateDiff(currentAttrs, after) !== null;
 }
@@ -551,7 +538,7 @@ function processExistingResource(actions: PlanAction[], desired: DesiredResource
   });
 }
 
-/** `currentState` is the state with every move already made, as the desired resources were planned against it. */
+/** `currentState` already has every move applied. */
 export function plan(desiredResources: DesiredResource[], currentState: State): PlanAction[] {
   const actions: PlanAction[] = [];
   const currentMap = new Map<string, Resource>(Object.entries(currentState.resources));
