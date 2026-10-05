@@ -67,6 +67,7 @@ describe('CLI: apply command', () => {
         prevRun: {},
         prior: {},
         schemas: { test: {} },
+        dataSources: {},
       };
       const planMock = vi.fn().mockResolvedValue(planned);
       const runMock = vi.fn(doneWith({}));
@@ -92,9 +93,15 @@ describe('CLI: apply command', () => {
       vi.mocked(fs.access).mockResolvedValue(void 0);
       vi.mocked(fs.readFile).mockResolvedValue('content');
 
-      const planMock = vi
-        .fn()
-        .mockResolvedValue({ serial: 0, actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }], outputs: {}, prevRun: {}, prior: {}, schemas: { test: {} } });
+      const planMock = vi.fn().mockResolvedValue({
+        serial: 0,
+        actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }],
+        outputs: {},
+        prevRun: {},
+        prior: {},
+        schemas: { test: {} },
+        dataSources: {},
+      });
       const runMock = vi.fn(async function* () {
         yield { type: 'applied', action: { type: 'CREATE', resourceType: 'test', name: 't' } };
         yield { type: 'applied', action: { type: 'DELETE', resourceType: 'test', name: 'gone', modulePath: [{ name: 'm' }] } };
@@ -125,9 +132,15 @@ describe('CLI: apply command', () => {
       vi.mocked(fs.access).mockResolvedValue(void 0);
       vi.mocked(fs.readFile).mockResolvedValue('content');
 
-      const planMock = vi
-        .fn()
-        .mockResolvedValue({ serial: 0, actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }], outputs: {}, prevRun: {}, prior: {}, schemas: { test: {} } });
+      const planMock = vi.fn().mockResolvedValue({
+        serial: 0,
+        actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }],
+        outputs: {},
+        prevRun: {},
+        prior: {},
+        schemas: { test: {} },
+        dataSources: {},
+      });
       const runMock = vi.fn(doneWith({}));
 
       vi.mocked(Orchestrator.create).mockImplementation(function () {
@@ -148,9 +161,15 @@ describe('CLI: apply command', () => {
       vi.mocked(fs.access).mockResolvedValue(void 0);
       vi.mocked(fs.readFile).mockResolvedValue('content');
 
-      const planMock = vi
-        .fn()
-        .mockResolvedValue({ serial: 0, actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }], outputs: {}, prevRun: {}, prior: {}, schemas: { test: {} } });
+      const planMock = vi.fn().mockResolvedValue({
+        serial: 0,
+        actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }],
+        outputs: {},
+        prevRun: {},
+        prior: {},
+        schemas: { test: {} },
+        dataSources: {},
+      });
       const runMock = vi.fn(doneWith({}));
 
       vi.mocked(Orchestrator.create).mockImplementation(function () {
@@ -176,9 +195,15 @@ describe('CLI: apply command', () => {
       vi.mocked(fs.access).mockResolvedValue(void 0);
       vi.mocked(fs.readFile).mockResolvedValue('content');
 
-      const planMock = vi
-        .fn()
-        .mockResolvedValue({ serial: 0, actions: [{ type: 'NO_OP', resourceType: 'test', name: 't' }], outputs: {}, prevRun: {}, prior: {}, schemas: { test: {} } });
+      const planMock = vi.fn().mockResolvedValue({
+        serial: 0,
+        actions: [{ type: 'NO_OP', resourceType: 'test', name: 't' }],
+        outputs: {},
+        prevRun: {},
+        prior: {},
+        schemas: { test: {} },
+        dataSources: {},
+      });
 
       vi.mocked(Orchestrator.create).mockImplementation(function () {
         return {
@@ -208,6 +233,7 @@ describe('CLI: apply command', () => {
         prevRun: {},
         prior: {},
         schemas: { test: {} },
+        dataSources: {},
       });
       const runMock = vi.fn(doneWith({ greeting: text('hi') }));
 
@@ -233,9 +259,15 @@ describe('CLI: apply command', () => {
       vi.mocked(fs.access).mockResolvedValue(void 0);
       vi.mocked(fs.readFile).mockResolvedValue('content');
 
-      const planMock = vi
-        .fn()
-        .mockResolvedValue({ serial: 0, actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }], outputs: {}, prevRun: {}, prior: {}, schemas: { test: {} } });
+      const planMock = vi.fn().mockResolvedValue({
+        serial: 0,
+        actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }],
+        outputs: {},
+        prevRun: {},
+        prior: {},
+        schemas: { test: {} },
+        dataSources: {},
+      });
       const runMock = vi.fn(doneWith({ my_output: text('test_value'), another_output: { value: 42, type: types.number } }));
 
       vi.mocked(Orchestrator.create).mockImplementation(function () {
@@ -263,9 +295,15 @@ describe('CLI: apply command', () => {
       vi.mocked(fs.access).mockResolvedValue(void 0);
       vi.mocked(fs.readFile).mockResolvedValue('content');
 
-      const planMock = vi
-        .fn()
-        .mockResolvedValue({ serial: 0, actions: [{ type: 'UNKNOWN', resourceType: 'test', name: 't' }], outputs: {}, prevRun: {}, prior: {}, schemas: { test: {} } });
+      const planMock = vi.fn().mockResolvedValue({
+        serial: 0,
+        actions: [{ type: 'UNKNOWN', resourceType: 'test', name: 't' }],
+        outputs: {},
+        prevRun: {},
+        prior: {},
+        schemas: { test: {} },
+        dataSources: {},
+      });
       const runMock = vi.fn(doneWith({}));
 
       vi.mocked(Orchestrator.create).mockImplementation(function () {
@@ -302,6 +340,7 @@ describe('CLI: apply command', () => {
         prevRun: {},
         prior: {},
         schemas: { test: {} },
+        dataSources: {},
       });
 
       vi.mocked(fs.readFile).mockImplementation(async (path) => {
@@ -345,6 +384,7 @@ describe('CLI: apply command', () => {
         prevRun: {},
         prior: {},
         schemas: { test: {} },
+        dataSources: {},
       });
 
       vi.mocked(fs.readFile).mockImplementation(async (path) => {
@@ -383,6 +423,7 @@ describe('CLI: apply command', () => {
         prevRun: {},
         prior: {},
         schemas: { test: {} },
+        dataSources: {},
       });
 
       vi.mocked(fs.readFile).mockImplementation(async (path) => {
@@ -432,9 +473,15 @@ describe('CLI: apply command', () => {
       vi.mocked(fs.access).mockResolvedValue(void 0);
       vi.mocked(fs.readFile).mockResolvedValue('content');
 
-      const planMock = vi
-        .fn()
-        .mockResolvedValue({ serial: 0, actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }], outputs: {}, prevRun: {}, prior: {}, schemas: { test: {} } });
+      const planMock = vi.fn().mockResolvedValue({
+        serial: 0,
+        actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }],
+        outputs: {},
+        prevRun: {},
+        prior: {},
+        schemas: { test: {} },
+        dataSources: {},
+      });
       const runMock = vi.fn(async function* () {
         yield { type: 'failed', action: { type: 'CREATE', resourceType: 'test', name: 't' }, error: new Error('disk full') };
       });

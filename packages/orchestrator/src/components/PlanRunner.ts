@@ -76,7 +76,7 @@ export class PlanRunner {
 
   /**
    * count and for_each are read again at apply, after what they read has run.
-   * Data sources are read again too, so a saved plan may name an index or a key they no longer give.
+   * A plan made from another configuration may name an index or a key they do not give.
    */
   private readKeys(address: Address, block: ResourceBlock, actions: PlanAction[], state: State): void {
     const { count, forEach } = block;
@@ -112,7 +112,7 @@ export class PlanRunner {
     return true;
   }
 
-  /** Read again at apply, as a resource's count and for_each are, since data sources are read again. */
+  /** Read again at apply, as a resource's count and for_each are. */
   private expandCall({ module, block }: Extract<GraphNode, { kind: 'module' }>, state: State): void {
     this.modules.expandCall(module, block, (value, parse, caller) => tryAt(value.position, spell(block), caller, () => parse(this.resolver.resolveValue(value, state, caller))));
   }

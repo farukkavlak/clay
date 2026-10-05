@@ -67,10 +67,21 @@ change each.
       `count = length(data.local_file.size.content)` and the file shorter by the apply, the
       plan's last index was still created. An apply read `for_each` again and never
       `count`; it reads both now and refuses an index or a key they do not give
-- [ ] A saved plan is held to the instances the apply reads in one direction only. With
+- [x] A saved plan was held to the instances the apply reads in one direction only. With
       `count = length(data.local_file.size.content)` and the file longer by the apply, the
-      new index is skipped in silence; with the plan deleting the last index and the file
-      longer again, it is deleted though the count gives it. `for_each` does the same
+      new index was skipped in silence; with the plan deleting the last index and the file
+      longer again, it was deleted though the count gave it. `for_each` did the same. A
+      plan carries what its data sources gave now, so an apply reads the count its plan read
+- [ ] A data source forgets what it was given. With `data "local_file" "f" { path = "x" }`,
+      `data.local_file.f.path` reads as `null`: an output shows nothing for it, and
+      `"${data.local_file.f.path}"` is refused as null. The read returns only `content`,
+      and an attribute it leaves out becomes null, the one the block set among them.
+      Terraform's provider returns the arguments with what it read
+- [ ] A plain `clay apply` reads module files twice: once for the plan, and again after
+      the confirmation. With `count = 2` in `m/main.clay` changed to `count = 3` in
+      between, index 2 is skipped in silence; with the plan deleting index 2 and the file
+      back at `count = 3`, it is deleted though the count gives it. `apply <plan>` runs
+      the files its plan read. Terraform holds the configuration it planned in memory
 
 ## 1. Language
 
@@ -311,8 +322,7 @@ length below 1.
 ### Data sources in the graph
 
 Data sources are read while the config loads, before any resource exists and before any
-module output has a value, so one that reads either fails at plan. `plan` and `apply` each
-read them, so an apply reads twice.
+module output has a value, so one that reads either fails at plan.
 
 - [ ] Data sources are graph nodes, read in dependency order and once per run. Read at load,
       one whose input reads a resource the plan changes gets the value in state, while a
@@ -324,9 +334,9 @@ read them, so an apply reads twice.
 - [ ] `count` and `for_each` on a data source, as on a resource, once it is a graph node:
       read at load, it cannot wait on what its count reads
 - [ ] A data source fed by a pending resource is `(known after apply)`
-- [ ] Their values travel in the plan, as in Terraform, so `apply` reads none of them
+- [x] Their values travel in the plan, as in Terraform, so `apply` reads none of them
       again. `runPlan` still parses and builds the graph on its own, since a saved plan
-      brings its own configuration; that stays, and only the second read goes
+      brings its own configuration
 - [x] `local_file` as a data source reads the file
 - [ ] `clay validate` stops reading them. Checking a configuration asks the provider for
       real data today, so validating needs whatever the data source talks to

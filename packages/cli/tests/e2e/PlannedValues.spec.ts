@@ -23,6 +23,40 @@ describe('an apply that does what the plan showed', () => {
 
   beforeEach(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-planned-'));
+  });
+
+  afterEach(async () => {
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  const copyOf = (word: string) => `
+    variable "word" { default = "${word}" }
+    resource "local_file" "copy" {
+      path = "${path.join(dir, 'copy.txt')}"
+      content = var.word
+    }
+  `;
+
+  // An action brings its own attributes, and reads what they name from the configuration the apply is given.
+  it('stops before a resource whose value the plan showed as known comes to another', async () => {
+    const engine = newOrchestrator();
+    const planned = await engine.plan(copyOf('one'));
+    config = copyOf('two');
+
+    await expect(run(engine, planned)).rejects.toThrow('the plan showed content = "one", but it now comes to "two". Plan again.');
+    await expect(fs.access(path.join(dir, 'copy.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('stops a saved plan the same way', async () => {
+    const engine = newOrchestrator();
+    const saved = parsePlanFile(serializePlan(await engine.plan(copyOf('one')), copyOf('one'), {}), 'plan.json');
+    config = copyOf('two');
+
+    await expect(run(engine, saved)).rejects.toThrow('the plan showed content = "one", but it now comes to "two". Plan again.');
+    await expect(fs.access(path.join(dir, 'copy.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('runs what the plan showed', async () => {
     await fs.writeFile(path.join(dir, 'source.txt'), 'one', 'utf8');
     config = `
       data "local_file" "source" { path = "${path.join(dir, 'source.txt')}" }
@@ -31,32 +65,6 @@ describe('an apply that does what the plan showed', () => {
         content = data.local_file.source.content
       }
     `;
-  });
-
-  afterEach(async () => {
-    await fs.rm(dir, { recursive: true, force: true });
-  });
-
-  // The data source is read again at apply and now returns a value the plan never showed.
-  it('stops before a resource whose value the plan showed as known comes to another', async () => {
-    const engine = newOrchestrator();
-    const planned = await engine.plan(config);
-    await fs.writeFile(path.join(dir, 'source.txt'), 'two', 'utf8');
-
-    await expect(run(engine, planned)).rejects.toThrow('the plan showed content = "one", but it now comes to "two". Plan again.');
-    await expect(fs.access(path.join(dir, 'copy.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
-  });
-
-  it('stops a saved plan the same way', async () => {
-    const engine = newOrchestrator();
-    const saved = parsePlanFile(serializePlan(await engine.plan(config), config, {}), 'plan.json');
-    await fs.writeFile(path.join(dir, 'source.txt'), 'two', 'utf8');
-
-    await expect(run(engine, saved)).rejects.toThrow('the plan showed content = "one", but it now comes to "two". Plan again.');
-    await expect(fs.access(path.join(dir, 'copy.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
-  });
-
-  it('runs what the plan showed', async () => {
     const engine = newOrchestrator();
 
     await run(engine, await engine.plan(config));

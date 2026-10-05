@@ -75,10 +75,12 @@ export interface Plan {
   prior: Record<string, Resource>;
   /** Lets a saved plan tell sets from lists without the provider. */
   schemas: Record<string, Schema>;
+  /** What each data source gave at plan, so the apply reads none of them again. */
+  dataSources: Record<string, Record<string, Output>>;
 }
 
 /** Bump on any change to the file's shape after a release, so an older plan file is refused instead of misread. */
-export const PLAN_FILE_VERSION = '20.0';
+export const PLAN_FILE_VERSION = '21.0';
 
 export interface PlanFile extends Plan {
   version: string;
@@ -163,6 +165,7 @@ export function serializePlan(plan: Plan, configContent: string, modules: Record
     prevRun: plan.prevRun,
     prior: plan.prior,
     schemas: plan.schemas,
+    dataSources: plan.dataSources,
   };
 
   return JSON.stringify(file, undefined, 2);
@@ -251,10 +254,20 @@ function isSchemas(schemas: unknown): schemas is Record<string, Schema> {
   return isRecord(schemas) && Object.values(schemas).every((schema) => isSchema(schema));
 }
 
+/** Each attribute holds a value and its type, as an output does. */
+function isDataSources(dataSources: unknown): boolean {
+  return isRecord(dataSources) && Object.values(dataSources).every((read) => isRecord(read) && Object.values(read).every((attribute) => isOutput(attribute)));
+}
+
 /** Resources are checked separately, the same way state's are. */
 function isPlan(plan: Partial<Plan>): plan is Plan {
   return (
-    typeof plan.serial === 'number' && Array.isArray(plan.actions) && plan.actions.every((action) => isAction(action)) && isOutputChanges(plan.outputs) && isSchemas(plan.schemas)
+    typeof plan.serial === 'number' &&
+    Array.isArray(plan.actions) &&
+    plan.actions.every((action) => isAction(action)) &&
+    isOutputChanges(plan.outputs) &&
+    isSchemas(plan.schemas) &&
+    isDataSources(plan.dataSources)
   );
 }
 

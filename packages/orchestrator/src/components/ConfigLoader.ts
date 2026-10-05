@@ -1,5 +1,6 @@
-import { ModuleAddress, Provider, Schema, State } from '@clay/contracts';
+import { ModuleAddress, Output, Provider, Schema, State } from '@clay/contracts';
 import { CONFIG_FILE, ConfigError, DataBlock, Lexer, Parser, spell, Statement } from '@clay/parser';
+import { Plan } from '@clay/planner';
 
 import { checkNames } from '../checkAttributes';
 import { conformValues, writtenAt } from '../conformValues';
@@ -20,6 +21,11 @@ export interface LoadedConfig {
   loadedResources: LoadedResource[];
   loadedModules: LoadedModule[];
   schemas: Map<string, Schema>;
+  dataSources: Plan['dataSources'];
+}
+
+function carried(read: Record<string, Value>): Record<string, Output> {
+  return Object.fromEntries(Object.entries(read).map(([name, { type, data }]) => [name, { value: data, type }]));
 }
 
 interface Reader {
@@ -41,7 +47,8 @@ export class ConfigLoader {
     private planned: Planned
   ) {}
 
-  async load(configContent: string, state: State): Promise<LoadedConfig> {
+  /** With `planned`, the values of a plan, no provider is asked for a data source. */
+  async load(configContent: string, state: State, planned?: Plan['dataSources']): Promise<LoadedConfig> {
     const mainProgram = new Parser(new Lexer(configContent, CONFIG_FILE).tokenize()).parse();
 
     this.scopeManager.clear();
@@ -59,9 +66,10 @@ export class ConfigLoader {
     await this.loadSchemas(loadedResources);
 
     this.dataSources.clear();
-    for (const mod of loadedModules) await this.readDataSources(mod.program, state, mod.address);
+    for (const mod of loadedModules) await this.readDataSources(mod.program, state, mod.address, planned);
 
-    return { mainProgram, loadedResources, loadedModules, schemas: this.schemas };
+    const dataSources = Object.fromEntries([...this.dataSources].map(([key, read]) => [key, carried(read)]));
+    return { mainProgram, loadedResources, loadedModules, schemas: this.schemas, dataSources };
   }
 
   /** Loaded before any value is resolved, since resolving needs the schema's types. */
@@ -90,19 +98,34 @@ export class ConfigLoader {
       }
   }
 
-  private async readDataSources(program: Statement[], state: State, scopeAddress: ModuleAddress): Promise<void> {
+  private async readDataSources(program: Statement[], state: State, scopeAddress: ModuleAddress, planned?: Plan['dataSources']): Promise<void> {
     const scope = scopeOf(scopeAddress);
 
     for (const stmt of program)
       if (stmt.type === 'Data') {
-        this.checkReadOnce(stmt, scopeAddress);
-        const reader = await this.readerOf(stmt, scopeAddress);
-        checkNames(stmt, reader.schema, scopeAddress);
-        const inputs = this.resolveInputs(stmt, state, scopeAddress);
-        const attributes = await this.readDataSource(stmt, reader, inputs, scopeAddress);
+        const key = dataSourceKey(scope, stmt.dataSourceType, stmt.name);
 
-        this.dataSources.set(dataSourceKey(scope, stmt.dataSourceType, stmt.name), attributes);
+        this.dataSources.set(key, planned ? this.plannedRead(stmt, planned, key, scopeAddress) : await this.read(stmt, state, scopeAddress));
       }
+  }
+
+  private async read(stmt: DataBlock, state: State, scopeAddress: ModuleAddress): Promise<Record<string, Value>> {
+    this.checkReadOnce(stmt, scopeAddress);
+    const reader = await this.readerOf(stmt, scopeAddress);
+    checkNames(stmt, reader.schema, scopeAddress);
+    const inputs = this.resolveInputs(stmt, state, scopeAddress);
+
+    return await this.readDataSource(stmt, reader, inputs, scopeAddress);
+  }
+
+  /** A plan that lacks one was made from another configuration. */
+  private plannedRead(stmt: DataBlock, planned: Plan['dataSources'], key: string, scopeAddress: ModuleAddress): Record<string, Value> {
+    if (!Object.hasOwn(planned, key)) {
+      const missing = new Error(`The plan has no value for data.${stmt.dataSourceType}.${stmt.name}, which the configuration declares`);
+      throw withPlace(missing, stmt.position, spell(stmt), scopeAddress);
+    }
+
+    return Object.fromEntries(Object.entries(planned[key]).map(([name, { type, value }]) => [name, valueOf(type, value)]));
   }
 
   private async readerOf(stmt: DataBlock, scopeAddress: ModuleAddress): Promise<Reader> {
