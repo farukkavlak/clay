@@ -218,7 +218,7 @@ export class DependencyGraphBuilder {
       });
   }
 
-  /** Checked here, as well as where it is called, since a value in a module nothing is made of is never read. */
+  /** Checked here, as well as where it is called, since the body of a for over an empty collection is never read. */
   private checkCalls(value: AttributeValue): void {
     for (const call of callsIn(value)) functionCalled(call);
   }

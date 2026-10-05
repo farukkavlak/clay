@@ -7,16 +7,14 @@ import { placed } from '../place';
 import { Planned, PlannedInstance } from '../Planned';
 import { TypeMismatch, typedValues } from '../typed';
 import { Value } from '../Value';
-import { readInstance } from './instance';
+import { noAttribute, readInstance } from './instance';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 
-/** What the provider computes, and a value the configuration does not know yet, only the apply makes. A name its schema has and nothing sets is null; any other never will be known. */
-function plannedAttribute(instance: PlannedInstance, type: string, schema: Schema, name: string, spelled: string, position?: Position): unknown {
+/** What the provider computes, and a value the configuration does not know yet, only the apply makes; anything else nothing sets, and is null. A name its schema does not have was refused where it is written. */
+function plannedAttribute(instance: PlannedInstance, name: string): unknown {
   if (Object.hasOwn(instance.known, name)) return instance.known[name];
-  if (instance.later.has(name)) return UNKNOWN;
-  if (Object.hasOwn(schema, name)) return null;
 
-  throw placed(`"${spelled}" will never be known: the configuration does not set ${name} and ${type} does not compute it`, position);
+  return instance.later.has(name) ? UNKNOWN : null;
 }
 
 export class ResourceResolver {
@@ -50,18 +48,18 @@ export class ResourceResolver {
 
     const spelled = spellReference([reference.type, reference.name, ...(key === undefined ? [] : [key]), attribute]);
     const planned = this.planned.get(resourceKey);
-    if (planned) return { value: plannedAttribute(planned, reference.type, schema, attribute, spelled, position), attribute, path };
+    if (planned) return { value: plannedAttribute(planned, attribute), attribute, path };
     if (!resource) throw new UnresolvedReferenceError(`Invalid resource reference "${spelled}": Resource "${resourceKey}" not found in state`);
 
-    return { value: this.getResolvedAttribute(resource, schema, attribute, spelled, position), attribute, path };
+    return { value: this.getResolvedAttribute(resource, reference.type, schema, attribute, position), attribute, path };
   }
 
   /** State holds all a resource has, so a name its schema has and it does not hold was left out, and is null; any other never will be read. */
-  private getResolvedAttribute(resource: { attributes: Record<string, unknown> }, schema: Schema, attributeName: string, fullPath: string, position?: Position): unknown {
+  private getResolvedAttribute(resource: { attributes: Record<string, unknown> }, type: string, schema: Schema, attributeName: string, position?: Position): unknown {
     // Plain indexing would find inherited names like `toString`.
     if (Object.hasOwn(resource.attributes, attributeName)) return resource.attributes[attributeName];
     if (Object.hasOwn(schema, attributeName)) return null;
 
-    throw placed(`Invalid resource reference "${fullPath}": Attribute "${attributeName}" not found on resource`, position);
+    throw placed(noAttribute(type, attributeName), position);
   }
 }

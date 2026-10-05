@@ -55,10 +55,14 @@ change each.
       under the variable's key and drops the default, so nothing reads it. A default is
       a constant now, as in Terraform: a reference or a function call in it is refused
       where it is written
-- [ ] A module input no instance reads is never resolved. `a = tolist([1, true])` given
-      to a module with `count = 0` and `variable "a" {}` is valid to `clay validate`;
-      the same call fails when `count = 1`. Only an input to a variable that names a type
-      is resolved once per call
+- [x] A block that makes no instance is never read. `tolist([1, true])` in a resource
+      with `count = 0`, in an output of a module called with `count = 0`, or given to its
+      untyped variable is valid to `clay validate`; with `count = 1` it is refused. A
+      template also stopped at its first part not known yet, so a mistake after it passed
+      the plan. Every value is read once now, as written, and held to the type of the
+      attribute or variable it is given to: a reference is not known yet, of the type its
+      variable or schema names, and a for over a collection not known yet reads its body
+      once. Terraform reads each block once the same way
 
 ## 1. Language
 
@@ -281,6 +285,11 @@ length below 1.
       it: an index into a set or a map, a key into a list, any step into a string. Today
       the apply refuses it. Terraform refuses at plan: "Can't access attributes on a
       primitive-typed value (string)"
+- [ ] A value not known yet is checked only by its own kind, not by the types of what it
+      holds. `var.l` of type `list(number)` given to a variable of type `list(bool)` is
+      valid to `clay validate` when no instance reads it: a list is taken as a list, and
+      its numbers are never checked. Its type says they can never be booleans. Terraform
+      refuses it
 - [ ] A provider that says it computes a value and does not return it at apply is not
       refused: the value is left out and reads as `null`. What reads it then fails
       without naming the provider: `content = stamp.a.made` ends in

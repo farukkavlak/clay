@@ -75,7 +75,7 @@ describe('length', () => {
     ['a boolean', written(true), 'a boolean'],
     ['null', valueOf(types.dynamic, null), 'null'],
     ['a list that is null', valueOf(types.list(types.string), null), 'null'],
-    ['a number not known yet', valueOf(types.number, UNKNOWN), 'a number known only after apply'],
+    ['a number not known yet', valueOf(types.number, UNKNOWN), 'a number'],
   ])('refuses %s where the argument is written', (_, value, described) => {
     const error = errorOf('length', value);
 
@@ -117,7 +117,7 @@ describe('tolist', () => {
   it.each([
     ['an object', written({ a: 'x' }), 'tolist takes a list, a tuple or a set, not an object'],
     ['a string', written('a'), 'tolist takes a list, a tuple or a set, not a string'],
-    ['a map not known yet', valueOf(types.map(types.string), UNKNOWN), 'tolist takes a list, a tuple or a set, not a map known only after apply'],
+    ['a map not known yet', valueOf(types.map(types.string), UNKNOWN), 'tolist takes a list, a tuple or a set, not a map'],
     ['a number and a boolean', written([ExactNumber.parse('1'), true]), 'tolist cannot join a number and a boolean into one type'],
     ['objects with other names', written([{ a: 'x' }, { b: 'x' }]), 'tolist cannot join an object with "b" and one without it into one type'],
   ])('refuses %s where the argument is written', (_, value, message) => {

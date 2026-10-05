@@ -36,7 +36,7 @@ describe('a reference to a name every object has', () => {
     await run(fileA());
     const reads = `${fileA()}\nresource "local_file" "b" { path = "${path.join(dir, 'b.txt')}" content = "\${local_file.a.toString}" }`;
 
-    await expect(run(reads)).rejects.toThrow('Invalid resource reference "local_file.a.toString": Attribute "toString" not found on resource');
+    await expect(run(reads)).rejects.toThrow('local_file has no attribute "toString"');
     await expect(fs.access(path.join(dir, 'b.txt'))).rejects.toThrow();
   });
 });

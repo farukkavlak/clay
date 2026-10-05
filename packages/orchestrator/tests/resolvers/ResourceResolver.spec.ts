@@ -62,7 +62,7 @@ describe('ResourceResolver', () => {
     const position = { file: 'main.clay', line: 3, column: 7 };
     const read = () => resolver.resolve(ref(`resource.test.${name}`), context, mockState, position);
 
-    expect(read).toThrow(expect.objectContaining({ message: `Invalid resource reference "resource.test.${name}": Attribute "${name}" not found on resource`, position }));
+    expect(read).toThrow(expect.objectContaining({ message: `resource has no attribute "${name}"`, position }));
     expect(read).not.toThrow(UnresolvedReferenceError);
   });
 
@@ -96,15 +96,6 @@ describe('ResourceResolver', () => {
       const named = new ResourceResolver(new Instances(), planned, new Map([['resource', { note: { type: types.string } }]]));
 
       expect(named.resolve(ref('resource.test.note'), context, mockState).value).toEqual(valueOf(types.string, null));
-    });
-
-    // State holds settings, but the plan will make the instance anew from its configuration.
-    it.each(['settings', 'toString'])('refuses %s, which neither its configuration sets nor its provider computes', (name) => {
-      const position = { file: 'main.clay', line: 3, column: 7 };
-
-      expect(() => planning.resolve(ref(`resource.test.${name}`), context, mockState, position)).toThrow(
-        expect.objectContaining({ message: `"resource.test.${name}" will never be known: the configuration does not set ${name} and resource does not compute it`, position })
-      );
     });
   });
 });

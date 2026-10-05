@@ -1,4 +1,4 @@
-import { ExactNumber, isUnknown, types } from '@clay/contracts';
+import { ExactNumber, isUnknown, Type, types, UNKNOWN } from '@clay/contracts';
 import { ConfigError, Position } from '@clay/parser';
 
 import { UnresolvedReferenceError } from './resolvers/UnresolvedReferenceError';
@@ -31,6 +31,21 @@ export function forItems(collection: Value, position: Position): ForItem[] {
 
   const items = (collection.data as unknown[]).map((_, index) => child(collection, index));
   return items.map((item, index) => [kind === 'set' ? item : indexOf(index), item]);
+}
+
+/** The key a for gives an item of a collection of `type`: a list's or a tuple's index, a map's or an object's key, and a set's member, which is its own key. */
+function keyType(type: Type): Type {
+  if (type.kind === 'list' || type.kind === 'tuple') return types.number;
+  if (type.kind === 'map' || type.kind === 'object') return types.string;
+
+  return type.kind === 'set' ? type.element : types.dynamic;
+}
+
+/** An item of a collection of `type` not known yet, its key and value of the types they will have where every item shares them. */
+export function unknownItem(type: Type): ForItem {
+  const value = type.kind === 'list' || type.kind === 'set' || type.kind === 'map' ? type.element : types.dynamic;
+
+  return [valueOf(keyType(type), UNKNOWN), valueOf(value, UNKNOWN)];
 }
 
 /** A key is text, so one of a type no key can have is refused at `position` even before it is known. */

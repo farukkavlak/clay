@@ -133,6 +133,24 @@ describe('ReferenceResolver', () => {
     expect(readLater).toThrow(expect.objectContaining({ type: types.string }));
   });
 
+  it('says why a for cannot be read by its collection, outside a plan', () => {
+    expect(() => read('[for v in resource.later.ids : v]')).toThrow(
+      new UnresolvedReferenceError('Invalid resource reference "resource.later.ids": Resource "resource.later" not found in state')
+    );
+  });
+
+  it('says why a template is not known yet by the first part that is not', () => {
+    expect(() => read('"${resource.later.id}-${resource.other.id}"')).toThrow(
+      new UnresolvedReferenceError('Invalid resource reference "resource.later.id": Resource "resource.later" not found in state', types.string)
+    );
+  });
+
+  it('reads every part of a template while one is not known yet, so a mistake after it is found', () => {
+    expect(() => readWith('"${resource.later.id}-${tolist([1, true])}"', new Map(), planning())).toThrow(
+      new ConfigError('tolist cannot join a number and a boolean into one type', atColumn(53))
+    );
+  });
+
   // While planning, an item only the apply can read stands on its own, with the type it will have.
   it('reads an item not known yet in a list as unknown, of the type it will have', () => {
     const planned = new Planned();
@@ -227,7 +245,7 @@ describe('ReferenceResolver', () => {
 
     it('refuses a collection not known yet whose type it cannot go over, while planning', () => {
       expect(() => readWith('[for s in data.src.s.v : s]', source(valueOf(types.string, UNKNOWN)), planning())).toThrow(
-        new ConfigError('A for goes over a list, a tuple, a set, a map or an object, not a string known only after apply', atColumn(32))
+        new ConfigError('A for goes over a list, a tuple, a set, a map or an object, not a string', atColumn(32))
       );
     });
 
@@ -325,7 +343,7 @@ describe('ReferenceResolver', () => {
 
     it('refuses a key not known yet whose type no key can have, while planning', () => {
       expect(() => readWith('{for v in ["a"] : data.src.s.v => v}', source(valueOf(types.list(types.string), UNKNOWN)), planning())).toThrow(
-        new ConfigError('A key in a for is a string, a number or a boolean, not a list known only after apply', atColumn(40))
+        new ConfigError('A key in a for is a string, a number or a boolean, not a list', atColumn(40))
       );
     });
   });
