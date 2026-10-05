@@ -315,7 +315,7 @@ describe('a set attribute', () => {
   it('refuses, at plan, a value not known yet of a type the attribute does not take', async () => {
     const error = await planError(`resource "pool" "q" { members = [] }\nresource "pool" "o" {\n  members = []\n  order = pool.q.id\n}`);
 
-    expect(error.message).toBe('order is a string known only after apply, where pool takes a list');
+    expect(error.message).toBe('order is a string, where pool takes a list');
     expect(error.position).toMatchObject({ line: 4 });
   });
 

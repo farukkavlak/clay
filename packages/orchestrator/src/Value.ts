@@ -1,4 +1,4 @@
-import { containsUnknown, ExactNumber, isRecord, isUnknown, own, Type, typeAt, types } from '@clay/contracts';
+import { containsUnknown, ExactNumber, isRecord, own, Type, typeAt, types } from '@clay/contracts';
 
 /**
  * A value with its type. `data` is plain: a string, an `ExactNumber`, a boolean or null; an array for a list, a set or a tuple; a record for a map or an
@@ -71,12 +71,9 @@ export function article(kind: Type['kind']): string {
   return ARTICLES[kind];
 }
 
-/** What a value is, as a message says it; one not known yet by the kind it will be, where that is known. */
+/** What a value is, as a message says it: its kind, known yet or not. */
 export function described(value: Value): string {
-  if (value.data === null) return 'null';
-  if (!isUnknown(value.data)) return article(value.type.kind);
-
-  return value.type.kind === 'dynamic' ? 'a value known only after apply' : `${article(value.type.kind)} known only after apply`;
+  return value.data === null ? 'null' : article(value.type.kind);
 }
 
 /** Values as a provider, a plan and a state hold them: the data alone, typed again by the schema where it is read. */

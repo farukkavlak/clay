@@ -161,7 +161,7 @@ describe('a for expression', () => {
 
     const error = await planError(config);
 
-    expect(error.message).toBe('A for goes over a list, a tuple, a set, a map or an object, not a string known only after apply');
+    expect(error.message).toBe('A for goes over a list, a tuple, a set, a map or an object, not a string');
     expect(error.position).toMatchObject(placeOf(config, 'random_string.s.result :'));
     expect(await textFiles()).toEqual([]);
   });

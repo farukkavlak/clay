@@ -197,7 +197,7 @@ describe('a variable that names its type', () => {
 
     const error = await errorOf(() => newOrchestrator().plan(config));
 
-    expect(error.message).toBe('names is a string known only after apply, where variable "names" takes a list');
+    expect(error.message).toBe('names is a string, where variable "names" takes a list');
     expect(error.position).toEqual({ file: 'main.clay', ...placeOf(config, 'random_string.r.result') });
   });
 

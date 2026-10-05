@@ -19,6 +19,11 @@ export function eachOutside(name: 'key' | 'value'): string {
   return `each.${name} is only known inside a resource or a module call that has for_each`;
 }
 
+/** A resource read for a name its schema does not have. */
+export function noAttribute(type: string, name: string): string {
+  return `${type} has no attribute "${name}"`;
+}
+
 function refuse(message: string, position?: Position): never {
   throw placed(message, position);
 }

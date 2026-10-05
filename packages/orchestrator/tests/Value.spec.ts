@@ -35,8 +35,8 @@ describe('a value with its type', () => {
     ['an object', valueOf(types.object({}), {}), 'an object'],
     ['a boolean', valueOf(types.bool, true), 'a boolean'],
     ['null of a type', valueOf(types.string, null), 'null'],
-    ['a value not known yet of a type', valueOf(types.list(types.string), UNKNOWN), 'a list known only after apply'],
-    ['a value not known yet of no type', valueOf(types.dynamic, UNKNOWN), 'a value known only after apply'],
+    ['a value not known yet of a type', valueOf(types.list(types.string), UNKNOWN), 'a list'],
+    ['a value not known yet of no type', valueOf(types.dynamic, UNKNOWN), 'any value'],
   ])('describes %s', (_, value, words) => {
     expect(described(value)).toBe(words);
   });

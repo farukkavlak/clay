@@ -171,7 +171,7 @@ describe('a value only the provider knows', () => {
     const config = `module "m" { source = "./m" }\nresource "local_file" "copy" {\n  path = "${file}"\n  content = module.m.t\n}`;
 
     await expect(newOrchestrator(new TaggedStampProvider()).plan(config)).rejects.toMatchObject({
-      message: 'content is a map known only after apply, where local_file takes a string',
+      message: 'content is a map, where local_file takes a string',
       position: { line: 4 },
     });
   });
@@ -181,7 +181,7 @@ describe('a value only the provider knows', () => {
     const config = 'resource "stamp" "a" { label = "x" }\noutput "o" { value = stamp.a.nope }';
 
     await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
-      message: '"stamp.a.nope" will never be known: the configuration does not set nope and stamp does not compute it',
+      message: 'stamp has no attribute "nope"',
       position: { file: 'main.clay', line: 2, column: 22 },
     });
   });
@@ -198,7 +198,7 @@ describe('a value only the provider knows', () => {
     await apply('resource "stamp" "a" { label = "x" }');
 
     await expect(newOrchestrator().plan('resource "stamp" "a" { label = "x" }\noutput "o" { value = stamp.a.nope }')).rejects.toMatchObject({
-      message: 'Invalid resource reference "stamp.a.nope": Attribute "nope" not found on resource',
+      message: 'stamp has no attribute "nope"',
       position: { file: 'main.clay', line: 2, column: 22 },
     });
   });

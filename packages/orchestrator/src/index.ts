@@ -10,6 +10,7 @@ import { DesiredStateBuilder } from './components/DesiredStateBuilder';
 import { ModuleLoader } from './components/ModuleLoader';
 import { PlanRunner } from './components/PlanRunner';
 import { ResourcePlanner } from './components/ResourcePlanner';
+import { WrittenCheck } from './components/WrittenCheck';
 import { checkRead, heldBy } from './providerResult';
 import { Instances } from './Instances';
 import { ModuleInstances } from './ModuleInstances';
@@ -38,6 +39,7 @@ export class Orchestrator {
     private providers: ProviderRegistry,
     private loader: ConfigLoader,
     private graphBuilder: DependencyGraphBuilder,
+    private writtenCheck: WrittenCheck,
     private desiredStateBuilder: DesiredStateBuilder,
     private runner: PlanRunner
   ) {}
@@ -61,6 +63,7 @@ export class Orchestrator {
       providers,
       new ConfigLoader(new ModuleLoader(files, scopes), scopes, dataSources, schemas, resolver, providers, instances, modules, planned),
       graphBuilder,
+      new WrittenCheck(resolver, scopes, schemas),
       new DesiredStateBuilder(scopes, scanner, resolver, graphBuilder, instances, modules, planned, resourcePlanner),
       new PlanRunner(stateManager, new ActionExecutor(providers, resolver, resourcePlanner), scopes, resolver, instances, modules)
     );
@@ -153,6 +156,7 @@ export class Orchestrator {
 
     const graph = this.graphBuilder.buildExecutionGraph(loadedResources, loadedModules);
     checkAttributes(loadedResources, schemas);
+    this.writtenCheck.check(loadedResources, loadedModules);
     const { resources: desiredResources, outputs } = await this.desiredStateBuilder.build(loadedResources, graph, state, schemas);
 
     return { desiredResources, outputs };

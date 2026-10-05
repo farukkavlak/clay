@@ -147,7 +147,7 @@ describe('conformValues', () => {
   // Its kind is known before its value, so a value that could never fit is refused at the plan.
   it('refuses a value not known yet whose kind the schema does not take', () => {
     expect(() => conform('thing', schema, { ports: valueOf(types.string, UNKNOWN) })).toThrow(
-      expect.objectContaining({ message: 'ports is a string known only after apply, where thing takes a list', attribute: 'ports' })
+      expect.objectContaining({ message: 'ports is a string, where thing takes a list', attribute: 'ports' })
     );
   });
 

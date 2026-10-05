@@ -55,10 +55,14 @@ change each.
       under the variable's key and drops the default, so nothing reads it. A default is
       a constant now, as in Terraform: a reference or a function call in it is refused
       where it is written
-- [ ] A module input no instance reads is never resolved. `a = tolist([1, true])` given
-      to a module with `count = 0` and `variable "a" {}` is valid to `clay validate`;
-      the same call fails when `count = 1`. Only an input to a variable that names a type
-      is resolved once per call
+- [x] A block that makes no instance is never read. `tolist([1, true])` in a resource
+      with `count = 0`, in an output of a module called with `count = 0`, or given to its
+      untyped variable is valid to `clay validate`; with `count = 1` it is refused. A
+      template also stopped at its first part not known yet, so a mistake after it passed
+      the plan. Every value is read once now, as written, and held to the type of the
+      attribute or variable it is given to: a reference is not known yet, of the type its
+      variable or schema names, and a for over a collection not known yet reads its body
+      once. Terraform reads each block once the same way
 
 ## 1. Language
 

@@ -58,12 +58,7 @@ describe('a value held to the type its variable names', () => {
   it.each([
     ['a string that spells no number', written('x'), types.number, 'v: "x" is not a number'],
     ['a list where a number goes', written(['a']), types.number, 'v is a tuple, where variable "v" takes a number'],
-    [
-      'a value not known yet whose type can never be a number',
-      valueOf(types.list(types.string), UNKNOWN),
-      types.number,
-      'v is a list known only after apply, where variable "v" takes a number',
-    ],
+    ['a value not known yet whose type can never be a number', valueOf(types.list(types.string), UNKNOWN), types.number, 'v is a list, where variable "v" takes a number'],
     ['an attribute the object type does not name', written({ a: 'x', extra: 'y' }), types.object({ a: types.string }), 'variable "v" has no attribute "extra" in v'],
     ['an object without an attribute its type names', written({}), types.object({ a: types.string }), 'variable "v" requires "a" in v'],
     ['a number and a boolean where list(any) joins them', written([n('1'), true]), types.list(types.dynamic), 'variable "v" cannot join a number and a boolean into one type'],
