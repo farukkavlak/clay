@@ -55,6 +55,10 @@ change each.
       under the variable's key and drops the default, so nothing reads it. A default is
       a constant now, as in Terraform: a reference or a function call in it is refused
       where it is written
+- [ ] A module input no instance reads is never resolved. `a = tolist([1, true])` given
+      to a module with `count = 0` and `variable "a" {}` is valid to `clay validate`;
+      the same call fails when `count = 1`. Only an input to a variable that names a type
+      is resolved once per call
 
 ## 1. Language
 
@@ -120,9 +124,10 @@ configuration hits each of these early.
 - [x] A `for` expression that makes an object, `{for k, v in m : k => v}`. A key two
       items give is refused, and `...` after the value groups them
 - [ ] `if` in a `for` expression, once operators can write a condition
-- [ ] A variable names its type: `variable "x" { type = set(string) }`. A module input
-      takes whatever it is given today, so a list passed where a set is meant keeps its
-      order and its duplicates
+- [x] A variable names its type: `variable "x" { type = set(string) }`. An object given
+      an attribute its type does not name is refused, where Terraform drops it in silence
+- [ ] `optional(type)` and `optional(type, default)` on an attribute of a variable's
+      object type. Today every attribute it names is required
 - [ ] `locals { name = "${var.prefix}-x" }`: a value a module works out once and reads by
       name as `local.name`. A variable default is a constant, so today such a value is
       written out again wherever it is read

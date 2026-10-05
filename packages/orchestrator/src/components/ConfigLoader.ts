@@ -1,8 +1,9 @@
 import { ModuleAddress, Provider, Schema, State } from '@clay/contracts';
-import { CONFIG_FILE, ConfigError, DataBlock, Lexer, Parser, spell, Statement } from '@clay/parser';
+import { AttributeValue, CONFIG_FILE, ConfigError, DataBlock, Lexer, ModuleBlock, namedIn, Parser, spell, Statement, VariableBlock } from '@clay/parser';
 
 import { checkNames } from '../checkAttributes';
 import { conformValues, writtenAt } from '../conformValues';
+import { declaredAs } from '../declared';
 import { checkDataSourceRead, heldBy } from '../providerResult';
 import { plainOf, Value, valueOf } from '../Value';
 import { Instances } from '../Instances';
@@ -49,6 +50,7 @@ export class ConfigLoader {
 
     this.scopeManager.clear();
     const { resources: loadedResources, modules: loadedModules } = await this.moduleLoader.loadModuleTree(mainProgram);
+    this.checkConstants(loadedModules, state);
 
     this.instances.clear();
     // A plan's values are its own; the next plan makes its own, and an apply reads state.
@@ -81,6 +83,31 @@ export class ConfigLoader {
         throw withPlace(error, block.position, spell(block), address);
       }
     }
+  }
+
+  /** Checked once per call, so a default given a value in its place, or a constant input no instance reads, is still refused. */
+  private checkConstants(loadedModules: LoadedModule[], state: State): void {
+    const programs = new Map(loadedModules.map(({ address, program }) => [address.toString(), program]));
+
+    for (const { address, program } of loadedModules)
+      for (const stmt of program) {
+        if (stmt.type === 'Variable') this.checkTyped(stmt, stmt.attributes.default, spell(stmt), address, state);
+        if (stmt.type === 'Module') this.checkInputs(stmt, programs.get(address.child(stmt.name).toString()) ?? [], address, state);
+      }
+  }
+
+  private checkInputs(call: ModuleBlock, program: Statement[], address: ModuleAddress, state: State): void {
+    for (const stmt of program.filter((declared): declared is VariableBlock => declared.type === 'Variable')) {
+      const given = Object.hasOwn(call.attributes, stmt.name) ? call.attributes[stmt.name] : undefined;
+      if (given && namedIn(given).every((named) => named.type === 'Call')) this.checkTyped(stmt, given, spell(call), address, state);
+    }
+  }
+
+  private checkTyped(stmt: VariableBlock, written: AttributeValue | undefined, block: string, address: ModuleAddress, state: State): void {
+    const { valueType } = stmt;
+    if (!valueType || !written) return;
+
+    tryAt(written.position, block, address, () => declaredAs(stmt.name, this.resolver.resolveValue(written, state, address), valueType));
   }
 
   private declareCalls(loadedModules: LoadedModule[]): void {

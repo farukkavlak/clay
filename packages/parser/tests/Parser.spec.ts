@@ -1,4 +1,4 @@
-import { ExactNumber } from '@clay/contracts';
+import { ExactNumber, types } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { BoundNode, callsIn, CONFIG_FILE, ModuleBlock, namedIn, ReferenceNode, ResourceBlock, spellNamed, VariableBlock } from '../src/ast';
@@ -29,6 +29,7 @@ function errorOf(input: string, file: string = CONFIG_FILE): ConfigError {
 
 const attributesOf = (input: string) => (makeParser(input).parse()[0] as ResourceBlock).attributes;
 const valueOf = (written: string) => attributesOf(`resource "t" "n" { v = ${written} }`).v;
+const typeOf = (written: string) => (makeParser(`variable "v" { type = ${written} }`).parse()[0] as VariableBlock).valueType;
 const reference = (parts: (string | number)[], column: number, line = 1) => ({ type: 'Reference', value: parts, position: at(line, column) });
 
 describe('Clay Parser', () => {
@@ -954,12 +955,21 @@ describe('Clay Parser', () => {
 
     it.each([
       ['a misspelled default', 'variable "v" { defualt = "a" }', 'defualt', at(1, 26)],
-      ['a type it does not check', 'variable "v" { default = "a" type = "string" }', 'type', at(1, 37)],
       ['a description it does not keep', 'variable "v" { default = "a" description = "why" }', 'description', at(1, 44)],
-    ])('refuses %s in a variable block', (_, input, attribute, position) => {
+    ])('refuses %s in a variable block, at its value', (_, input, attribute, position) => {
       const error = errorOf(input);
 
-      expect(error.message).toBe(`Variable "v" takes only "default", not "${attribute}".`);
+      expect(error.message).toBe(`Variable "v" takes only "default" and "type", not "${attribute}".`);
+      expect(error.position).toEqual(position);
+    });
+
+    it.each([
+      ['default', 'variable "v" { default = "a" default = "b" }', at(1, 30)],
+      ['type', 'variable "v" { type = string type = number }', at(1, 30)],
+    ])('refuses %s set twice in a variable block', (name, input, position) => {
+      const error = errorOf(input);
+
+      expect(error.message).toBe(`${name} is set twice`);
       expect(error.position).toEqual(position);
     });
 
@@ -1122,6 +1132,58 @@ describe('Clay Parser', () => {
 
       expect(error.message).toBe('module "m" has count or for_each, not both');
       expect(error.position).toEqual(at(1, 50));
+    });
+  });
+
+  describe('Variable types', () => {
+    it.each([
+      ['string', types.string],
+      ['number', types.number],
+      ['bool', types.bool],
+      ['any', types.dynamic],
+      ['list(string)', types.list(types.string)],
+      ['set(number)', types.set(types.number)],
+      ['map(bool)', types.map(types.bool)],
+      ['list(set(any))', types.list(types.set(types.dynamic))],
+      ['tuple([string, number,])', types.tuple([types.string, types.number])],
+      ['tuple([])', types.tuple([])],
+      ['object({ a = string, b = list(number) })', types.object({ a: types.string, b: types.list(types.number) })],
+      ['object({\n a = string\n b = bool\n})', types.object({ a: types.string, b: types.bool })],
+    ])('reads %s', (written, type) => {
+      expect(typeOf(written)).toEqual(type);
+    });
+
+    it('keeps the type beside the default', () => {
+      const [variable] = makeParser('variable "v" {\n  type    = set(string)\n  default = ["a"]\n}').parse() as VariableBlock[];
+
+      expect(variable.valueType).toEqual(types.set(types.string));
+      expect(variable.attributes).toEqual({ default: { type: 'List', value: [{ type: 'String', value: 'a', position: at(3, 14) }], position: at(3, 13) } });
+    });
+
+    it('leaves the type out of a variable that names none', () => {
+      const [variable] = makeParser('variable "v" { default = 1 }').parse() as VariableBlock[];
+
+      expect(Object.hasOwn(variable, 'valueType')).toBe(false);
+    });
+
+    it.each([
+      ['a quoted type', '"string"', 'A type is written without quotes: string, not "string"', at(1, 23)],
+      ['a misspelled type', 'list(strin)', '"strin" is not a type', at(1, 28)],
+      ['a type that holds none given one', 'string(number)', "string holds no other type, so it takes no '('", at(1, 29)],
+      ['a collection without its element', 'list', "Expect '(' after list.", at(2, 1)],
+      ['an unclosed collection', 'map(string', "Expect ')' after the type map holds.", at(2, 1)],
+      ['a tuple without brackets', 'tuple(string)', "Expect '[' after 'tuple('.", at(1, 29)],
+      ['tuple types without a comma between', 'tuple([string number])', "Expect ']' after the types in a tuple.", at(1, 37)],
+      ['an object without braces', 'object(string)', "Expect '{' after 'object('.", at(1, 30)],
+      ['an object attribute named twice', 'object({ a = string, a = number })', 'a is set twice', at(1, 44)],
+      ['an object attribute named __proto__', 'object({ __proto__ = string })', '__proto__ cannot be a name', at(1, 32)],
+      ['a value where a type goes', '1', 'Expect a type: string, number, bool, any', at(1, 23)],
+      ['an optional attribute, which is not read yet', 'object({ a = optional(string) })', '"optional" is not a type', at(1, 36)],
+    ])('refuses %s, where it is written', (_, written, message, position) => {
+      const error = errorOf(`variable "v" { type = ${written}\n}`);
+
+      expect(error.message).toContain(message);
+      expect(error.position).toEqual(position);
     });
   });
 

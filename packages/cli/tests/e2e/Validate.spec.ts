@@ -139,7 +139,7 @@ describe('validate against real files', () => {
   it('refuses an attribute a variable block is never read for, and points at it', async () => {
     const output = await validate('variable "v" {\n  default     = "a"\n  descriptoin = "typo"\n}');
 
-    expect(output).toContain('Variable "v" takes only "default", not "descriptoin".');
+    expect(output).toContain('Variable "v" takes only "default" and "type", not "descriptoin".');
     expect(output).toContain('\n  3:   descriptoin = "typo"\n                     ^');
   });
 

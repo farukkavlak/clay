@@ -1,4 +1,4 @@
-import { ExactNumber } from '@clay/contracts';
+import { ExactNumber, Type } from '@clay/contracts';
 import { Position } from './Position';
 import { spellReference, spellSteps, Step } from './reference';
 
@@ -55,6 +55,8 @@ export interface VariableBlock extends Node {
   type: 'Variable';
   name: string; // e.g., "environment"
   attributes: Record<string, AttributeValue>;
+  /** What every value it is given is taken as; a variable without one takes a value as it is. */
+  valueType?: Type;
 }
 
 export interface OutputBlock extends Node {

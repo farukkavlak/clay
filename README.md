@@ -54,7 +54,8 @@ Every value carries its type. A written list is a tuple, `["a", 1]` is
 `tuple([string, number])`, and a written map is an object; a value read from a resource or a
 data source has the type its schema names, and keeps it through variables, module inputs
 and outputs. An attribute set to `null` is left out, as if it were not written, so a
-required one is refused. `null` inside a list or a map stays there.
+required one is refused. `null` inside a list or a map stays there. A variable may name its
+type, `type = set(string)`, and takes what it is given as that type.
 
 | Block                            | Does                                                           |
 | -------------------------------- | -------------------------------------------------------------- |
