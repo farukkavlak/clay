@@ -285,6 +285,11 @@ length below 1.
       it: an index into a set or a map, a key into a list, any step into a string. Today
       the apply refuses it. Terraform refuses at plan: "Can't access attributes on a
       primitive-typed value (string)"
+- [ ] A value not known yet is checked only by its own kind, not by the types of what it
+      holds. `var.l` of type `list(number)` given to a variable of type `list(bool)` is
+      valid to `clay validate` when no instance reads it: a list is taken as a list, and
+      its numbers are never checked. Its type says they can never be booleans. Terraform
+      refuses it
 - [ ] A provider that says it computes a value and does not return it at apply is not
       refused: the value is left out and reads as `null`. What reads it then fails
       without naming the provider: `content = stamp.a.made` ends in
