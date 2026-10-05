@@ -1,10 +1,11 @@
 import { Address, ModuleAddress, Output, State } from '@clay/contracts';
 import { Graph } from '@clay/graph';
-import { ResourceBlock, spell, Statement } from '@clay/parser';
+import { AttributeValue, ResourceBlock, spell, Statement } from '@clay/parser';
 import { PlanAction } from '@clay/planner';
 import { moveResource, StateManager } from '@clay/state';
 
 import { asError } from '../asError';
+import { countFrom } from '../count';
 import { eachFrom } from '../forEach';
 import { Instances, repetitionOfKey } from '../Instances';
 import { blockKey, contextIn, scopeOf } from '../keys';
@@ -13,6 +14,7 @@ import { tryAt } from '../place';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { RunEvent } from '../RunEvent';
 import { ScopeManager } from '../scope/ScopeManager';
+import { Value } from '../Value';
 import { ActionExecutor } from './ActionExecutor';
 import { LoadedConfig } from './ConfigLoader';
 import { GraphNode, OutputNode } from './DependencyGraphBuilder';
@@ -73,17 +75,21 @@ export class PlanRunner {
   }
 
   /**
-   * for_each is read again at apply, after what it reads has run.
-   * Data sources are read again too, so a saved plan may name a key for_each no longer gives.
+   * count and for_each are read again at apply, after what they read has run.
+   * Data sources are read again too, so a saved plan may name an index or a key they no longer give.
    */
-  private readEach(address: Address, block: ResourceBlock, actions: PlanAction[], state: State): void {
-    const { forEach } = block;
-    if (!forEach) return;
+  private readKeys(address: Address, block: ResourceBlock, actions: PlanAction[], state: State): void {
+    const { count, forEach } = block;
+    const read = <T>(value: AttributeValue, from: (value: Value) => T) =>
+      tryAt(value.position, spell(block), address, () => from(this.resolver.resolveValue(value, state, address)));
 
-    const values = tryAt(forEach.position, spell(block), address, () => eachFrom(this.resolver.resolveValue(forEach, state, address)));
-    this.instances.setEach(address.toString(), values);
+    if (count) this.instances.setCount(address.toString(), read(count, countFrom));
+    if (forEach) this.instances.setEach(address.toString(), read(forEach, eachFrom));
 
-    for (const action of actions) if (typeof action.key !== 'string' || !values.has(action.key)) throw undeclared(Address.of(action));
+    const keys = this.instances.keysOf(address.toString());
+    if (keys === undefined) return;
+
+    for (const action of actions) if (action.key === undefined || !keys.includes(action.key)) throw undeclared(Address.of(action));
   }
 
   private async *applyInOrder(actions: PlanAction[], config: LoadedConfig, graph: Graph<GraphNode>, state: State): AsyncGenerator<RunEvent, boolean> {
@@ -106,7 +112,7 @@ export class PlanRunner {
     return true;
   }
 
-  /** Read again at apply, as a resource's for_each is, since data sources are read again. */
+  /** Read again at apply, as a resource's count and for_each are, since data sources are read again. */
   private expandCall({ module, block }: Extract<GraphNode, { kind: 'module' }>, state: State): void {
     this.modules.expandCall(module, block, (value, parse, caller) => tryAt(value.position, spell(block), caller, () => parse(this.resolver.resolveValue(value, state, caller))));
   }
@@ -120,7 +126,7 @@ export class PlanRunner {
 
     for (const at of blocks) {
       const instanceActions = byInstance.get(at.toString()) ?? [];
-      this.readEach(at, block, instanceActions, state);
+      this.readKeys(at, block, instanceActions, state);
 
       for (const action of instanceActions) if (!(yield* this.step(action, state))) return false;
     }
