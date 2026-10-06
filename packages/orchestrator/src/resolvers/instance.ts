@@ -1,5 +1,5 @@
 import { InstanceKey } from '@clay/contracts';
-import { ModuleOutputReference, NAME, Position, ResourceReference, spellReference, Step } from '@clay/parser';
+import { ModuleOutputReference, NAME, Position, ResourceReference, spellReference, Step, stepKey } from '@clay/parser';
 
 import { Repetition } from '../Instances';
 import { placed } from '../place';
@@ -25,9 +25,13 @@ function refuse(message: string, position?: Position): never {
   throw placed(message, position);
 }
 
+export function firstKey(steps: Step[]): string | number | undefined {
+  return steps.length === 0 ? undefined : stepKey(steps[0]);
+}
+
 function readAttribute(reference: ResourceReference, steps: Step[], position?: Position): string | undefined {
-  const [attribute] = steps;
-  const spelled = spellReference([reference.type, reference.name, ...reference.path]);
+  const attribute = firstKey(steps);
+  const spelled = spellReference([{ name: reference.type }, { name: reference.name }, ...reference.path]);
 
   if (attribute === undefined) return undefined;
   if (typeof attribute === 'number') refuse(`Reference "${spelled}" has an index where it needs a name`, position);
@@ -41,8 +45,9 @@ function readAttribute(reference: ResourceReference, steps: Step[], position?: P
  * `.name` and `["name"]` are the same, so under for_each `local_file.a.web.id` reads the instance "web" and `local_file.a.content` the instance "content".
  */
 export function readInstance(reference: ResourceReference, repetition: Repetition | undefined, position?: Position): InstanceRead {
-  const block = spellReference([reference.type, reference.name]);
-  const [first, ...rest] = reference.path;
+  const block = spellReference([{ name: reference.type }, { name: reference.name }]);
+  const first = firstKey(reference.path);
+  const rest = reference.path.slice(1);
 
   if (repetition === undefined) {
     if (typeof first === 'number') refuse(`${block} has no count, so it takes no index`, position);
@@ -63,8 +68,8 @@ export interface CallRead {
 }
 
 function readOutput(reference: ModuleOutputReference, steps: Step[], position?: Position): string {
-  const [output] = steps;
-  const spelled = spellReference(['module', reference.module, ...reference.path]);
+  const output = firstKey(steps);
+  const spelled = spellReference([{ name: 'module' }, { name: reference.module }, ...reference.path]);
 
   if (output === undefined) refuse(`Module output reference must include output name: ${spelled}`, position);
   if (typeof output === 'number') refuse(`Reference "${spelled}" has an index where it needs a name`, position);
@@ -78,8 +83,9 @@ function readOutput(reference: ModuleOutputReference, steps: Step[], position?: 
  * `.name` and `["name"]` are the same, so under for_each `module.web.ali.url` reads the instance "ali".
  */
 export function readCall(reference: ModuleOutputReference, repetition: Repetition | undefined, position?: Position): CallRead {
-  const call = spellReference(['module', reference.module]);
-  const [first, ...rest] = reference.path;
+  const call = spellReference([{ name: 'module' }, { name: reference.module }]);
+  const first = firstKey(reference.path);
+  const rest = reference.path.slice(1);
 
   if (repetition === undefined) {
     if (typeof first === 'number') refuse(`${call} has no count, so it takes no index`, position);
@@ -91,7 +97,7 @@ export function readCall(reference: ModuleOutputReference, repetition: Repetitio
   // `module.web.url` reads "url" as the key, though the author may have meant the output.
   if (repetition === 'for_each' && rest.length === 0)
     refuse(
-      `Reference "${spellReference(['module', reference.module, ...reference.path])}" names an instance and no output: ${call} has for_each, so its key comes first, as in ${call}["key"].out`,
+      `Reference "${spellReference([{ name: 'module' }, { name: reference.module }, ...reference.path])}" names an instance and no output: ${call} has for_each, so its key comes first, as in ${call}["key"].out`,
       position
     );
 

@@ -5,6 +5,8 @@ import { BoundNode, callsIn, CONFIG_FILE, ModuleBlock, namedIn, ReferenceNode, R
 import { ConfigError } from '../src/ConfigError';
 import { Lexer } from '../src/Lexer';
 import { Parser } from '../src/Parser';
+import { Step } from '../src/reference';
+import { steps } from './steps';
 
 function makeParser(input: string, file: string = CONFIG_FILE): Parser {
   return new Parser(new Lexer(input, file).tokenize());
@@ -30,7 +32,7 @@ function errorOf(input: string, file: string = CONFIG_FILE): ConfigError {
 const attributesOf = (input: string) => (makeParser(input).parse()[0] as ResourceBlock).attributes;
 const valueOf = (written: string) => attributesOf(`resource "t" "n" { v = ${written} }`).v;
 const typeOf = (written: string) => (makeParser(`variable "v" { type = ${written} }`).parse()[0] as VariableBlock).valueType;
-const reference = (parts: (string | number)[], column: number, line = 1) => ({ type: 'Reference', value: parts, position: at(line, column) });
+const reference = (parts: (string | number | Step)[], column: number, line = 1) => ({ type: 'Reference', value: steps(...parts), position: at(line, column) });
 
 describe('Clay Parser', () => {
   describe('Valid Cases', () => {
@@ -81,7 +83,7 @@ describe('Clay Parser', () => {
     it('should read a name that starts with null as a reference', () => {
       const result = makeParser('resource "null_resource" "test" { a = null_thing.b.c }').parse();
 
-      expect((result[0] as ResourceBlock).attributes.a).toMatchObject({ type: 'Reference', value: ['null_thing', 'b', 'c'] });
+      expect((result[0] as ResourceBlock).attributes.a).toMatchObject({ type: 'Reference', value: steps('null_thing', 'b', 'c') });
     });
 
     it('should parse multiple resources', () => {
@@ -131,7 +133,7 @@ describe('Clay Parser', () => {
 
       expect((ast[0] as ResourceBlock).attributes.ref).toMatchObject({
         type: 'Reference',
-        value: ['other_resource', 'field'],
+        value: steps('other_resource', 'field'),
       });
     });
 
@@ -142,7 +144,7 @@ describe('Clay Parser', () => {
 
       expect((ast[0] as ResourceBlock).attributes.ref).toMatchObject({
         type: 'Reference',
-        value: ['a', 'b', 'c', 'd'],
+        value: steps('a', 'b', 'c', 'd'),
       });
     });
 
@@ -216,7 +218,7 @@ describe('Clay Parser', () => {
       const block = makeParser(input).parse()[0] as ResourceBlock;
 
       expect(block.name).toBe('a-b');
-      expect(block.attributes.content).toEqual({ type: 'Reference', value: ['local_file', 'a-b', 'id'], position: at(1, 41) });
+      expect(block.attributes.content).toEqual({ type: 'Reference', value: steps('local_file', 'a-b', 'id'), position: at(1, 41) });
     });
 
     it('takes a dash in an attribute name and in a map key, as the same identifier rule does', () => {
@@ -246,7 +248,7 @@ describe('Clay Parser', () => {
     it('keeps a block kind in a reference', () => {
       const attributes = attributesOf('resource "null_resource" "a" { v = module.m.output }');
 
-      expect(attributes.v).toMatchObject({ type: 'Reference', value: ['module', 'm', 'output'] });
+      expect(attributes.v).toMatchObject({ type: 'Reference', value: steps('module', 'm', 'output') });
     });
 
     it('still starts a block with the word, right after an attribute of the same name', () => {
@@ -309,7 +311,7 @@ describe('Clay Parser', () => {
     });
 
     it('keeps a dash inside a name as part of the name', () => {
-      expect(attributesOf('resource "t" "n" { v = a-1 }').v).toMatchObject({ type: 'Reference', value: ['a-1'] });
+      expect(attributesOf('resource "t" "n" { v = a-1 }').v).toMatchObject({ type: 'Reference', value: steps('a-1') });
     });
 
     it.each([
@@ -455,11 +457,11 @@ describe('Clay Parser', () => {
       ['a key holding what starts a comment', '"${var.m["a#b"]}"', 'a#b'],
       ['a key by what its escapes stand for', '"${var.m["a\\"b"]}"', 'a"b'],
     ])('reads %s inside an interpolation', (_, written, key) => {
-      expect(valueOf(written)).toEqual({ type: 'Template', value: [reference(['var', 'm', key], 27)], position: at(1, 24) });
+      expect(valueOf(written)).toEqual({ type: 'Template', value: [reference(['var', 'm', { key }], 27)], position: at(1, 24) });
     });
 
     it('reads the text around an interpolation that holds a quoted key', () => {
-      expect(valueOf('"x ${var.m["k"]} y"')).toEqual({ type: 'Template', value: ['x ', reference(['var', 'm', 'k'], 29), ' y'], position: at(1, 24) });
+      expect(valueOf('"x ${var.m["k"]} y"')).toEqual({ type: 'Template', value: ['x ', reference(['var', 'm', { key: 'k' }], 29), ' y'], position: at(1, 24) });
     });
 
     it.each([
@@ -527,7 +529,7 @@ describe('Clay Parser', () => {
     });
 
     it('reads a quoted key in an interpolation in it', () => {
-      expect(valueOf('<<EOT\n${var.m["a b"]}\nEOT\n')).toEqual({ type: 'Template', value: [reference(['var', 'm', 'a b'], 3, 2), '\n'], position: at(1, 24) });
+      expect(valueOf('<<EOT\n${var.m["a b"]}\nEOT\n')).toEqual({ type: 'Template', value: [reference(['var', 'm', { key: 'a b' }], 3, 2), '\n'], position: at(1, 24) });
     });
 
     it('takes the indent off text before an interpolation, with <<-', () => {
@@ -587,11 +589,11 @@ describe('Clay Parser', () => {
   describe('Nested access', () => {
     it.each([
       ['an index', 'var.l[0]', ['var', 'l', 0]],
-      ['a quoted key', 'local_file.a.tags["env"]', ['local_file', 'a', 'tags', 'env']],
+      ['a quoted key', 'local_file.a.tags["env"]', ['local_file', 'a', 'tags', { key: 'env' }]],
       ['a name after an index', 'var.l[0].name', ['var', 'l', 0, 'name']],
-      ['steps of each kind in a row', 'local_file.a.tags["k"][2].x', ['local_file', 'a', 'tags', 'k', 2, 'x']],
-      ['a key with a dot in it', 'var.m["a.b"]', ['var', 'm', 'a.b']],
-      ['a key by what its escapes stand for', String.raw`var.m["a\"b"]`, ['var', 'm', 'a"b']],
+      ['steps of each kind in a row', 'local_file.a.tags["k"][2].x', ['local_file', 'a', 'tags', { key: 'k' }, 2, 'x']],
+      ['a key with a dot in it', 'var.m["a.b"]', ['var', 'm', { key: 'a.b' }]],
+      ['a key by what its escapes stand for', String.raw`var.m["a\"b"]`, ['var', 'm', { key: 'a"b' }]],
       ['an index written with leading zeros', 'var.l[007]', ['var', 'l', 7]],
     ])('reads %s', (_, written, parts) => {
       expect(valueOf(written)).toEqual(reference(parts, 24));
@@ -623,7 +625,7 @@ describe('Clay Parser', () => {
   });
 
   describe('Function calls', () => {
-    const call = (name: string, args: unknown[], path: (string | number)[] = [], column = 24) => ({ type: 'Call', name, args, path, position: at(1, column) });
+    const call = (name: string, args: unknown[], path: (string | number)[] = [], column = 24) => ({ type: 'Call', name, args, path: steps(...path), position: at(1, column) });
 
     it('reads a name with parentheses after it as a call, with its argument where it was written', () => {
       expect(valueOf('length(var.x)')).toEqual(call('length', [reference(['var', 'x'], 31)]));
@@ -647,7 +649,7 @@ describe('Clay Parser', () => {
     });
 
     it('reads the steps into what a call gives', () => {
-      expect(valueOf('tolist(var.x)[0].name["k"]')).toMatchObject({ type: 'Call', name: 'tolist', path: [0, 'name', 'k'] });
+      expect(valueOf('tolist(var.x)[0].name["k"]')).toMatchObject({ type: 'Call', name: 'tolist', path: steps(0, 'name', { key: 'k' }) });
     });
 
     it('reads a call with a space before its parentheses', () => {
@@ -709,7 +711,7 @@ describe('Clay Parser', () => {
   });
 
   describe('For expressions', () => {
-    const bound = (parts: (string | number)[], column: number, line = 1) => ({ type: 'Bound', value: parts, position: at(line, column) });
+    const bound = (parts: (string | number | Step)[], column: number, line = 1) => ({ type: 'Bound', value: steps(...parts), position: at(line, column) });
 
     it('reads a for over a collection, with the name it gives each item read in its body', () => {
       expect(valueOf('[for n in var.names : n]')).toEqual({
@@ -731,7 +733,7 @@ describe('Clay Parser', () => {
     });
 
     it('reads the steps written after a name the for gives', () => {
-      expect(valueOf('[for f in var.files : f.paths["a.b"][0]]')).toMatchObject({ body: bound(['f', 'paths', 'a.b', 0], 46) });
+      expect(valueOf('[for f in var.files : f.paths["a.b"][0]]')).toMatchObject({ body: bound(['f', 'paths', { key: 'a.b' }, 0], 46) });
     });
 
     it('reads a name it does not give in its body as a reference', () => {
@@ -775,7 +777,7 @@ describe('Clay Parser', () => {
     });
 
     it('spells a name the for gives as it is written', () => {
-      expect(spellNamed(bound(['f', 'paths', 'a.b', 0], 1) as BoundNode)).toBe('f.paths["a.b"][0]');
+      expect(spellNamed(bound(['f', 'paths', { key: 'a.b' }, 0], 1) as BoundNode)).toBe('f.paths["a.b"][0]');
     });
 
     it('takes a for over a constant as a variable default', () => {
@@ -828,7 +830,7 @@ describe('Clay Parser', () => {
   });
 
   describe('For expressions that make an object', () => {
-    const bound = (parts: (string | number)[], column: number) => ({ type: 'Bound', value: parts, position: at(1, column) });
+    const bound = (parts: (string | number | Step)[], column: number) => ({ type: 'Bound', value: steps(...parts), position: at(1, column) });
 
     it('reads a key and a value for each item, both with the names the for gives', () => {
       expect(valueOf('{for k, v in var.m : k => v}')).toEqual({
@@ -1265,7 +1267,7 @@ describe('Clay Parser', () => {
       expect(result[0]).toMatchObject({
         type: 'Output',
         name: 'ref_output',
-        value: { type: 'Reference', value: ['my_resource', 'name', 'attr'] },
+        value: { type: 'Reference', value: steps('my_resource', 'name', 'attr') },
       });
     });
   });

@@ -1,9 +1,10 @@
-import { parseReference, ResourceReference } from '@clay/parser';
+import { parseReference, ResourceReference, Step } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
 import { checkHasKey, checkInRange, readInstance } from '../../src/resolvers/instance';
+import { steps } from '../ast';
 
-const keyed = (...path: (string | number)[]) => parseReference(['local_file', 'logs', ...path]) as ResourceReference;
+const keyed = (...path: (string | number | Step)[]) => parseReference(steps('local_file', 'logs', ...path)) as ResourceReference;
 
 describe('an index checked against a count', () => {
   it.each([
@@ -36,10 +37,11 @@ describe('a key checked against a for_each', () => {
 });
 
 describe('an instance of a resource with for_each read by a reference', () => {
-  // `.web` and `["web"]` are the same step, so both name the instance.
+  // `.web` and `["web"]` read the same, so both name the instance.
   it('reads the first step as the key, the next as the attribute and the rest as the path', () => {
-    expect(readInstance(keyed('web', 'tags', 'env'), 'for_each')).toEqual({ key: 'web', attribute: 'tags', path: ['env'] });
-    expect(readInstance(keyed('a.b', 'id'), 'for_each')).toEqual({ key: 'a.b', attribute: 'id', path: [] });
+    expect(readInstance(keyed({ key: 'web' }, 'tags', 'env'), 'for_each')).toEqual({ key: 'web', attribute: 'tags', path: steps('env') });
+    expect(readInstance(keyed('web', 'tags', 'env'), 'for_each')).toEqual({ key: 'web', attribute: 'tags', path: steps('env') });
+    expect(readInstance(keyed({ key: 'a.b' }, 'id'), 'for_each')).toEqual({ key: 'a.b', attribute: 'id', path: [] });
   });
 
   it('reads a key with nothing after it as the whole instance', () => {
@@ -49,7 +51,7 @@ describe('an instance of a resource with for_each read by a reference', () => {
   it.each([
     [[0, 'id'], 'local_file.logs has for_each, so name one of it by key, as in local_file.logs["key"]'],
     [[], 'local_file.logs has for_each, so name one of it by key, as in local_file.logs["key"]'],
-    [['web', 0], 'Reference "local_file.logs.web[0]" has an index where it needs a name'],
+    [[{ key: 'web' }, 0], 'Reference "local_file.logs.web[0]" has an index where it needs a name'],
   ])('refuses %j', (path, message) => {
     expect(() => readInstance(keyed(...path), 'for_each')).toThrow(message);
   });

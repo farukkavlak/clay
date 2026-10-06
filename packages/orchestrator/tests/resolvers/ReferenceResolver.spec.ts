@@ -9,14 +9,14 @@ import { ReferenceResolver } from '../../src/resolvers/ReferenceResolver';
 import { UnresolvedReferenceError } from '../../src/resolvers/UnresolvedReferenceError';
 import { ScopeManager } from '../../src/scope/ScopeManager';
 import { Value, valueOf } from '../../src/Value';
-import { ref, str } from '../ast';
+import { ref, steps, str } from '../ast';
 
 const position = { file: 'main.clay', line: 1, column: 1 };
 const num = (text: string): AttributeValue => ({ type: 'Number', value: ExactNumber.parse(text), position });
 const list = (...value: AttributeValue[]): AttributeValue => ({ type: 'List', value, position });
 const map = (value: Record<string, AttributeValue>): AttributeValue => ({ type: 'Map', value, position });
 const template = (...value: TemplatePart[]): AttributeValue => ({ type: 'Template', value, position });
-const reference = (...value: (string | number)[]) => ({ type: 'Reference' as const, value, position });
+const reference = (...parts: (string | number)[]) => ({ type: 'Reference' as const, value: steps(...parts), position });
 
 const inInstance = (module: ModuleAddress) => new Address(module, 'resource', 'main');
 const context = Address.root('resource', 'main');

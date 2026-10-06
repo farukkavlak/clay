@@ -7,8 +7,9 @@ import { Planned } from '../../src/Planned';
 import { ResourceResolver } from '../../src/resolvers/ResourceResolver';
 import { UnresolvedReferenceError } from '../../src/resolvers/UnresolvedReferenceError';
 import { valueOf } from '../../src/Value';
+import { steps } from '../ast';
 
-const ref = (spelled: string) => parseReference(spelled.split('.')) as ResourceReference;
+const ref = (spelled: string) => parseReference(steps(...spelled.split('.'))) as ResourceReference;
 
 describe('ResourceResolver', () => {
   const resolver = new ResourceResolver(new Instances(), new Planned(), new Map());

@@ -76,6 +76,36 @@ describe('a plan saved to a file', () => {
     expect(await fs.readFile(path.join(dir, 'a.txt'), 'utf8')).toBe('planned');
   });
 
+  it('reads an index and a key in a reference back from the file', async () => {
+    const config = `
+      variable "m" { default = { k = "there" } }
+      resource "local_file" "a" {
+        count = 2
+        path = "\${path.module}/a\${count.index}.txt"
+        content = "hello \${count.index}"
+      }
+      resource "local_file" "b" {
+        path = "\${path.module}/b.txt"
+        content = "\${local_file.a[1].content} \${var.m["k"]}"
+      }
+    `;
+    await fs.writeFile(path.join(dir, 'plan.json'), await written(config), 'utf8');
+
+    const cwd = process.cwd();
+    process.chdir(dir);
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
+
+    try {
+      await createApplyCommand().parseAsync(['node', 'clay', 'plan.json']);
+    } finally {
+      vi.restoreAllMocks();
+      process.chdir(cwd);
+    }
+
+    expect(await fs.readFile(path.join(dir, 'b.txt'), 'utf8')).toBe('hello 1 there');
+  });
+
   it('reads the line a broken configuration was written on out of the plan, not off the disk', async () => {
     const saved = { ...JSON.parse(await written(fileConfig('planned'))), config: 'resource "local_file" {' };
     await fs.writeFile(path.join(dir, 'plan.json'), JSON.stringify(saved), 'utf8');

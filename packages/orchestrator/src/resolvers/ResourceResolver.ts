@@ -55,7 +55,7 @@ export class ResourceResolver {
     const resourceKey = new Address(module, reference.type, reference.name, key).toString();
     const resource = state.resources[resourceKey];
 
-    const spelled = spellReference([reference.type, reference.name, ...reference.path.slice(0, reference.path.length - path.length)]);
+    const spelled = spellReference([{ name: reference.type }, { name: reference.name }, ...reference.path.slice(0, reference.path.length - path.length)]);
     const planned = this.planned.get(resourceKey);
     if (planned) return { attributeOf: (name) => plannedAttribute(planned, name), attribute, path };
     if (!resource) throw new UnresolvedReferenceError(`Invalid resource reference "${spelled}": Resource "${resourceKey}" not found in state`);

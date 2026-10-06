@@ -1,11 +1,11 @@
 import { isUnknown, Type, typeAt } from '@clay/contracts';
-import { ConfigError, Position, spellSteps, Step } from '@clay/parser';
+import { ConfigError, Position, spellSteps, Step, stepKey } from '@clay/parser';
 
 import { child, described, Value } from '../Value';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 
 /** Undefined when the step finds something. */
-function missingItem(value: Value, step: Step): string | undefined {
+function missingItem(value: Value, step: string | number): string | undefined {
   if (typeof step === 'string') return `is ${described(value)} and has no key ${JSON.stringify(step)}`;
 
   const items = (value.data as unknown[]).length;
@@ -13,7 +13,7 @@ function missingItem(value: Value, step: Step): string | undefined {
 }
 
 /** Undefined when the step finds something. */
-function missing(value: Value, step: Step): string | undefined {
+function missing(value: Value, step: string | number): string | undefined {
   if (value.data === null) return 'is null and cannot be read into';
 
   const { kind } = value.type;
@@ -32,7 +32,7 @@ function missing(value: Value, step: Step): string | undefined {
 }
 
 export function typeInto(type: Type, steps: Step[]): Type {
-  return steps.reduce((found, step) => typeAt(found, step), type);
+  return steps.reduce((found, step) => typeAt(found, stepKey(step)), type);
 }
 
 /** Throws an unknown carrying the type the remaining steps find, so the reader can still check it. */
@@ -53,10 +53,10 @@ export function readPath(value: Value, target: string, path: Step[], position: P
     const read = `${target}${spellSteps(path.slice(0, i))}`;
     checkKnown(current, read, path.slice(i));
 
-    const problem = missing(current, step);
+    const problem = missing(current, stepKey(step));
     if (problem) throw new ConfigError(`${read} ${problem}`, position);
 
-    current = child(current, step);
+    current = child(current, stepKey(step));
   }
 
   checkKnown(current, `${target}${spellSteps(path)}`, []);

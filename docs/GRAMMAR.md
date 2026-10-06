@@ -472,11 +472,13 @@ type AttributeValue =
   | { type: 'List'; value: AttributeValue[]; position: Position }
   | { type: 'Map'; value: Record<string, AttributeValue>; position: Position };
 
-type Reference = { type: 'Reference'; value: (string | number)[]; position: Position };
+type Step = { name: string } | { key: string | number };
 
-type Call = { type: 'Call'; name: string; args: AttributeValue[]; path: (string | number)[]; position: Position };
+type Reference = { type: 'Reference'; value: Step[]; position: Position };
 
-type Bound = { type: 'Bound'; value: (string | number)[]; position: Position };
+type Call = { type: 'Call'; name: string; args: AttributeValue[]; path: Step[]; position: Position };
+
+type Bound = { type: 'Bound'; value: Step[]; position: Position };
 
 type For = {
   type: 'For';
@@ -535,13 +537,15 @@ type Statement = ResourceBlock | DataBlock | VariableBlock | OutputBlock | Modul
 type Program = Statement[];
 ```
 
-A `Reference` holds its parts in order, a key as a string and an index as a number:
-`local_file.a.tags["env"]` is `['local_file', 'a', 'tags', 'env']` and `var.names[0]` is
-`['var', 'names', 0]`. A `Call` holds its arguments in order, and in `path` the steps
-written after it, as a reference holds its own. A `Bound` is a name a for gives, read in
-its body, with its steps as a reference holds them. A `For` that makes an object holds
-its key in `key`, and `grouped` when `...` follows the value. A `VariableBlock` holds its
-type in `valueType` as the `Type` a schema names, `any` as `dynamic`.
+A `Reference` holds its parts in order, each as it was written: `{ name }` after a dot,
+`{ key }` in brackets, a string or a number. `local_file.a.tags["env"]` is
+`[{ name: 'local_file' }, { name: 'a' }, { name: 'tags' }, { key: 'env' }]` and
+`var.names[0]` is `[{ name: 'var' }, { name: 'names' }, { key: 0 }]`. A `Call` holds its
+arguments in order, and in `path` the steps written after it, as a reference holds its
+own. A `Bound` is a name a for gives, read in its body, with its steps as a reference
+holds them. A `For` that makes an object holds its key in `key`, and `grouped` when `...`
+follows the value. A `VariableBlock` holds its type in `valueType` as the `Type` a schema
+names, `any` as `dynamic`.
 
 ## Errors
 

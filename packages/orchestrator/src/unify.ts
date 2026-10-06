@@ -59,7 +59,7 @@ function sequence(found: readonly Type[], at: Step[], join: Join): Type {
       tuples[0].elements.map((_, index) =>
         join(
           tuples.map((tuple) => tuple.elements[index]),
-          [...at, index]
+          [...at, { key: index }]
         )
       )
     );
@@ -86,7 +86,7 @@ function objects(found: readonly ObjectType[], at: Step[], join: Join): Type {
       name,
       join(
         found.map((type) => type.attributes[name]),
-        [...at, name]
+        [...at, { name }]
       ),
     ])
   );

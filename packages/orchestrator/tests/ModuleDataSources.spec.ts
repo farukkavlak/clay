@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vite
 
 import { InMemoryFiles, Orchestrator } from '../src/index';
 import { apply } from './apply';
+import { steps } from './ast';
 
 const readMock = vi.fn().mockResolvedValue(emptyState());
 const writeMock = vi.fn().mockResolvedValue(undefined);
@@ -113,7 +114,7 @@ module "app" {
         resourceType: 'test_resource',
         name: 'server',
         modulePath: [{ name: 'app' }],
-        attributes: { ami: { type: 'Reference', value: ['data', 'aws_ami', 'ubuntu', 'id'] } },
+        attributes: { ami: { type: 'Reference', value: steps('data', 'aws_ami', 'ubuntu', 'id') } },
         planned: { ami: 'ami-12345' },
         after: { ami: 'ami-12345' },
       },
@@ -149,7 +150,7 @@ module "app" {
         resourceType: 'test_resource',
         name: 'server',
         modulePath: [{ name: 'app' }],
-        attributes: { ami: { type: 'Reference', value: ['data', 'aws_ami', 'root_ami', 'id'] } },
+        attributes: { ami: { type: 'Reference', value: steps('data', 'aws_ami', 'root_ami', 'id') } },
         planned: { ami: UNKNOWN },
         after: { ami: UNKNOWN },
       },

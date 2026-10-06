@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vite
 
 import { InMemoryFiles, Orchestrator } from '../src/index';
 import { apply } from './apply';
+import { steps } from './ast';
 
 /** Fresh per test: apply writes into what this returns, so a shared object would leak resources between tests. */
 const readMock = vi.fn();
@@ -109,7 +110,7 @@ describe('Orchestrator - Phase 4: Data Flow', () => {
         resourceType: 'test_resource',
         name: 'res',
         modulePath: [],
-        attributes: { region: { type: 'Reference', value: ['var', 'region'] } },
+        attributes: { region: { type: 'Reference', value: steps('var', 'region') } },
         planned: { region: UNKNOWN },
         after: { region: UNKNOWN },
       },
@@ -150,7 +151,7 @@ module "app" {
         resourceType: 'test_resource',
         name: 'server',
         modulePath: [{ name: 'app' }],
-        attributes: { tags: { type: 'Reference', value: ['var', 'env'] } },
+        attributes: { tags: { type: 'Reference', value: steps('var', 'env') } },
         planned: { tags: UNKNOWN },
         after: { tags: UNKNOWN },
       },
@@ -189,7 +190,7 @@ module "L2" {
         resourceType: 'test_resource',
         name: 'child',
         modulePath: [{ name: 'L2' }],
-        attributes: { loc: { type: 'Reference', value: ['var', 'region'] } },
+        attributes: { loc: { type: 'Reference', value: steps('var', 'region') } },
         planned: { loc: UNKNOWN },
         after: { loc: UNKNOWN },
       },
@@ -231,7 +232,7 @@ resource "test_resource" "instance" {
         resourceType: 'test_resource',
         name: 'instance',
         modulePath: [{ name: 'db' }],
-        attributes: { name: { type: 'Reference', value: ['var', 'db_name'] } },
+        attributes: { name: { type: 'Reference', value: steps('var', 'db_name') } },
         planned: { name: UNKNOWN },
         after: { name: UNKNOWN },
       },

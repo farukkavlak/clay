@@ -301,17 +301,23 @@ function childrenOf(node: Record<string, unknown>): unknown[] {
   return [];
 }
 
-/** Step indexes read back as plain numbers. */
+/** Indexes in an attribute path read back as plain numbers. */
 function readSteps(path: unknown): unknown {
   if (!Array.isArray(path)) return path;
 
   return path.map((step: unknown) => (step instanceof ExactNumber ? step.toSafeInteger('an index') : step));
 }
 
+function readReferenceSteps(steps: unknown): unknown {
+  if (!Array.isArray(steps)) return steps;
+
+  return steps.map((step: unknown) => (isRecord(step) && step.key instanceof ExactNumber ? { key: step.key.toSafeInteger('an index') } : step));
+}
+
 /** Indexes in references, for-bound names and steps after a call read back as plain numbers too. */
 function readIndexes(node: Record<string, unknown>): void {
-  if (node.type === 'Reference' || node.type === 'Bound') node.value = readSteps(node.value);
-  if (node.type === 'Call') node.path = readSteps(node.path);
+  if (node.type === 'Reference' || node.type === 'Bound') node.value = readReferenceSteps(node.value);
+  if (node.type === 'Call') node.path = readReferenceSteps(node.path);
 }
 
 function readNode(node: unknown): void {
