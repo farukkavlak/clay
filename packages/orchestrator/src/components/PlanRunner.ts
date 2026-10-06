@@ -6,9 +6,10 @@ import { moveResource, StateManager } from '@clay/state';
 
 import { asError } from '../asError';
 import { countFrom } from '../count';
+import { declaredOf, givenTo } from '../declared';
 import { eachFrom } from '../forEach';
 import { Instances, repetitionOfKey } from '../Instances';
-import { blockKey, contextIn, scopeOf } from '../keys';
+import { blockKey, Context, contextIn, scopeOf } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
 import { tryAt } from '../place';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
@@ -191,7 +192,7 @@ export class PlanRunner {
 
     for (const stmt of program)
       if (stmt.type === 'Output') {
-        const resolved = this.resolver.resolveValue(stmt.value, state, context);
+        const resolved = tryAt(stmt.value.position, spell(stmt), context, () => this.outputValue(stmt.name, stmt.value, declaredOf(stmt), state, context));
         outputs[stmt.name] = { value: resolved.data, type: resolved.type };
         this.scopeManager.setOutput(scope, stmt.name, resolved);
       }
@@ -201,8 +202,13 @@ export class PlanRunner {
 
   private resolveOutput(node: OutputNode, instance: ModuleAddress, state: State): void {
     const context = contextIn(node.context, instance);
-    const value = tryAt(node.position, node.declaration, context, () => this.resolver.resolveValue(node.value, state, context));
+    const value = tryAt(node.position, node.declaration, context, () => this.outputValue(node.name, node.value, node.declared, state, context));
 
     this.scopeManager.setOutput(instance.toString(), node.name, value);
+  }
+
+  private outputValue(name: string, value: AttributeValue, declared: OutputNode['declared'], state: State, context: Context): Value {
+    const resolved = this.resolver.resolveValue(value, state, context);
+    return givenTo('output', name, resolved, declared, (node) => this.resolver.resolveValue(node, state, context));
   }
 }

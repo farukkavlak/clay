@@ -72,6 +72,9 @@ export interface OutputBlock extends Node {
   type: 'Output';
   name: string;
   value: AttributeValue;
+  /** Without one, a value is taken as it is. */
+  valueType?: Type;
+  defaults?: TypeDefaults;
 }
 
 export interface DataBlock extends Node {

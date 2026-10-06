@@ -106,6 +106,11 @@ change each.
       `apply` that fails to plan described a positioned error from `DiskFiles`, so a file
       changed after it was parsed showed the caret under a line of the new version. Now
       each command reads a file once and quotes what it read
+- [ ] A default of the wrong type is reported at the value that leaves it to the default,
+      not at the default. With `type = object({ port = optional(number, "eighty") })` and
+      `{}` given, the caret is under `{}`; with `{ port = 80 }` given, it is under
+      `"eighty"`. A variable and an output do the same. The defaults are checked after the
+      value, so the value's conversion meets the bad default first
 
 ## 1. Language
 
@@ -163,10 +168,10 @@ configuration hits each of these early.
       and with `count` or `for_each` as a list or a map of them. Terraform makes a tuple
       and an object where an output has no declared type; Clay joins each output into one
       type across the instances, as `tolist` does, and refuses outputs that cannot be joined
-- [ ] An output names its type: `output "url" { type = string, value = ... }`. Today every
-      output is `dynamic`, so `validate` knows only its name, and `module.web` under
-      `count` is a list of objects whose attributes have no type until a plan. Terraform
-      has `type` on an output and gives a list or a map once every output names one
+- [x] An output names its type: `output "url" { type = string, value = ... }`, with
+      `optional(type, default)` as a variable's type has it. Its value is given as that
+      type at plan and at apply, and `validate` knows `module.web.url` is a string before a
+      plan. Terraform has `type` on an output and converts the value the same way
 - [x] `path.module` and `path.root`, so a module can name a file next to itself. Both are
       relative to the root, where `clay` runs, so a plan or a state reads the same on
       another machine

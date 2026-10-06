@@ -36,7 +36,7 @@ export class ModuleOutputResolver {
   }
 
   private whole(instance: ModuleAddress): Value {
-    return objectOf(this.scopeManager.outputsOf(scopeOf(instance.withoutKeys())).map((name) => [name, this.output(instance, name)]));
+    return objectOf([...this.scopeManager.outputsOf(scopeOf(instance.withoutKeys())).keys()].map((name) => [name, this.output(instance, name)]));
   }
 
   /** Converted as `tolist` converts, so outputs that take no one type are refused at the reference. */

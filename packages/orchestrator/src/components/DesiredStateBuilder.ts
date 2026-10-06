@@ -183,11 +183,13 @@ export class DesiredStateBuilder {
     const declared = this.scopeManager.getVariable(scopeOf(node.module), node.name) ?? {};
     const value = this.resolveNode(node, node.value, instance, state);
     const read = (constant: AttributeValue) => this.resolveNode(node, constant, instance, state);
-    tryAt(node.position, node.declaration, contextIn(node.context, instance), () => givenTo(node.name, value, declared, read));
+    tryAt(node.position, node.declaration, contextIn(node.context, instance), () => givenTo('variable', node.name, value, declared, read));
   }
 
   private planOutput(node: OutputNode, instance: ModuleAddress, state: State, rootOutputs: Record<string, Output>): void {
-    const value = this.resolveNode(node, node.value, instance, state);
+    const read = (constant: AttributeValue) => this.resolveNode(node, constant, instance, state);
+    const resolved = this.resolveNode(node, node.value, instance, state);
+    const value = tryAt(node.position, node.declaration, contextIn(node.context, instance), () => givenTo('output', node.name, resolved, node.declared, read));
     this.scopeManager.setOutput(instance.toString(), node.name, value);
 
     if (instance.isRoot()) rootOutputs[node.name] = { value: value.data, type: value.type };

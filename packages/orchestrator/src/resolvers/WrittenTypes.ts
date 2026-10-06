@@ -32,14 +32,15 @@ export class WrittenTypes {
     return this.resourceType(reference, where, position);
   }
 
-  /** Outputs have no declared type, so only a whole instance, or every instance, has a type with any shape. */
+  /** An output that names no type is `dynamic`. */
   private callType(reference: ModuleOutputReference, where: Context, position: Position): { type: Type; path: Step[] } {
     const call = moduleOf(where).child(reference.module).withoutKeys();
     const { every, output, path } = readCall(reference, this.modules.repetitionOf(call), position);
     const outputs = this.scopeManager.outputsOf(scopeOf(call));
     if (every) return { type: everyOf(every, outputsType(outputs)), path };
 
-    return { type: output === undefined ? outputsType(outputs) : types.dynamic, path };
+    // The graph has already refused undeclared outputs.
+    return { type: output === undefined ? outputsType(outputs) : outputs.get(output)!, path };
   }
 
   /** The type of the attribute, of the whole instance where the reference names none, or of every instance where it names no instance. */

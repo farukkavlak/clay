@@ -13,7 +13,7 @@ const n = (text: string) => ExactNumber.parse(text);
 
 const mismatchOf = (value: Value, type: Type): SchemaMismatch => {
   try {
-    declaredAs('v', value, type);
+    declaredAs('variable', 'v', value, type);
   } catch (error) {
     if (error instanceof SchemaMismatch) return error;
 
@@ -32,7 +32,7 @@ describe('a value held to the type its variable names', () => {
     ['an object as an object of the attribute types named', written({ a: n('1') }), types.object({ a: types.string }), { a: '1' }],
     ['null, as a null of the type', written(null), types.number, null],
   ])('takes %s', (_, value, type, data) => {
-    expect(declaredAs('v', value, type)).toEqual({ type, data });
+    expect(declaredAs('variable', 'v', value, type)).toEqual({ type, data });
   });
 
   it.each([
@@ -48,12 +48,12 @@ describe('a value held to the type its variable names', () => {
     ['any in a tuple, position by position', written([true, '2']), types.tuple([types.dynamic, types.number]), valueOf(types.tuple([types.bool, types.number]), [true, n('2')])],
     ['list(any) with no item', written([]), types.list(types.dynamic), valueOf(types.list(types.dynamic), [])],
   ])('reads %s from the value', (_, value, type, expected) => {
-    expect(declaredAs('v', value, type)).toEqual(expected);
+    expect(declaredAs('variable', 'v', value, type)).toEqual(expected);
   });
 
   it('gives a value not known yet the type named', () => {
-    expect(declaredAs('v', valueOf(types.dynamic, UNKNOWN), types.list(types.dynamic))).toEqual(valueOf(types.list(types.dynamic), UNKNOWN));
-    expect(declaredAs('v', valueOf(types.string, UNKNOWN), types.number)).toEqual(valueOf(types.number, UNKNOWN));
+    expect(declaredAs('variable', 'v', valueOf(types.dynamic, UNKNOWN), types.list(types.dynamic))).toEqual(valueOf(types.list(types.dynamic), UNKNOWN));
+    expect(declaredAs('variable', 'v', valueOf(types.string, UNKNOWN), types.number)).toEqual(valueOf(types.number, UNKNOWN));
   });
 
   it.each([
@@ -75,7 +75,7 @@ describe('a value held to the type its variable names', () => {
   });
 
   it('converts each item on its own where no any asks to join them', () => {
-    expect(declaredAs('v', written([n('1'), true]), types.list(types.string))).toEqual(valueOf(types.list(types.string), ['1', 'true']));
+    expect(declaredAs('variable', 'v', written([n('1'), true]), types.list(types.string))).toEqual(valueOf(types.list(types.string), ['1', 'true']));
   });
 });
 
@@ -89,13 +89,13 @@ const constant = (data: unknown): AttributeValue => {
 };
 
 const read = (node: AttributeValue): Value => constants.get(node)!;
-const filledAs = (value: Value, type: Type, tree: TypeDefaults = {}) => declaredAs('v', value, type, { tree, read });
+const filledAs = (value: Value, type: Type, tree: TypeDefaults = {}) => declaredAs('variable', 'v', value, type, { tree, read });
 
 describe('the optional attributes of an object type', () => {
   const site = types.object({ name: types.string, port: types.number, tag: types.string }, ['port', 'tag']);
 
   it('gives one left out null where its type names no default', () => {
-    expect(declaredAs('v', written({ name: 'a' }), site)).toEqual(
+    expect(declaredAs('variable', 'v', written({ name: 'a' }), site)).toEqual(
       valueOf(types.object({ name: types.string, port: types.number, tag: types.string }), { name: 'a', port: null, tag: null })
     );
   });
@@ -180,7 +180,9 @@ describe('the optional attributes of an object type', () => {
   });
 
   it('gives a filled item a type that requires every attribute', () => {
-    expect(declaredAs('v', written([{}]), types.list(types.object({ k: types.string }, ['k'])))).toEqual(valueOf(types.list(types.object({ k: types.string })), [{ k: null }]));
+    expect(declaredAs('variable', 'v', written([{}]), types.list(types.object({ k: types.string }, ['k'])))).toEqual(
+      valueOf(types.list(types.object({ k: types.string })), [{ k: null }])
+    );
   });
 
   it('holds each member of a set once after its defaults fill it in, though it is taken as a list', () => {
@@ -211,7 +213,7 @@ describe('the optional attributes of an object type', () => {
   it('leaves a set with a member not known yet unknown as a whole when it is taken as a tuple', () => {
     const members = valueOf(types.set(types.object({ k: types.string })), [{ k: 'a' }, UNKNOWN]);
 
-    expect(declaredAs('v', members, types.tuple([types.object({ k: types.string }, ['k']), types.object({ k: types.string }, ['k'])])).data).toBe(UNKNOWN);
+    expect(declaredAs('variable', 'v', members, types.tuple([types.object({ k: types.string }, ['k']), types.object({ k: types.string }, ['k'])])).data).toBe(UNKNOWN);
   });
 
   it('refuses a set member its declared type does not take, at its place in the set', () => {
@@ -223,7 +225,7 @@ describe('the optional attributes of an object type', () => {
   it('leaves a set with a member not known yet unknown as a whole when it is taken as a list', () => {
     const members = valueOf(types.set(types.object({ k: types.string })), [{ k: 'a' }, UNKNOWN]);
 
-    expect(declaredAs('v', members, types.list(types.object({ k: types.string }, ['k']))).data).toBe(UNKNOWN);
+    expect(declaredAs('variable', 'v', members, types.list(types.object({ k: types.string }, ['k']))).data).toBe(UNKNOWN);
   });
 
   it.each([
@@ -243,7 +245,7 @@ describe('the optional attributes of an object type', () => {
 
 function refusalOf(type: Type, tree: TypeDefaults): { node: AttributeValue; message: string } {
   let refusal: { node: AttributeValue; message: string } | undefined;
-  checkDefaults('v', type, { tree, read }, (node, check) => {
+  checkDefaults('variable', 'v', type, { tree, read }, (node, check) => {
     try {
       check();
     } catch (error) {
@@ -303,7 +305,7 @@ describe('the defaults an object type gives', () => {
     const a = constant(n('1'));
     const b = constant(['2']);
 
-    checkDefaults('v', type, { tree: { values: { a, b } }, read }, (node, check) => {
+    checkDefaults('variable', 'v', type, { tree: { values: { a, b } }, read }, (node, check) => {
       check();
       checked.push(node);
     });

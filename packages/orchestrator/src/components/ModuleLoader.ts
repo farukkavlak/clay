@@ -1,8 +1,9 @@
-import { Address, ModuleAddress } from '@clay/contracts';
+import { Address, ModuleAddress, Type, types } from '@clay/contracts';
 import { CONFIG_FILE, ConfigError, Lexer, ModuleBlock, Parser, ResourceBlock, Statement, spell } from '@clay/parser';
 import path from 'node:path';
 
 import { ConfigFiles } from '../ConfigFiles';
+import { required } from '../declared';
 import { ModuleCall, scopeOf } from '../keys';
 import { ScopeManager } from '../scope/ScopeManager';
 
@@ -22,8 +23,9 @@ export interface Loaded {
   modules: LoadedModule[];
 }
 
-export function outputNamesOf(program: Statement[]): string[] {
-  return program.flatMap((stmt) => (stmt.type === 'Output' ? [stmt.name] : []));
+/** The type each output's value has once filled, `dynamic` where it names none. */
+export function outputsOf(program: Statement[]): Map<string, Type> {
+  return new Map(program.flatMap((stmt) => (stmt.type === 'Output' ? [[stmt.name, stmt.valueType ? required(stmt.valueType) : types.dynamic]] : [])));
 }
 
 export class ModuleLoader {
@@ -62,7 +64,7 @@ export class ModuleLoader {
 
     loaded.modules.push({ address: childAddress, program: moduleProgram });
     this.scopeManager.setDirectory(scopeOf(childAddress), moduleDir);
-    this.scopeManager.declareOutputs(scopeOf(childAddress), outputNamesOf(moduleProgram));
+    this.scopeManager.declareOutputs(scopeOf(childAddress), outputsOf(moduleProgram));
     this.declareVariables(moduleProgram, childAddress);
 
     for (const childStmt of moduleProgram)

@@ -1,7 +1,7 @@
 import { ExactNumber, types } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { BoundNode, callsIn, CONFIG_FILE, ModuleBlock, namedIn, ReferenceNode, ResourceBlock, spellNamed, VariableBlock } from '../src/ast';
+import { BoundNode, callsIn, CONFIG_FILE, ModuleBlock, namedIn, OutputBlock, ReferenceNode, ResourceBlock, spellNamed, VariableBlock } from '../src/ast';
 import { ConfigError } from '../src/ConfigError';
 import { Lexer } from '../src/Lexer';
 import { Parser } from '../src/Parser';
@@ -257,11 +257,31 @@ describe('Clay Parser', () => {
       expect(program.map((statement) => statement.type)).toEqual(['Resource', 'Data']);
     });
 
-    it('takes only "value" in an output block, not any name', () => {
+    it('takes only "value" and "type" in an output block, not any name', () => {
       const error = errorOf('output "o" { data = 1 }');
 
-      expect(error.message).toBe("Expect 'value' in output block.");
-      expect(error.position).toEqual(at(1, 14));
+      expect(error.message).toBe('Output "o" takes only "value" and "type", not "data".');
+      expect(error.position).toEqual(at(1, 21));
+    });
+
+    it.each([
+      ['an empty output block', 'output "o" {}'],
+      ['an output block with only a type', 'output "o" { type = string }'],
+    ])('refuses %s, at the block', (_, input) => {
+      const error = errorOf(input);
+
+      expect(error.message).toBe('Output "o" has no "value".');
+      expect(error.position).toEqual(at(1, 1));
+    });
+
+    it.each([
+      ['value', 'output "o" { value = 1 value = 2 }', at(1, 24)],
+      ['type', 'output "o" { type = string type = number }', at(1, 28)],
+    ])('refuses %s set twice in an output block', (name, input, position) => {
+      const error = errorOf(input);
+
+      expect(error.message).toBe(`${name} is set twice`);
+      expect(error.position).toEqual(position);
     });
   });
 
@@ -1269,6 +1289,34 @@ describe('Clay Parser', () => {
         name: 'ref_output',
         value: { type: 'Reference', value: steps('my_resource', 'name', 'attr') },
       });
+    });
+
+    it('keeps the type an output names, written before or after its value', () => {
+      const [output] = makeParser('output "o" {\n  type  = list(string)\n  value = ["a"]\n}').parse() as OutputBlock[];
+
+      expect(output.valueType).toEqual(types.list(types.string));
+      expect(output.value).toEqual({ type: 'List', value: [{ type: 'String', value: 'a', position: at(3, 12) }], position: at(3, 11) });
+    });
+
+    it("keeps the defaults an output's type gives", () => {
+      const [output] = makeParser('output "o" {\n  value = {}\n  type  = object({ a = optional(number, 1) })\n}').parse() as OutputBlock[];
+
+      expect(output.valueType).toEqual(types.object({ a: types.number }, ['a']));
+      expect(output.defaults).toEqual({ values: { a: { type: 'Number', value: ExactNumber.parse('1'), position: at(3, 41) } } });
+    });
+
+    it('leaves the type and defaults out of an output that names none', () => {
+      const [output] = makeParser('output "o" { value = 1 }').parse() as OutputBlock[];
+
+      expect(Object.hasOwn(output, 'valueType')).toBe(false);
+      expect(Object.hasOwn(output, 'defaults')).toBe(false);
+    });
+
+    it("refuses a reference in an optional attribute's default of an output's type", () => {
+      const error = errorOf('output "o" {\n  value = {}\n  type  = object({ a = optional(number, var.z) })\n}');
+
+      expect(error.message).toBe("An optional attribute's default is a constant, so it cannot hold var.z");
+      expect(error.position).toEqual(at(3, 41));
     });
   });
 });

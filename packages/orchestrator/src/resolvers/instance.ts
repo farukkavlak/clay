@@ -83,9 +83,9 @@ export function everyType(repetition: Repetition, schema: Schema): Type {
   return everyOf(repetition, instanceType(schema));
 }
 
-/** Outputs declare no type, so each is `dynamic` until an instance gives it a value. */
-export function outputsType(outputs: string[]): Type {
-  return types.object(Object.fromEntries(outputs.map((name) => [name, types.dynamic])));
+/** An output that names no type is `dynamic` until an instance gives it a value. */
+export function outputsType(outputs: ReadonlyMap<string, Type>): Type {
+  return types.object(Object.fromEntries(outputs));
 }
 
 /** With no output, the whole instance is read; with `every`, every instance its count or for_each makes. */

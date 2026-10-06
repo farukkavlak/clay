@@ -35,7 +35,7 @@ export class VariableResolver {
   /** A wrong type is reported where the value is written, not where it is read. */
   private typed(name: string, declared: VariableValue, resolved: Value, where: Context, state: State): Value {
     try {
-      return givenTo(name, resolved, declared, (node) => this.referenceResolver.resolveValue(node, state, where));
+      return givenTo('variable', name, resolved, declared, (node) => this.referenceResolver.resolveValue(node, state, where));
     } catch (error) {
       if (error instanceof SchemaMismatch) throw withPlace(error, declared.value.position, declared.block, where);
       throw error;

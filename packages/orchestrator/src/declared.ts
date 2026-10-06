@@ -40,7 +40,7 @@ function settled(declared: Type, found: Type): Type {
 }
 
 /** After filling, every attribute is present, so all become required. */
-function required(type: Type): Type {
+export function required(type: Type): Type {
   if (!namesOptional(type)) return type;
   if (type.kind === 'object') return types.object(Object.fromEntries(Object.entries(type.attributes).map(([name, attribute]) => [name, required(attribute)])));
   if (type.kind === 'tuple') return types.tuple(type.elements.map((element) => required(element)));
@@ -50,7 +50,7 @@ function required(type: Type): Type {
 
 /** `walk` is passed in because objects and their items recurse into each other. */
 interface Fill {
-  variable: string;
+  holder: string;
   read?: Defaults['read'];
   walk: (value: Value, declared: Type, defaults: TypeDefaults | undefined, path: AttributePath) => Value;
 }
@@ -88,9 +88,9 @@ function filledSequence(value: Value, declared: Type, defaults: TypeDefaults | u
   const items = (value.data as unknown[]).map((_, index) => fill.walk(child(value, index), typeAt(declared, index), within(index), [...path, index]));
   if (value.type.kind !== 'set' || declared.kind === 'tuple') return tupleOf(items);
 
-  const held = items.map((item, index) => converted(fill.variable, item, settled(typeAt(declared, index), item.type), [...path, index]));
+  const held = items.map((item, index) => converted(fill.holder, item, settled(typeAt(declared, index), item.type), [...path, index]));
   const joined = unified(held.map((item) => item.type));
-  return valueOf(types.set(joined), setOf(held.map((item, index) => converted(fill.variable, item, joined, [...path, index]).data)));
+  return valueOf(types.set(joined), setOf(held.map((item, index) => converted(fill.holder, item, joined, [...path, index]).data)));
 }
 
 function filled(value: Value, declared: Type, defaults: TypeDefaults | undefined, fill: Fill, path: AttributePath): Value {
@@ -106,8 +106,8 @@ function filled(value: Value, declared: Type, defaults: TypeDefaults | undefined
   return filledSequence(value, declared, defaults, fill, path);
 }
 
-function fillWith(variable: string, read: Defaults['read'] | undefined): Fill {
-  const fill: Fill = { variable, read, walk: (value, declared, defaults, path) => filled(value, declared, defaults, fill, path) };
+function fillWith(holder: string, read: Defaults['read'] | undefined): Fill {
+  const fill: Fill = { holder, read, walk: (value, declared, defaults, path) => filled(value, declared, defaults, fill, path) };
   return fill;
 }
 
@@ -115,26 +115,34 @@ function fillWith(variable: string, read: Defaults['read'] | undefined): Fill {
 function heldAs(value: Value, type: Type, defaults: TypeDefaults | undefined, fill: Fill, path: AttributePath): Value {
   try {
     const written = fill.walk(value, type, defaults, path);
-    return converted(fill.variable, written, settled(required(type), written.type), path);
+    return converted(fill.holder, written, settled(required(type), written.type), path);
   } catch (error) {
-    if (error instanceof Unjoinable) throw new SchemaMismatch(`${fill.variable} ${error.message}`, String(path[0]));
+    if (error instanceof Unjoinable) throw new SchemaMismatch(`${fill.holder} ${error.message}`, String(path[0]));
     throw error;
   }
 }
 
+/** What declares a type: a variable takes a value, an output gives one. */
+export type Holder = 'variable' | 'output';
+
 /** Throws `SchemaMismatch` if the value does not fit the type. */
-export function declaredAs(name: string, value: Value, type: Type, defaults?: Defaults): Value {
-  return heldAs(value, type, defaults?.tree, fillWith(`variable "${name}"`, defaults?.read), [name]);
+export function declaredAs(holder: Holder, name: string, value: Value, type: Type, defaults?: Defaults): Value {
+  return heldAs(value, type, defaults?.tree, fillWith(`${holder} "${name}"`, defaults?.read), [name]);
+}
+
+/** A block's type and defaults, as `givenTo` takes them. */
+export function declaredOf(block: { valueType?: Type; defaults?: TypeDefaults }): { type?: Type; defaults?: TypeDefaults } {
+  return { type: block.valueType, defaults: block.defaults };
 }
 
 /** Without a declared type, the value is taken as it is. */
-export function givenTo(name: string, value: Value, { type, defaults }: { type?: Type; defaults?: TypeDefaults }, read: Defaults['read']): Value {
-  return type ? declaredAs(name, value, type, defaults && { tree: defaults, read }) : value;
+export function givenTo(holder: Holder, name: string, value: Value, { type, defaults }: { type?: Type; defaults?: TypeDefaults }, read: Defaults['read']): Value {
+  return type ? declaredAs(holder, name, value, type, defaults && { tree: defaults, read }) : value;
 }
 
 /** Checks every default against its attribute's type, so a bad default is refused even when no value uses it. */
-export function checkDefaults(name: string, type: Type, defaults: Defaults, at: (node: AttributeValue, check: () => void) => void): void {
-  const fill = fillWith(`variable "${name}"`, defaults.read);
+export function checkDefaults(holder: Holder, name: string, type: Type, defaults: Defaults, at: (node: AttributeValue, check: () => void) => void): void {
+  const fill = fillWith(`${holder} "${name}"`, defaults.read);
 
   const visit = (declared: Type, tree: TypeDefaults | undefined): void => {
     if (!tree) return;
