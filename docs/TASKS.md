@@ -78,11 +78,12 @@ change each.
       and an attribute it left out became null, the one the block set among them.
       Terraform's provider returns the arguments with what it read. Clay keeps what the
       configuration gave, and refuses a read that changes it as a provider bug
-- [ ] A plain `clay apply` reads module files twice: once for the plan, and again after
+- [x] A plain `clay apply` read module files twice: once for the plan, and again after
       the confirmation. With `count = 2` in `m/main.clay` changed to `count = 3` in
-      between, index 2 is skipped in silence; with the plan deleting index 2 and the file
-      back at `count = 3`, it is deleted though the count gives it. `apply <plan>` runs
-      the files its plan read. Terraform holds the configuration it planned in memory
+      between, the output said 3 though the plan showed 2; with the plan deleting index 2
+      and the file back at `count = 3`, the same. An error in the run quoted the changed
+      file. Terraform holds the configuration it planned in memory. Now a plain apply
+      runs the files its plan read, as `apply <plan>` does
 - [ ] Under `for_each`, `local_file.f.content` is refused with
       `local_file.f has no instance ["content"], only ["a"]`. It used to add that the key
       comes first, as in `local_file.f["key"].content`; when the name is an attribute of
@@ -93,6 +94,9 @@ change each.
       resource at apply and for a data source at read, since the two objects have
       different keys. Whether a provider may fill in what the configuration left out is
       open
+- [ ] One plan can read a module file twice. Two `module` blocks with the same `source`
+      each read it, so a file changed between the two reads is planned from two versions,
+      and `plan --out` saves only the second. A run reads each file once
 
 ## 1. Language
 

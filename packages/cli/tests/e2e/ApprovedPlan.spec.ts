@@ -12,6 +12,15 @@ import { start } from './start';
 
 vi.mock('node:readline/promises');
 
+const counted = (count: number) => `
+  resource "local_file" "f" {
+    count = ${count}
+    path = "\${path.module}/f\${count.index}.txt"
+    content = "x"
+  }
+  output "n" { value = ${count} }
+`;
+
 // apply reads the current directory, so the command runs from the temp one.
 describe('the plan apply showed', () => {
   let dir: string;
@@ -62,5 +71,36 @@ describe('the plan apply showed', () => {
 
     expect(printed.join('\n')).toContain('The state has changed since the plan was made. Plan again.');
     expect(await fs.readFile(path.join(dir, 'a.txt'), 'utf8')).toBe('theirs');
+  });
+
+  it('runs the module files it planned when one changes while the question is open', async () => {
+    await fs.mkdir(path.join(dir, 'm'));
+    await fs.writeFile(path.join(dir, 'main.clay'), 'module "m" { source = "./m" }\noutput "n" { value = module.m.n }', 'utf8');
+    await fs.writeFile(path.join(dir, 'm/main.clay'), counted(2), 'utf8');
+    const question = vi.fn(async () => {
+      await fs.writeFile(path.join(dir, 'm/main.clay'), counted(3), 'utf8');
+      return 'yes';
+    });
+    vi.mocked(readline.createInterface).mockReturnValue(Object.assign(new EventTarget(), { question, close: vi.fn() }) as unknown as readline.Interface);
+
+    await createApplyCommand().parseAsync(['node', 'clay']);
+
+    const state = JSON.parse(await fs.readFile(path.join(dir, 'clay.state.json'), 'utf8')) as { outputs: { n: { value: number } } };
+    expect(state.outputs.n.value).toBe(2);
+  });
+
+  // The id is not known at plan, so stepping into it fails only once the run resolves the output.
+  it('shows the line it planned when a run error points into a file changed while the question is open', async () => {
+    const config = 'resource "null_resource" "n" {}\noutput "x" { value = null_resource.n.id.foo }';
+    await fs.writeFile(path.join(dir, 'main.clay'), config, 'utf8');
+    const question = vi.fn(async () => {
+      await fs.writeFile(path.join(dir, 'main.clay'), `resource "null_resource" "m" {}\n${config}`, 'utf8');
+      return 'yes';
+    });
+    vi.mocked(readline.createInterface).mockReturnValue(Object.assign(new EventTarget(), { question, close: vi.fn() }) as unknown as readline.Interface);
+
+    await createApplyCommand().parseAsync(['node', 'clay']);
+
+    expect(printed.join('\n')).toContain('2: output "x" { value = null_resource.n.id.foo }');
   });
 });

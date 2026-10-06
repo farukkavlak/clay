@@ -1,5 +1,5 @@
 import { Address, Output } from '@clay/contracts';
-import { ConfigFiles, DiskFiles, InMemoryFiles, RunEvent } from '@clay/orchestrator';
+import { ConfigFiles, DiskFiles, InMemoryFiles, RecordingFiles, RunEvent } from '@clay/orchestrator';
 import { CONFIG_FILE } from '@clay/parser';
 import { changedOutside, parsePlanFile, Plan, PlanAction, PlanFile } from '@clay/planner';
 import { Command } from 'commander';
@@ -61,15 +61,30 @@ async function confirmApply(autoConfirm: boolean): Promise<boolean> {
   return autoConfirm || confirm('Do you want to perform these actions?');
 }
 
-async function executeApply(cwd: string, configPath: string, files: ConfigFiles, autoConfirm: boolean, refresh: boolean): Promise<void> {
-  const configContent = await fs.readFile(configPath, 'utf8');
-  const orchestrator = newOrchestrator(cwd, files);
+function configFiles(config: string, modules: Record<string, string>): ConfigFiles {
+  return new InMemoryFiles({ ...modules, [CONFIG_FILE]: config });
+}
+
+interface PlannedApply {
+  plan: Plan;
+  config: string;
+  /** What the plan read, so the run does not read files changed while the question was open. */
+  files: ConfigFiles;
+}
+
+async function planFromDisk(cwd: string, configPath: string, refresh: boolean): Promise<PlannedApply> {
+  const config = await fs.readFile(configPath, 'utf8');
+  const recording = new RecordingFiles(new DiskFiles(cwd));
 
   console.log(styleText('blue', 'Calculating plan...'));
-  const planned = await orchestrator.plan(configContent, { refresh });
+  const plan = await newOrchestrator(cwd, recording).plan(config, { refresh });
 
-  displayPlan(planned);
-  if (changesNothing(planned)) return;
+  return { plan, config, files: configFiles(config, recording.snapshot()) };
+}
+
+async function executeApply(cwd: string, { plan, config, files }: PlannedApply, autoConfirm: boolean): Promise<void> {
+  displayPlan(plan);
+  if (changesNothing(plan)) return;
 
   const confirmed = await confirmApply(autoConfirm);
   if (!confirmed) {
@@ -77,7 +92,7 @@ async function executeApply(cwd: string, configPath: string, files: ConfigFiles,
     return;
   }
 
-  await runAndReport(orchestrator.runPlan(planned, configContent), forgotten(planned));
+  await runAndReport(newOrchestrator(cwd, files).runPlan(plan, config), forgotten(plan));
 }
 
 /** Errors name the user's file and say what to do. */
@@ -97,10 +112,6 @@ async function readPlanFile(planFileArg: string, files: ConfigFiles): Promise<Pl
   } catch (error) {
     throw new Error(`${describeError(error, files)}. Run \`clay plan --out <file>\` again.`, { cause: error });
   }
-}
-
-function filesInPlan(planFile: PlanFile): ConfigFiles {
-  return new InMemoryFiles({ ...planFile.modules, [CONFIG_FILE]: planFile.config });
 }
 
 async function executeApplyFromPlan(cwd: string, planFile: PlanFile, files: ConfigFiles): Promise<void> {
@@ -131,7 +142,7 @@ export function createApplyCommand() {
           if (options.refresh !== undefined) throw new Error('--refresh is for a plan: a saved plan is applied as it was made');
           const planData = await readPlanFile(planFileArg, files);
 
-          files = filesInPlan(planData);
+          files = configFiles(planData.config, planData.modules);
           await executeApplyFromPlan(cwd, planData, files);
         } else {
           const configPath = path.join(cwd, CONFIG_FILE);
@@ -141,7 +152,10 @@ export function createApplyCommand() {
             process.exit(1);
           }
 
-          await executeApply(cwd, configPath, files, options.yes, options.refresh ?? true);
+          const planned = await planFromDisk(cwd, configPath, options.refresh ?? true);
+
+          files = planned.files;
+          await executeApply(cwd, planned, options.yes);
         }
       } catch (error: unknown) {
         console.error(styleText('red', 'Apply failed:'), describeError(error, files));
