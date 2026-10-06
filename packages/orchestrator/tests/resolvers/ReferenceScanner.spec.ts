@@ -55,14 +55,23 @@ describe('ReferenceScanner', () => {
     });
   });
 
-  // `.web` and `["web"]` are the same step, so under for_each the first name is the key.
-  it('reads the first step of a module called with for_each as its key', () => {
+  it('reads the first step of a module called with for_each as its key when it is in brackets', () => {
     const modules = new ModuleInstances();
     modules.declare(ModuleAddress.root.child('db'), 'for_each');
 
     const [found] = new ReferenceScanner(modules).referencesIn({ type: 'Reference', value: steps('module', 'db', { key: 'eu' }, 'url') }, context);
 
     expect(found).toMatchObject({ key: 'module.db.outputs:url', instanceKey: 'eu', name: 'url' });
+  });
+
+  it('reads a name after a dot as the output, never as the key of a module called with for_each', () => {
+    const modules = new ModuleInstances();
+    modules.declare(ModuleAddress.root.child('db'), 'for_each');
+
+    const [found] = new ReferenceScanner(modules).referencesIn({ type: 'Reference', value: steps('module', 'db', 'eu', 'url') }, context);
+
+    expect(found).toMatchObject({ key: 'module.db.outputs:eu', name: 'eu' });
+    expect(found).not.toHaveProperty('instanceKey');
   });
 
   it('should ignore data sources', () => {

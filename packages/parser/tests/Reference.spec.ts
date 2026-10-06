@@ -105,7 +105,7 @@ describe('a reference spelled back', () => {
     [steps('var', 'names', 0), 'var.names[0]'],
     [steps('local_file', 'a', 'tags', 'env'), 'local_file.a.tags.env'],
     [steps('var', 'tags', { key: 'a.b' }, 1), 'var.tags["a.b"][1]'],
-    [steps('var', 'tags', { key: 'env' }), 'var.tags.env'],
+    [steps('var', 'tags', { key: 'env' }), 'var.tags["env"]'],
     [steps('var', 'tags', { key: 'say "hi"' }), String.raw`var.tags["say \"hi\""]`],
     [steps('var', 'tags', { key: '' }), 'var.tags[""]'],
   ])('spells %j as %s', (parts, spelled) => {

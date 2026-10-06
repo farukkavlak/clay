@@ -1,5 +1,5 @@
 import { Address, ExactNumber, ModuleAddress, types } from '@clay/contracts';
-import { ModuleOutputReference, parseReference } from '@clay/parser';
+import { ModuleOutputReference, parseReference, Step } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
 import { ModuleInstances } from '../../src/ModuleInstances';
@@ -8,7 +8,7 @@ import { ScopeManager } from '../../src/scope/ScopeManager';
 import { valueOf } from '../../src/Value';
 import { steps } from '../ast';
 
-const ref = (...parts: (string | number)[]) => parseReference(steps(...parts)) as ModuleOutputReference;
+const ref = (...parts: (string | number | Step)[]) => parseReference(steps(...parts)) as ModuleOutputReference;
 
 describe('ModuleOutputResolver', () => {
   const scopeManager = new ScopeManager();
@@ -41,21 +41,19 @@ describe('ModuleOutputResolver', () => {
   it('reads the output of the instance a key names', () => {
     scopeManager.setOutput('module.db["eu"]', 'url', valueOf(types.string, 'eu-url'));
 
-    expect(resolver.resolve(ref('module', 'db', 'eu', 'url'), context).value.data).toBe('eu-url');
+    expect(resolver.resolve(ref('module', 'db', { key: 'eu' }, 'url'), context).value.data).toBe('eu-url');
   });
 
   it.each([
-    [
-      'no key on a module called with for_each',
-      ref('module', 'db', 'url'),
-      'Reference "module.db.url" names an instance and no output: module.db has for_each, so its key comes first, as in module.db["key"].out',
-    ],
+    ['no key on a module called with for_each', ref('module', 'db', 'url'), 'module.db has for_each, so name one of it by key, as in module.db["key"]'],
+    ['a key after a dot on a module called with for_each', ref('module', 'db', 'eu', 'url'), 'module.db has for_each, so name one of it by key, as in module.db["key"]'],
+    ['a key and no output', ref('module', 'db', { key: 'eu' }), 'Module output reference must include output name: module.db["eu"]'],
     ['an index on a module called with for_each', ref('module', 'db', 0, 'url'), 'module.db has for_each, so name one of it by key, as in module.db["key"]'],
     ['an index on a module called without count', ref('module', 'app', 0, 'ip_address'), 'module.app has no count, so it takes no index'],
     ['no index on a module called with count', ref('module', 'web', 'tags'), 'module.web has count, so name one of it by index, as in module.web[0]'],
     ['an index and no output', ref('module', 'web', 0), 'Module output reference must include output name: module.web[0]'],
     ['an index where the output goes', ref('module', 'web', 0, 1), 'Reference "module.web[0][1]" has an index where it needs a name'],
-    ['an output that is no name', ref('module', 'app', 'a b'), 'Reference "module.app["a b"]" has "a b" where it needs a name'],
+    ['an output that is no name', ref('module', 'app', { key: 'a b' }), 'Reference "module.app["a b"]" has "a b" where it needs a name'],
   ])('refuses %s', (_, reference, message) => {
     expect(() => resolver.resolve(reference, context)).toThrow(message);
   });

@@ -84,20 +84,13 @@ change each.
       and the file back at `count = 3`, the same. An error in the run quoted the changed
       file. Terraform holds the configuration it planned in memory. Now a plain apply
       runs the files its plan read, as `apply <plan>` does
-- [x] Under `for_each`, `local_file.f.content` was refused with
-      `local_file.f has no instance ["content"], only ["a"]`. It used to add that the key
-      comes first, as in `local_file.f["key"].content`. Now it says so again when the name
-      is written after a dot and is an attribute of the schema, where the value may be an
-      object: an output, a variable with no type
-- [ ] Where a string is expected the hint does not show. With `for_each` on
-      `local_file.f`, `content = local_file.f.content` in another resource is refused with
-      `content is an object, where local_file takes a string`: the type check runs before
-      the key check and reads `content` as a whole instance. The same for a module input
-      with `type = string`
-- [ ] A module called with `for_each` has the same gap. With outputs `path` and `other`,
-      `module.web.path.other` is refused with `module.web has no instance ["path"]` and no
-      word that the key comes first. `module.web.path.x` is refused with
-      `module "web" has no output "x"`, though the missing key is the mistake
+- [x] A name after a dot was read as a `for_each` key, so a reference with its key left
+      out was read as another instance and refused for the wrong reason. With `for_each`
+      on `local_file.f`, `content = local_file.f.content` in another resource gave
+      `content is an object, where local_file takes a string`; with `for_each` on
+      `module.web`, `module.web.path.x` gave `module "web" has no output "x"`. Terraform
+      reads a key only in brackets. Now a key is written in brackets, as in
+      `local_file.f["key"]`, and a name after a dot there is refused as a missing key
 - [ ] An object a provider gives back with an optional attribute filled in is refused as
       a provider bug. With an object type whose `b` is optional, a configuration that sets
       `{ a = "1" }` and a provider that returns `{ a = "1", b = null }` fail, for a

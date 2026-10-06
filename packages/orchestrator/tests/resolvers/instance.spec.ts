@@ -30,10 +30,6 @@ describe('a key checked against a for_each', () => {
     expect(() => checkHasKey('local_file.logs', 'x', keys)).toThrow(message);
   });
 
-  it('leaves the hint out when the for_each is empty, since no key would be taken', () => {
-    expect(() => checkHasKey('local_file.logs', 'x', [], undefined, '. hint')).toThrow(/its for_each is empty$/);
-  });
-
   it('takes a key the for_each gives, and any key while the for_each is not read yet', () => {
     expect(() => checkHasKey('local_file.logs', 'a', ['a'])).not.toThrow();
     expect(() => checkHasKey('local_file.logs', 'x', undefined)).not.toThrow();
@@ -41,21 +37,21 @@ describe('a key checked against a for_each', () => {
 });
 
 describe('an instance of a resource with for_each read by a reference', () => {
-  // `.web` and `["web"]` read the same, so both name the instance.
   it('reads the first step as the key, the next as the attribute and the rest as the path', () => {
     expect(readInstance(keyed({ key: 'web' }, 'tags', 'env'), 'for_each')).toEqual({ key: 'web', attribute: 'tags', path: steps('env') });
-    expect(readInstance(keyed('web', 'tags', 'env'), 'for_each')).toEqual({ key: 'web', attribute: 'tags', path: steps('env') });
     expect(readInstance(keyed({ key: 'a.b' }, 'id'), 'for_each')).toEqual({ key: 'a.b', attribute: 'id', path: [] });
   });
 
   it('reads a key with nothing after it as the whole instance', () => {
-    expect(readInstance(keyed('content'), 'for_each')).toEqual({ key: 'content', attribute: undefined, path: [] });
+    expect(readInstance(keyed({ key: 'content' }), 'for_each')).toEqual({ key: 'content', attribute: undefined, path: [] });
   });
 
   it.each([
     [[0, 'id'], 'local_file.logs has for_each, so name one of it by key, as in local_file.logs["key"]'],
     [[], 'local_file.logs has for_each, so name one of it by key, as in local_file.logs["key"]'],
-    [[{ key: 'web' }, 0], 'Reference "local_file.logs.web[0]" has an index where it needs a name'],
+    [['web', 'id'], 'local_file.logs has for_each, so name one of it by key, as in local_file.logs["key"]'],
+    [['content'], 'local_file.logs has for_each, so name one of it by key, as in local_file.logs["key"]'],
+    [[{ key: 'web' }, 0], 'Reference "local_file.logs["web"][0]" has an index where it needs a name'],
   ])('refuses %j', (path, message) => {
     expect(() => readInstance(keyed(...path), 'for_each')).toThrow(message);
   });

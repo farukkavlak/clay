@@ -1,4 +1,4 @@
-import { InstanceKey, Schema } from '@clay/contracts';
+import { InstanceKey } from '@clay/contracts';
 import { ModuleOutputReference, NAME, Position, ResourceReference, spellReference, Step, stepKey } from '@clay/parser';
 
 import { Repetition } from '../Instances';
@@ -25,8 +25,13 @@ function refuse(message: string, position?: Position): never {
   throw placed(message, position);
 }
 
-export function firstKey(steps: Step[]): string | number | undefined {
+function firstKey(steps: Step[]): string | number | undefined {
   return steps.length === 0 ? undefined : stepKey(steps[0]);
+}
+
+/** An index or a key is written in brackets, so a name after a dot is never one. */
+export function instanceKeyIn(steps: Step[]): InstanceKey | undefined {
+  return steps.length > 0 && 'key' in steps[0] ? steps[0].key : undefined;
 }
 
 function readAttribute(reference: ResourceReference, steps: Step[], position?: Position): string | undefined {
@@ -41,12 +46,12 @@ function readAttribute(reference: ResourceReference, steps: Step[], position?: P
 }
 
 /**
- * With count or for_each the first step must be an index or a key; without either there is none.
- * `.name` and `["name"]` are the same, so under for_each `local_file.a.web.id` reads the instance "web" and `local_file.a.content` the instance "content".
+ * With count or for_each the first step must be an index or a key in brackets; without either there is none.
+ * A key after a dot would read `local_file.a.content` as the instance "content", so it is refused.
  */
 export function readInstance(reference: ResourceReference, repetition: Repetition | undefined, position?: Position): InstanceRead {
   const block = spellReference([{ name: reference.type }, { name: reference.name }]);
-  const first = firstKey(reference.path);
+  const first = instanceKeyIn(reference.path);
   const rest = reference.path.slice(1);
 
   if (repetition === undefined) {
@@ -79,12 +84,12 @@ function readOutput(reference: ModuleOutputReference, steps: Step[], position?: 
 }
 
 /**
- * With count or for_each the first step must be an index or a key; without either there is none.
- * `.name` and `["name"]` are the same, so under for_each `module.web.ali.url` reads the instance "ali".
+ * With count or for_each the first step must be an index or a key in brackets; without either there is none.
+ * A key after a dot would read `module.web.url` as the instance "url", so it is refused.
  */
 export function readCall(reference: ModuleOutputReference, repetition: Repetition | undefined, position?: Position): CallRead {
   const call = spellReference([{ name: 'module' }, { name: reference.module }]);
-  const first = firstKey(reference.path);
+  const first = instanceKeyIn(reference.path);
   const rest = reference.path.slice(1);
 
   if (repetition === undefined) {
@@ -94,12 +99,6 @@ export function readCall(reference: ModuleOutputReference, repetition: Repetitio
 
   if (repetition === 'count' && typeof first !== 'number') refuse(`${call} has count, so name one of it by index, as in ${call}[0]`, position);
   if (repetition === 'for_each' && typeof first !== 'string') refuse(`${call} has for_each, so name one of it by key, as in ${call}["key"]`, position);
-  // `module.web.url` reads "url" as the key, though the author may have meant the output.
-  if (repetition === 'for_each' && rest.length === 0)
-    refuse(
-      `Reference "${spellReference([{ name: 'module' }, { name: reference.module }, ...reference.path])}" names an instance and no output: ${call} has for_each, so its key comes first, as in ${call}["key"].out`,
-      position
-    );
 
   return { key: first, output: readOutput(reference, rest, position), path: rest.slice(1) };
 }
@@ -113,18 +112,11 @@ export function checkInRange(block: string, key: number, count: number | undefin
   refuse(`${block} has ${count} ${count === 1 ? 'instance, [0]' : `instances, [0] to [${count - 1}]`}`, position);
 }
 
-/** A name after a dot that is an attribute: the author may have left the key out. */
-export function keyComesFirst(block: string, type: string, step: Step, schema: Schema): string {
-  if (!('name' in step) || !Object.hasOwn(schema, step.name)) return '';
-
-  return `. "${step.name}" is an attribute of ${type}, and the key comes first, as in ${block}["key"].${step.name}`;
-}
-
 /** Refused, since an instance that will never exist would otherwise read as unknown. */
-export function checkHasKey(block: string, key: string, keys: InstanceKey[] | undefined, position?: Position, hint = ''): void {
+export function checkHasKey(block: string, key: string, keys: InstanceKey[] | undefined, position?: Position): void {
   if (keys === undefined || keys.includes(key)) return;
 
   if (keys.length === 0) refuse(`${block} has no instances: its for_each is empty`, position);
 
-  refuse(`${block} has no instance [${JSON.stringify(key)}], only ${keys.map((k) => `[${JSON.stringify(k)}]`).join(', ')}${hint}`, position);
+  refuse(`${block} has no instance [${JSON.stringify(key)}], only ${keys.map((k) => `[${JSON.stringify(k)}]`).join(', ')}`, position);
 }

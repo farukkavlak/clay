@@ -203,8 +203,8 @@ A resource named with no attribute is the whole instance: an object that holds e
 attribute of its schema, with `null` for one nothing sets. `local_file.a` reads a resource
 with no `count` or `for_each`, `local_file.logs[0]` one instance by its index and
 `local_file.f["key"]` one by its key. A resource with `count` or `for_each` named with no
-index or key is refused. Under `for_each`, `local_file.f.content` reads the instance
-with the key `content`, not an attribute.
+index or key is refused. A key is written in brackets, so under `for_each`
+`local_file.f.content` has no key and is refused: a name after a dot there is never a key.
 
 `path.module` is the directory of the module it is written in, relative to the root: `.`
 at the root, `web` in a module called with `source = "./web"`. In a call's inputs it is the
@@ -228,6 +228,7 @@ The parts before that name what is read, so each is a name even when it is quote
 A module is read through its outputs, so `module.app.local_file.a` names an output
 called `local_file`, and is refused when the module has none. A module called with count
 or for_each is read one instance at a time: `module.app[0].url`, `module.app["eu"].url`.
+The key is written in brackets there too, so `module.app.eu.url` is refused.
 
 ### Functions
 
@@ -382,10 +383,10 @@ Inside the block, `each.key` is the key of the instance being made and `each.val
 value, which a reference can read into: `each.value.port`. Anywhere else but a module
 call with for_each, and in `for_each` itself, they are refused where they are written.
 
-A reference names one instance by its key: `local_file.site["web"].content`. `.web` is
-the same step as `["web"]`, so `local_file.site.web.content` reads it too, and
-`local_file.site.content` reads the whole instance with the key `content`. An index, and
-a key `for_each` does not give, are refused where they are written.
+A reference names one instance by its key, in brackets: `local_file.site["web"].content`.
+A name after a dot there is never a key, so `local_file.site.web.content` and
+`local_file.site.content` are refused as naming no instance. An index, and a key
+`for_each` does not give, are refused where they are written.
 
 Adding `for_each` to a resource, or taking it off, moves nothing: no key stands for the
 resource the way `[0]` does for a count. `clay state mv 'type.name' 'type.name["key"]'`
@@ -402,10 +403,9 @@ In the call's inputs, `each.key` is the key of the instance being made and `each
 its value. Inside the module they are refused where they are written; the module takes
 them as inputs.
 
-An output is read from one instance by its key: `module.web["eu"].url`, or
-`module.web.eu.url`, the same step. `module.web.url` reads the instance `url` and names no
-output, so it is refused where it is written, and so are an index and a key `for_each`
-does not give. A data source in the module is refused as it is under count.
+An output is read from one instance by its key, in brackets: `module.web["eu"].url`. A
+name after a dot there is never a key, so `module.web.eu.url` and `module.web.url` are
+refused where they are written, and so are an index and a key `for_each` does not give. A data source in the module is refused as it is under count.
 
 Adding `for_each` to a module that exists, or taking it off, moves nothing, as for a
 resource; `clay state mv` keeps each resource.
