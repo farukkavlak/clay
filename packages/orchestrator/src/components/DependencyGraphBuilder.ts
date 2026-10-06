@@ -9,7 +9,7 @@ import { ModuleInstances } from '../ModuleInstances';
 import { placed, tryAt, withPlace } from '../place';
 import { COUNT_INDEX_OUTSIDE, eachOutside, readCall, readInstance } from '../resolvers/instance';
 import { Reference, ReferenceScanner } from '../resolvers/ReferenceScanner';
-import { LoadedModule, LoadedResource } from './ModuleLoader';
+import { LoadedModule, LoadedResource, outputNamesOf } from './ModuleLoader';
 
 /** The module as written, not an instance; a node runs once per instance. A module call sits in its caller. */
 interface InModule {
@@ -72,6 +72,7 @@ const edgeKey = (from: string, to: string) => `${from} -> ${to}`;
 
 export class DependencyGraphBuilder {
   private references = new Map<string, ReferencePlace>();
+  private outputs = new Map<string, string[]>();
 
   constructor(
     private scanner: ReferenceScanner,
@@ -82,6 +83,7 @@ export class DependencyGraphBuilder {
   buildExecutionGraph(loadedResources: LoadedResource[], loadedModules: LoadedModule[]): Graph<GraphNode> {
     const graph = new Graph<GraphNode>();
     this.references.clear();
+    this.outputs = new Map(loadedModules.map((mod) => [scopeOf(mod.address), outputNamesOf(mod.program)]));
 
     for (const { uniqueId, address } of loadedResources) graph.addNode(uniqueId, { kind: 'resource', module: address.module });
     for (const [key, node] of this.valueNodes(loadedModules)) graph.addNode(key, node);
@@ -238,10 +240,20 @@ export class DependencyGraphBuilder {
       // Checked here too, since a reference to a resource not yet created is never read at plan time.
       if (reference.kind === 'resource') readInstance(reference.reference, this.instances.repetitionOf(reference.key), reference.position);
 
-      graph.addEdge(reference.key, dependent.key);
-      const edge = edgeKey(reference.key, dependent.key);
-      if (reference.position && !this.references.has(edge))
-        this.references.set(edge, { position: reference.position, declaration: dependent.declaration, context: dependent.context });
+      for (const from of this.readFrom(reference)) this.addEdge(from, dependent, graph, reference.position);
     }
+  }
+
+  private addEdge(from: string, dependent: Dependent, graph: Graph<GraphNode>, position?: Position): void {
+    graph.addEdge(from, dependent.key);
+    const edge = edgeKey(from, dependent.key);
+    if (position && !this.references.has(edge)) this.references.set(edge, { position, declaration: dependent.declaration, context: dependent.context });
+  }
+
+  /** A whole module is read once every output of it has a value. */
+  private readFrom(reference: Exclude<Reference, { kind: 'count' | 'each' }>): string[] {
+    if (reference.kind !== 'output' || reference.name !== undefined) return [reference.key];
+
+    return [reference.key, ...(this.outputs.get(reference.scope) ?? []).map((name) => outputKey(reference.scope, name))];
   }
 }

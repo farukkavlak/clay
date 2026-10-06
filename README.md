@@ -96,7 +96,12 @@ A set keeps the members it knows while one is unknown; that one may turn out the
 another, so how many members it holds is known only after apply. Taken as a list, such a
 set is unknown as a whole until then, since it has no order yet.
 Reaching inside a module (`module.m.local_file.a`) is not allowed; a module speaks
-through its outputs. `path.module` is the directory of the module it is written in,
+through its outputs. A module named with no output is an object of all its outputs:
+`module.m`, or one instance as `module.web[0]`. With `count` or `for_each`, `module.web`
+alone is a list or a map of them, as for a resource. Outputs have no declared type, so
+each output takes one type across the instances, as `tolist` gives one; outputs that
+cannot, such as a string in one instance and a list in another, are refused at plan.
+`path.module` is the directory of the module it is written in,
 relative to the root, so `"${path.module}/index.html"` names a file next to the module.
 
 A function is called by its name: `count = length(var.names)`, or `"${length(var.names)}"`

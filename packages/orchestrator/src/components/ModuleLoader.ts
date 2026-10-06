@@ -22,6 +22,10 @@ export interface Loaded {
   modules: LoadedModule[];
 }
 
+export function outputNamesOf(program: Statement[]): string[] {
+  return program.flatMap((stmt) => (stmt.type === 'Output' ? [stmt.name] : []));
+}
+
 export class ModuleLoader {
   // One load sees one version of a file, however many blocks call its module.
   private contents = new Map<string, string | undefined>();
@@ -58,6 +62,7 @@ export class ModuleLoader {
 
     loaded.modules.push({ address: childAddress, program: moduleProgram });
     this.scopeManager.setDirectory(scopeOf(childAddress), moduleDir);
+    this.scopeManager.declareOutputs(scopeOf(childAddress), outputNamesOf(moduleProgram));
     this.declareVariables(moduleProgram, childAddress);
 
     for (const childStmt of moduleProgram)

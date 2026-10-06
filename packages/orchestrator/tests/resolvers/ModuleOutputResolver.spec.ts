@@ -5,8 +5,10 @@ import { describe, expect, it } from 'vitest';
 import { ModuleInstances } from '../../src/ModuleInstances';
 import { ModuleOutputResolver } from '../../src/resolvers/ModuleOutputResolver';
 import { ScopeManager } from '../../src/scope/ScopeManager';
-import { valueOf } from '../../src/Value';
+import { Value, valueOf } from '../../src/Value';
 import { steps } from '../ast';
+
+const record = (url: string, port: unknown) => ({ url, port });
 
 const ref = (...parts: (string | number | Step)[]) => parseReference(steps(...parts)) as ModuleOutputReference;
 
@@ -47,11 +49,9 @@ describe('ModuleOutputResolver', () => {
   it.each([
     ['no key on a module called with for_each', ref('module', 'db', 'url'), 'module.db has for_each, so name one of it by key, as in module.db["key"]'],
     ['a key after a dot on a module called with for_each', ref('module', 'db', 'eu', 'url'), 'module.db has for_each, so name one of it by key, as in module.db["key"]'],
-    ['a key and no output', ref('module', 'db', { key: 'eu' }), 'Module output reference must include output name: module.db["eu"]'],
     ['an index on a module called with for_each', ref('module', 'db', 0, 'url'), 'module.db has for_each, so name one of it by key, as in module.db["key"]'],
     ['an index on a module called without count', ref('module', 'app', 0, 'ip_address'), 'module.app has no count, so it takes no index'],
     ['no index on a module called with count', ref('module', 'web', 'tags'), 'module.web has count, so name one of it by index, as in module.web[0]'],
-    ['an index and no output', ref('module', 'web', 0), 'Module output reference must include output name: module.web[0]'],
     ['an index where the output goes', ref('module', 'web', 0, 1), 'Reference "module.web[0][1]" has an index where it needs a name'],
     ['an output that is no name', ref('module', 'app', { key: 'a b' }), 'Reference "module.app["a b"]" has "a b" where it needs a name'],
   ])('refuses %s', (_, reference, message) => {
@@ -60,5 +60,48 @@ describe('ModuleOutputResolver', () => {
 
   it('should throw if output is not found', () => {
     expect(() => resolver.resolve(ref('module', 'missing', 'val'), context)).toThrow(/Output "val" not found/);
+  });
+
+  describe('a whole module', () => {
+    const scopes = new ScopeManager();
+    const calls = new ModuleInstances();
+    const whole = new ModuleOutputResolver(scopes, calls);
+    const site = (scope: string, url: string, port: Value) => {
+      scopes.setOutput(scope, 'url', valueOf(types.string, url));
+      scopes.setOutput(scope, 'port', port);
+    };
+    const number = (text: string) => valueOf(types.number, ExactNumber.parse(text));
+
+    scopes.declareOutputs('module.app', ['url', 'port']);
+    scopes.declareOutputs('module.web', ['url', 'port']);
+    scopes.declareOutputs('module.db', ['url', 'port']);
+    calls.declare(ModuleAddress.root.child('web'), 'count');
+    calls.declare(ModuleAddress.root.child('db'), 'for_each');
+    calls.expand(ModuleAddress.root, 'web', () => [0, 1]);
+    calls.expand(ModuleAddress.root, 'db', () => ['eu', 'us']);
+    site('module.app', 'app-url', number('80'));
+    site('module.web[0]', 'web-0', number('80'));
+    site('module.web[1]', 'web-1', valueOf(types.string, '8080'));
+    site('module.db["eu"]', 'eu-url', number('5432'));
+    site('module.db["us"]', 'us-url', valueOf(types.tuple([types.string]), ['5432']));
+
+    it('reads one instance as an object of every output it declares', () => {
+      expect(whole.resolve(ref('module', 'app'), context).value.data).toEqual(record('app-url', ExactNumber.parse('80')));
+      expect(whole.resolve(ref('module', 'web', 0), context).value).toEqual(
+        valueOf(types.object({ url: types.string, port: types.number }), record('web-0', ExactNumber.parse('80')))
+      );
+    });
+
+    // A string can hold a number, so the two instances take one type, as tolist gives them.
+    it('reads every instance under count as a list, each output in one type', () => {
+      expect(whole.resolve(ref('module', 'web'), context)).toEqual({
+        value: valueOf(types.list(types.object({ url: types.string, port: types.string })), [record('web-0', '80'), record('web-1', '8080')]),
+        path: [],
+      });
+    });
+
+    it('refuses every instance under for_each where an output takes no one type, naming the output', () => {
+      expect(() => whole.resolve(ref('module', 'db'), context)).toThrow('module.db cannot join a number and a tuple into one type, at .port in each item');
+    });
   });
 });

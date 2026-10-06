@@ -159,9 +159,14 @@ configuration hits each of these early.
       instances under `count` and a map of them by key under `for_each`. Terraform makes a
       tuple and an object, since a dynamic attribute can give its instances different
       types; a Clay value keeps its schema's type, so they share one and `validate` knows it
-- [ ] Every instance of a module as one value: `module.web` as an object of its outputs,
-      and with `count` or `for_each` as a list or a map of them. Today a name without an
-      output is refused
+- [x] Every instance of a module as one value: `module.web` as an object of its outputs,
+      and with `count` or `for_each` as a list or a map of them. Terraform makes a tuple
+      and an object where an output has no declared type; Clay joins each output into one
+      type across the instances, as `tolist` does, and refuses outputs that cannot be joined
+- [ ] An output names its type: `output "url" { type = string, value = ... }`. Today every
+      output is `dynamic`, so `validate` knows only its name, and `module.web` under
+      `count` is a list of objects whose attributes have no type until a plan. Terraform
+      has `type` on an output and gives a list or a map once every output names one
 - [x] `path.module` and `path.root`, so a module can name a file next to itself. Both are
       relative to the root, where `clay` runs, so a plan or a state reads the same on
       another machine
