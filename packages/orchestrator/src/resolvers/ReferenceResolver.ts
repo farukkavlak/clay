@@ -14,6 +14,7 @@ import {
   spellNamed,
   spellReference,
   Step,
+  stepKey,
   TemplatePart,
 } from '@clay/parser';
 
@@ -113,9 +114,10 @@ export class ReferenceResolver {
 
   /** The parser only binds a name inside its for, so it always has a value here. */
   private resolveBound(node: BoundNode, given: Given): Value {
-    const [name, ...path] = node.value;
+    const [first, ...path] = node.value;
+    const name = String(stepKey(first));
 
-    return readPath(given.get(String(name))!, String(name), path, node.position);
+    return readPath(given.get(name)!, name, path, node.position);
   }
 
   private resolveFor(node: ForNode, state: State, context: Context | undefined, reading: Reading): Value {

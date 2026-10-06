@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { readPath } from '../../src/resolvers/readPath';
 import { UnresolvedReferenceError } from '../../src/resolvers/UnresolvedReferenceError';
 import { inferred, Value, valueOf } from '../../src/Value';
+import { steps } from '../ast';
 
 const at = { file: 'main.clay', line: 2, column: 9 };
 
@@ -13,7 +14,7 @@ const written = (data: unknown): Value => valueOf(inferred(data), data);
 
 const errorOf = (value: Value, path: (string | number)[]): ConfigError => {
   try {
-    readPath(value, 'var.tags', path, at);
+    readPath(value, 'var.tags', steps(...path), at);
   } catch (error) {
     if (error instanceof ConfigError) return error;
 
@@ -32,22 +33,22 @@ describe('reading a path into a value', () => {
     [['nested', 'deep', 'name'], 'x'],
     [[], tags],
   ])('reads %j', (path, expected) => {
-    expect(readPath(written(tags), 'var.tags', path, at).data).toEqual(expected);
+    expect(readPath(written(tags), 'var.tags', steps(...path), at).data).toEqual(expected);
   });
 
   it('reads a key named like something every object has, when the map holds it', () => {
-    expect(readPath(written(JSON.parse('{"__proto__": "own"}')), 'var.m', ['__proto__'], at).data).toBe('own');
+    expect(readPath(written(JSON.parse('{"__proto__": "own"}')), 'var.m', steps('__proto__'), at).data).toBe('own');
   });
 
   // The element type comes from the collection, so a set inside a list stays a set.
   it('reads an item with the type its place names', () => {
     const groups = valueOf(types.list(types.set(types.string)), [['a']]);
 
-    expect(readPath(groups, 'var.g', [0], at)).toEqual(valueOf(types.set(types.string), ['a']));
+    expect(readPath(groups, 'var.g', steps(0), at)).toEqual(valueOf(types.set(types.string), ['a']));
   });
 
   it('reads an item of a dynamic list with the type its data has', () => {
-    expect(readPath(valueOf(types.list(types.dynamic), [['a']]), 'var.g', [0], at).type).toEqual(types.tuple([types.string]));
+    expect(readPath(valueOf(types.list(types.dynamic), [['a']]), 'var.g', steps(0), at).type).toEqual(types.tuple([types.string]));
   });
 
   it.each([
@@ -76,7 +77,7 @@ describe('reading a path into a value', () => {
 
   // The reader can check its type before apply knows the value.
   it('reads a value not known yet as nothing yet, with the type it will have', () => {
-    const read = () => readPath(valueOf(types.object({ id: types.string }), { id: UNKNOWN }), 'a.b', ['id'], at);
+    const read = () => readPath(valueOf(types.object({ id: types.string }), { id: UNKNOWN }), 'a.b', steps('id'), at);
 
     expect(read).toThrow(UnresolvedReferenceError);
     expect(read).toThrow(expect.objectContaining({ message: 'a.b.id is known only after apply', type: types.string }));
@@ -85,7 +86,7 @@ describe('reading a path into a value', () => {
   // The map is unknown, and the steps into it reach a string.
   it('reads into a value not known yet as the type the steps into it will find', () => {
     const tags = types.object({ tags: types.map(types.list(types.string)) });
-    const read = () => readPath(valueOf(tags, { tags: UNKNOWN }), 'a.b', ['tags', 'x', 0], at);
+    const read = () => readPath(valueOf(tags, { tags: UNKNOWN }), 'a.b', steps('tags', 'x', 0), at);
 
     expect(read).toThrow(expect.objectContaining({ message: 'a.b.tags is known only after apply', type: types.string }));
   });

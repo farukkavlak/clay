@@ -94,22 +94,28 @@ describe('reading a plan file', () => {
           attributes: {
             id: { type: 'Number', value: ExactNumber.parse('12345678901234567890'), position: at },
             tags: { type: 'List', value: [{ type: 'Map', value: { n: { type: 'Number', value: ExactNumber.parse('1'), position: at } }, position: at }], position: at },
-            label: { type: 'Template', value: ['id ', { type: 'Reference', value: ['var', 'ids', 0], position: at }], position: at },
-            first: { type: 'Reference', value: ['var', 'ids', 1, 'name'], position: at },
-            size: { type: 'Call', name: 'length', args: [{ type: 'Reference', value: ['var', 'ids', 2], position: at }], path: [0, 'a'], position: at },
+            label: { type: 'Template', value: ['id ', { type: 'Reference', value: [{ name: 'var' }, { name: 'ids' }, { key: 0 }], position: at }], position: at },
+            first: { type: 'Reference', value: [{ name: 'var' }, { name: 'ids' }, { key: 1 }, { name: 'name' }], position: at },
+            size: {
+              type: 'Call',
+              name: 'length',
+              args: [{ type: 'Reference', value: [{ name: 'var' }, { name: 'ids' }, { key: 2 }], position: at }],
+              path: [{ key: 0 }, { name: 'a' }],
+              position: at,
+            },
             names: {
               type: 'For',
               valueName: 'n',
-              collection: { type: 'Reference', value: ['var', 'ids', 3], position: at },
-              body: { type: 'Bound', value: ['n', 4], position: at },
+              collection: { type: 'Reference', value: [{ name: 'var' }, { name: 'ids' }, { key: 3 }], position: at },
+              body: { type: 'Bound', value: [{ name: 'n' }, { key: 4 }], position: at },
               position: at,
             },
             byName: {
               type: 'For',
               valueName: 'n',
-              collection: { type: 'Reference', value: ['var', 'ids', 5], position: at },
-              key: { type: 'Bound', value: ['n', 6], position: at },
-              body: { type: 'Bound', value: ['n'], position: at },
+              collection: { type: 'Reference', value: [{ name: 'var' }, { name: 'ids' }, { key: 5 }], position: at },
+              key: { type: 'Bound', value: [{ name: 'n' }, { key: 6 }], position: at },
+              body: { type: 'Bound', value: [{ name: 'n' }], position: at },
               grouped: true,
               position: at,
             },
@@ -393,11 +399,11 @@ describe('reading a plan file', () => {
           type: 'CREATE',
           resourceType: 'null_resource',
           name: 'a',
-          attributes: { n: { type: 'Reference', value: ['var', 'l', 1], position: { file: 'main.clay', line: 1, column: 1 } } },
+          attributes: { n: { type: 'Reference', value: [{ name: 'var' }, { name: 'l' }, { key: 1 }], position: { file: 'main.clay', line: 1, column: 1 } } },
         },
       ],
       outputs: {},
-    }).replace(/"l",\s*1/, '"l", 1.5');
+    }).replace(/"key":\s*1\b/, '"key": 1.5');
 
     expect(() => parsePlanFile(text, 'tfplan.json')).toThrow('tfplan.json is not a plan file: an index: 1.5 is not a whole number');
   });

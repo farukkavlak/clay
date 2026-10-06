@@ -8,7 +8,7 @@ import { Instances } from '../../src/Instances';
 import { ModuleCall } from '../../src/keys';
 import { ModuleInstances } from '../../src/ModuleInstances';
 import { ReferenceScanner } from '../../src/resolvers/ReferenceScanner';
-import { moduleBlock, ref, resourceBlock, str, variableBlock } from '../ast';
+import { moduleBlock, ref, resourceBlock, steps, str, variableBlock } from '../ast';
 
 function moduleAt(names: string[]): ModuleAddress {
   return names.reduce((module, name) => module.child(name), ModuleAddress.root);
@@ -47,7 +47,7 @@ describe('DependencyGraphBuilder', () => {
       module([], [moduleBlock('app', { source: str('./app') })]),
       {
         address: ModuleAddress.root.child('app'),
-        program: [{ type: 'Output', name: 'ip', value: { type: 'Reference', value: ['resource', 'instance', 'ip'] } }],
+        program: [{ type: 'Output', name: 'ip', value: { type: 'Reference', value: steps('resource', 'instance', 'ip') } }],
       },
     ] as LoadedModule[];
 
@@ -64,7 +64,7 @@ describe('DependencyGraphBuilder', () => {
 
   // A string may hold several references, so the error points at the missing one.
   it('should point at the missing reference, not at the template it sits in', () => {
-    const typo: ReferenceNode = { type: 'Reference', value: ['resource', 'typo', 'id'], position: { file: 'main.clay', line: 3, column: 9 } };
+    const typo: ReferenceNode = { type: 'Reference', value: steps('resource', 'typo', 'id'), position: { file: 'main.clay', line: 3, column: 9 } };
     const main = resource('main', { line: { type: 'Template', value: ['id ', typo], position: { file: 'main.clay', line: 3, column: 1 } } });
 
     expect(() => builder.buildExecutionGraph([main], [])).toThrow(expect.objectContaining({ position: typo.position }));
@@ -73,7 +73,7 @@ describe('DependencyGraphBuilder', () => {
   // A hand-built value may have no position; the enclosing value supplies one.
   it('should place a missing reference with no position at the value it sits in', () => {
     const at = { file: 'main.clay', line: 3, column: 1 };
-    const typo = { type: 'Reference', value: ['resource', 'typo', 'id'] } as ReferenceNode;
+    const typo = { type: 'Reference', value: steps('resource', 'typo', 'id') } as ReferenceNode;
     const main = resource('main', { line: { type: 'Template', value: ['id ', typo], position: at } });
 
     expect(() => builder.buildExecutionGraph([main], [])).toThrow(expect.objectContaining({ position: at }));

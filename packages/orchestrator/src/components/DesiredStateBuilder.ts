@@ -13,7 +13,7 @@ import { Context, contextIn, enclosing, scopeOf } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
 import { Planned } from '../Planned';
 import { tryAt, withPlace } from '../place';
-import { checkHasKey, checkInRange } from '../resolvers/instance';
+import { checkHasKey, checkInRange, firstKey } from '../resolvers/instance';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { Reference, ReferenceScanner } from '../resolvers/ReferenceScanner';
 import { UnresolvedReferenceError } from '../resolvers/UnresolvedReferenceError';
@@ -224,15 +224,16 @@ export class DesiredStateBuilder {
   }
 
   private checkIndex({ key, block, reference, position }: Extract<Reference, { kind: 'resource' }>): void {
-    const [first] = reference.path;
+    const first = firstKey(reference.path);
     const repetition = this.instances.repetitionOf(key);
+    const spelled = spellReference([{ name: reference.type }, { name: reference.name }]);
 
-    if (repetition === 'count' && typeof first === 'number') checkInRange(spellReference([reference.type, reference.name]), first, this.instances.keysOf(block)?.length, position);
-    if (repetition === 'for_each' && typeof first === 'string') checkHasKey(spellReference([reference.type, reference.name]), first, this.instances.keysOf(block), position);
+    if (repetition === 'count' && typeof first === 'number') checkInRange(spelled, first, this.instances.keysOf(block)?.length, position);
+    if (repetition === 'for_each' && typeof first === 'string') checkHasKey(spelled, first, this.instances.keysOf(block), position);
   }
 
   private checkCallIndex({ module, call, instanceKey, position }: Extract<Reference, { kind: 'output' }>): void {
-    const spelled = spellReference(['module', module]);
+    const spelled = spellReference([{ name: 'module' }, { name: module }]);
 
     if (typeof instanceKey === 'number') checkInRange(spelled, instanceKey, this.modules.keysOf(call)?.length, position);
     if (typeof instanceKey === 'string') checkHasKey(spelled, instanceKey, this.modules.keysOf(call), position);

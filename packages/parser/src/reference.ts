@@ -1,7 +1,11 @@
 import { ConfigError } from './ConfigError';
 import { Position } from './Position';
 
-export type Step = string | number;
+export type Step = { name: string } | { key: string | number };
+
+export function stepKey(step: Step): string | number {
+  return 'name' in step ? step.name : step.key;
+}
 
 export interface VariableReference {
   kind: 'variable';
@@ -54,7 +58,8 @@ export type ParsedReference = VariableReference | DataReference | ModuleOutputRe
 /** What a reference can spell after a dot, so every declared name can be referenced. */
 export const NAME = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 
-function spellStep(step: Step, first: boolean): string {
+function spellStep(part: Step, first: boolean): string {
+  const step = stepKey(part);
   if (typeof step === 'number') return `[${step}]`;
   if (!NAME.test(step)) return `[${JSON.stringify(step)}]`;
 
@@ -78,7 +83,7 @@ function refuse(message: string, position?: Position): never {
 
 /** The target's parts must be names, since scope keys join them with dots; the rest is the path into its value. */
 function split(parts: Step[], count: number, position?: Position): { names: string[]; path: Step[] } {
-  const names = parts.slice(0, count);
+  const names = parts.slice(0, count).map((part) => stepKey(part));
   const spelled = () => spellReference(parts);
 
   for (const part of names) {
@@ -143,12 +148,13 @@ function pathReference(parts: Step[], position?: Position): PathReference {
 
 /** Splits a reference into its target and the path into the target's value. */
 export function parseReference(parts: Step[], position?: Position): ParsedReference {
-  if (parts[0] === 'var') return variableReference(parts, position);
-  if (parts[0] === 'data') return dataReference(parts, position);
-  if (parts[0] === 'module') return moduleOutputReference(parts, position);
-  if (parts[0] === 'count') return countReference(parts, position);
-  if (parts[0] === 'each') return eachReference(parts, position);
-  if (parts[0] === 'path') return pathReference(parts, position);
+  const head = parts.length === 0 ? undefined : stepKey(parts[0]);
+  if (head === 'var') return variableReference(parts, position);
+  if (head === 'data') return dataReference(parts, position);
+  if (head === 'module') return moduleOutputReference(parts, position);
+  if (head === 'count') return countReference(parts, position);
+  if (head === 'each') return eachReference(parts, position);
+  if (head === 'path') return pathReference(parts, position);
 
   return resourceReference(parts, position);
 }

@@ -513,9 +513,9 @@ export class Parser {
   private parseNamed(position: Position): ReferenceNode | CallNode | BoundNode {
     const name = this.advance().value;
     if (this.matchToken(TokenType.LParen)) return { type: 'Call', name, args: this.parseArguments(), path: this.parseSteps(), position };
-    if (this.bound.includes(name)) return { type: 'Bound', value: [name, ...this.parseSteps()], position };
+    if (this.bound.includes(name)) return { type: 'Bound', value: [{ name }, ...this.parseSteps()], position };
 
-    return { type: 'Reference', value: [name, ...this.parseSteps()], position };
+    return { type: 'Reference', value: [{ name }, ...this.parseSteps()], position };
   }
 
   private parseArguments(): AttributeValue[] {
@@ -532,20 +532,20 @@ export class Parser {
     const steps: Step[] = [];
 
     while (this.matchToken(TokenType.Dot, TokenType.LBracket))
-      steps.push(this.previous().type === TokenType.Dot ? this.consume(TokenType.Identifier, 'Expect property name after dot.').value : this.parseBracket());
+      steps.push(this.previous().type === TokenType.Dot ? { name: this.consume(TokenType.Identifier, 'Expect property name after dot.').value } : this.parseBracket());
 
     return steps;
   }
 
   private parseBracket(): Step {
-    let step: Step;
+    let key: string | number;
 
-    if (this.matchToken(TokenType.OQuote)) step = this.stringKey(this.previous()).value;
-    else if (this.check(TokenType.Number) || this.check(TokenType.Minus)) step = this.index(this.advance());
+    if (this.matchToken(TokenType.OQuote)) key = this.stringKey(this.previous()).value;
+    else if (this.check(TokenType.Number) || this.check(TokenType.Minus)) key = this.index(this.advance());
     else return this.error("Expect a number or a string inside '['.");
 
     this.consume(TokenType.RBracket, "Expect ']' after the index.");
-    return step;
+    return { key };
   }
 
   /** Digits only, and must fit a safe integer. */

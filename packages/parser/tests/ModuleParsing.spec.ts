@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { CONFIG_FILE, ModuleBlock } from '../src/ast';
 import { Lexer } from '../src/Lexer';
 import { Parser } from '../src/Parser';
+import { steps } from './steps';
 
 function makeParser(input: string): Parser {
   const lexer = new Lexer(input, CONFIG_FILE);
@@ -62,7 +63,7 @@ describe('Clay Parser - Modules', () => {
 
     expect((result[0] as ModuleBlock).attributes.vpc_id).toMatchObject({
       type: 'Reference',
-      value: ['module', 'vpc', 'id'],
+      value: steps('module', 'vpc', 'id'),
     });
   });
 

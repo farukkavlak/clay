@@ -1,13 +1,14 @@
 import { Address, ExactNumber, ModuleAddress, types } from '@clay/contracts';
-import { ModuleOutputReference, parseReference, Step } from '@clay/parser';
+import { ModuleOutputReference, parseReference } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
 import { ModuleInstances } from '../../src/ModuleInstances';
 import { ModuleOutputResolver } from '../../src/resolvers/ModuleOutputResolver';
 import { ScopeManager } from '../../src/scope/ScopeManager';
 import { valueOf } from '../../src/Value';
+import { steps } from '../ast';
 
-const ref = (...parts: Step[]) => parseReference(parts) as ModuleOutputReference;
+const ref = (...parts: (string | number)[]) => parseReference(steps(...parts)) as ModuleOutputReference;
 
 describe('ModuleOutputResolver', () => {
   const scopeManager = new ScopeManager();
@@ -34,7 +35,7 @@ describe('ModuleOutputResolver', () => {
     const tags = valueOf(types.object({ env: types.string }), { env: 'b' });
     scopeManager.setOutput('module.web[1]', 'tags', tags);
 
-    expect(resolver.resolve(ref('module', 'web', 1, 'tags', 'env'), context)).toEqual({ value: tags, path: ['env'] });
+    expect(resolver.resolve(ref('module', 'web', 1, 'tags', 'env'), context)).toEqual({ value: tags, path: steps('env') });
   });
 
   it('reads the output of the instance a key names', () => {
