@@ -97,9 +97,28 @@ describe('conformValues', () => {
     ['a whole value', { name: UNKNOWN, settings: UNKNOWN }],
     ['an item of a list', { ports: [n('80'), UNKNOWN] }],
     ['a value of a map', { tags: { a: UNKNOWN } }],
-    ['a value inside an object', { settings: { mode: UNKNOWN } }],
+    ['a value inside an object', { settings: { mode: UNKNOWN, depth: n('2') } }],
   ])('takes %s not known yet, as it is', (_, config) => {
     expect(conformValues('thing', schema, config)).toEqual(config);
+  });
+
+  it.each([
+    ['beside a value', { mode: 'm' }],
+    ['beside a value not known yet', { mode: UNKNOWN }],
+  ])('gives an optional attribute an object leaves out as null, %s', (_, settings) => {
+    expect(conformValues('thing', schema, { settings })).toEqual({ settings: { ...settings, depth: null } });
+  });
+
+  it('holds an object once in a set, with its optional attribute left out and set to null', () => {
+    const rules: Schema = { rules: { type: types.set(schema.settings.type) } };
+
+    expect(conformValues('thing', rules, { rules: [{ mode: 'm' }, { mode: 'm', depth: null }] })).toEqual({ rules: [{ mode: 'm', depth: null }] });
+  });
+
+  it('keeps the attributes of an object in the order they are written', () => {
+    const { settings } = conformValues('thing', schema, { settings: { depth: n('2'), mode: 'm' } });
+
+    expect(Object.keys(settings as object)).toEqual(['depth', 'mode']);
   });
 
   // Converted first, so "80" and 80 become one member.

@@ -91,12 +91,14 @@ change each.
       `module.web`, `module.web.path.x` gave `module "web" has no output "x"`. Terraform
       reads a key only in brackets. Now a key is written in brackets, as in
       `local_file.f["key"]`, and a name after a dot there is refused as a missing key
-- [ ] An object a provider gives back with an optional attribute filled in is refused as
-      a provider bug. With an object type whose `b` is optional, a configuration that sets
-      `{ a = "1" }` and a provider that returns `{ a = "1", b = null }` fail, for a
-      resource at apply and for a data source at read, since the two objects have
-      different keys. Whether a provider may fill in what the configuration left out is
-      open
+- [x] An object a provider gave back with an optional attribute as `null` was refused as
+      a provider bug. With an object type whose `b` is optional, a configuration that set
+      `{ a = "1" }` and a provider that returned `{ a = "1", b = null }` failed, for a
+      resource at apply and for a data source at read, since the two objects had
+      different keys. Now an object of a schema's type holds every attribute, and an
+      optional one left out is `null`, from the configuration and from a provider alike,
+      as in Terraform and as a variable's type already did. A provider that gives it a
+      value the configuration did not is still refused, by the attribute's name
 - [x] One plan could read a module file twice. Two `module` blocks with the same `source`
       each read it, so a file changed between the two reads was planned from two versions,
       and `plan --out` saved only the second. Now a load reads each file once
@@ -502,6 +504,8 @@ Nothing here changes what Clay does. Each is a place the next change has to work
       state", but `action.attributes` is the parsed block and was never resolved;
       `executeCreate` does the same resolve with no comment
 - [ ] `LoadedResource.uniqueId` is `address.toString()` under a second name
+- [ ] The type of an object type is spelled out three times in the orchestrator, in
+      `withLeftOut.ts`, `declared.ts` and `unify.ts`
 - [x] Comments that restate the code: the `// e.g., "my_file"` trailers in `ast.ts`, the
       `// {` and `// }` trailers in `tokens.ts`, the `forceNew` explanations in the local
       provider

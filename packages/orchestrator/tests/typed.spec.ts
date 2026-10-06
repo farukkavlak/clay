@@ -35,7 +35,7 @@ describe('plain data read as its type', () => {
     expect(Object.fromEntries(Object.entries(read).map(([name, value]) => [name, value.data]))).toEqual({
       groups: [['a', 'b']],
       byName: { x: ['a', 'b'] },
-      rule: { cidrs: ['a', 'b'] },
+      rule: { cidrs: ['a', 'b'], note: null },
       pair: [
         ['a', 'b'],
         ['b', 'a'],
@@ -66,12 +66,18 @@ describe('plain data read as its type', () => {
   it('takes a name given no value as one left out, at any depth', () => {
     const values = { ports: undefined, rule: { cidrs: [], note: undefined }, meta: { a: undefined, b: [{ c: undefined }] } };
 
-    expect(plainOf(typedValues(schema, values))).toEqual({ rule: { cidrs: [] }, meta: { b: [{}] } });
+    expect(plainOf(typedValues(schema, values))).toEqual({ rule: { cidrs: [], note: null }, meta: { b: [{}] } });
     expect(typedValues(schema, values).meta.type).toEqual(types.object({ b: types.tuple([types.object({})]) }));
   });
 
-  it('leaves out an optional attribute of an object', () => {
-    expect(typed(schema.rule.type, { cidrs: [] }, ['rule']).data).toEqual({ cidrs: [] });
+  it('reads an optional attribute an object leaves out as null', () => {
+    expect(typed(schema.rule.type, { cidrs: [] }, ['rule']).data).toEqual({ cidrs: [], note: null });
+  });
+
+  it('holds an object once in a set, with its optional attribute left out and set to null', () => {
+    const rules = types.set(schema.rule.type);
+
+    expect(typed(rules, [{ cidrs: [] }, { cidrs: [], note: null }], ['rules']).data).toEqual([{ cidrs: [], note: null }]);
   });
 
   it.each([
