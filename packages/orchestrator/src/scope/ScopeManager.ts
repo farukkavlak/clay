@@ -17,7 +17,7 @@ export interface VariableValue {
 export class ScopeManager {
   private variables: Map<string, Map<string, VariableValue>> = new Map();
   private outputs: Map<string, Map<string, Value>> = new Map();
-  private outputNames: Map<string, string[]> = new Map();
+  private declaredOutputs: Map<string, ReadonlyMap<string, Type>> = new Map();
   private directories: Map<string, string> = new Map();
 
   setVariable(scope: string, name: string, value: VariableValue): void {
@@ -39,12 +39,13 @@ export class ScopeManager {
   }
 
   /** Per module, not per instance: every instance declares the same outputs. */
-  declareOutputs(scope: string, names: string[]): void {
-    this.outputNames.set(scope, names);
+  declareOutputs(scope: string, outputs: ReadonlyMap<string, Type>): void {
+    this.declaredOutputs.set(scope, outputs);
   }
 
-  outputsOf(scope: string): string[] {
-    return this.outputNames.get(scope) ?? [];
+  /** Each output's type, `dynamic` where it names none. */
+  outputsOf(scope: string): ReadonlyMap<string, Type> {
+    return this.declaredOutputs.get(scope) ?? new Map();
   }
 
   setDirectory(scope: string, directory: string): void {
@@ -58,7 +59,7 @@ export class ScopeManager {
   clear(): void {
     this.variables.clear();
     this.outputs.clear();
-    this.outputNames.clear();
+    this.declaredOutputs.clear();
     this.directories.clear();
   }
 }

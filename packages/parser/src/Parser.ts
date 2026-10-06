@@ -157,7 +157,8 @@ export class Parser {
     if (INSTANCE_ARGUMENTS.includes(nameToken.value))
       throw new ConfigError(`"${nameToken.value}" cannot be a variable name: a module call keeps it for itself.`, nameToken.position);
 
-    const { attributes, declared } = this.parseVariableBody(nameToken.value);
+    this.consume(TokenType.LBrace, "Expect '{' after variable name.");
+    const { attributes, declared } = this.parseTypedBody(`Variable "${nameToken.value}"`, 'default');
 
     // A module input replaces the default, so a reference or a call in it might never be checked.
     if (attributes.default) this.checkConstant(attributes.default, "A variable's default");
@@ -177,10 +178,8 @@ export class Parser {
     if (named) throw new ConfigError(`${what} is a constant, so it cannot hold ${spellNamed(named)}`, named.position);
   }
 
-  /** Only `default` and `type`; any other name is refused, since nothing would read it. */
-  private parseVariableBody(name: string): { attributes: Record<string, AttributeValue>; declared?: ParsedType } {
-    this.consume(TokenType.LBrace, "Expect '{' after variable name.");
-
+  /** Only the one value and `type`; any other name is refused, since nothing would read it. */
+  private parseTypedBody(block: string, valueName: string): { attributes: Record<string, AttributeValue>; declared?: ParsedType } {
     const attributes: Record<string, AttributeValue> = {};
     let declared: ParsedType | undefined;
     const seen: Record<string, true> = {};
@@ -196,8 +195,8 @@ export class Parser {
       }
 
       const value = this.parseValue();
-      if (key.value !== 'default') throw new ConfigError(`Variable "${name}" takes only "default" and "type", not "${key.value}".`, value.position);
-      attributes.default = value;
+      if (key.value !== valueName) throw new ConfigError(`${block} takes only "${valueName}" and "type", not "${key.value}".`, value.position);
+      attributes[valueName] = value;
     }
 
     this.consume(TokenType.RBrace, "Expect '}' after block body.");
@@ -287,18 +286,15 @@ export class Parser {
     const nameToken = this.consumeName("Expect output name string after 'output'.");
 
     this.consume(TokenType.LBrace, "Expect '{' after output name.");
-    if (!this.check(TokenType.Identifier) || this.peek().value !== 'value') return this.error("Expect 'value' in output block.");
-    this.advance();
-    this.consume(TokenType.Assign, "Expect '=' after 'value'.");
-
-    const value = this.parseValue();
-
-    this.consume(TokenType.RBrace, "Expect '}' after output block.");
+    const { attributes, declared } = this.parseTypedBody(`Output "${nameToken.value}"`, 'value');
+    if (!attributes.value) throw new ConfigError(`Output "${nameToken.value}" has no "value".`, position);
 
     return {
       type: 'Output',
       name: nameToken.value,
-      value,
+      value: attributes.value,
+      ...(declared && { valueType: declared.type }),
+      ...(declared?.defaults && { defaults: declared.defaults }),
       position,
     };
   }

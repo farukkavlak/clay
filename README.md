@@ -55,8 +55,10 @@ Every value carries its type. A written list is a tuple, `["a", 1]` is
 data source has the type its schema names, and keeps it through variables, module inputs
 and outputs. An attribute set to `null` is left out, as if it were not written, so a
 required one is refused. `null` inside a list or a map stays there. A variable may name its
-type, `type = set(string)`, and takes what it is given as that type. An attribute of an
-object type can be optional, with a default: `object({ port = optional(number, 80) })`.
+type, `type = set(string)`, and takes what it is given as that type. An output may name its
+type the same way, and gives its value as that type, so its caller knows it before a plan.
+An attribute of an object type can be optional, with a default:
+`object({ port = optional(number, 80) })`.
 
 | Block                            | Does                                                           |
 | -------------------------------- | -------------------------------------------------------------- |
@@ -98,9 +100,9 @@ set is unknown as a whole until then, since it has no order yet.
 Reaching inside a module (`module.m.local_file.a`) is not allowed; a module speaks
 through its outputs. A module named with no output is an object of all its outputs:
 `module.m`, or one instance as `module.web[0]`. With `count` or `for_each`, `module.web`
-alone is a list or a map of them, as for a resource. Outputs have no declared type, so
-each output takes one type across the instances, as `tolist` gives one; outputs that
-cannot, such as a string in one instance and a list in another, are refused at plan.
+alone is a list or a map of them, as for a resource. Each output takes one type across
+the instances, as `tolist` gives one; where an output names no type, values that cannot
+share one, such as a string in one instance and a list in another, are refused at plan.
 `path.module` is the directory of the module it is written in,
 relative to the root, so `"${path.module}/index.html"` names a file next to the module.
 
@@ -165,8 +167,8 @@ state all see the converted value. A schema may call a list a set: its order is 
 change, and a member written twice is held once. A plan shows a change to a set as the
 members it loses and gains.
 
-No schema names the type of an output, so state and a plan hold each root output as its
-value and its type: `{ "value": ["a", "b"], "type": { "kind": "set", ... } }`. A set
+State and a plan hold each root output as its value and its type, the one it names or the
+one its value has: `{ "value": ["a", "b"], "type": { "kind": "set", ... } }`. A set
 output changes by its members too. An output whose value stays and whose type changes is
 a change, shown by the two types: `m = ["a","b"] (list(string) -> set(string))`.
 

@@ -1,15 +1,16 @@
-import { ModuleAddress } from '@clay/contracts';
+import { ModuleAddress, Type } from '@clay/contracts';
 import { Graph } from '@clay/graph';
-import { AttributeValue, callsIn, ModuleBlock, Position, spell } from '@clay/parser';
+import { AttributeValue, callsIn, ModuleBlock, Position, spell, TypeDefaults } from '@clay/parser';
 
 import { Instances, Repetition } from '../Instances';
+import { declaredOf } from '../declared';
 import { functionCalled } from '../functions';
 import { callKey, Context, ModuleCall, outputKey, scopeOf, variableKey } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
 import { placed, tryAt, withPlace } from '../place';
 import { COUNT_INDEX_OUTSIDE, eachOutside, readCall, readInstance } from '../resolvers/instance';
 import { Reference, ReferenceScanner } from '../resolvers/ReferenceScanner';
-import { LoadedModule, LoadedResource, outputNamesOf } from './ModuleLoader';
+import { LoadedModule, LoadedResource, outputsOf } from './ModuleLoader';
 
 /** The module as written, not an instance; a node runs once per instance. A module call sits in its caller. */
 interface InModule {
@@ -26,7 +27,7 @@ export interface ValueNode extends InModule {
 }
 
 /** An output always has a value; a variable may not until a call gives it one. */
-export type OutputNode = ValueNode & { value: AttributeValue };
+export type OutputNode = ValueNode & { value: AttributeValue; declared: { type?: Type; defaults?: TypeDefaults } };
 
 export type GraphNode =
   | ({ kind: 'resource' } & InModule)
@@ -83,7 +84,7 @@ export class DependencyGraphBuilder {
   buildExecutionGraph(loadedResources: LoadedResource[], loadedModules: LoadedModule[]): Graph<GraphNode> {
     const graph = new Graph<GraphNode>();
     this.references.clear();
-    this.outputs = new Map(loadedModules.map((mod) => [scopeOf(mod.address), outputNamesOf(mod.program)]));
+    this.outputs = new Map(loadedModules.map((mod) => [scopeOf(mod.address), [...outputsOf(mod.program).keys()]]));
 
     for (const { uniqueId, address } of loadedResources) graph.addNode(uniqueId, { kind: 'resource', module: address.module });
     for (const [key, node] of this.valueNodes(loadedModules)) graph.addNode(key, node);
@@ -177,6 +178,7 @@ export class DependencyGraphBuilder {
             module: mod.address,
             name: stmt.name,
             value: stmt.value,
+            declared: declaredOf(stmt),
             context: mod.address,
             position: stmt.value.position,
             declaration,

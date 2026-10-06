@@ -72,9 +72,13 @@ describe('ModuleOutputResolver', () => {
     };
     const number = (text: string) => valueOf(types.number, ExactNumber.parse(text));
 
-    scopes.declareOutputs('module.app', ['url', 'port']);
-    scopes.declareOutputs('module.web', ['url', 'port']);
-    scopes.declareOutputs('module.db', ['url', 'port']);
+    const outputs = new Map([
+      ['url', types.dynamic],
+      ['port', types.dynamic],
+    ]);
+    scopes.declareOutputs('module.app', outputs);
+    scopes.declareOutputs('module.web', outputs);
+    scopes.declareOutputs('module.db', outputs);
     calls.declare(ModuleAddress.root.child('web'), 'count');
     calls.declare(ModuleAddress.root.child('db'), 'for_each');
     calls.expand(ModuleAddress.root, 'web', () => [0, 1]);
