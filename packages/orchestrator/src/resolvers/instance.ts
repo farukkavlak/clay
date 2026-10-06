@@ -1,11 +1,12 @@
-import { InstanceKey } from '@clay/contracts';
+import { InstanceKey, Schema, Type, types } from '@clay/contracts';
 import { ModuleOutputReference, NAME, Position, ResourceReference, spellReference, Step, stepKey } from '@clay/parser';
 
 import { Repetition } from '../Instances';
 import { placed } from '../place';
 
-/** With no attribute, the whole instance is read. */
+/** With no attribute, the whole instance is read; with `every`, every instance its count or for_each makes. */
 export interface InstanceRead {
+  every?: Repetition;
   key?: InstanceKey;
   attribute?: string;
   path: Step[];
@@ -46,7 +47,7 @@ function readAttribute(reference: ResourceReference, steps: Step[], position?: P
 }
 
 /**
- * With count or for_each the first step must be an index or a key in brackets; without either there is none.
+ * With count or for_each the first step must be an index or a key in brackets, or there is no step at all; without either there is none.
  * A key after a dot would read `local_file.a.content` as the instance "content", so it is refused.
  */
 export function readInstance(reference: ResourceReference, repetition: Repetition | undefined, position?: Position): InstanceRead {
@@ -59,11 +60,22 @@ export function readInstance(reference: ResourceReference, repetition: Repetitio
     return { attribute: readAttribute(reference, reference.path, position), path: rest };
   }
 
+  if (reference.path.length === 0) return { every: repetition, path: [] };
+
   // The step is not echoed: it may be an attribute, or a key meant as the index.
   if (repetition === 'count' && typeof first !== 'number') refuse(`${block} has count, so name one of it by index, as in ${block}[0]`, position);
   if (repetition === 'for_each' && typeof first !== 'string') refuse(`${block} has for_each, so name one of it by key, as in ${block}["key"]`, position);
 
   return { key: first, attribute: readAttribute(reference, rest, position), path: rest.slice(1) };
+}
+
+export function instanceType(schema: Schema): Type {
+  return types.object(Object.fromEntries(Object.entries(schema).map(([name, attribute]) => [name, attribute.type])));
+}
+
+/** Instances share the schema's type and a `dynamic` attribute takes each one's own, so a list or a map holds them all, where Terraform needs a tuple or an object. */
+export function everyType(repetition: Repetition, schema: Schema): Type {
+  return repetition === 'count' ? types.list(instanceType(schema)) : types.map(instanceType(schema));
 }
 
 export interface CallRead {

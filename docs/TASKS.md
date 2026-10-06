@@ -155,8 +155,13 @@ configuration hits each of these early.
       items, since they are its keys
 - [x] A whole instance as a value: `local_file.a`, `local_file.a[0]` and
       `local_file.a["key"]` are each an object of every attribute in the schema
-- [ ] Every instance of a resource as one value: `local_file.a` as the list of its
-      instances under `count`, and as a map by key under `for_each`
+- [x] Every instance of a resource as one value: `local_file.a` is the list of its
+      instances under `count` and a map of them by key under `for_each`. Terraform makes a
+      tuple and an object, since a dynamic attribute can give its instances different
+      types; a Clay value keeps its schema's type, so they share one and `validate` knows it
+- [ ] Every instance of a module as one value: `module.web` as an object of its outputs,
+      and with `count` or `for_each` as a list or a map of them. Today a name without an
+      output is refused
 - [x] `path.module` and `path.root`, so a module can name a file next to itself. Both are
       relative to the root, where `clay` runs, so a plan or a state reads the same on
       another machine
@@ -328,9 +333,15 @@ length below 1.
       a string: `"x-${thing.a.tags}"` with `tags` a map. Today the plan passes and the
       apply fails after `thing.a` is made. Terraform also waits for the apply
 - [ ] A step into a value not known yet is refused at plan where its type can never take
-      it: an index into a set or a map, a key into a list, any step into a string. Today
-      the apply refuses it. Terraform refuses at plan: "Can't access attributes on a
-      primitive-typed value (string)"
+      it: an index into a set or a map, a key into a list, a name its object type does not
+      have, any step into a string. Today the apply refuses it, and a block that makes no
+      instance never: in a block with `count = 0`, `[for log in local_file.logs : log.contnet]`
+      is valid. Terraform refuses at plan: "Can't access attributes on a primitive-typed
+      value (string)"
+- [ ] The body of a `for` over a collection known to be empty is never read. With
+      `count = 0` on `local_file.logs`, `[for log in local_file.logs : log.contnet]` is
+      valid, and with `count = 2` it is refused. A body is read once against the item type
+      when the collection is unknown, and should be when it is empty
 - [ ] A value not known yet is checked only by its own kind, not by the types of what it
       holds. `var.l` of type `list(number)` given to a variable of type `list(bool)` is
       valid to `clay validate` when no instance reads it: a list is taken as a list, and
@@ -350,7 +361,9 @@ module output has a value, so one that reads either fails at plan.
 
 - [ ] Data sources are graph nodes, read in dependency order and once per run. Read at load,
       one whose input reads a resource the plan changes gets the value in state, while a
-      resource that reads it gets the value the plan sets
+      resource that reads it gets the value the plan sets. One that reads every instance of
+      a resource with `count` or `for_each`, `local_file.logs`, is refused, since no count
+      is read yet
 - [ ] A data source in a module called with `count` or `for_each` is refused, since it is
       read before the module has instances. As a graph node it is read once for each
       instance of its module; test that end to end with a module called with `count` and one

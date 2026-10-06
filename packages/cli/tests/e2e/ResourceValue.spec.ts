@@ -128,8 +128,7 @@ describe('a whole resource instance read as a value', () => {
   });
 
   it.each([
-    ['all of a resource that has count', 'local_file.logs', 'local_file.logs has count, so name one of it by index, as in local_file.logs[0]'],
-    ['all of a resource that has for_each', 'local_file.f', 'local_file.f has for_each, so name one of it by key, as in local_file.f["key"]'],
+    ['an attribute of a resource that has count, with no index', 'local_file.logs.content', 'local_file.logs has count, so name one of it by index, as in local_file.logs[0]'],
     ['an index of a resource that has no count', 'local_file.one[0]', 'local_file.one has no count, so it takes no index'],
     ['an index past its count', 'local_file.logs[2]', 'local_file.logs has 2 instances, [0] to [1]'],
     ['a resource that is not declared', 'local_file.other', '"local_file.other" is not declared in the configuration'],
@@ -168,5 +167,64 @@ describe('a whole resource instance read as a value', () => {
 
     expect(error.message).toBe('content is an object, where local_file takes a string');
     expect(error.position).toMatchObject(placeOf(config, 'local_file.one\n}'));
+  });
+
+  describe('every instance of a resource', () => {
+    it('gives a list in index order under count, and a map by key under for_each', async () => {
+      await apply(`${counted()}\n${keyed()}\noutput "logs" { value = local_file.logs }\noutput "f" { value = local_file.f }`);
+
+      const [zero, one] = [0, 1].map((index) => path.join(dir, `log-${index}.txt`));
+      expect(await outputs()).toEqual({
+        logs: {
+          value: [
+            { id: zero, path: zero, content: 'log 0' },
+            { id: one, path: one, content: 'log 1' },
+          ],
+          type: types.list(FILE),
+        },
+        f: { value: { a: { id: at('a'), path: at('a'), content: 'a' }, b: { id: at('b'), path: at('b'), content: 'b' } }, type: types.map(FILE) },
+      });
+    });
+
+    it('gives an empty list where count is 0', async () => {
+      await apply(`resource "local_file" "none" {\n  count = 0\n  path = "${at('none')}"\n  content = "x"\n}\noutput "none" { value = local_file.none }`);
+
+      expect((await outputs())!.none).toEqual({ value: [], type: types.list(FILE) });
+    });
+
+    it('feeds a for_each, one instance for each it gives', async () => {
+      await apply(
+        `${keyed()}\nresource "local_file" "copy" {\n  for_each = local_file.f\n  path = "${path.join(dir, 'copy-${each.key}.txt')}"\n  content = "copy of \${each.value.content}"\n}`
+      );
+
+      expect(await fs.readFile(path.join(dir, 'copy-a.txt'), 'utf8')).toBe('copy of a');
+      expect(await fs.readFile(path.join(dir, 'copy-b.txt'), 'utf8')).toBe('copy of b');
+    });
+
+    it('plans what the configuration sets as known and what the apply makes as unknown, in each instance', async () => {
+      const { outputs: planned } = await newOrchestrator().plan('resource "random_string" "s" {\n  count = 2\n  length = 4\n}\noutput "s" { value = random_string.s }');
+
+      const fresh = { id: UNKNOWN, length: ExactNumber.parse('4'), result: UNKNOWN, special: null };
+      expect(planned.s.new?.value).toEqual([fresh, fresh]);
+    });
+
+    // Each instance keeps the types its own triggers hold, though the schema names them dynamic.
+    it('holds instances whose dynamic attributes hold different types', async () => {
+      await apply(
+        'resource "null_resource" "n" {\n  for_each = { a = "text", b = 1 }\n  triggers = { v = each.value }\n}\noutput "v" { value = [for key, n in null_resource.n : n.triggers.v] }'
+      );
+
+      expect((await outputs())!.v.value).toEqual(['text', ExactNumber.parse('1')]);
+    });
+
+    // A data source is read at load, before any count is read.
+    it('is not known yet to a data source', async () => {
+      const config = `${counted()}\ndata "local_file" "d" {\n  path = "${at('d')}\${length(local_file.logs)}"\n}`;
+
+      const error = await planError(config);
+
+      expect(error.message).toBe('local_file.logs is known only once its count is read');
+      expect(error.position).toMatchObject(placeOf(config, `"${at('d')}`));
+    });
   });
 });
