@@ -38,4 +38,17 @@ describe('ModuleLoader', () => {
     expect(resources[0].uniqueId).toBe('module.a.module.big.null_resource.r0');
     expect(resources.at(-1)?.uniqueId).toBe(`module.a.module.big.null_resource.r${count - 1}`);
   });
+
+  it('reads a module two blocks call once per load, so a file changed between them is loaded as it was first read', async () => {
+    let reads = 0;
+    const changing = { read: () => `resource "null_resource" "v${++reads}" {}` };
+    const loader = new ModuleLoader(changing, new ScopeManager());
+    const root = parse('module "a" { source = "./m" }\nmodule "b" { source = "./m" }');
+
+    const first = await loader.loadModuleTree(root);
+    const second = await loader.loadModuleTree(root);
+
+    expect(first.resources.map((resource) => resource.uniqueId)).toEqual(['module.a.null_resource.v1', 'module.b.null_resource.v1']);
+    expect(second.resources.map((resource) => resource.uniqueId)).toEqual(['module.a.null_resource.v2', 'module.b.null_resource.v2']);
+  });
 });

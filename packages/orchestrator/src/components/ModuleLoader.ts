@@ -23,6 +23,9 @@ export interface Loaded {
 }
 
 export class ModuleLoader {
+  // One load sees one version of a file, however many blocks call its module.
+  private contents = new Map<string, string | undefined>();
+
   constructor(
     private files: ConfigFiles,
     private scopeManager: ScopeManager
@@ -30,6 +33,7 @@ export class ModuleLoader {
 
   async loadModuleTree(rootProgram: Statement[]): Promise<Loaded> {
     const loaded: Loaded = { resources: [], modules: [] };
+    this.contents.clear();
 
     const parentAddress = ModuleAddress.root;
     loaded.modules.push({ address: parentAddress, program: rootProgram });
@@ -85,7 +89,8 @@ export class ModuleLoader {
 
   private parseModuleFile(moduleDir: string): Statement[] | undefined {
     const moduleFile = path.posix.join(moduleDir, CONFIG_FILE);
-    const moduleContent = this.files.read(moduleFile);
+    if (!this.contents.has(moduleFile)) this.contents.set(moduleFile, this.files.read(moduleFile));
+    const moduleContent = this.contents.get(moduleFile);
     if (moduleContent === undefined) return undefined;
 
     return new Parser(new Lexer(moduleContent, moduleFile).tokenize()).parse();

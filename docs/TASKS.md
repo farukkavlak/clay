@@ -94,9 +94,13 @@ change each.
       resource at apply and for a data source at read, since the two objects have
       different keys. Whether a provider may fill in what the configuration left out is
       open
-- [ ] One plan can read a module file twice. Two `module` blocks with the same `source`
-      each read it, so a file changed between the two reads is planned from two versions,
-      and `plan --out` saves only the second. A run reads each file once
+- [x] One plan could read a module file twice. Two `module` blocks with the same `source`
+      each read it, so a file changed between the two reads was planned from two versions,
+      and `plan --out` saved only the second. Now a load reads each file once
+- [ ] An error's source line is read off the disk again. `plan`, `validate` and a plain
+      `apply` that fails to plan describe a positioned error from `DiskFiles`, so a file
+      changed after it was parsed shows the caret under a line of the new version. A
+      saved plan and a run already quote what they read
 
 ## 1. Language
 
