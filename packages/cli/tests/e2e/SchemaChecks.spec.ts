@@ -10,9 +10,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { start } from './start';
 
+const RULE = types.object({ mode: types.string, port: types.number }, ['port']);
+
 /**
  * Computes a numeric `total` at apply, and holds `labels` (map of strings), `rule` (object with an optional `port`) and `pair` (string, number).
- * As a data source it returns the `size` it is given.
+ * As a data source it returns the `size` and the `rule` it is given.
  */
 class TallyProvider implements Provider {
   readonly resources = ['tally'];
@@ -23,7 +25,7 @@ class TallyProvider implements Provider {
       id: { type: types.string, computed: true, kept: true },
       total: { type: types.number, computed: true },
       labels: { type: types.map(types.string) },
-      rule: { type: types.object({ mode: types.string, port: types.number }, ['port']) },
+      rule: { type: RULE },
       pair: { type: types.tuple([types.string, types.number]) },
     };
   }
@@ -49,29 +51,51 @@ class TallyProvider implements Provider {
   async delete(): Promise<void> {}
 
   async getDataSourceSchema(): Promise<Schema> {
-    return { size: { type: types.number, required: true } };
+    return { size: { type: types.number, required: true }, rule: { type: RULE } };
   }
 
   async validateDataSource(): Promise<void> {}
 
   async readDataSource(_type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return { size: inputs.size };
+    return inputs;
   }
 }
+
+type Rule = Record<string, unknown>;
+
+/** Gives `rule` back as `shape` makes it, from a create and from a data source read. */
+class ShapingProvider extends TallyProvider {
+  constructor(private readonly shape: (rule: Rule) => Rule) {
+    super();
+  }
+
+  override async create(type: string, request: CreateRequest): Promise<Record<string, unknown>> {
+    const made = await super.create(type, request);
+    return { ...made, rule: this.shape(made.rule as Rule) };
+  }
+
+  override async readDataSource(type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return { ...inputs, rule: this.shape(inputs.rule as Rule) };
+  }
+}
+
+const withNull = new ShapingProvider(({ mode }) => ({ mode, port: null }));
+const leftOut = new ShapingProvider(({ mode }) => ({ mode }));
+const filled = new ShapingProvider(({ mode }) => ({ mode, port: ExactNumber.parse('80') }));
 
 describe('a configuration held to the schema', () => {
   let dir: string;
   let file: string;
 
-  const newOrchestrator = () => {
+  const newOrchestrator = (tally = new TallyProvider()) => {
     const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
     engine.registerProvider(new LocalProvider());
-    engine.registerProvider(new TallyProvider());
+    engine.registerProvider(tally);
     return engine;
   };
 
-  const apply = async (config: string) => {
-    for await (const event of start(newOrchestrator(), config)) if (event.type === 'failed') throw event.error;
+  const apply = async (config: string, tally?: TallyProvider) => {
+    for await (const event of start(newOrchestrator(tally), config)) if (event.type === 'failed') throw event.error;
   };
 
   beforeEach(async () => {
@@ -191,6 +215,33 @@ describe('a configuration held to the schema', () => {
     });
   });
 
+  it('plans an optional attribute an object leaves out as null', async () => {
+    const { actions } = await newOrchestrator().plan('resource "tally" "t" {\n  rule = { mode = "a" }\n}');
+
+    expect(actions.map(({ after }) => after?.rule)).toEqual([{ mode: 'a', port: null }]);
+  });
+
+  it.each([
+    ['gives back as null', withNull],
+    ['leaves out again', leftOut],
+  ])('takes an optional attribute the configuration leaves out and the provider %s, and plans no change after', async (_, provider) => {
+    const config = 'resource "tally" "t" {\n  rule = { mode = "a" }\n}\noutput "port" { value = tally.t.rule.port }';
+
+    await apply(config, provider);
+
+    const { resources, outputs } = await new LocalBackend(dir).read();
+    expect(resources['tally.t'].attributes.rule).toEqual({ mode: 'a', port: null });
+    expect(outputs?.port).toEqual({ value: null, type: types.number });
+    const { actions } = await newOrchestrator(provider).plan(config);
+    expect(actions.map((action) => action.type)).toEqual(['NO_OP']);
+  });
+
+  it('refuses a provider that gives an optional attribute the configuration leaves out a value, naming the attribute', async () => {
+    await expect(apply('resource "tally" "t" {\n  rule = { mode = "a" }\n}', filled)).rejects.toThrow(
+      'tally returned what the plan did not show, which is a bug in the provider:\n  rule["port"] = 80, where the plan showed null'
+    );
+  });
+
   it('refuses a tuple with another number of items than its type', async () => {
     await expect(newOrchestrator().plan('resource "tally" "t" {\n  pair = ["a"]\n}')).rejects.toMatchObject({
       message: 'pair holds 1 item, where tally takes 2 items',
@@ -263,6 +314,21 @@ describe('a data block held to the schema', () => {
       message: 'local_file requires "path"',
       position: { file: 'main.clay', line: 2, column: 1 },
     });
+  });
+
+  it.each([
+    ['gives back as null', withNull],
+    ['leaves out again', leftOut],
+  ])('reads an optional attribute the configuration leaves out and the provider %s as null', async (_, provider) => {
+    const { outputs } = await plan('data "tally" "t" {\n  size = 1\n  rule = { mode = "a" }\n}\noutput "r" { value = data.tally.t.rule }', provider);
+
+    expect(outputs.r.new).toEqual({ value: { mode: 'a', port: null }, type: RULE });
+  });
+
+  it('refuses a data source that gives an optional attribute the configuration leaves out a value, naming the attribute', async () => {
+    await expect(plan('data "tally" "t" {\n  size = 1\n  rule = { mode = "a" }\n}', filled)).rejects.toThrow(
+      'tally read what its configuration did not give, which is a bug in the provider:\n  rule["port"] = 80, where the configuration gave null'
+    );
   });
 
   // Names are checked before values resolve, so the wrong name is reported.

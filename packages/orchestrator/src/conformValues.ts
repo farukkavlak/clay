@@ -5,6 +5,7 @@ import { setOf } from './setMembers';
 import { shown } from './shown';
 import { items, spelled } from './spelled';
 import { article, child, described, unordered, Value, valueOf } from './Value';
+import { ObjectType, withLeftOut } from './withLeftOut';
 
 /** Carries the attribute, so the caller can report its position; undefined for a missing attribute. */
 export class SchemaMismatch extends Error {
@@ -37,7 +38,7 @@ export function namesOf(schema: Schema): Names {
   return { known, required: known.filter((name) => schema[name].required) };
 }
 
-function namesOfObject(type: Extract<Type, { kind: 'object' }>): Names {
+function namesOfObject(type: ObjectType): Names {
   const known = Object.keys(type.attributes);
   return { known, required: known.filter((name) => !type.optional?.includes(name)) };
 }
@@ -116,9 +117,13 @@ function collection(resource: string, value: Value, to: Type, path: AttributePat
     return itemsConverted(value, (index) => to.elements[index], path, convert);
   }
 
-  const named = nameProblem(resource, namesOfObject(to as Extract<Type, { kind: 'object' }>), Object.keys(value.data as Record<string, unknown>), path);
+  const object = to as ObjectType;
+  const named = nameProblem(resource, namesOfObject(object), Object.keys(value.data as Record<string, unknown>), path);
   if (named) throw mismatchAt(path, named.message);
-  return entriesConverted(value, (name) => (to as Extract<Type, { kind: 'object' }>).attributes[name], path, convert);
+  return withLeftOut(
+    object,
+    entriesConverted(value, (name) => object.attributes[name], path, convert)
+  );
 }
 
 /** Only a set can hold a set with an unknown member before apply. */

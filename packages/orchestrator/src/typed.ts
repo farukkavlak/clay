@@ -3,6 +3,7 @@ import { AttributePath, ExactNumber, isRecord, isUnknown, Schema, Type, typeIn }
 import { setOf } from './setMembers';
 import { items, spelled } from './spelled';
 import { article, inferred, Value, valueOf } from './Value';
+import { ObjectType, withLeftOut } from './withLeftOut';
 
 export class TypeMismatch extends Error {
   constructor(message: string) {
@@ -39,7 +40,7 @@ function entriesTyped(data: Record<string, unknown>, typeOf: (name: string) => T
 }
 
 /** Every non-optional attribute, and no other. */
-function checkNames(type: Extract<Type, { kind: 'object' }>, data: Record<string, unknown>, path: AttributePath): void {
+function checkNames(type: ObjectType, data: Record<string, unknown>, path: AttributePath): void {
   const other = Object.keys(data).find((name) => !Object.hasOwn(type.attributes, name));
   if (other !== undefined) throw new TypeMismatch(`${spelled(path)} has "${other}", which its type does not`);
 
@@ -57,7 +58,10 @@ function held(type: Type, data: unknown, path: AttributePath, read: Read): unkno
   if (type.kind === 'tuple') return tupleItems(type, data as unknown[], path, read);
   if (type.kind === 'object') {
     checkNames(type, data as Record<string, unknown>, path);
-    return entriesTyped(data as Record<string, unknown>, (name) => type.attributes[name], path, read);
+    return withLeftOut(
+      type,
+      entriesTyped(data as Record<string, unknown>, (name) => type.attributes[name], path, read)
+    );
   }
   if (type.kind === 'map') return entriesTyped(data as Record<string, unknown>, () => type.element, path, read);
   if (type.kind !== 'list' && type.kind !== 'set') return data;
