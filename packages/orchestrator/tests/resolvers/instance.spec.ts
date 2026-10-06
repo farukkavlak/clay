@@ -48,7 +48,6 @@ describe('an instance of a resource with for_each read by a reference', () => {
 
   it.each([
     [[0, 'id'], 'local_file.logs has for_each, so name one of it by key, as in local_file.logs["key"]'],
-    [[], 'local_file.logs has for_each, so name one of it by key, as in local_file.logs["key"]'],
     [['web', 'id'], 'local_file.logs has for_each, so name one of it by key, as in local_file.logs["key"]'],
     [['content'], 'local_file.logs has for_each, so name one of it by key, as in local_file.logs["key"]'],
     [[{ key: 'web' }, 0], 'Reference "local_file.logs["web"][0]" has an index where it needs a name'],
@@ -67,10 +66,16 @@ describe('a whole instance read by a reference', () => {
   });
 
   it.each([
-    ['count', [], 'local_file.logs has count, so name one of it by index, as in local_file.logs[0]'],
+    ['count', ['content'], 'local_file.logs has count, so name one of it by index, as in local_file.logs[0]'],
     [undefined, [0], 'local_file.logs has no count, so it takes no index'],
     ['count', [0, 1], 'Reference "local_file.logs[0][1]" has an index where it needs a name'],
   ] as const)('refuses, with %s, the steps %j', (repetition, path, message) => {
     expect(() => readInstance(keyed(...path), repetition)).toThrow(message);
+  });
+});
+
+describe('every instance read by a reference', () => {
+  it.each(['count', 'for_each'] as const)('reads the name alone as every instance, with %s', (repetition) => {
+    expect(readInstance(keyed(), repetition)).toEqual({ every: repetition, path: [] });
   });
 });

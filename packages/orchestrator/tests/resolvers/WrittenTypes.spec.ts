@@ -27,6 +27,16 @@ describe('the type a resource reference will have, read before any instance exis
     expect(typeOf(instances, 0, 'length', 'x')).toEqual({ type: types.number, path: steps('x') });
   });
 
+  it.each([
+    ['count', types.list(types.object({ id: types.string, length: types.number }))],
+    ['for_each', types.map(types.object({ id: types.string, length: types.number }))],
+  ] as const)('is every instance of that object, with %s, where the reference names no instance', (repetition, type) => {
+    const instances = new Instances();
+    instances.declare('random_string.s', repetition);
+
+    expect(typeOf(instances)).toEqual({ type, path: [] });
+  });
+
   it('refuses an attribute the schema does not have', () => {
     expect(() => typeOf(new Instances(), 'nope')).toThrow('random_string has no attribute "nope"');
   });

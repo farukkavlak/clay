@@ -11,6 +11,8 @@ import { steps } from '../ast';
 
 const ref = (spelled: string) => parseReference(steps(...spelled.split('.'))) as ResourceReference;
 
+const held = (id: string, tags: Record<string, unknown>) => ({ resourceType: 'item', name: 'a', attributes: { id, tags } });
+
 describe('ResourceResolver', () => {
   const resolver = new ResourceResolver(new Instances(), new Planned(), new Map());
   const context = Address.root('resource', 'main');
@@ -97,6 +99,72 @@ describe('ResourceResolver', () => {
       const named = new ResourceResolver(new Instances(), planned, new Map([['resource', { note: { type: types.string } }]]));
 
       expect(named.resolve(ref('resource.test.note'), context, mockState).value).toEqual(valueOf(types.string, null));
+    });
+  });
+
+  describe('every instance of a block with count or for_each', () => {
+    const schemas = new Map<string, Schema>([['item', { id: { type: types.string, computed: true }, tags: { type: types.map(types.dynamic) } }]]);
+    const item = types.object({ id: types.string, tags: types.map(types.dynamic) });
+    const state: State = {
+      version: STATE_VERSION,
+      serial: 0,
+      resources: {
+        'item.a[0]': held('zero', { n: 'text' }),
+        'item.a[1]': held('one', { n: true }),
+        'item.a["x"]': held('ex', {}),
+      },
+    };
+
+    const read = (instances: Instances, planned = new Planned()) => new ResourceResolver(instances, planned, schemas).resolve(ref('item.a'), context, state);
+
+    const counted = (count: number) => {
+      const instances = new Instances();
+      instances.declare('item.a', 'count');
+      instances.setCount('item.a', count);
+      return instances;
+    };
+
+    // Each instance keeps what its own tags hold; the list's type is the schema's.
+    it('reads a list in index order under count, one object of the schema for each instance', () => {
+      expect(read(counted(2))).toEqual({
+        value: valueOf(types.list(item), [
+          { id: 'zero', tags: { n: 'text' } },
+          { id: 'one', tags: { n: true } },
+        ]),
+        path: [],
+      });
+    });
+
+    it('reads a map by key under for_each', () => {
+      const instances = new Instances();
+      instances.declare('item.a', 'for_each');
+      instances.setEach('item.a', new Map([['x', valueOf(types.string, 'x')]]));
+
+      expect(read(instances).value).toEqual(valueOf(types.map(item), { x: { id: 'ex', tags: {} } }));
+    });
+
+    it('reads an empty list where count is 0', () => {
+      expect(read(counted(0)).value).toEqual(valueOf(types.list(item), []));
+    });
+
+    it('reads an instance the plan creates from the plan, with what only the apply makes as unknown', () => {
+      const planned = new Planned();
+      planned.set('item.a[1]', { id: UNKNOWN, tags: { n: 'new' } });
+
+      expect(read(counted(2), planned).value.data).toEqual([
+        { id: 'zero', tags: { n: 'text' } },
+        { id: UNKNOWN, tags: { n: 'new' } },
+      ]);
+    });
+
+    // Its type is known, so what reads it is still checked.
+    it.each([
+      ['its count is not read yet', new Instances()],
+      ['one instance is in neither the plan nor state', counted(3)],
+    ])('is not known yet where %s, and keeps its type', (_, instances) => {
+      instances.declare('item.a', 'count');
+
+      expect(() => read(instances)).toThrow(expect.objectContaining({ constructor: UnresolvedReferenceError, type: types.list(item) }));
     });
   });
 });

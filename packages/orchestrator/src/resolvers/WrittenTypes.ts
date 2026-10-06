@@ -5,14 +5,10 @@ import { Instances } from '../Instances';
 import { blockKey, Context, moduleOf, scopeOf } from '../keys';
 import { placed } from '../place';
 import { ScopeManager } from '../scope/ScopeManager';
-import { noAttribute, readInstance } from './instance';
+import { everyType, instanceType, noAttribute, readInstance } from './instance';
 
 /** Data sources and paths are known at load, so they are not here. */
 type Unread = VariableReference | ModuleOutputReference | ResourceReference | CountReference | EachReference;
-
-function instanceType(schema: Schema): Type {
-  return types.object(Object.fromEntries(Object.entries(schema).map(([name, attribute]) => [name, attribute.type])));
-}
 
 /** Types for references read as written, before any instance exists. */
 export class WrittenTypes {
@@ -35,12 +31,13 @@ export class WrittenTypes {
     return this.resourceType(reference, where, position);
   }
 
-  /** The type of the attribute, or of the whole instance where the reference names none. */
+  /** The type of the attribute, of the whole instance where the reference names none, or of every instance where it names no instance. */
   private resourceType(reference: ResourceReference, where: Context, position: Position): { type: Type; path: Step[] } {
     const block = blockKey(new Address(moduleOf(where), reference.type, reference.name));
-    const { attribute, path } = readInstance(reference, this.instances.repetitionOf(block), position);
+    const { every, attribute, path } = readInstance(reference, this.instances.repetitionOf(block), position);
     // Every schema is loaded by now.
     const schema = this.schemas.get(reference.type)!;
+    if (every) return { type: everyType(every, schema), path };
     if (attribute === undefined) return { type: instanceType(schema), path };
     if (!Object.hasOwn(schema, attribute)) throw placed(noAttribute(reference.type, attribute), position);
 
