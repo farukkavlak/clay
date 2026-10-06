@@ -2,6 +2,7 @@ import { Address, InstanceKey, ModuleAddress } from '@clay/contracts';
 import { ModuleOutputReference, ParsedReference, parseReference, Position, ResourceReference, Step, stepKey } from '@clay/parser';
 
 import { repetitionOfKey } from '../Instances';
+import { instanceKeyIn } from './instance';
 import { ModuleInstances } from '../ModuleInstances';
 import { blockKey, Context, moduleOf, outputKey, scopeOf, variableKey } from '../keys';
 
@@ -84,10 +85,11 @@ export class ReferenceScanner {
   private outputOf(reference: ModuleOutputReference, context: Context): Omit<Extract<Reference, { kind: 'output' }>, 'kind' | 'position'> {
     const caller = moduleOf(context);
     const call = caller.child(reference.module);
-    const [first, second] = reference.path.map((step) => stepKey(step));
+    const first = instanceKeyIn(reference.path);
     const repetition = this.modules.repetitionOf(call.withoutKeys());
     const instanceKey = repetition === repetitionOfKey(first) ? first : undefined;
-    const named = instanceKey === undefined ? first : second;
+    const step = reference.path.at(instanceKey === undefined ? 0 : 1);
+    const named = step && stepKey(step);
     const output = typeof named === 'string' ? named : '';
     const scope = scopeOf(call.withoutKeys());
 

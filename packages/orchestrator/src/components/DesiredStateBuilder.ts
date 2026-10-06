@@ -13,7 +13,7 @@ import { Context, contextIn, enclosing, scopeOf } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
 import { Planned } from '../Planned';
 import { tryAt, withPlace } from '../place';
-import { checkHasKey, checkInRange, firstKey, keyComesFirst } from '../resolvers/instance';
+import { checkHasKey, checkInRange, instanceKeyIn } from '../resolvers/instance';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { Reference, ReferenceScanner } from '../resolvers/ReferenceScanner';
 import { UnresolvedReferenceError } from '../resolvers/UnresolvedReferenceError';
@@ -224,16 +224,12 @@ export class DesiredStateBuilder {
   }
 
   private checkIndex({ key, block, reference, position }: Extract<Reference, { kind: 'resource' }>): void {
-    const first = firstKey(reference.path);
+    const first = instanceKeyIn(reference.path);
     const repetition = this.instances.repetitionOf(key);
     const spelled = spellReference([{ name: reference.type }, { name: reference.name }]);
 
     if (repetition === 'count' && typeof first === 'number') checkInRange(spelled, first, this.instances.keysOf(block)?.length, position);
-    if (repetition !== 'for_each' || typeof first !== 'string') return;
-
-    // Every schema is loaded by now.
-    const hint = keyComesFirst(spelled, reference.type, reference.path[0], this.schemas.get(reference.type)!);
-    checkHasKey(spelled, first, this.instances.keysOf(block), position, hint);
+    if (repetition === 'for_each' && typeof first === 'string') checkHasKey(spelled, first, this.instances.keysOf(block), position);
   }
 
   private checkCallIndex({ module, call, instanceKey, position }: Extract<Reference, { kind: 'output' }>): void {

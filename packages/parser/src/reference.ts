@@ -58,12 +58,11 @@ export type ParsedReference = VariableReference | DataReference | ModuleOutputRe
 /** What a reference can spell after a dot, so every declared name can be referenced. */
 export const NAME = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 
+/** A key is spelled in brackets as it was written, since under for_each only that form names an instance. */
 function spellStep(part: Step, first: boolean): string {
-  const step = stepKey(part);
-  if (typeof step === 'number') return `[${step}]`;
-  if (!NAME.test(step)) return `[${JSON.stringify(step)}]`;
+  if ('key' in part) return `[${JSON.stringify(part.key)}]`;
 
-  return first ? step : `.${step}`;
+  return first ? part.name : `.${part.name}`;
 }
 
 /** `var.names[0]`, `local_file.a.tags["a.b"]`. */

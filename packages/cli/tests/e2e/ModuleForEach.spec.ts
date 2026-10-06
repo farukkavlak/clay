@@ -124,11 +124,8 @@ describe('a module called with for_each', () => {
     expect(await stateKeys()).toEqual([]);
   });
 
-  it.each([
-    ['in brackets', 'module.web["ali"].path'],
-    ['after a dot', 'module.web.ali.path'],
-  ])('gives the output of the instance a key names %s', async (_, reference) => {
-    const outputs = await apply(web('["ali", "can"]', `output "o" { value = "\${${reference}}" }`));
+  it('gives the output of the instance a key names', async () => {
+    const outputs = await apply(web('["ali", "can"]', 'output "o" { value = "${module.web["ali"].path}" }'));
 
     expect(outputs.o.value).toBe(path.join(dir, 'ali.txt'));
   });
@@ -189,7 +186,10 @@ describe('a module called with for_each', () => {
   });
 
   it.each([
-    ['no key', 'module.web.path', 'Reference "module.web.path" names an instance and no output: module.web has for_each, so its key comes first, as in module.web["key"].out'],
+    ['no key', 'module.web.path', 'module.web has for_each, so name one of it by key, as in module.web["key"]'],
+    ['no key and a step into the output', 'module.web.path.x', 'module.web has for_each, so name one of it by key, as in module.web["key"]'],
+    ['a key written after a dot', 'module.web.ali.path', 'module.web has for_each, so name one of it by key, as in module.web["key"]'],
+    ['a key and no output', 'module.web["ali"]', 'Module output reference must include output name: module.web["ali"]'],
     ['an index', 'module.web[0].path', 'module.web has for_each, so name one of it by key, as in module.web["key"]'],
     ['a key for_each does not give', 'module.web["zed"].path', 'module.web has no instance ["zed"], only ["ali"], ["can"]'],
   ])('refuses a reference to its output with %s, where it is written', async (_, reference, message) => {

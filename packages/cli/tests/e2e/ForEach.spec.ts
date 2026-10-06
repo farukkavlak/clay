@@ -154,13 +154,13 @@ describe('a resource with for_each', () => {
     expect(await stateKeys()).toEqual([]);
   });
 
-  it('gives one instance to a resource and an output that read it, by ["key"] or by .key', async () => {
+  it('gives one instance to a resource and an output that read it by its key', async () => {
     const config = `${files('{ web = "80", api = "8080" }')}
       resource "local_file" "reader" {
         path = "${path.join(dir, 'reader.txt')}"
         content = "\${local_file.f["web"].content}"
       }
-      output "api" { value = "\${local_file.f.api.content}" }
+      output "api" { value = "\${local_file.f["api"].content}" }
     `;
 
     const events = await apply(config);
@@ -267,13 +267,9 @@ describe('a resource with for_each', () => {
 
   it.each([
     ['all of it where one is read', 'local_file.f[0].content', 'local_file.f has for_each, so name one of it by key, as in local_file.f["key"]'],
-    [
-      'an attribute where the key goes',
-      'local_file.f.content',
-      'local_file.f has no instance ["content"], only ["a"], ["b"]. "content" is an attribute of local_file, and the key comes first, as in local_file.f["key"].content',
-    ],
+    ['an attribute where the key goes', 'local_file.f.content', 'local_file.f has for_each, so name one of it by key, as in local_file.f["key"]'],
+    ['a key written after a dot', 'local_file.f.a.content', 'local_file.f has for_each, so name one of it by key, as in local_file.f["key"]'],
     ['an attribute name written as a key', 'local_file.f["content"]', 'local_file.f has no instance ["content"], only ["a"], ["b"]'],
-    ['a name that is no attribute where the key goes', 'local_file.f.constructor', 'local_file.f has no instance ["constructor"], only ["a"], ["b"]'],
     ['a key its for_each does not give', 'local_file.f["gone"].content', 'local_file.f has no instance ["gone"], only ["a"], ["b"]'],
   ])('refuses a reference to %s, where it is written', async (_, reference, message) => {
     const config = `${files('["a", "b"]')}
@@ -284,6 +280,20 @@ describe('a resource with for_each', () => {
 
     expect(error.message).toBe(message);
     expect(error.position).toMatchObject(placeOf(config, reference));
+  });
+
+  it.each([
+    ['a resource attribute', 'resource "local_file" "g" { path = "g" content = local_file.f.content }'],
+    ['a module input that takes a string', 'module "m" {\n source = "./m"\n text = local_file.f.content\n}'],
+  ])('refuses a reference with no key in %s, where a string is expected', async (_, reader) => {
+    await fs.mkdir(path.join(dir, 'm'));
+    await fs.writeFile(path.join(dir, 'm', 'main.clay'), 'variable "text" { type = string }', 'utf8');
+    const config = `${files('["a", "b"]')}\n${reader}`;
+
+    const error = await planError(config);
+
+    expect(error.message).toBe('local_file.f has for_each, so name one of it by key, as in local_file.f["key"]');
+    expect(error.position).toMatchObject(placeOf(config, 'local_file.f.content'));
   });
 
   it.each([

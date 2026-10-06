@@ -102,6 +102,15 @@ describe('a reference that reads into a list or a map', () => {
     expect(error.message).toBe('var.names has no item [1]: it holds 1');
   });
 
+  it.each([
+    ['in brackets', 'var.tags["env"]["x"]', 'var.tags["env"] is a string and cannot be read into'],
+    ['after a dot', 'var.tags.env.x', 'var.tags.env is a string and cannot be read into'],
+  ])('names a step into a value as it was written, %s', async (_, reference, message) => {
+    const error = await planError(`variable "tags" { default = { env = "prod" } }\n${file('f', reference)}`);
+
+    expect(error.message).toBe(message);
+  });
+
   // Scope keys join names with dots, so a quoted part like `"a.b"` could reach a module two levels down.
   it('refuses a quoted key where the reference needs a name, rather than read a module the caller never called', async () => {
     await fs.mkdir(path.join(dir, 'a', 'b'), { recursive: true });
