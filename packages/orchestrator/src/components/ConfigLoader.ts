@@ -4,7 +4,8 @@ import { Plan } from '@clay/planner';
 
 import { checkNames } from '../checkAttributes';
 import { conformValues, writtenAt } from '../conformValues';
-import { checkDataSourceRead, heldBy } from '../providerResult';
+import { checkDataSourceGiven, checkDataSourceRead, heldBy } from '../providerResult';
+import { typedValues } from '../typed';
 import { plainOf, Value, valueOf } from '../Value';
 import { Instances } from '../Instances';
 import { ModuleInstances } from '../ModuleInstances';
@@ -143,10 +144,13 @@ export class ConfigLoader {
       const read = await provider.readDataSource(stmt.dataSourceType, conformed);
       const held = heldBy(stmt.dataSourceType, 'read', schema, read);
       checkDataSourceRead(stmt.dataSourceType, schema, plainOf(held));
+      // A null reads as left out, so it never replaces what the configuration gave.
+      const valued = Object.fromEntries(Object.entries(held).filter(([, value]) => value.data !== null));
+      checkDataSourceGiven(stmt.dataSourceType, schema, conformed, plainOf(valued));
 
-      // A schema attribute the read omits is null.
+      // A schema attribute neither the configuration nor the read gives is null.
       const leftOut = Object.entries(schema).map(([name, { type }]) => [name, valueOf(type, null)]);
-      return { ...Object.fromEntries(leftOut), ...held };
+      return { ...Object.fromEntries(leftOut), ...typedValues(schema, conformed), ...valued };
     } catch (error) {
       throw withPlace(error, writtenAt(error, stmt), spell(stmt), scopeAddress);
     }

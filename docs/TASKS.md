@@ -72,16 +72,27 @@ change each.
       new index was skipped in silence; with the plan deleting the last index and the file
       longer again, it was deleted though the count gave it. `for_each` did the same. A
       plan carries what its data sources gave now, so an apply reads the count its plan read
-- [ ] A data source forgets what it was given. With `data "local_file" "f" { path = "x" }`,
-      `data.local_file.f.path` reads as `null`: an output shows nothing for it, and
-      `"${data.local_file.f.path}"` is refused as null. The read returns only `content`,
-      and an attribute it leaves out becomes null, the one the block set among them.
-      Terraform's provider returns the arguments with what it read
+- [x] A data source forgot what it was given. With `data "local_file" "f" { path = "x" }`,
+      `data.local_file.f.path` read as `null`: an output showed nothing for it, and
+      `"${data.local_file.f.path}"` was refused as null. The read returned only `content`,
+      and an attribute it left out became null, the one the block set among them.
+      Terraform's provider returns the arguments with what it read. Clay keeps what the
+      configuration gave, and refuses a read that changes it as a provider bug
 - [ ] A plain `clay apply` reads module files twice: once for the plan, and again after
       the confirmation. With `count = 2` in `m/main.clay` changed to `count = 3` in
       between, index 2 is skipped in silence; with the plan deleting index 2 and the file
       back at `count = 3`, it is deleted though the count gives it. `apply <plan>` runs
       the files its plan read. Terraform holds the configuration it planned in memory
+- [ ] Under `for_each`, `local_file.f.content` is refused with
+      `local_file.f has no instance ["content"], only ["a"]`. It used to add that the key
+      comes first, as in `local_file.f["key"].content`; when the name is an attribute of
+      the schema, the refusal says so again
+- [ ] An object a provider gives back with an optional attribute filled in is refused as
+      a provider bug. With an object type whose `b` is optional, a configuration that sets
+      `{ a = "1" }` and a provider that returns `{ a = "1", b = null }` fail, for a
+      resource at apply and for a data source at read, since the two objects have
+      different keys. Whether a provider may fill in what the configuration left out is
+      open
 
 ## 1. Language
 

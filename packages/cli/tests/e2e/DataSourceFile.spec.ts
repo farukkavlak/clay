@@ -37,6 +37,19 @@ describe('a local_file data source', () => {
     expect(outputs.greeting.new?.value).toBe('hello clay');
   });
 
+  it('reads back the path it was given', async () => {
+    const file = path.join(dir, 'name.txt');
+    await fs.writeFile(file, 'clay', 'utf8');
+    const config = `
+      data "local_file" "name" { path = "${file}" }
+      output "from" { value = "read \${data.local_file.name.path}" }
+    `;
+
+    const { outputs } = await newOrchestrator().plan(config);
+
+    expect(outputs.from.new?.value).toBe(`read ${file}`);
+  });
+
   it('refuses a file that is not there, placed in its block', async () => {
     const missing = path.join(dir, 'missing.txt');
 

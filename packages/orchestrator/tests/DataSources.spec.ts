@@ -121,6 +121,44 @@ describe('Orchestrator - Data Sources', () => {
     await expect(apply(orchestrator, config)).rejects.toThrow('Attribute "toString" not found on data source');
   });
 
+  it('keeps what the configuration gave a data source when the read leaves it out', async () => {
+    mockProvider.setMockData('user-123', { username: 'testuser' });
+    const config = 'data "mock_data" "user" { id = "user-123" }\noutput "id" { value = data.mock_data.user.id }';
+
+    const outputs = await apply(orchestrator, config);
+
+    expect(outputs.id.value).toBe('user-123');
+  });
+
+  // Absent, undefined and null all read the same.
+  it('keeps what the configuration gave a data source when the read gives it null', async () => {
+    mockProvider.setMockData('user-123', { id: null, username: 'testuser' });
+    const config = 'data "mock_data" "user" { id = "user-123" }\noutput "id" { value = data.mock_data.user.id }';
+
+    const outputs = await apply(orchestrator, config);
+
+    expect(outputs.id.value).toBe('user-123');
+  });
+
+  it('takes a read that returns what the configuration gave unchanged', async () => {
+    mockProvider.setMockData('user-123', { id: 'user-123', username: 'testuser' });
+    const config = 'data "mock_data" "user" { id = "user-123" }\noutput "id" { value = data.mock_data.user.id }';
+
+    const outputs = await apply(orchestrator, config);
+
+    expect(outputs.id.value).toBe('user-123');
+  });
+
+  it('refuses a read that changes what the configuration gave, placed in its block', async () => {
+    mockProvider.setMockData('user-123', { id: 'other', username: 'testuser' });
+
+    await expect(apply(orchestrator, 'data "mock_data" "user" { id = "user-123" }')).rejects.toMatchObject({
+      message: 'mock_data read what its configuration did not give, which is a bug in the provider:\n  id = "other", where the configuration gave "user-123"',
+      block: 'data "mock_data" "user"',
+      position: { file: 'main.clay', line: 1, column: 1 },
+    });
+  });
+
   it('should throw error if data source provider is not registered', async () => {
     const config = `
       data "really_unknown_provider" "test" {

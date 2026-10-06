@@ -1,5 +1,5 @@
 import { isType, isUnknown, Schema, unknownPaths } from '@clay/contracts';
-import { Mismatch } from '@clay/planner';
+import { Mismatch, offFinal } from '@clay/planner';
 
 import { shown } from './shown';
 import { spelled } from './spelled';
@@ -52,6 +52,17 @@ export function checkRead(type: string, schema: Schema, read: Record<string, unk
 /** References read this directly, so an unknown or a name outside the schema is refused. */
 export function checkDataSourceRead(type: string, schema: Schema, read: Record<string, unknown>): void {
   refuse(type, 'data source', schema, read);
+}
+
+/** What the configuration gave belongs to the configuration, so a read may leave it out but not change it. */
+export function checkDataSourceGiven(type: string, schema: Schema, given: Record<string, unknown>, read: Record<string, unknown>): void {
+  const both = Object.keys(given).filter((name) => Object.hasOwn(read, name));
+  const only = (values: Record<string, unknown>) => Object.fromEntries(both.map((name) => [name, values[name]]));
+  const changed = offFinal(schema, only(given), only(read));
+  if (changed.length === 0) return;
+
+  const lines = changed.map(({ path, planned, returned }) => `  ${spelled(path)} = ${shown(returned)}, where the configuration gave ${shown(planned)}`);
+  throw new Error([`${type} read what its configuration did not give, which is a bug in the provider:`, ...lines].join('\n'));
 }
 
 /** Otherwise a bad type would only fail when a saved plan holding it is read back. */
