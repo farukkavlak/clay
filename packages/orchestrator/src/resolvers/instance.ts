@@ -73,22 +73,34 @@ export function instanceType(schema: Schema): Type {
   return types.object(Object.fromEntries(Object.entries(schema).map(([name, attribute]) => [name, attribute.type])));
 }
 
-/** Instances share the schema's type and a `dynamic` attribute takes each one's own, so a list or a map holds them all, where Terraform needs a tuple or an object. */
-export function everyType(repetition: Repetition, schema: Schema): Type {
-  return repetition === 'count' ? types.list(instanceType(schema)) : types.map(instanceType(schema));
+/** A list in index order under count, a map by key under for_each. */
+export function everyOf(repetition: Repetition, instance: Type): Type {
+  return repetition === 'count' ? types.list(instance) : types.map(instance);
 }
 
+/** Instances share the schema's type and a `dynamic` attribute takes each one's own, so a list or a map holds them all, where Terraform needs a tuple or an object. */
+export function everyType(repetition: Repetition, schema: Schema): Type {
+  return everyOf(repetition, instanceType(schema));
+}
+
+/** Outputs declare no type, so each is `dynamic` until an instance gives it a value. */
+export function outputsType(outputs: string[]): Type {
+  return types.object(Object.fromEntries(outputs.map((name) => [name, types.dynamic])));
+}
+
+/** With no output, the whole instance is read; with `every`, every instance its count or for_each makes. */
 export interface CallRead {
+  every?: Repetition;
   key?: InstanceKey;
-  output: string;
+  output?: string;
   path: Step[];
 }
 
-function readOutput(reference: ModuleOutputReference, steps: Step[], position?: Position): string {
+function readOutput(reference: ModuleOutputReference, steps: Step[], position?: Position): string | undefined {
   const output = firstKey(steps);
   const spelled = spellReference([{ name: 'module' }, { name: reference.module }, ...reference.path]);
 
-  if (output === undefined) refuse(`Module output reference must include output name: ${spelled}`, position);
+  if (output === undefined) return undefined;
   if (typeof output === 'number') refuse(`Reference "${spelled}" has an index where it needs a name`, position);
   if (!NAME.test(output)) refuse(`Reference "${spelled}" has ${JSON.stringify(output)} where it needs a name`, position);
 
@@ -96,7 +108,7 @@ function readOutput(reference: ModuleOutputReference, steps: Step[], position?: 
 }
 
 /**
- * With count or for_each the first step must be an index or a key in brackets; without either there is none.
+ * With count or for_each the first step must be an index or a key in brackets, or there is no step at all; without either there is none.
  * A key after a dot would read `module.web.url` as the instance "url", so it is refused.
  */
 export function readCall(reference: ModuleOutputReference, repetition: Repetition | undefined, position?: Position): CallRead {
@@ -108,6 +120,8 @@ export function readCall(reference: ModuleOutputReference, repetition: Repetitio
     if (typeof first === 'number') refuse(`${call} has no count, so it takes no index`, position);
     return { output: readOutput(reference, reference.path, position), path: rest };
   }
+
+  if (reference.path.length === 0) return { every: repetition, path: [] };
 
   if (repetition === 'count' && typeof first !== 'number') refuse(`${call} has count, so name one of it by index, as in ${call}[0]`, position);
   if (repetition === 'for_each' && typeof first !== 'string') refuse(`${call} has for_each, so name one of it by key, as in ${call}["key"]`, position);

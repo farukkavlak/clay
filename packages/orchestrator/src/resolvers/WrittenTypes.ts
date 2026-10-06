@@ -3,9 +3,10 @@ import { CountReference, EachReference, ModuleOutputReference, Position, Resourc
 
 import { Instances } from '../Instances';
 import { blockKey, Context, moduleOf, scopeOf } from '../keys';
+import { ModuleInstances } from '../ModuleInstances';
 import { placed } from '../place';
 import { ScopeManager } from '../scope/ScopeManager';
-import { everyType, instanceType, noAttribute, readInstance } from './instance';
+import { everyOf, everyType, instanceType, noAttribute, outputsType, readCall, readInstance } from './instance';
 
 /** Data sources and paths are known at load, so they are not here. */
 type Unread = VariableReference | ModuleOutputReference | ResourceReference | CountReference | EachReference;
@@ -15,7 +16,8 @@ export class WrittenTypes {
   constructor(
     private scopeManager: ScopeManager,
     private schemas: Map<string, Schema>,
-    private instances: Instances
+    private instances: Instances,
+    private modules: ModuleInstances
   ) {}
 
   typeOf(reference: Unread, where: Context, position: Position): { type: Type; path: Step[] } {
@@ -25,10 +27,19 @@ export class WrittenTypes {
     if (reference.kind === 'variable') return { type: this.scopeManager.getVariable(scopeOf(module), reference.name)!.type ?? types.dynamic, path: reference.path };
     if (reference.kind === 'count') return { type: types.number, path: reference.path };
     if (reference.kind === 'each') return { type: reference.name === 'key' ? types.string : types.dynamic, path: reference.path };
-    // Outputs have no declared type.
-    if (reference.kind === 'module') return { type: types.dynamic, path: reference.path };
+    if (reference.kind === 'module') return this.callType(reference, where, position);
 
     return this.resourceType(reference, where, position);
+  }
+
+  /** Outputs have no declared type, so only a whole instance, or every instance, has a type with any shape. */
+  private callType(reference: ModuleOutputReference, where: Context, position: Position): { type: Type; path: Step[] } {
+    const call = moduleOf(where).child(reference.module).withoutKeys();
+    const { every, output, path } = readCall(reference, this.modules.repetitionOf(call), position);
+    const outputs = this.scopeManager.outputsOf(scopeOf(call));
+    if (every) return { type: everyOf(every, outputsType(outputs)), path };
+
+    return { type: output === undefined ? outputsType(outputs) : types.dynamic, path };
   }
 
   /** The type of the attribute, of the whole instance where the reference names none, or of every instance where it names no instance. */

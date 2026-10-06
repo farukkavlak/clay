@@ -93,7 +93,7 @@ export class ReferenceResolver {
     this.dataSources = new DataSourceResolver(dataSources);
     this.moduleOutputs = new ModuleOutputResolver(scopeManager, modules);
     this.resources = new ResourceResolver(instances, planned, schemas);
-    this.written = new WrittenTypes(scopeManager, schemas, instances);
+    this.written = new WrittenTypes(scopeManager, schemas, instances, modules);
   }
 
   private resolve(node: ReferenceNode, state: State, context: Context | undefined, reading: Reading): Value {

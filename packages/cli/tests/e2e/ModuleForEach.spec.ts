@@ -189,7 +189,6 @@ describe('a module called with for_each', () => {
     ['no key', 'module.web.path', 'module.web has for_each, so name one of it by key, as in module.web["key"]'],
     ['no key and a step into the output', 'module.web.path.x', 'module.web has for_each, so name one of it by key, as in module.web["key"]'],
     ['a key written after a dot', 'module.web.ali.path', 'module.web has for_each, so name one of it by key, as in module.web["key"]'],
-    ['a key and no output', 'module.web["ali"]', 'Module output reference must include output name: module.web["ali"]'],
     ['an index', 'module.web[0].path', 'module.web has for_each, so name one of it by key, as in module.web["key"]'],
     ['a key for_each does not give', 'module.web["zed"].path', 'module.web has no instance ["zed"], only ["ali"], ["can"]'],
   ])('refuses a reference to its output with %s, where it is written', async (_, reference, message) => {

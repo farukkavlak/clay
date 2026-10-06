@@ -21,7 +21,7 @@ export interface DataReference {
   path: Step[];
 }
 
-/** Whether the first step is an instance key or an output depends on the module call, which only the engine knows. */
+/** Whether the first step is an instance key or an output depends on the module call, which only the engine knows. With no output, it reads the whole instance, or with no step at all, every instance its count or for_each makes. */
 export interface ModuleOutputReference {
   kind: 'module';
   module: string;
@@ -108,7 +108,7 @@ function dataReference(parts: Step[], position?: Position): DataReference {
 }
 
 function moduleOutputReference(parts: Step[], position?: Position): ModuleOutputReference {
-  if (parts.length < 3) refuse(`Module output reference must include output name: ${spellReference(parts)}`, position);
+  if (parts.length < 2) refuse(`Reference "${spellReference(parts)}" names nothing: a module is read by its name, as in module.web`, position);
   const { names, path } = split(parts, 2, position);
 
   return { kind: 'module', module: names[1], path };
