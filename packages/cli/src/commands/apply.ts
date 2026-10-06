@@ -4,14 +4,12 @@ import { CONFIG_FILE } from '@clay/parser';
 import { changedOutside, parsePlanFile, Plan, PlanAction, PlanFile } from '@clay/planner';
 import { Command } from 'commander';
 import fs from 'node:fs/promises';
-import path from 'node:path';
 import { styleText } from 'node:util';
 
 import { confirm } from '../confirm';
 import { newOrchestrator } from '../engine';
 import { describeError } from '../describeError';
 import { actionLine, changesNothing, displayPlan } from '../showPlan';
-import { exists } from '../exists';
 import { refreshOption } from '../refreshOption';
 
 /** Counts as the plan summary does: a replace is one add and one destroy. */
@@ -72,10 +70,7 @@ interface PlannedApply {
   files: ConfigFiles;
 }
 
-async function planFromDisk(cwd: string, configPath: string, refresh: boolean): Promise<PlannedApply> {
-  const config = await fs.readFile(configPath, 'utf8');
-  const recording = new RecordingFiles(new DiskFiles(cwd));
-
+async function planFromDisk(cwd: string, recording: RecordingFiles, config: string, refresh: boolean): Promise<PlannedApply> {
   console.log(styleText('blue', 'Calculating plan...'));
   const plan = await newOrchestrator(cwd, recording).plan(config, { refresh });
 
@@ -134,7 +129,8 @@ export function createApplyCommand() {
     .argument('[plan-file]', 'Plan file to apply (optional)')
     .action(async (planFileArg: string | undefined, options) => {
       const cwd = process.cwd();
-      let files: ConfigFiles = new DiskFiles(cwd);
+      const recording = new RecordingFiles(new DiskFiles(cwd));
+      let files: ConfigFiles = recording;
 
       try {
         if (planFileArg && !planFileArg.startsWith('-')) {
@@ -145,14 +141,13 @@ export function createApplyCommand() {
           files = configFiles(planData.config, planData.modules);
           await executeApplyFromPlan(cwd, planData, files);
         } else {
-          const configPath = path.join(cwd, CONFIG_FILE);
-
-          if (!(await exists(configPath))) {
+          const config = recording.read(CONFIG_FILE);
+          if (config === undefined) {
             console.error(styleText('red', `Error: ${CONFIG_FILE} not found.`));
             process.exit(1);
           }
 
-          const planned = await planFromDisk(cwd, configPath, options.refresh ?? true);
+          const planned = await planFromDisk(cwd, recording, config, options.refresh ?? true);
 
           files = planned.files;
           await executeApply(cwd, planned, options.yes);

@@ -3,19 +3,14 @@ import { CONFIG_FILE } from '@clay/parser';
 import { serializePlan } from '@clay/planner';
 import { Command } from 'commander';
 import fs from 'node:fs/promises';
-import path from 'node:path';
 import { styleText } from 'node:util';
 
 import { newOrchestrator } from '../engine';
 import { describeError } from '../describeError';
 import { displayPlan } from '../showPlan';
-import { exists } from '../exists';
 import { refreshOption } from '../refreshOption';
 
-async function executePlan(cwd: string, configPath: string, refresh: boolean, outFile?: string): Promise<void> {
-  const configContent = await fs.readFile(configPath, 'utf8');
-
-  const files = new RecordingFiles(new DiskFiles(cwd));
+async function executePlan(cwd: string, files: RecordingFiles, configContent: string, refresh: boolean, outFile?: string): Promise<void> {
   const orchestrator = newOrchestrator(cwd, files);
 
   console.log(styleText('blue', 'Planning...'));
@@ -24,7 +19,9 @@ async function executePlan(cwd: string, configPath: string, refresh: boolean, ou
   displayPlan(planned);
 
   if (outFile) {
-    await fs.writeFile(outFile, serializePlan(planned, configContent, files.snapshot()), 'utf8');
+    // main.clay is saved as the plan's config, so the modules leave it out.
+    const modules = Object.fromEntries(Object.entries(files.snapshot()).filter(([file]) => file !== CONFIG_FILE));
+    await fs.writeFile(outFile, serializePlan(planned, configContent, modules), 'utf8');
     console.log(styleText('green', `\nPlan saved to: ${outFile}`));
   }
 }
@@ -36,17 +33,18 @@ export function createPlanCommand() {
     .addOption(refreshOption())
     .action(async (options) => {
       const cwd = process.cwd();
-      const configPath = path.join(cwd, CONFIG_FILE);
+      const files = new RecordingFiles(new DiskFiles(cwd));
 
       try {
-        if (!(await exists(configPath))) {
+        const configContent = files.read(CONFIG_FILE);
+        if (configContent === undefined) {
           console.error(styleText('red', `Error: ${CONFIG_FILE} not found in current directory.`));
           process.exit(1);
         }
 
-        await executePlan(cwd, configPath, options.refresh ?? true, options.out);
+        await executePlan(cwd, files, configContent, options.refresh ?? true, options.out);
       } catch (error: unknown) {
-        console.error(styleText('red', 'Planning failed:'), describeError(error, new DiskFiles(cwd)));
+        console.error(styleText('red', 'Planning failed:'), describeError(error, files));
         process.exit(1);
       }
     });

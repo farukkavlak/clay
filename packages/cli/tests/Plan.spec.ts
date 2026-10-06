@@ -1,12 +1,13 @@
 import { types, UNKNOWN } from '@clay/contracts';
 import { Orchestrator } from '@clay/orchestrator';
-import fs from 'node:fs/promises';
 import { stripVTControlCharacters } from 'node:util';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createPlanCommand } from '../src/commands/plan';
 
 vi.mock('node:fs/promises');
+// What the command reads through its files, main.clay among them.
+const readFiles = vi.hoisted(() => vi.fn<(file: string) => string | undefined>());
 // Address is a plain value type the commands print with, so it stays real.
 vi.mock('@clay/orchestrator', async () => {
   const actual = await vi.importActual<typeof import('@clay/orchestrator')>('@clay/orchestrator');
@@ -16,7 +17,7 @@ vi.mock('@clay/orchestrator', async () => {
     DiskFiles: vi.fn(),
     InMemoryFiles: vi.fn(),
     RecordingFiles: vi.fn(function () {
-      return { snapshot: () => ({}) };
+      return { read: readFiles, snapshot: () => ({}) };
     }),
   };
 });
@@ -29,7 +30,7 @@ describe('CLI: plan command', () => {
   });
 
   it('should fail if main.clay does not exist', async () => {
-    vi.mocked(fs.access).mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+    readFiles.mockReturnValue(undefined);
 
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -45,8 +46,7 @@ describe('CLI: plan command', () => {
 
   // The planner lists every resource, so a plan with nothing to do is all NO_OP, not empty.
   it('should display "No changes" when every action is a NO_OP', async () => {
-    vi.mocked(fs.access).mockResolvedValue(void 0);
-    vi.mocked(fs.readFile).mockResolvedValue('');
+    readFiles.mockReturnValue('');
 
     const planMock = vi.fn().mockResolvedValue({
       serial: 0,
@@ -75,8 +75,7 @@ describe('CLI: plan command', () => {
   });
 
   it('should list a changed output as a change, with no resource to touch', async () => {
-    vi.mocked(fs.access).mockResolvedValue(void 0);
-    vi.mocked(fs.readFile).mockResolvedValue('');
+    readFiles.mockReturnValue('');
 
     const outputs = { gone: { old: text('a'), new: undefined }, added: { old: undefined, new: text('b') }, moved: { old: text('a'), new: text('b') } };
     const planMock = vi
@@ -104,8 +103,7 @@ describe('CLI: plan command', () => {
   });
 
   it('should display planned actions', async () => {
-    vi.mocked(fs.access).mockResolvedValue(void 0);
-    vi.mocked(fs.readFile).mockResolvedValue('resource "test" "t" {}');
+    readFiles.mockReturnValue('resource "test" "t" {}');
 
     const actions = [
       { type: 'CREATE', resourceType: 'test', name: 't', attributes: {} },
@@ -132,8 +130,7 @@ describe('CLI: plan command', () => {
   });
 
   it('should display UPDATE actions with changes', async () => {
-    vi.mocked(fs.access).mockResolvedValue(void 0);
-    vi.mocked(fs.readFile).mockResolvedValue('resource "test" "t" {}');
+    readFiles.mockReturnValue('resource "test" "t" {}');
 
     const actions = [
       {
@@ -163,8 +160,7 @@ describe('CLI: plan command', () => {
   });
 
   it('shows a set by member only when both sides are known sets', async () => {
-    vi.mocked(fs.access).mockResolvedValue(void 0);
-    vi.mocked(fs.readFile).mockResolvedValue('resource "test" "t" {}');
+    readFiles.mockReturnValue('resource "test" "t" {}');
 
     const changes = {
       pending: { old: ['a'], new: UNKNOWN },
@@ -209,8 +205,7 @@ describe('CLI: plan command', () => {
   });
 
   it('should say when a value is not known yet, added or removed', async () => {
-    vi.mocked(fs.access).mockResolvedValue(void 0);
-    vi.mocked(fs.readFile).mockResolvedValue('resource "test" "t" {}');
+    readFiles.mockReturnValue('resource "test" "t" {}');
 
     const actions = [
       {
@@ -241,8 +236,7 @@ describe('CLI: plan command', () => {
   });
 
   it('should display a REPLACE as one line and count it as an add and a destroy', async () => {
-    vi.mocked(fs.access).mockResolvedValue(void 0);
-    vi.mocked(fs.readFile).mockResolvedValue('resource "test" "t" {}');
+    readFiles.mockReturnValue('resource "test" "t" {}');
 
     const actions = [
       {
@@ -273,8 +267,7 @@ describe('CLI: plan command', () => {
   });
 
   it('should display DELETE actions', async () => {
-    vi.mocked(fs.access).mockResolvedValue(void 0);
-    vi.mocked(fs.readFile).mockResolvedValue('');
+    readFiles.mockReturnValue('');
 
     const actions = [{ type: 'DELETE', resourceType: 'test', name: 't' }];
     const planMock = vi.fn().mockResolvedValue({ serial: 0, actions, outputs: {}, prevRun: {}, prior: {}, schemas: { test: {} }, dataSources: {} });
@@ -297,8 +290,7 @@ describe('CLI: plan command', () => {
   });
 
   it('should handle planning errors gracefully', async () => {
-    vi.mocked(fs.access).mockResolvedValue(void 0);
-    vi.mocked(fs.readFile).mockResolvedValue('invalid config');
+    readFiles.mockReturnValue('invalid config');
 
     vi.mocked(Orchestrator.create).mockImplementation(function () {
       return {
@@ -320,8 +312,7 @@ describe('CLI: plan command', () => {
   });
 
   it('should handle unknown action types', async () => {
-    vi.mocked(fs.access).mockResolvedValue(void 0);
-    vi.mocked(fs.readFile).mockResolvedValue('');
+    readFiles.mockReturnValue('');
 
     const actions = [{ type: 'UNKNOWN', resourceType: 'test', name: 't' }];
     const planMock = vi.fn().mockResolvedValue({ serial: 0, actions, outputs: {}, prevRun: {}, prior: {}, schemas: { test: {} }, dataSources: {} });
@@ -344,8 +335,7 @@ describe('CLI: plan command', () => {
   });
 
   it('should handle non-Error exceptions gracefully', async () => {
-    vi.mocked(fs.access).mockResolvedValue(void 0);
-    vi.mocked(fs.readFile).mockResolvedValue('content');
+    readFiles.mockReturnValue('content');
 
     vi.mocked(Orchestrator.create).mockImplementation(function () {
       return {

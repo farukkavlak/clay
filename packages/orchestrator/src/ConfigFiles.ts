@@ -30,13 +30,15 @@ export class InMemoryFiles implements ConfigFiles {
   }
 }
 
-/** Records every file read, so a saved plan can carry its configuration. */
+/** Reads each file once and records it, so a run and its errors see one version and a saved plan carries it. */
 export class RecordingFiles implements ConfigFiles {
   private files: Record<string, string> = {};
 
   constructor(private source: ConfigFiles) {}
 
   read(file: string): string | undefined {
+    if (Object.hasOwn(this.files, file)) return this.files[file];
+
     const content = this.source.read(file);
     if (content !== undefined) this.files[file] = content;
 

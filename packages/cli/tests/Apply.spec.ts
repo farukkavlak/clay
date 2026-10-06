@@ -8,6 +8,8 @@ import { createApplyCommand } from '../src/commands/apply';
 import { confirm } from '../src/confirm';
 
 vi.mock('node:fs/promises');
+// What the command reads through its files, main.clay among them.
+const readFiles = vi.hoisted(() => vi.fn<(file: string) => string | undefined>());
 // Address is a plain value type the commands print with, so it stays real.
 vi.mock('@clay/orchestrator', async () => {
   const actual = await vi.importActual<typeof import('@clay/orchestrator')>('@clay/orchestrator');
@@ -17,7 +19,7 @@ vi.mock('@clay/orchestrator', async () => {
     DiskFiles: vi.fn(),
     InMemoryFiles: vi.fn(),
     RecordingFiles: vi.fn(function () {
-      return { snapshot: () => ({}) };
+      return { read: readFiles, snapshot: () => ({}) };
     }),
   };
 });
@@ -37,7 +39,7 @@ describe('CLI: apply command', () => {
 
   describe('Config-based apply', () => {
     it('should abort if main.clay not found', async () => {
-      vi.mocked(fs.access).mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+      readFiles.mockReturnValue(undefined);
 
       const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -52,8 +54,7 @@ describe('CLI: apply command', () => {
     });
 
     it('should apply changes when confirmed', async () => {
-      vi.mocked(fs.access).mockResolvedValue(void 0);
-      vi.mocked(fs.readFile).mockResolvedValue('content');
+      readFiles.mockReturnValue('content');
 
       const planned = {
         serial: 0,
@@ -90,8 +91,7 @@ describe('CLI: apply command', () => {
     });
 
     it('should print each resource as it is applied', async () => {
-      vi.mocked(fs.access).mockResolvedValue(void 0);
-      vi.mocked(fs.readFile).mockResolvedValue('content');
+      readFiles.mockReturnValue('content');
 
       const planMock = vi.fn().mockResolvedValue({
         serial: 0,
@@ -129,8 +129,7 @@ describe('CLI: apply command', () => {
     });
 
     it('should skip confirmation with --yes flag', async () => {
-      vi.mocked(fs.access).mockResolvedValue(void 0);
-      vi.mocked(fs.readFile).mockResolvedValue('content');
+      readFiles.mockReturnValue('content');
 
       const planMock = vi.fn().mockResolvedValue({
         serial: 0,
@@ -158,8 +157,7 @@ describe('CLI: apply command', () => {
     });
 
     it('should abort if confirmation declined', async () => {
-      vi.mocked(fs.access).mockResolvedValue(void 0);
-      vi.mocked(fs.readFile).mockResolvedValue('content');
+      readFiles.mockReturnValue('content');
 
       const planMock = vi.fn().mockResolvedValue({
         serial: 0,
@@ -192,8 +190,7 @@ describe('CLI: apply command', () => {
     });
 
     it('should skip apply when all actions are NO_OP', async () => {
-      vi.mocked(fs.access).mockResolvedValue(void 0);
-      vi.mocked(fs.readFile).mockResolvedValue('content');
+      readFiles.mockReturnValue('content');
 
       const planMock = vi.fn().mockResolvedValue({
         serial: 0,
@@ -223,8 +220,7 @@ describe('CLI: apply command', () => {
     });
 
     it('should run when only an output changes', async () => {
-      vi.mocked(fs.access).mockResolvedValue(void 0);
-      vi.mocked(fs.readFile).mockResolvedValue('content');
+      readFiles.mockReturnValue('content');
 
       const planMock = vi.fn().mockResolvedValue({
         serial: 0,
@@ -256,8 +252,7 @@ describe('CLI: apply command', () => {
     });
 
     it('should display outputs when returned from apply', async () => {
-      vi.mocked(fs.access).mockResolvedValue(void 0);
-      vi.mocked(fs.readFile).mockResolvedValue('content');
+      readFiles.mockReturnValue('content');
 
       const planMock = vi.fn().mockResolvedValue({
         serial: 0,
@@ -292,8 +287,7 @@ describe('CLI: apply command', () => {
     });
 
     it('should handle unknown action types gracefully', async () => {
-      vi.mocked(fs.access).mockResolvedValue(void 0);
-      vi.mocked(fs.readFile).mockResolvedValue('content');
+      readFiles.mockReturnValue('content');
 
       const planMock = vi.fn().mockResolvedValue({
         serial: 0,
@@ -406,7 +400,7 @@ describe('CLI: apply command', () => {
       await createApplyCommand().parseAsync(['node', 'clay', 'plan.json']);
 
       expect(runPlanMock).toHaveBeenCalled();
-      expect(vi.mocked(fs.readFile).mock.calls.flat().join(' ')).not.toContain('main.clay');
+      expect(readFiles).not.toHaveBeenCalledWith('main.clay');
 
       consoleSpy.mockRestore();
     });
@@ -470,8 +464,7 @@ describe('CLI: apply command', () => {
 
   describe('Error handling', () => {
     it('should handle apply errors gracefully', async () => {
-      vi.mocked(fs.access).mockResolvedValue(void 0);
-      vi.mocked(fs.readFile).mockResolvedValue('content');
+      readFiles.mockReturnValue('content');
 
       const planMock = vi.fn().mockResolvedValue({
         serial: 0,
@@ -510,9 +503,13 @@ describe('CLI: apply command', () => {
   });
 
   it('should handle non-Error exceptions gracefully', async () => {
-    vi.mocked(fs.access).mockResolvedValue(void 0);
-
-    vi.mocked(fs.readFile).mockRejectedValue('String Error');
+    readFiles.mockReturnValue('content');
+    vi.mocked(Orchestrator.create).mockImplementation(function () {
+      return {
+        registerProvider: vi.fn(),
+        plan: vi.fn().mockRejectedValue('String Error'),
+      } as Partial<Orchestrator> as Orchestrator;
+    });
 
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
