@@ -30,6 +30,10 @@ describe('a key checked against a for_each', () => {
     expect(() => checkHasKey('local_file.logs', 'x', keys)).toThrow(message);
   });
 
+  it('leaves the hint out when the for_each is empty, since no key would be taken', () => {
+    expect(() => checkHasKey('local_file.logs', 'x', [], undefined, '. hint')).toThrow(/its for_each is empty$/);
+  });
+
   it('takes a key the for_each gives, and any key while the for_each is not read yet', () => {
     expect(() => checkHasKey('local_file.logs', 'a', ['a'])).not.toThrow();
     expect(() => checkHasKey('local_file.logs', 'x', undefined)).not.toThrow();

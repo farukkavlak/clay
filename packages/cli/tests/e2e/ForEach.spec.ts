@@ -267,7 +267,13 @@ describe('a resource with for_each', () => {
 
   it.each([
     ['all of it where one is read', 'local_file.f[0].content', 'local_file.f has for_each, so name one of it by key, as in local_file.f["key"]'],
-    ['an attribute where the key goes', 'local_file.f.content', 'local_file.f has no instance ["content"], only ["a"], ["b"]'],
+    [
+      'an attribute where the key goes',
+      'local_file.f.content',
+      'local_file.f has no instance ["content"], only ["a"], ["b"]. "content" is an attribute of local_file, and the key comes first, as in local_file.f["key"].content',
+    ],
+    ['an attribute name written as a key', 'local_file.f["content"]', 'local_file.f has no instance ["content"], only ["a"], ["b"]'],
+    ['a name that is no attribute where the key goes', 'local_file.f.constructor', 'local_file.f has no instance ["constructor"], only ["a"], ["b"]'],
     ['a key its for_each does not give', 'local_file.f["gone"].content', 'local_file.f has no instance ["gone"], only ["a"], ["b"]'],
   ])('refuses a reference to %s, where it is written', async (_, reference, message) => {
     const config = `${files('["a", "b"]')}
@@ -276,7 +282,7 @@ describe('a resource with for_each', () => {
 
     const error = await planError(config);
 
-    expect(error.message).toContain(message);
+    expect(error.message).toBe(message);
     expect(error.position).toMatchObject(placeOf(config, reference));
   });
 

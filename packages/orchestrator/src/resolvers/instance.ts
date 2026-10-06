@@ -1,4 +1,4 @@
-import { InstanceKey } from '@clay/contracts';
+import { InstanceKey, Schema } from '@clay/contracts';
 import { ModuleOutputReference, NAME, Position, ResourceReference, spellReference, Step, stepKey } from '@clay/parser';
 
 import { Repetition } from '../Instances';
@@ -113,11 +113,18 @@ export function checkInRange(block: string, key: number, count: number | undefin
   refuse(`${block} has ${count} ${count === 1 ? 'instance, [0]' : `instances, [0] to [${count - 1}]`}`, position);
 }
 
+/** A name after a dot that is an attribute: the author may have left the key out. */
+export function keyComesFirst(block: string, type: string, step: Step, schema: Schema): string {
+  if (!('name' in step) || !Object.hasOwn(schema, step.name)) return '';
+
+  return `. "${step.name}" is an attribute of ${type}, and the key comes first, as in ${block}["key"].${step.name}`;
+}
+
 /** Refused, since an instance that will never exist would otherwise read as unknown. */
-export function checkHasKey(block: string, key: string, keys: InstanceKey[] | undefined, position?: Position): void {
+export function checkHasKey(block: string, key: string, keys: InstanceKey[] | undefined, position?: Position, hint = ''): void {
   if (keys === undefined || keys.includes(key)) return;
 
   if (keys.length === 0) refuse(`${block} has no instances: its for_each is empty`, position);
 
-  refuse(`${block} has no instance [${JSON.stringify(key)}], only ${keys.map((k) => `[${JSON.stringify(k)}]`).join(', ')}`, position);
+  refuse(`${block} has no instance [${JSON.stringify(key)}], only ${keys.map((k) => `[${JSON.stringify(k)}]`).join(', ')}${hint}`, position);
 }
