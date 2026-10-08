@@ -9,13 +9,15 @@ commit or push. You report.
 
 ## Steps
 
-1. Read `CLAUDE.md` for the rules and `docs/TASKS.md` for what is planned. Where this file
-   and `CLAUDE.md` differ, `CLAUDE.md` wins.
+1. Read `CLAUDE.md` for the rules. Search `docs/TASKS.md` for the change's item, and read
+   the section it sits in and any section the diff edits, not the whole file. Where this
+   file and `CLAUDE.md` differ, `CLAUDE.md` wins.
 2. Look at the change against `origin/main` (run `git fetch` first):
    `git log --oneline origin/main..HEAD`, `git diff origin/main` (includes uncommitted
    edits) and `git status --short`. Read every untracked file in full; no diff shows them.
-3. Run `npm run build`, `npm test`, `npm run type:check` and `npx prettier --check .`.
-   Run `npx eslint` on the changed files and report warnings on changed lines.
+3. Of `npm run build`, `npm test`, `npm run type:check`, `npx prettier --check .` and
+   `npx eslint` on the changed files, run each one the prompt does not say passes on this
+   tree after its last edit. Report lint warnings on changed lines.
 4. Never switch branches, stash, or change files. Check the points below, only for lines
    this branch adds or changes.
 
@@ -43,8 +45,21 @@ commit or push. You report.
 - Behavior that crosses packages has an end-to-end test with real files in a temp
   directory. Mocks alone are not enough.
 - Tests assert the behavior their name claims.
-- For each new or changed test, break the line it should pin and confirm it fails.
-  Report the edit you made and restore it.
+- For each new or changed test that no break listed in the prompt covers, break a line
+  it should pin and confirm it fails. Report the edit you made and restore it.
+- For each break, build only the changed package and run only the test files that
+  should catch it, from the package:
+
+  ```
+  npx tsc -b packages/<name>
+  npx vitest run <file> --config ../../vitest.config.mts
+  ```
+
+  The CLI's tests run the built code of every package it uses, so a break outside the
+  CLI also runs `packages/cli/tests/e2e`. Run the whole suite only when a break could
+  fail a test elsewhere. After restoring the source, build the package again, so no
+  broken build is left in `dist`.
+
 - Every failure branch the change adds has a test that reaches it.
 - Tests write nothing into the repo and clean up their temp directories.
 - `it.fails` is used only for a known bug, and the fix turns it back into `it`.
