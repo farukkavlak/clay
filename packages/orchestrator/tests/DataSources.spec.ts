@@ -12,6 +12,7 @@ class MockDataProvider implements Provider {
   readonly resources = ['mock_resource'];
   readonly dataSources = ['mock_data'];
   data = new Map<string, Record<string, unknown>>();
+  reads = 0;
 
   async getSchema(_type: string): Promise<Schema> {
     return { contact: { type: types.string }, owner: { type: types.string }, url: { type: types.string }, val: { type: types.string } };
@@ -46,6 +47,7 @@ class MockDataProvider implements Provider {
   }
 
   async readDataSource(_type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+    this.reads += 1;
     const id = inputs.id as string;
     if (this.data.has(id)) return this.data.get(id)!;
 
@@ -166,6 +168,25 @@ describe('Orchestrator - Data Sources', () => {
       }
     `;
     await expect(apply(orchestrator, config)).rejects.toThrow('No provider reads data source "really_unknown_provider"');
+  });
+
+  it('refuses a misspelled name in any data source before reading one', async () => {
+    mockProvider.setMockData('user-123', { username: 'testuser' });
+    const config = `
+      data "mock_data" "user" {
+        id = "user-123"
+      }
+      data "mock_data" "other" {
+        idd = "user-123"
+      }
+    `;
+
+    await expect(apply(orchestrator, config)).rejects.toMatchObject({
+      message: expect.stringContaining('mock_data has no attribute "idd"'),
+      block: 'data "mock_data" "other"',
+      position: { line: 6, column: 15 },
+    });
+    expect(mockProvider.reads).toBe(0);
   });
 
   it('should throw error if data source not found', async () => {

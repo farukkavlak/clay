@@ -5,6 +5,7 @@ import { StateManager } from '@clay/state';
 import { asError } from './asError';
 import { ActionExecutor } from './components/ActionExecutor';
 import { ConfigLoader } from './components/ConfigLoader';
+import { DataSourceReader } from './components/DataSourceReader';
 import { DependencyGraphBuilder } from './components/DependencyGraphBuilder';
 import { DesiredStateBuilder } from './components/DesiredStateBuilder';
 import { ModuleLoader } from './components/ModuleLoader';
@@ -49,6 +50,7 @@ export class Orchestrator {
     const scopes = new ScopeManager();
     const dataSources = new Map<string, Record<string, Value>>();
     const schemas = new Map<string, Schema>();
+    const dataSchemas = new Map<string, Schema>();
     const instances = new Instances();
     const modules = new ModuleInstances();
     const planned = new Planned();
@@ -60,7 +62,19 @@ export class Orchestrator {
     return new Orchestrator(
       stateManager,
       providers,
-      new ConfigLoader(new ModuleLoader(files, scopes), scopes, dataSources, schemas, resolver, providers, instances, modules, planned),
+      new ConfigLoader(
+        new ModuleLoader(files, scopes),
+        scopes,
+        dataSources,
+        schemas,
+        dataSchemas,
+        resolver,
+        providers,
+        new DataSourceReader(providers, dataSchemas),
+        instances,
+        modules,
+        planned
+      ),
       graphBuilder,
       new WrittenCheck(resolver, scopes, schemas),
       new DesiredStateBuilder(scopes, scanner, resolver, graphBuilder, instances, modules, planned, resourcePlanner),
