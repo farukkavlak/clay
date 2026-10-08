@@ -57,6 +57,12 @@ const KEY_FORM = 'a key is a whole number or a quoted string, as in [0] or ["nam
 
 type Refuse = (reason: string) => never;
 
+function invalid(input: string): Refuse {
+  return (reason) => {
+    throw new Error(`Invalid address "${input}": ${reason}`);
+  };
+}
+
 /** `[0]` or `["name"]`, the string JSON-quoted, so a key with a dot or a quote reads back whole and each key has one spelling. */
 function readKey(text: string, refuse: Refuse): InstanceKey {
   const inner = /^\[(.*)]$/s.exec(text)?.[1] ?? refuse(KEY_FORM);
@@ -133,12 +139,8 @@ function readModules(segments: Segment[], refuse: Refuse): { module: ModuleAddre
   return { module: new ModuleAddress(path), rest: segments.slice(read) };
 }
 
-/** `module.m[0].data.local_file.f`, as a plan names a data source. */
-export function parseDataAddress(input: string): { module: ModuleAddress; type: string; name: string } {
-  const refuse: Refuse = (reason) => {
-    throw new Error(`Invalid address "${input}": ${reason}`);
-  };
-
+/** `module.m[0].data.local_file.f`, as a plan names a data source. A caller's `refuse` says why one is not, in its own words. */
+export function parseDataAddress(input: string, refuse: Refuse = invalid(input)): { module: ModuleAddress; type: string; name: string } {
   const { module, rest } = readModules(readSegments(input, refuse), refuse);
   const [data, type, name] = rest;
 
@@ -206,9 +208,7 @@ export class Address {
   }
 
   static parse(input: string): Address {
-    const refuse: Refuse = (reason) => {
-      throw new Error(`Invalid address "${input}": ${reason}`);
-    };
+    const refuse = invalid(input);
 
     const { module, rest } = readModules(readSegments(input, refuse), refuse);
     const [type, name] = rest;

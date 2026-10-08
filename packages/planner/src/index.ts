@@ -15,6 +15,7 @@ import {
   NumberError,
   Output,
   own,
+  parseDataAddress,
   readResources,
   Resource,
   Schema,
@@ -381,6 +382,13 @@ function checkSchemasCover(plan: Plan, say: (problem: string) => never): void {
   if (missing !== undefined) say(`it has no schema for ${missing}`);
 }
 
+/** Checked here, so a wrong address fails at the file and not deep in the apply. */
+function checkDataAddresses({ dataSources, readAtApply }: Plan, say: (problem: string) => never): void {
+  for (const address of [...Object.keys(dataSources), ...readAtApply]) parseDataAddress(address, (reason) => say(`"${address}" is not a data source: ${reason}`));
+
+  for (const address of readAtApply) if (Object.hasOwn(dataSources, address)) say(`"${address}" is both read and left for the apply`);
+}
+
 export function parsePlanFile(content: string, source: string): PlanFile {
   let parsed: unknown;
 
@@ -404,6 +412,7 @@ export function parsePlanFile(content: string, source: string): PlanFile {
   readResources(parsed.prevRun, 'its prevRun resources', say);
   readResources(parsed.prior, 'its prior resources', say);
   checkSchemasCover(parsed, say);
+  checkDataAddresses(parsed, say);
 
   return {
     ...parsed,

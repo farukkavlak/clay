@@ -131,9 +131,10 @@ change each.
       `apply` said it was complete and `b` was never made. Now it is refused, as a data
       source there is, before any instance of the block runs. Terraform builds the apply
       from the plan alone and says nothing
-- [ ] A data address in a plan file is checked in the run, not at the file. One that is
-      no address is shown by `apply` and then fails with no file named, and one in both
-      `dataSources` and `readAtApply` is taken from the first and never read
+- [x] A data address in a plan file was checked in the run, not at the file. One that
+      was no address was shown by `apply` and then failed with no file named, and one in
+      both `dataSources` and `readAtApply` was taken from the first and never read. Now
+      the file is refused as it is read, with the address and what is wrong with it
 
 ## 1. Language
 

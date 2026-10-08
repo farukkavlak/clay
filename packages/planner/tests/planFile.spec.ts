@@ -338,6 +338,26 @@ describe('reading a plan file', () => {
     ['an entry filed under another address', { prevRun: { 'x.b': { resourceType: 'x', name: 'a', attributes: {} } } }, 'tfplan.json is not a plan file: "x.b" holds x.a'],
     ['no list of data sources the apply reads', { readAtApply: undefined }, /^tfplan\.json is not a plan file$/],
     ['a data source the apply reads that is not an address', { readAtApply: [1] }, /^tfplan\.json is not a plan file$/],
+    [
+      'a data source the apply reads under a name that is no address',
+      { readAtApply: ['data.local_file'] },
+      'tfplan.json is not a plan file: "data.local_file" is not a data source: a data source is named data, its type and its name',
+    ],
+    [
+      'a data source in a module whose key is not written as one',
+      { readAtApply: ['module.m[x].data.local_file.f'] },
+      'tfplan.json is not a plan file: "module.m[x].data.local_file.f" is not a data source: a key is a whole number or a quoted string, as in [0] or ["name"]',
+    ],
+    [
+      'a data source it read under a name that is no address',
+      { dataSources: { 'local_file.f': {} } },
+      'tfplan.json is not a plan file: "local_file.f" is not a data source: a data source is named data, its type and its name',
+    ],
+    [
+      'a data source both read and left for the apply',
+      { dataSources: { 'data.local_file.f': {} }, readAtApply: ['data.local_file.f'] },
+      'tfplan.json is not a plan file: "data.local_file.f" is both read and left for the apply',
+    ],
   ])('refuses a plan file with %s', (_, broken, message) => {
     expect(read({ ...fields(), ...broken })).toThrow(message);
   });
@@ -478,8 +498,8 @@ describe('reading a plan file', () => {
 
   it('reads back what each data source gave, its types and exact numbers among them', () => {
     const dataSources = {
-      'local_file.f': { content: { value: 'x', type: types.string }, sizes: { value: [ExactNumber.parse('12345678901234567890')], type: types.set(types.number) } },
-      'module.m.local_file.f': { content: { value: null, type: types.string } },
+      'data.local_file.f': { content: { value: 'x', type: types.string }, sizes: { value: [ExactNumber.parse('12345678901234567890')], type: types.set(types.number) } },
+      'module.m[0].data.local_file.f': { content: { value: null, type: types.string } },
     };
 
     expect(parsePlanFile(aPlanFile({ ...emptyPlan, dataSources }), 'tfplan.json').dataSources).toEqual(dataSources);

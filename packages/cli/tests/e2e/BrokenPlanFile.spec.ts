@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { PLAN_FILE_VERSION } from '@clay/planner';
+import { PLAN_FILE_VERSION, serializePlan } from '@clay/planner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createApplyCommand } from '../../src/commands/apply';
@@ -49,6 +49,18 @@ describe('a plan file that cannot be read', () => {
     expect(output).toContain(reason);
     expect(output).toContain('Run `clay plan --out <file>` again');
     expect(output).not.toContain('JSON at position');
+    expect(exitCodes).toEqual([1]);
+  });
+
+  it('says which data source address is wrong before it shows the plan', async () => {
+    const plan = { serial: 0, actions: [], outputs: {}, prevRun: {}, prior: {}, schemas: {}, dataSources: {}, readAtApply: ['data.local_file'] };
+    await fs.writeFile(path.join(dir, 'tfplan.json'), serializePlan(plan, '', {}), 'utf8');
+
+    const output = await applyWith('tfplan.json');
+
+    expect(output).toContain('tfplan.json is not a plan file: "data.local_file" is not a data source: a data source is named data, its type and its name');
+    expect(output).toContain('Run `clay plan --out <file>` again');
+    expect(output).not.toContain('will be read during apply');
     expect(exitCodes).toEqual([1]);
   });
 
