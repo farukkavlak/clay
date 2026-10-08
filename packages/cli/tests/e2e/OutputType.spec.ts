@@ -121,6 +121,16 @@ describe('an output that names its type', () => {
     expect(error.position).toEqual({ file: 'main.clay', ...placeOf(config, '"eighty"') });
   });
 
+  it('refuses a default of the wrong type where it is written, when the value leaves it to the default', async () => {
+    const config = 'output "site" {\n  type  = object({ port = optional(number, "eighty") })\n  value = {}\n}';
+
+    const error = await errorOf(() => newOrchestrator().validate(config));
+
+    expect(error.message).toBe('port: "eighty" is not a number');
+    expect(error.position).toEqual({ file: 'main.clay', ...placeOf(config, '"eighty"') });
+    expect(error.block).toBe('output "site"');
+  });
+
   it('gives a value not known yet the type it names, and holds it to that type once the apply knows it', async () => {
     const config = 'resource "random_string" "r" { length = 4 }\noutput "n" {\n  type  = number\n  value = random_string.r.result\n}';
 

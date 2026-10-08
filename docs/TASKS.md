@@ -106,11 +106,11 @@ change each.
       `apply` that fails to plan described a positioned error from `DiskFiles`, so a file
       changed after it was parsed showed the caret under a line of the new version. Now
       each command reads a file once and quotes what it read
-- [ ] A default of the wrong type is reported at the value that leaves it to the default,
+- [x] A default of the wrong type was reported at the value that left it to the default,
       not at the default. With `type = object({ port = optional(number, "eighty") })` and
-      `{}` given, the caret is under `{}`; with `{ port = 80 }` given, it is under
-      `"eighty"`. A variable and an output do the same. The defaults are checked after the
-      value, so the value's conversion meets the bad default first
+      `{}` given, the caret was under `{}`, for a variable, an output, and a variable a
+      data source read at load. Now every default is checked as the configuration loads,
+      before anything reads it
 
 ## 1. Language
 

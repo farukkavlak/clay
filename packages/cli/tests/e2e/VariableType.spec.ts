@@ -166,6 +166,31 @@ describe('a variable that names its type', () => {
     expect(error.block).toBe('variable "port"');
   });
 
+  it('refuses an optional default of the wrong type where it is written, when the input given leaves it to the default', async () => {
+    const module = 'variable "site" { type = object({ port = optional(number, "eighty") }) }';
+    await writeModule(module);
+    const config = 'module "m" {\n  source = "./m"\n  site   = {}\n}';
+
+    const error = await errorOf(() => newOrchestrator().validate(config));
+
+    expect(error.message).toBe('port: "eighty" is not a number');
+    expect(error.position).toEqual({ file: path.join('m', 'main.clay'), ...placeOf(module, '"eighty"') });
+    expect(error.block).toBe('variable "site"');
+  });
+
+  it('refuses an optional default of the wrong type where it is written, when a data source reads the variable before the plan does', async () => {
+    await fs.writeFile(path.join(dir, 'in.txt'), 'hi', 'utf8');
+    const module = 'variable "file" { type = object({ path = string, port = optional(number, "eighty") }) }\ndata "local_file" "f" { path = var.file.path }';
+    await writeModule(module);
+    const config = 'module "m" {\n  source = "./m"\n  file   = { path = "in.txt" }\n}';
+
+    const error = await errorOf(() => newOrchestrator().validate(config));
+
+    expect(error.message).toBe('port: "eighty" is not a number');
+    expect(error.position).toEqual({ file: path.join('m', 'main.clay'), ...placeOf(module, '"eighty"') });
+    expect(error.block).toBe('variable "file"');
+  });
+
   it('refuses an input of the wrong type at the input, when a data source reads it before the plan does', async () => {
     await fs.writeFile(path.join(dir, 'in.txt'), 'hi', 'utf8');
     await writeModule('variable "file" { type = object({ path = string }) }\ndata "local_file" "f" { path = var.file.path }');

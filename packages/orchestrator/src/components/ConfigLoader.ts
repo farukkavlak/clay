@@ -1,9 +1,10 @@
 import { ModuleAddress, Output, Provider, Schema, State } from '@clay/contracts';
-import { CONFIG_FILE, ConfigError, DataBlock, Lexer, Parser, spell, Statement } from '@clay/parser';
+import { AttributeValue, CONFIG_FILE, ConfigError, DataBlock, Lexer, Parser, spell, Statement } from '@clay/parser';
 import { Plan } from '@clay/planner';
 
 import { checkNames } from '../checkAttributes';
 import { conformValues, writtenAt } from '../conformValues';
+import { checkDefaults } from '../declared';
 import { checkDataSourceGiven, checkDataSourceRead, heldBy } from '../providerResult';
 import { typedValues } from '../typed';
 import { plainOf, Value, valueOf } from '../Value';
@@ -54,6 +55,7 @@ export class ConfigLoader {
 
     this.scopeManager.clear();
     const { resources: loadedResources, modules: loadedModules } = await this.moduleLoader.loadModuleTree(mainProgram);
+    this.checkDefaults(loadedModules);
 
     this.instances.clear();
     // Planned values belong to one plan; the next plan makes its own, and an apply reads state.
@@ -71,6 +73,21 @@ export class ConfigLoader {
 
     const dataSources = Object.fromEntries([...this.dataSources].map(([key, read]) => [key, carried(read)]));
     return { mainProgram, loadedResources, loadedModules, schemas: this.schemas, dataSources };
+  }
+
+  /** Before anything reads a variable or an output, so a bad default is reported at the default. */
+  private checkDefaults(loadedModules: LoadedModule[]): void {
+    for (const { address, program } of loadedModules) {
+      const read = (node: AttributeValue) => this.resolver.readAsWritten(node, address);
+
+      for (const stmt of program) {
+        if ((stmt.type !== 'Variable' && stmt.type !== 'Output') || !stmt.valueType || !stmt.defaults) continue;
+
+        const declaration = spell(stmt);
+        const holder = stmt.type === 'Output' ? 'output' : 'variable';
+        checkDefaults(holder, stmt.name, stmt.valueType, { tree: stmt.defaults, read }, (node, check) => tryAt(node.position, declaration, address, check));
+      }
+    }
   }
 
   /** Loaded before any value is resolved, since resolving needs the schema's types. */
