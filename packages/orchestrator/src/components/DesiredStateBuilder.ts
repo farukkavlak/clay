@@ -94,23 +94,27 @@ export class DesiredStateBuilder {
     return desired;
   }
 
-  /** A module with a data source has one instance, since a repeated one is refused at load. */
+  /** Each module instance reads its own, and waits for the apply on its own. */
   private async planData(key: string, { module, block }: Extract<GraphNode, { kind: 'data' }>, graph: Graph<GraphNode>, state: State, desired: DesiredState): Promise<void> {
-    const inputs = this.resolveInputs(block, state, module);
-    const address = dataSourceAddress(scopeOf(module), block.dataSourceType, block.name);
+    const blocks = this.graphBuilder.resourceDependencies(graph, key);
 
-    if (this.waitsForApply(key, graph, module)) {
-      this.reader.defer(block, inputs, module);
-      desired.readAtApply.push(address);
-    } else desired.dataSources[address] = carried(await this.reader.read(block, inputs, module));
+    for (const instance of this.modules.of(module)) {
+      const inputs = this.resolveInputs(block, state, instance);
+      const address = dataSourceAddress(scopeOf(instance), block.dataSourceType, block.name);
+
+      if (this.waitsForApply(blocks, instance)) {
+        this.reader.defer(block, inputs, instance);
+        desired.readAtApply.push(address);
+      } else desired.dataSources[address] = carried(await this.reader.read(block, inputs, instance));
+    }
   }
 
   /**
    * Read now, it would see the world before the apply changes a resource it reads, even through a variable or an output.
    * A value not known yet comes only from such a change, so its inputs are known whenever it is read now.
    */
-  private waitsForApply(key: string, graph: Graph<GraphNode>, module: ModuleAddress): boolean {
-    return this.instancesOf(this.graphBuilder.resourceDependencies(graph, key), module).some((instance) => this.planned.get(instance) !== undefined);
+  private waitsForApply(blocks: string[], module: ModuleAddress): boolean {
+    return this.instancesOf(blocks, module).some((instance) => this.planned.get(instance) !== undefined);
   }
 
   /** One value at a time, so an error points at the value, not the block. */

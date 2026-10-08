@@ -266,24 +266,6 @@ describe('a module called with count', () => {
     expect(error.position).toMatchObject(placeOf(config, count));
   });
 
-  // Data sources are read once at load, before modules have instances.
-  it.each([
-    ['in the module', 'web'],
-    ['in a module the module calls', 'web/deeper'],
-  ])('refuses a data source %s, where it is written', async (_, where) => {
-    const data = `data "local_file" "d" { path = "${path.join(dir, 'x')}" }`;
-    if (where === 'web') await writeModule('web', `${data}\nvariable "name" {}`);
-    else {
-      await writeModule('web', `${page()}\nmodule "deeper" { source = "./deeper" }`);
-      await writeModule(where, data);
-    }
-
-    const error = await planError(web('2'));
-
-    expect(error.message).toBe('data "local_file" "d" is in a module called with count or for_each, where a data source cannot be read yet');
-    expect(error.position).toMatchObject({ file: `${where}/main.clay`, line: 1, column: 1 });
-  });
-
   describe('added to a module that exists, or taken off', () => {
     it('moves what is in the module to its first instance, so nothing is made again', async () => {
       await apply(once());

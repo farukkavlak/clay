@@ -379,12 +379,15 @@ describe('ReferenceResolver', () => {
       expect(read.data).toBe('from a[1]');
     });
 
-    it('reads a data source once for the module as the configuration writes it', () => {
-      const sources = new Map([['module.app.data:src.s', { v: valueOf(types.string, 'read') }]]);
+    it('reads the data source of its own module instance', () => {
+      const sources = new Map([
+        ['module.app[0].data:src.s', { v: valueOf(types.string, 'from app[0]') }],
+        ['module.app[1].data:src.s', { v: valueOf(types.string, 'from app[1]') }],
+      ]);
 
-      const read = resolverWith(new ScopeManager(), new Planned(), sources).resolveValue(reference('data', 'src', 's', 'v'), state, inInstance(ModuleAddress.root.child('app', 0)));
+      const read = resolverWith(new ScopeManager(), new Planned(), sources).resolveValue(reference('data', 'src', 's', 'v'), state, inInstance(ModuleAddress.root.child('app', 1)));
 
-      expect(read.data).toBe('read');
+      expect(read.data).toBe('from app[1]');
     });
   });
 });

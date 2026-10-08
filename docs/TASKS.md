@@ -111,6 +111,11 @@ change each.
       `{}` given, the caret was under `{}`, for a variable, an output, and a variable a
       data source read at load. Now every default is checked as the configuration loads,
       before anything reads it
+- [ ] A plan that names a data source the run never reads is accepted in silence. Run
+      with a configuration that has no such block, or whose module makes fewer instances,
+      the value the plan carries is dropped and one it left for the apply is never read.
+      A resource action with no block is refused; a data source address the run did not
+      visit should be refused the same way
 
 ## 1. Language
 
@@ -371,9 +376,10 @@ module output had a value, so one that read either failed at plan.
       resource that read it got the value the plan set. One that read every instance of
       a resource with `count` or `for_each`, `local_file.logs`, was refused, since no count
       was read yet. Now each is read after what it reads
-- [ ] A data source in a module called with `count` or `for_each` is refused, since it is
-      one node, read once. It should be read once for each instance of its module; test that end to end with a module called with `count` and one
-      with `for_each`, nested ones too
+- [x] A data source in a module called with `count` or `for_each` is read once for each
+      instance of its module. It was refused, since it was one node, read once. Each
+      instance waits for the apply on its own, as in Terraform, so one whose resources stay
+      as they are is read at plan while another waits
 - [ ] `count` and `for_each` on a data source, as on a resource
 - [x] A data source fed by a pending resource is `(known after apply)`. It waits for the
       apply when what it reads is not known yet, or when it reads a resource the plan

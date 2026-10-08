@@ -125,16 +125,19 @@ export class PlanRunner {
     { dataSources, readAtApply }: Omit<Approved, 'actions'>,
     state: State
   ): AsyncGenerator<RunEvent> {
-    const address = dataSourceAddress(scopeOf(module), block.dataSourceType, block.name);
-    if (Object.hasOwn(dataSources, address)) {
-      this.reader.use(block, module, dataSources[address]);
-      return;
+    for (const instance of this.modules.of(module)) {
+      const address = dataSourceAddress(scopeOf(instance), block.dataSourceType, block.name);
+      if (Object.hasOwn(dataSources, address)) {
+        this.reader.use(block, instance, dataSources[address]);
+        continue;
+      }
+
+      if (!readAtApply.includes(address))
+        throw withPlace(new Error(`The plan has no value for ${address}, which the configuration declares`), block.position, spell(block), instance);
+
+      await this.reader.read(block, this.resolveInputs(block, state, instance), instance);
+      yield { type: 'read', address };
     }
-
-    if (!readAtApply.includes(address)) throw withPlace(new Error(`The plan has no value for ${address}, which the configuration declares`), block.position, spell(block), module);
-
-    await this.reader.read(block, this.resolveInputs(block, state, module), module);
-    yield { type: 'read', address };
   }
 
   private resolveInputs(block: DataBlock, state: State, module: ModuleAddress): Record<string, Value> {
