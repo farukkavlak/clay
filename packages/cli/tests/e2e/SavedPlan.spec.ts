@@ -1,3 +1,4 @@
+import { UNKNOWN } from '@clay/contracts';
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { parsePlanFile, serializePlan } from '@clay/planner';
 import { LocalProvider } from '@clay/provider-local';
@@ -317,6 +318,78 @@ describe('a plan saved to a file', () => {
       const saved = await save(fileConfig('hello'));
 
       await expect(runs(saved, withOutput('hello'))).rejects.toThrow('The plan has no output "text", which the configuration declares');
+    });
+
+    it('stops before anything runs at an output whose value is not the one it showed', async () => {
+      const saved = await save(`${fileConfig('hello')}\noutput "url" { value = "http://x" }`);
+
+      await expect(runs(saved, `${fileConfig('hello')}\noutput "url" { value = "http://y" }`)).rejects.toMatchObject({
+        message: 'the plan showed url = "http://x", but it now comes to "http://y". Plan again.',
+        block: 'output "url"',
+      });
+      await expect(fs.access(path.join(dir, 'a.txt'))).rejects.toThrow();
+    });
+
+    it('stops at an output that reads a resource as soon as that resource has run', async () => {
+      const saved = await save(`${chained()}\noutput "text" { value = local_file.a.content }`);
+
+      await expect(runs(saved, `${chained()}\noutput "text" { value = "\${local_file.a.content}!" }`)).rejects.toThrow(
+        'the plan showed text = "hello", but it now comes to "hello!". Plan again.'
+      );
+      expect(await fs.readFile(path.join(dir, 'a.txt'), 'utf8')).toBe('hello');
+      await expect(fs.access(path.join(dir, 'b.txt'))).rejects.toThrow();
+    });
+
+    it('stops at an output it left as it was whose value is another now', async () => {
+      await drain(start(newOrchestrator(), `${fileConfig('hello')}\noutput "url" { value = "http://x" }`));
+      const saved = await save(`${fileConfig('changed')}\noutput "url" { value = "http://x" }`);
+
+      await expect(runs(saved, `${fileConfig('changed')}\noutput "url" { value = "http://y" }`)).rejects.toThrow(
+        'the plan left url = "http://x" as it was, but it now comes to "http://y". Plan again.'
+      );
+      expect(await fs.readFile(path.join(dir, 'a.txt'), 'utf8')).toBe('hello');
+    });
+
+    it.each([
+      ['a set it showed that is a list now', 'toset(["a", "b"])', '["b", "a"]', 'the plan showed s = ["a","b"], but it now comes to ["b","a"] of another type. Plan again.'],
+      ['a list it showed that is a set now', '["a", "b"]', 'toset(["a", "b"])', 'the plan showed s = ["a","b"], but it now comes to ["a","b"] of another type. Plan again.'],
+    ])('stops at %s', async (_, planned, now, message) => {
+      const saved = await save(`output "s" { value = ${planned} }`);
+
+      await expect(runs(saved, `output "s" { value = ${now} }`)).rejects.toThrow(message);
+    });
+
+    // Held as a set, the member the plan could not know may come before the one it knew.
+    it('takes a set whose member it could not know in any order', async () => {
+      const config = 'resource "random_string" "r" { length = 4 }\noutput "s" { value = toset(["zzzzz", random_string.r.result]) }';
+
+      await runs(await save(config), config);
+
+      const state = await new LocalBackend(dir).read();
+      expect(state.outputs?.s.value).toHaveLength(2);
+      expect(state.outputs?.s.value).toContain('zzzzz');
+    });
+
+    it('holds only a root output to it, not a module output of the same name', async () => {
+      await fs.mkdir(path.join(dir, 'm'));
+      await fs.writeFile(path.join(dir, 'm', 'main.clay'), 'output "text" { value = "inner" }', 'utf8');
+      const config = 'module "m" { source = "./m" }\noutput "text" { value = "root" }\noutput "inner" { value = module.m.text }';
+
+      await runs(await save(config), config);
+
+      const state = await new LocalBackend(dir).read();
+      expect([state.outputs?.text.value, state.outputs?.inner.value]).toEqual(['root', 'inner']);
+    });
+
+    it('takes any value for an output it could not know', async () => {
+      const config = 'resource "random_string" "r" { length = 4 }\noutput "made" { value = random_string.r.result }';
+      const saved = await save(config);
+
+      await runs(saved, config);
+
+      const state = await new LocalBackend(dir).read();
+      expect(saved.outputs.made.new?.value).toBe(UNKNOWN);
+      expect(state.outputs?.made.value).toHaveLength(4);
     });
 
     it('runs with an output that stays as it is, which it does not show', async () => {

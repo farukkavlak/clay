@@ -140,7 +140,8 @@ against, what the refresh read, what each data source read at plan gave and whic
 the apply reads. `apply` runs that configuration, not the one on disk now, against what
 the refresh read, and refuses the plan if the state has changed since.
 On every apply, a value the plan showed as known that now comes out otherwise stops the
-run before that resource is touched. A provider that makes a resource other than the plan
+run before that resource is touched. An output is held to the plan the same way, as soon
+as what it reads has run, and one the plan left as it was is held to the state. A provider that makes a resource other than the plan
 showed stops the run too: what it made is kept in state, and the error lists each value
 that differs.
 

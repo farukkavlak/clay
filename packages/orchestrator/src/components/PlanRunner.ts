@@ -1,7 +1,7 @@
 import { Address, ModuleAddress, Output, parseDataAddress, State } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { AttributeValue, DataBlock, ResourceBlock, spell, Statement } from '@clay/parser';
-import { Plan, PlanAction } from '@clay/planner';
+import { offPlan, Plan, PlanAction } from '@clay/planner';
 import { moveResource, StateManager } from '@clay/state';
 
 import { asError } from '../asError';
@@ -15,6 +15,8 @@ import { tryAt, withPlace } from '../place';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { RunEvent } from '../RunEvent';
 import { ScopeManager } from '../scope/ScopeManager';
+import { shown } from '../shown';
+import { typeFits } from '../typeFits';
 import { Value } from '../Value';
 import { ActionExecutor } from './ActionExecutor';
 import { LoadedConfig } from './ConfigLoader';
@@ -40,6 +42,20 @@ function groupBy(actions: PlanAction[], key: (address: Address) => string): Map<
 
 type Approved = Pick<Plan, 'actions' | 'outputs' | 'dataSources' | 'readAtApply'>;
 
+/** What a root output comes to: what the plan shows, or what state holds for one the plan leaves as it is. */
+interface PlannedOutput {
+  held: Output;
+  inPlan: boolean;
+}
+
+type PlannedOutputs = Map<string, PlannedOutput>;
+
+/** Checked against the configuration before anything runs, and used as the run goes. */
+interface Checked {
+  named: Map<string, string[]>;
+  outputs: PlannedOutputs;
+}
+
 /** State is written after every action, so a failed run loses nothing done before it. */
 export class PlanRunner {
   constructor(
@@ -55,14 +71,15 @@ export class PlanRunner {
   async *run(saved: Approved, config: LoadedConfig, graph: Graph<GraphNode>, state: State): AsyncGenerator<RunEvent> {
     const { actions } = saved;
     this.checkActionsMatch(actions, graph);
-    this.checkOutputsMatch(saved, config.mainProgram, state);
-    const named = this.dataNamed(saved, graph);
+    const outputs = this.plannedOutputs(saved, state);
+    this.checkOutputsMatch(outputs, config.mainProgram);
+    const checked = { outputs, named: this.dataNamed(saved, graph) };
 
     yield { type: 'planned', actions };
 
     // Outputs belong to a finished run, so every write before the last omits them.
     delete state.outputs;
-    if (!(yield* this.applyInOrder(saved, named, config, graph, state))) return;
+    if (!(yield* this.applyInOrder(saved, checked, config, graph, state))) return;
     if (!(yield* this.applyDeletes(actions, state))) return;
 
     // Resolved after the last action, so outputs never reflect a half-applied run.
@@ -82,18 +99,24 @@ export class PlanRunner {
     }
   }
 
-  /** By name. A plan shows each output that comes, goes or changes, so the others are the ones in state. */
-  private checkOutputsMatch({ outputs }: Approved, program: Statement[], state: State): void {
-    const kept = Object.keys(state.outputs ?? {}).filter((name) => !Object.hasOwn(outputs, name));
-    const shown = Object.keys(outputs).filter((name) => outputs[name].new !== undefined);
-    const planned = new Set([...kept, ...shown]);
+  /** A plan shows each output that comes, goes or changes, so the others are the ones in state. */
+  private plannedOutputs({ outputs }: Approved, state: State): PlannedOutputs {
+    const planned: PlannedOutputs = new Map();
+
+    for (const [name, held] of Object.entries(state.outputs ?? {})) if (!Object.hasOwn(outputs, name)) planned.set(name, { held, inPlan: false });
+    for (const [name, { new: next }] of Object.entries(outputs)) if (next !== undefined) planned.set(name, { held: next, inPlan: true });
+
+    return planned;
+  }
+
+  private checkOutputsMatch(planned: PlannedOutputs, program: Statement[]): void {
     const declared = program.filter((stmt) => stmt.type === 'Output');
 
     for (const stmt of declared)
       if (!planned.has(stmt.name))
         throw withPlace(new Error(`The plan has no output "${stmt.name}", which the configuration declares`), stmt.position, spell(stmt), ModuleAddress.root);
 
-    for (const name of planned) if (!declared.some((stmt) => stmt.name === name)) throw new Error(`The plan has output "${name}", which the configuration does not declare`);
+    for (const name of planned.keys()) if (!declared.some((stmt) => stmt.name === name)) throw new Error(`The plan has output "${name}", which the configuration does not declare`);
   }
 
   /** By block. A saved plan may name a data source with no block, whose value would be silently dropped. */
@@ -143,7 +166,7 @@ export class PlanRunner {
 
   private async *applyInOrder(
     { actions, ...read }: Approved,
-    named: Map<string, string[]>,
+    { named, outputs }: Checked,
     config: LoadedConfig,
     graph: Graph<GraphNode>,
     state: State
@@ -155,13 +178,13 @@ export class PlanRunner {
     );
 
     for (const layer of graph.topologicalSort())
-      for (const key of layer) {
+      for (const key of this.outputsFirst(layer, graph)) {
         const node = graph.getNode(key)!;
 
         if (node.kind === 'module') this.expandCall(node, state);
         if (node.kind === 'data') yield* this.readData(node, named.get(key), read, state);
         // Only this output: a sibling may read a resource a later layer creates.
-        if (node.kind === 'output') for (const instance of this.modules.of(node.module)) this.resolveOutput(node, instance, state);
+        if (node.kind === 'output') this.resolveInEvery(node, outputs, state);
         if (node.kind === 'resource' && !(yield* this.applyBlock(blocks.get(key)!, node.module, byBlock.get(key) ?? [], state))) return false;
       }
 
@@ -291,11 +314,37 @@ export class PlanRunner {
     return Object.fromEntries(outputs);
   }
 
-  private resolveOutput(node: OutputNode, instance: ModuleAddress, state: State): void {
+  /** Nothing in a layer reads another of it, so an output that is not what the plan showed stops the run before the layer's resources. */
+  private outputsFirst(layer: string[], graph: Graph<GraphNode>): string[] {
+    const isOutput = (key: string) => graph.getNode(key)!.kind === 'output';
+
+    return [...layer.filter((key) => isOutput(key)), ...layer.filter((key) => !isOutput(key))];
+  }
+
+  private resolveInEvery(node: OutputNode, planned: PlannedOutputs, state: State): void {
+    for (const instance of this.modules.of(node.module)) {
+      const value = this.resolveOutput(node, instance, state);
+      if (instance.isRoot()) this.checkOutput(node, value, planned.get(node.name)!);
+    }
+  }
+
+  /** Held to the plan as a resource's values are before it runs. What the plan could not know may be anything. */
+  private checkOutput(node: OutputNode, value: Value, { held, inPlan }: PlannedOutput): void {
+    const off = offPlan({ value: { type: held.type } }, { value: held.value }, { value: value.data });
+    const sameType = typeFits(held.type, value.type);
+    if (!off && sameType) return;
+
+    const was = inPlan ? `the plan showed ${node.name} = ${shown(held.value)}` : `the plan left ${node.name} = ${shown(held.value)} as it was`;
+    const now = `${shown(value.data)}${sameType ? '' : ' of another type'}`;
+    throw withPlace(new Error(`${was}, but it now comes to ${now}. Plan again.`), node.position, node.declaration, ModuleAddress.root);
+  }
+
+  private resolveOutput(node: OutputNode, instance: ModuleAddress, state: State): Value {
     const context = contextIn(node.context, instance);
     const value = tryAt(node.position, node.declaration, context, () => this.outputValue(node.name, node.value, node.declared, state, context));
 
     this.scopeManager.setOutput(instance.toString(), node.name, value);
+    return value;
   }
 
   private outputValue(name: string, value: AttributeValue, declared: OutputNode['declared'], state: State, context: Context): Value {

@@ -121,11 +121,12 @@ change each.
       output; with one the configuration had and the plan never showed, the run wrote it
       to state. Now the names are checked before anything runs. Terraform works an output
       out again at apply and compares nothing
-- [ ] An output whose value at apply is not the one the plan showed is written in
-      silence. The names are checked, the values are not: a plan that shows
-      `url = "http://x"` run with a configuration that gives `"http://y"` ends complete.
-      The value is known only after everything has run, so what a refusal there does is
-      the call the fix makes
+- [x] An output whose value at apply was not the one the plan showed was written in
+      silence. The names were checked, the values were not: a plan that showed
+      `url = "http://x"` run with a configuration that gave `"http://y"` ended complete.
+      Now each root output is held to the plan as the run reaches it, as a resource's
+      values are, so one that reads nothing stops the run before anything is made.
+      Terraform works an output out again at apply and compares nothing
 - [x] A resource the configuration declares and the plan had no action for was skipped
       in silence: with `resource "local_file" "b"` added to the `config` in a plan file,
       `apply` said it was complete and `b` was never made. Now it is refused, as a data
@@ -524,8 +525,9 @@ by resource type, and no `provider` block exists yet.
 - [ ] An output that fails to resolve reports a failure. `resolveOutput` runs outside the
       step's `try`, so a throw there ends the run with no `failed` event and nothing said.
       `readKeys`, which reads a `count` or a `for_each` again at apply, runs there too, and so do
-      `expandCall`, which reads a module's `count` or `for_each` again, and the refusal of
-      a saved plan's action in an instance of a module the configuration does not make
+      `expandCall`, which reads a module's `count` or `for_each` again, the refusal of
+      a saved plan's action in an instance of a module the configuration does not make,
+      and the refusal of an output that is not what the plan showed
 - [x] An output may be named `__proto__`. The plan and the apply collected root outputs
       into a plain object, where that name sets a prototype instead of a key, so the plan
       never held it and the apply refused it. Both collect them in a map now, as a module's
