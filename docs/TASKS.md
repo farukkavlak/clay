@@ -111,11 +111,20 @@ change each.
       `{}` given, the caret was under `{}`, for a variable, an output, and a variable a
       data source read at load. Now every default is checked as the configuration loads,
       before anything reads it
-- [ ] A plan that names a data source the run never reads is accepted in silence. Run
+- [x] A plan that named a data source the run never read was accepted in silence. Run
       with a configuration that has no such block, or whose module makes fewer instances,
-      the value the plan carries is dropped and one it left for the apply is never read.
-      A resource action with no block is refused; a data source address the run did not
-      visit should be refused the same way
+      the value the plan carried was dropped and one it left for the apply was never read.
+      Now it is refused as a resource action with no block is: before anything runs when
+      the block is gone, and before the block is read when only the instance is
+- [ ] A plan and a configuration that differ in their outputs run in silence. With an
+      output the plan shows and the configuration lacks, the run ends with no such output;
+      with one the configuration has and the plan never showed, the run writes it to state
+- [ ] A resource the configuration declares and the plan has no action for is skipped in
+      silence: with `resource "local_file" "b"` added to the `config` in a plan file,
+      `apply` says it is complete and `b` is never made. A data source there is refused
+- [ ] A data address in a plan file is checked in the run, not at the file. One that is
+      no address is shown by `apply` and then fails with no file named, and one in both
+      `dataSources` and `readAtApply` is taken from the first and never read
 
 ## 1. Language
 

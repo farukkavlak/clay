@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { Address, isModulePath, ModuleAddress } from '../src/index';
+import { Address, isModulePath, ModuleAddress, parseDataAddress } from '../src/index';
 
 describe('Address', () => {
   describe('toString', () => {
@@ -162,6 +162,29 @@ describe('Address', () => {
       app.child('db');
 
       expect(app.toString()).toBe('module.app');
+    });
+  });
+
+  describe('parseDataAddress', () => {
+    it('reads a data source at the root', () => {
+      const { module, type, name } = parseDataAddress('data.local_file.f');
+
+      expect([module.toString(), type, name]).toEqual(['', 'local_file', 'f']);
+    });
+
+    it('reads the module instance a data source is in', () => {
+      const { module, type, name } = parseDataAddress('module.app[0].module.db["x.y"].data.local_file.f');
+
+      expect([module.toString(), type, name]).toEqual(['module.app[0].module.db["x.y"]', 'local_file', 'f']);
+    });
+
+    it.each([
+      ['no name', 'data.local_file'],
+      ['a part after the name', 'data.local_file.f.content'],
+      ['a first word other than data', 'module.app.x.local_file.f'],
+      ['a key', 'data.local_file.f[0]'],
+    ])('refuses %s', (_, written) => {
+      expect(() => parseDataAddress(written)).toThrow(`Invalid address "${written}": a data source is named data, its type and its name`);
     });
   });
 

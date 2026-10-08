@@ -133,6 +133,20 @@ function readModules(segments: Segment[], refuse: Refuse): { module: ModuleAddre
   return { module: new ModuleAddress(path), rest: segments.slice(read) };
 }
 
+/** `module.m[0].data.local_file.f`, as a plan names a data source. */
+export function parseDataAddress(input: string): { module: ModuleAddress; type: string; name: string } {
+  const refuse: Refuse = (reason) => {
+    throw new Error(`Invalid address "${input}": ${reason}`);
+  };
+
+  const { module, rest } = readModules(readSegments(input, refuse), refuse);
+  const [data, type, name] = rest;
+
+  if (rest.length !== 3 || data.name !== 'data' || rest.some((segment) => segment.key !== undefined)) refuse('a data source is named data, its type and its name');
+
+  return { module, type: type.name, name: name.name };
+}
+
 export class Address {
   public readonly module: ModuleAddress;
   public readonly resourceType: string;

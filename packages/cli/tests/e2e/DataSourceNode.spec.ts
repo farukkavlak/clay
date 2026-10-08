@@ -63,6 +63,8 @@ describe('a data source in the graph', () => {
     output "read" { value = data.local_file.read.content }
   `;
 
+  const readers = (count: number) => `${writes('new')}\nmodule "reader" {\n  count = ${count}\n  source = "./reader"\n  path = local_file.a.path\n}`;
+
   // The module passes the path on, so the data source reaches the resource only through an output.
   const readsThroughModule = async (content: string) => {
     await fs.mkdir(path.join(dir, 'm'), { recursive: true });
@@ -149,6 +151,25 @@ describe('a data source in the graph', () => {
       block: 'data "local_file" "read"',
     });
     expect(await fs.readFile(file, 'utf8')).toBe('new');
+  });
+
+  it.each([
+    ['left for the apply', false],
+    ['read at plan', true],
+  ])('refuses a plan with a data source %s that the configuration does not declare, before anything runs', async (_, applied) => {
+    if (applied) await apply(writesAndReads('old'));
+    const saved = await newOrchestrator().plan(writesAndReads(applied ? 'old' : 'new'));
+
+    await expect(run(saved, writes('newer'))).rejects.toThrow('The plan has "data.local_file.read", which the configuration does not declare');
+    expect(await fs.readFile(file, 'utf8').catch(() => 'no file')).toBe(applied ? 'old' : 'no file');
+  });
+
+  it('refuses a plan that names a data source in a way no address is written', async () => {
+    const saved = await newOrchestrator().plan(writes('new'));
+
+    await expect(run({ ...saved, readAtApply: ['data.local_file'] }, writes('new'))).rejects.toThrow(
+      'Invalid address "data.local_file": a data source is named data, its type and its name'
+    );
   });
 
   it('says in the plan and in the apply that it reads during apply', async () => {
@@ -308,6 +329,19 @@ describe('a data source in the graph', () => {
         block: 'data "local_file" "read"',
         module: 'module.site[1]',
       });
+    });
+
+    // The module holds only a data source, so no resource action is refused first.
+    it.each([
+      ['left for the apply', false],
+      ['read at plan', true],
+    ])('refuses a plan with a data source %s in an instance the configuration does not make', async (_, applied) => {
+      await writeModule('reader', 'variable "path" {}\ndata "local_file" "read" { path = var.path }');
+      if (applied) await apply(readers(2));
+      const saved = await newOrchestrator().plan(readers(2));
+
+      await expect(run(saved, readers(1))).rejects.toThrow('The plan has "module.reader[1].data.local_file.read", which the configuration does not declare');
+      expect(applied ? Object.keys(saved.dataSources) : saved.readAtApply).toContain('module.reader[1].data.local_file.read');
     });
 
     it('names the instance whose read fails', async () => {

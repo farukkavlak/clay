@@ -7,7 +7,7 @@ import { isRecord } from './isRecord';
 import { isType, types } from './Type';
 import type { Type } from './Type';
 
-export { Address, isInstanceKey, isModulePath, ModuleAddress } from './Address';
+export { Address, isInstanceKey, isModulePath, ModuleAddress, parseDataAddress } from './Address';
 export type { InstanceKey, ModuleStep } from './Address';
 export { ExactNumber, NumberError } from './ExactNumber';
 export { isRecord } from './isRecord';
