@@ -160,8 +160,10 @@ describe('a data source in the graph', () => {
     ['left for the apply', false],
     ['read at plan', true],
   ])('refuses a plan with a data source %s that the configuration does not declare, before anything runs', async (_, applied) => {
-    if (applied) await apply(writesAndReads('old'));
-    const saved = await newOrchestrator().plan(writesAndReads(applied ? 'old' : 'new'));
+    // No output, so the plan is refused at the data source and not at an output before it.
+    const reads = (content: string) => `${writes(content)}\ndata "local_file" "read" { path = local_file.a.path }`;
+    if (applied) await apply(reads('old'));
+    const saved = await newOrchestrator().plan(reads(applied ? 'old' : 'new'));
 
     await expect(run(saved, writes('newer'))).rejects.toThrow('The plan has "data.local_file.read", which the configuration does not declare');
     expect(await fs.readFile(file, 'utf8').catch(() => 'no file')).toBe(applied ? 'old' : 'no file');

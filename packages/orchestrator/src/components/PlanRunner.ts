@@ -38,7 +38,7 @@ function groupBy(actions: PlanAction[], key: (address: Address) => string): Map<
   return groups;
 }
 
-type Approved = Pick<Plan, 'actions' | 'dataSources' | 'readAtApply'>;
+type Approved = Pick<Plan, 'actions' | 'outputs' | 'dataSources' | 'readAtApply'>;
 
 /** State is written after every action, so a failed run loses nothing done before it. */
 export class PlanRunner {
@@ -55,6 +55,7 @@ export class PlanRunner {
   async *run(saved: Approved, config: LoadedConfig, graph: Graph<GraphNode>, state: State): AsyncGenerator<RunEvent> {
     const { actions } = saved;
     this.checkActionsMatch(actions, graph);
+    this.checkOutputsMatch(saved, config.mainProgram, state);
     const named = this.dataNamed(saved, graph);
 
     yield { type: 'planned', actions };
@@ -79,6 +80,20 @@ export class PlanRunner {
 
       if (action.type !== 'DELETE' && !declared) throw undeclared(address);
     }
+  }
+
+  /** By name. A plan shows each output that comes, goes or changes, so the others are the ones in state. */
+  private checkOutputsMatch({ outputs }: Approved, program: Statement[], state: State): void {
+    const kept = Object.keys(state.outputs ?? {}).filter((name) => !Object.hasOwn(outputs, name));
+    const shown = Object.keys(outputs).filter((name) => outputs[name].new !== undefined);
+    const planned = new Set([...kept, ...shown]);
+    const declared = program.filter((stmt) => stmt.type === 'Output');
+
+    for (const stmt of declared)
+      if (!planned.has(stmt.name))
+        throw withPlace(new Error(`The plan has no output "${stmt.name}", which the configuration declares`), stmt.position, spell(stmt), ModuleAddress.root);
+
+    for (const name of planned) if (!declared.some((stmt) => stmt.name === name)) throw new Error(`The plan has output "${name}", which the configuration does not declare`);
   }
 
   /** By block. A saved plan may name a data source with no block, whose value would be silently dropped. */
@@ -157,7 +172,7 @@ export class PlanRunner {
   private async *readData(
     { module, block }: Extract<GraphNode, { kind: 'data' }>,
     named: string[] = [],
-    { dataSources, readAtApply }: Omit<Approved, 'actions'>,
+    { dataSources, readAtApply }: Pick<Approved, 'dataSources' | 'readAtApply'>,
     state: State
   ): AsyncGenerator<RunEvent> {
     const made = this.modules.of(module).map((instance) => ({ instance, address: dataSourceAddress(scopeOf(instance), block.dataSourceType, block.name) }));

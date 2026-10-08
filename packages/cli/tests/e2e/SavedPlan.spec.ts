@@ -46,8 +46,11 @@ describe('a plan saved to a file', () => {
     }
   `;
 
+  const withOutput = (content: string) => `${fileConfig(content)}\noutput "text" { value = local_file.a.content }`;
   const written = async (config: string) => serializePlan(await newOrchestrator().plan(config), config, {});
   const save = async (config: string) => parsePlanFile(await written(config), 'plan.json');
+
+  const runs = (saved: Awaited<ReturnType<typeof save>>, config: string) => drain(newOrchestrator().runPlan(saved, config));
 
   beforeEach(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-saved-plan-'));
@@ -288,6 +291,44 @@ describe('a plan saved to a file', () => {
       'The plan has no action for local_file.f[1], which the configuration declares'
     );
     await expect(fs.access(path.join(dir, 'f0.txt'))).rejects.toThrow();
+  });
+
+  describe('whose outputs are not the ones the configuration declares', () => {
+    it('stops before anything runs at an output it shows and the configuration does not declare', async () => {
+      const saved = await save(withOutput('hello'));
+
+      await expect(runs(saved, fileConfig('hello'))).rejects.toThrow('The plan has output "text", which the configuration does not declare');
+      await expect(fs.access(path.join(dir, 'a.txt'))).rejects.toThrow();
+    });
+
+    it('stops before anything runs at an output the configuration declares and it never showed', async () => {
+      const saved = await save(fileConfig('hello'));
+
+      await expect(runs(saved, withOutput('hello'))).rejects.toMatchObject({
+        message: 'The plan has no output "text", which the configuration declares',
+        block: 'output "text"',
+        position: { line: 7, column: 1 },
+      });
+      await expect(fs.access(path.join(dir, 'a.txt'))).rejects.toThrow();
+    });
+
+    it('stops at an output it takes away and the configuration still declares', async () => {
+      await drain(start(newOrchestrator(), withOutput('hello')));
+      const saved = await save(fileConfig('hello'));
+
+      await expect(runs(saved, withOutput('hello'))).rejects.toThrow('The plan has no output "text", which the configuration declares');
+    });
+
+    it('runs with an output that stays as it is, which it does not show', async () => {
+      await drain(start(newOrchestrator(), withOutput('hello')));
+      const saved = await save(withOutput('hello'));
+
+      await runs(saved, withOutput('hello'));
+
+      expect(saved.outputs).toEqual({});
+      const state = await new LocalBackend(dir).read();
+      expect(state.outputs?.text.value).toBe('hello');
+    });
   });
 
   // A plan file carries its own names, so the apply checks them again.

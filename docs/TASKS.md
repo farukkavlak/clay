@@ -116,9 +116,16 @@ change each.
       the value the plan carried was dropped and one it left for the apply was never read.
       Now it is refused as a resource action with no block is: before anything runs when
       the block is gone, and before the block is read when only the instance is
-- [ ] A plan and a configuration that differ in their outputs run in silence. With an
-      output the plan shows and the configuration lacks, the run ends with no such output;
-      with one the configuration has and the plan never showed, the run writes it to state
+- [x] A plan and a configuration that differed in their outputs ran in silence. With an
+      output the plan showed and the configuration lacked, the run ended with no such
+      output; with one the configuration had and the plan never showed, the run wrote it
+      to state. Now the names are checked before anything runs. Terraform works an output
+      out again at apply and compares nothing
+- [ ] An output whose value at apply is not the one the plan showed is written in
+      silence. The names are checked, the values are not: a plan that shows
+      `url = "http://x"` run with a configuration that gives `"http://y"` ends complete.
+      The value is known only after everything has run, so what a refusal there does is
+      the call the fix makes
 - [x] A resource the configuration declares and the plan had no action for was skipped
       in silence: with `resource "local_file" "b"` added to the `config` in a plan file,
       `apply` said it was complete and `b` was never made. Now it is refused, as a data
@@ -518,8 +525,11 @@ by resource type, and no `provider` block exists yet.
       `readKeys`, which reads a `count` or a `for_each` again at apply, runs there too, and so do
       `expandCall`, which reads a module's `count` or `for_each` again, and the refusal of
       a saved plan's action in an instance of a module the configuration does not make
-- [ ] An output may be named `__proto__`. The runner collects outputs into a plain object,
-      where that name sets a prototype instead of a key, so the output disappears
+- [ ] An output may be named `__proto__`. The plan collects outputs into a plain object,
+      where that name sets a prototype instead of a key, so the plan never holds it and
+      the apply refuses it with
+      `The plan has no output "__proto__", which the configuration declares`. That blames
+      a plan that matches its configuration
 - [ ] `apply` says a missing file is missing the same way twice. A missing plan file and a
       missing configuration are reported with different prefixes today
 - [x] `Address.parse` says `got 1 parts` when it refuses an address
