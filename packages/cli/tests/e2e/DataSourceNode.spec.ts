@@ -23,6 +23,9 @@ const counted = (count: number) => `
   output "sites" { value = [for site in module.site : site.read] }
 `;
 
+// Only a data source, so a plan that does not match is refused at it and not at a resource before it.
+const READER = 'variable "path" {}\ndata "local_file" "read" { path = var.path }';
+
 describe('a data source in the graph', () => {
   let dir: string;
   let file: string;
@@ -322,21 +325,21 @@ describe('a data source in the graph', () => {
     });
 
     it('refuses a plan with no value for an instance the configuration makes', async () => {
-      const saved = await newOrchestrator().plan(counted(1));
+      await writeModule('reader', READER);
+      const saved = await newOrchestrator().plan(readers(1));
 
-      await expect(run(saved, counted(2))).rejects.toMatchObject({
-        message: 'The plan has no value for module.site[1].data.local_file.read, which the configuration declares',
+      await expect(run(saved, readers(2))).rejects.toMatchObject({
+        message: 'The plan has no value for module.reader[1].data.local_file.read, which the configuration declares',
         block: 'data "local_file" "read"',
-        module: 'module.site[1]',
+        module: 'module.reader[1]',
       });
     });
 
-    // The module holds only a data source, so no resource action is refused first.
     it.each([
       ['left for the apply', false],
       ['read at plan', true],
     ])('refuses a plan with a data source %s in an instance the configuration does not make', async (_, applied) => {
-      await writeModule('reader', 'variable "path" {}\ndata "local_file" "read" { path = var.path }');
+      await writeModule('reader', READER);
       if (applied) await apply(readers(2));
       const saved = await newOrchestrator().plan(readers(2));
 

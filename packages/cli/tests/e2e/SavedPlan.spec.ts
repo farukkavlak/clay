@@ -13,6 +13,8 @@ import { start } from './start';
 
 const moduleConfig = (text: string) => `output "text" { value = "${text}" }`;
 
+const calls = (keys: string) => `module "m" {\n  for_each = ${keys}\n  source = "./m"\n}`;
+
 const drain = async (events: AsyncGenerator<{ type: string; error?: Error }>) => {
   for await (const event of events) if (event.type === 'failed') throw event.error;
 };
@@ -230,16 +232,6 @@ describe('a plan saved to a file', () => {
     expect(await fs.readFile(path.join(dir, 'a.txt'), 'utf8')).toBe('planned');
   });
 
-  it('runs the actions it carries instead of planning again', async () => {
-    const saved = await save(chained());
-    const onlyA = saved.actions.filter((action) => action.name === 'a');
-
-    await drain(newOrchestrator().runPlan({ ...saved, actions: onlyA }, saved.config));
-
-    expect(await fs.readFile(path.join(dir, 'a.txt'), 'utf8')).toBe('hello');
-    await expect(fs.access(path.join(dir, 'b.txt'))).rejects.toThrow();
-  });
-
   it('stops when it names a resource the configuration no longer declares', async () => {
     const saved = await save(chained());
     const onlyB = saved.actions.filter((action) => action.name === 'b');
@@ -261,6 +253,41 @@ describe('a plan saved to a file', () => {
       'The plan has "module.m[0].local_file.a", which the configuration does not declare'
     );
     await expect(fs.access(path.join(dir, 'a.txt'))).rejects.toThrow();
+  });
+
+  // Planned again, `b` would be made. `a` runs first, as the plan says.
+  it('stops at a resource the configuration declares and the plan has no action for', async () => {
+    const saved = await save(fileConfig('hello'));
+
+    await expect(drain(newOrchestrator().runPlan(saved, chained()))).rejects.toMatchObject({
+      message: 'The plan has no action for local_file.b, which the configuration declares',
+      block: 'resource "local_file" "b"',
+      position: { line: 6, column: 5 },
+    });
+    expect(await fs.readFile(path.join(dir, 'a.txt'), 'utf8')).toBe('hello');
+    await expect(fs.access(path.join(dir, 'b.txt'))).rejects.toThrow();
+  });
+
+  it('stops at an instance of a module the configuration makes and the plan has no action for', async () => {
+    await fs.mkdir(path.join(dir, 'm'));
+    await fs.writeFile(path.join(dir, 'm', 'main.clay'), `resource "local_file" "a" { path = "${path.join(dir, 'm')}\${path.module}.txt" content = "x" }`, 'utf8');
+    const saved = await save(calls('["x"]'));
+
+    await expect(drain(newOrchestrator().runPlan(saved, calls('["x", "y"]')))).rejects.toMatchObject({
+      message: 'The plan has no action for module.m["y"].local_file.a, which the configuration declares',
+      module: 'module.m["y"]',
+    });
+  });
+
+  it('stops at an instance its count gives and the plan has no action for, before any instance runs', async () => {
+    const config = `resource "local_file" "f" {\n  count = 2\n  path = "${path.join(dir, 'f')}\${count.index}.txt"\n  content = "x"\n}`;
+    const saved = await save(config);
+    const first = saved.actions.filter((action) => action.key === 0);
+
+    await expect(drain(newOrchestrator().runPlan({ ...saved, actions: first }, config))).rejects.toThrow(
+      'The plan has no action for local_file.f[1], which the configuration declares'
+    );
+    await expect(fs.access(path.join(dir, 'f0.txt'))).rejects.toThrow();
   });
 
   // A plan file carries its own names, so the apply checks them again.

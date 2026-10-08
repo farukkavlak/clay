@@ -119,9 +119,11 @@ change each.
 - [ ] A plan and a configuration that differ in their outputs run in silence. With an
       output the plan shows and the configuration lacks, the run ends with no such output;
       with one the configuration has and the plan never showed, the run writes it to state
-- [ ] A resource the configuration declares and the plan has no action for is skipped in
-      silence: with `resource "local_file" "b"` added to the `config` in a plan file,
-      `apply` says it is complete and `b` is never made. A data source there is refused
+- [x] A resource the configuration declares and the plan had no action for was skipped
+      in silence: with `resource "local_file" "b"` added to the `config` in a plan file,
+      `apply` said it was complete and `b` was never made. Now it is refused, as a data
+      source there is, before any instance of the block runs. Terraform builds the apply
+      from the plan alone and says nothing
 - [ ] A data address in a plan file is checked in the run, not at the file. One that is
       no address is shown by `apply` and then fails with no file named, and one in both
       `dataSources` and `readAtApply` is taken from the first and never read

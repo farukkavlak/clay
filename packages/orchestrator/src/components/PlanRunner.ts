@@ -114,6 +114,18 @@ export class PlanRunner {
     for (const action of actions) if (action.key === undefined || !keys.includes(action.key)) throw undeclared(Address.of(action));
   }
 
+  /** A plan has an action for every instance, a no-op for one that stays, so one with none would be silently skipped. */
+  private checkEveryInstancePlanned(address: Address, block: ResourceBlock, actions: PlanAction[]): void {
+    const keys = this.instances.keysOf(address.toString()) ?? [undefined];
+
+    for (const key of keys) {
+      if (actions.some((action) => action.key === key)) continue;
+
+      const instance = new Address(address.module, address.resourceType, address.name, key);
+      throw withPlace(new Error(`The plan has no action for ${instance}, which the configuration declares`), block.position, spell(block), instance);
+    }
+  }
+
   private async *applyInOrder(
     { actions, ...read }: Approved,
     named: Map<string, string[]>,
@@ -190,6 +202,7 @@ export class PlanRunner {
     for (const at of blocks) {
       const instanceActions = byInstance.get(at.toString()) ?? [];
       this.readKeys(at, block, instanceActions, state);
+      this.checkEveryInstancePlanned(at, block, instanceActions);
 
       for (const action of instanceActions) if (!(yield* this.step(action, state))) return false;
     }
