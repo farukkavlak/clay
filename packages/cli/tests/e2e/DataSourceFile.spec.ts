@@ -69,7 +69,7 @@ describe('a local_file data source', () => {
     await fs.mkdir(path.join(dir, 'm'));
     await fs.writeFile(path.join(dir, 'm', 'main.clay'), config, 'utf8');
 
-    await expect(newOrchestrator().plan(root(config))).rejects.toMatchObject({ message: 'Data source "data.local_file.nope" not found (or not resolved yet)' });
+    await expect(newOrchestrator().plan(root(config))).rejects.toMatchObject({ message: '"data.local_file.nope" is not declared in the configuration' });
   });
 
   it('names a data source by its address when the attribute read from it is missing', async () => {

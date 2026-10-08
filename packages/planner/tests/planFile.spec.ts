@@ -6,7 +6,7 @@ import { parsePlanFile, Plan, serializePlan } from '../src/index';
 // Empty schemas: these tests are about the file, not the schemas.
 const schemas = { null_resource: {}, x: {} };
 
-const emptyPlan: Plan = { serial: 0, actions: [], outputs: {}, prevRun: {}, prior: {}, schemas, dataSources: {} };
+const emptyPlan: Plan = { serial: 0, actions: [], outputs: {}, prevRun: {}, prior: {}, schemas, dataSources: {}, readAtApply: [] };
 
 const aPlanFile = (plan: Plan = emptyPlan) => serializePlan(plan, 'resource "a" "b" {}', { 'm/main.clay': '' });
 
@@ -30,6 +30,7 @@ describe('reading a plan file', () => {
       prior: {},
       schemas,
       dataSources: {},
+      readAtApply: [],
       actions: [
         {
           type: 'UPDATE',
@@ -58,6 +59,7 @@ describe('reading a plan file', () => {
       prior: {},
       schemas,
       dataSources: {},
+      readAtApply: [],
       actions: [
         {
           type: 'UPDATE',
@@ -86,6 +88,7 @@ describe('reading a plan file', () => {
       prior: {},
       schemas,
       dataSources: {},
+      readAtApply: [],
       actions: [
         {
           type: 'CREATE',
@@ -144,6 +147,7 @@ describe('reading a plan file', () => {
       prior: {},
       schemas,
       dataSources: {},
+      readAtApply: [],
     };
 
     expect(parsePlanFile(aPlanFile(plan), 'tfplan.json').outputs.tags.new?.value).toEqual(tags);
@@ -189,6 +193,7 @@ describe('reading a plan file', () => {
       prior: {},
       schemas,
       dataSources: {},
+      readAtApply: [],
     };
 
     const outputs = parsePlanFile(aPlanFile(plan), 'tfplan.json').outputs;
@@ -212,6 +217,7 @@ describe('reading a plan file', () => {
       prior: {},
       schemas,
       dataSources: {},
+      readAtApply: [],
       actions: [
         { type: 'DELETE', resourceType: 'null_resource', name: 'a', key: 0 },
         { type: 'DELETE', resourceType: 'null_resource', name: 'a', key: 'x.y' },
@@ -235,6 +241,7 @@ describe('reading a plan file', () => {
       prior: {},
       schemas,
       dataSources: {},
+      readAtApply: [],
     };
 
     expect(parsePlanFile(aPlanFile(plan), 'tfplan.json').actions[0].modulePath).toEqual(modulePath);
@@ -287,6 +294,7 @@ describe('reading a plan file', () => {
       prior: {},
       schemas,
       dataSources: {},
+      readAtApply: [],
       actions: [
         { type: 'NO_OP', resourceType: 'null_resource', name: 'a', key: 0, movedFrom: 'null_resource.a' },
         { type: 'NO_OP', resourceType: 'null_resource', name: 'b', movedFrom: 'null_resource.b[0]' },
@@ -328,6 +336,8 @@ describe('reading a plan file', () => {
       'tfplan.json is not a plan file: the key of "x.a": 1.5 is not a whole number',
     ],
     ['an entry filed under another address', { prevRun: { 'x.b': { resourceType: 'x', name: 'a', attributes: {} } } }, 'tfplan.json is not a plan file: "x.b" holds x.a'],
+    ['no list of data sources the apply reads', { readAtApply: undefined }, /^tfplan\.json is not a plan file$/],
+    ['a data source the apply reads that is not an address', { readAtApply: [1] }, /^tfplan\.json is not a plan file$/],
   ])('refuses a plan file with %s', (_, broken, message) => {
     expect(read({ ...fields(), ...broken })).toThrow(message);
   });
@@ -378,6 +388,7 @@ describe('reading a plan file', () => {
       prior: {},
       schemas,
       dataSources: {},
+      readAtApply: [],
       actions: [
         { type: 'CREATE', resourceType: 'null_resource', name: 'a', attributes: { n: { type: 'String', value: 'x', position: { file: 'main.clay', line: 1, column: 1 } } } },
       ],
@@ -394,6 +405,7 @@ describe('reading a plan file', () => {
       prior: {},
       schemas,
       dataSources: {},
+      readAtApply: [],
       actions: [
         {
           type: 'CREATE',

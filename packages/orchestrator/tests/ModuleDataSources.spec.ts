@@ -157,6 +157,6 @@ module "app" {
     ]);
 
     // A module sees only what it is passed, not the root's data sources.
-    await expect(apply(orchestrator, rootConfig)).rejects.toThrow('Data source "data.aws_ami.root_ami" not found');
+    await expect(apply(orchestrator, rootConfig)).rejects.toThrow('"data.aws_ami.root_ami" is not declared in the configuration');
   });
 });

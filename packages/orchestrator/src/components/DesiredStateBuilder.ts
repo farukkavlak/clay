@@ -1,6 +1,6 @@
 import { Address, ModuleAddress, Output, Resource, Schema, State, UNKNOWN } from '@clay/contracts';
 import { Graph } from '@clay/graph';
-import { AttributeValue, ResourceBlock, spell, spellReference, Statement } from '@clay/parser';
+import { AttributeValue, DataBlock, ResourceBlock, spell, spellReference, Statement } from '@clay/parser';
 import { DesiredResource, hasChanges } from '@clay/planner';
 import { moveResource } from '@clay/state';
 
@@ -9,7 +9,7 @@ import { countFrom } from '../count';
 import { givenTo } from '../declared';
 import { eachFrom } from '../forEach';
 import { Instances } from '../Instances';
-import { Context, contextIn, enclosing, scopeOf } from '../keys';
+import { Context, contextIn, dataSourceAddress, enclosing, scopeOf } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
 import { Planned } from '../Planned';
 import { tryAt, withPlace } from '../place';
@@ -18,7 +18,8 @@ import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { Reference, ReferenceScanner } from '../resolvers/ReferenceScanner';
 import { UnresolvedReferenceError } from '../resolvers/UnresolvedReferenceError';
 import { ScopeManager } from '../scope/ScopeManager';
-import { Value, valueOf } from '../Value';
+import { carried, Value, valueOf } from '../Value';
+import { DataSourceReader } from './DataSourceReader';
 import { DependencyGraphBuilder, GraphNode, OutputNode, ValueNode } from './DependencyGraphBuilder';
 import { LoadedResource } from './ModuleLoader';
 import { ResourcePlan, ResourcePlanner } from './ResourcePlanner';
@@ -26,6 +27,10 @@ import { ResourcePlan, ResourcePlanner } from './ResourcePlanner';
 export interface DesiredState {
   resources: DesiredResource[];
   outputs: Record<string, Output>;
+  /** What each data source read at plan gave, by address. */
+  dataSources: Record<string, Record<string, Output>>;
+  /** Data sources that wait for the apply, since what they read changes in it. */
+  readAtApply: string[];
 }
 
 /** `module.a` for `module.a.module.b` and `module.a.module.c`. */
@@ -51,7 +56,8 @@ export class DesiredStateBuilder {
     private instances: Instances,
     private modules: ModuleInstances,
     private planned: Planned,
-    private resourcePlanner: ResourcePlanner
+    private resourcePlanner: ResourcePlanner,
+    private reader: DataSourceReader
   ) {}
 
   /** Applies count moves to `state`, a copy the plan never writes, and plans the actions against it. */
@@ -60,18 +66,60 @@ export class DesiredStateBuilder {
     this.schemas = schemas;
     const byKey = new Map(loadedResources.map((r) => [r.address.toString(), r]));
     const resources: DesiredResource[] = [];
-    const outputs: Record<string, Output> = {};
+    const desired: DesiredState = { resources, outputs: {}, dataSources: {}, readAtApply: [] };
 
     for (const layer of graph.topologicalSort())
       for (const key of layer) {
         const node = graph.getNode(key)!;
 
-        if (node.kind === 'module') this.planCall(node, state);
-        else if (node.kind === 'resource') resources.push(...(await this.planResource(key, byKey.get(key)!, graph, state)));
-        else for (const instance of this.modules.of(node.module)) this.planValue(node, instance, state, outputs);
+        switch (node.kind) {
+          case 'module': {
+            this.planCall(node, state);
+            break;
+          }
+          case 'resource': {
+            resources.push(...(await this.planResource(key, byKey.get(key)!, graph, state)));
+            break;
+          }
+          case 'data': {
+            await this.planData(key, node, graph, state, desired);
+            break;
+          }
+          default: {
+            for (const instance of this.modules.of(node.module)) this.planValue(node, instance, state, desired.outputs);
+          }
+        }
       }
 
-    return { resources, outputs };
+    return desired;
+  }
+
+  /** A module with a data source has one instance, since a repeated one is refused at load. */
+  private async planData(key: string, { module, block }: Extract<GraphNode, { kind: 'data' }>, graph: Graph<GraphNode>, state: State, desired: DesiredState): Promise<void> {
+    const inputs = this.resolveInputs(block, state, module);
+    const address = dataSourceAddress(scopeOf(module), block.dataSourceType, block.name);
+
+    if (this.waitsForApply(key, graph, module)) {
+      this.reader.defer(block, inputs, module);
+      desired.readAtApply.push(address);
+    } else desired.dataSources[address] = carried(await this.reader.read(block, inputs, module));
+  }
+
+  /**
+   * Read now, it would see the world before the apply changes a resource it reads, even through a variable or an output.
+   * A value not known yet comes only from such a change, so its inputs are known whenever it is read now.
+   */
+  private waitsForApply(key: string, graph: Graph<GraphNode>, module: ModuleAddress): boolean {
+    return this.instancesOf(this.graphBuilder.resourceDependencies(graph, key), module).some((instance) => this.planned.get(instance) !== undefined);
+  }
+
+  /** One value at a time, so an error points at the value, not the block. */
+  private resolveInputs(block: DataBlock, state: State, module: ModuleAddress): Record<string, Value> {
+    const declaration = spell(block);
+
+    return Object.fromEntries(
+      Object.entries(block.attributes).map(([name, value]) => [name, tryAt(value.position, declaration, module, () => this.resolveOrUnknown(value, state, module))])
+    );
   }
 
   private planCall({ module, block }: Extract<GraphNode, { kind: 'module' }>, state: State): void {

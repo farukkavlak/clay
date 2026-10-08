@@ -14,6 +14,11 @@ export function changesNothing(plan: Plan): boolean {
   return !plan.actions.some((action) => changes(action)) && Object.keys(plan.outputs).length === 0 && changedOutside(plan).length === 0;
 }
 
+/** `will be read during apply` when `planned`, `read` after. */
+export function readLine(address: string, planned: boolean): string {
+  return `  ${styleText('cyan', '<=')} ${address} ${planned ? 'will be read during apply' : 'read'}`;
+}
+
 function actionSymbol(actionType: PlanAction['type']): string {
   if (actionType === 'CREATE') return styleText('green', '+');
   if (actionType === 'UPDATE') return styleText('yellow', '~');
@@ -158,6 +163,8 @@ export function displayPlan(plan: Plan): void {
   if (changing.length > 0) {
     console.log(styleText('bold', '\nClay will perform the following actions:\n'));
     for (const action of changing) displayAction(action, plan.schemas);
+    // Only a change makes a read wait, so reads come with actions. The summary counts no read.
+    for (const address of plan.readAtApply) console.log(readLine(address, true));
   }
 
   displayOutputChanges(plan.outputs);

@@ -1,4 +1,4 @@
-import { containsUnknown, ExactNumber, isRecord, own, Type, typeAt, types } from '@clay/contracts';
+import { containsUnknown, ExactNumber, isRecord, Output, own, Type, typeAt, types } from '@clay/contracts';
 
 /**
  * `data` is a string, an `ExactNumber`, a boolean, null, an array (list, set, tuple) or a record (map, object), with UNKNOWN at any depth.
@@ -77,4 +77,9 @@ export function described(value: Value): string {
 /** The data alone, as providers, plans and state hold it; the schema types it again when read. */
 export function plainOf(values: Record<string, Value>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(values).map(([name, value]) => [name, value.data]));
+}
+
+/** As a plan or a state holds each value, beside its type. */
+export function carried(values: Record<string, Value>): Record<string, Output> {
+  return Object.fromEntries(Object.entries(values).map(([name, { type, data }]) => [name, { value: data, type }]));
 }

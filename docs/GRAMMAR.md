@@ -357,8 +357,8 @@ An output is read from one instance: `module.web[0].url`. On a call with count,
 refused.
 
 A data source in a module called with count or for_each, or in a module that one calls,
-is refused where it is written: data sources are read once, as the configuration loads,
-before a module has instances.
+is refused where it is written: a data source is one node in the graph, read once, so a
+module with instances cannot have one yet.
 
 Adding `count` to a module that exists moves what is in it to `module.name[0]`, and
 taking `count` off moves `module.name[0]` back and destroys the other instances, as for a

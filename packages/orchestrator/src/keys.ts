@@ -26,8 +26,14 @@ export function blockKey(address: Address): string {
   return new Address(address.module.withoutKeys(), address.resourceType, address.name).toString();
 }
 
+/** Apart from a resource's key, since a data source and a resource may share a type and a name. */
 export function dataSourceKey(scope: string, type: string, name: string): string {
-  return scope ? `${scope}.${type}.${name}` : `${type}.${name}`;
+  return scope ? `${scope}.data:${type}.${name}` : `data:${type}.${name}`;
+}
+
+/** `module.m.data.local_file.f`, as a plan names it. */
+export function dataSourceAddress(scope: string, type: string, name: string): string {
+  return `${scope ? `${scope}.` : ''}data.${type}.${name}`;
 }
 
 /** Module inputs are read in the caller, for one module instance, whose key is `count.index` or `each.key`. */

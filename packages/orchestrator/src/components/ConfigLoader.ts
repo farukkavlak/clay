@@ -1,19 +1,17 @@
-import { ModuleAddress, Output, Schema, State } from '@clay/contracts';
+import { ModuleAddress, Schema } from '@clay/contracts';
 import { AttributeValue, CONFIG_FILE, ConfigError, DataBlock, Lexer, Parser, spell, Statement } from '@clay/parser';
-import { Plan } from '@clay/planner';
 
 import { checkNames } from '../checkAttributes';
 import { checkDefaults } from '../declared';
-import { Value, valueOf } from '../Value';
+import { Value } from '../Value';
 import { Instances } from '../Instances';
 import { ModuleInstances } from '../ModuleInstances';
 import { Planned } from '../Planned';
 import { ProviderRegistry } from '../ProviderRegistry';
-import { dataSourceKey, scopeOf } from '../keys';
+import { scopeOf } from '../keys';
 import { tryAt, withPlace } from '../place';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { ScopeManager } from '../scope/ScopeManager';
-import { DataSourceReader } from './DataSourceReader';
 import { LoadedModule, LoadedResource, ModuleLoader } from './ModuleLoader';
 
 export interface LoadedConfig {
@@ -21,11 +19,6 @@ export interface LoadedConfig {
   loadedResources: LoadedResource[];
   loadedModules: LoadedModule[];
   schemas: Map<string, Schema>;
-  dataSources: Plan['dataSources'];
-}
-
-function carried(read: Record<string, Value>): Record<string, Output> {
-  return Object.fromEntries(Object.entries(read).map(([name, { type, data }]) => [name, { value: data, type }]));
 }
 
 export class ConfigLoader {
@@ -38,14 +31,12 @@ export class ConfigLoader {
     private dataSchemas: Map<string, Schema>,
     private resolver: ReferenceResolver,
     private providers: ProviderRegistry,
-    private reader: DataSourceReader,
     private instances: Instances,
     private modules: ModuleInstances,
     private planned: Planned
   ) {}
 
-  /** With `planned`, the values of a plan, no data source is read again. */
-  async load(configContent: string, state: State, planned?: Plan['dataSources']): Promise<LoadedConfig> {
+  async load(configContent: string): Promise<LoadedConfig> {
     const mainProgram = new Parser(new Lexer(configContent, CONFIG_FILE).tokenize()).parse();
 
     this.scopeManager.clear();
@@ -64,11 +55,10 @@ export class ConfigLoader {
     await this.loadSchemas(loadedResources);
     await this.loadDataSchemas(loadedModules);
 
+    // Each data source is read, or left for the apply, in its turn in the graph.
     this.dataSources.clear();
-    for (const mod of loadedModules) await this.readDataSources(mod.program, state, mod.address, planned);
 
-    const dataSources = Object.fromEntries([...this.dataSources].map(([key, read]) => [key, carried(read)]));
-    return { mainProgram, loadedResources, loadedModules, schemas: this.schemas, dataSources };
+    return { mainProgram, loadedResources, loadedModules, schemas: this.schemas };
   }
 
   /** Before anything reads a variable or an output, so a bad default is reported at the default. */
@@ -113,6 +103,7 @@ export class ConfigLoader {
         const schema = this.dataSchemas.get(stmt.dataSourceType) ?? (await this.dataSchemaOf(stmt, address));
         this.dataSchemas.set(stmt.dataSourceType, schema);
         checkNames(stmt, schema, address);
+        this.checkReadOnce(stmt, address);
       }
   }
 
@@ -134,50 +125,12 @@ export class ConfigLoader {
       }
   }
 
-  private async readDataSources(program: Statement[], state: State, scopeAddress: ModuleAddress, planned?: Plan['dataSources']): Promise<void> {
-    const scope = scopeOf(scopeAddress);
-
-    for (const stmt of program)
-      if (stmt.type === 'Data') {
-        const key = dataSourceKey(scope, stmt.dataSourceType, stmt.name);
-
-        this.dataSources.set(key, planned ? this.plannedRead(stmt, planned, key, scopeAddress) : await this.read(stmt, state, scopeAddress));
-      }
-  }
-
-  private async read(stmt: DataBlock, state: State, scopeAddress: ModuleAddress): Promise<Record<string, Value>> {
-    this.checkReadOnce(stmt, scopeAddress);
-
-    return await this.reader.read(stmt, this.resolveInputs(stmt, state, scopeAddress), scopeAddress);
-  }
-
-  /** A plan that lacks one was made from another configuration. */
-  private plannedRead(stmt: DataBlock, planned: Plan['dataSources'], key: string, scopeAddress: ModuleAddress): Record<string, Value> {
-    if (!Object.hasOwn(planned, key)) {
-      const missing = new Error(`The plan has no value for data.${stmt.dataSourceType}.${stmt.name}, which the configuration declares`);
-      throw withPlace(missing, stmt.position, spell(stmt), scopeAddress);
-    }
-
-    return Object.fromEntries(Object.entries(planned[key]).map(([name, { type, value }]) => [name, valueOf(type, value)]));
-  }
-
-  /** A data source is read once at load, before modules have instances, so a repeated module cannot have one yet. */
+  /** A data source is one graph node, read once, so a module with instances cannot have one yet. */
   private checkReadOnce(stmt: DataBlock, module: ModuleAddress): void {
     const repeated = module.path.some((_, depth) => this.modules.repetitionOf(new ModuleAddress(module.path.slice(0, depth + 1))) !== undefined);
     if (!repeated) return;
 
     const place = { block: spell(stmt), module: scopeOf(module) };
     throw new ConfigError(`${spell(stmt)} is in a module called with count or for_each, where a data source cannot be read yet`, stmt.position, place);
-  }
-
-  /** One value at a time, so an error points at the value, not the block. */
-  private resolveInputs(stmt: DataBlock, state: State, scopeAddress: ModuleAddress): Record<string, Value> {
-    const declaration = spell(stmt);
-    const inputs: Record<string, Value> = {};
-
-    for (const [key, value] of Object.entries(stmt.attributes))
-      inputs[key] = tryAt(value.position, declaration, scopeAddress, () => this.resolver.resolveValue(value, state, scopeAddress));
-
-    return inputs;
   }
 }

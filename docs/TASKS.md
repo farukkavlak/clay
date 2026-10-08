@@ -193,9 +193,6 @@ configuration hits each of these early.
 - [x] `optional(type)` and `optional(type, default)` on an attribute of a variable's
       object type. One left out, or given `null`, takes its default, or `null` where it
       names none
-- [ ] `locals { name = "${var.prefix}-x" }`: a value a module works out once and reads by
-      name as `local.name`. A variable default is a constant, so today such a value is
-      written out again wherever it is read
 - [ ] `sensitive = true` on an output: its value is hidden in what `plan`, `apply` and
       `clay output` print, and `clay output --json` still gives it. Terraform prints
       `<sensitive>` and keeps the flag beside the value and its type in state, where the
@@ -366,27 +363,33 @@ length below 1.
 
 ### Data sources in the graph
 
-Data sources are read while the config loads, before any resource exists and before any
-module output has a value, so one that reads either fails at plan.
+Data sources were read while the config loaded, before any resource existed and before any
+module output had a value, so one that read either failed at plan.
 
-- [ ] Data sources are graph nodes, read in dependency order and once per run. Read at load,
-      one whose input reads a resource the plan changes gets the value in state, while a
-      resource that reads it gets the value the plan sets. One that reads every instance of
-      a resource with `count` or `for_each`, `local_file.logs`, is refused, since no count
-      is read yet
+- [x] Data sources are graph nodes, read in dependency order and once per run. Read at load,
+      one whose input read a resource the plan changed got the value in state, while a
+      resource that read it got the value the plan set. One that read every instance of
+      a resource with `count` or `for_each`, `local_file.logs`, was refused, since no count
+      was read yet. Now each is read after what it reads
 - [ ] A data source in a module called with `count` or `for_each` is refused, since it is
-      read before the module has instances. As a graph node it is read once for each
-      instance of its module; test that end to end with a module called with `count` and one
+      one node, read once. It should be read once for each instance of its module; test that end to end with a module called with `count` and one
       with `for_each`, nested ones too
-- [ ] `count` and `for_each` on a data source, as on a resource, once it is a graph node:
-      read at load, it cannot wait on what its count reads
-- [ ] A data source fed by a pending resource is `(known after apply)`
-- [x] Their values travel in the plan, as in Terraform, so `apply` reads none of them
-      again. `runPlan` still parses and builds the graph on its own, since a saved plan
+- [ ] `count` and `for_each` on a data source, as on a resource
+- [x] A data source fed by a pending resource is `(known after apply)`. It waits for the
+      apply when what it reads is not known yet, or when it reads a resource the plan
+      changes, through variables and module outputs too, so it never reads the world
+      before the apply. The plan shows `<= data.x.y will be read during apply`. Terraform
+      waits only for a resource read directly, so a local in between reads the old value
+- [x] Their values travel in the plan, as in Terraform, so `apply` reads none the plan
+      read again. `runPlan` still parses and builds the graph on its own, since a saved plan
       brings its own configuration
 - [x] `local_file` as a data source reads the file
 - [ ] `clay validate` stops reading them. Checking a configuration asks the provider for
       real data today, so validating needs whatever the data source talks to
+- [ ] `locals { name = "${var.prefix}-x" }`: a value a module works out once and reads by
+      name as `local.name`. A variable default is a constant, so today such a value is
+      written out again wherever it is read. Waits for the data sources above, so a local
+      is a node worked out once for each module instance and a data source can read it
 
 ### Parallel apply
 
@@ -486,7 +489,7 @@ by resource type, and no `provider` block exists yet.
       plain errors, and one of them means "not in state yet", so it cannot be wrapped blindly
 - [ ] "Did you mean": a reference to a name one edit away from a declared one says so
 - [ ] Provider errors carry what to do next, not only what went wrong
-- [ ] A module output that does not exist is reported two ways. Read from a resource,
+- [x] A module output that does not exist is reported two ways. Read from a resource,
       the graph says `module "m" has no output "x"`. Read from a data source, which
       loads before the graph, the resolver says
       `Output "x" not found in module "module.m"`, with the scope key where the

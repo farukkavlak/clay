@@ -75,12 +75,14 @@ export interface Plan {
   prior: Record<string, Resource>;
   /** Lets a saved plan tell sets from lists without the provider. */
   schemas: Record<string, Schema>;
-  /** What each data source gave at plan, so the apply reads none of them again. */
+  /** What each data source read at plan gave, by address, so the apply reads none of them again. */
   dataSources: Record<string, Record<string, Output>>;
+  /** Data sources the apply reads, after what they read has changed. */
+  readAtApply: string[];
 }
 
 /** Bump on any change to the file's shape after a release, so an older plan file is refused instead of misread. */
-export const PLAN_FILE_VERSION = '21.0';
+export const PLAN_FILE_VERSION = '22.0';
 
 export interface PlanFile extends Plan {
   version: string;
@@ -166,6 +168,7 @@ export function serializePlan(plan: Plan, configContent: string, modules: Record
     prior: plan.prior,
     schemas: plan.schemas,
     dataSources: plan.dataSources,
+    readAtApply: plan.readAtApply,
   };
 
   return JSON.stringify(file, undefined, 2);
@@ -267,7 +270,9 @@ function isPlan(plan: Partial<Plan>): plan is Plan {
     plan.actions.every((action) => isAction(action)) &&
     isOutputChanges(plan.outputs) &&
     isSchemas(plan.schemas) &&
-    isDataSources(plan.dataSources)
+    isDataSources(plan.dataSources) &&
+    Array.isArray(plan.readAtApply) &&
+    plan.readAtApply.every((address) => typeof address === 'string')
   );
 }
 
