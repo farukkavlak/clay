@@ -1,5 +1,5 @@
 import { Address, Schema, Type, types } from '@clay/contracts';
-import { CountReference, EachReference, ModuleOutputReference, Position, ResourceReference, Step, VariableReference } from '@clay/parser';
+import { CountReference, DataReference, EachReference, ModuleOutputReference, Position, ResourceReference, Step, VariableReference } from '@clay/parser';
 
 import { Instances } from '../Instances';
 import { blockKey, Context, moduleOf, scopeOf } from '../keys';
@@ -8,14 +8,15 @@ import { placed } from '../place';
 import { ScopeManager } from '../scope/ScopeManager';
 import { everyOf, everyType, instanceType, noAttribute, outputsType, readCall, readInstance } from './instance';
 
-/** Data sources and paths are known at load, so they are not here. */
-type Unread = VariableReference | ModuleOutputReference | ResourceReference | CountReference | EachReference;
+/** Paths are known at load, so they are not here. */
+type Unread = VariableReference | DataReference | ModuleOutputReference | ResourceReference | CountReference | EachReference;
 
 /** Types for references read as written, before any instance exists. */
 export class WrittenTypes {
   constructor(
     private scopeManager: ScopeManager,
     private schemas: Map<string, Schema>,
+    private dataSchemas: Map<string, Schema>,
     private instances: Instances,
     private modules: ModuleInstances
   ) {}
@@ -28,8 +29,18 @@ export class WrittenTypes {
     if (reference.kind === 'count') return { type: types.number, path: reference.path };
     if (reference.kind === 'each') return { type: reference.name === 'key' ? types.string : types.dynamic, path: reference.path };
     if (reference.kind === 'module') return this.callType(reference, where, position);
+    if (reference.kind === 'data') return this.dataType(reference, position);
 
     return this.resourceType(reference, where, position);
+  }
+
+  /** The graph has already refused undeclared data sources, and every one has its schema. */
+  private dataType(reference: DataReference, position: Position): { type: Type; path: Step[] } {
+    const schema = this.dataSchemas.get(reference.type)!;
+    if (!Object.hasOwn(schema, reference.attribute))
+      throw placed(`Attribute "${reference.attribute}" not found on data source "data.${reference.type}.${reference.name}"`, position);
+
+    return { type: schema[reference.attribute].type, path: reference.path };
   }
 
   /** An output that names no type is `dynamic`. */

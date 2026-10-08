@@ -9,7 +9,7 @@ import { styleText } from 'node:util';
 import { confirm } from '../confirm';
 import { newOrchestrator } from '../engine';
 import { describeError } from '../describeError';
-import { actionLine, changesNothing, displayPlan } from '../showPlan';
+import { actionLine, changesNothing, displayPlan, readLine } from '../showPlan';
 import { refreshOption } from '../refreshOption';
 
 /** Counts as the plan summary does: a replace is one add and one destroy. */
@@ -30,6 +30,7 @@ function forgotten(plan: Plan): number {
 
 function reportEvent(event: RunEvent): void {
   if (event.type === 'applied') console.log(actionLine(event.action, false));
+  if (event.type === 'read') console.log(readLine(event.address, false));
   if (event.type === 'failed') {
     if (event.stateError) console.error(styleText('red', 'The state could not be saved:'), event.stateError.message);
     throw new Error(`${Address.of(event.action).toString()}: ${event.error.message}`);

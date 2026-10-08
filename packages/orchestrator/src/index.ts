@@ -1,5 +1,5 @@
-import { emptyState, Output, Provider, Resource, Schema, State } from '@clay/contracts';
-import { DesiredResource, outputChanges, plan, Plan } from '@clay/planner';
+import { emptyState, Provider, Resource, Schema, State } from '@clay/contracts';
+import { outputChanges, plan, Plan } from '@clay/planner';
 import { StateManager } from '@clay/state';
 
 import { asError } from './asError';
@@ -7,7 +7,7 @@ import { ActionExecutor } from './components/ActionExecutor';
 import { ConfigLoader } from './components/ConfigLoader';
 import { DataSourceReader } from './components/DataSourceReader';
 import { DependencyGraphBuilder } from './components/DependencyGraphBuilder';
-import { DesiredStateBuilder } from './components/DesiredStateBuilder';
+import { DesiredState, DesiredStateBuilder } from './components/DesiredStateBuilder';
 import { ModuleLoader } from './components/ModuleLoader';
 import { PlanRunner } from './components/PlanRunner';
 import { ResourcePlanner } from './components/ResourcePlanner';
@@ -54,31 +54,20 @@ export class Orchestrator {
     const instances = new Instances();
     const modules = new ModuleInstances();
     const planned = new Planned();
-    const resolver = new ReferenceResolver(scopes, dataSources, schemas, instances, modules, planned);
+    const resolver = new ReferenceResolver(scopes, dataSources, schemas, dataSchemas, instances, modules, planned);
     const scanner = new ReferenceScanner(modules);
     const graphBuilder = new DependencyGraphBuilder(scanner, instances, modules);
     const resourcePlanner = new ResourcePlanner(providers);
+    const reader = new DataSourceReader(providers, dataSchemas, dataSources);
 
     return new Orchestrator(
       stateManager,
       providers,
-      new ConfigLoader(
-        new ModuleLoader(files, scopes),
-        scopes,
-        dataSources,
-        schemas,
-        dataSchemas,
-        resolver,
-        providers,
-        new DataSourceReader(providers, dataSchemas),
-        instances,
-        modules,
-        planned
-      ),
+      new ConfigLoader(new ModuleLoader(files, scopes), scopes, dataSources, schemas, dataSchemas, resolver, providers, instances, modules, planned),
       graphBuilder,
       new WrittenCheck(resolver, scopes, schemas),
-      new DesiredStateBuilder(scopes, scanner, resolver, graphBuilder, instances, modules, planned, resourcePlanner),
-      new PlanRunner(stateManager, new ActionExecutor(providers, resolver, resourcePlanner), scopes, resolver, instances, modules)
+      new DesiredStateBuilder(scopes, scanner, resolver, graphBuilder, instances, modules, planned, resourcePlanner, reader),
+      new PlanRunner(stateManager, new ActionExecutor(providers, resolver, resourcePlanner), scopes, resolver, instances, modules, reader)
     );
   }
 
@@ -92,7 +81,7 @@ export class Orchestrator {
     const prior = refresh ? await this.refresh(prevRun) : prevRun;
     // Planning applies count moves to a copy; the plan keeps the resources at their old addresses.
     const currentState = { ...prior, resources: copyResources(prior.resources) };
-    const { desiredResources, outputs, dataSources } = await this.resolveAndCheck(configContent, currentState);
+    const { resources: desiredResources, outputs, dataSources, readAtApply } = await this.resolveAndCheck(configContent, currentState);
 
     const actions = plan(desiredResources, currentState);
     // The refresh only drops resources, so prior has no type prevRun lacks.
@@ -106,6 +95,7 @@ export class Orchestrator {
       prior: prior.resources,
       schemas: await this.schemasOf(held.map((resource) => resource.resourceType)),
       dataSources,
+      readAtApply,
     };
   }
 
@@ -130,9 +120,9 @@ export class Orchestrator {
       // The actions were planned against the refreshed resources, so they run on those.
       state.resources = copyResources(saved.prior);
 
-      const config = await this.loader.load(configContent, state, saved.dataSources);
+      const config = await this.loader.load(configContent);
       const graph = this.graphBuilder.buildExecutionGraph(config.loadedResources, config.loadedModules);
-      yield* this.runner.run(saved.actions, config, graph, state);
+      yield* this.runner.run(saved, config, graph, state);
     } finally {
       await this.stateManager.unlock();
     }
@@ -165,17 +155,12 @@ export class Orchestrator {
     }
   }
 
-  private async resolveAndCheck(
-    configContent: string,
-    state: State
-  ): Promise<{ desiredResources: DesiredResource[]; outputs: Record<string, Output>; dataSources: Plan['dataSources'] }> {
-    const { loadedResources, loadedModules, schemas, dataSources } = await this.loader.load(configContent, state);
+  private async resolveAndCheck(configContent: string, state: State): Promise<DesiredState> {
+    const { loadedResources, loadedModules, schemas } = await this.loader.load(configContent);
 
     const graph = this.graphBuilder.buildExecutionGraph(loadedResources, loadedModules);
     checkAttributes(loadedResources, schemas);
     this.writtenCheck.check(loadedResources, loadedModules);
-    const { resources: desiredResources, outputs } = await this.desiredStateBuilder.build(loadedResources, graph, state, schemas);
-
-    return { desiredResources, outputs, dataSources };
+    return await this.desiredStateBuilder.build(loadedResources, graph, state, schemas);
   }
 }

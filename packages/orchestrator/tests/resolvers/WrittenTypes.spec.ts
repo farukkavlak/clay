@@ -13,7 +13,7 @@ const position = { file: 'main.clay', line: 1, column: 1 };
 const schemas = new Map<string, Schema>([['random_string', { id: { type: types.string, computed: true }, length: { type: types.number, required: true } }]]);
 
 const typeOf = (instances: Instances, ...path: (string | number)[]) =>
-  new WrittenTypes(new ScopeManager(), schemas, instances, new ModuleInstances()).typeOf(
+  new WrittenTypes(new ScopeManager(), schemas, new Map(), instances, new ModuleInstances()).typeOf(
     parseReference(steps('random_string', 's', ...path)) as ResourceReference,
     ModuleAddress.root,
     position

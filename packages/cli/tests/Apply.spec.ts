@@ -69,6 +69,7 @@ describe('CLI: apply command', () => {
         prior: {},
         schemas: { test: {} },
         dataSources: {},
+        readAtApply: [],
       };
       const planMock = vi.fn().mockResolvedValue(planned);
       const runMock = vi.fn(doneWith({}));
@@ -101,6 +102,7 @@ describe('CLI: apply command', () => {
         prior: {},
         schemas: { test: {} },
         dataSources: {},
+        readAtApply: [],
       });
       const runMock = vi.fn(async function* () {
         yield { type: 'applied', action: { type: 'CREATE', resourceType: 'test', name: 't' } };
@@ -139,6 +141,7 @@ describe('CLI: apply command', () => {
         prior: {},
         schemas: { test: {} },
         dataSources: {},
+        readAtApply: [],
       });
       const runMock = vi.fn(doneWith({}));
 
@@ -167,6 +170,7 @@ describe('CLI: apply command', () => {
         prior: {},
         schemas: { test: {} },
         dataSources: {},
+        readAtApply: [],
       });
       const runMock = vi.fn(doneWith({}));
 
@@ -200,6 +204,7 @@ describe('CLI: apply command', () => {
         prior: {},
         schemas: { test: {} },
         dataSources: {},
+        readAtApply: [],
       });
 
       vi.mocked(Orchestrator.create).mockImplementation(function () {
@@ -230,6 +235,7 @@ describe('CLI: apply command', () => {
         prior: {},
         schemas: { test: {} },
         dataSources: {},
+        readAtApply: [],
       });
       const runMock = vi.fn(doneWith({ greeting: text('hi') }));
 
@@ -262,6 +268,7 @@ describe('CLI: apply command', () => {
         prior: {},
         schemas: { test: {} },
         dataSources: {},
+        readAtApply: [],
       });
       const runMock = vi.fn(doneWith({ my_output: text('test_value'), another_output: { value: 42, type: types.number } }));
 
@@ -297,6 +304,7 @@ describe('CLI: apply command', () => {
         prior: {},
         schemas: { test: {} },
         dataSources: {},
+        readAtApply: [],
       });
       const runMock = vi.fn(doneWith({}));
 
@@ -335,6 +343,7 @@ describe('CLI: apply command', () => {
         prior: {},
         schemas: { test: {} },
         dataSources: {},
+        readAtApply: [],
       });
 
       vi.mocked(fs.readFile).mockImplementation(async (path) => {
@@ -379,6 +388,7 @@ describe('CLI: apply command', () => {
         prior: {},
         schemas: { test: {} },
         dataSources: {},
+        readAtApply: [],
       });
 
       vi.mocked(fs.readFile).mockImplementation(async (path) => {
@@ -418,6 +428,7 @@ describe('CLI: apply command', () => {
         prior: {},
         schemas: { test: {} },
         dataSources: {},
+        readAtApply: [],
       });
 
       vi.mocked(fs.readFile).mockImplementation(async (path) => {
@@ -474,6 +485,7 @@ describe('CLI: apply command', () => {
         prior: {},
         schemas: { test: {} },
         dataSources: {},
+        readAtApply: [],
       });
       const runMock = vi.fn(async function* () {
         yield { type: 'failed', action: { type: 'CREATE', resourceType: 'test', name: 't' }, error: new Error('disk full') };

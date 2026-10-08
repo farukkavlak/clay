@@ -28,7 +28,7 @@ const state: State = {
 };
 
 const resolverWith = (scopes = new ScopeManager(), planned = new Planned(), dataSources = new Map<string, Record<string, Value>>()) =>
-  new ReferenceResolver(scopes, dataSources, new Map(), new Instances(), new ModuleInstances(), planned);
+  new ReferenceResolver(scopes, dataSources, new Map(), new Map(), new Instances(), new ModuleInstances(), planned);
 
 /** A template reading a resource not in state, so only the apply knows it. */
 const readLater = () => resolverWith().resolveValue(template('id: ', reference('resource', 'later', 'id')), state, context);
@@ -44,7 +44,7 @@ const planning = () => {
 const readWith = (value: string, sources = new Map<string, Record<string, Value>>(), planned = new Planned()) =>
   resolverWith(new ScopeManager(), planned, sources).resolveValue(written(value), state, context);
 const read = (value: string) => readWith(value);
-const source = (value: Value) => new Map([['src.s', { v: value }]]);
+const source = (value: Value) => new Map([['data:src.s', { v: value }]]);
 const n = (text: string) => ExactNumber.parse(text);
 
 describe('ReferenceResolver', () => {
@@ -105,7 +105,7 @@ describe('ReferenceResolver', () => {
   // State may hold data outside the schema, so the error names the resource.
   it('refuses a value in state that its schema does not hold, naming the resource', () => {
     const schemas = new Map([['resource', { val: { type: types.number } }]]);
-    const resolver = new ReferenceResolver(new ScopeManager(), new Map(), schemas, new Instances(), new ModuleInstances(), new Planned());
+    const resolver = new ReferenceResolver(new ScopeManager(), new Map(), schemas, new Map(), new Instances(), new ModuleInstances(), new Planned());
 
     expect(() => resolver.resolveValue(reference('resource', 'test', 'val'), state, context)).toThrow(
       new ConfigError('resource.test holds what its schema does not: val is a string, where its type is a number', position)
@@ -121,7 +121,7 @@ describe('ReferenceResolver', () => {
 
   // A provider may return null where its schema names a string, which has no text to join.
   it('refuses to join a null of a type that joins into text', () => {
-    const sources = new Map([['src.s', { v: valueOf(types.string, null) }]]);
+    const sources = new Map([['data:src.s', { v: valueOf(types.string, null) }]]);
     const read = () => resolverWith(new ScopeManager(), new Planned(), sources).resolveValue(template('a ', reference('data', 'src', 's', 'v')), state, context);
 
     expect(read).toThrow(new ConfigError('data.src.s.v is null and cannot be joined into a string', position));
@@ -359,7 +359,7 @@ describe('ReferenceResolver', () => {
         resources: { 'module.app[0].resource.dep[1]': { resourceType: 'resource', name: 'dep', attributes: { id: 'one' } } },
       };
 
-      const read = new ReferenceResolver(new ScopeManager(), new Map(), new Map(), instances, new ModuleInstances(), new Planned()).resolveValue(
+      const read = new ReferenceResolver(new ScopeManager(), new Map(), new Map(), new Map(), instances, new ModuleInstances(), new Planned()).resolveValue(
         reference('resource', 'dep', 1, 'id'),
         held,
         inInstance(ModuleAddress.root.child('app', 0))
@@ -380,7 +380,7 @@ describe('ReferenceResolver', () => {
     });
 
     it('reads a data source once for the module as the configuration writes it', () => {
-      const sources = new Map([['module.app.src.s', { v: valueOf(types.string, 'read') }]]);
+      const sources = new Map([['module.app.data:src.s', { v: valueOf(types.string, 'read') }]]);
 
       const read = resolverWith(new ScopeManager(), new Planned(), sources).resolveValue(reference('data', 'src', 's', 'v'), state, inInstance(ModuleAddress.root.child('app', 0)));
 

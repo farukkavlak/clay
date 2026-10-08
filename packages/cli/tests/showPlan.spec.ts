@@ -17,6 +17,7 @@ function shown(old: unknown, next: unknown): string[] {
     prior: {},
     schemas: {},
     dataSources: {},
+    readAtApply: [],
   };
   const printed: string[] = [];
   vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => printed.push(stripVTControlCharacters(args.join(' '))));

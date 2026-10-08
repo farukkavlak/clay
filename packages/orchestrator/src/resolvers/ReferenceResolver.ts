@@ -81,6 +81,7 @@ export class ReferenceResolver {
     scopeManager: ScopeManager,
     dataSources: Map<string, Record<string, Value>>,
     schemas: Map<string, Schema>,
+    dataSchemas: Map<string, Schema>,
     instances: Instances,
     modules: ModuleInstances,
     planned: Planned
@@ -93,7 +94,7 @@ export class ReferenceResolver {
     this.dataSources = new DataSourceResolver(dataSources);
     this.moduleOutputs = new ModuleOutputResolver(scopeManager, modules);
     this.resources = new ResourceResolver(instances, planned, schemas);
-    this.written = new WrittenTypes(scopeManager, schemas, instances, modules);
+    this.written = new WrittenTypes(scopeManager, schemas, dataSchemas, instances, modules);
   }
 
   private resolve(node: ReferenceNode, state: State, context: Context | undefined, reading: Reading): Value {
@@ -178,9 +179,9 @@ export class ReferenceResolver {
     return this.resources.resolve(reference, where, state, position);
   }
 
-  /** Data sources and paths are known at load; anything else is unknown. */
+  /** Paths are known at load; anything else is unknown. */
   private writtenTarget(reference: ParsedReference, where: Context, position: Position): { value: Value; path: Step[] } {
-    if (reference.kind === 'data' || reference.kind === 'path') return this.resolveTarget(reference, emptyState(), where, position);
+    if (reference.kind === 'path') return this.resolveTarget(reference, emptyState(), where, position);
 
     const { type, path } = this.written.typeOf(reference, where, position);
     return { value: valueOf(type, UNKNOWN), path };

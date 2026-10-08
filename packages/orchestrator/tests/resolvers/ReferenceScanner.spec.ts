@@ -74,10 +74,10 @@ describe('ReferenceScanner', () => {
     expect(found).not.toHaveProperty('instanceKey');
   });
 
-  it('should ignore data sources', () => {
+  it('points a data source reference at the data source node, apart from a resource of the same type and name', () => {
     const attributes = { image: { type: 'Reference', value: steps('data', 'aws_ami', 'ubuntu', 'id') } };
 
-    expect(scanner.referencesIn(attributes, context)).toEqual([]);
+    expect(scanner.referencesIn(attributes, context)).toEqual([{ kind: 'data', key: 'data:aws_ami.ubuntu', name: 'data.aws_ami.ubuntu' }]);
   });
 
   it('should point a variable reference at the variable node', () => {

@@ -1,11 +1,11 @@
 import { ModuleAddress, Type } from '@clay/contracts';
 import { Graph } from '@clay/graph';
-import { AttributeValue, callsIn, ModuleBlock, Position, spell, TypeDefaults } from '@clay/parser';
+import { AttributeValue, callsIn, DataBlock, ModuleBlock, Position, spell, TypeDefaults } from '@clay/parser';
 
 import { Instances, Repetition } from '../Instances';
 import { declaredOf } from '../declared';
 import { functionCalled } from '../functions';
-import { callKey, Context, ModuleCall, outputKey, scopeOf, variableKey } from '../keys';
+import { callKey, Context, dataSourceAddress, dataSourceKey, ModuleCall, outputKey, scopeOf, variableKey } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
 import { placed, tryAt, withPlace } from '../place';
 import { COUNT_INDEX_OUTSIDE, eachOutside, readCall, readInstance } from '../resolvers/instance';
@@ -33,12 +33,14 @@ export type GraphNode =
   | ({ kind: 'resource' } & InModule)
   | ({ kind: 'variable' } & ValueNode)
   | ({ kind: 'output' } & OutputNode)
-  | ({ kind: 'module'; block: ModuleBlock } & InModule);
+  | ({ kind: 'module'; block: ModuleBlock } & InModule)
+  | ({ kind: 'data'; block: DataBlock } & InModule);
 
 /** `module.m.var.x`; a resource's key already is its address. */
 function spellNode(key: string, node: GraphNode): string {
   if (node.kind === 'resource') return key;
   if (node.kind === 'module') return node.module.child(node.block.name).toString();
+  if (node.kind === 'data') return dataSourceAddress(node.module.toString(), node.block.dataSourceType, node.block.name);
 
   const scope = node.module.toString();
   return `${scope ? `${scope}.` : ''}${node.kind === 'variable' ? 'var' : 'output'}.${node.name}`;
@@ -57,6 +59,8 @@ function checkInstanceReference(reference: Extract<Reference, { kind: 'count' | 
 function describeMissing(reference: Exclude<Reference, { kind: 'count' | 'each' }>, moduleScopes: Set<string>): string {
   if (reference.kind === 'variable') return `variable "${reference.name}" is not defined`;
   if (reference.kind === 'resource') return `"${reference.key}" is not declared in the configuration`;
+  // As written: the error's place names the module.
+  if (reference.kind === 'data') return `"${reference.name}" is not declared in the configuration`;
 
   return moduleScopes.has(reference.scope) ? `module "${reference.module}" has no output "${reference.name}"` : `module "${reference.module}" is not declared`;
 }
@@ -113,6 +117,7 @@ export class DependencyGraphBuilder {
   private addNodeDependencies(key: string, node: GraphNode, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
     if (node.kind === 'variable' || node.kind === 'output') this.addValueDependencies(key, node, graph, moduleScopes);
     if (node.kind === 'module') this.addCallDependencies(key, node.block, node.module, graph, moduleScopes);
+    if (node.kind === 'data') this.addDataDependencies(key, node.block, node.module, graph, moduleScopes);
   }
 
   private addValueDependencies(key: string, node: ValueNode, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
@@ -133,6 +138,12 @@ export class DependencyGraphBuilder {
       if (value) tryAt(value.position, dependent.declaration, caller, () => this.addDependencies(value, graph, dependent, moduleScopes));
   }
 
+  private addDataDependencies(key: string, block: DataBlock, module: ModuleAddress, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
+    const dependent = { key, declaration: spell(block), context: module };
+
+    for (const value of Object.values(block.attributes)) tryAt(value.position, dependent.declaration, module, () => this.addDependencies(value, graph, dependent, moduleScopes));
+  }
+
   /** One value at a time, so an error points at the value, not the block. count and for_each are read before any instance, so they have no key. */
   private addResourceDependencies({ address, block }: LoadedResource, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
     const dependent = { key: address.toString(), declaration: spell(block), context: address };
@@ -144,7 +155,7 @@ export class DependencyGraphBuilder {
       tryAt(value.position, dependent.declaration, address, () => this.addDependencies(value, graph, dependent, moduleScopes, repetition));
   }
 
-  /** Looks through the variables and outputs in between. */
+  /** Looks through the variables, outputs and data sources in between. */
   resourceDependencies(graph: Graph<GraphNode>, key: string): string[] {
     const found = new Set<string>();
     const seen = new Set<string>([key]);
@@ -162,7 +173,7 @@ export class DependencyGraphBuilder {
     return [...found].sort();
   }
 
-  /** Variables and outputs are nodes, so they run after what they read and before what reads them. */
+  /** Variables, outputs and data sources are nodes, so they run after what they read and before what reads them. */
   private valueNodes(loadedModules: LoadedModule[]): Map<string, GraphNode> {
     const nodes = new Map<string, GraphNode>();
 
@@ -194,6 +205,7 @@ export class DependencyGraphBuilder {
             declaration,
           });
         if (stmt.type === 'Module') this.setCallNodes(stmt, nodes, mod.address);
+        if (stmt.type === 'Data') nodes.set(dataSourceKey(scope, stmt.dataSourceType, stmt.name), { kind: 'data', module: mod.address, block: stmt });
       }
     }
 

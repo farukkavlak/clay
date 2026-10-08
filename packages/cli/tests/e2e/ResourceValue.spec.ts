@@ -217,14 +217,15 @@ describe('a whole resource instance read as a value', () => {
       expect((await outputs())!.v.value).toEqual(['text', ExactNumber.parse('1')]);
     });
 
-    // A data source is read at load, before any count is read.
-    it('is not known yet to a data source', async () => {
-      const config = `${counted()}\ndata "local_file" "d" {\n  path = "${at('d')}\${length(local_file.logs)}"\n}`;
+    it('is read by a data source after the apply makes every instance', async () => {
+      await fs.writeFile(`${at('d')}2`, 'two', 'utf8');
+      const config = `${counted()}\ndata "local_file" "d" {\n  path = "${at('d')}\${length(local_file.logs)}"\n}\noutput "d" { value = data.local_file.d.content }`;
 
-      const error = await planError(config);
+      const { readAtApply } = await newOrchestrator().plan(config);
+      await apply(config);
 
-      expect(error.message).toBe('local_file.logs is known only once its count is read');
-      expect(error.position).toMatchObject(placeOf(config, `"${at('d')}`));
+      expect(readAtApply).toEqual(['data.local_file.d']);
+      expect((await outputs())!.d.value).toBe('two');
     });
   });
 });

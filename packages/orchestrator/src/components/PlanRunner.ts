@@ -1,7 +1,7 @@
 import { Address, ModuleAddress, Output, State } from '@clay/contracts';
 import { Graph } from '@clay/graph';
-import { AttributeValue, ResourceBlock, spell, Statement } from '@clay/parser';
-import { PlanAction } from '@clay/planner';
+import { AttributeValue, DataBlock, ResourceBlock, spell, Statement } from '@clay/parser';
+import { Plan, PlanAction } from '@clay/planner';
 import { moveResource, StateManager } from '@clay/state';
 
 import { asError } from '../asError';
@@ -9,15 +9,16 @@ import { countFrom } from '../count';
 import { declaredOf, givenTo } from '../declared';
 import { eachFrom } from '../forEach';
 import { Instances, repetitionOfKey } from '../Instances';
-import { blockKey, Context, contextIn, scopeOf } from '../keys';
+import { blockKey, Context, contextIn, dataSourceAddress, scopeOf } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
-import { tryAt } from '../place';
+import { tryAt, withPlace } from '../place';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { RunEvent } from '../RunEvent';
 import { ScopeManager } from '../scope/ScopeManager';
 import { Value } from '../Value';
 import { ActionExecutor } from './ActionExecutor';
 import { LoadedConfig } from './ConfigLoader';
+import { DataSourceReader } from './DataSourceReader';
 import { GraphNode, OutputNode } from './DependencyGraphBuilder';
 
 function undeclared(address: Address): Error {
@@ -37,6 +38,8 @@ function groupBy(actions: PlanAction[], key: (address: Address) => string): Map<
   return groups;
 }
 
+type Approved = Pick<Plan, 'actions' | 'dataSources' | 'readAtApply'>;
+
 /** State is written after every action, so a failed run loses nothing done before it. */
 export class PlanRunner {
   constructor(
@@ -45,17 +48,19 @@ export class PlanRunner {
     private scopeManager: ScopeManager,
     private resolver: ReferenceResolver,
     private instances: Instances,
-    private modules: ModuleInstances
+    private modules: ModuleInstances,
+    private reader: DataSourceReader
   ) {}
 
-  async *run(actions: PlanAction[], config: LoadedConfig, graph: Graph<GraphNode>, state: State): AsyncGenerator<RunEvent> {
+  async *run(saved: Approved, config: LoadedConfig, graph: Graph<GraphNode>, state: State): AsyncGenerator<RunEvent> {
+    const { actions } = saved;
     this.checkActionsMatch(actions, graph);
 
     yield { type: 'planned', actions };
 
     // Outputs belong to a finished run, so every write before the last omits them.
     delete state.outputs;
-    if (!(yield* this.applyInOrder(actions, config, graph, state))) return;
+    if (!(yield* this.applyInOrder(saved, config, graph, state))) return;
     if (!(yield* this.applyDeletes(actions, state))) return;
 
     // Resolved after the last action, so outputs never reflect a half-applied run.
@@ -93,7 +98,7 @@ export class PlanRunner {
     for (const action of actions) if (action.key === undefined || !keys.includes(action.key)) throw undeclared(Address.of(action));
   }
 
-  private async *applyInOrder(actions: PlanAction[], config: LoadedConfig, graph: Graph<GraphNode>, state: State): AsyncGenerator<RunEvent, boolean> {
+  private async *applyInOrder({ actions, ...read }: Approved, config: LoadedConfig, graph: Graph<GraphNode>, state: State): AsyncGenerator<RunEvent, boolean> {
     const blocks = new Map(config.loadedResources.map(({ uniqueId, block }) => [uniqueId, block]));
     const byBlock = groupBy(
       actions.filter((action) => action.type !== 'DELETE'),
@@ -105,12 +110,39 @@ export class PlanRunner {
         const node = graph.getNode(key)!;
 
         if (node.kind === 'module') this.expandCall(node, state);
+        if (node.kind === 'data') yield* this.readData(node, read, state);
         // Only this output: a sibling may read a resource a later layer creates.
         if (node.kind === 'output') for (const instance of this.modules.of(node.module)) this.resolveOutput(node, instance, state);
         if (node.kind === 'resource' && !(yield* this.applyBlock(blocks.get(key)!, node.module, byBlock.get(key) ?? [], state))) return false;
       }
 
     return true;
+  }
+
+  /** The plan's value, or a read now, after what it reads has run. A plan that has neither was made from another configuration. */
+  private async *readData(
+    { module, block }: Extract<GraphNode, { kind: 'data' }>,
+    { dataSources, readAtApply }: Omit<Approved, 'actions'>,
+    state: State
+  ): AsyncGenerator<RunEvent> {
+    const address = dataSourceAddress(scopeOf(module), block.dataSourceType, block.name);
+    if (Object.hasOwn(dataSources, address)) {
+      this.reader.use(block, module, dataSources[address]);
+      return;
+    }
+
+    if (!readAtApply.includes(address)) throw withPlace(new Error(`The plan has no value for ${address}, which the configuration declares`), block.position, spell(block), module);
+
+    await this.reader.read(block, this.resolveInputs(block, state, module), module);
+    yield { type: 'read', address };
+  }
+
+  private resolveInputs(block: DataBlock, state: State, module: ModuleAddress): Record<string, Value> {
+    const declaration = spell(block);
+
+    return Object.fromEntries(
+      Object.entries(block.attributes).map(([name, value]) => [name, tryAt(value.position, declaration, module, () => this.resolver.resolveValue(value, state, module))])
+    );
   }
 
   /** Read again at apply, as a resource's count and for_each are. */

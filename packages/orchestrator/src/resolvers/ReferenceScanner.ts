@@ -4,7 +4,7 @@ import { ModuleOutputReference, ParsedReference, parseReference, Position, Resou
 import { repetitionOfKey } from '../Instances';
 import { instanceKeyIn } from './instance';
 import { ModuleInstances } from '../ModuleInstances';
-import { blockKey, callKey, Context, moduleOf, outputKey, scopeOf, variableKey } from '../keys';
+import { blockKey, callKey, Context, dataSourceKey, moduleOf, outputKey, scopeOf, variableKey } from '../keys';
 
 /** It also walks plain objects, which may have no position. */
 function positionOf(value: unknown): Position | undefined {
@@ -22,6 +22,7 @@ function positionOf(value: unknown): Position | undefined {
 export type Reference = (
   | { kind: 'resource'; key: string; block: string; reference: ResourceReference }
   | { kind: 'variable'; key: string; name: string }
+  | { kind: 'data'; key: string; name: string }
   | { kind: 'output'; key: string; call: ModuleAddress; instanceKey?: InstanceKey; scope: string; module: string; name?: string; reference: ModuleOutputReference }
   | { kind: 'count' }
   | { kind: 'each'; name: 'key' | 'value' }
@@ -59,10 +60,12 @@ export class ReferenceScanner {
     const scope = scopeOf(context);
 
     switch (reference.kind) {
-      // Data sources and paths are known at load, so neither is a graph node.
-      case 'data':
+      // Paths are known at load, so they are not graph nodes.
       case 'path': {
         return undefined;
+      }
+      case 'data': {
+        return { kind: 'data', key: dataSourceKey(scope, reference.type, reference.name), name: `data.${reference.type}.${reference.name}` };
       }
       case 'count': {
         return { kind: 'count' };

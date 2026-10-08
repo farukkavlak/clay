@@ -80,7 +80,7 @@ describe('ActionExecutor', () => {
 
     providers = new ProviderRegistry();
     providers.register(mockProvider);
-    const resolver = new ReferenceResolver(new ScopeManager(), new Map(), new Map(), new Instances(), new ModuleInstances(), new Planned());
+    const resolver = new ReferenceResolver(new ScopeManager(), new Map(), new Map(), new Map(), new Instances(), new ModuleInstances(), new Planned());
     executor = new ActionExecutor(providers, resolver, new ResourcePlanner(providers));
   });
 
