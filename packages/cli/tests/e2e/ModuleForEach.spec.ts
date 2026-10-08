@@ -232,13 +232,4 @@ describe('a module called with for_each', () => {
     expect(error.message).toBe(message);
     expect(error.position).toMatchObject(placeOf(config, forEach));
   });
-
-  it('refuses a data source in the module, where it is written', async () => {
-    await writeModule('web', `data "local_file" "d" { path = "${path.join(dir, 'x')}" }\nvariable "name" {}\nvariable "body" {}`);
-
-    const error = await planError(web('["ali"]'));
-
-    expect(error.message).toBe('data "local_file" "d" is in a module called with count or for_each, where a data source cannot be read yet');
-    expect(error.position).toMatchObject({ file: 'web/main.clay', line: 1, column: 1 });
-  });
 });

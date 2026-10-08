@@ -357,8 +357,8 @@ An output is read from one instance: `module.web[0].url`. On a call with count,
 refused.
 
 A data source in a module called with count or for_each, or in a module that one calls,
-is refused where it is written: a data source is one node in the graph, read once, so a
-module with instances cannot have one yet.
+is read once for each instance of its module, and a plan names it by the instance:
+`module.web[0].data.local_file.f`. Each instance waits for the apply on its own.
 
 Adding `count` to a module that exists moves what is in it to `module.name[0]`, and
 taking `count` off moves `module.name[0]` back and destroys the other instances, as for a
@@ -405,7 +405,8 @@ them as inputs.
 
 An output is read from one instance by its key, in brackets: `module.web["eu"].url`. A
 name after a dot there is never a key, so `module.web.eu.url` and `module.web.url` are
-refused where they are written, and so are an index and a key `for_each` does not give. A data source in the module is refused as it is under count.
+refused where they are written, and so are an index and a key `for_each` does not give. A data source in the module
+is read once for each instance, as it is under count.
 
 Adding `for_each` to a module that exists, or taking it off, moves nothing, as for a
 resource; `clay state mv` keeps each resource.

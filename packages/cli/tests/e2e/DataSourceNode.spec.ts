@@ -14,6 +14,15 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 // eslint-disable-next-line unicorn/prefer-module
 const clay = path.resolve(__dirname, '../../bin/clay.js');
 
+const counted = (count: number) => `
+  module "site" {
+    count  = ${count}
+    source = "./site"
+    name   = "site-\${count.index}"
+  }
+  output "sites" { value = [for site in module.site : site.read] }
+`;
+
 describe('a data source in the graph', () => {
   let dir: string;
   let file: string;
@@ -60,6 +69,22 @@ describe('a data source in the graph', () => {
     await fs.writeFile(path.join(dir, 'm', 'main.clay'), `${writes(content)}\noutput "path" { value = local_file.a.path }`, 'utf8');
 
     return 'module "m" { source = "./m" }\ndata "local_file" "read" { path = module.m.path }\noutput "read" { value = data.local_file.read.content }';
+  };
+
+  // An absolute path, since the provider reads a relative one from where the test runs.
+  const site = () => `
+    variable "name" {}
+    resource "local_file" "page" {
+      path    = "${dir}/\${var.name}.txt"
+      content = "body of \${var.name}"
+    }
+    data "local_file" "read" { path = local_file.page.path }
+    output "read" { value = data.local_file.read.content }
+  `;
+
+  const writeModule = async (name: string, content: string) => {
+    await fs.mkdir(path.join(dir, name), { recursive: true });
+    await fs.writeFile(path.join(dir, name, 'main.clay'), content, 'utf8');
   };
 
   beforeEach(async () => {
@@ -179,5 +204,120 @@ describe('a data source in the graph', () => {
     });
     const state = await new LocalBackend(dir).read();
     expect(Object.keys(state.resources)).toEqual(['local_file.a']);
+  });
+
+  describe('in a module with instances', () => {
+    beforeEach(async () => {
+      await writeModule('site', site());
+    });
+
+    it('is read once for each instance of a module called with count', async () => {
+      const outputs = await apply(counted(2));
+
+      expect(outputs.sites).toEqual(['body of site-0', 'body of site-1']);
+    });
+
+    it('is read once for each instance of a module called with for_each', async () => {
+      const config = `
+        module "site" {
+          for_each = ["ali", "veli"]
+          source   = "./site"
+          name     = each.key
+        }
+        output "ali" { value = module.site["ali"].read }
+        output "veli" { value = module.site["veli"].read }
+      `;
+
+      const outputs = await apply(config);
+
+      expect(outputs).toEqual({ ali: 'body of ali', veli: 'body of veli' });
+    });
+
+    it('is read once for each instance of a module inside a module with instances', async () => {
+      await writeModule('outer/site', site());
+      await writeModule(
+        'outer',
+        `
+          variable "prefix" {}
+          module "site" {
+            for_each = ["a", "b"]
+            source   = "./site"
+            name     = "\${var.prefix}-\${each.key}"
+          }
+          output "a" { value = module.site["a"].read }
+          output "b" { value = module.site["b"].read }
+        `
+      );
+      const config = `
+        module "outer" {
+          count  = 2
+          source = "./outer"
+          prefix = "outer-\${count.index}"
+        }
+        output "read" { value = [for outer in module.outer : "\${outer.a} and \${outer.b}"] }
+      `;
+
+      const plan = await newOrchestrator().plan(config);
+      const outputs = await run(plan, config);
+
+      expect(plan.readAtApply).toEqual([
+        'module.outer[0].module.site["a"].data.local_file.read',
+        'module.outer[0].module.site["b"].data.local_file.read',
+        'module.outer[1].module.site["a"].data.local_file.read',
+        'module.outer[1].module.site["b"].data.local_file.read',
+      ]);
+      expect(outputs.read).toEqual(['body of outer-0-a and body of outer-0-b', 'body of outer-1-a and body of outer-1-b']);
+    });
+
+    it('waits for the apply only in the instance whose resource changes', async () => {
+      await apply(counted(1));
+
+      const plan = await newOrchestrator().plan(counted(2));
+      const outputs = await run(plan, counted(2));
+
+      expect(plan.readAtApply).toEqual(['module.site[1].data.local_file.read']);
+      expect(plan.dataSources['module.site[0].data.local_file.read'].content.value).toBe('body of site-0');
+      expect(outputs.sites).toEqual(['body of site-0', 'body of site-1']);
+    });
+
+    it('gives each instance its own value from a plan saved to a file', async () => {
+      await apply(counted(1));
+      const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(counted(2)), counted(2), {}), 'plan.json');
+
+      const outputs = await run(saved, counted(2));
+
+      expect(Object.keys(saved.dataSources)).toEqual(['module.site[0].data.local_file.read']);
+      expect(outputs.sites).toEqual(['body of site-0', 'body of site-1']);
+    });
+
+    it('names the instance in the plan and in the apply', async () => {
+      await fs.writeFile(path.join(dir, 'main.clay'), counted(2), 'utf8');
+
+      const planned = await clayIn('plan');
+      const applied = await clayIn('apply', '--yes');
+
+      expect(planned).toContain('  <= module.site[0].data.local_file.read will be read during apply\n  <= module.site[1].data.local_file.read will be read during apply\n');
+      expect(applied.match(/^ {2}<= .* read$/gm)).toEqual(['  <= module.site[0].data.local_file.read read', '  <= module.site[1].data.local_file.read read']);
+    });
+
+    it('refuses a plan with no value for an instance the configuration makes', async () => {
+      const saved = await newOrchestrator().plan(counted(1));
+
+      await expect(run(saved, counted(2))).rejects.toMatchObject({
+        message: 'The plan has no value for module.site[1].data.local_file.read, which the configuration declares',
+        block: 'data "local_file" "read"',
+        module: 'module.site[1]',
+      });
+    });
+
+    it('names the instance whose read fails', async () => {
+      await writeModule('site', site().replace('local_file.page.path }', '"${local_file.page.path}-missing" }'));
+
+      await expect(apply(counted(2))).rejects.toMatchObject({
+        message: `local_file cannot read "${path.join(dir, 'site-0.txt')}-missing": there is no such file`,
+        block: 'data "local_file" "read"',
+        module: 'module.site[0]',
+      });
+    });
   });
 });

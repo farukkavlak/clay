@@ -177,14 +177,16 @@ reads a file, and `data.local_file.f.content` is what it holds. A data source ha
 of its own, apart from a resource of the same type, and its block is held to it as a
 resource's is, before anything is read. A read that returns a value not known, or a name
 the schema does not have, stops the run as a bug in the provider. A data source is read
-once, in its turn among the resources. It is read at plan, unless what it reads changes in
-the apply: a resource the plan creates or changes, read directly or through a variable or
-a module output. Then the plan shows `<= data.local_file.f will be read during apply`,
-what it reads is `(known after apply)`, and the apply reads it after those resources. The
-plan carries what it read, so the apply reads none of those again and a `count` that
-reads one makes the instances the plan showed. A `count` or `for_each` that reads one the
-apply reads is refused at plan, since the plan cannot show its instances. A plan file
-holds them unencrypted, a secret a data source read among them.
+once for each instance of its module, in its turn among the resources. It is read at plan,
+unless what it reads changes in the apply: a resource the plan creates or changes, read
+directly or through a variable or a module output. Then the plan shows
+`<= data.local_file.f will be read during apply`, what it reads is `(known after apply)`,
+and the apply reads it after those resources. In a module called with `count` or
+`for_each` each instance waits on its own: one whose resources stay as they are is read at
+plan while another waits. The plan carries what it read, so the apply reads none of those
+again and a `count` that reads one makes the instances the plan showed. A `count` or
+`for_each` that reads one the apply reads is refused at plan, since the plan cannot show
+its instances. A plan file holds them unencrypted, a secret a data source read among them.
 
 ## How a run goes
 

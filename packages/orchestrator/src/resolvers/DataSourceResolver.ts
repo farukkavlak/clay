@@ -1,13 +1,12 @@
 import { DataReference } from '@clay/parser';
-import { Context, dataSourceKey, moduleOf, scopeOf } from '../keys';
+import { Context, dataSourceKey, scopeOf } from '../keys';
 import { Value } from '../Value';
 
 export class DataSourceResolver {
   constructor(private dataSources: Map<string, Record<string, Value>>) {}
 
   resolve(reference: DataReference, context: Context): Value {
-    // Keyed by the module as written, since a module with a data source has one instance.
-    const key = dataSourceKey(scopeOf(moduleOf(context).withoutKeys()), reference.type, reference.name);
+    const key = dataSourceKey(scopeOf(context), reference.type, reference.name);
     const attrName = reference.attribute;
     // No scope: the error's place names the module.
     const spelled = `data.${reference.type}.${reference.name}`;

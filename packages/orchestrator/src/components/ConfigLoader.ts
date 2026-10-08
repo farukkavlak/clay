@@ -1,5 +1,5 @@
 import { ModuleAddress, Schema } from '@clay/contracts';
-import { AttributeValue, CONFIG_FILE, ConfigError, DataBlock, Lexer, Parser, spell, Statement } from '@clay/parser';
+import { AttributeValue, CONFIG_FILE, DataBlock, Lexer, Parser, spell, Statement } from '@clay/parser';
 
 import { checkNames } from '../checkAttributes';
 import { checkDefaults } from '../declared';
@@ -8,7 +8,6 @@ import { Instances } from '../Instances';
 import { ModuleInstances } from '../ModuleInstances';
 import { Planned } from '../Planned';
 import { ProviderRegistry } from '../ProviderRegistry';
-import { scopeOf } from '../keys';
 import { tryAt, withPlace } from '../place';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { ScopeManager } from '../scope/ScopeManager';
@@ -103,7 +102,6 @@ export class ConfigLoader {
         const schema = this.dataSchemas.get(stmt.dataSourceType) ?? (await this.dataSchemaOf(stmt, address));
         this.dataSchemas.set(stmt.dataSourceType, schema);
         checkNames(stmt, schema, address);
-        this.checkReadOnce(stmt, address);
       }
   }
 
@@ -123,14 +121,5 @@ export class ConfigLoader {
         if (stmt.type === 'Module' && stmt.count) this.modules.declare(address.child(stmt.name), 'count');
         if (stmt.type === 'Module' && stmt.forEach) this.modules.declare(address.child(stmt.name), 'for_each');
       }
-  }
-
-  /** A data source is one graph node, read once, so a module with instances cannot have one yet. */
-  private checkReadOnce(stmt: DataBlock, module: ModuleAddress): void {
-    const repeated = module.path.some((_, depth) => this.modules.repetitionOf(new ModuleAddress(module.path.slice(0, depth + 1))) !== undefined);
-    if (!repeated) return;
-
-    const place = { block: spell(stmt), module: scopeOf(module) };
-    throw new ConfigError(`${spell(stmt)} is in a module called with count or for_each, where a data source cannot be read yet`, stmt.position, place);
   }
 }
