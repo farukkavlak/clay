@@ -526,11 +526,12 @@ by resource type, and no `provider` block exists yet.
       `readKeys`, which reads a `count` or a `for_each` again at apply, runs there too, and so do
       `expandCall`, which reads a module's `count` or `for_each` again, and the refusal of
       a saved plan's action in an instance of a module the configuration does not make
-- [ ] An output may be named `__proto__`. The plan collects outputs into a plain object,
-      where that name sets a prototype instead of a key, so the plan never holds it and
-      the apply refuses it with
-      `The plan has no output "__proto__", which the configuration declares`. That blames
-      a plan that matches its configuration
+- [x] An output may be named `__proto__`. The plan and the apply collected root outputs
+      into a plain object, where that name sets a prototype instead of a key, so the plan
+      never held it and the apply refused it. Both collect them in a map now, as a module's
+      outputs already were
+- [ ] `clay output` takes no name, and a word after it is ignored: `clay output nope`
+      prints every output and exits 0
 - [ ] `apply` says a missing file is missing the same way twice. A missing plan file and a
       missing configuration are reported with different prefixes today
 - [x] `Address.parse` says `got 1 parts` when it refuses an address

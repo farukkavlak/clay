@@ -277,17 +277,18 @@ export class PlanRunner {
   }
 
   private resolveOutputs(program: Statement[], state: State, context: ModuleAddress): Record<string, Output> {
-    const outputs: Record<string, Output> = {};
+    // A map, so an output named `__proto__` is a key like any other.
+    const outputs = new Map<string, Output>();
     const scope = scopeOf(context);
 
     for (const stmt of program)
       if (stmt.type === 'Output') {
         const resolved = tryAt(stmt.value.position, spell(stmt), context, () => this.outputValue(stmt.name, stmt.value, declaredOf(stmt), state, context));
-        outputs[stmt.name] = { value: resolved.data, type: resolved.type };
+        outputs.set(stmt.name, { value: resolved.data, type: resolved.type });
         this.scopeManager.setOutput(scope, stmt.name, resolved);
       }
 
-    return outputs;
+    return Object.fromEntries(outputs);
   }
 
   private resolveOutput(node: OutputNode, instance: ModuleAddress, state: State): void {

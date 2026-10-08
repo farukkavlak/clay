@@ -67,6 +67,8 @@ export class DesiredStateBuilder {
     const byKey = new Map(loadedResources.map((r) => [r.address.toString(), r]));
     const resources: DesiredResource[] = [];
     const desired: DesiredState = { resources, outputs: {}, dataSources: {}, readAtApply: [] };
+    // A map, so an output named `__proto__` is a key like any other.
+    const rootOutputs = new Map<string, Output>();
 
     for (const layer of graph.topologicalSort())
       for (const key of layer) {
@@ -86,11 +88,12 @@ export class DesiredStateBuilder {
             break;
           }
           default: {
-            for (const instance of this.modules.of(node.module)) this.planValue(node, instance, state, desired.outputs);
+            for (const instance of this.modules.of(node.module)) this.planValue(node, instance, state, rootOutputs);
           }
         }
       }
 
+    desired.outputs = Object.fromEntries(rootOutputs);
     return desired;
   }
 
@@ -223,7 +226,7 @@ export class DesiredStateBuilder {
     return keys.map((key) => new Address(block.module, block.resourceType, block.name, key).toString());
   }
 
-  private planValue(node: Extract<GraphNode, { kind: 'variable' | 'output' }>, instance: ModuleAddress, state: State, rootOutputs: Record<string, Output>): void {
+  private planValue(node: Extract<GraphNode, { kind: 'variable' | 'output' }>, instance: ModuleAddress, state: State, rootOutputs: Map<string, Output>): void {
     if (node.kind === 'variable') this.planVariable(node, instance, state);
     else this.planOutput(node, instance, state, rootOutputs);
   }
@@ -238,13 +241,13 @@ export class DesiredStateBuilder {
     tryAt(node.position, node.declaration, contextIn(node.context, instance), () => givenTo('variable', node.name, value, declared, read));
   }
 
-  private planOutput(node: OutputNode, instance: ModuleAddress, state: State, rootOutputs: Record<string, Output>): void {
+  private planOutput(node: OutputNode, instance: ModuleAddress, state: State, rootOutputs: Map<string, Output>): void {
     const read = (constant: AttributeValue) => this.resolveNode(node, constant, instance, state);
     const resolved = this.resolveNode(node, node.value, instance, state);
     const value = tryAt(node.position, node.declaration, contextIn(node.context, instance), () => givenTo('output', node.name, resolved, node.declared, read));
     this.scopeManager.setOutput(instance.toString(), node.name, value);
 
-    if (instance.isRoot()) rootOutputs[node.name] = { value: value.data, type: value.type };
+    if (instance.isRoot()) rootOutputs.set(node.name, { value: value.data, type: value.type });
   }
 
   private resolveForPlan(block: ResourceBlock, state: State, context: Context): Record<string, Value> {
