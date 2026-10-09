@@ -5,6 +5,7 @@ import { Instances, Repetition } from '../Instances';
 import { Context, dataSourceAddress, dataSourceKey, moduleOf, scopeOf } from '../keys';
 import { objectOf, plainOf, Value, valueOf } from '../Value';
 import { everyType, readInstance } from './instance';
+import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 
 export class DataSourceResolver {
   constructor(
@@ -23,6 +24,8 @@ export class DataSourceResolver {
     const { every, key, attribute, path } = readInstance(spelled, reference.path, repetition, position);
     if (every) return { value: this.every(reference, scopeOf(module), every, spelled), path };
 
+    if (repetition && this.keysOf(reference, scopeOf(module)) === undefined) throw new UnresolvedReferenceError(`${spelled} is known only once its ${repetition} is read`);
+
     const dataAttributes = this.read(reference, scopeOf(module), key, spelled);
     if (attribute === undefined) return { value: objectOf(Object.entries(dataAttributes)), path };
 
@@ -33,16 +36,20 @@ export class DataSourceResolver {
     return { value: attrValue, path };
   }
 
-  /** The graph reads its count or for_each before anything that reads it. */
+  /** Not known until its count or for_each is; its type is known before then. */
   private every(reference: DataReference, scope: string, repetition: Repetition, spelled: string): Value {
     // The graph has already refused undeclared data sources, and every one has its schema.
     const type = everyType(repetition, this.dataSchemas.get(reference.type)!);
-    const keys = this.instances.keysOf(dataSourceKey(scope, reference.type, reference.name));
-    if (keys === undefined) throw new Error(`${spelled} was read before its ${repetition}`);
+    const keys = this.keysOf(reference, scope);
+    if (keys === undefined) throw new UnresolvedReferenceError(`${spelled} is known only once its ${repetition} is read`, type);
 
     const instances = keys.map((key) => plainOf(this.read(reference, scope, key, spelled)));
 
     return valueOf(type, repetition === 'count' ? instances : Object.fromEntries(keys.map((key, index) => [key, instances[index]])));
+  }
+
+  private keysOf(reference: DataReference, scope: string): InstanceKey[] | undefined {
+    return this.instances.keysOf(dataSourceKey(scope, reference.type, reference.name));
   }
 
   private read(reference: DataReference, scope: string, key: InstanceKey | undefined, spelled: string): Record<string, Value> {

@@ -69,6 +69,8 @@ describe('the instances a for_each makes', () => {
 
   it.each([
     ['a value only an apply makes', valueOf(types.dynamic, UNKNOWN), 'for_each must be known when planning: it reads a value only an apply makes'],
+    ['a map only an apply makes', valueOf(types.map(types.string), UNKNOWN), 'for_each must be known when planning: it reads a value only an apply makes'],
+    ['a string only an apply makes', valueOf(types.string, UNKNOWN), 'for_each is a map, or a list or a set of strings, not a string'],
     // A list's items are its keys.
     [
       'a list with an item only an apply makes',

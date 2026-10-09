@@ -333,7 +333,7 @@ describe('a resource with for_each', () => {
     ['a string', '"a"', 'for_each is a map, or a list or a set of strings, not a string'],
     ['a list with a number in it', '["a", 1]', 'for_each is a list of strings, but item [1] is a number'],
     ['a list with a string twice', '["a", "b", "a"]', 'for_each holds "a" twice; each instance needs a key of its own'],
-    ['a value only an apply makes', 'random_string.s.id', 'for_each must be known when planning: it reads a value only an apply makes'],
+    ['a string only an apply makes', 'random_string.s.id', 'for_each is a map, or a list or a set of strings, not a string'],
     // A list's items are its keys, so an unknown item leaves an instance without a key.
     [
       'a list with an item only an apply makes',

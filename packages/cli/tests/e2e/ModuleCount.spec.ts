@@ -256,7 +256,8 @@ describe('a module called with count', () => {
   it.each([
     ['a word', '"two"', 'count is a whole number from 0, not a string'],
     ['a negative number', '-1', 'count is a whole number from 0, not -1'],
-    ['a value only an apply makes', 'random_string.s.id', 'count must be known when planning: it reads a value only an apply makes'],
+    ['a number only an apply makes', 'length(random_string.s.id)', 'count must be known when planning: it reads a value only an apply makes'],
+    ['a string only an apply makes', 'random_string.s.id', 'count is a whole number from 0, not a string'],
   ])('refuses a count that is %s, where it is written', async (_, count, message) => {
     const config = `resource "random_string" "s" { length = 2 }\n${web(count)}`;
 

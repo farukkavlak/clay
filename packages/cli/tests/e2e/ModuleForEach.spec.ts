@@ -223,7 +223,7 @@ describe('a module called with for_each', () => {
 
   it.each([
     ['a string twice', '["ali", "ali"]', 'for_each holds "ali" twice; each instance needs a key of its own'],
-    ['a value only an apply makes', 'random_string.s.result', 'for_each must be known when planning: it reads a value only an apply makes'],
+    ['a string only an apply makes', 'random_string.s.result', 'for_each is a map, or a list or a set of strings, not a string'],
   ])('refuses a for_each with %s, where it is written', async (_, forEach, message) => {
     const config = `resource "random_string" "s" { length = 2 }\n${web(forEach)}`;
 
