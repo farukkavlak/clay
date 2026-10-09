@@ -1,4 +1,4 @@
-import { Address, ModuleAddress, Output, Resource, Schema, State, UNKNOWN } from '@clay/contracts';
+import { Address, ModuleAddress, Output, Resource, Schema, State } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { AttributeValue, DataBlock, ResourceBlock, spell, spellReference, Statement } from '@clay/parser';
 import { DesiredResource, hasChanges } from '@clay/planner';
@@ -6,7 +6,7 @@ import { moveResource } from '@clay/state';
 
 import { writtenAt } from '../conformValues';
 import { countFrom } from '../count';
-import { givenTo } from '../declared';
+import { givenTo, outputAs } from '../declared';
 import { eachFrom } from '../forEach';
 import { Instances } from '../Instances';
 import { Context, contextIn, DataInstance, enclosing, scopeOf } from '../keys';
@@ -17,9 +17,9 @@ import { tryAt, withPlace } from '../place';
 import { checkHasKey, checkInRange, instanceKeyIn } from '../resolvers/instance';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { Reference, ReferenceScanner } from '../resolvers/ReferenceScanner';
-import { UnresolvedReferenceError } from '../resolvers/UnresolvedReferenceError';
+import { unknownOf, UnresolvedReferenceError } from '../resolvers/UnresolvedReferenceError';
 import { ScopeManager } from '../scope/ScopeManager';
-import { carried, outputOf, Value, valueOf } from '../Value';
+import { carried, outputOf, Value } from '../Value';
 import { DataSourceReader } from './DataSourceReader';
 import { DependencyGraphBuilder, GraphNode, LocalNode, OutputNode, ValueNode } from './DependencyGraphBuilder';
 import { LoadedResource } from './ModuleLoader';
@@ -289,7 +289,7 @@ export class DesiredStateBuilder {
   private planOutput(node: OutputNode, instance: ModuleAddress, state: State, rootOutputs: Map<string, Output>): void {
     const read = (constant: AttributeValue) => this.resolveNode(node, constant, instance, state);
     const resolved = this.resolveNode(node, node.value, instance, state);
-    const value = tryAt(node.position, node.declaration, contextIn(node.context, instance), () => givenTo('output', node.name, resolved, node.declared, read));
+    const value = tryAt(node.position, node.declaration, contextIn(node.context, instance), () => outputAs(node.name, resolved, node.declared, read, instance.isRoot()));
     this.scopeManager.setOutput(instance.toString(), node.name, value);
 
     if (instance.isRoot()) rootOutputs.set(node.name, outputOf(value, node.declared.sensitive));
@@ -322,7 +322,7 @@ export class DesiredStateBuilder {
       return this.resolver.resolveValue(value, state, context);
     } catch (error) {
       if (!(error instanceof UnresolvedReferenceError)) throw error;
-      return valueOf(error.type, UNKNOWN);
+      return unknownOf(error);
     }
   }
 

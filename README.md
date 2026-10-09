@@ -85,9 +85,18 @@ An output with `sensitive = true` is hidden where it would be printed: `plan`, `
 and `clay output` show `<sensitive>` in its place, and a plan that puts the flag on or
 takes it off hides the value too. One that does not fit its `type` is refused without
 its value. `clay output --json` gives the value with `"sensitive": true`. The state and
-a plan file hold it unencrypted. The flag hides only that output: a module's sensitive
-output is not hidden in whatever its caller does with it, and an error raised while the
-value is worked out may still quote a part of it.
+a plan file hold it unencrypted.
+
+A module's sensitive output stays sensitive wherever its caller takes it: through a
+local, a variable, a string, a function and a `for`. It is followed part by part, so in
+`{ name = "app", password = module.db.password }` only `password` is sensitive. A set is
+sensitive as a whole when one member is, since its order and size give the member away.
+`length` of a list is not sensitive when only an item is. A root output that holds a
+sensitive value and does not say `sensitive = true` is refused, at `validate`, `plan`
+and `apply`. Three things are still open: a resource attribute given a sensitive value
+shows it in the plan, an error raised while the value is worked out may quote a part of
+it, and a sensitive `for_each` or `count` is accepted, so `each.key` and the number of
+instances are not sensitive.
 
 A local is a value with a name: `locals { name = "${var.prefix}-x" }` is read as
 `local.name`. It may read anything, another local among them, and is worked out once for

@@ -1,10 +1,10 @@
-import { AttributePath, ExactNumber, isRecord, isUnknown, NumberError, Schema, Type, UNKNOWN } from '@clay/contracts';
+import { AttributePath, ExactNumber, isRecord, isUnknown, NumberError, Schema, Type, typeAt, UNKNOWN } from '@clay/contracts';
 import { DataBlock, Position, ResourceBlock } from '@clay/parser';
 
 import { setOf } from './setMembers';
 import { shown } from './shown';
 import { items, spelled } from './spelled';
-import { article, child, described, unordered, Value, valueOf } from './Value';
+import { article, child, described, unordered, Value, valueOf, withSensitive } from './Value';
 import { ObjectType, withLeftOut } from './withLeftOut';
 
 /** Carries the attribute, so the caller can report its position; undefined for a missing attribute. */
@@ -140,8 +140,27 @@ function ordered(value: Value): unknown {
   return value.data;
 }
 
+/** A set is sorted and holds each member once, so a path into one ends at the set. */
+function endedAtSet(type: Type, path: AttributePath): AttributePath {
+  let current = type;
+
+  for (const [index, step] of path.entries()) {
+    if (current.kind === 'set') return path.slice(0, index);
+    current = typeAt(current, step);
+  }
+  return path;
+}
+
+/** `result` with the sensitive parts of the value it was made from, which keeps its steps. */
+export function sensitiveAs(value: Value, result: Value): Value {
+  return withSensitive(
+    result,
+    (value.sensitive ?? []).map((path) => endedAtSet(result.type, path))
+  );
+}
+
 /** An unknown is checked only for its kind here; it is checked again at apply. */
-export function converted(resource: string, value: Value, to: Type, path: AttributePath): Value {
+function plain(resource: string, value: Value, to: Type, path: AttributePath): Value {
   if (to.kind === 'dynamic') return valueOf(value.type, ordered(value));
   if (value.data === null) return valueOf(to, null);
 
@@ -149,9 +168,13 @@ export function converted(resource: string, value: Value, to: Type, path: Attrib
   if (from !== 'dynamic' && !TAKES[to.kind].includes(from)) throw mismatchAt(path, `${spelled(path)} is ${described(value)}, where ${resource} takes ${article(to.kind)}`);
   if (knownLater(value, to)) return valueOf(to, UNKNOWN);
 
-  const convert: Convert = (item, type, at) => converted(resource, item, type, at);
+  const convert: Convert = (item, type, at) => plain(resource, item, type, at);
   const isPrimitive = to.kind === 'string' || to.kind === 'number' || to.kind === 'bool';
   return valueOf(to, isPrimitive ? primitive(to.kind, value.data, path) : collection(resource, value, to, path, convert));
+}
+
+export function converted(resource: string, value: Value, to: Type, path: AttributePath): Value {
+  return sensitiveAs(value, plain(resource, value, to, path));
 }
 
 /** A name set to null counts as missing, so a required one is refused at its position. */

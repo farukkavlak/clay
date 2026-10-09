@@ -2,7 +2,7 @@ import { ExactNumber, isUnknown, Type, types, UNKNOWN } from '@clay/contracts';
 import { ConfigError, Position } from '@clay/parser';
 
 import { UnresolvedReferenceError } from './resolvers/UnresolvedReferenceError';
-import { child, described, hasText, objectOf, tupleOf, Value, valueOf } from './Value';
+import { allSensitiveIf, child, described, hasText, isSensitive, objectOf, tupleOf, Value, valueOf, wholeIf } from './Value';
 
 export type ForItem = [key: Value, value: Value];
 
@@ -57,8 +57,9 @@ function checkKey(key: Value, position: Position): void {
 /**
  * With `grouped`, each key holds its values in a tuple; without it, a duplicate key is refused.
  * Every known key is checked before an unknown key makes the whole result unknown.
+ * A sensitive key makes the whole object sensitive, since its names are its shape. `sensitive` says the collection is, as a whole.
  */
-export function forObject(entries: ForItem[], grouped: boolean, position: Position): Value {
+export function forObject(entries: ForItem[], grouped: boolean, sensitive: boolean, position: Position): Value {
   const keys = new Map<string, Value[]>();
   for (const [key, value] of entries) {
     checkKey(key, position);
@@ -71,6 +72,15 @@ export function forObject(entries: ForItem[], grouped: boolean, position: Positi
   }
 
   // One unknown key makes the object's shape unknown.
-  if (entries.some(([key]) => isUnknown(key.data))) throw new UnresolvedReferenceError('A key in a for is known only after apply, so what the for gives is not known yet');
-  return objectOf([...keys].map(([key, values]) => [key, grouped ? tupleOf(values) : values[0]]));
+  if (entries.some(([key]) => isUnknown(key.data)))
+    throw new UnresolvedReferenceError(
+      'A key in a for is known only after apply, so what the for gives is not known yet',
+      types.dynamic,
+      wholeIf(sensitive || entries.flat().some((part) => isSensitive(part)))
+    );
+
+  return allSensitiveIf(
+    entries.some(([key]) => isSensitive(key)),
+    objectOf([...keys].map(([key, values]) => [key, grouped ? tupleOf(values) : values[0]]))
+  );
 }

@@ -4,7 +4,7 @@ import { AttributeValue, TypeDefaults } from '@clay/parser';
 import { converted, SchemaMismatch } from './conformValues';
 import { setOf } from './setMembers';
 import { itemTypes, unified, Unjoinable } from './unify';
-import { child, objectOf, tupleOf, unordered, Value, valueOf } from './Value';
+import { allSensitive, allSensitiveIf, child, isAllSensitive, isSensitive, objectOf, tupleOf, unordered, Value, valueOf } from './Value';
 
 /** `read` evaluates a default, which is always a constant. */
 export interface Defaults {
@@ -106,8 +106,9 @@ function filled(value: Value, declared: Type, defaults: TypeDefaults | undefined
   return filledSequence(value, declared, defaults, fill, path);
 }
 
+/** Built again from its parts, so an empty one sensitive as a whole would come out with nothing sensitive. */
 function fillWith(holder: string, read: Defaults['read'] | undefined): Fill {
-  const fill: Fill = { holder, read, walk: (value, declared, defaults, path) => filled(value, declared, defaults, fill, path) };
+  const fill: Fill = { holder, read, walk: (value, declared, defaults, path) => allSensitiveIf(isAllSensitive(value), filled(value, declared, defaults, fill, path)) };
   return fill;
 }
 
@@ -152,6 +153,15 @@ export function givenTo(holder: Holder, name: string, value: Value, { type, defa
     if (sensitive && error instanceof SchemaMismatch) throw new SchemaMismatch(`${name} does not fit its type; it is sensitive, so its value is not shown`);
     throw error;
   }
+}
+
+/** A root output is where a value leaves, so it holds a sensitive one only if marked. */
+export function outputAs(name: string, value: Value, declared: Declared, read: Defaults['read'], root: boolean): Value {
+  const given = givenTo('output', name, value, declared, read);
+  if (declared.sensitive) return allSensitive(given);
+  if (root && isSensitive(given)) throw new Error(`output "${name}" holds a sensitive value; write sensitive = true to export it`);
+
+  return given;
 }
 
 /** Checks every default against its attribute's type, so a bad default is refused even when no value uses it. */
