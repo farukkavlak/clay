@@ -13,6 +13,12 @@ export interface VariableReference {
   path: Step[];
 }
 
+export interface LocalReference {
+  kind: 'local';
+  name: string;
+  path: Step[];
+}
+
 /** As a resource reference: the first step may be an instance key or an attribute, and with neither it reads the whole data source. */
 export interface DataReference {
   kind: 'data';
@@ -53,7 +59,7 @@ export interface PathReference {
   path: Step[];
 }
 
-export type ParsedReference = VariableReference | DataReference | ModuleOutputReference | ResourceReference | CountReference | EachReference | PathReference;
+export type ParsedReference = VariableReference | LocalReference | DataReference | ModuleOutputReference | ResourceReference | CountReference | EachReference | PathReference;
 
 /** What a reference can spell after a dot, so every declared name can be referenced. */
 export const NAME = /^[A-Za-z_][A-Za-z0-9_-]*$/;
@@ -98,6 +104,13 @@ function variableReference(parts: Step[], position?: Position): VariableReferenc
   const { names, path } = split(parts, 2, position);
 
   return { kind: 'variable', name: names[1], path };
+}
+
+function localReference(parts: Step[], position?: Position): LocalReference {
+  if (parts.length < 2) refuse(`Reference "${spellReference(parts)}" names nothing: a local is read by its name, as in local.name`, position);
+  const { names, path } = split(parts, 2, position);
+
+  return { kind: 'local', name: names[1], path };
 }
 
 function dataReference(parts: Step[], position?: Position): DataReference {
@@ -149,6 +162,7 @@ function pathReference(parts: Step[], position?: Position): PathReference {
 export function parseReference(parts: Step[], position?: Position): ParsedReference {
   const head = parts.length === 0 ? undefined : stepKey(parts[0]);
   if (head === 'var') return variableReference(parts, position);
+  if (head === 'local') return localReference(parts, position);
   if (head === 'data') return dataReference(parts, position);
   if (head === 'module') return moduleOutputReference(parts, position);
   if (head === 'count') return countReference(parts, position);

@@ -6,11 +6,13 @@ import {
   ConfigError,
   EachReference,
   ForNode,
+  LocalReference,
   ParsedReference,
   PathReference,
   parseReference,
   Position,
   ReferenceNode,
+  spell,
   spellNamed,
   spellReference,
   Step,
@@ -22,6 +24,7 @@ import { checkCollection, forItems, ForItem, forObject, unknownItem } from '../f
 import { Instances } from '../Instances';
 import { functionCalled } from '../functions';
 import { Context, DataInstance, instanceKeyOf, ModuleCall, moduleOf, scopeOf } from '../keys';
+import { tryAt } from '../place';
 import { ModuleInstances } from '../ModuleInstances';
 import { Planned } from '../Planned';
 import { ScopeManager } from '../scope/ScopeManager';
@@ -45,7 +48,7 @@ function literal(node: Extract<AttributeValue, { type: 'String' | 'Number' | 'Bo
 /** Values bound by enclosing for expressions. */
 type Given = ReadonlyMap<string, Value>;
 
-/** With `asWritten`, every reference reads as unknown of the type it will have. */
+/** With `asWritten`, a reference reads as unknown of the type it will have, and a local as its value read the same way. */
 interface Reading {
   given: Given;
   asWritten: boolean;
@@ -76,6 +79,8 @@ export class ReferenceResolver {
   private moduleOutputs: ModuleOutputResolver;
   private resources: ResourceResolver;
   private written: WrittenTypes;
+  /** Read once however many read it, by its value as parsed, which one load makes and no other shares. */
+  private writtenLocals = new WeakMap<AttributeValue, Value>();
 
   constructor(
     scopeManager: ScopeManager,
@@ -170,6 +175,7 @@ export class ReferenceResolver {
 
   private resolveTarget(reference: ParsedReference, state: State, where: Context, position: Position): { value: Value; path: Step[] } {
     if (reference.kind === 'variable') return { value: this.variables.resolve(reference, where, state), path: reference.path };
+    if (reference.kind === 'local') return { value: this.local(reference, where), path: reference.path };
     if (reference.kind === 'data') return this.dataSources.resolve(reference, where, position);
     if (reference.kind === 'module') return this.moduleOutputs.resolve(reference, where, position);
     if (reference.kind === 'count') return { value: countIndex(where, position), path: reference.path };
@@ -179,9 +185,29 @@ export class ReferenceResolver {
     return this.resources.resolve(reference, where, state, position);
   }
 
-  /** Paths are known at load; anything else is unknown. */
+  /** The graph runs a local before anything that reads it, in every module instance. */
+  private local(reference: LocalReference, where: Context): Value {
+    const value = this.scopeManager.getLocal(scopeOf(where), reference.name);
+    if (value === undefined) throw new Error(`local.${reference.name} was read before it was worked out`);
+
+    return value;
+  }
+
+  /** Placed at the local, so a mistake in it is not reported at whatever reads it first. */
+  private writtenLocal(reference: LocalReference, where: Context): Value {
+    const module = moduleOf(where).withoutKeys();
+    // The graph has already refused undeclared locals, and one that reads itself.
+    const local = this.scopeManager.declaredLocal(scopeOf(module), reference.name)!;
+    const read = this.writtenLocals.get(local.value) ?? tryAt(local.value.position, spell(local), module, () => this.readAsWritten(local.value, module));
+
+    this.writtenLocals.set(local.value, read);
+    return read;
+  }
+
+  /** Paths are known at load, and a local is read as written in its turn; anything else is unknown. */
   private writtenTarget(reference: ParsedReference, where: Context, position: Position): { value: Value; path: Step[] } {
     if (reference.kind === 'path') return this.resolveTarget(reference, emptyState(), where, position);
+    if (reference.kind === 'local') return { value: this.writtenLocal(reference, where), path: reference.path };
 
     const { type, path } = this.written.typeOf(reference, where, position);
     return { value: valueOf(type, UNKNOWN), path };
@@ -223,7 +249,7 @@ export class ReferenceResolver {
     return this.resolveIn(node, state, context, READING);
   }
 
-  /** Every reference reads as unknown of the type it will have, so one read covers every instance of the block. */
+  /** A reference reads as unknown of the type it will have, and a local as its value read the same way, so one read covers every instance of the block. */
   readAsWritten(node: AttributeValue, context: Context): Value {
     // Nothing reads the state here.
     return this.resolveItem(node, emptyState(), context, { ...READING, asWritten: true });

@@ -1,11 +1,11 @@
 import { ModuleAddress, Type } from '@clay/contracts';
 import { Graph } from '@clay/graph';
-import { AttributeValue, callsIn, DataBlock, ModuleBlock, Position, spell, TypeDefaults } from '@clay/parser';
+import { AttributeValue, callsIn, DataBlock, ModuleBlock, Position, spell, Statement, TypeDefaults } from '@clay/parser';
 
 import { Instances, Repetition } from '../Instances';
 import { declaredOf } from '../declared';
 import { functionCalled } from '../functions';
-import { callKey, Context, dataSourceAddress, dataSourceKey, ModuleCall, outputKey, scopeOf, variableKey } from '../keys';
+import { callKey, Context, dataSourceAddress, dataSourceKey, localKey, ModuleCall, outputKey, scopeOf, variableKey } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
 import { placed, tryAt, withPlace } from '../place';
 import { COUNT_INDEX_OUTSIDE, eachOutside, readCall, readInstance } from '../resolvers/instance';
@@ -29,9 +29,14 @@ export interface ValueNode extends InModule {
 /** An output always has a value; a variable may not until a call gives it one. */
 export type OutputNode = ValueNode & { value: AttributeValue; declared: { type?: Type; defaults?: TypeDefaults } };
 
+export type LocalNode = ValueNode & { value: AttributeValue };
+
+const SPELLED = { variable: 'var', local: 'local', output: 'output' };
+
 export type GraphNode =
   | ({ kind: 'resource' } & InModule)
   | ({ kind: 'variable' } & ValueNode)
+  | ({ kind: 'local' } & LocalNode)
   | ({ kind: 'output' } & OutputNode)
   | ({ kind: 'module'; block: ModuleBlock } & InModule)
   | ({ kind: 'data'; block: DataBlock } & InModule);
@@ -43,7 +48,7 @@ function spellNode(key: string, node: GraphNode): string {
   if (node.kind === 'data') return dataSourceAddress(node.module.toString(), node.block.dataSourceType, node.block.name);
 
   const scope = node.module.toString();
-  return `${scope ? `${scope}.` : ''}${node.kind === 'variable' ? 'var' : 'output'}.${node.name}`;
+  return `${scope ? `${scope}.` : ''}${SPELLED[node.kind]}.${node.name}`;
 }
 
 function inputNames(attributes: Record<string, AttributeValue>): string[] {
@@ -58,6 +63,7 @@ function checkInstanceReference(reference: Extract<Reference, { kind: 'count' | 
 
 function describeMissing(reference: Exclude<Reference, { kind: 'count' | 'each' }>, moduleScopes: Set<string>): string {
   if (reference.kind === 'variable') return `variable "${reference.name}" is not defined`;
+  if (reference.kind === 'local') return `local "${reference.name}" is not defined`;
   if (reference.kind === 'resource') return `"${reference.key}" is not declared in the configuration`;
   // As written: the error's place names the module.
   if (reference.kind === 'data') return `"${reference.name}" is not declared in the configuration`;
@@ -115,7 +121,7 @@ export class DependencyGraphBuilder {
   }
 
   private addNodeDependencies(key: string, node: GraphNode, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
-    if (node.kind === 'variable' || node.kind === 'output') this.addValueDependencies(key, node, graph, moduleScopes);
+    if (node.kind === 'variable' || node.kind === 'local' || node.kind === 'output') this.addValueDependencies(key, node, graph, moduleScopes);
     if (node.kind === 'module') this.addCallDependencies(key, node.block, node.module, graph, moduleScopes);
     if (node.kind === 'data') this.addDataDependencies(key, node.block, node.module, graph, moduleScopes);
   }
@@ -160,7 +166,7 @@ export class DependencyGraphBuilder {
       tryAt(value.position, dependent.declaration, address, () => this.addDependencies(value, graph, dependent, moduleScopes, repetition));
   }
 
-  /** Looks through the variables, outputs and data sources in between. */
+  /** Looks through the variables, locals, outputs and data sources in between. */
   resourceDependencies(graph: Graph<GraphNode>, key: string): string[] {
     const found = new Set<string>();
     const seen = new Set<string>([key]);
@@ -178,43 +184,52 @@ export class DependencyGraphBuilder {
     return [...found].sort();
   }
 
-  /** Variables, outputs and data sources are nodes, so they run after what they read and before what reads them. */
+  /** Variables, locals, outputs and data sources are nodes, so they run after what they read and before what reads them. */
   private valueNodes(loadedModules: LoadedModule[]): Map<string, GraphNode> {
     const nodes = new Map<string, GraphNode>();
 
-    for (const mod of loadedModules) {
-      const scope = scopeOf(mod.address);
-
-      for (const stmt of mod.program) {
-        const declaration = spell(stmt);
-
-        if (stmt.type === 'Output')
-          nodes.set(outputKey(scope, stmt.name), {
-            kind: 'output',
-            module: mod.address,
-            name: stmt.name,
-            value: stmt.value,
-            declared: declaredOf(stmt),
-            context: mod.address,
-            position: stmt.value.position,
-            declaration,
-          });
-        if (stmt.type === 'Variable' && !nodes.has(variableKey(scope, stmt.name)))
-          nodes.set(variableKey(scope, stmt.name), {
-            kind: 'variable',
-            module: mod.address,
-            name: stmt.name,
-            value: stmt.attributes.default,
-            context: mod.address,
-            position: stmt.attributes.default?.position ?? stmt.position,
-            declaration,
-          });
-        if (stmt.type === 'Module') this.setCallNodes(stmt, nodes, mod.address);
-        if (stmt.type === 'Data') nodes.set(dataSourceKey(scope, stmt.dataSourceType, stmt.name), { kind: 'data', module: mod.address, block: stmt });
-      }
-    }
+    for (const { address, program } of loadedModules) for (const stmt of program) this.setNodes(stmt, address, nodes);
 
     return nodes;
+  }
+
+  private setNodes(stmt: Statement, module: ModuleAddress, nodes: Map<string, GraphNode>): void {
+    const scope = scopeOf(module);
+    const declaration = spell(stmt);
+
+    if (stmt.type === 'Output')
+      nodes.set(outputKey(scope, stmt.name), {
+        kind: 'output',
+        module,
+        name: stmt.name,
+        value: stmt.value,
+        declared: declaredOf(stmt),
+        context: module,
+        position: stmt.value.position,
+        declaration,
+      });
+    if (stmt.type === 'Variable' && !nodes.has(variableKey(scope, stmt.name)))
+      nodes.set(variableKey(scope, stmt.name), {
+        kind: 'variable',
+        module,
+        name: stmt.name,
+        value: stmt.attributes.default,
+        context: module,
+        position: stmt.attributes.default?.position ?? stmt.position,
+        declaration,
+      });
+    if (stmt.type === 'Local')
+      nodes.set(localKey(scope, stmt.name), {
+        kind: 'local',
+        module,
+        name: stmt.name,
+        value: stmt.value,
+        context: module,
+        position: stmt.value.position,
+        declaration,
+      });
+    if (stmt.type === 'Module') this.setCallNodes(stmt, nodes, module);
+    if (stmt.type === 'Data') nodes.set(dataSourceKey(scope, stmt.dataSourceType, stmt.name), { kind: 'data', module, block: stmt });
   }
 
   // An input is read in the call and overrides the default.

@@ -5,6 +5,7 @@ import {
   CallNode,
   DataBlock,
   ForNode,
+  LocalBlock,
   ModuleBlock,
   namedIn,
   OutputBlock,
@@ -26,7 +27,7 @@ import { NAME, Step } from './reference';
 import { Token, TokenType } from './tokens';
 
 /** Reference prefixes, so no resource type or for name may use them. */
-const RESERVED_TYPES = new Set(['module', 'var', 'data', 'count', 'each', 'path']);
+const RESERVED_TYPES = new Set(['module', 'var', 'local', 'data', 'count', 'each', 'path']);
 
 /** A name spelled like one could never be referenced. */
 const KEYWORDS = new Set(['true', 'false', 'null']);
@@ -77,17 +78,15 @@ export class Parser {
     const program: Program = [];
     const declared = new Set<string>();
 
-    while (!this.isAtEnd()) {
-      const start = this.peek();
-      const statement = this.parseStatement();
+    while (!this.isAtEnd())
+      for (const statement of this.parseStatements()) {
+        // A duplicate would silently replace the first.
+        const label = spell(statement);
+        if (declared.has(label)) throw new ConfigError(`${label} is declared twice`, statement.position);
+        declared.add(label);
 
-      // A duplicate would silently replace the first.
-      const label = spell(statement);
-      if (declared.has(label)) throw new ConfigError(`${label} is declared twice`, start.position);
-      declared.add(label);
-
-      program.push(statement);
-    }
+        program.push(statement);
+      }
 
     this.checkForNames(program);
     return program;
@@ -109,6 +108,26 @@ export class Parser {
     ['output', this.parseOutput.bind(this)],
     ['module', this.parseModule.bind(this)],
   ]);
+
+  private parseStatements(): Statement[] {
+    return this.checkWord('locals') ? this.parseLocals() : [this.parseStatement()];
+  }
+
+  /** A statement for each name, so several blocks merge and a name set twice is a duplicate like any other. */
+  private parseLocals(): LocalBlock[] {
+    this.advance();
+    this.consume(TokenType.LBrace, "Expect '{' after 'locals'.");
+
+    const locals: LocalBlock[] = [];
+    while (!this.check(TokenType.RBrace) && !this.isAtEnd()) {
+      const key = this.consume(TokenType.Identifier, 'Expect the name of a local.');
+      this.consume(TokenType.Assign, "Expect '=' after the name of a local.");
+      locals.push({ type: 'Local', name: key.value, value: this.parseValue(), position: key.position });
+    }
+
+    this.consume(TokenType.RBrace, "Expect '}' after block body.");
+    return locals;
+  }
 
   private parseStatement(): Statement {
     const parseBlock = this.check(TokenType.Identifier) ? this.blockParsers.get(this.peek().value) : undefined;

@@ -98,7 +98,14 @@ export interface ModuleBlock extends Node {
   attributes: Record<string, AttributeValue>;
 }
 
-export type Statement = ResourceBlock | VariableBlock | OutputBlock | DataBlock | ModuleBlock;
+/** One name of a `locals` block, so the names of several blocks are told apart like any other statements. */
+export interface LocalBlock extends Node {
+  type: 'Local';
+  name: string;
+  value: AttributeValue;
+}
+
+export type Statement = ResourceBlock | VariableBlock | OutputBlock | DataBlock | ModuleBlock | LocalBlock;
 export type Program = Statement[];
 
 /** `resource "local_file" "a"`, `module "m"`. */

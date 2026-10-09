@@ -64,6 +64,7 @@ An attribute of an object type can be optional, with a default:
 | -------------------------------- | -------------------------------------------------------------- |
 | `resource "type" "name" { ... }` | Something the provider creates, updates and destroys           |
 | `variable "name" { default = }`  | A value the file takes; a module gets it from its caller       |
+| `locals { name = }`              | Values the file works out once and reads by name               |
 | `output "name" { value = }`      | A value the file gives back; a module's caller reads it        |
 | `module "name" { source = }`     | Another directory with its own `main.clay`, called with inputs |
 
@@ -80,8 +81,14 @@ way. A module call takes `for_each` too, `module.web["eu"]`, with `each.key` and
 `each.value` in its inputs. A `for_each` map needs its keys at plan time, not its values:
 `{ a = random_string.s.id }` plans `["a"]` with `each.value` unknown.
 
-References: `var.name`, `local_file.a.content`, `module.m.out`, `module.web[0].out`, and
-`random_string.s.id` for what the provider assigned. A reference reads into a map or a
+A local is a value with a name: `locals { name = "${var.prefix}-x" }` is read as
+`local.name`. It may read anything, another local among them, and is worked out once for
+each instance of its module, after what it reads. It names no type and has the one its
+value has. Only its own module reads it. A file may hold several `locals` blocks; a name
+set twice is refused.
+
+References: `var.name`, `local.name`, `local_file.a.content`, `module.m.out`,
+`module.web[0].out`, and `random_string.s.id` for what the provider assigned. A reference reads into a map or a
 list with `.key`, `["key"]` and `[0]`: `var.tags.env`, `var.names[0]`. A resource named
 with no attribute is an object of all its attributes: `local_file.a`, or one instance as
 `local_file.logs[0]` and `local_file.f["key"]`. With `count`, `local_file.logs` alone is
@@ -185,7 +192,7 @@ resource's is, before anything is read. A read that returns a value not known, o
 the schema does not have, stops the run as a bug in the provider. A data source is read
 once for each instance of its module, in its turn among the resources. It is read at plan,
 unless what it reads changes in the apply: a resource the plan creates or changes, read
-directly or through a variable or a module output. Then the plan shows
+directly or through a variable, a local or a module output. Then the plan shows
 `<= data.local_file.f will be read during apply`, or a line for each index or key with
 `count` or `for_each`, `<= data.local_file.f[0] ...`. What it reads is `(known after apply)`, and the apply reads
 it after those resources. In a module called with `count` or
@@ -206,9 +213,9 @@ its instances. A plan file holds them unencrypted, a secret a data source read a
    a bug in the provider.
 2. The parser turns `main.clay` and every module it names into a tree, with the file,
    line and column on every node.
-3. The graph builder links each resource, variable and output to what it reads, and
-   sorts them so nothing runs before what it needs. A cycle or a reference to nothing
-   stops here.
+3. The graph builder links each resource, variable, local and output to what it reads,
+   and sorts them so nothing runs before what it needs. A cycle or a reference to
+   nothing stops here.
 4. Each value is resolved in that order and held to the type its schema names. The
    provider checks it and plans what the resource will hold: a value it computes is
    known after apply once anything changes, unless it can work it out sooner, as

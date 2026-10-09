@@ -4,7 +4,7 @@ import { DataReference, ModuleOutputReference, ParsedReference, parseReference, 
 import { repetitionOfKey } from '../Instances';
 import { instanceKeyIn } from './instance';
 import { ModuleInstances } from '../ModuleInstances';
-import { blockKey, callKey, Context, dataSourceKey, moduleOf, outputKey, scopeOf, variableKey } from '../keys';
+import { blockKey, callKey, Context, dataSourceKey, localKey, moduleOf, outputKey, scopeOf, variableKey } from '../keys';
 
 /** It also walks plain objects, which may have no position. */
 function positionOf(value: unknown): Position | undefined {
@@ -22,6 +22,7 @@ function positionOf(value: unknown): Position | undefined {
 export type Reference = (
   | { kind: 'resource'; key: string; block: string; reference: ResourceReference }
   | { kind: 'variable'; key: string; name: string }
+  | { kind: 'local'; key: string; name: string }
   | { kind: 'data'; key: string; block: string; name: string; reference: DataReference }
   | { kind: 'output'; key: string; call: ModuleAddress; instanceKey?: InstanceKey; scope: string; module: string; name?: string; reference: ModuleOutputReference }
   | { kind: 'count' }
@@ -78,6 +79,9 @@ export class ReferenceScanner {
       }
       case 'variable': {
         return { kind: 'variable', key: variableKey(scope, reference.name), name: reference.name };
+      }
+      case 'local': {
+        return { kind: 'local', key: localKey(scopeOf(moduleOf(context).withoutKeys()), reference.name), name: reference.name };
       }
       case 'module': {
         return { kind: 'output', ...this.outputOf(reference, context) };

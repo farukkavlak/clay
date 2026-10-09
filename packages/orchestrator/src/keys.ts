@@ -9,6 +9,10 @@ export function variableKey(scope: string, name: string): string {
   return scope ? `${scope}.vars:${name}` : `vars:${name}`;
 }
 
+export function localKey(scope: string, name: string): string {
+  return scope ? `${scope}.locals:${name}` : `locals:${name}`;
+}
+
 export function outputKey(scope: string, name: string): string {
   return scope ? `${scope}.outputs:${name}` : `outputs:${name}`;
 }
@@ -81,7 +85,7 @@ export class ModuleCall {
   }
 }
 
-/** A resource instance, a data source instance, a module (its variables and outputs), or a module call. */
+/** A resource instance, a data source instance, a module (its variables, locals and outputs), or a module call. */
 export type Context = Address | DataInstance | ModuleAddress | ModuleCall;
 
 export function moduleOf(context: Context): ModuleAddress {
