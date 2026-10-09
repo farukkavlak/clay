@@ -1,5 +1,5 @@
 import { ModuleAddress, Schema } from '@clay/contracts';
-import { AttributeValue, ModuleBlock, OutputBlock, spell } from '@clay/parser';
+import { AttributeValue, DataBlock, ModuleBlock, OutputBlock, spell } from '@clay/parser';
 
 import { converted } from '../conformValues';
 import { declaredOf, givenTo } from '../declared';
@@ -15,7 +15,8 @@ export class WrittenCheck {
   constructor(
     private resolver: ReferenceResolver,
     private scopeManager: ScopeManager,
-    private schemas: Map<string, Schema>
+    private schemas: Map<string, Schema>,
+    private dataSchemas: Map<string, Schema>
   ) {}
 
   /** Runs after names are checked, so each has a type in its schema. */
@@ -25,6 +26,7 @@ export class WrittenCheck {
     for (const { address, program } of loadedModules)
       for (const stmt of program) {
         if (stmt.type === 'Output') this.checkOutput(stmt, address);
+        if (stmt.type === 'Data') this.checkData(stmt, address);
         if (stmt.type === 'Variable' && stmt.attributes.default) this.checkGiven(stmt.name, stmt.attributes.default, spell(stmt), address, address);
         if (stmt.type === 'Module') this.checkCall(stmt, address.child(stmt.name));
       }
@@ -36,9 +38,18 @@ export class WrittenCheck {
     const schema = this.schemas.get(block.resourceType)!;
 
     for (const value of [block.count, block.forEach]) if (value) this.read(value, declaration, address);
-    for (const [name, value] of Object.entries(block.attributes)) {
-      const read = this.read(value, declaration, address);
-      tryAt(value.position, declaration, address, () => converted(block.resourceType, read, schema[name].type, [name]));
+    this.checkAttributes(block.resourceType, block.attributes, schema, declaration, address);
+  }
+
+  private checkData(block: DataBlock, module: ModuleAddress): void {
+    // Every data schema is loaded by now, its names checked.
+    this.checkAttributes(block.dataSourceType, block.attributes, this.dataSchemas.get(block.dataSourceType)!, spell(block), module);
+  }
+
+  private checkAttributes(type: string, attributes: Record<string, AttributeValue>, schema: Schema, declaration: string, context: Context): void {
+    for (const [name, value] of Object.entries(attributes)) {
+      const read = this.read(value, declaration, context);
+      tryAt(value.position, declaration, context, () => converted(type, read, schema[name].type, [name]));
     }
   }
 

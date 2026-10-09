@@ -203,7 +203,8 @@ A resource named with no attribute is the whole instance: an object that holds e
 attribute of its schema, with `null` for one nothing sets. `local_file.a` reads a resource
 with no `count` or `for_each`, `local_file.logs[0]` one instance by its index and
 `local_file.f["key"]` one by its key. A resource with `count` or `for_each` named with no
-index or key is refused. A key is written in brackets, so under `for_each`
+index or key is every instance: a list by index under `count`, a map by key under
+`for_each`. A key is written in brackets, so under `for_each`
 `local_file.f.content` has no key and is refused: a name after a dot there is never a key.
 
 `path.module` is the directory of the module it is written in, relative to the root: `.`

@@ -65,7 +65,7 @@ export class Orchestrator {
       providers,
       new ConfigLoader(new ModuleLoader(files, scopes), scopes, dataSources, schemas, dataSchemas, resolver, providers, instances, modules, planned),
       graphBuilder,
-      new WrittenCheck(resolver, scopes, schemas),
+      new WrittenCheck(resolver, scopes, schemas, dataSchemas),
       new DesiredStateBuilder(scopes, scanner, resolver, graphBuilder, instances, modules, planned, resourcePlanner, reader),
       new PlanRunner(stateManager, new ActionExecutor(providers, resolver, resourcePlanner), scopes, resolver, instances, modules, reader)
     );

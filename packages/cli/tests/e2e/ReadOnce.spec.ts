@@ -65,6 +65,20 @@ describe('every block read once, whatever instances it makes', () => {
     expect(error.block).toBe('resource "local_file" "f"');
   });
 
+  it.each([
+    ['a broken value', BROKEN, REFUSED, CANNOT_JOIN],
+    ['a value of the wrong type', '["x"]', '["x"]', 'path is a tuple, where local_file takes a string'],
+  ])('refuses %s in a data source in a module that makes no instance', async (_, value, refused, message) => {
+    const module = `data "local_file" "f" {\n  path = ${value}\n}`;
+    await writeModule(module);
+
+    const error = await errorOf(() => newOrchestrator().validate('module "m" {\n  source = "./m"\n  count  = 0\n}'));
+
+    expect(error.message).toBe(message);
+    expect(error.position).toEqual({ file: path.join('m', 'main.clay'), ...placeOf(module, refused) });
+    expect(error.block).toBe('data "local_file" "f"');
+  });
+
   it('refuses a broken input to a variable that names no type, given to a module call with count = 0', async () => {
     await writeModule('variable "a" {}');
     const config = `module "m" {\n  source = "./m"\n  count  = 0\n  a      = ${BROKEN}\n}`;

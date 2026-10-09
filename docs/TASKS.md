@@ -136,6 +136,12 @@ change each.
       was no address was shown by `apply` and then failed with no file named, and one in
       both `dataSources` and `readAtApply` was taken from the first and never read. Now
       the file is refused as it is read, with the address and what is wrong with it
+- [x] A data source in a module that makes no instance was never read. With
+      `data "local_file" "f" { path = ["x"] }` in a module called with `count = 0`,
+      `clay validate` said the configuration was valid; with `count = 1` it was refused.
+      Every block was read once as written but the data block. Now each of its values is
+      read the same way and held to the type its schema names. Terraform validates a data
+      block once the same way
 
 ## 1. Language
 
