@@ -274,10 +274,14 @@ configuration hits each of these early.
       keys were sensitive, where a plan said it must be known and `validate` took it. Three things make it so: a sensitive key
       or body, a sensitive part of the collection, and a key not known yet. A step that
       stands for every item would keep the mark on the items alone
-- [ ] A key of a `for` over a collection not known yet is read at plan but not checked.
-      `{ for v in tolist(toset([random_string.r.result])) : [v] => v }` passes the plan
-      and the apply refuses the key after `random_string.r` is made; over a known
-      collection the plan refuses it
+- [x] A key of a `for` over a collection not known yet is checked at plan, as one over
+      a known collection is. `{ for v in tolist(toset([random_string.r.result])) : [v] => v }`
+      is refused by `validate` and the plan, where the apply refused the key after
+      `random_string.r` was made. So is one over an empty collection, or in a block that
+      makes no instance, which no run refused
+- [ ] A `for` written as a key passes the plan while it is not known, since it has no
+      type until then: `{ for v in var.l : [for c in <not known yet> : c] => v }` is
+      refused only by the apply, as a tuple
 - [ ] A resource attribute given a sensitive value is hidden in the plan and under
       "Changed outside Clay": `content = (sensitive value)`, as Terraform prints it. A
       plan file and the state keep which parts of a resource are sensitive, as

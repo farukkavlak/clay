@@ -341,6 +341,21 @@ describe('ReferenceResolver', () => {
       expect(() => readWith(value, new Map(), planning())).toThrow(new ConfigError(message, atColumn(column)));
     });
 
+    it.each([
+      ['a collection not known yet', 'data.src.s.v', valueOf(types.list(types.string), UNKNOWN)],
+      ['a set with a member not known yet', 'data.src.s.v', valueOf(types.set(types.string), ['a', UNKNOWN])],
+    ])('refuses a key no key can be over %s, while planning', (_, collection, value) => {
+      expect(() => readWith(`{for v in ${collection} : [v] => v}`, source(value), planning())).toThrow(
+        new ConfigError('A key in a for is a string, a number or a boolean, not a tuple', atColumn(47))
+      );
+    });
+
+    it('refuses __proto__ as a key over a collection not known yet, while planning', () => {
+      expect(() => readWith('{for v in data.src.s.v : "__proto__" => v}', source(valueOf(types.list(types.string), UNKNOWN)), planning())).toThrow(
+        new ConfigError('__proto__ cannot be a name', atColumn(47))
+      );
+    });
+
     it('refuses a key not known yet whose type no key can have, while planning', () => {
       expect(() => readWith('{for v in ["a"] : data.src.s.v => v}', source(valueOf(types.list(types.string), UNKNOWN)), planning())).toThrow(
         new ConfigError('A key in a for is a string, a number or a boolean, not a list', atColumn(40))

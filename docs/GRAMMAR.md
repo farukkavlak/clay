@@ -327,7 +327,8 @@ A for over a constant may be a variable's default.
 value after it are read once for each item. Each value keeps its own type. A key is a
 string; a number or a boolean becomes its text, and anything else, `null` too, is
 refused where the key is written, at plan too when the key is known only after apply but
-its type is known. `__proto__` is refused as a key, as in a map.
+its type is known, and when the collection is not known yet, is empty, or is in a block
+that makes no instance. `__proto__` is refused as a key, as in a map.
 
 A key two items give is refused where the key is written. With `...` after the value,
 `{for f in var.files : f.dir => f.name...}`, the items of one key are grouped instead:
