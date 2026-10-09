@@ -26,6 +26,11 @@ export function isSequence(kind: Type['kind']): boolean {
   return FAMILIES[kind] === 'sequence';
 }
 
+/** The reason names attributes of the types, which are keys of the value, so it is left out where a part of the value is sensitive. */
+export function unjoined(error: Unjoinable, sensitive: boolean): string {
+  return sensitive ? 'cannot join what it holds into one type; a part of it is sensitive, so no more is shown' : error.message;
+}
+
 function unjoinable(reason: string, at: Step[]): Unjoinable {
   return new Unjoinable(`cannot join ${reason} into one type${at.length > 0 ? `, at ${spellSteps(at)} in each item` : ''}`);
 }

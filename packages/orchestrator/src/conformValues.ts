@@ -4,7 +4,7 @@ import { DataBlock, Position, ResourceBlock } from '@clay/parser';
 import { setOf } from './setMembers';
 import { shown } from './shown';
 import { items, spelled } from './spelled';
-import { article, child, described, unordered, Value, valueOf, withSensitive } from './Value';
+import { article, child, described, HIDDEN, isAllSensitive, isSensitive, unordered, Value, valueOf, withSensitive } from './Value';
 import { ObjectType, withLeftOut } from './withLeftOut';
 
 /** Carries the attribute, so the caller can report its position; undefined for a missing attribute. */
@@ -71,26 +71,27 @@ const TAKES: Record<Type['kind'], readonly Type['kind'][]> = {
   object: ['map', 'object'],
 };
 
-function numberIn(text: string, path: AttributePath): ExactNumber {
+function numberIn(value: Value, path: AttributePath): ExactNumber {
   try {
-    return ExactNumber.parse(text);
+    return ExactNumber.parse(value.data as string);
   } catch (error) {
-    if (error instanceof NumberError) throw mismatchAt(path, `${spelled(path)}: ${error.message}`);
+    if (error instanceof NumberError) throw mismatchAt(path, `${spelled(path)}: ${isSensitive(value) ? `${HIDDEN} ${error.problem}` : error.message}`);
     throw error;
   }
 }
 
-function booleanIn(text: string, path: AttributePath): boolean {
+function booleanIn(value: Value, path: AttributePath): boolean {
+  const text = value.data as string;
   if (text === 'true' || text === 'false') return text === 'true';
 
-  throw mismatchAt(path, `${spelled(path)}: ${shown(text)} is not a boolean, which is "true" or "false"`);
+  throw mismatchAt(path, `${spelled(path)}: ${isSensitive(value) ? HIDDEN : shown(text)} is not a boolean, which is "true" or "false"`);
 }
 
-function primitive(kind: Type['kind'], data: unknown, path: AttributePath): unknown {
-  if (kind === 'string') return String(data);
-  if (typeof data !== 'string') return data;
+function primitive(kind: Type['kind'], value: Value, path: AttributePath): unknown {
+  if (kind === 'string') return String(value.data);
+  if (typeof value.data !== 'string') return value.data;
 
-  return kind === 'number' ? numberIn(data, path) : booleanIn(data, path);
+  return kind === 'number' ? numberIn(value, path) : booleanIn(value, path);
 }
 
 type Convert = (value: Value, to: Type, path: AttributePath) => Value;
@@ -159,6 +160,16 @@ export function sensitiveAs(value: Value, result: Value): Value {
   );
 }
 
+/** A mismatch inside a value sensitive as a whole is told at the value: a key, an item's place and how many there are, are parts of it. */
+export function toldWhole<T>(resource: string, value: Value, path: AttributePath, convert: () => T): T {
+  try {
+    return convert();
+  } catch (error) {
+    if (!(error instanceof SchemaMismatch) || !isAllSensitive(value)) throw error;
+    throw mismatchAt(path, `${spelled(path)} does not fit what ${resource} takes; it is sensitive, so its parts are not shown`);
+  }
+}
+
 /** An unknown is checked only for its kind here; it is checked again at apply. */
 function plain(resource: string, value: Value, to: Type, path: AttributePath): Value {
   if (to.kind === 'dynamic') return valueOf(value.type, ordered(value));
@@ -170,7 +181,7 @@ function plain(resource: string, value: Value, to: Type, path: AttributePath): V
 
   const convert: Convert = (item, type, at) => plain(resource, item, type, at);
   const isPrimitive = to.kind === 'string' || to.kind === 'number' || to.kind === 'bool';
-  return valueOf(to, isPrimitive ? primitive(to.kind, value.data, path) : collection(resource, value, to, path, convert));
+  return valueOf(to, isPrimitive ? primitive(to.kind, value, path) : toldWhole(resource, value, path, () => collection(resource, value, to, path, convert)));
 }
 
 export function converted(resource: string, value: Value, to: Type, path: AttributePath): Value {

@@ -45,6 +45,9 @@ export function allSensitiveIf(sensitive: boolean, result: Value): Value {
   return sensitive ? allSensitive(result) : result;
 }
 
+/** Stands in an error where a sensitive value would be quoted. */
+export const HIDDEN = '(sensitive value)';
+
 /** What is left of each path after `step`. A value sensitive as a whole is so in every part. */
 export function sensitiveUnder(paths: readonly AttributePath[], step: string | number): AttributePath[] {
   if (paths.some((path) => path.length === 0)) return [[]];

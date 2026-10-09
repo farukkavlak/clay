@@ -21,6 +21,8 @@ const typed = (value: string, type: string, flag = 'sensitive = true') =>
 
 const made = (flag: boolean) => `resource "random_string" "s" { length = 8 }\noutput "password" {\n  value = random_string.s.length${flag ? '\n  sensitive = true' : ''}\n}`;
 
+const FIT = 'password does not fit what output "password" takes; it is sensitive, so its parts are not shown';
+
 describe('a sensitive output', () => {
   let dir: string;
 
@@ -161,23 +163,28 @@ describe('a sensitive output', () => {
   describe('of a type its value does not fit', () => {
     // A key a for makes is data too, so nothing of the value is quoted, whatever the mismatch.
     it.each([
-      ['a string where it takes a number', 'random_string.s.result', 'number'],
-      ['a key its object type does not have', '{ for v in [random_string.s.result] : v => 1 }', 'object({ a = number })'],
-      ['a string under a key where it takes a boolean', '{ for v in [random_string.s.result] : v => "x" }', 'map(bool)'],
-      ['a string under a key where it takes a list', '{ for v in [random_string.s.result] : v => "x" }', 'map(list(string))'],
-      ['objects that share no type', '[{ a = 1 }, { for v in [random_string.s.result] : v => 1 }]', 'list(any)'],
-    ])('is refused at apply with nothing of the value a resource made, for %s', async (_, value, type) => {
+      ['a string where it takes a number', 'random_string.s.result', 'number', 'password: (sensitive value) is not a number'],
+      ['a key its object type does not have', '{ for v in [random_string.s.result] : v => 1 }', 'object({ a = number })', FIT],
+      ['a string under a key where it takes a boolean', '{ for v in [random_string.s.result] : v => "x" }', 'map(bool)', FIT],
+      ['a string under a key where it takes a list', '{ for v in [random_string.s.result] : v => "x" }', 'map(list(string))', FIT],
+      [
+        'objects that share no type',
+        '[{ a = 1 }, { for v in [random_string.s.result] : v => 1 }]',
+        'list(any)',
+        'output "password" cannot join what it holds into one type; a part of it is sensitive, so no more is shown',
+      ],
+    ])('is refused at apply with nothing of the value a resource made, for %s', async (_, value, type, message) => {
       const failed = await written(typed(value, type), 'apply', '--yes').catch((error: { stdout: string; stderr: string }) =>
         stripVTControlCharacters(error.stdout + error.stderr)
       );
       const state = JSON.parse(await fs.readFile(path.join(dir, 'clay.state.json'), 'utf8')) as { resources: Record<string, { attributes: { result: string } }> };
 
-      expect(failed).toContain('Apply failed: password does not fit its type; it is sensitive, so its value is not shown');
+      expect(failed).toContain(`Apply failed: ${message}`);
       expect(failed).not.toContain(state.resources['random_string.s'].attributes.result);
     });
 
     it('is refused by validate the same way, where the value is written', async () => {
-      await expect(newOrchestrator().validate(typed('"s3cret"', 'number'))).rejects.toThrow('password does not fit its type; it is sensitive, so its value is not shown');
+      await expect(newOrchestrator().validate(typed('"s3cret"', 'number'))).rejects.toThrow('password: (sensitive value) is not a number');
     });
 
     it('is refused with the value where it is not sensitive', async () => {

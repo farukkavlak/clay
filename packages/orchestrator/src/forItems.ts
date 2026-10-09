@@ -2,7 +2,7 @@ import { ExactNumber, isUnknown, Type, types, UNKNOWN } from '@clay/contracts';
 import { ConfigError, Position } from '@clay/parser';
 
 import { UnresolvedReferenceError } from './resolvers/UnresolvedReferenceError';
-import { allSensitiveIf, child, described, hasText, isSensitive, objectOf, tupleOf, Value, valueOf, wholeIf } from './Value';
+import { allSensitiveIf, child, described, hasText, HIDDEN, isSensitive, objectOf, tupleOf, Value, valueOf, wholeIf } from './Value';
 
 export type ForItem = [key: Value, value: Value];
 
@@ -54,6 +54,13 @@ function checkKey(key: Value, position: Position): void {
   if (key.data === '__proto__') throw new ConfigError('__proto__ cannot be a name', position);
 }
 
+/** Hidden where any item that gives the key is sensitive, since the message would say what the sensitive one is. */
+function shownKey(text: string, entries: ForItem[]): string {
+  const sensitive = entries.some(([key]) => isSensitive(key) && !isUnknown(key.data) && String(key.data) === text);
+
+  return sensitive ? HIDDEN : `"${text}"`;
+}
+
 /**
  * With `grouped`, each key holds its values in a tuple; without it, a duplicate key is refused.
  * Every known key is checked before an unknown key makes the whole result unknown.
@@ -67,7 +74,7 @@ export function forObject(entries: ForItem[], grouped: boolean, sensitive: boole
 
     const text = String(key.data);
     const values = keys.get(text) ?? [];
-    if (values.length > 0 && !grouped) throw new ConfigError(`Two items give the key "${text}"; write "..." after the value to group them`, position);
+    if (values.length > 0 && !grouped) throw new ConfigError(`Two items give the key ${shownKey(text, entries)}; write "..." after the value to group them`, position);
     keys.set(text, [...values, value]);
   }
 

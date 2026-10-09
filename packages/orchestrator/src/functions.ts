@@ -2,8 +2,8 @@ import { ExactNumber, isUnknown, Type, types, UNKNOWN } from '@clay/contracts';
 import { CallNode, ConfigError } from '@clay/parser';
 
 import { converted, sensitiveAs } from './conformValues';
-import { isSequence, itemTypes, unified, Unjoinable } from './unify';
-import { allSensitiveIf, described, isAllSensitive, unordered, Value, valueOf } from './Value';
+import { isSequence, itemTypes, unified, unjoined, Unjoinable } from './unify';
+import { allSensitiveIf, described, isAllSensitive, isSensitive, unordered, Value, valueOf } from './Value';
 
 /** The argument may be wholly or partly unknown. */
 type ClayFunction = (argument: Value, refuse: (message: string) => never) => Value;
@@ -33,11 +33,11 @@ function length(value: Value, refuse: (message: string) => never): Value {
   return allSensitiveIf(isAllSensitive(value), counted(value, refuse));
 }
 
-function elementOf(name: string, type: Type, refuse: (message: string) => never): Type {
+function elementOf(name: string, value: Value, refuse: (message: string) => never): Type {
   try {
-    return unified(itemTypes(type));
+    return unified(itemTypes(value.type));
   } catch (error) {
-    if (error instanceof Unjoinable) return refuse(`${name} ${error.message}`);
+    if (error instanceof Unjoinable) return refuse(`${name} ${unjoined(error, isSensitive(value))}`);
     throw error;
   }
 }
@@ -50,7 +50,7 @@ function converter(kind: 'list' | 'set'): ClayFunction {
     if (value.type.kind === 'dynamic') return sensitiveAs(value, valueOf(types[kind](types.dynamic), value.data));
     if (!isSequence(value.type.kind)) return refuse(`${name} takes a list, a tuple or a set, not ${described(value)}`);
 
-    return converted(name, value, types[kind](elementOf(name, value.type, refuse)), [name]);
+    return converted(name, value, types[kind](elementOf(name, value, refuse)), [name]);
   };
 }
 

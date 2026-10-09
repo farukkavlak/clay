@@ -1,10 +1,10 @@
 import { AttributePath, isRecord, Type, typeAt, types } from '@clay/contracts';
 import { AttributeValue, TypeDefaults } from '@clay/parser';
 
-import { converted, SchemaMismatch } from './conformValues';
+import { converted, SchemaMismatch, toldWhole } from './conformValues';
 import { setOf } from './setMembers';
-import { itemTypes, unified, Unjoinable } from './unify';
-import { allSensitive, allSensitiveIf, child, isAllSensitive, isSensitive, objectOf, tupleOf, unordered, Value, valueOf } from './Value';
+import { itemTypes, unified, unjoined, Unjoinable } from './unify';
+import { allSensitiveIf, child, isAllSensitive, isSensitive, objectOf, tupleOf, unordered, Value, valueOf } from './Value';
 
 /** `read` evaluates a default, which is always a constant. */
 export interface Defaults {
@@ -108,7 +108,11 @@ function filled(value: Value, declared: Type, defaults: TypeDefaults | undefined
 
 /** Built again from its parts, so an empty one sensitive as a whole would come out with nothing sensitive. */
 function fillWith(holder: string, read: Defaults['read'] | undefined): Fill {
-  const fill: Fill = { holder, read, walk: (value, declared, defaults, path) => allSensitiveIf(isAllSensitive(value), filled(value, declared, defaults, fill, path)) };
+  const fill: Fill = {
+    holder,
+    read,
+    walk: (value, declared, defaults, path) => toldWhole(holder, value, path, () => allSensitiveIf(isAllSensitive(value), filled(value, declared, defaults, fill, path))),
+  };
   return fill;
 }
 
@@ -118,7 +122,7 @@ function heldAs(value: Value, type: Type, defaults: TypeDefaults | undefined, fi
     const written = fill.walk(value, type, defaults, path);
     return converted(fill.holder, written, settled(required(type), written.type), path);
   } catch (error) {
-    if (error instanceof Unjoinable) throw new SchemaMismatch(`${fill.holder} ${error.message}`, String(path[0]));
+    if (error instanceof Unjoinable) throw new SchemaMismatch(`${fill.holder} ${unjoined(error, isSensitive(value))}`, String(path[0]));
     throw error;
   }
 }
@@ -143,23 +147,17 @@ export function declaredOf(block: { valueType?: Type; defaults?: TypeDefaults; s
   return { type: block.valueType, defaults: block.defaults, sensitive: block.sensitive };
 }
 
-/** Without a declared type, the value is taken as it is. A sensitive one that does not fit is refused in one fixed sentence, since any part of the usual message, a key among them, may be the value. */
+/** Without a declared type, the value is taken as it is. One the block marks is sensitive before its type is checked, so a mismatch shows nothing of it. */
 export function givenTo(holder: Holder, name: string, value: Value, { type, defaults, sensitive }: Declared, read: Defaults['read']): Value {
-  if (!type) return value;
+  const given = allSensitiveIf(sensitive === true, value);
 
-  try {
-    return declaredAs(holder, name, value, type, defaults && { tree: defaults, read });
-  } catch (error) {
-    if (sensitive && error instanceof SchemaMismatch) throw new SchemaMismatch(`${name} does not fit its type; it is sensitive, so its value is not shown`);
-    throw error;
-  }
+  return type ? declaredAs(holder, name, given, type, defaults && { tree: defaults, read }) : given;
 }
 
 /** A root output is where a value leaves, so it holds a sensitive one only if marked. */
 export function outputAs(name: string, value: Value, declared: Declared, read: Defaults['read'], root: boolean): Value {
   const given = givenTo('output', name, value, declared, read);
-  if (declared.sensitive) return allSensitive(given);
-  if (root && isSensitive(given)) throw new Error(`output "${name}" holds a sensitive value; write sensitive = true to export it`);
+  if (root && !declared.sensitive && isSensitive(given)) throw new Error(`output "${name}" holds a sensitive value; write sensitive = true to export it`);
 
   return given;
 }

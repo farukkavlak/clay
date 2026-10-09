@@ -255,9 +255,13 @@ configuration hits each of these early.
       map with sensitive values under keys that are not is taken, and `each.value` stays
       sensitive. A sensitive `count` is refused too, since the plan shows how many
       instances it makes; Terraform accepts it, for old configurations
-- [ ] No error quotes a sensitive value: today `{for v in [secret, secret] : v => 1}`
-      fails with `Two items give the key "..."`, and a string that is no number or
-      boolean is quoted where one is taken
+- [x] No error raised while a value is worked out quotes a sensitive one.
+      `(sensitive value)` stands where it would be, in the key two items of a `for`
+      give, where HCL quotes it, and in a string that is no number or boolean, where cty
+      quotes nothing. A mismatch inside a value sensitive as a whole is told at the
+      value, since its keys and how many it holds are parts of it. An output marked
+      sensitive is sensitive before its type is checked, which takes the place of its
+      one fixed sentence
 - [ ] A `for` over a collection not known yet is not sensitive at plan when only its
       body reads a sensitive value, since a plan does not read the body. With
       `[for v in toset([random_string.r.result]) : module.db.password]` in a root output
@@ -267,7 +271,9 @@ configuration hits each of these early.
       "Changed outside Clay": `content = (sensitive value)`, as Terraform prints it. A
       plan file and the state keep which parts of a resource are sensitive, as
       Terraform's `sensitive_attributes` does, so what reads the attribute later is
-      sensitive too
+      sensitive too. An error about a resource still quotes one: what the plan showed
+      against what it comes to now, a provider result that is off its plan, and a
+      provider's own message, as in `random_string "length": 424242.5 is not a whole number`
 - [ ] Other places a sensitive value starts: `sensitive = true` on a variable, an
       attribute a provider's schema marks, and the functions `sensitive` and
       `nonsensitive`, as Terraform has them
