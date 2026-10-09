@@ -174,15 +174,19 @@ output changes by its members too. An output whose value stays and whose type ch
 a change, shown by the two types: `m = ["a","b"] (list(string) -> set(string))`.
 
 A data source reads something that already exists. `data "local_file" "f" { path = "x" }`
-reads a file, and `data.local_file.f.content` is what it holds. A data source has a schema
+reads a file, and `data.local_file.f.content` is what it holds. `data.local_file.f` alone
+is an object of every attribute it has. With `count = 2` it is read twice, as
+`data.local_file.f[0]` and `data.local_file.f[1]`, each with its own `count.index`, and
+`data.local_file.f` alone is the list of them. A data source has a schema
 of its own, apart from a resource of the same type, and its block is held to it as a
 resource's is, before anything is read. A read that returns a value not known, or a name
 the schema does not have, stops the run as a bug in the provider. A data source is read
 once for each instance of its module, in its turn among the resources. It is read at plan,
 unless what it reads changes in the apply: a resource the plan creates or changes, read
 directly or through a variable or a module output. Then the plan shows
-`<= data.local_file.f will be read during apply`, what it reads is `(known after apply)`,
-and the apply reads it after those resources. In a module called with `count` or
+`<= data.local_file.f will be read during apply`, or a line for each index with `count`,
+`<= data.local_file.f[0] ...`. What it reads is `(known after apply)`, and the apply reads
+it after those resources. In a module called with `count` or
 `for_each` each instance waits on its own: one whose resources stay as they are is read at
 plan while another waits. The plan carries what it read, so the apply reads none of those
 again and a `count` that reads one makes the instances the plan showed. A `count` or

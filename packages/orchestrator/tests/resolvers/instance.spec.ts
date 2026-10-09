@@ -1,10 +1,7 @@
-import { parseReference, ResourceReference, Step } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
 import { checkHasKey, checkInRange, readInstance } from '../../src/resolvers/instance';
 import { steps } from '../ast';
-
-const keyed = (...path: (string | number | Step)[]) => parseReference(steps('local_file', 'logs', ...path)) as ResourceReference;
 
 describe('an index checked against a count', () => {
   it.each([
@@ -38,12 +35,12 @@ describe('a key checked against a for_each', () => {
 
 describe('an instance of a resource with for_each read by a reference', () => {
   it('reads the first step as the key, the next as the attribute and the rest as the path', () => {
-    expect(readInstance(keyed({ key: 'web' }, 'tags', 'env'), 'for_each')).toEqual({ key: 'web', attribute: 'tags', path: steps('env') });
-    expect(readInstance(keyed({ key: 'a.b' }, 'id'), 'for_each')).toEqual({ key: 'a.b', attribute: 'id', path: [] });
+    expect(readInstance('local_file.logs', steps({ key: 'web' }, 'tags', 'env'), 'for_each')).toEqual({ key: 'web', attribute: 'tags', path: steps('env') });
+    expect(readInstance('local_file.logs', steps({ key: 'a.b' }, 'id'), 'for_each')).toEqual({ key: 'a.b', attribute: 'id', path: [] });
   });
 
   it('reads a key with nothing after it as the whole instance', () => {
-    expect(readInstance(keyed({ key: 'content' }), 'for_each')).toEqual({ key: 'content', attribute: undefined, path: [] });
+    expect(readInstance('local_file.logs', steps({ key: 'content' }), 'for_each')).toEqual({ key: 'content', attribute: undefined, path: [] });
   });
 
   it.each([
@@ -52,17 +49,17 @@ describe('an instance of a resource with for_each read by a reference', () => {
     [['content'], 'local_file.logs has for_each, so name one of it by key, as in local_file.logs["key"]'],
     [[{ key: 'web' }, 0], 'Reference "local_file.logs["web"][0]" has an index where it needs a name'],
   ])('refuses %j', (path, message) => {
-    expect(() => readInstance(keyed(...path), 'for_each')).toThrow(message);
+    expect(() => readInstance('local_file.logs', steps(...path), 'for_each')).toThrow(message);
   });
 });
 
 describe('a whole instance read by a reference', () => {
   it('reads an index with nothing after it as the whole instance', () => {
-    expect(readInstance(keyed(1), 'count')).toEqual({ key: 1, attribute: undefined, path: [] });
+    expect(readInstance('local_file.logs', steps(1), 'count')).toEqual({ key: 1, attribute: undefined, path: [] });
   });
 
   it('reads the name alone as the whole instance of a resource with no count or for_each', () => {
-    expect(readInstance(keyed(), undefined)).toEqual({ attribute: undefined, path: [] });
+    expect(readInstance('local_file.logs', steps(), undefined)).toEqual({ attribute: undefined, path: [] });
   });
 
   it.each([
@@ -70,12 +67,12 @@ describe('a whole instance read by a reference', () => {
     [undefined, [0], 'local_file.logs has no count, so it takes no index'],
     ['count', [0, 1], 'Reference "local_file.logs[0][1]" has an index where it needs a name'],
   ] as const)('refuses, with %s, the steps %j', (repetition, path, message) => {
-    expect(() => readInstance(keyed(...path), repetition)).toThrow(message);
+    expect(() => readInstance('local_file.logs', steps(...path), repetition)).toThrow(message);
   });
 });
 
 describe('every instance read by a reference', () => {
   it.each(['count', 'for_each'] as const)('reads the name alone as every instance, with %s', (repetition) => {
-    expect(readInstance(keyed(), repetition)).toEqual({ every: repetition, path: [] });
+    expect(readInstance('local_file.logs', steps(), repetition)).toEqual({ every: repetition, path: [] });
   });
 });

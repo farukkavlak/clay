@@ -2,7 +2,7 @@ import { Address, Schema, Type, types } from '@clay/contracts';
 import { CountReference, DataReference, EachReference, ModuleOutputReference, Position, ResourceReference, Step, VariableReference } from '@clay/parser';
 
 import { Instances } from '../Instances';
-import { blockKey, Context, moduleOf, scopeOf } from '../keys';
+import { blockKey, Context, dataSourceKey, moduleOf, scopeOf } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
 import { placed } from '../place';
 import { ScopeManager } from '../scope/ScopeManager';
@@ -29,18 +29,22 @@ export class WrittenTypes {
     if (reference.kind === 'count') return { type: types.number, path: reference.path };
     if (reference.kind === 'each') return { type: reference.name === 'key' ? types.string : types.dynamic, path: reference.path };
     if (reference.kind === 'module') return this.callType(reference, where, position);
-    if (reference.kind === 'data') return this.dataType(reference, position);
+    if (reference.kind === 'data') return this.dataType(reference, where, position);
 
     return this.resourceType(reference, where, position);
   }
 
   /** The graph has already refused undeclared data sources, and every one has its schema. */
-  private dataType(reference: DataReference, position: Position): { type: Type; path: Step[] } {
+  private dataType(reference: DataReference, where: Context, position: Position): { type: Type; path: Step[] } {
+    const spelled = `data.${reference.type}.${reference.name}`;
+    const repetition = this.instances.repetitionOf(dataSourceKey(scopeOf(moduleOf(where).withoutKeys()), reference.type, reference.name));
+    const { every, attribute, path } = readInstance(spelled, reference.path, repetition, position);
     const schema = this.dataSchemas.get(reference.type)!;
-    if (!Object.hasOwn(schema, reference.attribute))
-      throw placed(`Attribute "${reference.attribute}" not found on data source "data.${reference.type}.${reference.name}"`, position);
+    if (every) return { type: everyType(every, schema), path };
+    if (attribute === undefined) return { type: instanceType(schema), path };
+    if (!Object.hasOwn(schema, attribute)) throw placed(`Attribute "${attribute}" not found on data source "${spelled}"`, position);
 
-    return { type: schema[reference.attribute].type, path: reference.path };
+    return { type: schema[attribute].type, path };
   }
 
   /** An output that names no type is `dynamic`. */
@@ -57,7 +61,7 @@ export class WrittenTypes {
   /** The type of the attribute, of the whole instance where the reference names none, or of every instance where it names no instance. */
   private resourceType(reference: ResourceReference, where: Context, position: Position): { type: Type; path: Step[] } {
     const block = blockKey(new Address(moduleOf(where), reference.type, reference.name));
-    const { every, attribute, path } = readInstance(reference, this.instances.repetitionOf(block), position);
+    const { every, attribute, path } = readInstance(`${reference.type}.${reference.name}`, reference.path, this.instances.repetitionOf(block), position);
     // Every schema is loaded by now.
     const schema = this.schemas.get(reference.type)!;
     if (every) return { type: everyType(every, schema), path };

@@ -211,6 +211,14 @@ describe('a data source in the graph', () => {
     expect(outputs.read.new?.value).toBe(UNKNOWN);
   });
 
+  it('reads as a whole what it was given as known and the rest as known after apply while it waits for the apply', async () => {
+    const config = `${writesAndReads('new')}\noutput "whole" { value = data.local_file.read }`;
+
+    const { outputs } = await newOrchestrator().plan(config);
+
+    expect(outputs.whole.new?.value).toEqual({ path: file, content: UNKNOWN });
+  });
+
   it('refuses a count that reads it while it waits for the apply', async () => {
     const config = `${writesAndReads('new')}\nresource "null_resource" "n" {\n  count = length(data.local_file.read.content)\n}`;
 

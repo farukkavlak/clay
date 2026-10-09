@@ -1,5 +1,5 @@
 import { Address, InstanceKey, ModuleAddress } from '@clay/contracts';
-import { ModuleOutputReference, ParsedReference, parseReference, Position, ResourceReference, Step, stepKey } from '@clay/parser';
+import { DataReference, ModuleOutputReference, ParsedReference, parseReference, Position, ResourceReference, Step, stepKey } from '@clay/parser';
 
 import { repetitionOfKey } from '../Instances';
 import { instanceKeyIn } from './instance';
@@ -15,14 +15,14 @@ function positionOf(value: unknown): Position | undefined {
 }
 
 /**
- * A resource's `key` is its block in the graph, shared by every instance; `block` is that block in the module instance read from.
+ * A resource's or a data source's `key` is its block in the graph, shared by every instance; `block` is that block in the module instance read from.
  * An output's `call` makes the instance read, and `instanceKey` is the index or key it is read at.
  * With no `name` it reads the whole module, and its `key` is the call, since the module may have no output.
  */
 export type Reference = (
   | { kind: 'resource'; key: string; block: string; reference: ResourceReference }
   | { kind: 'variable'; key: string; name: string }
-  | { kind: 'data'; key: string; name: string }
+  | { kind: 'data'; key: string; block: string; name: string; reference: DataReference }
   | { kind: 'output'; key: string; call: ModuleAddress; instanceKey?: InstanceKey; scope: string; module: string; name?: string; reference: ModuleOutputReference }
   | { kind: 'count' }
   | { kind: 'each'; name: 'key' | 'value' }
@@ -65,7 +65,10 @@ export class ReferenceScanner {
         return undefined;
       }
       case 'data': {
-        return { kind: 'data', key: dataSourceKey(scope, reference.type, reference.name), name: `data.${reference.type}.${reference.name}` };
+        const block = dataSourceKey(scope, reference.type, reference.name);
+        const key = dataSourceKey(scopeOf(moduleOf(context).withoutKeys()), reference.type, reference.name);
+
+        return { kind: 'data', key, block, name: `data.${reference.type}.${reference.name}`, reference };
       }
       case 'count': {
         return { kind: 'count' };

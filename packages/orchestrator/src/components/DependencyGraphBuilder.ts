@@ -138,10 +138,14 @@ export class DependencyGraphBuilder {
       if (value) tryAt(value.position, dependent.declaration, caller, () => this.addDependencies(value, graph, dependent, moduleScopes));
   }
 
+  /** As a resource's: its count is read before any instance, so it has no key. */
   private addDataDependencies(key: string, block: DataBlock, module: ModuleAddress, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
     const dependent = { key, declaration: spell(block), context: module };
+    const repetition = this.instances.repetitionOf(key);
 
-    for (const value of Object.values(block.attributes)) tryAt(value.position, dependent.declaration, module, () => this.addDependencies(value, graph, dependent, moduleScopes));
+    if (block.count) tryAt(block.count.position, dependent.declaration, module, () => this.addDependencies(block.count!, graph, dependent, moduleScopes));
+    for (const value of Object.values(block.attributes))
+      tryAt(value.position, dependent.declaration, module, () => this.addDependencies(value, graph, dependent, moduleScopes, repetition));
   }
 
   /** One value at a time, so an error points at the value, not the block. count and for_each are read before any instance, so they have no key. */
@@ -252,7 +256,10 @@ export class DependencyGraphBuilder {
       if (!graph.hasNode(reference.key)) throw placed(describeMissing(reference, moduleScopes), reference.position);
 
       // Checked here too, since a reference to a resource not yet created is never read at plan time.
-      if (reference.kind === 'resource') readInstance(reference.reference, this.instances.repetitionOf(reference.key), reference.position);
+      if (reference.kind === 'resource') {
+        const { type, name, path } = reference.reference;
+        readInstance(`${type}.${name}`, path, this.instances.repetitionOf(reference.key), reference.position);
+      }
 
       for (const from of this.readFrom(reference)) this.addEdge(from, dependent, graph, reference.position);
     }

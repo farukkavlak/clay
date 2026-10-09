@@ -9,7 +9,7 @@ import { countFrom } from '../count';
 import { givenTo } from '../declared';
 import { eachFrom } from '../forEach';
 import { Instances } from '../Instances';
-import { Context, contextIn, dataSourceAddress, enclosing, scopeOf } from '../keys';
+import { Context, contextIn, DataInstance, enclosing, scopeOf } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
 import { Planned } from '../Planned';
 import { tryAt, withPlace } from '../place';
@@ -102,14 +102,25 @@ export class DesiredStateBuilder {
     const blocks = this.graphBuilder.resourceDependencies(graph, key);
 
     for (const instance of this.modules.of(module)) {
-      const inputs = this.resolveInputs(block, state, instance);
-      const address = dataSourceAddress(scopeOf(instance), block.dataSourceType, block.name);
+      const waits = this.waitsForApply(blocks, instance);
 
-      if (this.waitsForApply(blocks, instance)) {
-        this.reader.defer(block, inputs, instance);
-        desired.readAtApply.push(address);
-      } else desired.dataSources[address] = carried(await this.reader.read(block, inputs, instance));
+      for (const at of this.dataInstances(block, instance, state)) {
+        const inputs = this.resolveInputs(block, state, at);
+
+        if (waits) {
+          this.reader.defer(block, inputs, at);
+          desired.readAtApply.push(at.toString());
+        } else desired.dataSources[at.toString()] = carried(await this.reader.read(block, inputs, at));
+      }
     }
+  }
+
+  /** Its count is read in its module instance before any instance exists. */
+  private dataInstances(block: DataBlock, module: ModuleAddress, state: State): DataInstance[] {
+    const at = new DataInstance(module, block.dataSourceType, block.name);
+    if (block.count) this.instances.setCount(at.block, this.readAt(block.count, block, at, state, countFrom));
+
+    return at.instances(this.instances.keysOf(at.block));
   }
 
   /**
@@ -121,11 +132,11 @@ export class DesiredStateBuilder {
   }
 
   /** One value at a time, so an error points at the value, not the block. */
-  private resolveInputs(block: DataBlock, state: State, module: ModuleAddress): Record<string, Value> {
+  private resolveInputs(block: DataBlock, state: State, at: DataInstance): Record<string, Value> {
     const declaration = spell(block);
 
     return Object.fromEntries(
-      Object.entries(block.attributes).map(([name, value]) => [name, tryAt(value.position, declaration, module, () => this.resolveOrUnknown(value, state, module))])
+      Object.entries(block.attributes).map(([name, value]) => [name, tryAt(value.position, declaration, at, () => this.resolveOrUnknown(value, state, at))])
     );
   }
 
@@ -268,7 +279,8 @@ export class DesiredStateBuilder {
   private resolveOrUnknown(value: AttributeValue, state: State, context: Context): Value {
     for (const reference of this.scanner.referencesIn(value, context)) {
       if (reference.kind === 'count' || reference.kind === 'each') continue;
-      if (reference.kind === 'resource') this.checkIndex(reference);
+      if (reference.kind === 'resource') this.checkIndex(reference, spellReference([{ name: reference.reference.type }, { name: reference.reference.name }]));
+      if (reference.kind === 'data') this.checkIndex(reference, reference.name);
       if (reference.kind === 'output') this.checkCallIndex(reference);
     }
 
@@ -280,10 +292,9 @@ export class DesiredStateBuilder {
     }
   }
 
-  private checkIndex({ key, block, reference, position }: Extract<Reference, { kind: 'resource' }>): void {
+  private checkIndex({ key, block, reference, position }: Extract<Reference, { kind: 'resource' | 'data' }>, spelled: string): void {
     const first = instanceKeyIn(reference.path);
     const repetition = this.instances.repetitionOf(key);
-    const spelled = spellReference([{ name: reference.type }, { name: reference.name }]);
 
     if (repetition === 'count' && typeof first === 'number') checkInRange(spelled, first, this.instances.keysOf(block)?.length, position);
     if (repetition === 'for_each' && typeof first === 'string') checkHasKey(spelled, first, this.instances.keysOf(block), position);

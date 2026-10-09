@@ -81,6 +81,8 @@ export interface DataBlock extends Node {
   type: 'Data';
   dataSourceType: string;
   name: string;
+  /** Read by the engine, never sent to the provider. */
+  count?: AttributeValue;
   attributes: Record<string, AttributeValue>;
 }
 

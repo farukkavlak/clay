@@ -208,6 +208,8 @@ describe('every block read once, whatever instances it makes', () => {
 
   it.each([
     ['a data source as it was read', 'data.local_file.d.nope', 'Attribute "nope" not found on data source "data.local_file.d"'],
+    ['a whole data source as the object it is', 'data.local_file.d', 'content is an object, where local_file takes a string'],
+    ['a data source with no count without an index', 'data.local_file.d[0].content', 'data.local_file.d has no count, so it takes no index'],
     ['a directory as the string it is', 'path.module.x', 'path.module is a string and cannot be read into'],
   ])('reads %s', async (_, read, message) => {
     await fs.writeFile(path.join(dir, 'd.txt'), 'd', 'utf8');

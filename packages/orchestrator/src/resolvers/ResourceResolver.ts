@@ -32,7 +32,7 @@ export class ResourceResolver {
   resolve(reference: ResourceReference, context: Context, state: State, position?: Position): { value: Value; path: Step[] } {
     const schema = this.schemas.get(reference.type) ?? {};
     const block = new Address(moduleOf(context), reference.type, reference.name);
-    const { every, key, attribute, path } = readInstance(reference, this.instances.repetitionOf(blockKey(block)), position);
+    const { every, key, attribute, path } = readInstance(`${reference.type}.${reference.name}`, reference.path, this.instances.repetitionOf(blockKey(block)), position);
     if (every) return { value: this.every(reference, block, every, schema, state, position), path };
 
     const address = new Address(block.module, reference.type, reference.name, key);

@@ -1,4 +1,4 @@
-import { Address, InstanceKey, ModuleAddress } from '@clay/contracts';
+import { Address, InstanceKey, ModuleAddress, spellKey } from '@clay/contracts';
 
 /**
  * Dependency graph keys. They are built here and never parsed.
@@ -31,9 +31,40 @@ export function dataSourceKey(scope: string, type: string, name: string): string
   return scope ? `${scope}.data:${type}.${name}` : `data:${type}.${name}`;
 }
 
-/** `module.m.data.local_file.f`, as a plan names it. */
-export function dataSourceAddress(scope: string, type: string, name: string): string {
-  return `${scope ? `${scope}.` : ''}data.${type}.${name}`;
+/** `module.m[0].data.local_file.f[1]`, as a plan names it. */
+export function dataSourceAddress(scope: string, type: string, name: string, key?: InstanceKey): string {
+  return `${scope ? `${scope}.` : ''}data.${type}.${name}${spellKey(key)}`;
+}
+
+/** One data source instance in one module instance; its key is `count.index`. */
+export class DataInstance {
+  public readonly module: ModuleAddress;
+  public readonly type: string;
+  public readonly name: string;
+  public readonly key?: InstanceKey;
+
+  constructor(module: ModuleAddress, type: string, name: string, key?: InstanceKey) {
+    this.module = module;
+    this.type = type;
+    this.name = name;
+    this.key = key;
+  }
+
+  /** Its block in its module instance, where its count is read; shared by every instance it makes there. */
+  get block(): string {
+    return dataSourceKey(this.module.toString(), this.type, this.name);
+  }
+
+  /** One for each key its count gives, or itself where it has no count. */
+  instances(keys: InstanceKey[] | undefined): DataInstance[] {
+    if (keys === undefined) return [this];
+
+    return keys.map((key) => new DataInstance(this.module, this.type, this.name, key));
+  }
+
+  toString(): string {
+    return dataSourceAddress(this.module.toString(), this.type, this.name, this.key);
+  }
 }
 
 /** Module inputs are read in the caller, for one module instance, whose key is `count.index` or `each.key`. */
@@ -50,11 +81,11 @@ export class ModuleCall {
   }
 }
 
-/** A resource instance, a module (its variables and outputs), or a module call. */
-export type Context = Address | ModuleAddress | ModuleCall;
+/** A resource instance, a data source instance, a module (its variables and outputs), or a module call. */
+export type Context = Address | DataInstance | ModuleAddress | ModuleCall;
 
 export function moduleOf(context: Context): ModuleAddress {
-  if (context instanceof Address) return context.module;
+  if (context instanceof Address || context instanceof DataInstance) return context.module;
 
   return context instanceof ModuleCall ? context.caller : context;
 }
@@ -68,7 +99,7 @@ export function scopeOf(context: Context): string {
 export function instanceKeyOf(context: Context): InstanceKey | undefined {
   if (context instanceof ModuleCall) return context.instance.path.at(-1)?.key;
 
-  return context instanceof Address ? context.key : undefined;
+  return context instanceof Address || context instanceof DataInstance ? context.key : undefined;
 }
 
 /** `module.a[1]` for `module.a[1].module.b[0]` and `module.a`. */

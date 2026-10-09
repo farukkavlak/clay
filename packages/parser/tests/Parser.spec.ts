@@ -1,7 +1,7 @@
 import { ExactNumber, types } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { BoundNode, callsIn, CONFIG_FILE, ModuleBlock, namedIn, OutputBlock, ReferenceNode, ResourceBlock, spellNamed, VariableBlock } from '../src/ast';
+import { BoundNode, callsIn, CONFIG_FILE, DataBlock, ModuleBlock, namedIn, OutputBlock, ReferenceNode, ResourceBlock, spellNamed, VariableBlock } from '../src/ast';
 import { ConfigError } from '../src/ConfigError';
 import { Lexer } from '../src/Lexer';
 import { Parser } from '../src/Parser';
@@ -1098,11 +1098,11 @@ describe('Clay Parser', () => {
       expect(valueOf('"${count.index}"')).toEqual({ type: 'Template', value: [reference(['count', 'index'], 27)], position: at(1, 24) });
     });
 
-    it('refuses count on a data source, where it is written', () => {
-      const error = errorOf('data "local_file" "a" { count = 2 }');
+    it('keeps count on a data source apart from what its provider is sent', () => {
+      const [block] = makeParser('data "local_file" "a" { count = 2 path = "a" }').parse() as DataBlock[];
 
-      expect(error.message).toBe('data "local_file" "a" cannot have count yet');
-      expect(error.position).toEqual(at(1, 33));
+      expect(block.count).toEqual({ type: 'Number', value: ExactNumber.parse('2'), position: at(1, 33) });
+      expect(block.attributes).toEqual({ path: { type: 'String', value: 'a', position: at(1, 42) } });
     });
   });
 

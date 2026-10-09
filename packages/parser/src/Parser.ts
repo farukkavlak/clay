@@ -139,13 +139,14 @@ export class Parser {
     const typeToken = this.consumeType("Expect data source type string after 'data'.");
     const nameToken = this.consumeName('Expect data source name string after data source type.');
 
-    const attributes = this.parseAttributes('data source');
+    const { count, ...attributes } = this.parseAttributes('data source');
     this.refuseInstances(attributes, `data "${typeToken.value}" "${nameToken.value}"`);
 
     return {
       type: 'Data',
       dataSourceType: typeToken.value,
       name: nameToken.value,
+      ...(count && { count }),
       attributes,
       position,
     };

@@ -91,7 +91,7 @@ export class ReferenceResolver {
     this.planned = planned;
     this.modules = modules;
     this.variables = new VariableResolver(scopeManager, this);
-    this.dataSources = new DataSourceResolver(dataSources);
+    this.dataSources = new DataSourceResolver(dataSources, dataSchemas, instances);
     this.moduleOutputs = new ModuleOutputResolver(scopeManager, modules);
     this.resources = new ResourceResolver(instances, planned, schemas);
     this.written = new WrittenTypes(scopeManager, schemas, dataSchemas, instances, modules);
@@ -170,7 +170,7 @@ export class ReferenceResolver {
 
   private resolveTarget(reference: ParsedReference, state: State, where: Context, position: Position): { value: Value; path: Step[] } {
     if (reference.kind === 'variable') return { value: this.variables.resolve(reference, where, state), path: reference.path };
-    if (reference.kind === 'data') return { value: this.dataSources.resolve(reference, where), path: reference.path };
+    if (reference.kind === 'data') return this.dataSources.resolve(reference, where, position);
     if (reference.kind === 'module') return this.moduleOutputs.resolve(reference, where, position);
     if (reference.kind === 'count') return { value: countIndex(where, position), path: reference.path };
     if (reference.kind === 'each') return { value: this.each(reference, where, position), path: reference.path };

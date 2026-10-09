@@ -203,18 +203,18 @@ describe('Orchestrator - Data Sources', () => {
     });
   });
 
-  it('should throw error if data reference is incomplete', async () => {
-    // The ID must be valid so the data source loads.
+  it('reads the whole data source where the reference names no attribute', async () => {
     mockProvider.setMockData('valid-id', { val: 'ok' });
     const config = `
       data "mock_data" "test" {
         id = "valid-id"
       }
-      resource "mock_resource" "app" {
-        val = data.mock_data.test
-      }
+      output "all" { value = data.mock_data.test }
     `;
-    await expect(apply(orchestrator, config)).rejects.toThrow('Data source reference must include attribute');
+
+    const outputs = await apply(orchestrator, config);
+
+    expect(outputs.all.value).toEqual({ id: 'valid-id', username: null, email: null, role: null, val: 'ok', endpoint: null, port: null });
   });
 
   it('should support string interpolation with data sources', async () => {

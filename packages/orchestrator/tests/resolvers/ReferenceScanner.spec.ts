@@ -77,7 +77,15 @@ describe('ReferenceScanner', () => {
   it('points a data source reference at the data source node, apart from a resource of the same type and name', () => {
     const attributes = { image: { type: 'Reference', value: steps('data', 'aws_ami', 'ubuntu', 'id') } };
 
-    expect(scanner.referencesIn(attributes, context)).toEqual([{ kind: 'data', key: 'data:aws_ami.ubuntu', name: 'data.aws_ami.ubuntu' }]);
+    expect(scanner.referencesIn(attributes, context)).toEqual([
+      {
+        kind: 'data',
+        key: 'data:aws_ami.ubuntu',
+        block: 'data:aws_ami.ubuntu',
+        name: 'data.aws_ami.ubuntu',
+        reference: { kind: 'data', type: 'aws_ami', name: 'ubuntu', path: steps('id') },
+      },
+    ]);
   });
 
   it('should point a variable reference at the variable node', () => {
