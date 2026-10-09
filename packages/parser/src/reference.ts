@@ -13,11 +13,11 @@ export interface VariableReference {
   path: Step[];
 }
 
+/** As a resource reference: the first step may be an instance key or an attribute, and with neither it reads the whole data source. */
 export interface DataReference {
   kind: 'data';
   type: string;
   name: string;
-  attribute: string;
   path: Step[];
 }
 
@@ -101,10 +101,10 @@ function variableReference(parts: Step[], position?: Position): VariableReferenc
 }
 
 function dataReference(parts: Step[], position?: Position): DataReference {
-  if (parts.length < 4) refuse(`Data source reference must include attribute: ${spellReference(parts)}`, position);
-  const { names, path } = split(parts, 4, position);
+  if (parts.length < 3) refuse(`Reference "${spellReference(parts)}" names nothing: a data source is read as data, its type and its name, as in data.local_file.a`, position);
+  const { names, path } = split(parts, 3, position);
 
-  return { kind: 'data', type: names[1], name: names[2], attribute: names[3], path };
+  return { kind: 'data', type: names[1], name: names[2], path };
 }
 
 function moduleOutputReference(parts: Step[], position?: Position): ModuleOutputReference {

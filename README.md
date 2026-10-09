@@ -174,7 +174,8 @@ output changes by its members too. An output whose value stays and whose type ch
 a change, shown by the two types: `m = ["a","b"] (list(string) -> set(string))`.
 
 A data source reads something that already exists. `data "local_file" "f" { path = "x" }`
-reads a file, and `data.local_file.f.content` is what it holds. A data source has a schema
+reads a file, and `data.local_file.f.content` is what it holds. `data.local_file.f` alone
+is an object of every attribute it has. A data source has a schema
 of its own, apart from a resource of the same type, and its block is held to it as a
 resource's is, before anything is read. A read that returns a value not known, or a name
 the schema does not have, stops the run as a bug in the provider. A data source is read

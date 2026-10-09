@@ -36,11 +36,13 @@ export class WrittenTypes {
 
   /** The graph has already refused undeclared data sources, and every one has its schema. */
   private dataType(reference: DataReference, position: Position): { type: Type; path: Step[] } {
+    const spelled = `data.${reference.type}.${reference.name}`;
+    const { attribute, path } = readInstance(spelled, reference.path, undefined, position);
     const schema = this.dataSchemas.get(reference.type)!;
-    if (!Object.hasOwn(schema, reference.attribute))
-      throw placed(`Attribute "${reference.attribute}" not found on data source "data.${reference.type}.${reference.name}"`, position);
+    if (attribute === undefined) return { type: instanceType(schema), path };
+    if (!Object.hasOwn(schema, attribute)) throw placed(`Attribute "${attribute}" not found on data source "${spelled}"`, position);
 
-    return { type: schema[reference.attribute].type, path: reference.path };
+    return { type: schema[attribute].type, path };
   }
 
   /** An output that names no type is `dynamic`. */
@@ -57,7 +59,7 @@ export class WrittenTypes {
   /** The type of the attribute, of the whole instance where the reference names none, or of every instance where it names no instance. */
   private resourceType(reference: ResourceReference, where: Context, position: Position): { type: Type; path: Step[] } {
     const block = blockKey(new Address(moduleOf(where), reference.type, reference.name));
-    const { every, attribute, path } = readInstance(reference, this.instances.repetitionOf(block), position);
+    const { every, attribute, path } = readInstance(`${reference.type}.${reference.name}`, reference.path, this.instances.repetitionOf(block), position);
     // Every schema is loaded by now.
     const schema = this.schemas.get(reference.type)!;
     if (every) return { type: everyType(every, schema), path };

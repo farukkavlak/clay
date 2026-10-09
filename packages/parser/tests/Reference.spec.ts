@@ -24,7 +24,8 @@ const errorOf = (parts: Step[]): ConfigError => {
 describe('a reference read into a value', () => {
   it.each([
     ['var.text', { kind: 'variable', name: 'text', path: steps() }],
-    ['data.local_file.f.content', { kind: 'data', type: 'local_file', name: 'f', attribute: 'content', path: steps() }],
+    ['data.local_file.f', { kind: 'data', type: 'local_file', name: 'f', path: steps() }],
+    ['data.local_file.f.content', { kind: 'data', type: 'local_file', name: 'f', path: steps('content') }],
     ['module.app.url', { kind: 'module', module: 'app', path: steps('url') }],
     ['module.app', { kind: 'module', module: 'app', path: steps() }],
     ['local_file.a.content', { kind: 'resource', type: 'local_file', name: 'a', path: steps('content') }],
@@ -35,7 +36,7 @@ describe('a reference read into a value', () => {
     ['path.module', { kind: 'path', name: 'module', path: steps() }],
     ['path.root', { kind: 'path', name: 'root', path: steps() }],
     ['var.tags.env', { kind: 'variable', name: 'tags', path: steps('env') }],
-    ['data.local_file.f.tags.env', { kind: 'data', type: 'local_file', name: 'f', attribute: 'tags', path: steps('env') }],
+    ['data.local_file.f.tags.env', { kind: 'data', type: 'local_file', name: 'f', path: steps('tags', 'env') }],
     ['module.app.tags.env', { kind: 'module', module: 'app', path: steps('tags', 'env') }],
     ['local_file.a.tags.env.name', { kind: 'resource', type: 'local_file', name: 'a', path: steps('tags', 'env', 'name') }],
   ])('reads %s as what it names, what it reads on it, and the steps into that value', (spelled, expected) => {
@@ -72,7 +73,7 @@ describe('a reference read into a value', () => {
   it.each([
     [steps(), 'Reference "" names nothing: a resource is read as its type and its name, as in local_file.a'],
     [steps('var'), 'Variable reference must include a name: var'],
-    [steps('data', 'local_file', 'f'), 'Data source reference must include attribute: data.local_file.f'],
+    [steps('data', 'local_file'), 'Reference "data.local_file" names nothing: a data source is read as data, its type and its name, as in data.local_file.a'],
     [steps('module'), 'Reference "module" names nothing: a module is read by its name, as in module.web'],
     [steps('local_file'), 'Reference "local_file" names nothing: a resource is read as its type and its name, as in local_file.a'],
     [steps('local_file', { key: '' }, 'id'), 'Reference "local_file[""].id" has "" where it needs a name'],

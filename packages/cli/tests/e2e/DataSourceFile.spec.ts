@@ -1,3 +1,4 @@
+import { types } from '@clay/contracts';
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { CONFIG_FILE } from '@clay/parser';
 import { LocalProvider } from '@clay/provider-local';
@@ -50,6 +51,27 @@ describe('a local_file data source', () => {
     expect(outputs.from.new?.value).toBe(`read ${file}`);
   });
 
+  it('reads the whole data source when the reference names no attribute', async () => {
+    const file = path.join(dir, 'name.txt');
+    await fs.writeFile(file, 'clay', 'utf8');
+    const config = `data "local_file" "name" { path = "${file}" }\noutput "file" { value = data.local_file.name }`;
+
+    const { outputs } = await newOrchestrator().plan(config);
+
+    expect(outputs.file.new?.value).toEqual({ path: file, content: 'clay' });
+    expect(outputs.file.new?.type).toEqual(types.object({ path: types.string, content: types.string }));
+  });
+
+  it('refuses an index on a data source with no count', async () => {
+    await fs.writeFile(path.join(dir, 'd.txt'), 'd', 'utf8');
+    const config = `data "local_file" "d" { path = "${path.join(dir, 'd.txt')}" }\noutput "o" { value = data.local_file.d[0].content }`;
+
+    await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
+      message: 'data.local_file.d has no count, so it takes no index',
+      position: { file: CONFIG_FILE, line: 2, column: 22 },
+    });
+  });
+
   it('refuses a file that is not there, placed in its block', async () => {
     const missing = path.join(dir, 'missing.txt');
 
@@ -76,7 +98,10 @@ describe('a local_file data source', () => {
     await fs.writeFile(path.join(dir, 'd.txt'), 'd', 'utf8');
     const config = `data "local_file" "d" { path = "${path.join(dir, 'd.txt')}" }\noutput "o" { value = data.local_file.d.nope }`;
 
-    await expect(newOrchestrator().plan(config)).rejects.toMatchObject({ message: 'Attribute "nope" not found on data source "data.local_file.d"' });
+    await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
+      message: 'Attribute "nope" not found on data source "data.local_file.d"',
+      position: { file: CONFIG_FILE, line: 2, column: 22 },
+    });
   });
 
   it('refuses a type the provider makes as a resource but does not read as a data source', async () => {

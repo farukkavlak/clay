@@ -252,7 +252,10 @@ export class DependencyGraphBuilder {
       if (!graph.hasNode(reference.key)) throw placed(describeMissing(reference, moduleScopes), reference.position);
 
       // Checked here too, since a reference to a resource not yet created is never read at plan time.
-      if (reference.kind === 'resource') readInstance(reference.reference, this.instances.repetitionOf(reference.key), reference.position);
+      if (reference.kind === 'resource') {
+        const { type, name, path } = reference.reference;
+        readInstance(`${type}.${name}`, path, this.instances.repetitionOf(reference.key), reference.position);
+      }
 
       for (const from of this.readFrom(reference)) this.addEdge(from, dependent, graph, reference.position);
     }

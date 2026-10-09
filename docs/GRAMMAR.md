@@ -189,7 +189,7 @@ A bare reference is a value on its own: `path = var.dir`. Inside a string it is 
 | First part | Reads                                                | Example                     |
 | ---------- | ---------------------------------------------------- | --------------------------- |
 | `var`      | A variable or input of the same module               | `var.name`                  |
-| `data`     | An attribute a data source read                      | `data.local_file.f.content` |
+| `data`     | A data source, or an attribute it read               | `data.local_file.f.content` |
 | `module`   | An output of a module called in the same file        | `module.app.url`            |
 | `count`    | The index of the instance being made                 | `count.index`               |
 | `each`     | The key of the instance being made, or its value     | `each.key`, `each.value`    |
@@ -206,6 +206,10 @@ with no `count` or `for_each`, `local_file.logs[0]` one instance by its index an
 index or key is every instance: a list by index under `count`, a map by key under
 `for_each`. A key is written in brackets, so under `for_each`
 `local_file.f.content` has no key and is refused: a name after a dot there is never a key.
+
+A data source named with no attribute is the same: `data.local_file.f` is an object of
+every attribute of its schema, with `null` for one nothing sets. It has no `count`, so
+`data.local_file.f[0]` is refused.
 
 `path.module` is the directory of the module it is written in, relative to the root: `.`
 at the root, `web` in a module called with `source = "./web"`. In a call's inputs it is the
