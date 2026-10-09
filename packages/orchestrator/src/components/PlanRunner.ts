@@ -6,10 +6,10 @@ import { moveResource, StateManager } from '@clay/state';
 
 import { asError } from '../asError';
 import { countFrom } from '../count';
-import { declaredOf, givenTo } from '../declared';
+import { declaredOf, outputAs } from '../declared';
 import { eachFrom } from '../forEach';
 import { Instances, repetitionOfKey } from '../Instances';
-import { blockKey, Context, contextIn, DataInstance, dataSourceKey, scopeOf } from '../keys';
+import { blockKey, Context, contextIn, DataInstance, dataSourceKey, moduleOf, scopeOf } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
 import { tryAt, withPlace } from '../place';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
@@ -386,6 +386,6 @@ export class PlanRunner {
 
   private outputValue(name: string, value: AttributeValue, declared: OutputNode['declared'], state: State, context: Context): Value {
     const resolved = this.resolver.resolveValue(value, state, context);
-    return givenTo('output', name, resolved, declared, (node) => this.resolver.resolveValue(node, state, context));
+    return outputAs(name, resolved, declared, (node) => this.resolver.resolveValue(node, state, context), moduleOf(context).isRoot());
   }
 }

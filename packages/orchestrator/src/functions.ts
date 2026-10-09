@@ -1,9 +1,9 @@
 import { ExactNumber, isUnknown, Type, types, UNKNOWN } from '@clay/contracts';
 import { CallNode, ConfigError } from '@clay/parser';
 
-import { converted } from './conformValues';
+import { converted, sensitiveAs } from './conformValues';
 import { isSequence, itemTypes, unified, Unjoinable } from './unify';
-import { described, unordered, Value, valueOf } from './Value';
+import { allSensitiveIf, described, isAllSensitive, unordered, Value, valueOf } from './Value';
 
 /** The argument may be wholly or partly unknown. */
 type ClayFunction = (argument: Value, refuse: (message: string) => never) => Value;
@@ -20,12 +20,17 @@ function sizeOf(data: unknown): number {
 const COUNTED = new Set(['string', 'list', 'tuple', 'set', 'map', 'object']);
 
 /** A list or map with an unknown item has a known size; a set does not, since the unknown may duplicate a member. */
-function length(value: Value, refuse: (message: string) => never): Value {
+function counted(value: Value, refuse: (message: string) => never): Value {
   const takes = value.data !== null && (value.type.kind === 'dynamic' || COUNTED.has(value.type.kind));
   if (!takes) return refuse(`length takes a string, a list, a tuple, a set, a map or an object, not ${described(value)}`);
   if (isUnknown(value.data) || unordered(value)) return valueOf(types.number, UNKNOWN);
 
   return valueOf(types.number, ExactNumber.parse(String(sizeOf(value.data))));
+}
+
+/** Sensitive where the whole argument is: how many items a list holds says nothing of a sensitive one among them. */
+function length(value: Value, refuse: (message: string) => never): Value {
+  return allSensitiveIf(isAllSensitive(value), counted(value, refuse));
 }
 
 function elementOf(name: string, type: Type, refuse: (message: string) => never): Type {
@@ -42,7 +47,7 @@ function converter(kind: 'list' | 'set'): ClayFunction {
   const name = `to${kind}`;
 
   return (value, refuse) => {
-    if (value.type.kind === 'dynamic') return valueOf(types[kind](types.dynamic), value.data);
+    if (value.type.kind === 'dynamic') return sensitiveAs(value, valueOf(types[kind](types.dynamic), value.data));
     if (!isSequence(value.type.kind)) return refuse(`${name} takes a list, a tuple or a set, not ${described(value)}`);
 
     return converted(name, value, types[kind](elementOf(name, value.type, refuse)), [name]);

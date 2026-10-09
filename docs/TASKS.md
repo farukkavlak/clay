@@ -241,15 +241,25 @@ configuration hits each of these early.
       than its plan did is refused before anything runs; Terraform takes the flag from
       the configuration. One that does not fit its type is refused in one fixed
       sentence, since a key in the usual message may be the value
-- [ ] A sensitive value stays sensitive wherever it goes. A module's sensitive output
+- [x] A sensitive value stays sensitive wherever it goes. A module's sensitive output
       marks what its caller reads, through a reference's steps, a string, a function, a
       `for`, a local, a variable and a module input, part by part: `.name` of an object
-      whose `password` is sensitive is not. A root output that holds one and does not
-      say `sensitive = true` is refused, as in Terraform: "Output refers to sensitive
-      values". No error quotes one: today `{for v in [secret, secret] : v => 1}` fails
-      with `Two items give the key "..."`. A sensitive `for_each` is refused, since a key shows in an address, as in
-      Terraform. A sensitive `count` is refused too, since the plan shows how many
-      instances it makes; Terraform accepts it, for old configurations
+      whose `password` is sensitive is not. A set with a sensitive member is sensitive
+      as a whole, and so is an object a `for` makes with a sensitive key, as in cty and
+      HCL. A root output that holds one and does not say `sensitive = true` is refused,
+      as in Terraform: "Output refers to sensitive values"
+- [ ] No error quotes a sensitive value: today `{for v in [secret, secret] : v => 1}`
+      fails with `Two items give the key "..."`. A sensitive `for_each` is refused,
+      since a key shows in an address, as in Terraform. A sensitive `count` is refused
+      too, since the plan shows how many instances it makes; Terraform accepts it, for
+      old configurations. Until then `each.key` of a sensitive `for_each` is not
+      sensitive: `for_each = toset([module.db.password])` with `v = each.key` in a
+      module reaches a root output unmarked
+- [ ] A `for` over a collection not known yet is not sensitive at plan when only its
+      body reads a sensitive value, since a plan does not read the body. With
+      `[for v in toset([random_string.r.result]) : module.db.password]` in a root output
+      that is not marked, the plan passes and the apply refuses the output after
+      `random_string.r` is made. Terraform does the same
 - [ ] A resource attribute given a sensitive value is hidden in the plan and under
       "Changed outside Clay": `content = (sensitive value)`, as Terraform prints it. A
       plan file and the state keep which parts of a resource are sensitive, as

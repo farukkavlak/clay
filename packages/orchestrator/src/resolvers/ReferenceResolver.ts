@@ -28,11 +28,11 @@ import { tryAt } from '../place';
 import { ModuleInstances } from '../ModuleInstances';
 import { Planned } from '../Planned';
 import { ScopeManager } from '../scope/ScopeManager';
-import { described, hasText, objectOf, tupleOf, unordered, Value, valueOf } from '../Value';
+import { allSensitiveIf, described, hasText, isAllSensitive, isSensitive, objectOf, tupleOf, unordered, Value, valueOf, withSensitive, wholeIf } from '../Value';
 import { DataSourceResolver } from './DataSourceResolver';
 import { COUNT_INDEX_OUTSIDE, eachOutside } from './instance';
 import { ModuleOutputResolver } from './ModuleOutputResolver';
-import { UnresolvedReferenceError } from './UnresolvedReferenceError';
+import { unknownOf, UnresolvedReferenceError } from './UnresolvedReferenceError';
 import { readPath } from './readPath';
 import { ResourceResolver } from './ResourceResolver';
 import { VariableResolver } from './VariableResolver';
@@ -126,19 +126,23 @@ export class ReferenceResolver {
     return readPath(given.get(name)!, name, path, node.position);
   }
 
+  /** Over a collection sensitive as a whole, what it gives is too: how many items it has is the collection's. */
   private resolveFor(node: ForNode, state: State, context: Context | undefined, reading: Reading): Value {
-    const items = forItems(this.collectionOf(node, state, context, reading), node.collection.position);
-    const names = items.map((item) => withNames(reading, node, item));
-    if (node.key) return this.resolveForObject(node, node.key, names, state, context);
+    const collection = this.collectionOf(node, state, context, reading);
+    const names = forItems(collection, node.collection.position).map((item) => withNames(reading, node, item));
+    const sensitive = isAllSensitive(collection);
+    const made = node.key
+      ? this.resolveForObject(node, node.key, names, sensitive, state, context)
+      : tupleOf(names.map((itemNames) => this.resolveItem(node.body, state, context, itemNames)));
 
-    return tupleOf(names.map((itemNames) => this.resolveItem(node.body, state, context, itemNames)));
+    return allSensitiveIf(sensitive, made);
   }
 
   /** Resolves every key and value first, so an error in any item is found even when another key is unknown. */
-  private resolveForObject(node: ForNode, key: AttributeValue, names: Reading[], state: State, context: Context | undefined): Value {
+  private resolveForObject(node: ForNode, key: AttributeValue, names: Reading[], sensitive: boolean, state: State, context: Context | undefined): Value {
     const entries = names.map((itemNames): ForItem => [this.resolveItem(key, state, context, itemNames), this.resolveItem(node.body, state, context, itemNames)]);
 
-    return forObject(entries, node.grouped === true, key.position);
+    return forObject(entries, node.grouped === true, sensitive, key.position);
   }
 
   /**
@@ -151,15 +155,15 @@ export class ReferenceResolver {
       collection = this.resolveIn(node.collection, state, context, reading);
     } catch (error) {
       if (!(error instanceof UnresolvedReferenceError)) throw error;
-      checkCollection(valueOf(error.type, UNKNOWN), node.collection.position);
-      this.readBodyOnce(node, valueOf(error.type, UNKNOWN), state, context, reading);
+      checkCollection(unknownOf(error), node.collection.position);
+      this.readBodyOnce(node, unknownOf(error), state, context, reading);
       // Rethrown without the collection's type: a for makes a tuple or an object whatever it iterates.
-      throw new UnresolvedReferenceError(error.message);
+      throw new UnresolvedReferenceError(error.message, types.dynamic, wholeIf(error.sensitive.length > 0));
     }
 
     if (unordered(collection)) {
       this.readBodyOnce(node, collection, state, context, reading);
-      throw new UnresolvedReferenceError('The set a for goes over has a member known only after apply, so it has no order yet');
+      throw new UnresolvedReferenceError('The set a for goes over has a member known only after apply, so it has no order yet', types.dynamic, wholeIf(isSensitive(collection)));
     }
     return collection;
   }
@@ -282,39 +286,40 @@ export class ReferenceResolver {
       return this.resolveIn(value, state, context, reading);
     } catch (error) {
       if (!(error instanceof UnresolvedReferenceError && (reading.asWritten || this.planned.isPlanning()))) throw error;
-      return valueOf(error.type, UNKNOWN);
+      return unknownOf(error);
     }
   }
 
-  /** A lone interpolation keeps its value and type; with any text it becomes a string, unknown if any part is. */
+  /** A lone interpolation keeps its value and type; with any text it becomes a string, unknown if any part is, and sensitive if any part is. */
   private resolveTemplate(parts: TemplatePart[], state: State, context: Context | undefined, reading: Reading): Value {
     const [first] = parts;
     if (parts.length === 1 && typeof first !== 'string') return this.resolveIn(first, state, context, reading);
 
     // Every part is resolved, so an error after an unknown part is still found.
     const unresolved: UnresolvedReferenceError[] = [];
-    const texts = parts.map((part) => (typeof part === 'string' ? part : this.textOf(part, state, context, reading, unresolved)));
-    if (unresolved.length > 0) throw new UnresolvedReferenceError(unresolved[0].message, types.string);
+    const texts = parts.map((part) => (typeof part === 'string' ? valueOf(types.string, part) : this.textOf(part, state, context, reading, unresolved)));
+    const sensitive = wholeIf(texts.some((text) => isSensitive(text)));
+    if (unresolved.length > 0) throw new UnresolvedReferenceError(unresolved[0].message, types.string, sensitive);
 
-    return valueOf(types.string, texts.join(''));
+    return withSensitive(valueOf(types.string, texts.map((text) => String(text.data)).join('')), sensitive);
   }
 
   /** Collects an unknown part into `unresolved`. */
-  private textOf(part: ReferenceNode | CallNode | BoundNode, state: State, context: Context | undefined, reading: Reading, unresolved: UnresolvedReferenceError[]): string {
+  private textOf(part: ReferenceNode | CallNode | BoundNode, state: State, context: Context | undefined, reading: Reading, unresolved: UnresolvedReferenceError[]): Value {
     try {
       return this.joined(part, state, context, reading);
     } catch (error) {
       if (!(error instanceof UnresolvedReferenceError)) throw error;
       unresolved.push(error);
-      return '';
+      return unknownOf(error);
     }
   }
 
   /** Only a string, a number or a boolean can be joined. */
-  private joined(part: ReferenceNode | CallNode | BoundNode, state: State, context: Context | undefined, reading: Reading): string {
+  private joined(part: ReferenceNode | CallNode | BoundNode, state: State, context: Context | undefined, reading: Reading): Value {
     const resolved = this.resolveIn(part, state, context, reading);
     if (resolved.data === null || !hasText(resolved.type)) throw new ConfigError(`${spellNamed(part)} is ${described(resolved)} and cannot be joined into a string`, part.position);
 
-    return String(resolved.data);
+    return resolved;
   }
 }

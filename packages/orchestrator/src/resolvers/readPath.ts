@@ -1,7 +1,7 @@
 import { isUnknown, Type, typeAt } from '@clay/contracts';
 import { ConfigError, Position, spellSteps, Step, stepKey } from '@clay/parser';
 
-import { child, described, Value } from '../Value';
+import { child, described, sensitiveUnder, Value } from '../Value';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 
 /** Undefined when the step finds something. */
@@ -35,11 +35,15 @@ export function typeInto(type: Type, steps: Step[]): Type {
   return steps.reduce((found, step) => typeAt(found, stepKey(step)), type);
 }
 
-/** Throws an unknown carrying the type the remaining steps find, so the reader can still check it. */
-function checkKnown(value: Value, read: string, rest: Step[]): void {
-  if (!isUnknown(value.data)) return;
+/** An unknown of the type the remaining steps find, so the reader can still check it, and as sensitive as the part they reach. */
+export function laterAt(value: Value, message: string, rest: Step[]): UnresolvedReferenceError {
+  const sensitive = rest.reduce((paths, step) => sensitiveUnder(paths, stepKey(step)), [...(value.sensitive ?? [])]);
 
-  throw new UnresolvedReferenceError(`${read} is known only after apply`, typeInto(value.type, rest));
+  return new UnresolvedReferenceError(message, typeInto(value.type, rest), sensitive);
+}
+
+function checkKnown(value: Value, read: string, rest: Step[]): void {
+  if (isUnknown(value.data)) throw laterAt(value, `${read} is known only after apply`, rest);
 }
 
 /**

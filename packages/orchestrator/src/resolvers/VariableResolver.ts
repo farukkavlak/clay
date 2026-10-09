@@ -1,13 +1,13 @@
-import { State, UNKNOWN } from '@clay/contracts';
+import { State } from '@clay/contracts';
 import { AttributeValue, VariableReference } from '@clay/parser';
 import { SchemaMismatch } from '../conformValues';
 import { givenTo } from '../declared';
 import { Context, contextIn, moduleOf, scopeOf } from '../keys';
 import { withPlace } from '../place';
 import { ScopeManager, VariableValue } from '../scope/ScopeManager';
-import { Value, valueOf } from '../Value';
-import { typeInto } from './readPath';
-import { UnresolvedReferenceError } from './UnresolvedReferenceError';
+import { Value } from '../Value';
+import { laterAt } from './readPath';
+import { unknownOf, UnresolvedReferenceError } from './UnresolvedReferenceError';
 
 export class VariableResolver {
   constructor(
@@ -27,8 +27,7 @@ export class VariableResolver {
     } catch (error) {
       if (!(error instanceof UnresolvedReferenceError)) throw error;
       // The unknown takes the variable's type, narrowed by the reference's steps.
-      const type = this.typed(reference.name, declared, valueOf(error.type, UNKNOWN), where, state).type;
-      throw new UnresolvedReferenceError(error.message, typeInto(type, reference.path));
+      throw laterAt(this.typed(reference.name, declared, unknownOf(error), where, state), error.message, reference.path);
     }
   }
 
