@@ -130,14 +130,28 @@ export function declaredAs(holder: Holder, name: string, value: Value, type: Typ
   return heldAs(value, type, defaults?.tree, fillWith(`${holder} "${name}"`, defaults?.read), [name]);
 }
 
-/** A block's type and defaults, as `givenTo` takes them. */
-export function declaredOf(block: { valueType?: Type; defaults?: TypeDefaults }): { type?: Type; defaults?: TypeDefaults } {
-  return { type: block.valueType, defaults: block.defaults };
+/** What a block declares about its value. */
+export interface Declared {
+  type?: Type;
+  defaults?: TypeDefaults;
+  sensitive?: true;
 }
 
-/** Without a declared type, the value is taken as it is. */
-export function givenTo(holder: Holder, name: string, value: Value, { type, defaults }: { type?: Type; defaults?: TypeDefaults }, read: Defaults['read']): Value {
-  return type ? declaredAs(holder, name, value, type, defaults && { tree: defaults, read }) : value;
+/** A block's type, defaults and flag, as `givenTo` takes them. */
+export function declaredOf(block: { valueType?: Type; defaults?: TypeDefaults; sensitive?: true }): Declared {
+  return { type: block.valueType, defaults: block.defaults, sensitive: block.sensitive };
+}
+
+/** Without a declared type, the value is taken as it is. A sensitive value that does not fit is refused without being quoted. */
+export function givenTo(holder: Holder, name: string, value: Value, { type, defaults, sensitive }: Declared, read: Defaults['read']): Value {
+  if (!type) return value;
+
+  try {
+    return declaredAs(holder, name, value, type, defaults && { tree: defaults, read });
+  } catch (error) {
+    if (sensitive && error instanceof SchemaMismatch && error.unquoted !== undefined) throw new SchemaMismatch(error.unquoted, error.attribute);
+    throw error;
+  }
 }
 
 /** Checks every default against its attribute's type, so a bad default is refused even when no value uses it. */

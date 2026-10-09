@@ -1,4 +1,4 @@
-import { Address, ModuleAddress, Output, parseDataAddress, State } from '@clay/contracts';
+import { Address, ModuleAddress, Output, parseDataAddress, SENSITIVE, State } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { AttributeValue, DataBlock, ResourceBlock, spell, Statement } from '@clay/parser';
 import { offPlan, Plan, PlanAction } from '@clay/planner';
@@ -17,7 +17,7 @@ import { RunEvent } from '../RunEvent';
 import { ScopeManager } from '../scope/ScopeManager';
 import { shown } from '../shown';
 import { typeFits } from '../typeFits';
-import { Value } from '../Value';
+import { outputOf, Value } from '../Value';
 import { ActionExecutor } from './ActionExecutor';
 import { LoadedConfig } from './ConfigLoader';
 import { DataSourceReader } from './DataSourceReader';
@@ -319,7 +319,7 @@ export class PlanRunner {
     for (const stmt of program)
       if (stmt.type === 'Output') {
         const resolved = tryAt(stmt.value.position, spell(stmt), context, () => this.outputValue(stmt.name, stmt.value, declaredOf(stmt), state, context));
-        outputs.set(stmt.name, { value: resolved.data, type: resolved.type });
+        outputs.set(stmt.name, outputOf(resolved, stmt.sensitive));
         this.scopeManager.setOutput(scope, stmt.name, resolved);
       }
 
@@ -352,11 +352,31 @@ export class PlanRunner {
   private checkOutput(node: OutputNode, value: Value, { held, inPlan }: PlannedOutput): void {
     const off = offPlan({ value: { type: held.type } }, { value: held.value }, { value: value.data });
     const sameType = typeFits(held.type, value.type);
-    if (!off && sameType) return;
+    const { sensitive } = node.declared;
+    if (!off && sameType && held.sensitive === sensitive) return;
 
-    const was = inPlan ? `the plan showed ${node.name} = ${shown(held.value)}` : `the plan left ${node.name} = ${shown(held.value)} as it was`;
-    const now = `${shown(value.data)}${sameType ? '' : ' of another type'}`;
-    throw withPlace(new Error(`${was}, but it now comes to ${now}. Plan again.`), node.position, node.declaration, ModuleAddress.root);
+    throw withPlace(
+      new Error(`${this.outputWas(node.name, held, inPlan, sensitive)}, but ${this.outputNow(value, held, off !== undefined, sensitive)}. Plan again.`),
+      node.position,
+      node.declaration,
+      ModuleAddress.root
+    );
+  }
+
+  /** Hidden if either says so: the plan may have hidden what the configuration now would print. */
+  private outputWas(name: string, held: Output, inPlan: boolean, sensitive?: true): string {
+    if (held.sensitive !== sensitive) return `the plan ${inPlan ? 'showed' : 'left'} ${name} as ${held.sensitive ? 'sensitive' : 'not sensitive'}`;
+
+    const before = sensitive ? SENSITIVE : shown(held.value);
+    return inPlan ? `the plan showed ${name} = ${before}` : `the plan left ${name} = ${before} as it was`;
+  }
+
+  /** A plan that hid an output is not run with a configuration that prints it, nor the other way round. */
+  private outputNow(value: Value, held: Output, off: boolean, sensitive?: true): string {
+    if (held.sensitive !== sensitive) return `it is ${sensitive ? 'sensitive' : 'not sensitive'} now`;
+    if (!sensitive) return `it now comes to ${shown(value.data)}${typeFits(held.type, value.type) ? '' : ' of another type'}`;
+
+    return `it now comes to ${off ? 'another value' : 'another type'}`;
   }
 
   private resolveOutput(node: OutputNode, instance: ModuleAddress, state: State): Value {

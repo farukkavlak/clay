@@ -19,7 +19,7 @@ import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { Reference, ReferenceScanner } from '../resolvers/ReferenceScanner';
 import { UnresolvedReferenceError } from '../resolvers/UnresolvedReferenceError';
 import { ScopeManager } from '../scope/ScopeManager';
-import { carried, Value, valueOf } from '../Value';
+import { carried, outputOf, Value, valueOf } from '../Value';
 import { DataSourceReader } from './DataSourceReader';
 import { DependencyGraphBuilder, GraphNode, LocalNode, OutputNode, ValueNode } from './DependencyGraphBuilder';
 import { LoadedResource } from './ModuleLoader';
@@ -292,7 +292,7 @@ export class DesiredStateBuilder {
     const value = tryAt(node.position, node.declaration, contextIn(node.context, instance), () => givenTo('output', node.name, resolved, node.declared, read));
     this.scopeManager.setOutput(instance.toString(), node.name, value);
 
-    if (instance.isRoot()) rootOutputs.set(node.name, { value: value.data, type: value.type });
+    if (instance.isRoot()) rootOutputs.set(node.name, outputOf(value, node.declared.sensitive));
   }
 
   private resolveForPlan(block: ResourceBlock, state: State, context: Context): Record<string, Value> {

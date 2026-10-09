@@ -1,9 +1,9 @@
-import { ModuleAddress, Type } from '@clay/contracts';
+import { ModuleAddress } from '@clay/contracts';
 import { Graph } from '@clay/graph';
-import { AttributeValue, callsIn, DataBlock, ModuleBlock, Position, spell, Statement, TypeDefaults } from '@clay/parser';
+import { AttributeValue, callsIn, DataBlock, ModuleBlock, Position, spell, Statement } from '@clay/parser';
 
 import { Instances, Repetition } from '../Instances';
-import { declaredOf } from '../declared';
+import { Declared, declaredOf } from '../declared';
 import { functionCalled } from '../functions';
 import { callKey, Context, dataSourceAddress, dataSourceKey, localKey, ModuleCall, outputKey, scopeOf, variableKey } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
@@ -27,7 +27,7 @@ export interface ValueNode extends InModule {
 }
 
 /** An output always has a value; a variable may not until a call gives it one. */
-export type OutputNode = ValueNode & { value: AttributeValue; declared: { type?: Type; defaults?: TypeDefaults } };
+export type OutputNode = ValueNode & { value: AttributeValue; declared: Declared };
 
 export type LocalNode = ValueNode & { value: AttributeValue };
 

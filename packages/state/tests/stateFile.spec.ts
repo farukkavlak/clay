@@ -113,10 +113,11 @@ describe('reading a state file', () => {
     ['a value with no type', { value: 'hello' }],
     ['a type with no value', { type: { kind: 'string' } }],
     ['a type that is none', { value: 'hello', type: { kind: 'text' } }],
+    ['sensitive and not by `true`', { value: 'hello', type: { kind: 'string' }, sensitive: 'yes' }],
   ])('refuses an output that is %s', (_, output) => {
     const content = { version: STATE_VERSION, serial: 0, resources: {}, outputs: { o: output } };
 
-    expect(read(content)).toThrow('clay.state.json is not valid state: its output "o" is not a value with its type');
+    expect(read(content)).toThrow('clay.state.json is not valid state: its output "o" is not a value with its type, and sensitive only as true');
   });
 
   it('reads an output of null, which is a value', () => {

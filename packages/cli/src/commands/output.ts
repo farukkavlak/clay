@@ -1,4 +1,4 @@
-import { Output } from '@clay/contracts';
+import { Output, SENSITIVE } from '@clay/contracts';
 import { StateManager } from '@clay/state';
 import { Command } from 'commander';
 import { styleText } from 'node:util';
@@ -16,7 +16,8 @@ function displayOutputs(outputs: Record<string, Output>, json: boolean): void {
   if (Object.keys(outputs).length === 0) console.log(styleText('yellow', 'No outputs found in state.'));
   else {
     console.log(styleText('bold', '\nOutputs:\n'));
-    for (const [key, { value }] of Object.entries(outputs)) console.log(`${styleText('cyan', key)} = ${styleText('green', JSON.stringify(value))}`);
+    for (const [key, { value, sensitive }] of Object.entries(outputs))
+      console.log(`${styleText('cyan', key)} = ${styleText('green', sensitive ? SENSITIVE : JSON.stringify(value))}`);
 
     console.log();
   }

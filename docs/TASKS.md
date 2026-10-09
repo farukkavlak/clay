@@ -234,10 +234,27 @@ configuration hits each of these early.
 - [x] `optional(type)` and `optional(type, default)` on an attribute of a variable's
       object type. One left out, or given `null`, takes its default, or `null` where it
       names none
-- [ ] `sensitive = true` on an output: its value is hidden in what `plan`, `apply` and
+- [x] `sensitive = true` on an output: its value is hidden in what `plan`, `apply` and
       `clay output` print, and `clay output --json` still gives it. Terraform prints
       `<sensitive>` and keeps the flag beside the value and its type in state, where the
-      value stays in plain text
+      value stays in plain text. A run whose configuration marks an output otherwise
+      than its plan did is refused; Terraform takes the flag from the configuration
+- [ ] A sensitive value stays sensitive wherever it goes. A module's sensitive output
+      marks what its caller reads, through a reference's steps, a string, a function, a
+      `for`, a local, a variable and a module input, part by part: `.name` of an object
+      whose `password` is sensitive is not. A root output that holds one and does not
+      say `sensitive = true` is refused, as in Terraform: "Output refers to sensitive
+      values". A sensitive `for_each` is refused, since a key shows in an address, as in
+      Terraform. A sensitive `count` is refused too, since the plan shows how many
+      instances it makes; Terraform accepts it, for old configurations
+- [ ] A resource attribute given a sensitive value is hidden in the plan and under
+      "Changed outside Clay": `content = (sensitive value)`, as Terraform prints it. A
+      plan file and the state keep which parts of a resource are sensitive, as
+      Terraform's `sensitive_attributes` does, so what reads the attribute later is
+      sensitive too
+- [ ] Other places a sensitive value starts: `sensitive = true` on a variable, an
+      attribute a provider's schema marks, and the functions `sensitive` and
+      `nonsensitive`, as Terraform has them
 - [x] A module `source` has a kind. Terraform reads a local path only when it starts with
       `./` or `../` and treats anything else as a registry address; Clay joins whatever it
       is onto the parent directory, so an absolute path is read as well
