@@ -142,14 +142,14 @@ export function declaredOf(block: { valueType?: Type; defaults?: TypeDefaults; s
   return { type: block.valueType, defaults: block.defaults, sensitive: block.sensitive };
 }
 
-/** Without a declared type, the value is taken as it is. A sensitive value that does not fit is refused without being quoted. */
+/** Without a declared type, the value is taken as it is. A sensitive one that does not fit is refused in one fixed sentence, since any part of the usual message, a key among them, may be the value. */
 export function givenTo(holder: Holder, name: string, value: Value, { type, defaults, sensitive }: Declared, read: Defaults['read']): Value {
   if (!type) return value;
 
   try {
     return declaredAs(holder, name, value, type, defaults && { tree: defaults, read });
   } catch (error) {
-    if (sensitive && error instanceof SchemaMismatch && error.unquoted !== undefined) throw new SchemaMismatch(error.unquoted, error.attribute);
+    if (sensitive && error instanceof SchemaMismatch) throw new SchemaMismatch(`${name} does not fit its type; it is sensitive, so its value is not shown`);
     throw error;
   }
 }

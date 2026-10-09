@@ -7,15 +7,11 @@ import { items, spelled } from './spelled';
 import { article, child, described, unordered, Value, valueOf } from './Value';
 import { ObjectType, withLeftOut } from './withLeftOut';
 
-/**
- * Carries the attribute, so the caller can report its position; undefined for a missing attribute.
- * `unquoted` is the message without the value, where the message quotes it, for a value that must not be printed.
- */
+/** Carries the attribute, so the caller can report its position; undefined for a missing attribute. */
 export class SchemaMismatch extends Error {
   constructor(
     message: string,
-    readonly attribute?: string,
-    readonly unquoted?: string
+    readonly attribute?: string
   ) {
     super(message);
     this.name = 'SchemaMismatch';
@@ -58,8 +54,8 @@ export function nameProblem(resource: string, { known, required }: Names, names:
   return missing === undefined ? undefined : { message: `${resource} requires "${missing}"${where}` };
 }
 
-function mismatchAt(path: AttributePath, message: string, unquoted?: string): SchemaMismatch {
-  return new SchemaMismatch(message, String(path[0]), unquoted);
+function mismatchAt(path: AttributePath, message: string): SchemaMismatch {
+  return new SchemaMismatch(message, String(path[0]));
 }
 
 /** Allowed conversions: a number or bool to its text, a string to the number or bool it spells, and a collection to another. */
@@ -79,7 +75,7 @@ function numberIn(text: string, path: AttributePath): ExactNumber {
   try {
     return ExactNumber.parse(text);
   } catch (error) {
-    if (error instanceof NumberError) throw mismatchAt(path, `${spelled(path)}: ${error.message}`, `${spelled(path)} is not a number, or is one out of range`);
+    if (error instanceof NumberError) throw mismatchAt(path, `${spelled(path)}: ${error.message}`);
     throw error;
   }
 }
@@ -87,8 +83,7 @@ function numberIn(text: string, path: AttributePath): ExactNumber {
 function booleanIn(text: string, path: AttributePath): boolean {
   if (text === 'true' || text === 'false') return text === 'true';
 
-  const wanted = 'is not a boolean, which is "true" or "false"';
-  throw mismatchAt(path, `${spelled(path)}: ${shown(text)} ${wanted}`, `${spelled(path)} ${wanted}`);
+  throw mismatchAt(path, `${spelled(path)}: ${shown(text)} is not a boolean, which is "true" or "false"`);
 }
 
 function primitive(kind: Type['kind'], data: unknown, path: AttributePath): unknown {

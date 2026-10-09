@@ -1,6 +1,6 @@
 import { Address, ModuleAddress, Output, parseDataAddress, SENSITIVE, State } from '@clay/contracts';
 import { Graph } from '@clay/graph';
-import { AttributeValue, DataBlock, ResourceBlock, spell, Statement } from '@clay/parser';
+import { AttributeValue, DataBlock, OutputBlock, ResourceBlock, spell, Statement } from '@clay/parser';
 import { offPlan, Plan, PlanAction } from '@clay/planner';
 import { moveResource, StateManager } from '@clay/state';
 
@@ -46,6 +46,8 @@ type Approved = Pick<Plan, 'actions' | 'outputs' | 'dataSources' | 'readAtApply'
 interface PlannedOutput {
   held: Output;
   inPlan: boolean;
+  /** The plan printed no value for it: it is sensitive, or was until this plan. */
+  hidden: boolean;
 }
 
 type PlannedOutputs = Map<string, PlannedOutput>;
@@ -103,8 +105,9 @@ export class PlanRunner {
   private plannedOutputs({ outputs }: Approved, state: State): PlannedOutputs {
     const planned: PlannedOutputs = new Map();
 
-    for (const [name, held] of Object.entries(state.outputs ?? {})) if (!Object.hasOwn(outputs, name)) planned.set(name, { held, inPlan: false });
-    for (const [name, { new: next }] of Object.entries(outputs)) if (next !== undefined) planned.set(name, { held: next, inPlan: true });
+    for (const [name, held] of Object.entries(state.outputs ?? {})) if (!Object.hasOwn(outputs, name)) planned.set(name, { held, inPlan: false, hidden: held.sensitive === true });
+    for (const [name, { old, new: next }] of Object.entries(outputs))
+      if (next !== undefined) planned.set(name, { held: next, inPlan: true, hidden: (old?.sensitive ?? next.sensitive) === true });
 
     return planned;
   }
@@ -112,11 +115,22 @@ export class PlanRunner {
   private checkOutputsMatch(planned: PlannedOutputs, program: Statement[]): void {
     const declared = program.filter((stmt) => stmt.type === 'Output');
 
-    for (const stmt of declared)
-      if (!planned.has(stmt.name))
-        throw withPlace(new Error(`The plan has no output "${stmt.name}", which the configuration declares`), stmt.position, spell(stmt), ModuleAddress.root);
+    for (const stmt of declared) {
+      const output = planned.get(stmt.name);
+      if (!output) throw withPlace(new Error(`The plan has no output "${stmt.name}", which the configuration declares`), stmt.position, spell(stmt), ModuleAddress.root);
+
+      this.checkFlagMatches(stmt, output);
+    }
 
     for (const name of planned.keys()) if (!declared.some((stmt) => stmt.name === name)) throw new Error(`The plan has output "${name}", which the configuration does not declare`);
+  }
+
+  /** A plan that hid an output would end by printing it, or one that printed it by hiding it. */
+  private checkFlagMatches(stmt: OutputBlock, { held, inPlan }: PlannedOutput): void {
+    if (held.sensitive === stmt.sensitive) return;
+
+    const was = `the plan ${inPlan ? 'showed' : 'left'} ${stmt.name} as ${held.sensitive ? 'sensitive' : 'not sensitive'}`;
+    throw withPlace(new Error(`${was}, but it is ${stmt.sensitive ? 'sensitive' : 'not sensitive'} now. Plan again.`), stmt.position, spell(stmt), ModuleAddress.root);
   }
 
   /** By block. A saved plan may name a data source with no block, whose value would be silently dropped. */
@@ -349,34 +363,17 @@ export class PlanRunner {
   }
 
   /** Held to the plan as a resource's values are before it runs. What the plan could not know may be anything. */
-  private checkOutput(node: OutputNode, value: Value, { held, inPlan }: PlannedOutput): void {
+  private checkOutput(node: OutputNode, value: Value, { held, inPlan, hidden }: PlannedOutput): void {
     const off = offPlan({ value: { type: held.type } }, { value: held.value }, { value: value.data });
     const sameType = typeFits(held.type, value.type);
-    const { sensitive } = node.declared;
-    if (!off && sameType && held.sensitive === sensitive) return;
+    if (!off && sameType) return;
 
-    throw withPlace(
-      new Error(`${this.outputWas(node.name, held, inPlan, sensitive)}, but ${this.outputNow(value, held, off !== undefined, sensitive)}. Plan again.`),
-      node.position,
-      node.declaration,
-      ModuleAddress.root
-    );
-  }
-
-  /** Hidden if either says so: the plan may have hidden what the configuration now would print. */
-  private outputWas(name: string, held: Output, inPlan: boolean, sensitive?: true): string {
-    if (held.sensitive !== sensitive) return `the plan ${inPlan ? 'showed' : 'left'} ${name} as ${held.sensitive ? 'sensitive' : 'not sensitive'}`;
-
-    const before = sensitive ? SENSITIVE : shown(held.value);
-    return inPlan ? `the plan showed ${name} = ${before}` : `the plan left ${name} = ${before} as it was`;
-  }
-
-  /** A plan that hid an output is not run with a configuration that prints it, nor the other way round. */
-  private outputNow(value: Value, held: Output, off: boolean, sensitive?: true): string {
-    if (held.sensitive !== sensitive) return `it is ${sensitive ? 'sensitive' : 'not sensitive'} now`;
-    if (!sensitive) return `it now comes to ${shown(value.data)}${typeFits(held.type, value.type) ? '' : ' of another type'}`;
-
-    return `it now comes to ${off ? 'another value' : 'another type'}`;
+    const before = hidden ? SENSITIVE : shown(held.value);
+    const was = inPlan ? `the plan showed ${node.name} = ${before}` : `the plan left ${node.name} = ${before} as it was`;
+    const shownNow = `${shown(value.data)}${sameType ? '' : ' of another type'}`;
+    // A value the plan hid is not printed here either.
+    const now = hidden ? (off ? 'another value' : 'another type') : shownNow;
+    throw withPlace(new Error(`${was}, but it now comes to ${now}. Plan again.`), node.position, node.declaration, ModuleAddress.root);
   }
 
   private resolveOutput(node: OutputNode, instance: ModuleAddress, state: State): Value {

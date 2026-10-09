@@ -19,6 +19,8 @@ const collection = (value: string) => `output "password" {\n  value = ${value}\n
 const typed = (value: string, type: string, flag = 'sensitive = true') =>
   `resource "random_string" "s" { length = 8 }\noutput "password" {\n  value = ${value}\n  type = ${type}\n  ${flag}\n}`;
 
+const made = (flag: boolean) => `resource "random_string" "s" { length = 8 }\noutput "password" {\n  value = random_string.s.length${flag ? '\n  sensitive = true' : ''}\n}`;
+
 describe('a sensitive output', () => {
   let dir: string;
 
@@ -106,9 +108,9 @@ describe('a sensitive output', () => {
   });
 
   it.each([
-    ['showed', '', 'the plan showed password = <sensitive>, but it now comes to another value. Plan again.'],
-    ['left as it was', 'apply', 'the plan left password = <sensitive> as it was, but it now comes to another value. Plan again.'],
-  ])('is named without its value where a plan that %s it is run on another', async (_, first, message) => {
+    ['showed it', '', 'the plan showed password = <sensitive>, but it now comes to another value. Plan again.'],
+    ['left it as it was', 'apply', 'the plan left password = <sensitive> as it was, but it now comes to another value. Plan again.'],
+  ])('is named without its value where a plan that %s is run on another', async (_, first, message) => {
     if (first) await written(secret('s3cret'), first, '--yes');
     const saved = await newOrchestrator().plan(`${secret('s3cret')}\nresource "null_resource" "n" {}`);
 
@@ -120,27 +122,30 @@ describe('a sensitive output', () => {
   });
 
   it.each([
-    [
-      'hid it is run with a configuration that prints it',
-      secret('s3cret'),
-      secret('s3cret', ''),
-      'the plan showed password as sensitive, but it is not sensitive now. Plan again.',
-    ],
-    [
-      'printed it is run with a configuration that hides it',
-      secret('s3cret', ''),
-      secret('s3cret'),
-      'the plan showed password as not sensitive, but it is sensitive now. Plan again.',
-    ],
-  ])('stops the run where a plan that %s', async (_, plannedWith, runWith, message) => {
-    const saved = await newOrchestrator().plan(plannedWith);
+    ['showed it as sensitive', '', true, 'the plan showed password as sensitive, but it is not sensitive now. Plan again.'],
+    ['showed it as not sensitive', '', false, 'the plan showed password as not sensitive, but it is sensitive now. Plan again.'],
+    ['left it as sensitive', 'apply', true, 'the plan left password as sensitive, but it is not sensitive now. Plan again.'],
+  ])('stops the run before anything is made where a plan that %s is run with a configuration that says otherwise', async (_, first, flagged, message) => {
+    if (first) await written(`output "password" {\n  value = 8\n  sensitive = true\n}`, first, '--yes');
+    const saved = await newOrchestrator().plan(made(flagged));
 
     const run = async () => {
-      for await (const event of newOrchestrator().runPlan(saved, runWith)) if (event.type === 'failed') throw event.error;
+      for await (const event of newOrchestrator().runPlan(saved, made(!flagged))) if (event.type === 'failed') throw event.error;
     };
 
     await expect(run()).rejects.toThrow(message);
-    await expect(clayIn('output')).resolves.toContain('No outputs found in state.');
+    await expect(clayIn('state', 'list')).resolves.not.toContain('random_string.s');
+  });
+
+  it('is named without its value where the plan that takes the flag off, which hid it, is run on another value', async () => {
+    await written(secret('s3cret'), 'apply', '--yes');
+    const saved = await newOrchestrator().plan(secret('s3cret', ''));
+
+    const run = async () => {
+      for await (const event of newOrchestrator().runPlan(saved, secret('n3w', ''))) if (event.type === 'failed') throw event.error;
+    };
+
+    await expect(run()).rejects.toThrow('the plan showed password = <sensitive>, but it now comes to another value. Plan again.');
   });
 
   it('is named without its value where only its type is not the one the plan showed', async () => {
@@ -154,19 +159,25 @@ describe('a sensitive output', () => {
   });
 
   describe('of a type its value does not fit', () => {
-    it('is refused at apply without the value a resource made', async () => {
-      const applied = await written(typed('random_string.s.result', 'number'), 'apply', '--yes').catch((error: { stderr: string }) => stripVTControlCharacters(error.stderr));
-      const made = JSON.parse(await fs.readFile(path.join(dir, 'clay.state.json'), 'utf8')) as { resources: Record<string, { attributes: { result: string } }> };
+    // A key a for makes is data too, so nothing of the value is quoted, whatever the mismatch.
+    it.each([
+      ['a string where it takes a number', 'random_string.s.result', 'number'],
+      ['a key its object type does not have', '{ for v in [random_string.s.result] : v => 1 }', 'object({ a = number })'],
+      ['a string under a key where it takes a boolean', '{ for v in [random_string.s.result] : v => "x" }', 'map(bool)'],
+      ['a string under a key where it takes a list', '{ for v in [random_string.s.result] : v => "x" }', 'map(list(string))'],
+      ['objects that share no type', '[{ a = 1 }, { for v in [random_string.s.result] : v => 1 }]', 'list(any)'],
+    ])('is refused at apply with nothing of the value a resource made, for %s', async (_, value, type) => {
+      const failed = await written(typed(value, type), 'apply', '--yes').catch((error: { stdout: string; stderr: string }) =>
+        stripVTControlCharacters(error.stdout + error.stderr)
+      );
+      const state = JSON.parse(await fs.readFile(path.join(dir, 'clay.state.json'), 'utf8')) as { resources: Record<string, { attributes: { result: string } }> };
 
-      expect(applied).toContain('Apply failed: password is not a number, or is one out of range');
-      expect(applied).not.toContain(made.resources['random_string.s'].attributes.result);
+      expect(failed).toContain('Apply failed: password does not fit its type; it is sensitive, so its value is not shown');
+      expect(failed).not.toContain(state.resources['random_string.s'].attributes.result);
     });
 
-    it.each([
-      ['a number', '"s3cret"', 'number', 'password is not a number, or is one out of range'],
-      ['a boolean inside it', '{ a = "s3cret" }', 'object({ a = bool })', 'password["a"] is not a boolean, which is "true" or "false"'],
-    ])('is refused by validate without the value, where it takes %s', async (_, value, type, message) => {
-      await expect(newOrchestrator().validate(typed(value, type))).rejects.toThrow(message);
+    it('is refused by validate the same way, where the value is written', async () => {
+      await expect(newOrchestrator().validate(typed('"s3cret"', 'number'))).rejects.toThrow('password does not fit its type; it is sensitive, so its value is not shown');
     });
 
     it('is refused with the value where it is not sensitive', async () => {

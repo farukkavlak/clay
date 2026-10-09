@@ -117,7 +117,7 @@ describe('reading a state file', () => {
   ])('refuses an output that is %s', (_, output) => {
     const content = { version: STATE_VERSION, serial: 0, resources: {}, outputs: { o: output } };
 
-    expect(read(content)).toThrow('clay.state.json is not valid state: its output "o" is not a value with its type, and sensitive only as true');
+    expect(read(content)).toThrow('clay.state.json is not valid state: its output "o" is not a value with its type, or its sensitive is not true');
   });
 
   it('reads an output of null, which is a value', () => {

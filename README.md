@@ -81,11 +81,13 @@ way. A module call takes `for_each` too, `module.web["eu"]`, with `each.key` and
 `each.value` in its inputs. A `for_each` map needs its keys at plan time, not its values:
 `{ a = random_string.s.id }` plans `["a"]` with `each.value` unknown.
 
-An output with `sensitive = true` is hidden wherever it would be printed: `plan`, `apply`,
-`clay output` and an error about it show `<sensitive>` or leave the value out, and a plan that puts the flag on or takes it off hides
-the value too. `clay output --json` gives the value with `"sensitive": true`. The state
-and a plan file hold it unencrypted. The flag hides only that output: a module's
-sensitive output is not hidden in whatever its caller does with it.
+An output with `sensitive = true` is hidden where it would be printed: `plan`, `apply`
+and `clay output` show `<sensitive>` in its place, and a plan that puts the flag on or
+takes it off hides the value too. One that does not fit its `type` is refused without
+its value. `clay output --json` gives the value with `"sensitive": true`. The state and
+a plan file hold it unencrypted. The flag hides only that output: a module's sensitive
+output is not hidden in whatever its caller does with it, and an error raised while the
+value is worked out may still quote a part of it.
 
 A local is a value with a name: `locals { name = "${var.prefix}-x" }` is read as
 `local.name`. It may read anything, another local among them, and is worked out once for

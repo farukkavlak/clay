@@ -79,7 +79,7 @@ export function plainOf(values: Record<string, Value>): Record<string, unknown> 
   return Object.fromEntries(Object.entries(values).map(([name, value]) => [name, value.data]));
 }
 
-/** As a plan or a state holds a root output. */
+/** As a plan or a state holds a value, beside its type and, for a root output, its flag. */
 export function outputOf({ type, data }: Value, sensitive?: true): Output {
   return { value: data, type, ...(sensitive && { sensitive }) };
 }

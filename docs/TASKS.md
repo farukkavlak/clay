@@ -238,13 +238,16 @@ configuration hits each of these early.
       `clay output` print, and `clay output --json` still gives it. Terraform prints
       `<sensitive>` and keeps the flag beside the value and its type in state, where the
       value stays in plain text. A run whose configuration marks an output otherwise
-      than its plan did is refused; Terraform takes the flag from the configuration
+      than its plan did is refused before anything runs; Terraform takes the flag from
+      the configuration. One that does not fit its type is refused in one fixed
+      sentence, since a key in the usual message may be the value
 - [ ] A sensitive value stays sensitive wherever it goes. A module's sensitive output
       marks what its caller reads, through a reference's steps, a string, a function, a
       `for`, a local, a variable and a module input, part by part: `.name` of an object
       whose `password` is sensitive is not. A root output that holds one and does not
       say `sensitive = true` is refused, as in Terraform: "Output refers to sensitive
-      values". A sensitive `for_each` is refused, since a key shows in an address, as in
+      values". No error quotes one: today `{for v in [secret, secret] : v => 1}` fails
+      with `Two items give the key "..."`. A sensitive `for_each` is refused, since a key shows in an address, as in
       Terraform. A sensitive `count` is refused too, since the plan shows how many
       instances it makes; Terraform accepts it, for old configurations
 - [ ] A resource attribute given a sensitive value is hidden in the plan and under
