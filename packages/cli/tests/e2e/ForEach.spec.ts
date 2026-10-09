@@ -307,7 +307,7 @@ describe('a resource with for_each', () => {
   ])('refuses each in %s, where it is written', async (_, config, reference) => {
     const error = await planError(config);
 
-    expect(error.message).toBe(`${reference} is only known inside a resource or a module call that has for_each`);
+    expect(error.message).toBe(`${reference} is only known inside a resource, a data source or a module call that has for_each`);
     expect(error.position).toMatchObject(placeOf(config, reference));
   });
 

@@ -409,7 +409,9 @@ module output had a value, so one that read either failed at plan.
 - [x] `count` on a data source, as on a resource. `data.local_file.f[0]` is one instance,
       `data.local_file.f` alone the list of them, and a plan names each by its index. The
       apply reads the count again and refuses an index the plan has and the count does not
-- [ ] `for_each` on a data source, as on a resource
+- [x] `for_each` on a data source, as on a resource. `data.local_file.f["a"]` is one
+      instance, `data.local_file.f` alone the map of them by key, and `each.key` and
+      `each.value` are read in its block
 - [x] A data source fed by a pending resource is `(known after apply)`. It waits for the
       apply when what it reads is not known yet, or when it reads a resource the plan
       changes, through variables and module outputs too, so it never reads the world

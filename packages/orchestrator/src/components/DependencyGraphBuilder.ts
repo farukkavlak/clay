@@ -138,12 +138,13 @@ export class DependencyGraphBuilder {
       if (value) tryAt(value.position, dependent.declaration, caller, () => this.addDependencies(value, graph, dependent, moduleScopes));
   }
 
-  /** As a resource's: its count is read before any instance, so it has no key. */
+  /** As a resource's: its count or for_each is read before any instance, so it has no key. */
   private addDataDependencies(key: string, block: DataBlock, module: ModuleAddress, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
     const dependent = { key, declaration: spell(block), context: module };
     const repetition = this.instances.repetitionOf(key);
 
-    if (block.count) tryAt(block.count.position, dependent.declaration, module, () => this.addDependencies(block.count!, graph, dependent, moduleScopes));
+    for (const value of [block.count, block.forEach])
+      if (value) tryAt(value.position, dependent.declaration, module, () => this.addDependencies(value, graph, dependent, moduleScopes));
     for (const value of Object.values(block.attributes))
       tryAt(value.position, dependent.declaration, module, () => this.addDependencies(value, graph, dependent, moduleScopes, repetition));
   }

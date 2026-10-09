@@ -15,7 +15,7 @@ export interface InstanceRead {
 export const COUNT_INDEX_OUTSIDE = 'count.index is only known inside a resource, a data source or a module call that has count';
 
 export function eachOutside(name: 'key' | 'value'): string {
-  return `each.${name} is only known inside a resource or a module call that has for_each`;
+  return `each.${name} is only known inside a resource, a data source or a module call that has for_each`;
 }
 
 export function noAttribute(type: string, name: string): string {

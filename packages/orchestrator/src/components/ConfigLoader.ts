@@ -118,7 +118,13 @@ export class ConfigLoader {
   /** Apart from a resource's, since a data source and a resource may share a type and a name. */
   private declareData(loadedModules: LoadedModule[]): void {
     for (const { address, program } of loadedModules)
-      for (const stmt of program) if (stmt.type === 'Data' && stmt.count) this.instances.declare(dataSourceKey(address.toString(), stmt.dataSourceType, stmt.name), 'count');
+      for (const stmt of program) {
+        if (stmt.type !== 'Data') continue;
+
+        const key = dataSourceKey(address.toString(), stmt.dataSourceType, stmt.name);
+        if (stmt.count) this.instances.declare(key, 'count');
+        if (stmt.forEach) this.instances.declare(key, 'for_each');
+      }
   }
 
   private declareCalls(loadedModules: LoadedModule[]): void {

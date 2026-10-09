@@ -217,15 +217,13 @@ export class PlanRunner {
     }
   }
 
-  /** count is read again at apply, after what it reads has run, as a resource's is. */
+  /** count and for_each are read again at apply, after what they read has run, as a resource's are. */
   private dataInstances(block: DataBlock, module: ModuleAddress, state: State): DataInstance[] {
     const at = new DataInstance(module, block.dataSourceType, block.name);
-    const { count } = block;
+    const read = <T>(value: AttributeValue, from: (value: Value) => T) => tryAt(value.position, spell(block), at, () => from(this.resolver.resolveValue(value, state, at)));
 
-    if (count) {
-      const read = tryAt(count.position, spell(block), at, () => countFrom(this.resolver.resolveValue(count, state, at)));
-      this.instances.setCount(at.block, read);
-    }
+    if (block.count) this.instances.setCount(at.block, read(block.count, countFrom));
+    if (block.forEach) this.instances.setEach(at.block, read(block.forEach, eachFrom));
 
     return at.instances(this.instances.keysOf(at.block));
   }

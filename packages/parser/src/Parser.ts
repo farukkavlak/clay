@@ -43,7 +43,7 @@ const PRIMITIVE_TYPES = new Map<string, Type>([
 const HOLDING_TYPES = new Set(['list', 'set', 'map', 'tuple', 'object']);
 
 /** Reserved by a module call, so no module input may use them. */
-const INSTANCE_ARGUMENTS = ['count', 'for_each'];
+const INSTANCE_ARGUMENTS = new Set(['count', 'for_each']);
 
 interface ParsedType {
   type: Type;
@@ -139,14 +139,15 @@ export class Parser {
     const typeToken = this.consumeType("Expect data source type string after 'data'.");
     const nameToken = this.consumeName('Expect data source name string after data source type.');
 
-    const { count, ...attributes } = this.parseAttributes('data source');
-    this.refuseInstances(attributes, `data "${typeToken.value}" "${nameToken.value}"`);
+    const { count, for_each: forEach, ...attributes } = this.parseAttributes('data source');
+    if (count && forEach) throw new ConfigError(`data "${typeToken.value}" "${nameToken.value}" has count or for_each, not both`, forEach.position);
 
     return {
       type: 'Data',
       dataSourceType: typeToken.value,
       name: nameToken.value,
       ...(count && { count }),
+      ...(forEach && { forEach }),
       attributes,
       position,
     };
@@ -155,8 +156,7 @@ export class Parser {
   private parseVariable(position: Position): VariableBlock {
     const nameToken = this.consumeName("Expect variable name string after 'variable'.");
     if (nameToken.value === 'source') throw new ConfigError('"source" cannot be a variable name: a module call reads it as the module\'s path.', nameToken.position);
-    if (INSTANCE_ARGUMENTS.includes(nameToken.value))
-      throw new ConfigError(`"${nameToken.value}" cannot be a variable name: a module call keeps it for itself.`, nameToken.position);
+    if (INSTANCE_ARGUMENTS.has(nameToken.value)) throw new ConfigError(`"${nameToken.value}" cannot be a variable name: a module call keeps it for itself.`, nameToken.position);
 
     this.consume(TokenType.LBrace, "Expect '{' after variable name.");
     const { attributes, declared } = this.parseTypedBody(`Variable "${nameToken.value}"`, 'default');
@@ -314,11 +314,6 @@ export class Parser {
       attributes,
       position,
     };
-  }
-
-  /** Data sources do not support instances yet; `count` or `for_each` would otherwise pass as inputs. */
-  private refuseInstances(attributes: Record<string, AttributeValue>, block: string): void {
-    for (const name of INSTANCE_ARGUMENTS) if (Object.hasOwn(attributes, name)) throw new ConfigError(`${block} cannot have ${name} yet`, attributes[name].position);
   }
 
   private parseAttributes(block: string): Record<string, AttributeValue> {

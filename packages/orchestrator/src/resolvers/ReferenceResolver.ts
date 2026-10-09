@@ -21,7 +21,7 @@ import {
 import { checkCollection, forItems, ForItem, forObject, unknownItem } from '../forItems';
 import { Instances } from '../Instances';
 import { functionCalled } from '../functions';
-import { Context, instanceKeyOf, ModuleCall, moduleOf, scopeOf } from '../keys';
+import { Context, DataInstance, instanceKeyOf, ModuleCall, moduleOf, scopeOf } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
 import { Planned } from '../Planned';
 import { ScopeManager } from '../scope/ScopeManager';
@@ -192,11 +192,19 @@ export class ReferenceResolver {
     if (typeof key !== 'string') throw new ConfigError(eachOutside(reference.name), position);
     if (reference.name === 'key') return valueOf(types.string, key);
 
-    // Only a resource instance or a module call has a key, and its for_each is read before anything in the instance.
-    const value = where instanceof ModuleCall ? this.modules.eachValue(where.call, key) : this.instances.eachValue((where as Address).withoutKey().toString(), key);
+    // Only a resource or data source instance or a module call has a key, and its for_each is read before anything in the instance.
+    const value = this.eachValue(where, key);
     if (value === undefined) throw new Error(`each.value of "${key}" was read before its for_each`);
 
     return value;
+  }
+
+  private eachValue(where: Context, key: string): Value | undefined {
+    if (where instanceof ModuleCall) return this.modules.eachValue(where.call, key);
+    if (where instanceof DataInstance) return this.instances.eachValue(where.block, key);
+    if (where instanceof Address) return this.instances.eachValue(where.withoutKey().toString(), key);
+
+    return undefined;
   }
 
   /** Relative to the root, so a state or a plan reads the same on another machine. */

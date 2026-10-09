@@ -1135,11 +1135,18 @@ describe('Clay Parser', () => {
       expect(error.position).toEqual(at(1, 50));
     });
 
-    it('refuses for_each on a data source, where it is written', () => {
-      const error = errorOf('data "local_file" "a" { for_each = ["x"] }');
+    it('keeps for_each on a data source apart from what its provider is sent', () => {
+      const [block] = makeParser('data "local_file" "a" { for_each = ["x"] path = "a" }').parse() as DataBlock[];
 
-      expect(error.message).toBe('data "local_file" "a" cannot have for_each yet');
-      expect(error.position).toEqual(at(1, 36));
+      expect(block.forEach).toEqual({ type: 'List', value: [{ type: 'String', value: 'x', position: at(1, 37) }], position: at(1, 36) });
+      expect(block.attributes).toEqual({ path: { type: 'String', value: 'a', position: at(1, 49) } });
+    });
+
+    it('refuses a data source with both count and for_each, at for_each', () => {
+      const error = errorOf('data "local_file" "a" { count = 2 for_each = ["x"] }');
+
+      expect(error.message).toBe('data "local_file" "a" has count or for_each, not both');
+      expect(error.position).toEqual(at(1, 46));
     });
 
     it('keeps for_each on a module apart from its inputs', () => {

@@ -36,7 +36,7 @@ export function dataSourceAddress(scope: string, type: string, name: string, key
   return `${scope ? `${scope}.` : ''}data.${type}.${name}${spellKey(key)}`;
 }
 
-/** One data source instance in one module instance; its key is `count.index`. */
+/** One data source instance in one module instance; its key is `count.index` or `each.key`. */
 export class DataInstance {
   public readonly module: ModuleAddress;
   public readonly type: string;
@@ -50,12 +50,12 @@ export class DataInstance {
     this.key = key;
   }
 
-  /** Its block in its module instance, where its count is read; shared by every instance it makes there. */
+  /** Its block in its module instance, where its count or for_each is read; shared by every instance it makes there. */
   get block(): string {
     return dataSourceKey(this.module.toString(), this.type, this.name);
   }
 
-  /** One for each key its count gives, or itself where it has no count. */
+  /** One for each key its count or for_each gives, or itself where it has neither. */
   instances(keys: InstanceKey[] | undefined): DataInstance[] {
     if (keys === undefined) return [this];
 
