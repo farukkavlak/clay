@@ -1,11 +1,18 @@
 import { ExactNumber, isUnknown } from '@clay/contracts';
 
+import { NotKnownYet } from './NotKnownYet';
 import { described, Value } from './Value';
 
-/** Must be a known whole number. */
+function notANumber(value: Value): Error {
+  return new Error(`count is a whole number from 0, not ${described(value)}`);
+}
+
+/** Must be a known whole number. A value not known yet has its type, so one no apply can make a number is refused first. */
 export function countFrom(value: Value): number {
-  if (isUnknown(value.data)) throw new Error('count must be known when planning: it reads a value only an apply makes');
-  if (!(value.data instanceof ExactNumber)) throw new Error(`count is a whole number from 0, not ${described(value)}`);
+  const { kind } = value.type;
+  if (kind !== 'number' && kind !== 'dynamic') throw notANumber(value);
+  if (isUnknown(value.data)) throw new NotKnownYet('count must be known when planning: it reads a value only an apply makes');
+  if (!(value.data instanceof ExactNumber)) throw notANumber(value);
 
   const count = value.data.toSafeInteger('count');
   if (count < 0) throw new Error(`count is a whole number from 0, not ${count}`);

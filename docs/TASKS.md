@@ -142,6 +142,16 @@ change each.
       Every block was read once as written but the data block. Now each of its values is
       read the same way and held to the type its schema names. Terraform validates a data
       block once the same way
+- [x] `clay validate` refused a `count` or `for_each` only an apply knows, which a plan
+      can accept. With the resource `local_file.size` applied and
+      `count = length(data.local_file.f.content)` on a data source that reads it,
+      `clay plan` made its instances and `clay validate` refused it with
+      `count must be known when planning`: it plans against an empty state, where the file
+      is still to be made. Now such a block makes no instance in a check, on a resource, a
+      data source and a module call, and what reads it is not known yet. It is still
+      checked once as written, and one whose type no apply can make right is refused:
+      `count = data.local_file.f.content` is a string. A plan refuses it as before.
+      Terraform's validate does not expand `count` either
 
 ## 1. Language
 

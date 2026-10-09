@@ -44,8 +44,8 @@ export class ModuleOutputResolver {
     const call = caller.child(reference.module);
     const written = outputsType(this.scopeManager.outputsOf(scopeOf(call.withoutKeys())));
     const spelled = spellReference([{ name: 'module' }, { name: reference.module }]);
-    // A call's count and for_each are known at plan, and the reader runs after the call.
-    const keys = this.modules.keysOf(call)!;
+    const keys = this.modules.keysOf(call);
+    if (keys === undefined) throw new UnresolvedReferenceError(`${spelled} is known only once its ${repetition} is read`, everyOf(repetition, written));
 
     const instances = keys.map((key) => this.whole(caller.child(reference.module, key)));
     const value = repetition === 'count' ? tupleOf(instances) : objectOf(keys.map((key, index) => [String(key), instances[index]]));
