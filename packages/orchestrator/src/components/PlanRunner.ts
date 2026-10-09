@@ -21,7 +21,7 @@ import { Value } from '../Value';
 import { ActionExecutor } from './ActionExecutor';
 import { LoadedConfig } from './ConfigLoader';
 import { DataSourceReader } from './DataSourceReader';
-import { GraphNode, OutputNode } from './DependencyGraphBuilder';
+import { GraphNode, LocalNode, OutputNode } from './DependencyGraphBuilder';
 
 function undeclared(address: Address | string): Error {
   return new Error(`The plan has "${address}", which the configuration does not declare`);
@@ -183,6 +183,7 @@ export class PlanRunner {
 
         if (node.kind === 'module') this.expandCall(node, state);
         if (node.kind === 'data') yield* this.readData(node, named.get(key), read, state);
+        if (node.kind === 'local') this.resolveLocal(node, state);
         // Only this output: a sibling may read a resource a later layer creates.
         if (node.kind === 'output') this.resolveInEvery(node, outputs, state);
         if (node.kind === 'resource' && !(yield* this.applyBlock(blocks.get(key)!, node.module, byBlock.get(key) ?? [], state))) return false;
@@ -330,6 +331,14 @@ export class PlanRunner {
     const isOutput = (key: string) => graph.getNode(key)!.kind === 'output';
 
     return [...layer.filter((key) => isOutput(key)), ...layer.filter((key) => !isOutput(key))];
+  }
+
+  /** Worked out again, after what it reads has run. */
+  private resolveLocal(node: LocalNode, state: State): void {
+    for (const instance of this.modules.of(node.module)) {
+      const value = tryAt(node.position, node.declaration, instance, () => this.resolver.resolveValue(node.value, state, instance));
+      this.scopeManager.setLocal(instance.toString(), node.name, value);
+    }
   }
 
   private resolveInEvery(node: OutputNode, planned: PlannedOutputs, state: State): void {

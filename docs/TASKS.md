@@ -438,10 +438,12 @@ module output had a value, so one that read either failed at plan.
       it reads is not known yet, of the type its schema names. A data source that waits
       for the apply is checked by its provider at plan too. Terraform's validate calls the
       provider's check and reads nothing
-- [ ] `locals { name = "${var.prefix}-x" }`: a value a module works out once and reads by
-      name as `local.name`. A variable default is a constant, so today such a value is
-      written out again wherever it is read. Waits for the data sources above, so a local
-      is a node worked out once for each module instance and a data source can read it
+- [x] `locals { name = "${var.prefix}-x" }`: a value a module works out once and reads by
+      name as `local.name`. A variable default is a constant, so such a value was written
+      out again wherever it was read. A local is a node worked out once for each module
+      instance, so a data source can read it, and one that reads a pending resource through
+      it waits for the apply. It names no type: `clay validate` reads its value as written
+      and knows the type from that, as Terraform does
 
 ### Parallel apply
 
@@ -553,7 +555,8 @@ by resource type, and no `provider` block exists yet.
       `readKeys`, which reads a `count` or a `for_each` again at apply, runs there too, and so do
       `expandCall`, which reads a module's `count` or `for_each` again, the refusal of
       a saved plan's action in an instance of a module the configuration does not make,
-      and the refusal of an output that is not what the plan showed
+      the refusal of an output that is not what the plan showed, and a local worked out
+      again at apply
 - [x] An output may be named `__proto__`. The plan and the apply collected root outputs
       into a plain object, where that name sets a prototype instead of a key, so the plan
       never held it and the apply refused it. Both collect them in a map now, as a module's

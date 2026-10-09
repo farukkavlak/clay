@@ -10,7 +10,7 @@ import { ScopeManager } from '../scope/ScopeManager';
 import { Value } from '../Value';
 import { LoadedModule, LoadedResource } from './ModuleLoader';
 
-/** Checks every value once with references unknown, so a block is checked even when it makes no instance. */
+/** Checks every value once as written, so a block is checked even when it makes no instance. */
 export class WrittenCheck {
   constructor(
     private resolver: ReferenceResolver,
@@ -26,6 +26,7 @@ export class WrittenCheck {
     for (const { address, program } of loadedModules)
       for (const stmt of program) {
         if (stmt.type === 'Output') this.checkOutput(stmt, address);
+        if (stmt.type === 'Local') this.read(stmt.value, spell(stmt), address);
         if (stmt.type === 'Data') this.checkData(stmt, address);
         if (stmt.type === 'Variable' && stmt.attributes.default) this.checkGiven(stmt.name, stmt.attributes.default, spell(stmt), address, address);
         if (stmt.type === 'Module') this.checkCall(stmt, address.child(stmt.name));

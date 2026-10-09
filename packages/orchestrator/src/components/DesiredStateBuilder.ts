@@ -21,7 +21,7 @@ import { UnresolvedReferenceError } from '../resolvers/UnresolvedReferenceError'
 import { ScopeManager } from '../scope/ScopeManager';
 import { carried, Value, valueOf } from '../Value';
 import { DataSourceReader } from './DataSourceReader';
-import { DependencyGraphBuilder, GraphNode, OutputNode, ValueNode } from './DependencyGraphBuilder';
+import { DependencyGraphBuilder, GraphNode, LocalNode, OutputNode, ValueNode } from './DependencyGraphBuilder';
 import { LoadedResource } from './ModuleLoader';
 import { ResourcePlan, ResourcePlanner } from './ResourcePlanner';
 
@@ -152,7 +152,7 @@ export class DesiredStateBuilder {
   }
 
   /**
-   * Read now, it would see the world before the apply changes a resource it reads, even through a variable or an output.
+   * Read now, it would see the world before the apply changes a resource it reads, even through a variable, a local or an output.
    * A value not known yet comes only from such a change, so its inputs are known whenever it is read now.
    */
   private waitsForApply(blocks: string[], module: ModuleAddress): boolean {
@@ -265,9 +265,15 @@ export class DesiredStateBuilder {
     return keys.map((key) => new Address(block.module, block.resourceType, block.name, key).toString());
   }
 
-  private planValue(node: Extract<GraphNode, { kind: 'variable' | 'output' }>, instance: ModuleAddress, state: State, rootOutputs: Map<string, Output>): void {
+  private planValue(node: Extract<GraphNode, { kind: 'variable' | 'local' | 'output' }>, instance: ModuleAddress, state: State, rootOutputs: Map<string, Output>): void {
     if (node.kind === 'variable') this.planVariable(node, instance, state);
+    else if (node.kind === 'local') this.planLocal(node, instance, state);
     else this.planOutput(node, instance, state, rootOutputs);
+  }
+
+  /** Kept as it comes, UNKNOWN where only the apply makes it, so every reader in the instance sees one value. */
+  private planLocal(node: LocalNode, instance: ModuleAddress, state: State): void {
+    this.scopeManager.setLocal(instance.toString(), node.name, this.resolveNode(node, node.value, instance, state));
   }
 
   /** Resolved so an error is found at plan even if nothing reads it; each reader resolves it again. */

@@ -8,7 +8,7 @@ import { placed } from '../place';
 import { ScopeManager } from '../scope/ScopeManager';
 import { everyOf, everyType, instanceType, noAttribute, outputsType, readCall, readInstance } from './instance';
 
-/** Paths are known at load, so they are not here. */
+/** Paths are known at load and a local is read as written, so they are not here. */
 type Unread = VariableReference | DataReference | ModuleOutputReference | ResourceReference | CountReference | EachReference;
 
 /** Types for references read as written, before any instance exists. */

@@ -45,6 +45,7 @@ export class ModuleLoader {
     loaded.modules.push({ address: parentAddress, program: rootProgram });
     this.scopeManager.setDirectory(scopeOf(parentAddress), '.');
     this.declareVariables(rootProgram, parentAddress);
+    this.declareLocals(rootProgram, parentAddress);
 
     for (const stmt of rootProgram)
       if (stmt.type === 'Resource') {
@@ -66,6 +67,7 @@ export class ModuleLoader {
     this.scopeManager.setDirectory(scopeOf(childAddress), moduleDir);
     this.scopeManager.declareOutputs(scopeOf(childAddress), outputsOf(moduleProgram));
     this.declareVariables(moduleProgram, childAddress);
+    this.declareLocals(moduleProgram, childAddress);
 
     for (const childStmt of moduleProgram)
       if (childStmt.type === 'Resource') {
@@ -115,6 +117,10 @@ export class ModuleLoader {
 
       this.scopeManager.setVariable(childScope, key, { value, context: new ModuleCall(childAddress), type: variable.valueType, defaults: variable.defaults, block });
     }
+  }
+
+  private declareLocals(program: Statement[], address: ModuleAddress): void {
+    for (const stmt of program) if (stmt.type === 'Local') this.scopeManager.declareLocal(scopeOf(address), stmt);
   }
 
   private declareVariables(program: Statement[], address: ModuleAddress): void {

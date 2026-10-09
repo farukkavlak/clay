@@ -50,8 +50,8 @@ closes the map does not close the `${`. A heredoc is read the same
 way, a line at a time, until its closing line; one still open at the end is refused where
 it opens.
 
-There are no keywords. `resource`, `data`, `variable`, `output` and `module` start a
-block only at the top level; anywhere else they are ordinary identifiers, so
+There are no keywords. `resource`, `data`, `variable`, `locals`, `output` and `module`
+start a block only at the top level; anywhere else they are ordinary identifiers, so
 `data = "x"` inside a block is an attribute. `for` right after `[` or `{`, and `in` after
 its names, start a for expression; `[for.a.id]` is still a list holding a reference, and
 `{ for = 1 }` a map with a key named `for`.
@@ -66,19 +66,25 @@ error. A resource is named by its type and name together, so `resource "a" "x"` 
 resource "type" "name" { attributes }
 data "type" "name" { attributes }
 variable "name" { attributes }
+locals { attributes }
 output "name" { value = value }
 module "name" { attributes }
 ```
 
 A `type` and a `name` are written as strings, and each has to spell an `IDENTIFIER`, since
 an address joins them with `.` and a reference reads them back. A `type` cannot be `var`,
-`data`, `module`, `count`, `each` or `path`, the words a reference reads as something
-other than a type. A variable cannot be named `source`, since a module call reads that as
+`local`, `data`, `module`, `count`, `each` or `path`, the words a reference reads as
+something other than a type. A variable cannot be named `source`, since a module call reads that as
 the module's path, or `count` or `for_each`, which a module call keeps for itself.
 
 `attributes` is zero or more `name = value` pairs, in any order, without separators, and
 no name twice.
 `output` takes exactly one attribute and it must be `value`.
+
+`locals` takes no name of its own. Each attribute is a local of the module, read as
+`local.name`. A file may hold several `locals` blocks, and they are read as one: a name
+set twice, in one block or in two, is refused at the second. A local may share its name
+with a variable or an output.
 
 What the engine reads from each:
 
@@ -87,6 +93,7 @@ What the engine reads from each:
 | `resource` | `count` or `for_each`, read by the engine; every other attribute goes to the provider                                        |
 | `data`     | `count` or `for_each`, read by the engine; every other attribute goes to the provider                                        |
 | `variable` | `default`, a constant: no reference or function call; `type`, read below; another attribute is refused where it is written   |
+| `locals`   | every attribute, as a value of any kind; it may read anything a resource's attribute may, another local among them           |
 | `output`   | `value`                                                                                                                      |
 | `module`   | `source`, a literal string naming a directory relative to the file; `count` or `for_each`; every other attribute is an input |
 
@@ -189,6 +196,7 @@ A bare reference is a value on its own: `path = var.dir`. Inside a string it is 
 | First part | Reads                                                | Example                     |
 | ---------- | ---------------------------------------------------- | --------------------------- |
 | `var`      | A variable or input of the same module               | `var.name`                  |
+| `local`    | A local of the same module                           | `local.name`                |
 | `data`     | A data source, or an attribute it read               | `data.local_file.f.content` |
 | `module`   | An output of a module called in the same file        | `module.app.url`            |
 | `count`    | The index of the instance being made                 | `count.index`               |
@@ -301,9 +309,9 @@ only after apply but its type is known.
 
 A name the for gives is read in its body only, with steps after it as a reference's:
 `[for f in var.files : f.path]`. In the collection, and after the `]`, the same name is a
-reference again. A name cannot be one a reference starts with, `var`, `data`, `module`,
-`count`, `each` or `path`, nor the type of a resource in the same file, nor one a for
-around it gives; the key and the value need names of their own. Terraform lets such a
+reference again. A name cannot be one a reference starts with, `var`, `local`, `data`,
+`module`, `count`, `each` or `path`, nor the type of a resource in the same file, nor one a
+for around it gives; the key and the value need names of their own. Terraform lets such a
 name hide what it spells; Clay refuses it where it is written.
 
 An item not known until apply is not known in what the for gives either, and the rest is
@@ -541,7 +549,14 @@ interface ModuleBlock {
   position: Position;
 }
 
-type Statement = ResourceBlock | DataBlock | VariableBlock | OutputBlock | ModuleBlock;
+interface LocalBlock {
+  type: 'Local';
+  name: string;
+  value: AttributeValue;
+  position: Position;
+}
+
+type Statement = ResourceBlock | DataBlock | VariableBlock | OutputBlock | ModuleBlock | LocalBlock;
 type Program = Statement[];
 ```
 
@@ -553,7 +568,8 @@ arguments in order, and in `path` the steps written after it, as a reference hol
 own. A `Bound` is a name a for gives, read in its body, with its steps as a reference
 holds them. A `For` that makes an object holds its key in `key`, and `grouped` when `...`
 follows the value. A `VariableBlock` holds its type in `valueType` as the `Type` a schema
-names, `any` as `dynamic`.
+names, `any` as `dynamic`. A `locals` block is a `LocalBlock` for each of its names,
+`{ type: 'Local', name, value }`, placed at the name.
 
 ## Errors
 
