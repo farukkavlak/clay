@@ -93,10 +93,12 @@ local, a variable, a string, a function and a `for`. It is followed part by part
 sensitive as a whole when one member is, since its order and size give the member away.
 `length` of a list is not sensitive when only an item is. A root output that holds a
 sensitive value and does not say `sensitive = true` is refused, at `validate`, `plan`
-and `apply`. Three things are still open: a resource attribute given a sensitive value
-shows it in the plan, an error raised while the value is worked out may quote a part of
-it, and a sensitive `for_each` or `count` is accepted, so `each.key` and the number of
-instances are not sensitive.
+and `apply`. A `for_each` with a sensitive key is refused, since a key shows in an
+address, and so is a sensitive `count`, since a plan shows how many instances it makes.
+`for_each = { primary = module.db.password }` is taken: only `each.value` is sensitive.
+Two things are still open: a resource attribute given a sensitive value shows it in the
+plan and is not sensitive where it is read back, a `for_each` among them, and an error
+raised while the value is worked out may quote a part of it.
 
 A local is a value with a name: `locals { name = "${var.prefix}-x" }` is read as
 `local.name`. It may read anything, another local among them, and is worked out once for

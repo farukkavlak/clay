@@ -229,6 +229,8 @@ configuration hits each of these early.
 - [x] A `for` expression that makes an object, `{for k, v in m : k => v}`. A key two
       items give is refused, and `...` after the value groups them
 - [ ] `if` in a `for` expression, once operators can write a condition
+- [ ] An index that is read, not written: `var.names[count.index]`. An index is digits
+      or a quoted key today, so an instance cannot take its own item from a list
 - [x] A variable names its type: `variable "x" { type = set(string) }`. An object given
       an attribute its type does not name is refused, where Terraform drops it in silence
 - [x] `optional(type)` and `optional(type, default)` on an attribute of a variable's
@@ -248,13 +250,14 @@ configuration hits each of these early.
       as a whole, and so is an object a `for` makes with a sensitive key, as in cty and
       HCL. A root output that holds one and does not say `sensitive = true` is refused,
       as in Terraform: "Output refers to sensitive values"
+- [x] A `for_each` with a sensitive key is refused, since a key shows in an address: a
+      value sensitive as a whole, as in Terraform, or a list with a sensitive item. A
+      map with sensitive values under keys that are not is taken, and `each.value` stays
+      sensitive. A sensitive `count` is refused too, since the plan shows how many
+      instances it makes; Terraform accepts it, for old configurations
 - [ ] No error quotes a sensitive value: today `{for v in [secret, secret] : v => 1}`
-      fails with `Two items give the key "..."`. A sensitive `for_each` is refused,
-      since a key shows in an address, as in Terraform. A sensitive `count` is refused
-      too, since the plan shows how many instances it makes; Terraform accepts it, for
-      old configurations. Until then `each.key` of a sensitive `for_each` is not
-      sensitive: `for_each = toset([module.db.password])` with `v = each.key` in a
-      module reaches a root output unmarked
+      fails with `Two items give the key "..."`, and a string that is no number or
+      boolean is quoted where one is taken
 - [ ] A `for` over a collection not known yet is not sensitive at plan when only its
       body reads a sensitive value, since a plan does not read the body. With
       `[for v in toset([random_string.r.result]) : module.db.password]` in a root output
