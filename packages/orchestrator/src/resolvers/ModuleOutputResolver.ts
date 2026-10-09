@@ -7,8 +7,8 @@ import { Context, moduleOf, scopeOf } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
 import { placed } from '../place';
 import { ScopeManager } from '../scope/ScopeManager';
-import { unified, Unjoinable } from '../unify';
-import { objectOf, tupleOf, Value } from '../Value';
+import { unified, unjoined, Unjoinable } from '../unify';
+import { isSensitive, objectOf, tupleOf, Value } from '../Value';
 import { everyOf, outputsType, readCall } from './instance';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 
@@ -54,7 +54,7 @@ export class ModuleOutputResolver {
       return converted(spelled, value, everyOf(repetition, unified([written, ...instances.map((instance) => instance.type)])), []);
     } catch (error) {
       if (!(error instanceof Unjoinable)) throw error;
-      throw placed(`${spelled} ${error.message}`, position);
+      throw placed(`${spelled} ${unjoined(error, isSensitive(value))}`, position);
     }
   }
 }

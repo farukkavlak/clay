@@ -34,6 +34,10 @@ const DB = `
     value     = null
     sensitive = true
   }
+  output "keyed" {
+    value     = { hunter2 = "x" }
+    sensitive = true
+  }
 `;
 
 const APP = `
@@ -54,6 +58,54 @@ const ECHO = `
   variable "v" { type = string }
   output "v" { value = var.v }
 `;
+
+const TAKES = `
+  variable "on" {
+    type    = bool
+    default = true
+  }
+  variable "named" {
+    type    = object({ a = optional(string) })
+    default = {}
+  }
+`;
+
+const REP = `
+  variable "v" { type = any }
+  output "o" { value = var.v }
+`;
+
+const UNJOINED = 'cannot join what it holds into one type; a part of it is sensitive, so no more is shown';
+
+const QUOTED = [
+  [
+    'a key two items of a for give',
+    'output "probe" {\n  value = length({ for v in ["a", "b"] : module.db.password => v })\n  sensitive = true\n}',
+    'Two items give the key (sensitive value);',
+  ],
+  [
+    'a key an item that is not sensitive gives too',
+    'output "probe" {\n  value = length({ for v in [module.db.password, "hunter2"] : v => 1 })\n  sensitive = true\n}',
+    'Two items give the key (sensitive value);',
+  ],
+  ['a string where a resource takes a number', 'resource "random_string" "x" { length = module.db.password }', 'length: (sensitive value) is not a number'],
+  [
+    'a string where a variable takes a boolean',
+    'module "takes" {\n  source = "./takes"\n  on = module.db.password\n}',
+    'on: (sensitive value) is not a boolean, which is "true" or "false"',
+  ],
+  [
+    'a key the type of a variable does not have',
+    'module "takes" {\n  source = "./takes"\n  named = module.db.keyed\n}',
+    'named does not fit what variable "named" takes; it is sensitive, so its parts are not shown',
+  ],
+  ['a key that keeps tolist from joining its items', 'output "probe" {\n  value = tolist([{ a = "x" }, module.db.keyed])\n  sensitive = true\n}', `tolist ${UNJOINED}`],
+  [
+    'a key that keeps the instances of a module from sharing a type',
+    'module "rep" {\n  source = "./rep"\n  for_each = { a = module.db.keyed, b = { z = 1 } }\n  v = each.value\n}\noutput "probe" {\n  value = module.rep\n  sensitive = true\n}',
+    `module.rep ${UNJOINED}`,
+  ],
+].map(([name, written, message]) => [name, `module "db" { source = "./db" }\n${written}`, message]);
 
 type Block = [name: string, write: (repeat: string) => string];
 
@@ -110,6 +162,8 @@ const probe = (value: string, flag = '') => `
   }
 `;
 
+const refused = (error: Error) => error.message;
+
 const REFUSED = 'output "probe" holds a sensitive value; write sensitive = true to export it';
 
 const n = (text: string) => ExactNumber.parse(text);
@@ -143,6 +197,8 @@ describe('a sensitive value', () => {
     await writeModule('db', DB);
     await writeModule('app', APP);
     await writeModule('echo', ECHO);
+    await writeModule('takes', TAKES);
+    await writeModule('rep', REP);
   });
 
   afterEach(async () => {
@@ -201,6 +257,17 @@ describe('a sensitive value', () => {
 
   it('is exported by a root output that says it is sensitive', async () => {
     expect(await planned('local.conn', '\n    sensitive = true')).toMatchObject({ value: { name: 'app', password: 'hunter2' }, sensitive: true });
+  });
+
+  it.each(QUOTED)('is not quoted by the error about %s', async (_, config, expected) => {
+    for (const check of ['plan', 'validate'] as const) {
+      const message = await newOrchestrator()
+        [check](config)
+        .then(() => 'accepted', refused);
+
+      expect(message).toContain(expected);
+      expect(message).not.toContain('hunter2');
+    }
   });
 
   it.each(REPEATED)('refuses %s', async (_, config, message) => {

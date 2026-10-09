@@ -15,6 +15,14 @@ const MAX_PLACES = 1000;
 /** Its own class, so a caller can catch it and rethrow anything else. */
 export class NumberError extends Error {
   override name = 'NumberError';
+
+  constructor(
+    message: string,
+    /** The message without the number, for a caller that may not show it. */
+    readonly problem: string
+  ) {
+    super(message);
+  }
 }
 
 /** Shortens a long number in an error message. */
@@ -34,14 +42,15 @@ export class ExactNumber {
   ) {}
 
   static parse(text: string): ExactNumber {
+    const refused = (problem: string) => new NumberError(`${shown(text, '"')} ${problem}`, problem);
     const match = NUMERAL.exec(text);
-    if (!match) throw new NumberError(`${shown(text, '"')} is not a number`);
+    if (!match) throw refused('is not a number');
 
     const [, sign, whole, fraction = '', exponent = '0'] = match;
     const number = ExactNumber.normalized(sign === '-', whole + fraction, Number(exponent) - fraction.length);
 
     if (number.digits.length + number.exponent > MAX_PLACES || -number.exponent > MAX_PLACES)
-      throw new NumberError(`${shown(text, '"')} is out of range: a number reaches at most ${MAX_PLACES} places either side of the point`);
+      throw refused(`is out of range: a number reaches at most ${MAX_PLACES} places either side of the point`);
 
     return number;
   }
@@ -91,7 +100,7 @@ export class ExactNumber {
 
   /** Throws rather than rounds; `name` labels the error. */
   toSafeInteger(name?: string): number {
-    const refused = (problem: string) => new NumberError(`${name ? `${name}: ` : ''}${shown(this.toString())} ${problem}`);
+    const refused = (problem: string) => new NumberError(`${name ? `${name}: ` : ''}${shown(this.toString())} ${problem}`, problem);
     if (this.exponent < 0) throw refused('is not a whole number');
 
     const value = Number(this.toString());

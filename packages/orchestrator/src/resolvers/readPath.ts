@@ -1,7 +1,7 @@
 import { isUnknown, Type, typeAt } from '@clay/contracts';
 import { ConfigError, Position, spellSteps, Step, stepKey } from '@clay/parser';
 
-import { child, described, sensitiveUnder, Value } from '../Value';
+import { child, described, isAllSensitive, sensitiveUnder, Value } from '../Value';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 
 /** Undefined when the step finds something. */
@@ -9,7 +9,10 @@ function missingItem(value: Value, step: string | number): string | undefined {
   if (typeof step === 'string') return `is ${described(value)} and has no key ${JSON.stringify(step)}`;
 
   const items = (value.data as unknown[]).length;
-  return step < items ? undefined : `has no item [${step}]: it holds ${items}`;
+  if (step < items) return undefined;
+
+  // How many a list sensitive as a whole holds is sensitive too.
+  return isAllSensitive(value) ? `has no item [${step}]` : `has no item [${step}]: it holds ${items}`;
 }
 
 /** Undefined when the step finds something. */

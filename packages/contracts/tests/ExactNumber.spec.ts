@@ -90,6 +90,14 @@ describe('ExactNumber', () => {
     expect(refused).toThrow(NumberError);
   });
 
+  it.each([
+    ['a text that is no number', () => ExactNumber.parse('abc'), 'is not a number'],
+    ['a number out of range', () => ExactNumber.parse('1e2000'), 'is out of range: a number reaches at most 1000 places either side of the point'],
+    ['a fraction as an integer', () => ExactNumber.parse('1.5').toSafeInteger('count'), 'is not a whole number'],
+  ])('names the problem apart from the number, for %s', (_, refused, problem) => {
+    expect(refused).toThrow(expect.objectContaining({ problem }));
+  });
+
   it('is written into JSON as the number it is, not rounded', () => {
     expect(JSON.stringify({ id: ExactNumber.parse('12345678901234567890'), list: [ExactNumber.parse('1.50')] })).toBe('{"id":12345678901234567890,"list":[1.5]}');
   });
