@@ -115,10 +115,11 @@ export class DesiredStateBuilder {
     }
   }
 
-  /** Its count is read in its module instance before any instance exists. */
+  /** Its count or for_each is read in its module instance before any instance exists. */
   private dataInstances(block: DataBlock, module: ModuleAddress, state: State): DataInstance[] {
     const at = new DataInstance(module, block.dataSourceType, block.name);
     if (block.count) this.instances.setCount(at.block, this.readAt(block.count, block, at, state, countFrom));
+    if (block.forEach) this.instances.setEach(at.block, this.readAt(block.forEach, block, at, state, eachFrom));
 
     return at.instances(this.instances.keysOf(at.block));
   }

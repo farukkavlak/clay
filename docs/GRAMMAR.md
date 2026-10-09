@@ -85,13 +85,13 @@ What the engine reads from each:
 | Block      | Reads                                                                                                                        |
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `resource` | `count` or `for_each`, read by the engine; every other attribute goes to the provider                                        |
-| `data`     | `count`, read by the engine; every other attribute goes to the provider that reads that type of data source                  |
+| `data`     | `count` or `for_each`, read by the engine; every other attribute goes to the provider                                        |
 | `variable` | `default`, a constant: no reference or function call; `type`, read below; another attribute is refused where it is written   |
 | `output`   | `value`                                                                                                                      |
 | `module`   | `source`, a literal string naming a directory relative to the file; `count` or `for_each`; every other attribute is an input |
 
-`for_each` on a data source is refused where it is written, and so is a resource or a
-module with both `count` and `for_each`.
+A resource, a data source or a module with both `count` and `for_each` is refused where
+it is written.
 
 A module's `source` starts with `./` or `../`. Anything else, a registry address or an
 absolute path, is refused where it is written.
@@ -209,7 +209,8 @@ index or key is every instance: a list by index under `count`, a map by key unde
 
 A data source is read the same way. `data.local_file.f` is an object of every attribute
 of its schema, with `null` for one nothing sets. With `count`, `data.local_file.f[0]` is
-one instance and `data.local_file.f` alone is the list of them.
+one instance and `data.local_file.f` alone is the list of them; with `for_each`,
+`data.local_file.f["key"]` is one and `data.local_file.f` alone the map of them by key.
 
 `path.module` is the directory of the module it is written in, relative to the root: `.`
 at the root, `web` in a module called with `source = "./web"`. In a call's inputs it is the
@@ -363,8 +364,8 @@ refused.
 
 A data source in a module called with count or for_each, or in a module that one calls,
 is read once for each instance of its module, and a plan names it by the instance:
-`module.web[0].data.local_file.f`, or `module.web[0].data.local_file.f[1]` with a `count` of
-its own. Each instance of the module waits for the apply on its own.
+`module.web[0].data.local_file.f`, or `module.web[0].data.local_file.f[1]` and
+`module.web[0].data.local_file.f["key"]` with a `count` or a `for_each` of its own. Each instance of the module waits for the apply on its own.
 
 Adding `count` to a module that exists moves what is in it to `module.name[0]`, and
 taking `count` off moves `module.name[0]` back and destroys the other instances, as for a
@@ -565,7 +566,7 @@ throws the same for a character it does not know, a string not closed on its lin
 
 - Operators; a value is a literal, a reference, a function call or a for expression
 - A for that filters with `if`
-- `for_each` on a data source, `depends_on`, lifecycle blocks, provisioners
+- `depends_on`, lifecycle blocks, provisioners
 - Nested blocks inside a block
 - Any file other than `main.clay`
 

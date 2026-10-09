@@ -44,7 +44,7 @@ export class WrittenCheck {
   private checkData(block: DataBlock, module: ModuleAddress): void {
     const declaration = spell(block);
 
-    if (block.count) this.read(block.count, declaration, module);
+    for (const value of [block.count, block.forEach]) if (value) this.read(value, declaration, module);
     // Every data schema is loaded by now, its names checked.
     this.checkAttributes(block.dataSourceType, block.attributes, this.dataSchemas.get(block.dataSourceType)!, declaration, module);
   }

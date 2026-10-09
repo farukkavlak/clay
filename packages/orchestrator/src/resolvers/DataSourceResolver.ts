@@ -33,17 +33,16 @@ export class DataSourceResolver {
     return { value: attrValue, path };
   }
 
-  /** The graph reads its count before anything that reads it. */
+  /** The graph reads its count or for_each before anything that reads it. */
   private every(reference: DataReference, scope: string, repetition: Repetition, spelled: string): Value {
     // The graph has already refused undeclared data sources, and every one has its schema.
     const type = everyType(repetition, this.dataSchemas.get(reference.type)!);
     const keys = this.instances.keysOf(dataSourceKey(scope, reference.type, reference.name));
     if (keys === undefined) throw new Error(`${spelled} was read before its ${repetition}`);
 
-    return valueOf(
-      type,
-      keys.map((key) => plainOf(this.read(reference, scope, key, spelled)))
-    );
+    const instances = keys.map((key) => plainOf(this.read(reference, scope, key, spelled)));
+
+    return valueOf(type, repetition === 'count' ? instances : Object.fromEntries(keys.map((key, index) => [key, instances[index]])));
   }
 
   private read(reference: DataReference, scope: string, key: InstanceKey | undefined, spelled: string): Record<string, Value> {

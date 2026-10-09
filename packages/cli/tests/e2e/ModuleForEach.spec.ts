@@ -206,7 +206,7 @@ describe('a module called with for_each', () => {
   ])('refuses %s, where it is written', async (_, config, reference) => {
     const error = await planError(config);
 
-    expect(error.message).toBe(`${reference} is only known inside a resource or a module call that has for_each`);
+    expect(error.message).toBe(`${reference} is only known inside a resource, a data source or a module call that has for_each`);
     expect(error.position).toMatchObject(placeOf(config, reference));
   });
 
@@ -217,7 +217,7 @@ describe('a module called with for_each', () => {
 
     const error = await planError(web('["ali"]'));
 
-    expect(error.message).toBe('each.key is only known inside a resource or a module call that has for_each');
+    expect(error.message).toBe('each.key is only known inside a resource, a data source or a module call that has for_each');
     expect(error.position).toMatchObject({ file: 'web/main.clay', ...placeOf(body, 'each.key') });
   });
 

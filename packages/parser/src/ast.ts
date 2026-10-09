@@ -83,6 +83,8 @@ export interface DataBlock extends Node {
   name: string;
   /** Read by the engine, never sent to the provider. */
   count?: AttributeValue;
+  /** Read by the engine, never sent to the provider. */
+  forEach?: AttributeValue;
   attributes: Record<string, AttributeValue>;
 }
 

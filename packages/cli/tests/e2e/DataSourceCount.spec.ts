@@ -179,11 +179,4 @@ describe('a data source with count', () => {
       position: { file: path.join('m', 'main.clay'), line: 2, column: 25 },
     });
   });
-
-  it('still refuses for_each', async () => {
-    await expect(newOrchestrator().plan('data "local_file" "f" {\n  for_each = {}\n  path     = "x"\n}')).rejects.toMatchObject({
-      message: 'data "local_file" "f" cannot have for_each yet',
-      position: { file: CONFIG_FILE, line: 2, column: 14 },
-    });
-  });
 });
