@@ -2,7 +2,7 @@ import { ExactNumber, types, UNKNOWN } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { eachFrom } from '../src/forEach';
-import { inferred, Value, valueOf } from '../src/Value';
+import { allSensitive, inferred, Value, valueOf, withSensitive } from '../src/Value';
 
 /** As the configuration writes it: a list is a tuple and a map an object. */
 const written = (data: unknown): Value => valueOf(inferred(data), data);
@@ -95,5 +95,23 @@ describe('the instances a for_each makes', () => {
     ['a list with a string twice', written(['a', 'b', 'a']), 'for_each holds "a" twice; each instance needs a key of its own'],
   ])('refuses %s', (_, value, message) => {
     expect(() => eachFrom(value)).toThrow(message);
+  });
+
+  it.each([
+    ['a map sensitive as a whole', allSensitive(written({ a: 'x' }))],
+    ['a tuple with a sensitive item', withSensitive(written(['a', 'b']), [[1]])],
+    ['a list with a sensitive item', withSensitive(valueOf(types.list(types.string), ['a', 'b']), [[1]])],
+    ['a sensitive set', allSensitive(valueOf(types.set(types.string), ['a']))],
+    ['a sensitive value only an apply makes', allSensitive(valueOf(types.dynamic, UNKNOWN))],
+    ['a sensitive set with a member only an apply makes', allSensitive(valueOf(types.set(types.string), [UNKNOWN]))],
+  ])('refuses %s, since a key shows in an address', (_, value) => {
+    expect(() => eachFrom(value)).toThrow('for_each is sensitive: a key shows in an address, so it cannot be hidden');
+  });
+
+  it('takes a map with a sensitive value under a key that is not, and gives the instance the value still sensitive', () => {
+    const each = eachFrom(withSensitive(written({ db: 'hunter2', web: 'x' }), [['db']]));
+
+    expect(each.get('db')).toEqual(allSensitive(valueOf(types.string, 'hunter2')));
+    expect(each.get('web')).toEqual(valueOf(types.string, 'x'));
   });
 });

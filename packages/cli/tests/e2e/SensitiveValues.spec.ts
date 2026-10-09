@@ -50,6 +50,46 @@ const APP = `
   output "size" { value = length(var.members) }
 `;
 
+const ECHO = `
+  variable "v" { type = string }
+  output "v" { value = var.v }
+`;
+
+type Block = [name: string, write: (repeat: string) => string];
+
+const BLOCKS: Block[] = [
+  ['a resource', (repeat) => `resource "local_file" "a" {\n  ${repeat}\n  path = "a.txt"\n  content = "x"\n}`],
+  ['a data source', (repeat) => `data "local_file" "f" {\n  ${repeat}\n  path = "a.txt"\n}`],
+  ['a module call', (repeat) => `module "echo" {\n  source = "./echo"\n  ${repeat}\n  v = "x"\n}`],
+];
+
+const EACH = 'for_each is sensitive: a key shows in an address, so it cannot be hidden';
+const COUNT = 'count is sensitive: the number of instances shows what it is';
+
+const REPEATS = [
+  ['for_each', 'for_each = toset([module.db.password])', EACH],
+  ['for_each with a member known only after apply', 'for_each = module.db.made_set', EACH],
+  ['for_each known only after apply', 'for_each = tolist(module.db.made_set)', EACH],
+  ['count', 'count = length(module.db.password_list)', COUNT],
+  ['count known only after apply', 'count = length(module.db.made)', COUNT],
+];
+
+const REPEATED = REPEATS.flatMap(([name, repeat, message]) =>
+  BLOCKS.map(([block, write]) => [`${block} with a sensitive ${name}`, `module "db" { source = "./db" }\n${write(repeat)}`, message])
+);
+
+const eachValue = (flag: string) => `
+  module "db" { source = "./db" }
+  module "echo" {
+    source   = "./echo"
+    for_each = { primary = module.db.password }
+    v        = each.value
+  }
+  output "probe" {
+    value = module.echo["primary"].v${flag}
+  }
+`;
+
 const probe = (value: string, flag = '') => `
   resource "random_string" "r" { length = 8 }
   module "db" { source = "./db" }
@@ -102,6 +142,7 @@ describe('a sensitive value', () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-sensitive-values-'));
     await writeModule('db', DB);
     await writeModule('app', APP);
+    await writeModule('echo', ECHO);
   });
 
   afterEach(async () => {
@@ -160,6 +201,18 @@ describe('a sensitive value', () => {
 
   it('is exported by a root output that says it is sensitive', async () => {
     expect(await planned('local.conn', '\n    sensitive = true')).toMatchObject({ value: { name: 'app', password: 'hunter2' }, sensitive: true });
+  });
+
+  it.each(REPEATED)('refuses %s', async (_, config, message) => {
+    await expect(newOrchestrator().plan(config)).rejects.toThrow(message);
+    await expect(newOrchestrator().validate(config)).rejects.toThrow(message);
+  });
+
+  it('is taken as a value of a for_each whose keys are not sensitive, and each.value stays sensitive', async () => {
+    await expect(newOrchestrator().plan(eachValue(''))).rejects.toThrow(REFUSED);
+
+    const { outputs } = await newOrchestrator().plan(eachValue('\n    sensitive = true'));
+    expect(outputs.probe.new).toMatchObject({ value: 'hunter2', sensitive: true });
   });
 
   // The plan cannot read the body of a for over a set with no order yet, so only the apply finds the value.

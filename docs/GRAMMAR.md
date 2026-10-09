@@ -340,7 +340,8 @@ A resource with `count = n` makes `n` instances, addressed `type.name[0]` to
 `type.name[n-1]`. `n` is a whole number from 0, known when planning: a literal, a
 variable, a value a resource already has, or one the configuration sets on a resource to
 be created or changed. One that reads a value only an apply makes, such as an id, is
-refused where it is written.
+refused where it is written. So is a sensitive one, since a plan shows how many
+instances it makes.
 
 Inside the block, `count.index` is the index of the instance being made. Anywhere else,
 and in `count` itself, it is refused where it is written.
@@ -392,6 +393,9 @@ Over a list of strings, each string is a key and its own value. A string twice i
 list is refused, and so is anything other than a map or a list of strings. Its keys are
 known when planning: a map's values may wait for the apply, and `each.value` is then
 unknown, but a list item or a whole value only an apply makes is refused.
+A sensitive key is refused, since a key shows in an address: a value sensitive as a
+whole, or a list or a set with a sensitive item. A map's values may be sensitive, and
+`each.value` is then sensitive too.
 The instances are planned in the order of their keys. An empty map or list makes none, so
 any that exist are destroyed.
 
