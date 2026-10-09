@@ -188,6 +188,7 @@ describe('every block read once, whatever instances it makes', () => {
   it.each([
     ['a list', `[for v in var.l : ${BROKEN}]`, REFUSED, CANNOT_JOIN],
     ['an object, its key', `{for v in var.l : ${BROKEN} => v}`, REFUSED, CANNOT_JOIN],
+    ['an object, its key as a key', '{for v in var.l : [v] => v}', '[v] =>', 'A key in a for is a string, a number or a boolean, not a tuple'],
     ['a list, an item as its element type', '[for v in var.l : tolist(v)]', 'v)', notList('a string')],
     ['a list, an index as a number', '[for i, v in var.l : tolist(i)]', 'i)', notList('a number')],
     ['a set with a member not known yet', '[for v in toset([var.l[0], "b"]) : tolist(v)]', 'v)', notList('a string')],
@@ -204,6 +205,20 @@ describe('every block read once, whatever instances it makes', () => {
 
     expect(error.message).toBe(message);
     expect(error.position).toEqual({ file: path.join('m', 'main.clay'), ...placeOf(module, refused) });
+  });
+
+  it.each([
+    ['a tuple', '[v]'],
+    ['null', 'null'],
+  ])('refuses %s as the key of a for over a collection known only after apply, in validate and plan', async (described, key) => {
+    const config = `resource "random_string" "r" { length = 8 }\noutput "o" {\n  value = { for v in tolist(toset([random_string.r.result])) : ${key} => v }\n}`;
+
+    for (const check of ['validate', 'plan'] as const) {
+      const error = await errorOf(() => newOrchestrator()[check](config));
+
+      expect(error.message).toBe(`A key in a for is a string, a number or a boolean, not ${described}`);
+      expect(error.position).toEqual({ file: 'main.clay', ...placeOf(config, `${key} =>`) });
+    }
   });
 
   it.each([

@@ -20,7 +20,7 @@ import {
   TemplatePart,
 } from '@clay/parser';
 
-import { checkCollection, forItems, ForItem, forObject, unknownItem } from '../forItems';
+import { checkCollection, checkKey, forItems, ForItem, forObject, unknownItem } from '../forItems';
 import { Instances } from '../Instances';
 import { functionCalled } from '../functions';
 import { Context, DataInstance, instanceKeyOf, ModuleCall, moduleOf, scopeOf } from '../keys';
@@ -173,7 +173,10 @@ export class ReferenceResolver {
     if (!(reading.asWritten || this.planned.isPlanning())) return [];
 
     const names = withNames(reading, node, unknownItem(collection.type));
-    return [...(node.key ? [node.key] : []), node.body].map((part) => this.resolveItem(part, state, context, names));
+    const parts = [...(node.key ? [node.key] : []), node.body].map((part) => this.resolveItem(part, state, context, names));
+    if (node.key) checkKey(parts[0], node.key.position);
+
+    return parts;
   }
 
   private resolveTarget(reference: ParsedReference, state: State, where: Context, position: Position): { value: Value; path: Step[] } {

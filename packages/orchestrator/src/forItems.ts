@@ -47,7 +47,7 @@ export function unknownItem(type: Type): ForItem {
 }
 
 /** A key must be text, so a key of another type is refused even while unknown. */
-function checkKey(key: Value, position: Position): void {
+export function checkKey(key: Value, position: Position): void {
   if (key.data === null || !(hasText(key.type) || key.type.kind === 'dynamic'))
     throw new ConfigError(`A key in a for is a string, a number or a boolean, not ${described(key)}`, position);
   // As in a map: setting it as a property would set a prototype.
