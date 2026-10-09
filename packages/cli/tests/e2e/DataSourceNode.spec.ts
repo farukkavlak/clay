@@ -229,6 +229,15 @@ describe('a data source in the graph', () => {
     });
   });
 
+  it('refuses at plan what its provider will not take, though it waits for the apply', async () => {
+    const config = `${writes('')}\ndata "local_file" "read" { path = local_file.a.content }`;
+
+    await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
+      message: 'local_file "path" must not be empty',
+      block: 'data "local_file" "read"',
+    });
+  });
+
   it('stops the apply at a read that fails, keeping what was made before it', async () => {
     const config = `${writes('new')}\ndata "local_file" "read" { path = "\${local_file.a.path}-missing" }`;
 

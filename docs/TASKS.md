@@ -384,8 +384,9 @@ length below 1.
       it: an index into a set or a map, a key into a list, a name its object type does not
       have, any step into a string. Today the apply refuses it, and a block that makes no
       instance never: in a block with `count = 0`, `[for log in local_file.logs : log.contnet]`
-      is valid. Terraform refuses at plan: "Can't access attributes on a primitive-typed
-      value (string)"
+      is valid. `clay validate` reads no data source, so `data.local_file.f.content.nope`
+      is valid to it and refused at plan. Terraform refuses at plan: "Can't access
+      attributes on a primitive-typed value (string)"
 - [ ] The body of a `for` over a collection known to be empty is never read. With
       `count = 0` on `local_file.logs`, `[for log in local_file.logs : log.contnet]` is
       valid, and with `count = 2` it is refused. A body is read once against the item type
@@ -431,8 +432,12 @@ module output had a value, so one that read either failed at plan.
       read again. `runPlan` still parses and builds the graph on its own, since a saved plan
       brings its own configuration
 - [x] `local_file` as a data source reads the file
-- [ ] `clay validate` stops reading them. Checking a configuration asks the provider for
-      real data today, so validating needs whatever the data source talks to
+- [x] `clay validate` reads none. It asked the provider for real data, so checking a
+      configuration needed whatever the data source talks to, and a file not there yet
+      made it invalid. Now each one is checked as written and by its provider, and what
+      it reads is not known yet, of the type its schema names. A data source that waits
+      for the apply is checked by its provider at plan too. Terraform's validate calls the
+      provider's check and reads nothing
 - [ ] `locals { name = "${var.prefix}-x" }`: a value a module works out once and reads by
       name as `local.name`. A variable default is a constant, so today such a value is
       written out again wherever it is read. Waits for the data sources above, so a local

@@ -237,6 +237,43 @@ describe('validate against real files', () => {
     expect(output).toContain('on mod/main.clay line 1:');
   });
 
+  it('reads no data source, so one whose file is not there is valid', async () => {
+    const config = 'data "local_file" "f" {\n  path = "missing.txt"\n}\noutput "c" { value = data.local_file.f.content }';
+
+    expect(await validate(config)).toContain('Configuration is valid');
+  });
+
+  it('reads no data source its count would read, either', async () => {
+    const config = 'data "local_file" "f" {\n  count = 2\n  path  = "missing-${count.index}.txt"\n}\noutput "c" { value = data.local_file.f[1].content }';
+
+    expect(await validate(config)).toContain('Configuration is valid');
+  });
+
+  it('accepts a count that reads a data source, which only a plan reads', async () => {
+    const config = 'data "local_file" "f" {\n  path = "missing.txt"\n}\nresource "null_resource" "n" {\n  count = length(data.local_file.f.content)\n}';
+
+    expect(await validate(config)).toContain('Configuration is valid');
+  });
+
+  it('still holds what a data source reads to its type', async () => {
+    const config = 'data "local_file" "f" {\n  path = "missing.txt"\n}\nresource "null_resource" "n" {\n  count = data.local_file.f.content\n}';
+
+    expect(await validate(config)).toContain('count is a whole number from 0, not a string');
+  });
+
+  it('refuses a data source its provider will not take, and points at the block', async () => {
+    const output = await validate('data "local_file" "f" {\n  path = ""\n}');
+
+    expect(output).toContain('local_file "path" must not be empty');
+    expect(output).toContain('on main.clay line 1, in data "local_file" "f":');
+  });
+
+  it('still refuses an index a data source does not have', async () => {
+    const config = 'data "local_file" "f" {\n  count = 2\n  path  = "f.txt"\n}\noutput "c" { value = data.local_file.f[5].content }';
+
+    expect(await validate(config)).toContain('data.local_file.f has 2 instances, [0] to [1]');
+  });
+
   it('says so when there is no configuration', async () => {
     await createValidateCommand().parseAsync(['node', 'clay']);
 

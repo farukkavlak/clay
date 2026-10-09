@@ -123,17 +123,17 @@ A key two items give is refused, unless `...` after the value groups them.
 
 ## Commands
 
-| Command                  | Does                                                                                   |
-| ------------------------ | -------------------------------------------------------------------------------------- |
-| `clay init`              | Creates an empty state file, or says so if one is already there                        |
-| `clay validate`          | Resolves references and checks values with the schema and the provider; reads no state |
-| `clay plan [--out file]` | Shows what `apply` would do; `--out` saves the plan with its configuration             |
-| `clay apply [plan] [-y]` | Runs the plan it shows, or a saved one; `-y` skips the question                        |
-| `clay output [--json]`   | Prints the root outputs from the last apply; `--json` gives each with its type         |
-| `clay state list`        | Lists the resources in state                                                           |
-| `clay state show <addr>` | Prints one resource as it is in state                                                  |
-| `clay state mv <a> <b>`  | Renames a resource in state, so the next plan does not recreate it                     |
-| `clay state rm <addr>`   | Forgets a resource without destroying it                                               |
+| Command                  | Does                                                                                                      |
+| ------------------------ | --------------------------------------------------------------------------------------------------------- |
+| `clay init`              | Creates an empty state file, or says so if one is already there                                           |
+| `clay validate`          | Resolves references and checks values with the schema and the provider; reads no state and no data source |
+| `clay plan [--out file]` | Shows what `apply` would do; `--out` saves the plan with its configuration                                |
+| `clay apply [plan] [-y]` | Runs the plan it shows, or a saved one; `-y` skips the question                                           |
+| `clay output [--json]`   | Prints the root outputs from the last apply; `--json` gives each with its type                            |
+| `clay state list`        | Lists the resources in state                                                                              |
+| `clay state show <addr>` | Prints one resource as it is in state                                                                     |
+| `clay state mv <a> <b>`  | Renames a resource in state, so the next plan does not recreate it                                        |
+| `clay state rm <addr>`   | Forgets a resource without destroying it                                                                  |
 
 A saved plan carries the configuration it was made from, the state it was planned
 against, what the refresh read, what each data source read at plan gave and which ones

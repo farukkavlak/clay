@@ -7,7 +7,7 @@ import { ActionExecutor } from './components/ActionExecutor';
 import { ConfigLoader } from './components/ConfigLoader';
 import { DataSourceReader } from './components/DataSourceReader';
 import { DependencyGraphBuilder } from './components/DependencyGraphBuilder';
-import { DesiredState, DesiredStateBuilder, KeysKnownLater } from './components/DesiredStateBuilder';
+import { DesiredState, DesiredStateBuilder, Walk } from './components/DesiredStateBuilder';
 import { ModuleLoader } from './components/ModuleLoader';
 import { PlanRunner } from './components/PlanRunner';
 import { ResourcePlanner } from './components/ResourcePlanner';
@@ -81,7 +81,7 @@ export class Orchestrator {
     const prior = refresh ? await this.refresh(prevRun) : prevRun;
     // Planning applies count moves to a copy; the plan keeps the resources at their old addresses.
     const currentState = { ...prior, resources: copyResources(prior.resources) };
-    const { resources: desiredResources, outputs, dataSources, readAtApply } = await this.resolveAndCheck(configContent, currentState, 'refused');
+    const { resources: desiredResources, outputs, dataSources, readAtApply } = await this.resolveAndCheck(configContent, currentState, 'plan');
 
     const actions = plan(desiredResources, currentState);
     // The refresh only drops resources, so prior has no type prevRun lacks.
@@ -104,9 +104,9 @@ export class Orchestrator {
     return Object.fromEntries(await Promise.all(unique.map(async (type) => [type, await this.providers.schema(type)] as const)));
   }
 
-  /** Plans against an empty state, so resource values are unknown and everything else is checked. */
+  /** Plans against an empty state and reads no data source, so what a resource or a data source gives is unknown and everything else is checked. */
   async validate(configContent: string): Promise<void> {
-    await this.resolveAndCheck(configContent, emptyState(), 'accepted');
+    await this.resolveAndCheck(configContent, emptyState(), 'check');
   }
 
   /** Holds the state lock. A state written since the plan was made is refused, since the approved plan no longer matches it. */
@@ -155,12 +155,12 @@ export class Orchestrator {
     }
   }
 
-  private async resolveAndCheck(configContent: string, state: State, later: KeysKnownLater): Promise<DesiredState> {
+  private async resolveAndCheck(configContent: string, state: State, walk: Walk): Promise<DesiredState> {
     const { loadedResources, loadedModules, schemas } = await this.loader.load(configContent);
 
     const graph = this.graphBuilder.buildExecutionGraph(loadedResources, loadedModules);
     checkAttributes(loadedResources, schemas);
     this.writtenCheck.check(loadedResources, loadedModules);
-    return await this.desiredStateBuilder.build(loadedResources, graph, state, schemas, later);
+    return await this.desiredStateBuilder.build(loadedResources, graph, state, schemas, walk);
   }
 }
