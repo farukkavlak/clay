@@ -1,4 +1,4 @@
-import { Address, isRecord, isUnknown, Output, Schema } from '@clay/contracts';
+import { Address, isRecord, isUnknown, Output, Schema, SENSITIVE } from '@clay/contracts';
 import { changedOutside, Changes, Drift, OutputChanges, Plan, PlanAction } from '@clay/planner';
 import { isDeepStrictEqual, styleText } from 'node:util';
 
@@ -127,6 +127,7 @@ function displayOutputChange(name: string, old: Output, next: Output): void {
   } else console.log(`${changed} = ${show(old.value)} -> ${show(next.value)}`);
 }
 
+/** Hidden when either side is sensitive, so taking the flag off does not print the value it hid. */
 function displayOutputChanges(outputs: OutputChanges): void {
   const names = Object.keys(outputs);
   if (names.length === 0) return;
@@ -135,6 +136,7 @@ function displayOutputChanges(outputs: OutputChanges): void {
   for (const name of names) {
     const { old, new: next } = outputs[name];
     if (next === undefined) console.log(`  ${styleText('red', '-')} ${name}`);
+    else if (old?.sensitive ?? next.sensitive) console.log(`  ${old ? styleText('yellow', '~') : styleText('green', '+')} ${name} = ${SENSITIVE}`);
     else if (old === undefined) console.log(`  ${styleText('green', '+')} ${name} = ${show(next.value)}`);
     else displayOutputChange(name, old, next);
   }

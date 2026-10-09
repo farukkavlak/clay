@@ -64,14 +64,19 @@ export interface Resource {
   dependencies?: string[];
 }
 
+/** Printed where a sensitive value would be. */
+export const SENSITIVE = '<sensitive>';
+
 /** Carries its type, which no schema names, so a reader can tell a set from a list. */
 export interface Output {
   value: unknown;
   type: Type;
+  /** Kept beside the value, so what prints a state or a plan hides it without the configuration. */
+  sensitive?: true;
 }
 
 export function isOutput(output: unknown): output is Output {
-  return isRecord(output) && Object.hasOwn(output, 'value') && isType(output.type);
+  return isRecord(output) && Object.hasOwn(output, 'value') && isType(output.type) && (output.sensitive === undefined || output.sensitive === true);
 }
 
 export interface State {
@@ -84,7 +89,7 @@ export interface State {
 }
 
 /** Bump on any change to the shape after a release. A higher version was written by a newer Clay and is refused. */
-export const STATE_VERSION = 3;
+export const STATE_VERSION = 4;
 
 export function emptyState(): State {
   return { version: STATE_VERSION, serial: 0, resources: {} };

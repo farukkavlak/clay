@@ -83,7 +83,7 @@ export interface Plan {
 }
 
 /** Bump on any change to the file's shape after a release, so an older plan file is refused instead of misread. */
-export const PLAN_FILE_VERSION = '22.0';
+export const PLAN_FILE_VERSION = '23.0';
 
 export interface PlanFile extends Plan {
   version: string;

@@ -198,10 +198,12 @@ export class Parser {
     if (named) throw new ConfigError(`${what} is a constant, so it cannot hold ${spellNamed(named)}`, named.position);
   }
 
-  /** Only the one value and `type`; any other name is refused, since nothing would read it. */
-  private parseTypedBody(block: string, valueName: string): { attributes: Record<string, AttributeValue>; declared?: ParsedType } {
+  /** Only the one value, `type`, and the flag where the block has one; any other name is refused, since nothing would read it. */
+  private parseTypedBody(block: string, valueName: string, flag?: string): { attributes: Record<string, AttributeValue>; declared?: ParsedType; flagged?: boolean } {
     const attributes: Record<string, AttributeValue> = {};
     let declared: ParsedType | undefined;
+    let flagged: boolean | undefined;
+    const taken = flag ? `"${valueName}", "type" and "${flag}"` : `"${valueName}" and "type"`;
     const seen: Record<string, true> = {};
     while (!this.check(TokenType.RBrace) && !this.isAtEnd()) {
       const key = this.consume(TokenType.Identifier, 'Expect attribute name.');
@@ -213,14 +215,19 @@ export class Parser {
         declared = this.parseType();
         continue;
       }
+      if (key.value === flag) {
+        // Read with the block, before any reference has a value.
+        flagged = this.consume(TokenType.Boolean, `${flag} is true or false.`).value === 'true';
+        continue;
+      }
 
       const value = this.parseValue();
-      if (key.value !== valueName) throw new ConfigError(`${block} takes only "${valueName}" and "type", not "${key.value}".`, value.position);
+      if (key.value !== valueName) throw new ConfigError(`${block} takes only ${taken}, not "${key.value}".`, value.position);
       attributes[valueName] = value;
     }
 
     this.consume(TokenType.RBrace, "Expect '}' after block body.");
-    return { attributes, declared };
+    return { attributes, declared, flagged };
   }
 
   private parseType(): ParsedType {
@@ -306,7 +313,7 @@ export class Parser {
     const nameToken = this.consumeName("Expect output name string after 'output'.");
 
     this.consume(TokenType.LBrace, "Expect '{' after output name.");
-    const { attributes, declared } = this.parseTypedBody(`Output "${nameToken.value}"`, 'value');
+    const { attributes, declared, flagged } = this.parseTypedBody(`Output "${nameToken.value}"`, 'value', 'sensitive');
     if (!attributes.value) throw new ConfigError(`Output "${nameToken.value}" has no "value".`, position);
 
     return {
@@ -315,6 +322,7 @@ export class Parser {
       value: attributes.value,
       ...(declared && { valueType: declared.type }),
       ...(declared?.defaults && { defaults: declared.defaults }),
+      ...(flagged && { sensitive: true }),
       position,
     };
   }

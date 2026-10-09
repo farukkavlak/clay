@@ -3,7 +3,7 @@ import { ExactNumber, isOutput, isRecord, NumberError, readResources, State, STA
 function checkOutputs(outputs: unknown, say: (problem: string) => never): void {
   if (!isRecord(outputs)) say('its outputs are not a record');
 
-  for (const [name, output] of Object.entries(outputs)) if (!isOutput(output)) say(`its output "${name}" is not a value with its type`);
+  for (const [name, output] of Object.entries(outputs)) if (!isOutput(output)) say(`its output "${name}" is not a value with its type, or its sensitive is not true`);
 }
 
 /** Checks what the engine relies on; a wrong shape would plan wrong actions. */

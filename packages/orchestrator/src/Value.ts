@@ -79,7 +79,12 @@ export function plainOf(values: Record<string, Value>): Record<string, unknown> 
   return Object.fromEntries(Object.entries(values).map(([name, value]) => [name, value.data]));
 }
 
+/** As a plan or a state holds a value, beside its type and, for a root output, its flag. */
+export function outputOf({ type, data }: Value, sensitive?: true): Output {
+  return { value: data, type, ...(sensitive && { sensitive }) };
+}
+
 /** As a plan or a state holds each value, beside its type. */
 export function carried(values: Record<string, Value>): Record<string, Output> {
-  return Object.fromEntries(Object.entries(values).map(([name, { type, data }]) => [name, { value: data, type }]));
+  return Object.fromEntries(Object.entries(values).map(([name, value]) => [name, outputOf(value)]));
 }

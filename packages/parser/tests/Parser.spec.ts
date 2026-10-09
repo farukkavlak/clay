@@ -257,11 +257,37 @@ describe('Clay Parser', () => {
       expect(program.map((statement) => statement.type)).toEqual(['Resource', 'Data']);
     });
 
-    it('takes only "value" and "type" in an output block, not any name', () => {
+    it('takes only "value", "type" and "sensitive" in an output block, not any name', () => {
       const error = errorOf('output "o" { data = 1 }');
 
-      expect(error.message).toBe('Output "o" takes only "value" and "type", not "data".');
+      expect(error.message).toBe('Output "o" takes only "value", "type" and "sensitive", not "data".');
       expect(error.position).toEqual(at(1, 21));
+    });
+
+    it('marks an output sensitive, and leaves one that says false as one that says nothing', () => {
+      const [marked, unmarked, silent] = makeParser(
+        'output "a" {\n  value = 1\n  sensitive = true\n}\noutput "b" {\n  sensitive = false\n  value = 1\n}\noutput "c" { value = 1 }'
+      ).parse();
+
+      expect(marked).toMatchObject({ type: 'Output', name: 'a', sensitive: true });
+      expect(unmarked).not.toHaveProperty('sensitive');
+      expect(silent).not.toHaveProperty('sensitive');
+    });
+
+    it.each([
+      ['a string', '"true"', at(1, 36)],
+      ['a reference', 'var.secret', at(1, 36)],
+      ['null', 'null', at(1, 36)],
+    ])('refuses %s as sensitive, which is read before any value', (_, written, position) => {
+      const error = errorOf(`output "o" { value = 1 sensitive = ${written} }`);
+
+      expect(error.message).toBe('sensitive is true or false.');
+      expect(error.position).toEqual(position);
+    });
+
+    it('refuses sensitive set twice, and on a variable', () => {
+      expect(errorOf('output "o" {\n  value = 1\n  sensitive = true\n  sensitive = true\n}').message).toBe('sensitive is set twice');
+      expect(errorOf('variable "v" { sensitive = true }').message).toBe('Variable "v" takes only "default" and "type", not "sensitive".');
     });
 
     it.each([

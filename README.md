@@ -81,6 +81,14 @@ way. A module call takes `for_each` too, `module.web["eu"]`, with `each.key` and
 `each.value` in its inputs. A `for_each` map needs its keys at plan time, not its values:
 `{ a = random_string.s.id }` plans `["a"]` with `each.value` unknown.
 
+An output with `sensitive = true` is hidden where it would be printed: `plan`, `apply`
+and `clay output` show `<sensitive>` in its place, and a plan that puts the flag on or
+takes it off hides the value too. One that does not fit its `type` is refused without
+its value. `clay output --json` gives the value with `"sensitive": true`. The state and
+a plan file hold it unencrypted. The flag hides only that output: a module's sensitive
+output is not hidden in whatever its caller does with it, and an error raised while the
+value is worked out may still quote a part of it.
+
 A local is a value with a name: `locals { name = "${var.prefix}-x" }` is read as
 `local.name`. It may read anything, another local among them, and is worked out once for
 each instance of its module, after what it reads. It names no type and has the one its
@@ -136,7 +144,7 @@ A key two items give is refused, unless `...` after the value groups them.
 | `clay validate`          | Resolves references and checks values with the schema and the provider; reads no state and no data source |
 | `clay plan [--out file]` | Shows what `apply` would do; `--out` saves the plan with its configuration                                |
 | `clay apply [plan] [-y]` | Runs the plan it shows, or a saved one; `-y` skips the question                                           |
-| `clay output [--json]`   | Prints the root outputs from the last apply; `--json` gives each with its type                            |
+| `clay output [--json]`   | Prints the root outputs from the last apply; `--json` gives each with its type, a sensitive one too       |
 | `clay state list`        | Lists the resources in state                                                                              |
 | `clay state show <addr>` | Prints one resource as it is in state                                                                     |
 | `clay state mv <a> <b>`  | Renames a resource in state, so the next plan does not recreate it                                        |

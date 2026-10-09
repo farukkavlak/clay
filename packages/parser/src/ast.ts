@@ -75,6 +75,8 @@ export interface OutputBlock extends Node {
   /** Without one, a value is taken as it is. */
   valueType?: Type;
   defaults?: TypeDefaults;
+  /** A root output's value is hidden wherever it would be printed. */
+  sensitive?: true;
 }
 
 export interface DataBlock extends Node {
