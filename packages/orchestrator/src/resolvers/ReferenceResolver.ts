@@ -156,25 +156,24 @@ export class ReferenceResolver {
     } catch (error) {
       if (!(error instanceof UnresolvedReferenceError)) throw error;
       checkCollection(unknownOf(error), node.collection.position);
-      this.readBodyOnce(node, unknownOf(error), state, context, reading);
+      const sensitive = this.readOnce(node, unknownOf(error), state, context, reading).some((part) => isSensitive(part)) || error.sensitive.length > 0;
       // Rethrown without the collection's type: a for makes a tuple or an object whatever it iterates.
-      throw new UnresolvedReferenceError(error.message, types.dynamic, wholeIf(error.sensitive.length > 0));
+      throw new UnresolvedReferenceError(error.message, types.dynamic, wholeIf(sensitive));
     }
 
     if (unordered(collection)) {
-      this.readBodyOnce(node, collection, state, context, reading);
-      throw new UnresolvedReferenceError('The set a for goes over has a member known only after apply, so it has no order yet', types.dynamic, wholeIf(isSensitive(collection)));
+      const sensitive = this.readOnce(node, collection, state, context, reading).some((part) => isSensitive(part)) || isSensitive(collection);
+      throw new UnresolvedReferenceError('The set a for goes over has a member known only after apply, so it has no order yet', types.dynamic, wholeIf(sensitive));
     }
     return collection;
   }
 
-  /** In `asWritten` mode, resolves the body once with an unknown item, so its errors are found before the collection is known. */
-  private readBodyOnce(node: ForNode, collection: Value, state: State, context: Context | undefined, reading: Reading): void {
-    if (!reading.asWritten) return;
+  /** The key and the body with an unknown item, so an error or a sensitive value in them is found before the collection is known. */
+  private readOnce(node: ForNode, collection: Value, state: State, context: Context | undefined, reading: Reading): Value[] {
+    if (!(reading.asWritten || this.planned.isPlanning())) return [];
 
     const names = withNames(reading, node, unknownItem(collection.type));
-    if (node.key) this.resolveItem(node.key, state, context, names);
-    this.resolveItem(node.body, state, context, names);
+    return [...(node.key ? [node.key] : []), node.body].map((part) => this.resolveItem(part, state, context, names));
   }
 
   private resolveTarget(reference: ParsedReference, state: State, where: Context, position: Position): { value: Value; path: Step[] } {

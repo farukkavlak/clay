@@ -318,6 +318,9 @@ name hide what it spells; Clay refuses it where it is written.
 An item not known until apply is not known in what the for gives either, and the rest is
 known. A collection not known at all leaves the whole for to the apply, and so does a set
 with a member not known yet: that member may sort before the others and move every item.
+The key and the value are still read once at plan, with an item not known yet, so a
+reference that cannot be read is refused then, and a sensitive value in either makes the
+whole for sensitive.
 A for over a constant may be a variable's default.
 
 `{for n in var.names : n => "app-${n}"}` makes an object: the key before `=>` and the

@@ -262,11 +262,22 @@ configuration hits each of these early.
       value, since its keys and how many it holds are parts of it. An output marked
       sensitive is sensitive before its type is checked, which takes the place of its
       one fixed sentence
-- [ ] A `for` over a collection not known yet is not sensitive at plan when only its
-      body reads a sensitive value, since a plan does not read the body. With
+- [x] A `for` over a collection not known yet is sensitive at plan when its key or its
+      body reads a sensitive value: the plan reads both once with an item not known yet.
       `[for v in toset([random_string.r.result]) : module.db.password]` in a root output
-      that is not marked, the plan passes and the apply refuses the output after
-      `random_string.r` is made. Terraform does the same
+      that is not marked is refused by the plan, where the apply refused it after
+      `random_string.r` was made. HCL reads the `if` of such a for this way, and not
+      its body
+- [ ] A `for` not known yet is sensitive as a whole or not at all. So `length` of one
+      whose body reads a sensitive value is refused in a root output that is not marked,
+      and `for_each = { for v in ... : v => module.db.password }` is refused as if its
+      keys were sensitive, where a plan said it must be known and `validate` took it. Three things make it so: a sensitive key
+      or body, a sensitive part of the collection, and a key not known yet. A step that
+      stands for every item would keep the mark on the items alone
+- [ ] A key of a `for` over a collection not known yet is read at plan but not checked.
+      `{ for v in tolist(toset([random_string.r.result])) : [v] => v }` passes the plan
+      and the apply refuses the key after `random_string.r` is made; over a known
+      collection the plan refuses it
 - [ ] A resource attribute given a sensitive value is hidden in the plan and under
       "Changed outside Clay": `content = (sensitive value)`, as Terraform prints it. A
       plan file and the state keep which parts of a resource are sensitive, as

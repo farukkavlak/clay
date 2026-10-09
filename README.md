@@ -91,7 +91,8 @@ A module's sensitive output stays sensitive wherever its caller takes it: throug
 local, a variable, a string, a function and a `for`. It is followed part by part, so in
 `{ name = "app", password = module.db.password }` only `password` is sensitive. A set is
 sensitive as a whole when one member is, since its order and size give the member away.
-`length` of a list is not sensitive when only an item is. A root output that holds a
+`length` of a list is not sensitive when only an item is. A `for` not known until apply
+is sensitive as a whole when any part of it is, its `length` too. A root output that holds a
 sensitive value and does not say `sensitive = true` is refused, at `validate`, `plan`
 and `apply`. A `for_each` with a sensitive key is refused, since a key shows in an
 address, and so is a sensitive `count`, since a plan shows how many instances it makes.

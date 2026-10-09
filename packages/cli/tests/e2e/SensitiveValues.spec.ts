@@ -1,4 +1,4 @@
-import { ExactNumber } from '@clay/contracts';
+import { ExactNumber, UNKNOWN } from '@clay/contracts';
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
@@ -107,6 +107,8 @@ const QUOTED = [
   ],
 ].map(([name, written, message]) => [name, `module "db" { source = "./db" }\n${written}`, message]);
 
+const MADE = 'toset([random_string.r.result])';
+
 type Block = [name: string, write: (repeat: string) => string];
 
 const BLOCKS: Block[] = [
@@ -129,6 +131,8 @@ const REPEATS = [
 const REPEATED = REPEATS.flatMap(([name, repeat, message]) =>
   BLOCKS.map(([block, write]) => [`${block} with a sensitive ${name}`, `module "db" { source = "./db" }\n${write(repeat)}`, message])
 );
+
+const REPEATED_OVER_MADE = `module "db" { source = "./db" }\n${BLOCKS[0][1](`for_each = { for v in tolist(${MADE}) : v => module.db.password }`)}`;
 
 const eachValue = (flag: string) => `
   module "db" { source = "./db" }
@@ -182,9 +186,9 @@ describe('a sensitive value', () => {
     return outputs.probe.new;
   };
 
-  const run = async (config: string) => {
+  const run = async (planned: string, applied: string) => {
     const engine = newOrchestrator();
-    for await (const event of engine.runPlan(await engine.plan(config), config)) if (event.type === 'failed') throw event.error;
+    for await (const event of engine.runPlan(await engine.plan(planned), applied)) if (event.type === 'failed') throw event.error;
   };
 
   const writeModule = async (name: string, content: string) => {
@@ -231,6 +235,11 @@ describe('a sensitive value', () => {
     ['is known only after apply and is a key of the object a for makes', '{ for k, v in local.made : v => k }'],
     ['is a set a for goes over, with a member known only after apply', '[for v in module.db.made_set : "x"]'],
     ['is a list a for goes over, known only after apply', '[for v in tolist(module.db.made_set) : "x"]'],
+    ['is what the body of a for gives, over a set with a member known only after apply', `[for v in ${MADE} : module.db.password]`],
+    ['is what the body of a for gives, over a list known only after apply', `[for v in tolist(${MADE}) : module.db.password]`],
+    ['is a value in the object a for makes, over a list known only after apply', `{ for v in tolist(${MADE}) : v => module.db.password }`],
+    ['is a key of the object a for makes, over a set with a member known only after apply', `{ for v in ${MADE} : module.db.password => v }`],
+    ['is each item a for gives over a list known only after apply, whose size is read', `length([for v in tolist(${MADE}) : module.db.password])`],
     ['is null of no type and given to tolist', 'tolist(module.db.nothing)'],
     ['is an empty object a module takes with an attribute left out', 'module.app.filled'],
     ['is a set a module takes with an attribute left out of each member, whose size it gives', 'module.app.rows'],
@@ -282,9 +291,27 @@ describe('a sensitive value', () => {
     expect(outputs.probe.new).toMatchObject({ value: 'hunter2', sensitive: true });
   });
 
-  // The plan cannot read the body of a for over a set with no order yet, so only the apply finds the value.
-  it('is refused at apply where only the apply reads it, and is not written to the state', async () => {
-    await expect(run(probe('[for v in toset([random_string.r.result]) : module.db.password]'))).rejects.toThrow(REFUSED);
+  it('is refused at apply where the configuration came to read it after its plan, and is not written to the state', async () => {
+    await expect(run(probe('random_string.r.result'), probe('"${random_string.r.result}${module.db.password}"'))).rejects.toThrow(REFUSED);
     await expect(fs.readFile(path.join(dir, 'clay.state.json'), 'utf8')).resolves.not.toContain('"probe"');
+  });
+
+  it('is not what a for over a list known only after apply gives, where its body reads none', async () => {
+    const shown = await planned(`[for v in tolist(${MADE}) : "x"]`);
+
+    expect(shown?.value).toBe(UNKNOWN);
+  });
+
+  it('makes a for_each sensitive as the values of the object a for makes, over a list known only after apply', async () => {
+    const config = `resource "random_string" "r" { length = 8 }\n${REPEATED_OVER_MADE}`;
+
+    await expect(newOrchestrator().validate(config)).rejects.toThrow(EACH);
+    await expect(newOrchestrator().plan(config)).rejects.toThrow(EACH);
+  });
+
+  it('is read by the body of a for over a list known only after apply, so a step it cannot take is refused by the plan', async () => {
+    const value = `[for v in tolist(${MADE}) : module.db.password_list[3]]`;
+
+    await expect(planned(value, '\n    sensitive = true')).rejects.toThrow('module.db.password_list has no item [3]');
   });
 });
