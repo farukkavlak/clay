@@ -1,4 +1,4 @@
-import { CreateRequest, ExactNumber, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types } from '@clay/contracts';
+import { CreateRequest, ExactNumber, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types, UNKNOWN } from '@clay/contracts';
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { parsePlanFile, serializePlan } from '@clay/planner';
 import { LocalProvider } from '@clay/provider-local';
@@ -307,6 +307,15 @@ describe('a data block held to the schema', () => {
 
     expect(validate).toHaveBeenCalledWith('tally', { size: ExactNumber.parse('5') });
     expect(outputs).toEqual({ s: { old: undefined, new: { value: ExactNumber.parse('5'), type: types.number } } });
+  });
+
+  it('checks at plan one that waits for the apply, with what only the apply makes not known yet', async () => {
+    const provider = new TallyProvider();
+    const validate = vi.spyOn(provider, 'validateDataSource');
+
+    await plan('resource "tally" "r" {}\ndata "tally" "t" { size = tally.r.total }', provider);
+
+    expect(validate).toHaveBeenCalledWith('tally', { size: UNKNOWN });
   });
 
   it('refuses a block without a value it requires, at the block', async () => {

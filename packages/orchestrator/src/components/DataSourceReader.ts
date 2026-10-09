@@ -40,12 +40,13 @@ export class DataSourceReader {
     }
   }
 
-  /** Read at apply: what the configuration gives is known now, and the rest is unknown. */
-  defer(stmt: DataBlock, inputs: Record<string, Value>, at: DataInstance): Record<string, Value> {
+  /** Not read now: what the configuration gives is known and checked, and the rest is unknown. */
+  async defer(stmt: DataBlock, inputs: Record<string, Value>, at: DataInstance): Promise<Record<string, Value>> {
     const schema = this.dataSchemas.get(stmt.dataSourceType)!;
 
     try {
       const conformed = conformValues(stmt.dataSourceType, schema, inputs);
+      await this.providers.reader(stmt.dataSourceType).validateDataSource(stmt.dataSourceType, conformed);
       const later = Object.entries(schema).map(([name, { type }]) => [name, valueOf(type, UNKNOWN)]);
       return this.keep(at, { ...Object.fromEntries(later), ...typedValues(schema, conformed) });
     } catch (error) {

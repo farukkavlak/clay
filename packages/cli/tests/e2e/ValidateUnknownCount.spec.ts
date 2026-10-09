@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPlanCommand } from '../../src/commands/plan';
 import { createValidateCommand } from '../../src/commands/validate';
 
-// With no state the file is still to be made, so what reads it waits for the apply.
+// A check reads no data source, and a plan with no state waits for the file to be made, so neither knows what this reads.
 const waits = `resource "local_file" "a" {\n  path    = "a.txt"\n  content = "ab"\n}\ndata "local_file" "read" {\n  path = local_file.a.path\n}\n`;
 const LATER = 'length(data.local_file.read.content)';
 

@@ -226,6 +226,7 @@ export interface Provider {
   /** Separate from the resource schema, since one type may be both with different attributes. */
   getDataSourceSchema(type: string): Promise<Schema>;
 
+  /** Throws on invalid inputs. An input may be UNKNOWN until the data source is read, and is checked again then. */
   validateDataSource(type: string, inputs: Record<string, unknown>): Promise<void>;
 
   readDataSource(type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>>;

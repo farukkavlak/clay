@@ -9,7 +9,7 @@ import { countFrom } from '../count';
 import { givenTo } from '../declared';
 import { eachFrom } from '../forEach';
 import { Instances } from '../Instances';
-import { blockKey, Context, contextIn, DataInstance, enclosing, scopeOf } from '../keys';
+import { Context, contextIn, DataInstance, enclosing, scopeOf } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
 import { NotKnownYet } from '../NotKnownYet';
 import { Planned } from '../Planned';
@@ -34,8 +34,8 @@ export interface DesiredState {
   readAtApply: string[];
 }
 
-/** A plan names each instance, so it refuses a count or for_each only an apply knows; a check accepts one. */
-export type KeysKnownLater = 'refused' | 'accepted';
+/** A plan reads the data sources it can and refuses a count or for_each only an apply knows; a check reads none and accepts one. */
+export type Walk = 'plan' | 'check';
 
 /** Undefined where only an apply knows it. */
 function orLater<T>(parse: (value: Value) => T): (value: Value) => T | undefined {
@@ -63,7 +63,7 @@ function sharedModule(one: ModuleAddress, other: ModuleAddress): ModuleAddress {
  */
 export class DesiredStateBuilder {
   private schemas = new Map<string, Schema>();
-  private later: KeysKnownLater = 'refused';
+  private walk: Walk = 'plan';
 
   constructor(
     private scopeManager: ScopeManager,
@@ -78,10 +78,10 @@ export class DesiredStateBuilder {
   ) {}
 
   /** Applies count moves to `state`, a copy the plan never writes, and plans the actions against it. */
-  async build(loadedResources: LoadedResource[], graph: Graph<GraphNode>, state: State, schemas: Map<string, Schema>, later: KeysKnownLater): Promise<DesiredState> {
+  async build(loadedResources: LoadedResource[], graph: Graph<GraphNode>, state: State, schemas: Map<string, Schema>, walk: Walk): Promise<DesiredState> {
     this.planned.begin();
     this.schemas = schemas;
-    this.later = later;
+    this.walk = walk;
     const byKey = new Map(loadedResources.map((r) => [r.address.toString(), r]));
     const resources: DesiredResource[] = [];
     const desired: DesiredState = { resources, outputs: {}, dataSources: {}, readAtApply: [] };
@@ -115,18 +115,18 @@ export class DesiredStateBuilder {
     return desired;
   }
 
-  /** Each module instance reads its own, and waits for the apply on its own. */
+  /** Each module instance reads its own, and waits for the apply on its own. A check reads none. */
   private async planData(key: string, { module, block }: Extract<GraphNode, { kind: 'data' }>, graph: Graph<GraphNode>, state: State, desired: DesiredState): Promise<void> {
     const blocks = this.graphBuilder.resourceDependencies(graph, key);
 
     for (const instance of this.modules.of(module)) {
-      const waits = this.waitsForApply(blocks, instance);
+      const waits = this.walk === 'check' || this.waitsForApply(blocks, instance);
 
       for (const at of this.dataInstances(block, instance, state)) {
         const inputs = this.resolveInputs(block, state, at);
 
         if (waits) {
-          this.reader.defer(block, inputs, at);
+          await this.reader.defer(block, inputs, at);
           desired.readAtApply.push(at.toString());
         } else desired.dataSources[at.toString()] = carried(await this.reader.read(block, inputs, at));
       }
@@ -153,15 +153,10 @@ export class DesiredStateBuilder {
 
   /**
    * Read now, it would see the world before the apply changes a resource it reads, even through a variable or an output.
-   * A value not known yet comes only from such a change, or from a resource whose instances are not known yet, so its inputs are known whenever it is read now.
+   * A value not known yet comes only from such a change, so its inputs are known whenever it is read now.
    */
   private waitsForApply(blocks: string[], module: ModuleAddress): boolean {
-    return this.blocksFor(blocks, module).some((block) => this.keysLater(block) || this.instancesIn(block).some((instance) => this.planned.get(instance) !== undefined));
-  }
-
-  /** Its count or for_each was read and only an apply knows it. */
-  private keysLater(block: Address): boolean {
-    return this.instances.repetitionOf(blockKey(block)) !== undefined && this.instances.keysOf(block.toString()) === undefined;
+    return this.instancesOf(blocks, module).some((instance) => this.planned.get(instance) !== undefined);
   }
 
   /** One value at a time, so an error points at the value, not the block. */
@@ -206,7 +201,7 @@ export class DesiredStateBuilder {
 
   /** For count and for_each, read before any instance exists. Undefined where only an apply knows it and a check reads it. */
   private readAt<T>(value: AttributeValue, block: Statement, context: Context, state: State, read: (value: Value) => T): T | undefined {
-    const parse = this.later === 'accepted' ? orLater(read) : read;
+    const parse = this.walk === 'check' ? orLater(read) : read;
 
     return tryAt(value.position, spell(block), context, () => parse(this.resolveOrUnknown(value, state, context)));
   }
@@ -251,11 +246,6 @@ export class DesiredStateBuilder {
    * Only instances in the reader's own module instance: `module.a[0]` reads from `module.a[0]`, never `module.a[1]`.
    */
   private instancesOf(blocks: string[], reader: ModuleAddress): string[] {
-    return this.blocksFor(blocks, reader).flatMap((block) => this.instancesIn(block));
-  }
-
-  /** Each block in the module instances the reader reads from. */
-  private blocksFor(blocks: string[], reader: ModuleAddress): Address[] {
     return blocks.flatMap((block) => {
       const { module, resourceType, name } = Address.parse(block);
       const shared = sharedModule(module, reader.withoutKeys());
@@ -264,7 +254,7 @@ export class DesiredStateBuilder {
       return this.modules
         .of(module)
         .filter((instance) => enclosing(instance, shared).toString() === readerIn)
-        .map((instance) => new Address(instance, resourceType, name));
+        .flatMap((instance) => this.instancesIn(new Address(instance, resourceType, name)));
     });
   }
 
