@@ -44,7 +44,7 @@ const planning = () => {
 const readWith = (value: string, sources = new Map<string, Record<string, Value>>(), planned = new Planned()) =>
   resolverWith(new ScopeManager(), planned, sources).resolveValue(written(value), state, context);
 const read = (value: string) => readWith(value);
-const source = (value: Value) => new Map([['data:src.s', { v: value }]]);
+const source = (value: Value) => new Map([['data.src.s', { v: value }]]);
 const n = (text: string) => ExactNumber.parse(text);
 
 describe('ReferenceResolver', () => {
@@ -121,7 +121,7 @@ describe('ReferenceResolver', () => {
 
   // A provider may return null where its schema names a string, which has no text to join.
   it('refuses to join a null of a type that joins into text', () => {
-    const sources = new Map([['data:src.s', { v: valueOf(types.string, null) }]]);
+    const sources = new Map([['data.src.s', { v: valueOf(types.string, null) }]]);
     const read = () => resolverWith(new ScopeManager(), new Planned(), sources).resolveValue(template('a ', reference('data', 'src', 's', 'v')), state, context);
 
     expect(read).toThrow(new ConfigError('data.src.s.v is null and cannot be joined into a string', position));
@@ -381,8 +381,8 @@ describe('ReferenceResolver', () => {
 
     it('reads the data source of its own module instance', () => {
       const sources = new Map([
-        ['module.app[0].data:src.s', { v: valueOf(types.string, 'from app[0]') }],
-        ['module.app[1].data:src.s', { v: valueOf(types.string, 'from app[1]') }],
+        ['module.app[0].data.src.s', { v: valueOf(types.string, 'from app[0]') }],
+        ['module.app[1].data.src.s', { v: valueOf(types.string, 'from app[1]') }],
       ]);
 
       const read = resolverWith(new ScopeManager(), new Planned(), sources).resolveValue(reference('data', 'src', 's', 'v'), state, inInstance(ModuleAddress.root.child('app', 1)));

@@ -179,10 +179,19 @@ describe('Address', () => {
     });
 
     it.each([
+      ['an index', 'data.local_file.f[1]', 1],
+      ['a key', 'data.local_file.f["a.b"]', 'a.b'],
+      ['no index or key', 'data.local_file.f', undefined],
+    ])('reads %s after the name as the instance', (_, written, key) => {
+      expect(parseDataAddress(written).key).toBe(key);
+    });
+
+    it.each([
       ['no name', 'data.local_file'],
       ['a part after the name', 'data.local_file.f.content'],
       ['a first word other than data', 'module.app.x.local_file.f'],
-      ['a key', 'data.local_file.f[0]'],
+      ['a key after data', 'data[0].local_file.f'],
+      ['a key after the type', 'data.local_file[0].f'],
     ])('refuses %s', (_, written) => {
       expect(() => parseDataAddress(written)).toThrow(`Invalid address "${written}": a data source is named data, its type and its name`);
     });

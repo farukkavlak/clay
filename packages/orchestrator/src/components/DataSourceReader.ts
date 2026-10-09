@@ -1,8 +1,8 @@
-import { ModuleAddress, Output, Schema, UNKNOWN } from '@clay/contracts';
+import { Output, Schema, UNKNOWN } from '@clay/contracts';
 import { DataBlock, spell } from '@clay/parser';
 
 import { conformValues, writtenAt } from '../conformValues';
-import { dataSourceKey, scopeOf } from '../keys';
+import { DataInstance } from '../keys';
 import { checkDataSourceGiven, checkDataSourceRead, heldBy } from '../providerResult';
 import { ProviderRegistry } from '../ProviderRegistry';
 import { withPlace } from '../place';
@@ -18,7 +18,7 @@ export class DataSourceReader {
     private dataSources: Map<string, Record<string, Value>>
   ) {}
 
-  async read(stmt: DataBlock, inputs: Record<string, Value>, module: ModuleAddress): Promise<Record<string, Value>> {
+  async read(stmt: DataBlock, inputs: Record<string, Value>, at: DataInstance): Promise<Record<string, Value>> {
     const schema = this.dataSchemas.get(stmt.dataSourceType)!;
 
     try {
@@ -34,32 +34,33 @@ export class DataSourceReader {
 
       // A schema attribute neither the configuration nor the read gives is null.
       const leftOut = Object.entries(schema).map(([name, { type }]) => [name, valueOf(type, null)]);
-      return this.keep(stmt, module, { ...Object.fromEntries(leftOut), ...typedValues(schema, conformed), ...valued });
+      return this.keep(at, { ...Object.fromEntries(leftOut), ...typedValues(schema, conformed), ...valued });
     } catch (error) {
-      throw withPlace(error, writtenAt(error, stmt), spell(stmt), module);
+      throw withPlace(error, writtenAt(error, stmt), spell(stmt), at);
     }
   }
 
   /** Read at apply: what the configuration gives is known now, and the rest is unknown. */
-  defer(stmt: DataBlock, inputs: Record<string, Value>, module: ModuleAddress): Record<string, Value> {
+  defer(stmt: DataBlock, inputs: Record<string, Value>, at: DataInstance): Record<string, Value> {
     const schema = this.dataSchemas.get(stmt.dataSourceType)!;
 
     try {
       const conformed = conformValues(stmt.dataSourceType, schema, inputs);
       const later = Object.entries(schema).map(([name, { type }]) => [name, valueOf(type, UNKNOWN)]);
-      return this.keep(stmt, module, { ...Object.fromEntries(later), ...typedValues(schema, conformed) });
+      return this.keep(at, { ...Object.fromEntries(later), ...typedValues(schema, conformed) });
     } catch (error) {
-      throw withPlace(error, writtenAt(error, stmt), spell(stmt), module);
+      throw withPlace(error, writtenAt(error, stmt), spell(stmt), at);
     }
   }
 
   /** What a plan read, so the apply reads it no more. */
-  use(stmt: DataBlock, module: ModuleAddress, saved: Record<string, Output>): void {
-    this.keep(stmt, module, Object.fromEntries(Object.entries(saved).map(([name, { type, value }]) => [name, valueOf(type, value)])));
+  use(at: DataInstance, saved: Record<string, Output>): void {
+    this.keep(at, Object.fromEntries(Object.entries(saved).map(([name, { type, value }]) => [name, valueOf(type, value)])));
   }
 
-  private keep(stmt: DataBlock, module: ModuleAddress, values: Record<string, Value>): Record<string, Value> {
-    this.dataSources.set(dataSourceKey(scopeOf(module), stmt.dataSourceType, stmt.name), values);
+  /** By the instance's address, as a plan names it. */
+  private keep(at: DataInstance, values: Record<string, Value>): Record<string, Value> {
+    this.dataSources.set(at.toString(), values);
     return values;
   }
 }

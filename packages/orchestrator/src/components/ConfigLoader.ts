@@ -3,6 +3,7 @@ import { AttributeValue, CONFIG_FILE, DataBlock, Lexer, Parser, spell, Statement
 
 import { checkNames } from '../checkAttributes';
 import { checkDefaults } from '../declared';
+import { dataSourceKey } from '../keys';
 import { Value } from '../Value';
 import { Instances } from '../Instances';
 import { ModuleInstances } from '../ModuleInstances';
@@ -50,6 +51,7 @@ export class ConfigLoader {
       if (block.forEach) this.instances.declare(uniqueId, 'for_each');
     }
 
+    this.declareData(loadedModules);
     this.declareCalls(loadedModules);
     await this.loadSchemas(loadedResources);
     await this.loadDataSchemas(loadedModules);
@@ -111,6 +113,12 @@ export class ConfigLoader {
     } catch (error) {
       throw withPlace(error, stmt.position, spell(stmt), address);
     }
+  }
+
+  /** Apart from a resource's, since a data source and a resource may share a type and a name. */
+  private declareData(loadedModules: LoadedModule[]): void {
+    for (const { address, program } of loadedModules)
+      for (const stmt of program) if (stmt.type === 'Data' && stmt.count) this.instances.declare(dataSourceKey(address.toString(), stmt.dataSourceType, stmt.name), 'count');
   }
 
   private declareCalls(loadedModules: LoadedModule[]): void {

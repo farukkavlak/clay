@@ -5,7 +5,8 @@ export function isInstanceKey(value: unknown): value is InstanceKey {
   return typeof value === 'string' || (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0);
 }
 
-function spellKey(key: InstanceKey | undefined): string {
+/** `[0]` or `["a"]`, nothing with no key. */
+export function spellKey(key: InstanceKey | undefined): string {
   return key === undefined ? '' : `[${JSON.stringify(key)}]`;
 }
 
@@ -140,13 +141,14 @@ function readModules(segments: Segment[], refuse: Refuse): { module: ModuleAddre
 }
 
 /** `module.m[0].data.local_file.f`, as a plan names a data source. A caller's `refuse` says why one is not, in its own words. */
-export function parseDataAddress(input: string, refuse: Refuse = invalid(input)): { module: ModuleAddress; type: string; name: string } {
+export function parseDataAddress(input: string, refuse: Refuse = invalid(input)): { module: ModuleAddress; type: string; name: string; key?: InstanceKey } {
   const { module, rest } = readModules(readSegments(input, refuse), refuse);
   const [data, type, name] = rest;
 
-  if (rest.length !== 3 || data.name !== 'data' || rest.some((segment) => segment.key !== undefined)) refuse('a data source is named data, its type and its name');
+  // Only the name takes an index or a key, as `data.local_file.f[0]`.
+  if (rest.length !== 3 || data.name !== 'data' || data.key !== undefined || type.key !== undefined) refuse('a data source is named data, its type and its name');
 
-  return { module, type: type.name, name: name.name };
+  return { module, type: type.name, name: name.name, ...(name.key !== undefined && { key: name.key }) };
 }
 
 export class Address {

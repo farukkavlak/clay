@@ -238,7 +238,7 @@ describe('a module called with count', () => {
   ])('refuses count.index %s, where it is written', async (_, config) => {
     const error = await planError(config);
 
-    expect(error.message).toBe('count.index is only known inside a resource or a module call that has count');
+    expect(error.message).toBe('count.index is only known inside a resource, a data source or a module call that has count');
     expect(error.position).toMatchObject(placeOf(config, 'count.index'));
   });
 
@@ -249,7 +249,7 @@ describe('a module called with count', () => {
 
     const error = await planError(web('2'));
 
-    expect(error.message).toBe('count.index is only known inside a resource or a module call that has count');
+    expect(error.message).toBe('count.index is only known inside a resource, a data source or a module call that has count');
     expect(error.position).toMatchObject({ file: 'web/main.clay', ...placeOf(body, 'count.index') });
   });
 

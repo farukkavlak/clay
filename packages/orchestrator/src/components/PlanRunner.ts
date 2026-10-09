@@ -9,7 +9,7 @@ import { countFrom } from '../count';
 import { declaredOf, givenTo } from '../declared';
 import { eachFrom } from '../forEach';
 import { Instances, repetitionOfKey } from '../Instances';
-import { blockKey, Context, contextIn, dataSourceAddress, dataSourceKey, scopeOf } from '../keys';
+import { blockKey, Context, contextIn, DataInstance, dataSourceKey, scopeOf } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
 import { tryAt, withPlace } from '../place';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
@@ -198,30 +198,43 @@ export class PlanRunner {
     { dataSources, readAtApply }: Pick<Approved, 'dataSources' | 'readAtApply'>,
     state: State
   ): AsyncGenerator<RunEvent> {
-    const made = this.modules.of(module).map((instance) => ({ instance, address: dataSourceAddress(scopeOf(instance), block.dataSourceType, block.name) }));
+    const made = this.modules.of(module).flatMap((instance) => this.dataInstances(block, instance, state));
 
-    // An instance the module does not make would otherwise be silently skipped.
-    for (const address of named) if (!made.some((at) => at.address === address)) throw undeclared(address);
+    // An instance the module or the count does not make would otherwise be silently skipped.
+    for (const address of named) if (!made.some((at) => at.toString() === address)) throw undeclared(address);
 
-    for (const { instance, address } of made) {
+    for (const at of made) {
+      const address = at.toString();
       if (Object.hasOwn(dataSources, address)) {
-        this.reader.use(block, instance, dataSources[address]);
+        this.reader.use(at, dataSources[address]);
         continue;
       }
 
-      if (!readAtApply.includes(address))
-        throw withPlace(new Error(`The plan has no value for ${address}, which the configuration declares`), block.position, spell(block), instance);
+      if (!readAtApply.includes(address)) throw withPlace(new Error(`The plan has no value for ${address}, which the configuration declares`), block.position, spell(block), at);
 
-      await this.reader.read(block, this.resolveInputs(block, state, instance), instance);
+      await this.reader.read(block, this.resolveInputs(block, state, at), at);
       yield { type: 'read', address };
     }
   }
 
-  private resolveInputs(block: DataBlock, state: State, module: ModuleAddress): Record<string, Value> {
+  /** count is read again at apply, after what it reads has run, as a resource's is. */
+  private dataInstances(block: DataBlock, module: ModuleAddress, state: State): DataInstance[] {
+    const at = new DataInstance(module, block.dataSourceType, block.name);
+    const { count } = block;
+
+    if (count) {
+      const read = tryAt(count.position, spell(block), at, () => countFrom(this.resolver.resolveValue(count, state, at)));
+      this.instances.setCount(at.block, read);
+    }
+
+    return at.instances(this.instances.keysOf(at.block));
+  }
+
+  private resolveInputs(block: DataBlock, state: State, at: DataInstance): Record<string, Value> {
     const declaration = spell(block);
 
     return Object.fromEntries(
-      Object.entries(block.attributes).map(([name, value]) => [name, tryAt(value.position, declaration, module, () => this.resolver.resolveValue(value, state, module))])
+      Object.entries(block.attributes).map(([name, value]) => [name, tryAt(value.position, declaration, at, () => this.resolver.resolveValue(value, state, at))])
     );
   }
 
