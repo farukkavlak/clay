@@ -55,8 +55,8 @@ describe('a sensitive output', () => {
     const planned = await written(secret('s3cret'), 'plan');
     const applied = await clayIn('apply', '--yes');
 
-    expect(planned).toContain('+ password = <sensitive>\n  + plain = "seen"');
-    expect(applied).toContain('Outputs:\n  password = <sensitive>\n  plain = "seen"');
+    expect(planned).toContain('+ password = (sensitive value)\n  + plain = "seen"');
+    expect(applied).toContain('Outputs:\n  password = (sensitive value)\n  plain = "seen"');
     expect(planned + applied).not.toContain('s3cret');
   });
 
@@ -66,7 +66,7 @@ describe('a sensitive output', () => {
     const read = await clayIn('output');
     const json = JSON.parse(await clayIn('output', '--json')) as Record<string, unknown>;
 
-    expect(read).toContain('password = <sensitive>\nplain = "seen"');
+    expect(read).toContain('password = (sensitive value)\nplain = "seen"');
     expect(read).not.toContain('s3cret');
     expect(json).toEqual({ password: { value: 's3cret', type: { kind: 'string' }, sensitive: true }, plain: { value: 'seen', type: { kind: 'string' } } });
   });
@@ -76,7 +76,7 @@ describe('a sensitive output', () => {
 
     const applied = await clayIn('apply', 'p.plan');
 
-    expect(applied).toContain('+ password = <sensitive>');
+    expect(applied).toContain('+ password = (sensitive value)');
     expect(applied).not.toContain('s3cret');
   });
 
@@ -85,7 +85,7 @@ describe('a sensitive output', () => {
 
     const planned = await written(secret('n3w'), 'plan');
 
-    expect(planned).toContain('~ password = <sensitive>');
+    expect(planned).toContain('~ password = (sensitive value)');
     expect(planned).not.toMatch(/s3cret|n3w/);
   });
 
@@ -95,7 +95,7 @@ describe('a sensitive output', () => {
     const planned = await written(secret('s3cret', ''), 'plan');
     const applied = await clayIn('apply', '--yes');
 
-    expect(planned).toContain('~ password = <sensitive>');
+    expect(planned).toContain('~ password = (sensitive value)');
     expect(planned).not.toContain('s3cret');
     expect(applied).toContain('password = "s3cret"');
   });
@@ -105,13 +105,13 @@ describe('a sensitive output', () => {
 
     const planned = await written(secret('s3cret'), 'plan');
 
-    expect(planned).toContain('~ password = <sensitive>');
+    expect(planned).toContain('~ password = (sensitive value)');
     expect(planned).not.toContain('s3cret');
   });
 
   it.each([
-    ['showed it', '', 'the plan showed password = <sensitive>, but it now comes to another value. Plan again.'],
-    ['left it as it was', 'apply', 'the plan left password = <sensitive> as it was, but it now comes to another value. Plan again.'],
+    ['showed it', '', 'the plan showed password = (sensitive value), but it now comes to another value. Plan again.'],
+    ['left it as it was', 'apply', 'the plan left password = (sensitive value) as it was, but it now comes to another value. Plan again.'],
   ])('is named without its value where a plan that %s is run on another', async (_, first, message) => {
     if (first) await written(secret('s3cret'), first, '--yes');
     const saved = await newOrchestrator().plan(`${secret('s3cret')}\nresource "null_resource" "n" {}`);
@@ -147,7 +147,7 @@ describe('a sensitive output', () => {
       for await (const event of newOrchestrator().runPlan(saved, secret('n3w', ''))) if (event.type === 'failed') throw event.error;
     };
 
-    await expect(run()).rejects.toThrow('the plan showed password = <sensitive>, but it now comes to another value. Plan again.');
+    await expect(run()).rejects.toThrow('the plan showed password = (sensitive value), but it now comes to another value. Plan again.');
   });
 
   it('is named without its value where only its type is not the one the plan showed', async () => {
@@ -157,7 +157,7 @@ describe('a sensitive output', () => {
       for await (const event of newOrchestrator().runPlan(saved, collection('["a", "b"]'))) if (event.type === 'failed') throw event.error;
     };
 
-    await expect(run()).rejects.toThrow('the plan showed password = <sensitive>, but it now comes to another type. Plan again.');
+    await expect(run()).rejects.toThrow('the plan showed password = (sensitive value), but it now comes to another type. Plan again.');
   });
 
   describe('of a type its value does not fit', () => {

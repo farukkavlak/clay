@@ -66,8 +66,8 @@ export interface Resource {
   dependencies?: string[];
 }
 
-/** Printed where a sensitive value would be. */
-export const SENSITIVE = '<sensitive>';
+/** Stands where a sensitive value would be printed or quoted. */
+export const SENSITIVE = '(sensitive value)';
 
 /** Carries its type, which no schema names, so a reader can tell a set from a list. */
 export interface Output {

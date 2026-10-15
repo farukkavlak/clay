@@ -237,9 +237,10 @@ configuration hits each of these early.
       object type. One left out, or given `null`, takes its default, or `null` where it
       names none
 - [x] `sensitive = true` on an output: its value is hidden in what `plan`, `apply` and
-      `clay output` print, and `clay output --json` still gives it. Terraform prints
-      `<sensitive>` and keeps the flag beside the value and its type in state, where the
-      value stays in plain text. A run whose configuration marks an output otherwise
+      `clay output` print, and `clay output --json` still gives it. Clay prints
+      `(sensitive value)`, the stand-in its errors use; Terraform prints `<sensitive>`
+      there. Both keep the flag beside the value and its type in state, where the value
+      stays in plain text. A run whose configuration marks an output otherwise
       than its plan did is refused before anything runs; Terraform takes the flag from
       the configuration. One that does not fit its type is refused in one fixed
       sentence, since a key in the usual message may be the value

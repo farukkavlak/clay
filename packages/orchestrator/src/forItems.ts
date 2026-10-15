@@ -1,8 +1,8 @@
-import { ExactNumber, isUnknown, Type, types, UNKNOWN } from '@clay/contracts';
+import { ExactNumber, isUnknown, SENSITIVE, Type, types, UNKNOWN } from '@clay/contracts';
 import { ConfigError, Position } from '@clay/parser';
 
 import { UnresolvedReferenceError } from './resolvers/UnresolvedReferenceError';
-import { allSensitiveIf, child, described, hasText, HIDDEN, isSensitive, objectOf, tupleOf, Value, valueOf, wholeIf } from './Value';
+import { allSensitiveIf, child, described, hasText, isSensitive, objectOf, tupleOf, Value, valueOf, wholeIf } from './Value';
 
 export type ForItem = [key: Value, value: Value];
 
@@ -58,7 +58,7 @@ export function checkKey(key: Value, position: Position): void {
 function shownKey(text: string, entries: ForItem[]): string {
   const sensitive = entries.some(([key]) => isSensitive(key) && !isUnknown(key.data) && String(key.data) === text);
 
-  return sensitive ? HIDDEN : `"${text}"`;
+  return sensitive ? SENSITIVE : `"${text}"`;
 }
 
 /**

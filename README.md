@@ -82,8 +82,8 @@ way. A module call takes `for_each` too, `module.web["eu"]`, with `each.key` and
 `{ a = random_string.s.id }` plans `["a"]` with `each.value` unknown.
 
 An output with `sensitive = true` is hidden where it would be printed: `plan`, `apply`
-and `clay output` show `<sensitive>` in its place, and a plan that puts the flag on or
-takes it off hides the value too. One that does not fit its `type` is refused without
+and `clay output` show `(sensitive value)` in its place, and a plan that puts the flag
+on or takes it off hides the value too. One that does not fit its `type` is refused without
 its value. `clay output --json` gives the value with `"sensitive": true`. The state and
 a plan file hold it unencrypted.
 

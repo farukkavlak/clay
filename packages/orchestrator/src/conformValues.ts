@@ -1,10 +1,10 @@
-import { AttributePath, ExactNumber, isRecord, isUnknown, NumberError, Schema, Type, typeAt, UNKNOWN } from '@clay/contracts';
+import { AttributePath, ExactNumber, isRecord, isUnknown, NumberError, Schema, SENSITIVE, Type, typeAt, UNKNOWN } from '@clay/contracts';
 import { DataBlock, Position, ResourceBlock } from '@clay/parser';
 
 import { setOf } from './setMembers';
 import { shown } from './shown';
 import { items, spelled } from './spelled';
-import { article, child, described, HIDDEN, isAllSensitive, isSensitive, plainOf, unordered, Value, valueOf, withSensitive } from './Value';
+import { article, child, described, isAllSensitive, isSensitive, plainOf, unordered, Value, valueOf, withSensitive } from './Value';
 import { ObjectType, withLeftOut } from './withLeftOut';
 
 /** Carries the attribute, so the caller can report its position; undefined for a missing attribute. */
@@ -75,7 +75,7 @@ function numberIn(value: Value, path: AttributePath): ExactNumber {
   try {
     return ExactNumber.parse(value.data as string);
   } catch (error) {
-    if (error instanceof NumberError) throw mismatchAt(path, `${spelled(path)}: ${isSensitive(value) ? `${HIDDEN} ${error.problem}` : error.message}`);
+    if (error instanceof NumberError) throw mismatchAt(path, `${spelled(path)}: ${isSensitive(value) ? `${SENSITIVE} ${error.problem}` : error.message}`);
     throw error;
   }
 }
@@ -84,7 +84,7 @@ function booleanIn(value: Value, path: AttributePath): boolean {
   const text = value.data as string;
   if (text === 'true' || text === 'false') return text === 'true';
 
-  throw mismatchAt(path, `${spelled(path)}: ${isSensitive(value) ? HIDDEN : shown(text)} is not a boolean, which is "true" or "false"`);
+  throw mismatchAt(path, `${spelled(path)}: ${isSensitive(value) ? SENSITIVE : shown(text)} is not a boolean, which is "true" or "false"`);
 }
 
 function primitive(kind: Type['kind'], value: Value, path: AttributePath): unknown {
