@@ -1,7 +1,7 @@
-import { isUnknown, Type, typeAt } from '@clay/contracts';
+import { isUnknown, sensitiveUnder, Type, typeAt } from '@clay/contracts';
 import { ConfigError, Position, spellSteps, Step, stepKey } from '@clay/parser';
 
-import { child, described, isAllSensitive, sensitiveUnder, Value } from '../Value';
+import { child, described, isAllSensitive, Value } from '../Value';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 
 /** Undefined when the step finds something. */

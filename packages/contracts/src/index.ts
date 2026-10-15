@@ -113,6 +113,13 @@ export function samePaths(one: readonly AttributePath[], other: readonly Attribu
   return left.size === right.size && [...left].every((path) => right.has(path));
 }
 
+/** What is left of each path after `step`. A value sensitive as a whole is so in every part. */
+export function sensitiveUnder(paths: readonly AttributePath[], step: string | number): AttributePath[] {
+  if (paths.some((path) => path.length === 0)) return [[]];
+
+  return paths.filter(([first]) => String(first) === String(step)).map((path) => path.slice(1));
+}
+
 /** An index in a path read from a file is a plain number, where every other number read from one is exact. */
 export function readPaths(paths: unknown, what: string): unknown {
   if (!Array.isArray(paths)) return paths;

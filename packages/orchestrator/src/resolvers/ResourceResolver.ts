@@ -1,4 +1,4 @@
-import { Address, AttributePath, InstanceKey, Schema, State, UNKNOWN } from '@clay/contracts';
+import { Address, AttributePath, InstanceKey, Schema, sensitiveUnder, State, UNKNOWN } from '@clay/contracts';
 import { Position, ResourceReference, spellReference, Step } from '@clay/parser';
 
 import { Instances, Repetition } from '../Instances';
@@ -6,7 +6,7 @@ import { blockKey, Context, moduleOf } from '../keys';
 import { placed } from '../place';
 import { Planned, PlannedInstance } from '../Planned';
 import { TypeMismatch, typedValues } from '../typed';
-import { objectOf, sensitiveUnder, Value, valueOf, withSensitive } from '../Value';
+import { objectOf, Value, valueOf, withSensitive } from '../Value';
 import { everyType, noAttribute, readInstance } from './instance';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 

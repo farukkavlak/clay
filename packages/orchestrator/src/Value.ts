@@ -1,4 +1,4 @@
-import { AttributePath, containsUnknown, ExactNumber, isRecord, Output, own, Type, typeAt, types } from '@clay/contracts';
+import { AttributePath, containsUnknown, ExactNumber, isRecord, Output, own, sensitiveUnder, Type, typeAt, types } from '@clay/contracts';
 
 /**
  * `data` is a string, an `ExactNumber`, a boolean, null, an array (list, set, tuple) or a record (map, object), with UNKNOWN at any depth.
@@ -43,13 +43,6 @@ export function wholeIf(sensitive: boolean): AttributePath[] {
 /** Sensitive as a whole where `sensitive`, and as it was otherwise. */
 export function allSensitiveIf(sensitive: boolean, result: Value): Value {
   return sensitive ? allSensitive(result) : result;
-}
-
-/** What is left of each path after `step`. A value sensitive as a whole is so in every part. */
-export function sensitiveUnder(paths: readonly AttributePath[], step: string | number): AttributePath[] {
-  if (paths.some((path) => path.length === 0)) return [[]];
-
-  return paths.filter(([first]) => String(first) === String(step)).map((path) => path.slice(1));
 }
 
 function sensitiveIn(parts: [step: string | number, value: Value][]): AttributePath[] {
