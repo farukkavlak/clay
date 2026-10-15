@@ -59,6 +59,11 @@ function sensitiveIn(parts: [step: string | number, value: Value][]): AttributeP
   return parts.flatMap(([step, value]) => (value.sensitive ?? []).map((path) => [step, ...path]));
 }
 
+/** The steps to each sensitive part of the values, from their names on. */
+export function sensitiveAmong(values: Record<string, Value>): AttributePath[] {
+  return sensitiveIn(Object.entries(values));
+}
+
 /** A string, a number or a boolean. */
 export function hasText(type: Type): boolean {
   return type.kind === 'string' || type.kind === 'number' || type.kind === 'bool';

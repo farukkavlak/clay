@@ -98,10 +98,13 @@ and `apply`. A `for_each` with a sensitive key is refused, since a key shows in 
 address, and so is a sensitive `count`, since a plan shows how many instances it makes.
 `for_each = { primary = module.db.password }` is taken: only `each.value` is sensitive.
 An error raised while a value is worked out does not quote a sensitive one:
-`enabled: (sensitive value) is not a boolean, which is "true" or "false"`. One thing is
-still open: a resource attribute given a sensitive value shows it in the plan and in an
-error about the resource, a provider's own among them, and is not sensitive where it is
-read back, a `for_each` among them.
+`enabled: (sensitive value) is not a boolean, which is "true" or "false"`. A resource
+attribute given a sensitive value is sensitive where it is read back, so
+`local_file.conf.content` in a root output needs `sensitive = true` too. The state keeps
+which parts of each resource are sensitive beside its values. A value a provider works
+out from a sensitive one is not sensitive, nor is what a data source given one reads.
+One thing is still open: the plan, "Changed outside Clay", `clay state show` and an error
+about a resource, a provider's own among them, still show such an attribute.
 
 A local is a value with a name: `locals { name = "${var.prefix}-x" }` is read as
 `local.name`. It may read anything, another local among them, and is worked out once for

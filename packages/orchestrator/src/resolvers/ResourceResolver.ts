@@ -1,4 +1,4 @@
-import { Address, Schema, State, UNKNOWN } from '@clay/contracts';
+import { Address, AttributePath, InstanceKey, Schema, State, UNKNOWN } from '@clay/contracts';
 import { Position, ResourceReference, spellReference, Step } from '@clay/parser';
 
 import { Instances, Repetition } from '../Instances';
@@ -6,7 +6,7 @@ import { blockKey, Context, moduleOf } from '../keys';
 import { placed } from '../place';
 import { Planned, PlannedInstance } from '../Planned';
 import { TypeMismatch, typedValues } from '../typed';
-import { objectOf, plainOf, Value, valueOf } from '../Value';
+import { objectOf, sensitiveUnder, Value, valueOf, withSensitive } from '../Value';
 import { everyType, noAttribute, readInstance } from './instance';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 
@@ -15,6 +15,12 @@ function plannedAttribute(instance: PlannedInstance, name: string): unknown {
   if (Object.hasOwn(instance.known, name)) return instance.known[name];
 
   return instance.later.has(name) ? UNKNOWN : null;
+}
+
+/** An instance as the plan or the state holds it, with the steps to each sensitive part. */
+interface Held {
+  attribute: (name: string) => unknown;
+  sensitive: readonly AttributePath[];
 }
 
 function notFound(spelled: string, address: Address): string {
@@ -36,11 +42,11 @@ export class ResourceResolver {
     if (every) return { value: this.every(reference, block, every, schema, state, position), path };
 
     const address = new Address(block.module, reference.type, reference.name, key);
-    const attributeOf = this.attributesOf(address, reference.type, schema, state, position);
+    const held = this.heldAt(address, reference.type, schema, state, position);
     const spelled = spellReference([{ name: reference.type }, { name: reference.name }, ...reference.path.slice(0, reference.path.length - path.length)]);
-    if (!attributeOf) throw new UnresolvedReferenceError(notFound(spelled, address));
+    if (!held) throw new UnresolvedReferenceError(notFound(spelled, address));
 
-    const values = this.typedRead(reference, attribute === undefined ? Object.keys(schema) : [attribute], attributeOf, schema, position);
+    const values = this.typedRead(reference, attribute === undefined ? Object.keys(schema) : [attribute], held, schema, position);
     return { value: attribute === undefined ? objectOf(Object.entries(values)) : values[attribute], path };
   }
 
@@ -51,29 +57,33 @@ export class ResourceResolver {
     const spelled = spellReference([{ name: reference.type }, { name: reference.name }]);
     if (keys === undefined) throw new UnresolvedReferenceError(`${spelled} is known only once its ${repetition} is read`, type);
 
-    const instances = keys.map((key) => {
+    const instances = keys.map((key): [InstanceKey, Value] => {
       const address = new Address(block.module, reference.type, reference.name, key);
-      const attributeOf = this.attributesOf(address, reference.type, schema, state, position);
-      if (!attributeOf) throw new UnresolvedReferenceError(notFound(spelled, address), type);
+      const held = this.heldAt(address, reference.type, schema, state, position);
+      if (!held) throw new UnresolvedReferenceError(notFound(spelled, address), type);
 
-      return plainOf(this.typedRead(reference, Object.keys(schema), attributeOf, schema, position));
+      return [key, objectOf(Object.entries(this.typedRead(reference, Object.keys(schema), held, schema, position)))];
     });
+    const data = instances.map(([, instance]) => instance.data);
+    const sensitive = instances.flatMap(([key, instance]) => (instance.sensitive ?? []).map((path) => [key, ...path]));
 
-    return valueOf(type, repetition === 'count' ? instances : Object.fromEntries(keys.map((key, index) => [key, instances[index]])));
+    return withSensitive(valueOf(type, repetition === 'count' ? data : Object.fromEntries(keys.map((key, index) => [key, data[index]]))), sensitive);
   }
 
   /** An instance the plan creates or changes is read from the plan, not state. Undefined where neither has it. */
-  private attributesOf(address: Address, type: string, schema: Schema, state: State, position?: Position): ((name: string) => unknown) | undefined {
+  private heldAt(address: Address, type: string, schema: Schema, state: State, position?: Position): Held | undefined {
     const planned = this.planned.get(address.toString());
-    if (planned) return (name) => plannedAttribute(planned, name);
+    if (planned) return { attribute: (name) => plannedAttribute(planned, name), sensitive: planned.sensitive };
 
     const resource = state.resources[address.toString()];
-    return resource && ((name) => this.getResolvedAttribute(resource, type, schema, name, position));
+    return resource && { attribute: (name) => this.getResolvedAttribute(resource, type, schema, name, position), sensitive: resource.sensitive ?? [] };
   }
 
-  private typedRead(reference: ResourceReference, names: string[], attributeOf: (name: string) => unknown, schema: Schema, position?: Position): Record<string, Value> {
+  private typedRead(reference: ResourceReference, names: string[], { attribute, sensitive }: Held, schema: Schema, position?: Position): Record<string, Value> {
     try {
-      return typedValues(schema, Object.fromEntries(names.map((name) => [name, attributeOf(name)])));
+      const values = typedValues(schema, Object.fromEntries(names.map((name) => [name, attribute(name)])));
+
+      return Object.fromEntries(Object.entries(values).map(([name, value]) => [name, withSensitive(value, sensitiveUnder(sensitive, name))]));
     } catch (error) {
       if (!(error instanceof TypeMismatch)) throw error;
       throw placed(`${reference.type}.${reference.name} holds what its schema does not: ${error.message}`, position);

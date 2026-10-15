@@ -1,8 +1,11 @@
-import { isUnknown } from '@clay/contracts';
+import { AttributePath, isUnknown } from '@clay/contracts';
 
 export interface PlannedInstance {
   known: Record<string, unknown>;
   later: Set<string>;
+  sensitive: readonly AttributePath[];
+  /** False where only which parts are sensitive changes, so a data source that reads it can still be read at plan. */
+  changes: boolean;
 }
 
 /** Planned values by address, so a reference reads what the plan will make. Cleared before an apply, which reads state. */
@@ -25,12 +28,12 @@ export class Planned {
     return this.planning;
   }
 
-  set(address: string, after: Record<string, unknown>): void {
+  set(address: string, after: Record<string, unknown>, sensitive: readonly AttributePath[], changes: boolean): void {
     const entries = Object.entries(after);
     const known = Object.fromEntries(entries.filter(([, value]) => !isUnknown(value)));
     const later = new Set(entries.filter(([, value]) => isUnknown(value)).map(([name]) => name));
 
-    this.instances.set(address, { known, later });
+    this.instances.set(address, { known, later, sensitive, changes });
   }
 
   get(address: string): PlannedInstance | undefined {

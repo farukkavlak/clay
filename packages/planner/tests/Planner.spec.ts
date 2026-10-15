@@ -24,6 +24,7 @@ function desiredResource(name: string, attributes: Record<string, string>, modul
     },
     attributes,
     after: attributes,
+    sensitive: [],
     replace: false,
     dependencies: [],
   };
@@ -65,6 +66,18 @@ describe('Planner', () => {
     expect(plan([{ ...desired, replace: true }], stateWith('r', { path: 'old', size: 'large' }))[0]).toMatchObject({ type: 'REPLACE', planned, after });
     expect(plan([{ ...desiredResource('r', planned) }], stateWith('r', planned))[0]).not.toHaveProperty('after');
     expect(plan([], stateWith('r', planned))[0]).not.toHaveProperty('after');
+  });
+
+  it('carries which parts are sensitive on a create, an update, a replace and a no-op, and nothing where none is', () => {
+    const planned = { path: 'x', size: 'large' };
+    const sensitive = [['size']];
+    const desired = { ...desiredResource('r', planned), sensitive };
+
+    expect(plan([desired], { version: STATE_VERSION, serial: 0, resources: {} })[0]).toMatchObject({ type: 'CREATE', sensitive });
+    expect(plan([desired], stateWith('r', { path: 'x', size: 'small' }))[0]).toMatchObject({ type: 'UPDATE', sensitive });
+    expect(plan([{ ...desired, replace: true }], stateWith('r', { path: 'old', size: 'large' }))[0]).toMatchObject({ type: 'REPLACE', sensitive });
+    expect(plan([desired], stateWith('r', planned))[0]).toMatchObject({ type: 'NO_OP', sensitive });
+    expect(plan([desiredResource('r', planned)], stateWith('r', planned))[0]).not.toHaveProperty('sensitive');
   });
 
   // The configuration is unchanged; the change comes from the provider's plan.
@@ -239,6 +252,38 @@ describe('Planner', () => {
       };
 
       expect(validatePlanFile(planFile)).toBe(true);
+    });
+
+    it.each([
+      [
+        'steps',
+        [
+          ['tags', 'token'],
+          ['list', 1],
+        ],
+        true,
+      ],
+      ['a string', 'content', false],
+      ['a step that is neither a name nor an index', [['content', 1.5]], false],
+      ['a step that is an object', [[{ name: 'content' }]], false],
+    ])('takes the sensitive parts of an action as %s', (_, sensitive, valid) => {
+      const action = { type: 'NO_OP', resourceType: 'thing', name: 'a', sensitive };
+      const planFile = {
+        version: PLAN_FILE_VERSION,
+        timestamp: '',
+        config: '',
+        modules: {},
+        serial: 0,
+        actions: [action],
+        outputs: {},
+        prevRun: {},
+        prior: {},
+        schemas: {},
+        dataSources: {},
+        readAtApply: [],
+      };
+
+      expect(validatePlanFile(planFile)).toBe(valid);
     });
 
     it('should reject a plan file without the state serial it was made from', () => {

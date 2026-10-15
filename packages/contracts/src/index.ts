@@ -60,6 +60,8 @@ export interface Resource {
   modulePath?: readonly ModuleStep[];
   key?: InstanceKey;
   attributes: Record<string, unknown>;
+  /** The steps to each sensitive part of `attributes`, left out where there is none. The values themselves are held as they are. */
+  sensitive?: AttributePath[];
   /** Kept so it can be deleted before them once the config drops it. */
   dependencies?: string[];
 }
@@ -89,13 +91,28 @@ export interface State {
 }
 
 /** Bump on any change to the shape after a release. A higher version was written by a newer Clay and is refused. */
-export const STATE_VERSION = 4;
+export const STATE_VERSION = 5;
 
 export function emptyState(): State {
   return { version: STATE_VERSION, serial: 0, resources: {} };
 }
 
-/** Checks what the engine reads without asking: the address fields, `attributes` and `dependencies`. */
+function isAttributePath(path: unknown): path is AttributePath {
+  return Array.isArray(path) && path.every((step) => typeof step === 'string' || Number.isInteger(step));
+}
+
+export function isAttributePaths(paths: unknown): paths is AttributePath[] {
+  return Array.isArray(paths) && paths.every((path) => isAttributePath(path));
+}
+
+/** An index in a path read from a file is a plain number, where every other number read from one is exact. */
+export function readPaths(paths: unknown, what: string): unknown {
+  if (!Array.isArray(paths)) return paths;
+
+  return paths.map((path: unknown) => (Array.isArray(path) ? path.map((step: unknown) => (step instanceof ExactNumber ? step.toSafeInteger(what) : step)) : path));
+}
+
+/** Checks what the engine reads without asking: the address fields, `attributes`, `sensitive` and `dependencies`. */
 function isResource(value: unknown): value is Resource {
   return (
     isRecord(value) &&
@@ -103,16 +120,18 @@ function isResource(value: unknown): value is Resource {
     typeof value.name === 'string' &&
     (value.modulePath === undefined || isModulePath(value.modulePath)) &&
     isRecord(value.attributes) &&
+    (value.sensitive === undefined || isAttributePaths(value.sensitive)) &&
     (value.dependencies === undefined || Array.isArray(value.dependencies))
   );
 }
 
-/** Instance keys are part of the address, so they read back as plain numbers. */
+/** Instance keys are part of the address and indexes in sensitive paths are steps, so both read back as plain numbers. */
 function readKeys(resources: Record<string, unknown>): void {
   for (const [address, resource] of Object.entries(resources)) {
     if (!isRecord(resource)) continue;
 
     if (resource.key instanceof ExactNumber) resource.key = resource.key.toSafeInteger(`the key of "${address}"`);
+    if (resource.sensitive !== undefined) resource.sensitive = readPaths(resource.sensitive, `a sensitive index of "${address}"`);
     if (Array.isArray(resource.modulePath))
       for (const step of resource.modulePath) if (isRecord(step) && step.key instanceof ExactNumber) step.key = step.key.toSafeInteger(`a module key of "${address}"`);
   }
@@ -129,7 +148,7 @@ function checkResources(resources: Record<string, unknown>, say: (problem: strin
   }
 }
 
-/** Resources from a state or plan file, read with exact numbers: keys become plain numbers, then each resource is checked. */
+/** Resources from a state or plan file, read with exact numbers: keys and sensitive indexes become plain numbers, then each resource is checked. */
 export function readResources(resources: unknown, field: string, say: (problem: string) => never): asserts resources is Record<string, Resource> {
   if (!isRecord(resources)) say(`${field} are not a record`);
 

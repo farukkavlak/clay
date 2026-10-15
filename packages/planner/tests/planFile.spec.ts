@@ -318,6 +318,12 @@ describe('reading a plan file', () => {
     expect(read(keyed(1.5))).toThrow('tfplan.json is not a plan file: an instance key: 1.5 is not a whole number');
   });
 
+  it('names a sensitive index that is not whole', () => {
+    const content = { ...fields(), actions: [{ type: 'NO_OP', resourceType: 'null_resource', name: 'a', sensitive: [['triggers', 1.5]] }] };
+
+    expect(read(content)).toThrow('tfplan.json is not a plan file: a sensitive index: 1.5 is not a whole number');
+  });
+
   it('reads back the resources as state held them and as the refresh read them, keys and numbers as state reads them', () => {
     const resources = { 'x.a[0]': { resourceType: 'x', name: 'a', key: 0, attributes: { n: ExactNumber.parse('12345678901234567890') } } };
 
