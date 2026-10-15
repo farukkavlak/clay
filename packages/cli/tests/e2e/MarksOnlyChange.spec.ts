@@ -14,7 +14,7 @@ const DB = 'output "password" {\n  value     = "hunter2"\n  sensitive = true\n}\
 const MARKED = '"password=${module.db.password}"';
 const PLAIN = '"password=hunter2"';
 
-const PLANNED = '  ~ local_file.conf will be updated\n      only which parts are sensitive changes\n\nPlan: 0 to add, 1 to change, 0 to destroy.';
+const PLANNED = (note: string) => `  ~ local_file.conf will be updated\n      content: ${note}\n\nPlan: 0 to add, 1 to change, 0 to destroy.`;
 const APPLIED = '  ~ local_file.conf updated\n\nApply complete! Resources: 0 added, 1 changed, 0 destroyed.';
 
 const triggers = (first: string, second: string) =>
@@ -50,9 +50,9 @@ describe('a change only in which parts of a resource are sensitive', () => {
   });
 
   it.each([
-    ['puts a mark on', PLAIN, MARKED, [['content']]],
-    ['takes a mark off', MARKED, PLAIN, undefined],
-  ])('%s with a plan that updates and an apply that writes it, with no value shown', async (_, before, after, held) => {
+    ['puts a mark on', PLAIN, MARKED, [['content']], 'will be marked sensitive'],
+    ['takes a mark off', MARKED, PLAIN, undefined, 'will no longer be marked sensitive'],
+  ])('%s with a plan that updates and an apply that writes it, with no value shown', async (_, before, after, held, note) => {
     await written(before);
     await clayIn('apply', '--yes');
     await written(after);
@@ -60,7 +60,7 @@ describe('a change only in which parts of a resource are sensitive', () => {
     const planned = await clayIn('plan');
     const applied = await clayIn('apply', '--yes');
 
-    expect(planned).toContain(PLANNED);
+    expect(planned).toContain(PLANNED(note));
     expect(applied).toContain(APPLIED);
     expect(planned + applied).not.toContain('hunter2');
     expect(await marks()).toEqual(held);
@@ -84,7 +84,7 @@ describe('a change only in which parts of a resource are sensitive', () => {
     const applied = await clayIn('apply', '--yes');
 
     expect(planned).toContain(
-      '  ~ local_file.conf[0] will be updated, moved from local_file.conf\n      only which parts are sensitive changes\n\nPlan: 0 to add, 1 to change, 0 to destroy, 1 to move.'
+      '  ~ local_file.conf[0] will be updated, moved from local_file.conf\n      content: will be marked sensitive\n\nPlan: 0 to add, 1 to change, 0 to destroy, 1 to move.'
     );
     expect(applied).toContain('Resources: 0 added, 1 changed, 0 destroyed, 1 moved.');
   });

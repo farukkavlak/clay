@@ -40,3 +40,39 @@ describe('showing a set output', () => {
     expect(shown(['a', 'b'], ['a', UNKNOWN])).toEqual(expect.arrayContaining(['  ~ m:', '      - "b"', '      + (known after apply)', '      (1 unchanged)']));
   });
 });
+
+describe('showing a sensitive set attribute', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('hides it whole, members and all', () => {
+    const plan: Plan = {
+      serial: 0,
+      actions: [
+        {
+          type: 'UPDATE',
+          resourceType: 'x',
+          name: 'a',
+          planned: {},
+          after: { tags: ['b'] },
+          sensitive: [['tags']],
+          changes: { tags: { old: ['a'], new: ['b'] } },
+        },
+      ],
+      outputs: {},
+      prevRun: {},
+      prior: { 'x.a': { resourceType: 'x', name: 'a', attributes: { tags: ['a'] }, sensitive: [['tags']] } },
+      schemas: { x: { tags: { type: members } } },
+      dataSources: {},
+      readAtApply: [],
+    };
+    const printed: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => printed.push(stripVTControlCharacters(args.join(' '))));
+
+    displayPlan(plan);
+
+    expect(printed).toContain('      tags: (sensitive value) -> (sensitive value)');
+    expect(printed.join('\n')).not.toMatch(/"a"|"b"/);
+  });
+});
