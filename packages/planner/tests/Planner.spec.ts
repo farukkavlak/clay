@@ -80,6 +80,24 @@ describe('Planner', () => {
     expect(plan([desiredResource('r', planned)], stateWith('r', planned))[0]).not.toHaveProperty('sensitive');
   });
 
+  it('says a no-op changes which parts are sensitive where the state marks other parts, and only then', () => {
+    const planned = { path: 'x', size: 'large' };
+    const markedIn = (sensitive: string[][]) => {
+      const state = stateWith('r', planned);
+      state.resources['mock_resource.r'].sensitive = sensitive;
+      return state;
+    };
+    const desired = { ...desiredResource('r', planned), sensitive: [['size']] };
+
+    expect(plan([desired], stateWith('r', planned))[0]).toMatchObject({ type: 'NO_OP', marksChange: true });
+    expect(plan([desiredResource('r', planned)], markedIn([['size']]))[0]).toMatchObject({ type: 'NO_OP', marksChange: true });
+    expect(plan([desired], markedIn([['path']]))[0]).toMatchObject({ type: 'NO_OP', marksChange: true });
+    expect(plan([desired], markedIn([['size']]))[0]).not.toHaveProperty('marksChange');
+    expect(plan([{ ...desired, sensitive: [['size'], ['path']] }], markedIn([['path'], ['size']]))[0]).not.toHaveProperty('marksChange');
+    expect(plan([desiredResource('r', planned)], stateWith('r', planned))[0]).not.toHaveProperty('marksChange');
+    expect(plan([desired], stateWith('r', { path: 'x', size: 'small' }))[0]).not.toHaveProperty('marksChange');
+  });
+
   // The configuration is unchanged; the change comes from the provider's plan.
   it('plans the change from what the provider plans, not from the configuration alone', () => {
     const desired = { ...desiredResource('r', { path: 'x' }), after: { path: 'x', made: UNKNOWN } };

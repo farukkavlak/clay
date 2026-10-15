@@ -291,12 +291,13 @@ configuration hits each of these early.
       Terraform's `sensitive_attributes` does, and the values as they are. A provider is
       sent no mark. Only what the configuration gives is marked: a value a provider
       works out from one is not
+- [x] A plan whose only change is which parts of a resource are sensitive plans an
+      update, and its apply writes the new marks to state without the provider. It said
+      "No changes" and the state kept the old mark. Terraform plans an update too
 - [ ] A resource attribute given a sensitive value is hidden in the plan, under "Changed
       outside Clay" and in `clay state show`: `content = (sensitive value)`, as
-      Terraform prints it. A plan whose only change is which parts are sensitive says
-      "No changes" and its apply writes nothing, so the state keeps the old mark until
-      another change is applied; Terraform plans an update and says the value will be
-      marked, or marked no more
+      Terraform prints it. A change only in which parts are sensitive names the
+      attributes that are marked, or marked no more, as Terraform's warning does
 - [ ] An error about a resource quotes a sensitive value: what the plan showed against
       what it comes to now, a provider result that is off its plan, and a provider's own
       message, as in `random_string "length": 424242.5 is not a whole number`

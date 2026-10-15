@@ -318,6 +318,16 @@ describe('reading a plan file', () => {
     expect(read(keyed(1.5))).toThrow('tfplan.json is not a plan file: an instance key: 1.5 is not a whole number');
   });
 
+  it.each([
+    ['anything but true', 'NO_OP', 'yes'],
+    ['false', 'NO_OP', false],
+    ['on a delete', 'DELETE', true],
+  ])('refuses a change in which parts are sensitive that is %s', (_, type, marksChange) => {
+    const content = { ...fields(), actions: [{ type, resourceType: 'null_resource', name: 'a', marksChange }] };
+
+    expect(read(content)).toThrow(/^tfplan\.json is not a plan file$/);
+  });
+
   it('names a sensitive index that is not whole', () => {
     const content = { ...fields(), actions: [{ type: 'NO_OP', resourceType: 'null_resource', name: 'a', sensitive: [['triggers', 1.5]] }] };
 

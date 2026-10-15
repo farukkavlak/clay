@@ -9,12 +9,12 @@ import { styleText } from 'node:util';
 import { confirm } from '../confirm';
 import { newOrchestrator } from '../engine';
 import { describeError } from '../describeError';
-import { actionLine, changesNothing, displayPlan, readLine } from '../showPlan';
+import { actionLine, changesNothing, displayPlan, readLine, shownType } from '../showPlan';
 import { refreshOption } from '../refreshOption';
 
 /** Counts as the plan summary does: a replace is one add and one destroy. */
 function summarize(applied: PlanAction[], forgotten: number): string {
-  const count = (type: PlanAction['type']) => applied.filter((action) => action.type === type).length;
+  const count = (type: PlanAction['type']) => applied.filter((action) => shownType(action) === type).length;
   const replaced = count('REPLACE');
   const moved = applied.filter((action) => action.movedFrom).length;
 
