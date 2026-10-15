@@ -101,10 +101,13 @@ An error raised while a value is worked out does not quote a sensitive one:
 `enabled: (sensitive value) is not a boolean, which is "true" or "false"`. A resource
 attribute given a sensitive value is sensitive where it is read back, so
 `local_file.conf.content` in a root output needs `sensitive = true` too. The state keeps
-which parts of each resource are sensitive beside its values. A value a provider works
+which parts of each resource are sensitive beside its values. `plan`, its "Changed
+outside Clay" and `clay state show` print `(sensitive value)` for each sensitive part,
+on both sides of a change where either side is sensitive, and name each attribute whose
+sensitive parts change: `content: will be marked sensitive`. A value a provider works
 out from a sensitive one is not sensitive, nor is what a data source given one reads.
-One thing is still open: the plan, "Changed outside Clay", `clay state show` and an error
-about a resource, a provider's own among them, still show such an attribute.
+One thing is still open: an error about a resource, a provider's own among them, still
+quotes such an attribute.
 
 A local is a value with a name: `locals { name = "${var.prefix}-x" }` is read as
 `local.name`. It may read anything, another local among them, and is worked out once for

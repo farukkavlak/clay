@@ -1,9 +1,10 @@
-import { Address, Resource, State } from '@clay/contracts';
+import { Address, Resource, sensitiveUnder, State } from '@clay/contracts';
 import { mapDependencies, moveResource, StateManager } from '@clay/state';
 import { Command } from 'commander';
 import { styleText } from 'node:util';
 
 import { exists } from '../exists';
+import { show } from '../showPlan';
 import { stateFile } from '../stateFile';
 
 function getStateManager(backend = stateFile()): StateManager {
@@ -72,7 +73,7 @@ export function createStateCommand(): Command {
 
         console.log(styleText('bold', `# ${address}:`));
         console.log(`resource "${resource.resourceType}" "${resource.name}" {`);
-        for (const [key, value] of Object.entries(resource.attributes || {})) console.log(`  ${key} = ${JSON.stringify(value)}`);
+        for (const [key, value] of Object.entries(resource.attributes || {})) console.log(`  ${key} = ${show(value, sensitiveUnder(resource.sensitive ?? [], key))}`);
 
         console.log('}');
       } catch (error) {

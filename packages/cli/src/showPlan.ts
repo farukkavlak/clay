@@ -1,4 +1,4 @@
-import { Address, isRecord, isUnknown, Output, Schema, SENSITIVE } from '@clay/contracts';
+import { Address, AttributePath, isRecord, isUnknown, Output, samePaths, Schema, SENSITIVE, sensitiveUnder } from '@clay/contracts';
 import { changedOutside, Changes, Drift, OutputChanges, Plan, PlanAction } from '@clay/planner';
 import { isDeepStrictEqual, styleText } from 'node:util';
 
@@ -39,21 +39,22 @@ function pastTense(actionType: PlanAction['type']): string {
   return styleText('red', 'destroyed');
 }
 
-/** Built by hand, since no JSON text can stand for an unknown inside a value. */
-function show(value: unknown): string {
+/** Built by hand, since no JSON text can stand for an unknown inside a value. That a part is sensitive tells more than that it is not known. */
+export function show(value: unknown, sensitive: readonly AttributePath[] = []): string {
+  if (sensitive.some((path) => path.length === 0)) return SENSITIVE;
   if (isUnknown(value)) return '(known after apply)';
-  if (Array.isArray(value)) return `[${value.map((item) => show(item)).join(',')}]`;
+  if (Array.isArray(value)) return `[${value.map((item, index) => show(item, sensitiveUnder(sensitive, index))).join(',')}]`;
   // Numbers are ExactNumbers, which JSON.stringify writes exactly.
   if (isRecord(value))
     return `{${Object.entries(value)
-      .map(([key, item]) => `${JSON.stringify(key)}:${show(item)}`)
+      .map(([key, item]) => `${JSON.stringify(key)}:${show(item, sensitiveUnder(sensitive, key))}`)
       .join(',')}}`;
 
   return JSON.stringify(value);
 }
 
-function showOr(value: unknown, whenAbsent: string): string {
-  return value === undefined ? whenAbsent : show(value);
+function showOr(value: unknown, whenAbsent: string, sensitive: readonly AttributePath[]): string {
+  return value === undefined ? whenAbsent : show(value, sensitive);
 }
 
 /** `will be created` when `planned`, `created` after apply. */
@@ -81,23 +82,44 @@ function displayMembers(old: unknown[], next: unknown[], indent: string): void {
   if (unchanged > 0) console.log(`${indent}(${unchanged} unchanged)`);
 }
 
-function displayChanges(changes: Changes, schema: Schema): void {
+/** `sensitive` holds the parts marked before the change and after it: a part marked on either side is hidden on both. */
+function displayChanges(changes: Changes, schema: Schema, sensitive: readonly AttributePath[]): void {
   for (const [key, change] of Object.entries(changes)) {
+    const under = sensitiveUnder(sensitive, key);
     const isSet = Object.hasOwn(schema, key) && schema[key].type.kind === 'set';
-    if (isSet && Array.isArray(change.old) && Array.isArray(change.new)) {
+    if (isSet && under.length === 0 && Array.isArray(change.old) && Array.isArray(change.new)) {
       console.log(`      ${key}:`);
       displayMembers(change.old, change.new, '        ');
     }
-    // An unknown, added or removed set has no members on one side to compare.
-    else console.log(`      ${key}: ${showOr(change.old, '(none)')} -> ${showOr(change.new, '(removed)')}`);
+    // An unknown, added or removed set has no members on one side to compare, and a sensitive one shows none.
+    else console.log(`      ${key}: ${showOr(change.old, '(none)', under)} -> ${showOr(change.new, '(removed)', under)}`);
   }
 }
 
-function displayAction(action: PlanAction, schemas: Plan['schemas']): void {
-  console.log(actionLine(action, true));
+function marksNote(before: AttributePath[], after: AttributePath[]): string | undefined {
+  if (samePaths(before, after)) return undefined;
+  if (before.length === 0) return 'will be marked sensitive';
+  if (after.length === 0) return 'will no longer be marked sensitive';
+  return 'which parts are sensitive changes';
+}
 
-  if ((action.type === 'UPDATE' || action.type === 'REPLACE') && action.changes) displayChanges(action.changes, schemas[action.resourceType]);
-  if (action.marksChange) console.log('      only which parts are sensitive changes');
+/** Each attribute whose sensitive parts change, whether or not its value does. */
+function displayMarks(before: AttributePath[], after: AttributePath[]): void {
+  for (const key of new Set([...before, ...after].map(([attribute]) => String(attribute)))) {
+    const note = marksNote(sensitiveUnder(before, key), sensitiveUnder(after, key));
+    if (note) console.log(`      ${key}: ${note}`);
+  }
+}
+
+function displayAction(action: PlanAction, plan: Plan): void {
+  console.log(actionLine(action, true));
+  if (shownType(action) !== 'UPDATE' && action.type !== 'REPLACE') return;
+
+  // The plan holds a moved resource where it was before the move.
+  const before = plan.prior[action.movedFrom ?? Address.of(action).toString()]?.sensitive ?? [];
+  const after = action.sensitive ?? [];
+  if (action.changes) displayChanges(action.changes, plan.schemas[action.resourceType], [...before, ...after]);
+  displayMarks(before, after);
 }
 
 function displayChangedOutside({ address, changes }: Drift, plan: Plan): void {
@@ -107,7 +129,8 @@ function displayChangedOutside({ address, changes }: Drift, plan: Plan): void {
   }
 
   console.log(`  ${styleText('yellow', '~')} ${address} was changed outside Clay`);
-  displayChanges(changes, plan.schemas[plan.prevRun[address].resourceType]);
+  // A refresh changes values, never marks.
+  displayChanges(changes, plan.schemas[plan.prevRun[address].resourceType], plan.prevRun[address].sensitive ?? []);
 }
 
 function displayDrift(drift: Drift[], plan: Plan): void {
@@ -171,7 +194,7 @@ export function displayPlan(plan: Plan): void {
   const changing = plan.actions.filter((action) => changes(action));
   if (changing.length > 0) {
     console.log(styleText('bold', '\nClay will perform the following actions:\n'));
-    for (const action of changing) displayAction(action, plan.schemas);
+    for (const action of changing) displayAction(action, plan);
     // Only a change makes a read wait, so reads come with actions. The summary counts no read.
     for (const address of plan.readAtApply) console.log(readLine(address, true));
   }
