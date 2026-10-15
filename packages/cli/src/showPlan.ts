@@ -4,9 +4,14 @@ import { isDeepStrictEqual, styleText } from 'node:util';
 
 import { typeName } from './typeName';
 
-/** A move changes state, so a plan that only moves still has work to do. */
+/** A move or a change of marks changes state. */
 function changes(action: PlanAction): boolean {
-  return action.type !== 'NO_OP' || action.movedFrom !== undefined;
+  return action.type !== 'NO_OP' || action.movedFrom !== undefined || action.marksChange === true;
+}
+
+/** A no-op that changes which parts are sensitive shows and counts as an update. */
+export function shownType(action: PlanAction): PlanAction['type'] {
+  return action.marksChange ? 'UPDATE' : action.type;
 }
 
 /** Apply writes drift into state, so a plan that found drift has work to do. */
@@ -55,10 +60,11 @@ function showOr(value: unknown, whenAbsent: string): string {
 export function actionLine(action: PlanAction, planned: boolean): string {
   const address = Address.of(action).toString();
   const will = planned ? 'will be ' : '';
-  if (action.type === 'NO_OP') return `  ${styleText('cyan', '>')} ${address} ${will}moved from ${action.movedFrom}`;
+  const type = shownType(action);
+  if (type === 'NO_OP') return `  ${styleText('cyan', '>')} ${address} ${will}moved from ${action.movedFrom}`;
 
   const moved = action.movedFrom ? `, moved from ${action.movedFrom}` : '';
-  return `  ${actionSymbol(action.type)} ${address} ${will}${pastTense(action.type)}${moved}`;
+  return `  ${actionSymbol(type)} ${address} ${will}${pastTense(type)}${moved}`;
 }
 
 function without(members: unknown[], others: unknown[]): unknown[] {
@@ -91,6 +97,7 @@ function displayAction(action: PlanAction, schemas: Plan['schemas']): void {
   console.log(actionLine(action, true));
 
   if ((action.type === 'UPDATE' || action.type === 'REPLACE') && action.changes) displayChanges(action.changes, schemas[action.resourceType]);
+  if (action.marksChange) console.log('      only which parts are sensitive changes');
 }
 
 function displayChangedOutside({ address, changes }: Drift, plan: Plan): void {
@@ -144,7 +151,7 @@ function displayOutputChanges(outputs: OutputChanges): void {
 
 /** A replace counts as one add and one destroy. */
 function displaySummary(actions: PlanAction[]): void {
-  const count = (type: PlanAction['type']) => actions.filter((action) => action.type === type).length;
+  const count = (type: PlanAction['type']) => actions.filter((action) => shownType(action) === type).length;
   const replaced = count('REPLACE');
   const moved = actions.filter((action) => action.movedFrom).length;
 

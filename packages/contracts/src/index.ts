@@ -105,6 +105,14 @@ export function isAttributePaths(paths: unknown): paths is AttributePath[] {
   return Array.isArray(paths) && paths.every((path) => isAttributePath(path));
 }
 
+/** The order follows how the configuration is written, so it says nothing. */
+export function samePaths(one: readonly AttributePath[], other: readonly AttributePath[]): boolean {
+  const spelled = (paths: readonly AttributePath[]) => new Set(paths.map((path) => JSON.stringify(path)));
+  const [left, right] = [spelled(one), spelled(other)];
+
+  return left.size === right.size && [...left].every((path) => right.has(path));
+}
+
 /** An index in a path read from a file is a plain number, where every other number read from one is exact. */
 export function readPaths(paths: unknown, what: string): unknown {
   if (!Array.isArray(paths)) return paths;

@@ -20,6 +20,7 @@ import {
   readPaths,
   readResources,
   Resource,
+  samePaths,
   Schema,
   State,
   Type,
@@ -68,6 +69,8 @@ export interface PlanAction {
   after?: Record<string, unknown>;
   /** The steps to each sensitive part of the resource as the plan leaves it, a no-op too. Left out where there is none. */
   sensitive?: AttributePath[];
+  /** On a no-op: the values stay, which parts are sensitive changes. */
+  marksChange?: true;
   changes?: Changes;
   dependencies?: string[];
 }
@@ -89,7 +92,7 @@ export interface Plan {
 }
 
 /** Bump on any change to the file's shape after a release, so an older plan file is refused instead of misread. */
-export const PLAN_FILE_VERSION = '24.0';
+export const PLAN_FILE_VERSION = '25.0';
 
 export interface PlanFile extends Plan {
   version: string;
@@ -236,12 +239,17 @@ function carriesValues(action: Record<string, unknown>): boolean {
   return marked && [action.planned, action.after].every((values) => (values === undefined ? !sends : sends && isChanges(values)));
 }
 
+function isMarksChange(action: Record<string, unknown>): boolean {
+  return action.marksChange === undefined || (action.marksChange === true && action.type === 'NO_OP');
+}
+
 function isAction(action: unknown): boolean {
   return (
     isRecord(action) &&
     (action.modulePath === undefined || isModulePath(action.modulePath)) &&
     (action.key === undefined || isInstanceKey(action.key)) &&
     isMovedFrom(action) &&
+    isMarksChange(action) &&
     (action.changes === undefined || isChanges(action.changes)) &&
     carriesValues(action)
   );
@@ -557,6 +565,7 @@ function processExistingResource(actions: PlanAction[], desired: DesiredResource
       ...desired.address.fields(),
       ...(moved && { movedFrom: moved }),
       ...marked(desired),
+      ...(!samePaths(currentResource.sensitive ?? [], desired.sensitive) && { marksChange: true }),
       dependencies: desired.dependencies,
     });
     return;

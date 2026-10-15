@@ -1,9 +1,8 @@
-import { Address, ModuleAddress, Output, Resource, Schema, State } from '@clay/contracts';
+import { Address, ModuleAddress, Output, Resource, samePaths, Schema, State } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { AttributeValue, DataBlock, ResourceBlock, spell, spellReference, Statement } from '@clay/parser';
 import { DesiredResource, hasChanges } from '@clay/planner';
 import { moveResource } from '@clay/state';
-import { isDeepStrictEqual } from 'node:util';
 
 import { writtenAt } from '../conformValues';
 import { countFrom } from '../count';
@@ -217,7 +216,7 @@ export class DesiredStateBuilder {
     const change = await this.askProvider(address, block, current, this.resolveForPlan(block, state, address));
     const values = changes(current, change);
     // A change of values or of marks goes in, so a reader takes the marks from the plan too.
-    if (values || !isDeepStrictEqual(current?.sensitive ?? [], change.sensitive)) this.planned.set(address.toString(), change.after, change.sensitive, values);
+    if (values || !samePaths(current?.sensitive ?? [], change.sensitive)) this.planned.set(address.toString(), change.after, change.sensitive, values);
 
     return { address, block, attributes: change.config, after: change.after, sensitive: change.sensitive, replace: change.replace, dependencies, ...(movedFrom && { movedFrom }) };
   }
