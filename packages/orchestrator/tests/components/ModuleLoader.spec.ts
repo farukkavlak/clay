@@ -27,6 +27,7 @@ describe('ModuleLoader', () => {
   });
 
   // Spreading every resource into one call would overflow the stack on a large module.
+  // Parsing 200,000 blocks takes seconds alone and longer beside the rest of the suite.
   it('loads a large module two levels down', async () => {
     const count = 200_000;
     const big = Array.from({ length: count }, (_, i) => `resource "null_resource" "r${i}" {}`).join('\n');
@@ -37,7 +38,7 @@ describe('ModuleLoader', () => {
     expect(resources).toHaveLength(count);
     expect(resources[0].uniqueId).toBe('module.a.module.big.null_resource.r0');
     expect(resources.at(-1)?.uniqueId).toBe(`module.a.module.big.null_resource.r${count - 1}`);
-  });
+  }, 30_000);
 
   it('reads a module two blocks call once per load, so a file changed between them is loaded as it was first read', async () => {
     let reads = 0;
