@@ -271,9 +271,10 @@ configuration hits each of these early.
 - [ ] A `for` not known yet is sensitive as a whole or not at all. So `length` of one
       whose body reads a sensitive value is refused in a root output that is not marked,
       and `for_each = { for v in ... : v => module.db.password }` is refused as if its
-      keys were sensitive, where a plan said it must be known and `validate` took it. Three things make it so: a sensitive key
-      or body, a sensitive part of the collection, and a key not known yet. A step that
-      stands for every item would keep the mark on the items alone
+      keys were sensitive, where a plan said it must be known and `validate` took it.
+      Three things make it so: a sensitive key or body, a sensitive part of the
+      collection, and a key not known yet. A step that stands for every item would keep
+      the mark on the items alone
 - [x] A key of a `for` over a collection not known yet is checked at plan, as one over
       a known collection is. `{ for v in tolist(toset([random_string.r.result])) : [v] => v }`
       is refused by `validate` and the plan, where the apply refused the key after
@@ -282,13 +283,24 @@ configuration hits each of these early.
 - [ ] A `for` written as a key passes the plan while it is not known, since it has no
       type until then: `{ for v in var.l : [for c in <not known yet> : c] => v }` is
       refused only by the apply, as a tuple
-- [ ] A resource attribute given a sensitive value is hidden in the plan and under
-      "Changed outside Clay": `content = (sensitive value)`, as Terraform prints it. A
-      plan file and the state keep which parts of a resource are sensitive, as
-      Terraform's `sensitive_attributes` does, so what reads the attribute later is
-      sensitive too. An error about a resource still quotes one: what the plan showed
-      against what it comes to now, a provider result that is off its plan, and a
-      provider's own message, as in `random_string "length": 424242.5 is not a whole number`
+- [x] A resource attribute given a sensitive value is sensitive where it is read back,
+      from the plan or from the state: `local_file.conf.content` in a root output that
+      is not marked is refused, and so is a `for_each` given it. A plan file and the
+      state keep which parts of a resource are sensitive beside its values, as
+      Terraform's `sensitive_attributes` does, and the values as they are. A provider is
+      sent no mark. Only what the configuration gives is marked: a value a provider
+      works out from one is not
+- [ ] A resource attribute given a sensitive value is hidden in the plan, under "Changed
+      outside Clay" and in `clay state show`: `content = (sensitive value)`, as
+      Terraform prints it. A plan whose only change is which parts are sensitive says
+      "No changes" and its apply writes nothing, so the state keeps the old mark until
+      another change is applied; Terraform plans an update and says the value will be
+      marked, or marked no more
+- [ ] An error about a resource quotes a sensitive value: what the plan showed against
+      what it comes to now, a provider result that is off its plan, and a provider's own
+      message, as in `random_string "length": 424242.5 is not a whole number`
+- [ ] A data source given a sensitive value gives it back unmarked: what it reads is
+      not sensitive. Terraform marks the same parts of what it read
 - [ ] Other places a sensitive value starts: `sensitive = true` on a variable, an
       attribute a provider's schema marks, and the functions `sensitive` and
       `nonsensitive`, as Terraform has them

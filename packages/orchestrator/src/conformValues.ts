@@ -4,7 +4,7 @@ import { DataBlock, Position, ResourceBlock } from '@clay/parser';
 import { setOf } from './setMembers';
 import { shown } from './shown';
 import { items, spelled } from './spelled';
-import { article, child, described, HIDDEN, isAllSensitive, isSensitive, unordered, Value, valueOf, withSensitive } from './Value';
+import { article, child, described, HIDDEN, isAllSensitive, isSensitive, plainOf, unordered, Value, valueOf, withSensitive } from './Value';
 import { ObjectType, withLeftOut } from './withLeftOut';
 
 /** Carries the attribute, so the caller can report its position; undefined for a missing attribute. */
@@ -198,12 +198,17 @@ function checkNames(resource: string, schema: Schema, config: Record<string, Val
 }
 
 /**
- * Converts configuration values to the schema's types, as the provider receives them. A name set to null is dropped.
+ * Converts configuration values to the schema's types, keeping their marks. A name set to null is dropped.
  * Names are checked here too, since a saved plan's values reach the apply without the load-time check.
  */
-export function conformValues(resource: string, schema: Schema, config: Record<string, Value>): Record<string, unknown> {
+export function conformed(resource: string, schema: Schema, config: Record<string, Value>): Record<string, Value> {
   checkNames(resource, schema, config);
 
   const given = Object.entries(config).filter(([, value]) => value.data !== null);
-  return Object.fromEntries(given.map(([name, value]) => [name, converted(resource, value, schema[name].type, [name]).data]));
+  return Object.fromEntries(given.map(([name, value]) => [name, converted(resource, value, schema[name].type, [name])]));
+}
+
+/** As the provider receives them, which sees no mark. */
+export function conformValues(resource: string, schema: Schema, config: Record<string, Value>): Record<string, unknown> {
+  return plainOf(conformed(resource, schema, config));
 }

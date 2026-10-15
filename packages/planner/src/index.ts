@@ -4,6 +4,7 @@ import {
   containsUnknown,
   ExactNumber,
   InstanceKey,
+  isAttributePaths,
   isInstanceKey,
   isOutput,
   isModulePath,
@@ -16,6 +17,7 @@ import {
   Output,
   own,
   parseDataAddress,
+  readPaths,
   readResources,
   Resource,
   Schema,
@@ -38,6 +40,8 @@ export interface DesiredResource {
   attributes: Record<string, unknown>;
   /** As the provider plans it after apply; UNKNOWN where only the apply knows a value. */
   after: Record<string, unknown>;
+  /** The steps to each sensitive part of the configuration it was given. */
+  sensitive: AttributePath[];
   replace: boolean;
   dependencies: string[];
   /** Its state address before count was added or removed; the state it was planned against already has the move. */
@@ -62,6 +66,8 @@ export interface PlanAction {
   planned?: Record<string, unknown>;
   /** As the provider planned it after apply. */
   after?: Record<string, unknown>;
+  /** The steps to each sensitive part of the resource as the plan leaves it, a no-op too. Left out where there is none. */
+  sensitive?: AttributePath[];
   changes?: Changes;
   dependencies?: string[];
 }
@@ -83,7 +89,7 @@ export interface Plan {
 }
 
 /** Bump on any change to the file's shape after a release, so an older plan file is refused instead of misread. */
-export const PLAN_FILE_VERSION = '23.0';
+export const PLAN_FILE_VERSION = '24.0';
 
 export interface PlanFile extends Plan {
   version: string;
@@ -175,10 +181,6 @@ export function serializePlan(plan: Plan, configContent: string, modules: Record
   return JSON.stringify(file, undefined, 2);
 }
 
-function isPath(path: unknown): path is AttributePath {
-  return Array.isArray(path) && path.every((step) => typeof step === 'string' || typeof step === 'number');
-}
-
 /** A path that is a prefix of another would nest an unknown inside an unknown. */
 function overlaps(paths: AttributePath[]): boolean {
   return paths.some((path, i) => paths.some((other, j) => i !== j && path.length <= other.length && path.every((step, k) => other[k] === step)));
@@ -189,7 +191,7 @@ function isUnknownPaths(change: Record<string, unknown>): boolean {
   const { unknown } = change;
   if (unknown === undefined) return true;
 
-  return Array.isArray(unknown) && unknown.every((path) => isPath(path) && lands(change.new, path)) && !overlaps(unknown as AttributePath[]);
+  return isAttributePaths(unknown) && unknown.every((path) => lands(change.new, path)) && !overlaps(unknown);
 }
 
 /** Checked here, so a malformed change fails at the file and not deep in the apply. */
@@ -225,11 +227,13 @@ function isMovedFrom(action: Record<string, unknown>): boolean {
 
 const SENDS_VALUES = new Set<ActionType>(['CREATE', 'UPDATE', 'REPLACE']);
 
-/** Create, update and replace carry `planned` and `after`; other actions carry neither. */
+/** Create, update and replace carry `planned` and `after`; other actions carry neither. Any may carry which parts are sensitive. */
 function carriesValues(action: Record<string, unknown>): boolean {
   const sends = SENDS_VALUES.has(action.type as ActionType);
 
-  return [action.planned, action.after].every((values) => (values === undefined ? !sends : sends && isChanges(values)));
+  const marked = action.sensitive === undefined || isAttributePaths(action.sensitive);
+
+  return marked && [action.planned, action.after].every((values) => (values === undefined ? !sends : sends && isChanges(values)));
 }
 
 function isAction(action: unknown): boolean {
@@ -307,13 +311,6 @@ function childrenOf(node: Record<string, unknown>): unknown[] {
   return [];
 }
 
-/** Indexes in an attribute path read back as plain numbers. */
-function readSteps(path: unknown): unknown {
-  if (!Array.isArray(path)) return path;
-
-  return path.map((step: unknown) => (step instanceof ExactNumber ? step.toSafeInteger('an index') : step));
-}
-
 function readReferenceSteps(steps: unknown): unknown {
   if (!Array.isArray(steps)) return steps;
 
@@ -337,11 +334,12 @@ function readNode(node: unknown): void {
 function readUnknownPaths(changes: unknown): void {
   if (!isRecord(changes)) return;
 
-  for (const change of Object.values(changes)) if (isRecord(change) && Array.isArray(change.unknown)) change.unknown = change.unknown.map((path: unknown) => readSteps(path));
+  for (const change of Object.values(changes)) if (isRecord(change) && change.unknown !== undefined) change.unknown = readPaths(change.unknown, 'an index');
 }
 
 function readAction(action: Record<string, unknown>): void {
   if (action.key instanceof ExactNumber) action.key = action.key.toSafeInteger('an instance key');
+  if (action.sensitive !== undefined) action.sensitive = readPaths(action.sensitive, 'a sensitive index');
   readUnknownPaths(action.changes);
   readUnknownPaths(action.planned);
   readUnknownPaths(action.after);
@@ -350,7 +348,7 @@ function readAction(action: Record<string, unknown>): void {
   if (isRecord(action.attributes)) for (const node of Object.values(action.attributes)) readNode(node);
 }
 
-/** The serial, action keys, positions, indexes and unknown paths are plain numbers; every other number is a value and stays exact. */
+/** The serial, action keys, positions, indexes, unknown and sensitive paths are plain numbers; every other number is a value and stays exact. */
 function readPlan(content: string): unknown {
   const read = ExactNumber.readJSON(content);
   if (!isRecord(read)) return read;
@@ -544,6 +542,10 @@ export function hasChanges(currentAttrs: Record<string, unknown>, after: Record<
   return calculateDiff(currentAttrs, after) !== null;
 }
 
+function marked({ sensitive }: DesiredResource): Pick<PlanAction, 'sensitive'> {
+  return sensitive.length > 0 ? { sensitive } : {};
+}
+
 function processExistingResource(actions: PlanAction[], desired: DesiredResource, currentResource: Resource) {
   const moved = desired.movedFrom;
   const resource = desired.block;
@@ -554,6 +556,7 @@ function processExistingResource(actions: PlanAction[], desired: DesiredResource
       type: 'NO_OP',
       ...desired.address.fields(),
       ...(moved && { movedFrom: moved }),
+      ...marked(desired),
       dependencies: desired.dependencies,
     });
     return;
@@ -566,6 +569,7 @@ function processExistingResource(actions: PlanAction[], desired: DesiredResource
     attributes: resource.attributes,
     planned: desired.attributes,
     after: desired.after,
+    ...marked(desired),
     changes: changes ?? {},
     dependencies: desired.dependencies,
   });
@@ -589,6 +593,7 @@ export function plan(desiredResources: DesiredResource[], currentState: State): 
         attributes: desired.block.attributes,
         planned: desired.attributes,
         after: desired.after,
+        ...marked(desired),
         dependencies: desired.dependencies,
       });
   }

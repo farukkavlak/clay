@@ -46,6 +46,16 @@ describe('a state file that is not valid state', () => {
       '"local_file.a" is not a resource',
     ],
     [
+      'a resource whose sensitive parts are not steps',
+      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"sensitive":"content"}}}`,
+      '"local_file.a" is not a resource',
+    ],
+    [
+      'a resource with a sensitive index that is not whole',
+      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"sensitive":[["content",1.5]]}}}`,
+      'a sensitive index of "local_file.a": 1.5 is not a whole number',
+    ],
+    [
       'a resource filed under another address',
       `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"b","attributes":{}}}}`,
       '"local_file.a" holds local_file.b',

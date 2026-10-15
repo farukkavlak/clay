@@ -76,14 +76,34 @@ describe('ResourceResolver', () => {
     expect(named.resolve(ref('resource.test.note'), context, mockState).value).toEqual(valueOf(types.string, null));
   });
 
+  it('reads each attribute with the parts of it the state says are sensitive', () => {
+    const state = { ...mockState, resources: { 'resource.test': { ...mockState.resources['resource.test'], sensitive: [['simple'], ['settings', 'value']] } } };
+    const read = (spelled: string) => resolver.resolve(ref(spelled), context, state).value.sensitive;
+
+    expect(read('resource.test.simple')).toEqual([[]]);
+    expect(read('resource.test.settings')).toEqual([['value']]);
+    expect(read('resource.test.id')).toBeUndefined();
+  });
+
   // A resource the plan creates or changes is read from the plan, not state.
   describe('an instance the plan will create or change', () => {
     const planned = new Planned();
-    planned.set('resource.test', { simple: 'new', later: UNKNOWN, made: UNKNOWN });
+    planned.set('resource.test', { simple: 'new', later: UNKNOWN, made: UNKNOWN }, [], true);
     const planning = new ResourceResolver(new Instances(), planned, new Map([['resource', { made: { type: types.list(types.string), computed: true } }]]));
 
     it('reads what its configuration sets, not what state holds', () => {
       expect(planning.resolve(ref('resource.test.simple'), context, mockState).value.data).toBe('new');
+    });
+
+    it('reads each attribute with the parts of it the plan says are sensitive, whatever the state says', () => {
+      const marked = new Planned();
+      marked.set('resource.test', { simple: 'new', settings: { type: 'a', value: UNKNOWN } }, [['simple'], ['settings', 'value']], true);
+      const state = { ...mockState, resources: { 'resource.test': { ...mockState.resources['resource.test'], sensitive: [['id']] } } };
+      const read = (spelled: string) => new ResourceResolver(new Instances(), marked, new Map([['resource', {}]])).resolve(ref(spelled), context, state).value.sensitive;
+
+      expect(read('resource.test.simple')).toEqual([[]]);
+      expect(read('resource.test.settings')).toEqual([['value']]);
+      expect(read('resource.test.id')).toBeUndefined();
     });
 
     // It comes back unknown, so the caller can take the remaining steps.
@@ -143,13 +163,28 @@ describe('ResourceResolver', () => {
       expect(read(instances).value).toEqual(valueOf(types.map(item), { x: { id: 'ex', tags: {} } }));
     });
 
+    it('reads every instance with the sensitive parts of each, under its index or its key', () => {
+      const marked = {
+        ...state,
+        resources: { ...state.resources, 'item.a[1]': { ...held('one', { n: true }), sensitive: [['tags', 'n']] }, 'item.a["x"]': { ...held('ex', {}), sensitive: [['id']] } },
+      };
+      const each = new Instances();
+      each.declare('item.a', 'for_each');
+      each.setEach('item.a', new Map([['x', valueOf(types.string, 'x')]]));
+      const all = (instances: Instances) => new ResourceResolver(instances, new Planned(), schemas).resolve(ref('item.a'), context, marked).value.sensitive;
+
+      expect(all(counted(2))).toEqual([[1, 'tags', 'n']]);
+      expect(all(each)).toEqual([['x', 'id']]);
+      expect(read(counted(2)).value.sensitive).toBeUndefined();
+    });
+
     it('reads an empty list where count is 0', () => {
       expect(read(counted(0)).value).toEqual(valueOf(types.list(item), []));
     });
 
     it('reads an instance the plan creates from the plan, with what only the apply makes as unknown', () => {
       const planned = new Planned();
-      planned.set('item.a[1]', { id: UNKNOWN, tags: { n: 'new' } });
+      planned.set('item.a[1]', { id: UNKNOWN, tags: { n: 'new' } }, [], true);
 
       expect(read(counted(2), planned).value.data).toEqual([
         { id: 'zero', tags: { n: 'text' } },

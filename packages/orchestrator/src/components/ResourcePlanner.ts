@@ -1,17 +1,18 @@
 import { AttributePath, containsUnknown, own, PlannedChange, PlanRequest, Provider, Resource, Schema, valueAt } from '@clay/contracts';
 import { isDeepStrictEqual } from 'node:util';
 
-import { conformValues } from '../conformValues';
+import { conformed } from '../conformValues';
 import { heldBy } from '../providerResult';
 import { ProviderRegistry } from '../ProviderRegistry';
 import { shown } from '../shown';
-import { plainOf, Value } from '../Value';
+import { plainOf, sensitiveAmong, Value } from '../Value';
 
-/** `config` is converted to the schema, as the provider receives it. */
+/** `config` is converted to the schema, as the provider receives it. `sensitive` holds the steps to each sensitive part of it. */
 export interface ResourcePlan {
   after: Record<string, unknown>;
   replace: boolean;
   config: Record<string, unknown>;
+  sensitive: AttributePath[];
 }
 
 /** The configuration plus computed values from the refresh that the configuration does not set. */
@@ -57,21 +58,23 @@ export class ResourcePlanner {
   /** Validates first, since planning invalid values means nothing. Unknown values are validated again at apply. */
   async plan(type: string, schema: Schema, current: Resource | undefined, written: Record<string, Value>): Promise<ResourcePlan> {
     const provider = this.providers.get(type);
-    const config = conformValues(type, schema, written);
+    const given = conformed(type, schema, written);
+    const config = plainOf(given);
+    const sensitive = sensitiveAmong(given);
     await provider.validate(type, config);
-    if (!current) return this.create(provider, type, schema, config);
+    if (!current) return { ...(await this.create(provider, type, schema, config)), sensitive };
 
     const change = await this.ask(provider, type, schema, { prior: current.attributes, proposed: proposed(current.attributes, config, schema), config });
     if (!replaces(change.replace, current.attributes, change.after)) {
       checkKept(type, schema, current.attributes, change.after);
-      return { after: change.after, replace: false, config };
+      return { after: change.after, replace: false, config, sensitive };
     }
 
     // The old resource's values go with it, so the new one is planned from nothing.
-    return { ...(await this.create(provider, type, schema, config)), replace: true };
+    return { ...(await this.create(provider, type, schema, config)), replace: true, sensitive };
   }
 
-  private async create(provider: Provider, type: string, schema: Schema, config: Record<string, unknown>): Promise<ResourcePlan> {
+  private async create(provider: Provider, type: string, schema: Schema, config: Record<string, unknown>): Promise<Omit<ResourcePlan, 'sensitive'>> {
     const { after } = await this.ask(provider, type, schema, { prior: null, proposed: config, config });
 
     return { after, replace: false, config };

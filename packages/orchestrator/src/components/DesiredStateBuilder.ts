@@ -3,6 +3,7 @@ import { Graph } from '@clay/graph';
 import { AttributeValue, DataBlock, ResourceBlock, spell, spellReference, Statement } from '@clay/parser';
 import { DesiredResource, hasChanges } from '@clay/planner';
 import { moveResource } from '@clay/state';
+import { isDeepStrictEqual } from 'node:util';
 
 import { writtenAt } from '../conformValues';
 import { countFrom } from '../count';
@@ -47,6 +48,10 @@ function orLater<T>(parse: (value: Value) => T): (value: Value) => T | undefined
       return undefined;
     }
   };
+}
+
+function changes(current: Resource | undefined, { after, replace }: ResourcePlan): boolean {
+  return !current || replace || hasChanges(current.attributes, after);
 }
 
 /** `module.a` for `module.a.module.b` and `module.a.module.c`. */
@@ -156,7 +161,7 @@ export class DesiredStateBuilder {
    * A value not known yet comes only from such a change, so its inputs are known whenever it is read now.
    */
   private waitsForApply(blocks: string[], module: ModuleAddress): boolean {
-    return this.instancesOf(blocks, module).some((instance) => this.planned.get(instance) !== undefined);
+    return this.instancesOf(blocks, module).some((instance) => this.planned.get(instance)?.changes === true);
   }
 
   /** One value at a time, so an error points at the value, not the block. */
@@ -210,9 +215,11 @@ export class DesiredStateBuilder {
     const movedFrom = tryAt(block.position, spell(block), address, () => this.moveIn(address, state));
     const current = state.resources[address.toString()];
     const change = await this.askProvider(address, block, current, this.resolveForPlan(block, state, address));
-    if (!current || change.replace || hasChanges(current.attributes, change.after)) this.planned.set(address.toString(), change.after);
+    const values = changes(current, change);
+    // A change of values or of marks goes in, so a reader takes the marks from the plan too.
+    if (values || !isDeepStrictEqual(current?.sensitive ?? [], change.sensitive)) this.planned.set(address.toString(), change.after, change.sensitive, values);
 
-    return { address, block, attributes: change.config, after: change.after, replace: change.replace, dependencies, ...(movedFrom && { movedFrom }) };
+    return { address, block, attributes: change.config, after: change.after, sensitive: change.sensitive, replace: change.replace, dependencies, ...(movedFrom && { movedFrom }) };
   }
 
   private async askProvider(address: Address, block: ResourceBlock, current: Resource | undefined, attributes: Record<string, Value>): Promise<ResourcePlan> {

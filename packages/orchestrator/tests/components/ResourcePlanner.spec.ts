@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ResourcePlanner } from '../../src/components/ResourcePlanner';
 import { ProviderRegistry } from '../../src/ProviderRegistry';
-import { inferred, Value, valueOf } from '../../src/Value';
+import { allSensitive, inferred, Value, valueOf, withSensitive } from '../../src/Value';
 
 /** As the configuration writes them: a list is a tuple and a map an object. */
 const written = (config: Record<string, unknown>): Record<string, Value> => Object.fromEntries(Object.entries(config).map(([name, data]) => [name, valueOf(inferred(data), data)]));
@@ -40,7 +40,12 @@ describe('ResourcePlanner', () => {
   it('plans a change in place as its provider plans it', async () => {
     const config = { path: 'a', tags: { x: '2' } };
 
-    expect(await plannerFor(fakeProvider()).plan('thing', schema, current, written(config))).toEqual({ after: { ...config, made: UNKNOWN }, replace: false, config });
+    expect(await plannerFor(fakeProvider()).plan('thing', schema, current, written(config))).toEqual({
+      after: { ...config, made: UNKNOWN },
+      replace: false,
+      config,
+      sensitive: [],
+    });
   });
 
   it('plans a resource it replaces again, as one to create', async () => {
@@ -49,7 +54,7 @@ describe('ResourcePlanner', () => {
 
     const planned = await plannerFor(provider).plan('thing', schema, current, written(config));
 
-    expect(planned).toEqual({ after: { ...config, made: UNKNOWN }, replace: true, config });
+    expect(planned).toEqual({ after: { ...config, made: UNKNOWN }, replace: true, config, sensitive: [] });
     expect(provider.plan).toHaveBeenLastCalledWith('thing', { prior: null, proposed: config, config });
   });
 
@@ -62,7 +67,24 @@ describe('ResourcePlanner', () => {
 
     expect(provider.validate).toHaveBeenCalledWith('thing', converted);
     expect(provider.plan).toHaveBeenCalledWith('thing', { prior: null, proposed: converted, config: converted });
-    expect(planned).toEqual({ after: { ...converted, made: UNKNOWN }, replace: false, config: converted });
+    expect(planned).toEqual({ after: { ...converted, made: UNKNOWN }, replace: false, config: converted, sensitive: [] });
+  });
+
+  it('gives the steps to each sensitive part of what it was given, on a create, a change in place and a replace', async () => {
+    const tags = withSensitive(valueOf(types.object({ x: types.string, y: types.string }), { x: '2', y: 's' }), [['y']]);
+    const marked = (path: string) => ({ path: allSensitive(valueOf(types.string, path)), tags });
+    const sensitive = [['path'], ['tags', 'y']];
+
+    expect(await plannerFor(fakeProvider()).plan('thing', schema, undefined, marked('a'))).toMatchObject({ replace: false, sensitive });
+    expect(await plannerFor(fakeProvider()).plan('thing', schema, current, marked('a'))).toMatchObject({ replace: false, sensitive });
+    expect(await plannerFor(fakeProvider()).plan('thing', schema, current, marked('b'))).toMatchObject({ replace: true, sensitive });
+  });
+
+  it('sends the provider a sensitive value as it is, with no mark', async () => {
+    const provider = fakeProvider();
+    await plannerFor(provider).plan('thing', schema, undefined, { path: allSensitive(valueOf(types.string, 'a')) });
+
+    expect(provider.plan).toHaveBeenCalledWith('thing', { prior: null, proposed: { path: 'a' }, config: { path: 'a' } });
   });
 
   it('replaces only where a value the provider names changes', async () => {

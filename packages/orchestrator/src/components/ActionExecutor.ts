@@ -1,4 +1,4 @@
-import { Address, Provider, Resource, Schema, State } from '@clay/contracts';
+import { Address, AttributePath, Provider, Resource, Schema, State } from '@clay/contracts';
 import { offApply, offFinal, offPlan, PlanAction } from '@clay/planner';
 
 import { conformValues } from '../conformValues';
@@ -22,7 +22,14 @@ function held(action: PlanAction, state: State): Resource {
 interface Sending {
   inputs: Record<string, unknown>;
   after: Record<string, unknown>;
+  sensitive: AttributePath[];
   schema: Schema;
+}
+
+/** Left out where no part is, so a value sensitive no more loses its mark. */
+function mark(resource: Resource, sensitive: AttributePath[]): void {
+  if (sensitive.length > 0) resource.sensitive = sensitive;
+  else delete resource.sensitive;
 }
 
 export class ActionExecutor {
@@ -33,9 +40,9 @@ export class ActionExecutor {
   ) {}
 
   async execute(action: PlanAction, currentState: State): Promise<void> {
-    // A no-op only updates its dependencies, so it needs no provider.
+    // A no-op only updates its dependencies and which parts are sensitive, so it needs no provider.
     if (action.type === 'NO_OP') {
-      this.recordDependencies(action, currentState);
+      this.recordUnchanged(action, currentState);
       return;
     }
 
@@ -83,7 +90,7 @@ export class ActionExecutor {
     if (off) throw new Error(`the plan showed ${off.name} = ${shown(off.planned)}, but it now comes to ${shown(off.resolved)}. Plan again.`);
 
     const final = await this.finalPlan(action, schema, action.after, inputs, currentState);
-    return { inputs: final.config, after: final.after, schema };
+    return { inputs: final.config, after: final.after, sensitive: final.sensitive, schema };
   }
 
   /** A replace is planned as a create. The approved plan's known values must still hold. */
@@ -131,6 +138,7 @@ export class ActionExecutor {
       attributes,
       dependencies: action.dependencies ?? [],
     };
+    mark(currentState.resources[key], sending.sensitive);
     this.holdToPlan(action.resourceType, sending, attributes);
   }
 
@@ -142,12 +150,16 @@ export class ActionExecutor {
 
     currentResource.attributes = this.returned(sending, await provider.update(action.resourceType, request));
     currentResource.dependencies = action.dependencies ?? [];
+    mark(currentResource, sending.sensitive);
     this.holdToPlan(action.resourceType, sending, currentResource.attributes);
   }
 
-  /** Dependencies can change while values do not, so a no-op still updates them. */
-  private recordDependencies(action: PlanAction, currentState: State): void {
-    held(action, currentState).dependencies = action.dependencies ?? [];
+  /** Dependencies, and which parts are sensitive, can change while values do not, so a no-op still updates them. */
+  private recordUnchanged(action: PlanAction, currentState: State): void {
+    const resource = held(action, currentState);
+
+    resource.dependencies = action.dependencies ?? [];
+    mark(resource, action.sensitive ?? []);
   }
 
   async executeDelete(action: PlanAction, provider: Provider, currentState: State): Promise<void> {
