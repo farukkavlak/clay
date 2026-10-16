@@ -312,9 +312,10 @@ configuration hits each of these early.
 - [x] A data source given a sensitive value gives it back marked at the same parts, as
       Terraform does; what the provider computes stays plain. A plan holds the parts
       of what it read, so the apply keeps them
-- [ ] Other places a sensitive value starts: `sensitive = true` on a variable, an
-      attribute a provider's schema marks, and the functions `sensitive` and
-      `nonsensitive`, as Terraform has them
+- [x] Other places a sensitive value starts: `sensitive = true` on a variable, an
+      attribute a provider's schema marks, and the functions `sensitive`, `nonsensitive`
+      and `issensitive`, as Terraform has them. The schema flag marks a top-level attribute
+      as a whole, null or not
 - [x] A module `source` has a kind. Terraform reads a local path only when it starts with
       `./` or `../` and treats anything else as a registry address; Clay joins whatever it
       is onto the parent directory, so an absolute path is read as well

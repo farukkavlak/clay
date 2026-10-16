@@ -10,6 +10,7 @@ export interface VariableValue {
   context: ModuleAddress | ModuleCall;
   type?: Type;
   defaults?: TypeDefaults;
+  sensitive?: true;
   block: string;
 }
 

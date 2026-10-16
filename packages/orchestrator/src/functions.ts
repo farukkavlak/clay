@@ -3,7 +3,7 @@ import { CallNode, ConfigError } from '@clay/parser';
 
 import { converted, sensitiveAs } from './conformValues';
 import { isSequence, itemTypes, unified, unjoined, Unjoinable } from './unify';
-import { allSensitiveIf, described, isAllSensitive, isSensitive, unordered, Value, valueOf } from './Value';
+import { allSensitive, allSensitiveIf, described, isAllSensitive, isSensitive, unordered, Value, valueOf, withSensitive } from './Value';
 
 /** The argument may be wholly or partly unknown. */
 type ClayFunction = (argument: Value, refuse: (message: string) => never) => Value;
@@ -54,8 +54,18 @@ function converter(kind: 'list' | 'set'): ClayFunction {
   };
 }
 
+/** Unknown only when nothing says it is sensitive: a mark is known before the value is. */
+function issensitive(value: Value): Value {
+  if (isSensitive(value)) return valueOf(types.bool, true);
+
+  return valueOf(types.bool, isUnknown(value.data) ? UNKNOWN : false);
+}
+
 const FUNCTIONS = new Map<string, ClayFunction>([
   ['length', length],
+  ['sensitive', allSensitive],
+  ['nonsensitive', (value) => withSensitive(value, [])],
+  ['issensitive', issensitive],
   ['tolist', converter('list')],
   ['toset', converter('set')],
 ]);

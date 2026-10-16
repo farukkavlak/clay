@@ -285,9 +285,17 @@ describe('Clay Parser', () => {
       expect(error.position).toEqual(position);
     });
 
-    it('refuses sensitive set twice, and on a variable', () => {
-      expect(errorOf('output "o" {\n  value = 1\n  sensitive = true\n  sensitive = true\n}').message).toBe('sensitive is set twice');
-      expect(errorOf('variable "v" { sensitive = true }').message).toBe('Variable "v" takes only "default" and "type", not "sensitive".');
+    it.each([
+      ['an output', 'output "o" {\n  value = 1\n  sensitive = true\n  sensitive = true\n}'],
+      ['a variable', 'variable "v" {\n  sensitive = true\n  sensitive = true\n}'],
+    ])('refuses sensitive set twice on %s', (_, input) => {
+      expect(errorOf(input).message).toBe('sensitive is set twice');
+    });
+
+    it('keeps the flag of a variable only when it is true', () => {
+      expect(makeParser('variable "v" { sensitive = true }').parse()[0]).toMatchObject({ type: 'Variable', sensitive: true });
+      expect(makeParser('variable "v" { sensitive = false }').parse()[0]).not.toHaveProperty('sensitive');
+      expect(makeParser('variable "v" {}').parse()[0]).not.toHaveProperty('sensitive');
     });
 
     it.each([
@@ -1008,7 +1016,7 @@ describe('Clay Parser', () => {
     ])('refuses %s in a variable block, at its value', (_, input, attribute, position) => {
       const error = errorOf(input);
 
-      expect(error.message).toBe(`Variable "v" takes only "default" and "type", not "${attribute}".`);
+      expect(error.message).toBe(`Variable "v" takes only "default", "type" and "sensitive", not "${attribute}".`);
       expect(error.position).toEqual(position);
     });
 

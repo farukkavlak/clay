@@ -79,8 +79,9 @@ the module's path, or `count` or `for_each`, which a module call keeps for itsel
 
 `attributes` is zero or more `name = value` pairs, in any order, without separators, and
 no name twice.
-`output` must have `value`, and may have `type` and `sensitive`. `sensitive` is `true` or
-`false` as written, never another value or a reference.
+`output` must have `value`, and may have `type` and `sensitive`. `variable` may have
+`default`, `type` and `sensitive`. `sensitive` is `true` or `false` as written, never
+another value or a reference.
 
 `locals` takes no name of its own. Each attribute is a local of the module, read as
 `local.name`. A file may hold several `locals` blocks, and they are read as one: a name
@@ -89,14 +90,14 @@ with a variable or an output.
 
 What the engine reads from each:
 
-| Block      | Reads                                                                                                                        |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `resource` | `count` or `for_each`, read by the engine; every other attribute goes to the provider                                        |
-| `data`     | `count` or `for_each`, read by the engine; every other attribute goes to the provider                                        |
-| `variable` | `default`, a constant: no reference or function call; `type`, read below; another attribute is refused where it is written   |
-| `locals`   | every attribute, as a value of any kind; it may read anything a resource's attribute may, another local among them           |
-| `output`   | `value`; `type`, read below; `sensitive`, which hides the value of a root output wherever it is printed                      |
-| `module`   | `source`, a literal string naming a directory relative to the file; `count` or `for_each`; every other attribute is an input |
+| Block      | Reads                                                                                                                             |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `resource` | `count` or `for_each`, read by the engine; every other attribute goes to the provider                                             |
+| `data`     | `count` or `for_each`, read by the engine; every other attribute goes to the provider                                             |
+| `variable` | `default`, a constant: no reference or function call; `type`, read below; `sensitive`; another attribute is refused where written |
+| `locals`   | every attribute, as a value of any kind; it may read anything a resource's attribute may, another local among them                |
+| `output`   | `value`; `type`, read below; `sensitive`, which hides the value of a root output wherever it is printed                           |
+| `module`   | `source`, a literal string naming a directory relative to the file; `count` or `for_each`; every other attribute is an input      |
 
 A resource, a data source or a module with both `count` and `for_each` is refused where
 it is written.
@@ -255,11 +256,14 @@ A name with `(` after it calls a function; any other name starts a reference, so
 resource type may be spelled as a function is. An argument is any value, a call too. The
 steps after the `)` read into what the function gives, as a reference's do.
 
-| Function        | Gives                                                                                          |
-| --------------- | ---------------------------------------------------------------------------------------------- |
-| `length(value)` | How many items a list, a tuple or a set holds, keys a map or an object, or characters a string |
-| `tolist(value)` | A list, a tuple or a set as a list of the one type its items share                             |
-| `toset(value)`  | A list, a tuple or a set as a set of the one type its items share, each member once            |
+| Function              | Gives                                                                                          |
+| --------------------- | ---------------------------------------------------------------------------------------------- |
+| `length(value)`       | How many items a list, a tuple or a set holds, keys a map or an object, or characters a string |
+| `tolist(value)`       | A list, a tuple or a set as a list of the one type its items share                             |
+| `toset(value)`        | A list, a tuple or a set as a set of the one type its items share, each member once            |
+| `sensitive(value)`    | The value, marked sensitive as a whole                                                         |
+| `nonsensitive(value)` | The value with every sensitive mark taken off, of any part                                     |
+| `issensitive(value)`  | `true` when any part of the value is sensitive, else `false`; not known only if nothing says   |
 
 A character is what a reader counts as one: a letter with its accent, or an emoji made of
 several code points, is one. A number, a boolean or `null` is refused where the argument
@@ -539,6 +543,7 @@ interface VariableBlock {
   name: string;
   attributes: Record<string, AttributeValue>;
   valueType?: Type;
+  sensitive?: true;
   position: Position;
 }
 
