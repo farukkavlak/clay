@@ -1,8 +1,8 @@
-import { AttributePath, containsUnknown, own, PlannedChange, PlanRequest, Provider, Resource, Schema, valueAt } from '@clay/contracts';
+import { AttributePath, containsUnknown, own, PlannedChange, PlanRequest, Provider, Resource, Schema, touchesSensitive, valueAt } from '@clay/contracts';
 import { isDeepStrictEqual } from 'node:util';
 
 import { conformed } from '../conformValues';
-import { heldBy } from '../providerResult';
+import { heldBy, hidingReason, undisclosed } from '../providerResult';
 import { ProviderRegistry } from '../ProviderRegistry';
 import { shown } from '../shown';
 import { plainOf, sensitiveAmong, Value } from '../Value';
@@ -27,11 +27,19 @@ function replaces(paths: AttributePath[], prior: Record<string, unknown>, after:
   return paths.some((path) => !isDeepStrictEqual(valueAt(prior, path), valueAt(after, path)));
 }
 
+function plannedOtherwise(type: string, name: string, got: unknown, value: unknown, sensitive: readonly AttributePath[]): string {
+  if (touchesSensitive(sensitive, [name])) return `${type} planned ${undisclosed([name])}`;
+
+  return `${type} planned ${name} = ${shown(got)}, but the configuration sets ${shown(value)}`;
+}
+
 /** The provider may not change a value the configuration sets. */
-function checkPlanned(type: string, schema: Schema, config: Record<string, unknown>, after: Record<string, unknown>): void {
+function checkPlanned(type: string, schema: Schema, config: Record<string, unknown>, after: Record<string, unknown>, sensitive: readonly AttributePath[]): void {
   for (const [name, value] of Object.entries(config)) {
     const got = own(after, name);
-    if (!isDeepStrictEqual(got, value)) throw new Error(`${type} planned ${name} = ${shown(got)}, but the configuration sets ${shown(value)}`);
+    if (isDeepStrictEqual(got, value)) continue;
+
+    throw new Error(plannedOtherwise(type, name, got, value, sensitive));
   }
 
   for (const name of Object.keys(after))
@@ -61,29 +69,29 @@ export class ResourcePlanner {
     const given = conformed(type, schema, written);
     const config = plainOf(given);
     const sensitive = sensitiveAmong(given);
-    await provider.validate(type, config);
-    if (!current) return { ...(await this.create(provider, type, schema, config)), sensitive };
+    await hidingReason(type, sensitive, () => provider.validate(type, config));
+    if (!current) return { ...(await this.create(provider, type, schema, config, sensitive)), sensitive };
 
-    const change = await this.ask(provider, type, schema, { prior: current.attributes, proposed: proposed(current.attributes, config, schema), config });
+    const change = await this.ask(provider, type, schema, { prior: current.attributes, proposed: proposed(current.attributes, config, schema), config }, sensitive);
     if (!replaces(change.replace, current.attributes, change.after)) {
       checkKept(type, schema, current.attributes, change.after);
       return { after: change.after, replace: false, config, sensitive };
     }
 
     // The old resource's values go with it, so the new one is planned from nothing.
-    return { ...(await this.create(provider, type, schema, config)), replace: true, sensitive };
+    return { ...(await this.create(provider, type, schema, config, sensitive)), replace: true, sensitive };
   }
 
-  private async create(provider: Provider, type: string, schema: Schema, config: Record<string, unknown>): Promise<Omit<ResourcePlan, 'sensitive'>> {
-    const { after } = await this.ask(provider, type, schema, { prior: null, proposed: config, config });
+  private async create(provider: Provider, type: string, schema: Schema, config: Record<string, unknown>, sensitive: AttributePath[]): Promise<Omit<ResourcePlan, 'sensitive'>> {
+    const { after } = await this.ask(provider, type, schema, { prior: null, proposed: config, config }, sensitive);
 
     return { after, replace: false, config };
   }
 
-  private async ask(provider: Provider, type: string, schema: Schema, request: PlanRequest): Promise<PlannedChange> {
-    const change = await provider.plan(type, request);
+  private async ask(provider: Provider, type: string, schema: Schema, request: PlanRequest, sensitive: AttributePath[]): Promise<PlannedChange> {
+    const change = await hidingReason(type, sensitive, () => provider.plan(type, request));
     const after = plainOf(heldBy(type, 'planned', schema, change.after));
-    checkPlanned(type, schema, request.config, after);
+    checkPlanned(type, schema, request.config, after, sensitive);
 
     return { ...change, after };
   }

@@ -104,10 +104,12 @@ attribute given a sensitive value is sensitive where it is read back, so
 which parts of each resource are sensitive beside its values. `plan`, its "Changed
 outside Clay" and `clay state show` print `(sensitive value)` for each sensitive part,
 on both sides of a change where either side is sensitive, and name each attribute whose
-sensitive parts change: `content: will be marked sensitive`. A value a provider works
+sensitive parts change: `content: will be marked sensitive`. An error about a resource names
+a sensitive attribute and quotes neither value, and what a provider says when its validate
+or plan fails on a configuration holding a sensitive value is not shown, only that it failed. A value a provider works
 out from a sensitive one is not sensitive, nor is what a data source given one reads.
-One thing is still open: an error about a resource, a provider's own among them, still
-quotes such an attribute.
+One thing is still open: a provider's own message from a create, update, delete or read
+can still quote such an attribute.
 
 A local is a value with a name: `locals { name = "${var.prefix}-x" }` is read as
 `local.name`. It may read anything, another local among them, and is worked out once for

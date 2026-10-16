@@ -1,4 +1,4 @@
-import { Address, AttributePath, Provider, Resource, Schema, State } from '@clay/contracts';
+import { Address, AttributePath, Provider, Resource, Schema, State, touchesSensitive } from '@clay/contracts';
 import { offApply, offFinal, offPlan, PlanAction } from '@clay/planner';
 
 import { conformValues } from '../conformValues';
@@ -7,7 +7,7 @@ import { ProviderRegistry } from '../ProviderRegistry';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { shown } from '../shown';
 import { TypeMismatch, typedValues } from '../typed';
-import { plainOf, Value } from '../Value';
+import { plainOf, sensitiveAmong, Value } from '../Value';
 import { ResourcePlan, ResourcePlanner } from './ResourcePlanner';
 
 /** As state holds it, which is how the provider finds it. */
@@ -23,6 +23,8 @@ interface Sending {
   inputs: Record<string, unknown>;
   after: Record<string, unknown>;
   sensitive: AttributePath[];
+  /** Sensitive in the plan or now, so an error hides it whichever way the apply came to differ. */
+  hidden: AttributePath[];
   schema: Schema;
 }
 
@@ -30,6 +32,13 @@ interface Sending {
 function mark(resource: Resource, sensitive: AttributePath[]): void {
   if (sensitive.length > 0) resource.sensitive = sensitive;
   else delete resource.sensitive;
+}
+
+/** An attribute the plan or the apply holds sensitive is named and not quoted. */
+function offPlanMessage(off: NonNullable<ReturnType<typeof offPlan>>, hidden: AttributePath[]): string {
+  if (touchesSensitive(hidden, [off.name])) return `the plan showed ${off.name}, which is sensitive, but it now comes to another value. Plan again.`;
+
+  return `the plan showed ${off.name} = ${shown(off.planned)}, but it now comes to ${shown(off.resolved)}. Plan again.`;
 }
 
 export class ActionExecutor {
@@ -87,21 +96,29 @@ export class ActionExecutor {
     const schema = await this.providers.schema(type);
     const inputs = this.resolver.resolveAttributes(action.attributes, currentState, Address.of(action));
     const off = offPlan(schema, action.planned, conformValues(type, schema, inputs));
-    if (off) throw new Error(`the plan showed ${off.name} = ${shown(off.planned)}, but it now comes to ${shown(off.resolved)}. Plan again.`);
+    const hidden = [...(action.sensitive ?? []), ...sensitiveAmong(inputs)];
+    if (off) throw new Error(offPlanMessage(off, hidden));
 
-    const final = await this.finalPlan(action, schema, action.after, inputs, currentState);
-    return { inputs: final.config, after: final.after, sensitive: final.sensitive, schema };
+    const final = await this.finalPlan(action, schema, action.after, inputs, currentState, hidden);
+    return { inputs: final.config, after: final.after, sensitive: final.sensitive, hidden, schema };
   }
 
   /** A replace is planned as a create. The approved plan's known values must still hold. */
-  private async finalPlan(action: PlanAction, schema: Schema, after: Record<string, unknown>, inputs: Record<string, Value>, currentState: State): Promise<ResourcePlan> {
+  private async finalPlan(
+    action: PlanAction,
+    schema: Schema,
+    after: Record<string, unknown>,
+    inputs: Record<string, Value>,
+    currentState: State,
+    hidden: AttributePath[]
+  ): Promise<ResourcePlan> {
     const type = action.resourceType;
     const current = action.type === 'UPDATE' ? held(action, currentState) : undefined;
     const final = await this.planner.plan(type, schema, current, inputs);
     if (final.replace) throw new Error(`${type} planned at apply to replace what the plan changed in place, which is a bug in the provider`);
 
     const mismatches = offFinal(schema, after, final.after);
-    if (mismatches.length > 0) throw inconsistent(type, 'plan', mismatches);
+    if (mismatches.length > 0) throw inconsistent(type, 'plan', mismatches, hidden);
 
     return final;
   }
@@ -117,10 +134,10 @@ export class ActionExecutor {
   }
 
   /** Runs after the result is in state, since the resource exists whatever its schema or the plan said. */
-  private holdToPlan(type: string, { inputs, after, schema }: Sending, returned: Record<string, unknown>): void {
+  private holdToPlan(type: string, { inputs, after, hidden, schema }: Sending, returned: Record<string, unknown>): void {
     heldBy(type, 'returned', schema, returned);
     const mismatches = offApply(schema, after, inputs, returned);
-    if (mismatches.length > 0) throw inconsistent(type, 'apply', mismatches);
+    if (mismatches.length > 0) throw inconsistent(type, 'apply', mismatches, hidden);
   }
 
   async executeCreate(action: PlanAction, provider: Provider, currentState: State): Promise<void> {

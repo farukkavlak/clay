@@ -300,9 +300,15 @@ configuration hits each of these early.
       of a change is hidden on both, and a sensitive value not known yet shows as
       sensitive. A change in which parts are sensitive names each attribute it touches:
       `content: will be marked sensitive`
-- [ ] An error about a resource quotes a sensitive value: what the plan showed against
-      what it comes to now, a provider result that is off its plan, and a provider's own
-      message, as in `random_string "length": 424242.5 is not a whole number`
+- [x] An error about a resource quotes no sensitive value: what the plan showed against
+      what it comes to now, a provider result that is off its plan, and what a provider
+      says when it refuses a configuration holding one. Terraform hides a provider result
+      off its plan, has no check of the first, and leaves a provider's message as it words it
+- [ ] A provider's own message from a create, update, delete, refresh read or data source
+      read can quote what it was given, and so can the message about a value it returns
+      of the wrong type. The failure of a validate or a plan is hidden when a value in the
+      configuration is sensitive; these are not, since an I/O error with its path is what
+      a user needs to fix the run
 - [ ] A data source given a sensitive value gives it back unmarked: what it reads is
       not sensitive. Terraform marks the same parts of what it read
 - [ ] Other places a sensitive value starts: `sensitive = true` on a variable, an
