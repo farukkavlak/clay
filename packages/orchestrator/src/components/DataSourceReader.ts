@@ -6,8 +6,9 @@ import { DataInstance } from '../keys';
 import { checkDataSourceGiven, checkDataSourceRead, heldBy, hidingReason } from '../providerResult';
 import { ProviderRegistry } from '../ProviderRegistry';
 import { withPlace } from '../place';
+import { marksOf, schemaRemarked } from '../schemaMarks';
 import { typedValues } from '../typed';
-import { plainOf, sensitiveAmong, Value, valueOf, withSensitive } from '../Value';
+import { plainOf, Value, valueOf, withSensitive } from '../Value';
 
 /** A data source gives back, at an attribute it was given, the marks it was given with. */
 function remarked(values: Record<string, Value>, given: Record<string, Value>): Record<string, Value> {
@@ -30,7 +31,7 @@ export class DataSourceReader {
       const provider = this.providers.reader(stmt.dataSourceType);
       const given = conformed(stmt.dataSourceType, schema, inputs);
       const config = plainOf(given);
-      const sensitive = sensitiveAmong(given);
+      const sensitive = marksOf(schema, given);
       await hidingReason(stmt.dataSourceType, sensitive, () => provider.validateDataSource(stmt.dataSourceType, config));
       const read = await provider.readDataSource(stmt.dataSourceType, config);
       const held = heldBy(stmt.dataSourceType, 'read', schema, read);
@@ -41,7 +42,7 @@ export class DataSourceReader {
 
       // A schema attribute neither the configuration nor the read gives is null.
       const leftOut = Object.entries(schema).map(([name, { type }]) => [name, valueOf(type, null)]);
-      return this.keep(at, remarked({ ...Object.fromEntries(leftOut), ...typedValues(schema, config), ...valued }, given));
+      return this.keep(at, schemaRemarked(schema, remarked({ ...Object.fromEntries(leftOut), ...typedValues(schema, config), ...valued }, given)));
     } catch (error) {
       throw withPlace(error, writtenAt(error, stmt), spell(stmt), at);
     }
@@ -55,9 +56,9 @@ export class DataSourceReader {
       const given = conformed(stmt.dataSourceType, schema, inputs);
       const config = plainOf(given);
       const provider = this.providers.reader(stmt.dataSourceType);
-      await hidingReason(stmt.dataSourceType, sensitiveAmong(given), () => provider.validateDataSource(stmt.dataSourceType, config));
+      await hidingReason(stmt.dataSourceType, marksOf(schema, given), () => provider.validateDataSource(stmt.dataSourceType, config));
       const later = Object.entries(schema).map(([name, { type }]) => [name, valueOf(type, UNKNOWN)]);
-      return this.keep(at, remarked({ ...Object.fromEntries(later), ...typedValues(schema, config) }, given));
+      return this.keep(at, schemaRemarked(schema, remarked({ ...Object.fromEntries(later), ...typedValues(schema, config) }, given)));
     } catch (error) {
       throw withPlace(error, writtenAt(error, stmt), spell(stmt), at);
     }

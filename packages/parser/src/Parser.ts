@@ -178,7 +178,7 @@ export class Parser {
     if (INSTANCE_ARGUMENTS.has(nameToken.value)) throw new ConfigError(`"${nameToken.value}" cannot be a variable name: a module call keeps it for itself.`, nameToken.position);
 
     this.consume(TokenType.LBrace, "Expect '{' after variable name.");
-    const { attributes, declared } = this.parseTypedBody(`Variable "${nameToken.value}"`, 'default');
+    const { attributes, declared, flagged } = this.parseTypedBody(`Variable "${nameToken.value}"`, 'default', 'sensitive');
 
     // A module input replaces the default, so a reference or a call in it might never be checked.
     if (attributes.default) this.checkConstant(attributes.default, "A variable's default");
@@ -189,6 +189,7 @@ export class Parser {
       attributes,
       ...(declared && { valueType: declared.type }),
       ...(declared?.defaults && { defaults: declared.defaults }),
+      ...(flagged && { sensitive: true }),
       position,
     };
   }

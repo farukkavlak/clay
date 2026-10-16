@@ -5,7 +5,8 @@ import { conformed } from '../conformValues';
 import { heldBy, hidingReason, undisclosed } from '../providerResult';
 import { ProviderRegistry } from '../ProviderRegistry';
 import { shown } from '../shown';
-import { plainOf, sensitiveAmong, Value } from '../Value';
+import { marksOf } from '../schemaMarks';
+import { plainOf, Value } from '../Value';
 
 /** `config` is converted to the schema, as the provider receives it. `sensitive` holds the steps to each sensitive part of it. */
 export interface ResourcePlan {
@@ -68,7 +69,7 @@ export class ResourcePlanner {
     const provider = this.providers.get(type);
     const given = conformed(type, schema, written);
     const config = plainOf(given);
-    const sensitive = sensitiveAmong(given);
+    const sensitive = marksOf(schema, given);
     await hidingReason(type, sensitive, () => provider.validate(type, config));
     if (!current) return { ...(await this.create(provider, type, schema, config, sensitive)), sensitive };
 

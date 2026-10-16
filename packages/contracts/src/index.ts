@@ -198,6 +198,8 @@ export interface SchemaDefinition {
   optional?: boolean;
   /** With `computed`: fixed at create until replace, so an update keeps it as read. */
   kept?: boolean;
+  /** Whatever it holds is sensitive, the configuration's or the provider's. */
+  sensitive?: boolean;
 }
 
 export type Schema = Record<string, SchemaDefinition>;

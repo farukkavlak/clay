@@ -56,6 +56,8 @@ export interface VariableBlock extends Node {
   /** Without one, a value is taken as it is. */
   valueType?: Type;
   defaults?: TypeDefaults;
+  /** Every value the variable takes is sensitive. */
+  sensitive?: true;
 }
 
 /** The defaults of `optional(type, default)`, nested the way the type is. */

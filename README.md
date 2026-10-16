@@ -87,6 +87,12 @@ on or takes it off hides the value too. One that does not fit its `type` is refu
 its value. `clay output --json` gives the value with `"sensitive": true`. The state and
 a plan file hold it unencrypted.
 
+A variable with `sensitive = true` is sensitive wherever it is read, its default and the
+value a module call gives it. `sensitive(x)` marks a value sensitive as a whole,
+`nonsensitive(x)` takes every mark off it, and `issensitive(x)` is true when any part of it
+is sensitive. A value given to a sensitive variable that does not fit its `type` is refused
+without quoting it in the message.
+
 A module's sensitive output stays sensitive wherever its caller takes it: through a
 local, a variable, a string, a function and a `for`. It is followed part by part, so in
 `{ name = "app", password = module.db.password }` only `password` is sensitive. A set is
@@ -109,7 +115,8 @@ a sensitive attribute and quotes neither value, and what a provider says when it
 or plan fails on a configuration holding a sensitive value is not shown, only that it
 failed. A data source given a sensitive value gives it back sensitive at the same parts,
 `data.local_file.f.path` for a sensitive `path`. A value a provider works out from a
-sensitive one is not sensitive.
+sensitive one is not sensitive, unless its schema marks the attribute sensitive: that
+attribute is sensitive whoever sets it, and null too.
 One thing is still open: a provider's own message from a create, update, delete or read
 can still quote such an attribute.
 
