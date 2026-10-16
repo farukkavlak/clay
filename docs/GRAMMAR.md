@@ -79,8 +79,9 @@ the module's path, or `count` or `for_each`, which a module call keeps for itsel
 
 `attributes` is zero or more `name = value` pairs, in any order, without separators, and
 no name twice.
-`output` must have `value`, and may have `type` and `sensitive`. `sensitive` is `true` or
-`false` as written, never another value or a reference.
+`output` must have `value`, and may have `type` and `sensitive`. `variable` may have
+`default`, `type` and `sensitive`. `sensitive` is `true` or `false` as written, never
+another value or a reference.
 
 `locals` takes no name of its own. Each attribute is a local of the module, read as
 `local.name`. A file may hold several `locals` blocks, and they are read as one: a name
@@ -542,6 +543,7 @@ interface VariableBlock {
   name: string;
   attributes: Record<string, AttributeValue>;
   valueType?: Type;
+  sensitive?: true;
   position: Position;
 }
 
