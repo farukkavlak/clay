@@ -283,9 +283,12 @@ configuration hits each of these early.
       is refused by `validate` and the plan, where the apply refused the key after
       `random_string.r` was made. So is one over an empty collection, or in a block that
       makes no instance, which no run refused
-- [ ] A `for` written as a key passes the plan while it is not known, since it has no
+- [x] A `for` written as a key passes the plan while it is not known, since it has no
       type until then: `{ for v in var.l : [for c in <not known yet> : c] => v }` is
-      refused only by the apply, as a tuple
+      refused only by the apply, as a tuple. Kept as it is: Terraform's `for` over a
+      collection not known yet is `DynamicVal`, so it also waits for the apply.
+      Refusing it at plan needs a type for "a tuple of unknown shape", which Terraform
+      does not have
 - [x] A resource attribute given a sensitive value is sensitive where it is read back,
       from the plan or from the state: `local_file.conf.content` in a root output that
       is not marked is refused, and so is a `for_each` given it. A plan file and the
