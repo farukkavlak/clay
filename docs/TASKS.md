@@ -272,13 +272,12 @@ configuration hits each of these early.
       that is not marked is refused by the plan, where the apply refused it after
       `random_string.r` was made. HCL reads the `if` of such a for this way, and not
       its body
-- [ ] A `for` not known yet is sensitive as a whole or not at all. So `length` of one
-      whose body reads a sensitive value is refused in a root output that is not marked,
-      and `for_each = { for v in ... : v => module.db.password }` is refused as if its
-      keys were sensitive, where a plan said it must be known and `validate` took it.
-      Three things make it so: a sensitive key or body, a sensitive part of the
-      collection, and a key not known yet. A step that stands for every item would keep
-      the mark on the items alone
+- [x] A `for` not known yet is sensitive as a whole only where its collection or a key
+      is. Where only its body reads a sensitive value, each item is, and the size is not:
+      `length` of one is taken in a root output that is not marked, and
+      `for_each = { for v in ... : v => module.db.password }` is taken by `validate`,
+      where a plan says it must be known. A plan file keeps this as a step that stands
+      for every item, `-1`, since the items have no places yet
 - [x] A key of a `for` over a collection not known yet is checked at plan, as one over
       a known collection is. `{ for v in tolist(toset([random_string.r.result])) : [v] => v }`
       is refused by `validate` and the plan, where the apply refused the key after

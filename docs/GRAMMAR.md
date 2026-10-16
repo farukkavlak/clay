@@ -330,8 +330,9 @@ An item not known until apply is not known in what the for gives either, and the
 known. A collection not known at all leaves the whole for to the apply, and so does a set
 with a member not known yet: that member may sort before the others and move every item.
 The key and the value are still read once at plan, with an item not known yet, so a
-reference that cannot be read is refused then, and a sensitive value in either makes the
-whole for sensitive.
+reference that cannot be read is refused then. A sensitive key, or a collection sensitive as
+a whole, makes the whole for sensitive. A sensitive value in the body makes each item
+sensitive, and the size is not.
 A for over a constant may be a variable's default.
 
 `{for n in var.names : n => "app-${n}"}` makes an object: the key before `=>` and the

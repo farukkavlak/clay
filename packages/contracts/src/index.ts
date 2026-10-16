@@ -113,11 +113,18 @@ export function samePaths(one: readonly AttributePath[], other: readonly Attribu
   return left.size === right.size && [...left].every((path) => right.has(path));
 }
 
+/** The step to every item of a collection not known yet, which has no items to name. No list has an item -1. */
+export const EVERY_ITEM = -1;
+
+function sameStep(marked: string | number, step: string | number): boolean {
+  return marked === EVERY_ITEM || String(marked) === String(step);
+}
+
 /** What is left of each path after `step`. A value sensitive as a whole is so in every part. */
 export function sensitiveUnder(paths: readonly AttributePath[], step: string | number): AttributePath[] {
   if (paths.some((path) => path.length === 0)) return [[]];
 
-  return paths.filter(([first]) => String(first) === String(step)).map((path) => path.slice(1));
+  return paths.filter(([first]) => sameStep(first, step)).map((path) => path.slice(1));
 }
 
 /** Whether the value at `at` is sensitive in some part, or sits inside a sensitive one. */
@@ -125,7 +132,7 @@ export function touchesSensitive(paths: readonly AttributePath[], at: AttributeP
   return paths.some((path) => {
     const shared = Math.min(path.length, at.length);
 
-    return path.slice(0, shared).every((step, i) => String(step) === String(at[i]));
+    return path.slice(0, shared).every((step, i) => sameStep(step, at[i]));
   });
 }
 

@@ -239,7 +239,8 @@ describe('a sensitive value', () => {
     ['is what the body of a for gives, over a list known only after apply', `[for v in tolist(${MADE}) : module.db.password]`],
     ['is a value in the object a for makes, over a list known only after apply', `{ for v in tolist(${MADE}) : v => module.db.password }`],
     ['is a key of the object a for makes, over a set with a member known only after apply', `{ for v in ${MADE} : module.db.password => v }`],
-    ['is each item a for gives over a list known only after apply, whose size is read', `length([for v in tolist(${MADE}) : module.db.password])`],
+    ['is a key of the object a for makes over a list known only after apply, whose size is read', `length({ for v in tolist(${MADE}) : module.db.password => v })`],
+    ['is a list a for goes over, known only after apply, whose size is read', 'length([for v in tolist(module.db.made_set) : "x"])'],
     ['is null of no type and given to tolist', 'tolist(module.db.nothing)'],
     ['is an empty object a module takes with an attribute left out', 'module.app.filled'],
     ['is a set a module takes with an attribute left out of each member, whose size it gives', 'module.app.rows'],
@@ -258,6 +259,8 @@ describe('a sensitive value', () => {
     ['another part of each item a for goes over', '[for v in [local.conn] : v.name]', ['app']],
     ['another part of the object a module was given it in', 'module.app.name', 'app'],
     ['another part of an object that holds one known only after apply', 'local.made.name', 'app'],
+    ['the size of what a for gives over a list known only after apply, where its body is sensitive', `length([for v in tolist(${MADE}) : module.db.password])`, UNKNOWN],
+    ['the size of what a for gives over a set with a member known only after apply, where its body is sensitive', `length([for v in ${MADE} : module.db.password])`, UNKNOWN],
   ])('leaves %s to be shown', async (_, value, data) => {
     const shown = await planned(value);
 
@@ -302,8 +305,15 @@ describe('a sensitive value', () => {
     expect(shown?.value).toBe(UNKNOWN);
   });
 
-  it('makes a for_each sensitive as the values of the object a for makes, over a list known only after apply', async () => {
+  it('is taken by validate as the values of a for_each object over a list known only after apply, and the plan says it must be known', async () => {
     const config = `resource "random_string" "r" { length = 8 }\n${REPEATED_OVER_MADE}`;
+
+    await expect(newOrchestrator().validate(config)).resolves.toBeUndefined();
+    await expect(newOrchestrator().plan(config)).rejects.toThrow('for_each must be known when planning');
+  });
+
+  it('makes a for_each sensitive as the keys of the object a for makes, over a list known only after apply', async () => {
+    const config = `resource "random_string" "r" { length = 8 }\nmodule "db" { source = "./db" }\n${BLOCKS[0][1](`for_each = { for v in tolist(${MADE}) : module.db.password => v }`)}`;
 
     await expect(newOrchestrator().validate(config)).rejects.toThrow(EACH);
     await expect(newOrchestrator().plan(config)).rejects.toThrow(EACH);
