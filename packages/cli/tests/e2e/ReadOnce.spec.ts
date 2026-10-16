@@ -30,6 +30,9 @@ const REFUSED = '[1, true]';
 const CANNOT_JOIN = 'tolist cannot join a number and a boolean into one type';
 const notList = (kind: string) => `tolist takes a list, a tuple or a set, not ${kind}`;
 
+const logs = (repeat: string) =>
+  `resource "local_file" "logs" {\n  ${repeat}\n  path     = "f.txt"\n  content  = "x"\n}\noutput "o" {\n  value = [for log in local_file.logs : log.contnet]\n}`;
+
 describe('every block read once, whatever instances it makes', () => {
   let dir: string;
 
@@ -63,6 +66,22 @@ describe('every block read once, whatever instances it makes', () => {
     expect(error.message).toBe(CANNOT_JOIN);
     expect(error.position).toEqual({ file: 'main.clay', ...placeOf(config, REFUSED) });
     expect(error.block).toBe('resource "local_file" "f"');
+  });
+
+  it.each([
+    ['a resource with count = 0', logs('count    = 0'), 'log.contnet', 'log has no key "contnet"'],
+    ['a resource with an empty for_each', logs('for_each = {}'), 'log.contnet', 'log has no key "contnet"'],
+    [
+      'an empty list variable',
+      'variable "l" {\n  type    = list(string)\n  default = []\n}\noutput "o" {\n  value = [for x in var.l : x.nope]\n}',
+      'x.nope',
+      'x is a string and cannot be read into',
+    ],
+  ])('refuses a body that cannot read its item over %s', async (_, config, needle, message) => {
+    const error = await errorOf(() => newOrchestrator().plan(config));
+
+    expect(error.message).toBe(message);
+    expect(error.position).toEqual({ file: 'main.clay', ...placeOf(config, needle) });
   });
 
   it.each([

@@ -474,10 +474,11 @@ length below 1.
       `module.m[0].x.nope` is valid to `clay validate`, since the output has no type until
       the module has instances. Resources and data sources give an unknown of their schema
       type there and are refused
-- [ ] The body of a `for` over a collection known to be empty is never read. With
-      `count = 0` on `local_file.logs`, `[for log in local_file.logs : log.contnet]` is
-      valid, and with `count = 2` it is refused. A body is read once against the item type
-      when the collection is unknown, and should be when it is empty
+- [x] The body of a `for` over a collection known to be empty is read against its item
+      type. `[for log in local_file.logs : log.contnet]` is refused with `count = 0` or
+      `for_each = {}`, as with `count = 2`, and so is a body over an empty `list(string)`
+      or `map(object(...))` variable. A body over a literal `[]` is not, since an empty
+      tuple names no item type. HCL does not read it either, so that is not a gap
 - [x] A value not known yet is checked by its whole type, not only its own kind. A list of
       numbers only the apply knows, `tolist(toset([length(random_string.r.result)]))`,
       given to a variable of type `list(bool)` was valid to the plan and refused by the
