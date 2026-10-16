@@ -1,6 +1,6 @@
 import { ExactNumber, Type } from '@clay/contracts';
 import { Position } from './Position';
-import { spellReference, spellSteps, Step } from './reference';
+import { IndexNode, spellReference, spellSteps, Step } from './reference';
 
 /** The config file name, for the root and every module. */
 export const CONFIG_FILE = 'main.clay';
@@ -119,10 +119,16 @@ export function spell(statement: Statement): string {
   return `${statement.type.toLowerCase()} "${statement.name}"`;
 }
 
+/** What a reference or a call reads in the brackets of its steps. */
+function indexesIn(steps: Step[]): IndexNode[] {
+  return steps.flatMap((step) => ('index' in step ? [step.index] : []));
+}
+
 /** Direct children only. */
 function valuesIn(value: AttributeValue): AttributeValue[] {
   if (value.type === 'List') return value.value;
-  if (value.type === 'Call') return value.args;
+  if (value.type === 'Call') return [...value.args, ...indexesIn(value.path)];
+  if (value.type === 'Reference' || value.type === 'Bound') return indexesIn(value.value);
   if (value.type === 'For') return [value.collection, ...(value.key ? [value.key] : []), value.body];
   if (value.type === 'Map') return Object.values(value.value);
   if (value.type === 'Template') return value.value.filter((part) => typeof part !== 'string');

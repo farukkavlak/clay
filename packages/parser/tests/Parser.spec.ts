@@ -653,6 +653,23 @@ describe('Clay Parser', () => {
       expect(valueOf(written)).toEqual(reference(parts, 24));
     });
 
+    it.each([
+      ['a reference', 'var.l[var.i]', 'var.i', { type: 'Reference', value: steps('var', 'i'), position: at(1, 30) }],
+      ['count.index', 'var.l[count.index]', 'count.index', { type: 'Reference', value: steps('count', 'index'), position: at(1, 30) }],
+      ['a call', 'var.l[length(var.x)]', 'length(...)', { type: 'Call', name: 'length', path: [], position: at(1, 30) }],
+      ['an index in an index', 'var.l[var.m[var.i]]', 'var.m[var.i]', { type: 'Reference', position: at(1, 30) }],
+    ])('reads %s in brackets as a step read where the reference is', (_, written, spelled, index) => {
+      expect(valueOf(written)).toMatchObject({ type: 'Reference', value: [{ name: 'var' }, { name: 'l' }, { spelled, index }] });
+    });
+
+    it('reads a name a for binds in brackets as a step too', () => {
+      expect(valueOf('[for i in var.a : var.l[i]]')).toMatchObject({ body: { value: [{ name: 'var' }, { name: 'l' }, { spelled: 'i', index: { type: 'Bound' } }] } });
+    });
+
+    it('reads an index after a call', () => {
+      expect(valueOf('tolist(var.s)[var.i]')).toMatchObject({ type: 'Call', path: [{ spelled: 'var.i', index: { type: 'Reference' } }] });
+    });
+
     it('reads an index inside an interpolation', () => {
       expect(valueOf('"a ${var.l[1]}"')).toEqual({ type: 'Template', value: ['a ', reference(['var', 'l', 1], 29)], position: at(1, 24) });
     });
@@ -666,8 +683,9 @@ describe('Clay Parser', () => {
       ['a decimal index', 'var.l[1.5]', 'An index is a whole number from 0 to 9007199254740991, written in digits', at(1, 30)],
       ['an index with an exponent', 'var.l[1e2]', 'An index is a whole number from 0 to 9007199254740991, written in digits', at(1, 30)],
       ['an index past what a list can hold', 'var.l[9007199254740992]', 'An index is a whole number from 0 to 9007199254740991, written in digits', at(1, 30)],
-      ['a reference as an index', 'var.l[var.i]', "Expect a number or a string inside '['", at(1, 30)],
-      ['an empty index', 'var.l[]', "Expect a number or a string inside '['", at(1, 30)],
+      ['an empty index', 'var.l[]', "Expect a number, a string or a reference inside '['", at(1, 30)],
+      ['a list as an index', 'var.l[[0]]', "Expect a number, a string or a reference inside '['", at(1, 30)],
+      ['a reference as an index never closed', 'var.l[var.i ', "Expect ']' after the index", at(1, 37)],
       ['an index never closed', 'var.l[0 ', "Expect ']' after the index", at(1, 33)],
       ['a key with an interpolation', 'var.m["${var.k}"]', 'A map key is plain text; it cannot hold an interpolation', at(1, 30)],
     ])('refuses %s where it is written', (_, written, message, position) => {

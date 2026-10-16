@@ -1,7 +1,7 @@
 import { Address, InstanceKey, ModuleAddress } from '@clay/contracts';
 import { DataReference, ModuleOutputReference, ParsedReference, parseReference, Position, ResourceReference, Step, stepKey } from '@clay/parser';
 
-import { repetitionOfKey } from '../Instances';
+import { Repetition, repetitionOfKey } from '../Instances';
 import { instanceKeyIn } from './instance';
 import { ModuleInstances } from '../ModuleInstances';
 import { blockKey, callKey, Context, dataSourceKey, localKey, moduleOf, outputKey, scopeOf, variableKey } from '../keys';
@@ -29,6 +29,11 @@ export type Reference = (
   | { kind: 'each'; name: 'key' | 'value' }
 ) & { position?: Position };
 
+/** An index read from a value is the instance's key too, though only its value says which. */
+function keyedByValue(path: Step[], repetition: Repetition | undefined): boolean {
+  return repetition !== undefined && path.length > 0 && 'index' in path[0];
+}
+
 export class ReferenceScanner {
   constructor(private modules: ModuleInstances) {}
 
@@ -52,9 +57,12 @@ export class ReferenceScanner {
     else for (const item of Object.values(obj)) this.collect(item, context, references);
   }
 
+  /** What an index reads is read too, so the reference waits for it. */
   private addReference(refParts: Step[], context: Context, references: Reference[], position?: Position): void {
     const found = this.referenceOf(parseReference(refParts, position), context);
     if (found) references.push({ ...found, position });
+
+    for (const part of refParts) if ('index' in part) this.collect(part.index, context, references);
   }
 
   private referenceOf(reference: ParsedReference, context: Context): Reference | undefined {
@@ -99,7 +107,7 @@ export class ReferenceScanner {
     const first = instanceKeyIn(reference.path);
     const repetition = this.modules.repetitionOf(call.withoutKeys());
     const instanceKey = repetition === repetitionOfKey(first) ? first : undefined;
-    const step = reference.path.at(instanceKey === undefined ? 0 : 1);
+    const step = reference.path.at(instanceKey !== undefined || keyedByValue(reference.path, repetition) ? 1 : 0);
     const named = step && stepKey(step);
     const scope = scopeOf(call.withoutKeys());
     // A number where the output goes is refused once the graph knows the module exists.

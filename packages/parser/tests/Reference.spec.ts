@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { CONFIG_FILE } from '../src/ast';
 import { ConfigError } from '../src/ConfigError';
-import { parseReference, spellReference, Step } from '../src/reference';
+import { parseReference, spellReference, Step, stepKey } from '../src/reference';
 import { steps } from './steps';
 
 const position = { file: CONFIG_FILE, line: 1, column: 1 };
@@ -116,5 +116,19 @@ describe('a reference spelled back', () => {
     [steps('var', 'tags', { key: '' }), 'var.tags[""]'],
   ])('spells %j as %s', (parts, spelled) => {
     expect(spellReference(parts)).toBe(spelled);
+  });
+});
+
+describe('a step read from a value', () => {
+  const index = { type: 'Reference' as const, value: steps('var', 'i'), position };
+  const step: Step = { index, spelled: 'var.i' };
+
+  it('is spelled in brackets, as it was written', () => {
+    expect(spellReference([...steps('var', 'l'), step])).toBe('var.l[var.i]');
+  });
+
+  it('has a key no name or number can be, so a reference naming it where a name goes is refused', () => {
+    expect(stepKey(step)).toBe('[var.i]');
+    expect(errorOf([...steps('var'), step]).message).toContain('has "[var.i]" where it needs a name');
   });
 });
