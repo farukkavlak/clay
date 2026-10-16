@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { touchesSensitive } from '../src';
+import { EVERY_ITEM, touchesSensitive } from '../src';
 
 describe('touchesSensitive', () => {
   const marks = [
@@ -32,5 +32,17 @@ describe('touchesSensitive', () => {
 
   it('takes no path when nothing is marked', () => {
     expect(touchesSensitive([], ['triggers'])).toBe(false);
+  });
+
+  it.each([
+    ['an item', ['items', 3]],
+    ['a value of a map', ['items', 'key']],
+    ['a part of an item', ['items', 0, 'deeper']],
+  ])('takes %s where every item is marked', (_, at) => {
+    expect(touchesSensitive([['items', EVERY_ITEM]], at)).toBe(true);
+  });
+
+  it('leaves out what is beside the items that are all marked', () => {
+    expect(touchesSensitive([['items', EVERY_ITEM]], ['other', 0])).toBe(false);
   });
 });

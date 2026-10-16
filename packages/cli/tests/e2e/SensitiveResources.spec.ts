@@ -1,4 +1,4 @@
-import { ExactNumber, State } from '@clay/contracts';
+import { EVERY_ITEM, ExactNumber, State, UNKNOWN } from '@clay/contracts';
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { parsePlanFile, serializePlan } from '@clay/planner';
 import { LocalProvider } from '@clay/provider-local';
@@ -33,6 +33,8 @@ const shown = (value: unknown) => (typeof value === 'string' ? path.basename(val
 const drain = async (events: AsyncGenerator<{ type: string; error?: Error }>) => {
   for await (const event of events) if (event.type === 'failed') throw event.error;
 };
+
+const sensitiveOf = (plan: Awaited<ReturnType<Orchestrator['plan']>>) => plan.actions.find((action) => action.resourceType === 'null_resource')?.sensitive;
 
 describe('a resource given a sensitive value', () => {
   let dir: string;
@@ -214,15 +216,39 @@ describe('a resource given a sensitive value', () => {
     expect(await marks('local_file.conf')).toEqual([['content']]);
   });
 
-  it('keeps the parts the apply finds sensitive, where the plan could only mark the whole', async () => {
+  describe('given a for over a list not known yet', () => {
     const rows = '[for v in tolist(toset([random_string.r.result])) : { name = v, token = module.db.password }]';
     const config = `module "db" { source = "./db" }\nresource "random_string" "r" { length = 8 }\nresource "null_resource" "n" {\n  triggers = { rows = ${rows} }\n}`;
-    const engine = newOrchestrator();
-    const plan = await engine.plan(config);
-    await drain(engine.runPlan(plan, config));
+    const itemsOnly = [['triggers', 'rows', EVERY_ITEM]];
 
-    expect(plan.actions.find((action) => action.resourceType === 'null_resource')?.sensitive).toEqual([['triggers', 'rows']]);
-    expect(await marks('null_resource.n')).toEqual([['triggers', 'rows', 0, 'token']]);
+    it('marks every item in the plan, and the parts the apply finds sensitive in the state', async () => {
+      const engine = newOrchestrator();
+      const plan = await engine.plan(config);
+      await drain(engine.runPlan(plan, config));
+
+      expect(sensitiveOf(plan)).toEqual(itemsOnly);
+      expect(await marks('null_resource.n')).toEqual([['triggers', 'rows', 0, 'token']]);
+    });
+
+    it.each([
+      ['whose body ignores the item', '[for r in null_resource.n.triggers.rows : "x"]', true],
+      ['whose body reads the item', '[for r in null_resource.n.triggers.rows : r.name]', false],
+    ])('marks each item of a for over what it marks every item of, %s', async (_, value, accepted) => {
+      const probe = `${config}\noutput "probe" { value = ${value} }`;
+
+      if (accepted) {
+        const { outputs } = await newOrchestrator().plan(probe);
+        expect(outputs.probe.new?.value).toBe(UNKNOWN);
+      } else await expect(newOrchestrator().plan(probe)).rejects.toThrow(REFUSED);
+    });
+
+    it('keeps the mark of every item through a plan saved to a file', async () => {
+      const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), config, {}), 'plan.json');
+      await drain(newOrchestrator().runPlan(saved, config));
+
+      expect(sensitiveOf(saved)).toEqual(itemsOnly);
+      expect(await marks('null_resource.n')).toEqual([['triggers', 'rows', 0, 'token']]);
+    });
   });
 
   it('reads the value as the configuration marks it now, not as the state does', async () => {
