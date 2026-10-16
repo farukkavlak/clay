@@ -9,6 +9,8 @@ export interface Value {
   readonly type: Type;
   readonly data: unknown;
   readonly sensitive?: readonly AttributePath[];
+  /** The reference a null was read through, so a refusal of it can say where it came from. */
+  readonly nullFrom?: string;
 }
 
 export function valueOf(type: Type, data: unknown): Value {
@@ -16,10 +18,11 @@ export function valueOf(type: Type, data: unknown): Value {
 }
 
 /** Left out where there are none, so a value with no sensitive part is the value it was. */
-export function withSensitive({ type, data }: Value, paths: readonly AttributePath[]): Value {
-  if (paths.length === 0) return { type, data };
+export function withSensitive({ type, data, nullFrom }: Value, paths: readonly AttributePath[]): Value {
+  const kept = nullFrom === undefined ? { type, data } : { type, data, nullFrom };
+  if (paths.length === 0) return kept;
 
-  return { type, data, sensitive: paths.some((path) => path.length === 0) ? [[]] : paths };
+  return { ...kept, sensitive: paths.some((path) => path.length === 0) ? [[]] : paths };
 }
 
 export function allSensitive(value: Value): Value {

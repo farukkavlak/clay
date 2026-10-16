@@ -243,13 +243,18 @@ export function converted(resource: string, value: Value, to: Type, path: Attrib
   return sensitiveAs(value, plain(resource, value, to, path));
 }
 
+/** Where a null came from, when a reference gave it. */
+function nullSource(value: Value | undefined): string {
+  return value?.nullFrom === undefined ? '' : `, and ${value.nullFrom}, which it reads, is null`;
+}
+
 /** A name set to null counts as missing, so a required one is refused at its position. */
 function checkNames(resource: string, schema: Schema, config: Record<string, Value>): void {
   const named = nameProblem(resource, { known: Object.keys(schema), required: [] }, Object.keys(config));
   if (named) throw new SchemaMismatch(named.message, named.set);
 
   const missing = namesOf(schema).required.find((name) => !Object.hasOwn(config, name) || config[name].data === null);
-  if (missing !== undefined) throw new SchemaMismatch(`${resource} requires "${missing}"`, Object.hasOwn(config, missing) ? missing : undefined);
+  if (missing !== undefined) throw new SchemaMismatch(`${resource} requires "${missing}"${nullSource(config[missing])}`, Object.hasOwn(config, missing) ? missing : undefined);
 }
 
 /**

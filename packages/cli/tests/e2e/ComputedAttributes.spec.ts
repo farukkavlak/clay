@@ -108,6 +108,8 @@ class PlannedStampProvider extends StampProvider {
   }
 }
 
+const named = (source: string) => `local_file requires "content", and ${source}, which it reads, is null`;
+
 describe('a value only the provider knows', () => {
   let dir: string;
   let file: string;
@@ -125,6 +127,8 @@ describe('a value only the provider knows', () => {
 
   const serialCopy = (label: string, size = '1') =>
     `resource "stamp" "a" {\n  label = "${label}"\n  size = "${size}"\n}\nresource "local_file" "copy" {\n  path = "${file}"\n  content = stamp.a.serial\n}`;
+
+  const copy = (content: string, extra = '') => `resource "stamp" "a" { label = "x" }\n${extra}resource "local_file" "copy" {\n  path = "${file}"\n  content = ${content}\n}`;
 
   const withCopy = (stamp: string) => `${stamp}\nresource "local_file" "copy" {\n  path = "${file}"\n  content = stamp.a.made\n}`;
 
@@ -192,6 +196,40 @@ describe('a value only the provider knows', () => {
 
     const { resources } = await new LocalBackend(dir).read();
     expect(resources['null_resource.n'].attributes.triggers).toEqual({ a: null });
+  });
+
+  describe('when the provider does not return a value that what reads it requires', () => {
+    it.each([
+      ['a reference', () => copy('stamp.a.made'), 'stamp.a.made'],
+      ['a local', () => copy('local.made', 'locals {\n  made = stamp.a.made\n}\n'), 'local.made'],
+      ['a call', () => copy('nonsensitive(stamp.a.made)'), 'stamp.a.made'],
+      ['a reference with an index', () => copy('stamp.b[0].made', 'resource "stamp" "b" {\n  count = 1\n  label = "y"\n}\n'), 'stamp.b[0].made'],
+      [
+        'an index that is a sensitive key',
+        () => copy('stamp.b[local.k].made', 'locals {\n  k = sensitive(0)\n}\nresource "stamp" "b" {\n  count = 1\n  label = "y"\n}\n'),
+        'stamp.b[local.k].made',
+      ],
+    ])('says where the null came from, for %s', async (_, config, source) => {
+      await expect(apply(config(), new ForgetfulStampProvider())).rejects.toThrow(named(source));
+    });
+
+    it('says it at the next plan too, where state holds the null', async () => {
+      const config = copy('stamp.a.made');
+      await expect(apply(config, new ForgetfulStampProvider())).rejects.toThrow(named('stamp.a.made'));
+
+      await expect(newOrchestrator(new ForgetfulStampProvider()).plan(config)).rejects.toThrow(named('stamp.a.made'));
+    });
+
+    it('says it for a data source that requires it', async () => {
+      const config = 'resource "stamp" "a" { label = "x" }\ndata "local_file" "d" {\n  path = stamp.a.made\n}';
+      await apply('resource "stamp" "a" { label = "x" }', new ForgetfulStampProvider());
+
+      await expect(newOrchestrator(new ForgetfulStampProvider()).plan(config)).rejects.toThrow('local_file requires "path", and stamp.a.made, which it reads, is null');
+    });
+
+    it('names nothing for a null written in the configuration', async () => {
+      await expect(apply(copy('null'), new ForgetfulStampProvider())).rejects.toThrow(/^local_file requires "content"$/);
+    });
   });
 
   it('refuses a reference to a name a resource that does not change has not got, where it is written', async () => {

@@ -142,19 +142,23 @@ export class ReferenceResolver {
 
   private resolve(node: ReferenceNode, state: State, context: Context | undefined, reading: Reading): Value {
     const where = context ?? ModuleAddress.root;
-    const read: Reader = (steps, keyed) => this.readReference(steps, node.position, state, where, reading, keyed);
+    const read: Reader = (steps, keyed) => this.readReference(steps, node, state, where, reading, keyed);
 
     return this.readWith({ node, state, context, reading }, node.value, read);
   }
 
   /** `keyed` is whether an index read from a value gave a key, which the block's count or for_each may not make. */
-  private readReference(steps: Step[], position: Position, state: State, where: Context, reading: Reading, keyed: boolean): Value {
+  private readReference(steps: Step[], node: ReferenceNode, state: State, where: Context, reading: Reading, keyed: boolean): Value {
+    const { position } = node;
     const reference = parseReference(steps);
     if (keyed) this.keys.of(reference, where, position);
     const { value, path } = reading.asWritten ? this.writtenTarget(reference, where, position) : this.resolveTarget(reference, state, where, position);
     const target = steps.slice(0, steps.length - path.length);
 
-    return readPath(value, spellReference(target), path, position);
+    const read = readPath(value, spellReference(target), path, position);
+
+    // As written, since an index read from a value may be a sensitive key.
+    return read.data === null ? { ...read, nullFrom: spellNamed(node) } : read;
   }
 
   /** Looks up the function first, so an unknown name is refused whatever the argument is. */

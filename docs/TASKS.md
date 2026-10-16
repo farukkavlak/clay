@@ -485,12 +485,16 @@ length below 1.
       apply after `random_string.r` was made. Its items, tuple places, object attributes and
       tuple length are checked now, as Terraform's type conversion does; a string not
       known yet still passes as a boolean or a number, since it may spell one
-- [ ] A provider that says it computes a value and does not return it at apply is not
-      refused: the value is left out and reads as `null`. What reads it then fails
-      without naming the provider: `content = stamp.a.made` ends in
-      `local_file requires "content"`. To weigh: refuse it as the provider's bug when the
-      plan showed it as known after apply and the schema does not mark it optional.
-      Terraform lets a value not known at plan come to null
+- [x] A provider that says it computes a value and does not return it at apply leaves it
+      `null`, and what requires it said only `local_file requires "content"`. It names
+      the reference now, for a resource at the plan and the apply and for a data source at
+      the plan:
+      `local_file requires "content", and stamp.a.made, which it reads, is null`. The
+      value stays null and is not refused as the provider's bug, since a null may be right
+      for an instance; Terraform also lets a value not known at plan come to null
+- [ ] A null a reference gives is named only where a whole required attribute is null. A
+      null that makes a nested attribute required, or a `count`, a `for_each` or a
+      variable of another type refuse its value, still gives no source
 
 ### Data sources in the graph
 
