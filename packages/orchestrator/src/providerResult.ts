@@ -1,10 +1,15 @@
-import { isType, isUnknown, Schema, unknownPaths } from '@clay/contracts';
+import { AttributePath, isType, isUnknown, Schema, touchesSensitive, unknownPaths } from '@clay/contracts';
 import { Mismatch, offFinal } from '@clay/planner';
 
 import { shown } from './shown';
 import { spelled } from './spelled';
 import { TypeMismatch, typedValues } from './typed';
 import { Value } from './Value';
+
+/** Says that a sensitive value differs and nothing of either value, as the difference itself could give it away. */
+export function undisclosed(path: AttributePath): string {
+  return `${spelled(path)}: inconsistent values for sensitive attribute`;
+}
 
 function differs({ path, planned, returned }: Mismatch): string {
   const at = spelled(path);
@@ -21,9 +26,10 @@ const steps = {
 };
 
 /** The plan was approved as shown, so any deviation is a provider bug and stops the run. */
-export function inconsistent(type: string, step: keyof typeof steps, mismatches: Mismatch[]): Error {
+export function inconsistent(type: string, step: keyof typeof steps, mismatches: Mismatch[], sensitive: readonly AttributePath[]): Error {
   const { did, unknown } = steps[step];
-  const line = (mismatch: Mismatch) => (isUnknown(mismatch.returned) ? `${spelled(mismatch.path)} ${unknown(mismatch.planned)}` : differs(mismatch));
+  const describe = (mismatch: Mismatch) => (isUnknown(mismatch.returned) ? `${spelled(mismatch.path)} ${unknown(mismatch.planned)}` : differs(mismatch));
+  const line = (mismatch: Mismatch) => (touchesSensitive(sensitive, mismatch.path) ? undisclosed(mismatch.path) : describe(mismatch));
 
   return new Error([`${type} ${did} what the plan did not show, which is a bug in the provider:`, ...mismatches.map((mismatch) => `  ${line(mismatch)}`)].join('\n'));
 }
@@ -55,13 +61,15 @@ export function checkDataSourceRead(type: string, schema: Schema, read: Record<s
 }
 
 /** What the configuration gave belongs to the configuration, so a read may leave it out but not change it. */
-export function checkDataSourceGiven(type: string, schema: Schema, given: Record<string, unknown>, read: Record<string, unknown>): void {
+export function checkDataSourceGiven(type: string, schema: Schema, given: Record<string, unknown>, read: Record<string, unknown>, sensitive: readonly AttributePath[]): void {
   const both = Object.keys(given).filter((name) => Object.hasOwn(read, name));
   const only = (values: Record<string, unknown>) => Object.fromEntries(both.map((name) => [name, values[name]]));
   const changed = offFinal(schema, only(given), only(read));
   if (changed.length === 0) return;
 
-  const lines = changed.map(({ path, planned, returned }) => `  ${spelled(path)} = ${shown(returned)}, where the configuration gave ${shown(planned)}`);
+  const lines = changed.map(({ path, planned, returned }) =>
+    touchesSensitive(sensitive, path) ? `  ${undisclosed(path)}` : `  ${spelled(path)} = ${shown(returned)}, where the configuration gave ${shown(planned)}`
+  );
   throw new Error([`${type} read what its configuration did not give, which is a bug in the provider:`, ...lines].join('\n'));
 }
 
@@ -99,5 +107,15 @@ export function heldBy(type: string, did: string, schema: Schema, values: Record
   } catch (error) {
     if (error instanceof TypeMismatch) throw new Error(`${type} ${did} what its schema does not hold, which is a bug in the provider: ${error.message}`, { cause: error });
     throw error;
+  }
+}
+
+/** A provider words what it throws itself, a string too, and may quote what it was given, so with a sensitive value given none of it is shown. */
+export async function hidingReason<T>(type: string, sensitive: readonly AttributePath[], ask: () => Promise<T>): Promise<T> {
+  try {
+    return await ask();
+  } catch (error) {
+    if (sensitive.length === 0) throw error;
+    throw new Error(`${type} failed on its configuration; a value given to it is sensitive, so the reason is not shown`);
   }
 }

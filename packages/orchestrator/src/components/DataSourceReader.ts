@@ -3,11 +3,11 @@ import { DataBlock, spell } from '@clay/parser';
 
 import { conformValues, writtenAt } from '../conformValues';
 import { DataInstance } from '../keys';
-import { checkDataSourceGiven, checkDataSourceRead, heldBy } from '../providerResult';
+import { checkDataSourceGiven, checkDataSourceRead, heldBy, hidingReason } from '../providerResult';
 import { ProviderRegistry } from '../ProviderRegistry';
 import { withPlace } from '../place';
 import { typedValues } from '../typed';
-import { plainOf, Value, valueOf } from '../Value';
+import { plainOf, sensitiveAmong, Value, valueOf } from '../Value';
 
 /** Asks a data source's provider for what it reads, and keeps it where references find it. */
 export class DataSourceReader {
@@ -24,13 +24,14 @@ export class DataSourceReader {
     try {
       const provider = this.providers.reader(stmt.dataSourceType);
       const conformed = conformValues(stmt.dataSourceType, schema, inputs);
-      await provider.validateDataSource(stmt.dataSourceType, conformed);
+      const sensitive = sensitiveAmong(inputs);
+      await hidingReason(stmt.dataSourceType, sensitive, () => provider.validateDataSource(stmt.dataSourceType, conformed));
       const read = await provider.readDataSource(stmt.dataSourceType, conformed);
       const held = heldBy(stmt.dataSourceType, 'read', schema, read);
       checkDataSourceRead(stmt.dataSourceType, schema, plainOf(held));
       // A null reads as left out, so it never replaces what the configuration gave.
       const valued = Object.fromEntries(Object.entries(held).filter(([, value]) => value.data !== null));
-      checkDataSourceGiven(stmt.dataSourceType, schema, conformed, plainOf(valued));
+      checkDataSourceGiven(stmt.dataSourceType, schema, conformed, plainOf(valued), sensitive);
 
       // A schema attribute neither the configuration nor the read gives is null.
       const leftOut = Object.entries(schema).map(([name, { type }]) => [name, valueOf(type, null)]);
@@ -46,7 +47,8 @@ export class DataSourceReader {
 
     try {
       const conformed = conformValues(stmt.dataSourceType, schema, inputs);
-      await this.providers.reader(stmt.dataSourceType).validateDataSource(stmt.dataSourceType, conformed);
+      const provider = this.providers.reader(stmt.dataSourceType);
+      await hidingReason(stmt.dataSourceType, sensitiveAmong(inputs), () => provider.validateDataSource(stmt.dataSourceType, conformed));
       const later = Object.entries(schema).map(([name, { type }]) => [name, valueOf(type, UNKNOWN)]);
       return this.keep(at, { ...Object.fromEntries(later), ...typedValues(schema, conformed) });
     } catch (error) {

@@ -120,6 +120,15 @@ export function sensitiveUnder(paths: readonly AttributePath[], step: string | n
   return paths.filter(([first]) => String(first) === String(step)).map((path) => path.slice(1));
 }
 
+/** Whether the value at `at` is sensitive in some part, or sits inside a sensitive one. */
+export function touchesSensitive(paths: readonly AttributePath[], at: AttributePath): boolean {
+  return paths.some((path) => {
+    const shared = Math.min(path.length, at.length);
+
+    return path.slice(0, shared).every((step, i) => String(step) === String(at[i]));
+  });
+}
+
 /** An index in a path read from a file is a plain number, where every other number read from one is exact. */
 export function readPaths(paths: unknown, what: string): unknown {
   if (!Array.isArray(paths)) return paths;
