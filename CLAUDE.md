@@ -26,7 +26,7 @@ Try the CLI in a temp directory, never in the repo: `node packages/cli/bin/clay.
 ## Commits
 
 - Never commit, push or open a PR. Suggest the command and the owner runs it.
-- Give commit and PR commands through the Run button (`propose_commands`), with
+- Give commit and PR commands as one plain code block to copy and paste, with
   `npx lint-staged` first.
 - Format: `type: what changed`, lowercase, no period, under 72 characters. Types: `feat`,
   `fix`, `refactor`, `test`, `docs`, `chore`, `ci`.
