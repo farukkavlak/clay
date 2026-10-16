@@ -1,4 +1,4 @@
-import { Address, ModuleAddress, Output, Resource, samePaths, Schema, State } from '@clay/contracts';
+import { Address, AttributePath, ModuleAddress, Output, Resource, samePaths, Schema, State } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { AttributeValue, DataBlock, ResourceBlock, spell, spellReference, Statement } from '@clay/parser';
 import { DesiredResource, hasChanges } from '@clay/planner';
@@ -19,7 +19,7 @@ import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { Reference, ReferenceScanner } from '../resolvers/ReferenceScanner';
 import { unknownOf, UnresolvedReferenceError } from '../resolvers/UnresolvedReferenceError';
 import { ScopeManager } from '../scope/ScopeManager';
-import { carried, outputOf, Value } from '../Value';
+import { carried, outputOf, sensitiveAmong, Value } from '../Value';
 import { DataSourceReader } from './DataSourceReader';
 import { DependencyGraphBuilder, GraphNode, LocalNode, OutputNode, ValueNode } from './DependencyGraphBuilder';
 import { LoadedResource } from './ModuleLoader';
@@ -30,6 +30,8 @@ export interface DesiredState {
   outputs: Record<string, Output>;
   /** What each data source read at plan gave, by address. */
   dataSources: Record<string, Record<string, Output>>;
+  /** The steps to each sensitive part of what a data source read at plan gave, by address, left out where there is none. */
+  dataSensitive: Record<string, AttributePath[]>;
   /** Data sources that wait for the apply, since what they read changes in it. */
   readAtApply: string[];
 }
@@ -88,7 +90,7 @@ export class DesiredStateBuilder {
     this.walk = walk;
     const byKey = new Map(loadedResources.map((r) => [r.address.toString(), r]));
     const resources: DesiredResource[] = [];
-    const desired: DesiredState = { resources, outputs: {}, dataSources: {}, readAtApply: [] };
+    const desired: DesiredState = { resources, outputs: {}, dataSources: {}, dataSensitive: {}, readAtApply: [] };
     // A map, so an output named `__proto__` is a key like any other.
     const rootOutputs = new Map<string, Output>();
 
@@ -132,9 +134,17 @@ export class DesiredStateBuilder {
         if (waits) {
           await this.reader.defer(block, inputs, at);
           desired.readAtApply.push(at.toString());
-        } else desired.dataSources[at.toString()] = carried(await this.reader.read(block, inputs, at));
+        } else this.recordRead(desired, at, await this.reader.read(block, inputs, at));
       }
     }
+  }
+
+  private recordRead(desired: DesiredState, at: DataInstance, read: Record<string, Value>): void {
+    const address = at.toString();
+    desired.dataSources[address] = carried(read);
+
+    const sensitive = sensitiveAmong(read);
+    if (sensitive.length > 0) desired.dataSensitive[address] = sensitive;
   }
 
   /** Its count or for_each is read in its module instance before any instance exists. */

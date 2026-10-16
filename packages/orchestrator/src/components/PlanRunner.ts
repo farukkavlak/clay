@@ -40,7 +40,7 @@ function groupBy(actions: PlanAction[], key: (address: Address) => string): Map<
   return groups;
 }
 
-type Approved = Pick<Plan, 'actions' | 'outputs' | 'dataSources' | 'readAtApply'>;
+type Approved = Pick<Plan, 'actions' | 'outputs' | 'dataSources' | 'dataSensitive' | 'readAtApply'>;
 
 /** What a root output comes to: what the plan shows, or what state holds for one the plan leaves as it is. */
 interface PlannedOutput {
@@ -210,7 +210,7 @@ export class PlanRunner {
   private async *readData(
     { module, block }: Extract<GraphNode, { kind: 'data' }>,
     named: string[] = [],
-    { dataSources, readAtApply }: Pick<Approved, 'dataSources' | 'readAtApply'>,
+    { dataSources, dataSensitive, readAtApply }: Pick<Approved, 'dataSources' | 'dataSensitive' | 'readAtApply'>,
     state: State
   ): AsyncGenerator<RunEvent> {
     const made = this.modules.of(module).flatMap((instance) => this.dataInstances(block, instance, state));
@@ -221,7 +221,7 @@ export class PlanRunner {
     for (const at of made) {
       const address = at.toString();
       if (Object.hasOwn(dataSources, address)) {
-        this.reader.use(at, dataSources[address]);
+        this.reader.use(at, dataSources[address], dataSensitive?.[address]);
         continue;
       }
 

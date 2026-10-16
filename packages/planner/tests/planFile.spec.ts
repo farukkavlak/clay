@@ -334,6 +334,40 @@ describe('reading a plan file', () => {
     expect(read(content)).toThrow('tfplan.json is not a plan file: a sensitive index: 1.5 is not a whole number');
   });
 
+  describe('the sensitive parts of what a data source read', () => {
+    const address = 'data.local_file.f';
+    const gave = { path: { value: 'a', type: types.string }, tags: { value: ['x', 'y'], type: types.list(types.string) } };
+
+    it('reads them back, an index as a plain number', () => {
+      const plan: Plan = { ...emptyPlan, dataSources: { [address]: gave }, dataSensitive: { [address]: [['path'], ['tags', 1]] } };
+
+      expect(parsePlanFile(aPlanFile(plan), 'tfplan.json').dataSensitive).toEqual({ [address]: [['path'], ['tags', 1]] });
+    });
+
+    it('leaves them out of a plan that has none', () => {
+      expect(JSON.parse(aPlanFile())).not.toHaveProperty('dataSensitive');
+    });
+
+    it.each([
+      ['paths that are not a list', { [address]: 'path' }],
+      ['a path with a step that is no key or index', { [address]: [[true]] }],
+    ])('refuses a plan file with %s', (_, dataSensitive) => {
+      expect(read({ ...fields(), dataSources: { [address]: gave }, dataSensitive })).toThrow(/^tfplan\.json is not a plan file$/);
+    });
+
+    it('names a sensitive index that is not whole', () => {
+      expect(read({ ...fields(), dataSources: { [address]: gave }, dataSensitive: { [address]: [['tags', 1.5]] } })).toThrow(
+        'tfplan.json is not a plan file: a sensitive index: 1.5 is not a whole number'
+      );
+    });
+
+    it('refuses sensitive parts of a data source the plan holds no value for', () => {
+      expect(read({ ...fields(), dataSensitive: { [address]: [['path']] } })).toThrow(
+        'tfplan.json is not a plan file: "data.local_file.f" has sensitive parts but no value in the plan'
+      );
+    });
+  });
+
   it('reads back the resources as state held them and as the refresh read them, keys and numbers as state reads them', () => {
     const resources = { 'x.a[0]': { resourceType: 'x', name: 'a', key: 0, attributes: { n: ExactNumber.parse('12345678901234567890') } } };
 

@@ -87,12 +87,14 @@ export interface Plan {
   schemas: Record<string, Schema>;
   /** What each data source read at plan gave, by address, so the apply reads none of them again. */
   dataSources: Record<string, Record<string, Output>>;
+  /** The steps to each sensitive part of what a data source read at plan gave, by address. Left out where there is none. */
+  dataSensitive?: Record<string, AttributePath[]>;
   /** Data sources the apply reads, after what they read has changed. */
   readAtApply: string[];
 }
 
 /** Bump on any change to the file's shape after a release, so an older plan file is refused instead of misread. */
-export const PLAN_FILE_VERSION = '25.0';
+export const PLAN_FILE_VERSION = '26.0';
 
 export interface PlanFile extends Plan {
   version: string;
@@ -178,6 +180,7 @@ export function serializePlan(plan: Plan, configContent: string, modules: Record
     prior: plan.prior,
     schemas: plan.schemas,
     dataSources: plan.dataSources,
+    dataSensitive: plan.dataSensitive,
     readAtApply: plan.readAtApply,
   };
 
@@ -275,6 +278,10 @@ function isDataSources(dataSources: unknown): boolean {
   return isRecord(dataSources) && Object.values(dataSources).every((read) => isRecord(read) && Object.values(read).every((attribute) => isOutput(attribute)));
 }
 
+function isDataSensitive(dataSensitive: unknown): boolean {
+  return dataSensitive === undefined || (isRecord(dataSensitive) && Object.values(dataSensitive).every((paths) => isAttributePaths(paths)));
+}
+
 /** Resources are checked separately, the same way state's are. */
 function isPlan(plan: Partial<Plan>): plan is Plan {
   return (
@@ -284,6 +291,7 @@ function isPlan(plan: Partial<Plan>): plan is Plan {
     isOutputChanges(plan.outputs) &&
     isSchemas(plan.schemas) &&
     isDataSources(plan.dataSources) &&
+    isDataSensitive(plan.dataSensitive) &&
     Array.isArray(plan.readAtApply) &&
     plan.readAtApply.every((address) => typeof address === 'string')
   );
@@ -364,6 +372,7 @@ function readPlan(content: string): unknown {
   if (read.serial instanceof ExactNumber) read.serial = read.serial.toSafeInteger('its serial');
   if (Array.isArray(read.actions)) for (const action of read.actions) if (isRecord(action)) readAction(action);
   readUnknownPaths(read.outputs);
+  if (isRecord(read.dataSensitive)) for (const [address, paths] of Object.entries(read.dataSensitive)) read.dataSensitive[address] = readPaths(paths, 'a sensitive index');
 
   return read;
 }
@@ -389,8 +398,10 @@ function checkSchemasCover(plan: Plan, say: (problem: string) => never): void {
 }
 
 /** Checked here, so a wrong address fails at the file and not deep in the apply. */
-function checkDataAddresses({ dataSources, readAtApply }: Plan, say: (problem: string) => never): void {
+function checkDataAddresses({ dataSources, dataSensitive = {}, readAtApply }: Plan, say: (problem: string) => never): void {
   for (const address of [...Object.keys(dataSources), ...readAtApply]) parseDataAddress(address, (reason) => say(`"${address}" is not a data source: ${reason}`));
+
+  for (const address of Object.keys(dataSensitive)) if (!Object.hasOwn(dataSources, address)) say(`"${address}" has sensitive parts but no value in the plan`);
 
   for (const address of readAtApply) if (Object.hasOwn(dataSources, address)) say(`"${address}" is both read and left for the apply`);
 }

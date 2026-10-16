@@ -3,7 +3,7 @@ import { DataReference, Position, Step } from '@clay/parser';
 
 import { Instances, Repetition } from '../Instances';
 import { Context, dataSourceAddress, dataSourceKey, moduleOf, scopeOf } from '../keys';
-import { objectOf, plainOf, Value, valueOf } from '../Value';
+import { objectOf, Value, valueOf, withSensitive } from '../Value';
 import { everyType, readInstance } from './instance';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 
@@ -43,9 +43,11 @@ export class DataSourceResolver {
     const keys = this.keysOf(reference, scope);
     if (keys === undefined) throw new UnresolvedReferenceError(`${spelled} is known only once its ${repetition} is read`, type);
 
-    const instances = keys.map((key) => plainOf(this.read(reference, scope, key, spelled)));
+    const instances = keys.map((key) => objectOf(Object.entries(this.read(reference, scope, key, spelled))));
+    const data = instances.map((instance) => instance.data);
+    const sensitive = instances.flatMap((instance, index) => (instance.sensitive ?? []).map((path) => [keys[index], ...path]));
 
-    return valueOf(type, repetition === 'count' ? instances : Object.fromEntries(keys.map((key, index) => [key, instances[index]])));
+    return withSensitive(valueOf(type, repetition === 'count' ? data : Object.fromEntries(keys.map((key, index) => [key, data[index]]))), sensitive);
   }
 
   private keysOf(reference: DataReference, scope: string): InstanceKey[] | undefined {

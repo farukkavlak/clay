@@ -106,8 +106,10 @@ outside Clay" and `clay state show` print `(sensitive value)` for each sensitive
 on both sides of a change where either side is sensitive, and name each attribute whose
 sensitive parts change: `content: will be marked sensitive`. An error about a resource names
 a sensitive attribute and quotes neither value, and what a provider says when its validate
-or plan fails on a configuration holding a sensitive value is not shown, only that it failed. A value a provider works
-out from a sensitive one is not sensitive, nor is what a data source given one reads.
+or plan fails on a configuration holding a sensitive value is not shown, only that it
+failed. A data source given a sensitive value gives it back sensitive at the same parts,
+`data.local_file.f.path` for a sensitive `path`. A value a provider works out from a
+sensitive one is not sensitive.
 One thing is still open: a provider's own message from a create, update, delete or read
 can still quote such an attribute.
 
