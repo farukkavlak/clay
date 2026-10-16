@@ -478,11 +478,12 @@ length below 1.
       `count = 0` on `local_file.logs`, `[for log in local_file.logs : log.contnet]` is
       valid, and with `count = 2` it is refused. A body is read once against the item type
       when the collection is unknown, and should be when it is empty
-- [ ] A value not known yet is checked only by its own kind, not by the types of what it
-      holds. `var.l` of type `list(number)` given to a variable of type `list(bool)` is
-      valid to `clay validate` when no instance reads it: a list is taken as a list, and
-      its numbers are never checked. Its type says they can never be booleans. Terraform
-      refuses it
+- [x] A value not known yet is checked by its whole type, not only its own kind. A list of
+      numbers only the apply knows, `tolist(toset([length(random_string.r.result)]))`,
+      given to a variable of type `list(bool)` was valid to the plan and refused by the
+      apply after `random_string.r` was made. Its items, tuple places, object attributes and
+      tuple length are checked now, as Terraform's type conversion does; a string not
+      known yet still passes as a boolean or a number, since it may spell one
 - [ ] A provider that says it computes a value and does not return it at apply is not
       refused: the value is left out and reads as `null`. What reads it then fails
       without naming the provider: `content = stamp.a.made` ends in

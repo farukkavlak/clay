@@ -127,6 +127,58 @@ function collection(resource: string, value: Value, to: Type, path: AttributePat
   );
 }
 
+interface Part {
+  from: Type;
+  to: Type;
+  path: AttributePath;
+  holds: boolean;
+}
+
+function targets(to: Type): Type[] {
+  if (to.kind === 'list' || to.kind === 'set' || to.kind === 'map') return [to.element];
+  if (to.kind === 'tuple') return [...to.elements];
+  if (to.kind === 'object') return Object.values(to.attributes);
+
+  return [];
+}
+
+function targetAt(to: Type, key: string | number): Type | undefined {
+  if (to.kind === 'tuple' && typeof key === 'number') return to.elements[key];
+  // An object source has been checked to name only attributes the target has.
+  if (to.kind === 'object' && typeof key === 'string') return to.attributes[key];
+
+  return to.kind === 'list' || to.kind === 'set' || to.kind === 'map' ? to.element : undefined;
+}
+
+/** What each part of a type is to become. A collection holds one type for all its items, so it names no place. */
+function partsOf(from: Type, to: Type, path: AttributePath): Part[] {
+  if (from.kind === 'list' || from.kind === 'set' || from.kind === 'map') return targets(to).map((target) => ({ from: from.element, to: target, path, holds: true }));
+
+  const placed: [string | number, Type][] = from.kind === 'tuple' ? [...from.elements.entries()] : from.kind === 'object' ? Object.entries(from.attributes) : [];
+  return placed.flatMap(([key, type]) => {
+    const target = targetAt(to, key);
+    return target === undefined ? [] : [{ from: type, to: target, path: [...path, key], holds: false }];
+  });
+}
+
+function shapeFits(resource: string, from: Type, to: Type, path: AttributePath): void {
+  if (from.kind === 'tuple' && to.kind === 'tuple' && from.elements.length !== to.elements.length)
+    throw mismatchAt(path, `${spelled(path)} holds ${items(from.elements.length)}, where ${resource} takes ${items(to.elements.length)}`);
+  if (from.kind !== 'object' || to.kind !== 'object') return;
+
+  const named = nameProblem(resource, namesOfObject(to), Object.keys(from.attributes), path);
+  if (named) throw mismatchAt(path, named.message);
+}
+
+/** A value not known yet has its type, so a part that can never become what the schema takes is refused before apply. */
+function typesFit(resource: string, from: Type, to: Type, path: AttributePath, holds = false): void {
+  if (from.kind === 'dynamic' || to.kind === 'dynamic') return;
+  if (!TAKES[to.kind].includes(from.kind)) throw mismatchAt(path, `${spelled(path)} ${holds ? 'holds' : 'is'} ${article(from.kind)}, where ${resource} takes ${article(to.kind)}`);
+
+  shapeFits(resource, from, to, path);
+  for (const part of partsOf(from, to, path)) typesFit(resource, part.from, part.to, part.path, part.holds);
+}
+
 /** Only a set can hold a set with an unknown member before apply. */
 function knownLater(value: Value, to: Type): boolean {
   return isUnknown(value.data) || (to.kind !== 'set' && unordered(value));
@@ -170,14 +222,17 @@ export function toldWhole<T>(resource: string, value: Value, path: AttributePath
   }
 }
 
-/** An unknown is checked only for its kind here; it is checked again at apply. */
+/** An unknown is checked only by its type here; it is checked again at apply. */
 function plain(resource: string, value: Value, to: Type, path: AttributePath): Value {
   if (to.kind === 'dynamic') return valueOf(value.type, ordered(value));
   if (value.data === null) return valueOf(to, null);
 
   const from = value.type.kind;
   if (from !== 'dynamic' && !TAKES[to.kind].includes(from)) throw mismatchAt(path, `${spelled(path)} is ${described(value)}, where ${resource} takes ${article(to.kind)}`);
-  if (knownLater(value, to)) return valueOf(to, UNKNOWN);
+  if (knownLater(value, to)) {
+    toldWhole(resource, value, path, () => typesFit(resource, value.type, to, path));
+    return valueOf(to, UNKNOWN);
+  }
 
   const convert: Convert = (item, type, at) => plain(resource, item, type, at);
   const isPrimitive = to.kind === 'string' || to.kind === 'number' || to.kind === 'bool';

@@ -1,8 +1,8 @@
-import { ExactNumber, Schema, types, UNKNOWN } from '@clay/contracts';
+import { ExactNumber, Schema, Type, types, UNKNOWN } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { conformValues as conform, SchemaMismatch } from '../src/conformValues';
-import { inferred, valueOf } from '../src/Value';
+import { inferred, valueOf, withSensitive } from '../src/Value';
 
 const schema: Schema = {
   name: { type: types.string },
@@ -191,5 +191,60 @@ describe('conformValues', () => {
     const meta = valueOf(types.object({ m: members, k: types.tuple([members, members]) }), { m: ['z', UNKNOWN], k: [['a'], [UNKNOWN]] });
 
     expect(conform('thing', { meta: { type: types.dynamic } }, { meta })).toEqual({ meta: { m: UNKNOWN, k: [['a'], UNKNOWN] } });
+  });
+  describe('a value not known yet whose parts have kinds the schema cannot take', () => {
+    const held: Schema = {
+      flags: { type: types.list(types.bool) },
+      groups: { type: types.map(types.list(types.bool)) },
+      pair: { type: types.tuple([types.string, types.list(types.bool)]) },
+      two: { type: types.tuple([types.string, types.number]) },
+      cfg: { type: types.object({ on: types.bool }) },
+    };
+
+    const later = (name: string, type: Type) => () => conform('thing', held, { [name]: valueOf(type, UNKNOWN) });
+
+    it.each([
+      ['a list', 'flags', types.list(types.number), 'flags holds a number, where thing takes a boolean'],
+      ['a set into a list', 'flags', types.set(types.number), 'flags holds a number, where thing takes a boolean'],
+      ['a map of lists', 'groups', types.map(types.list(types.number)), 'groups holds a number, where thing takes a boolean'],
+      ['an item of a tuple', 'pair', types.tuple([types.string, types.list(types.number)]), 'pair[1] holds a number, where thing takes a boolean'],
+      ['a list where a tuple goes', 'two', types.list(types.list(types.string)), 'two holds a list, where thing takes a string'],
+      ['an attribute of an object', 'cfg', types.object({ on: types.number }), 'cfg["on"] is a number, where thing takes a boolean'],
+      ['a map where an object goes', 'cfg', types.map(types.list(types.string)), 'cfg holds a list, where thing takes a boolean'],
+    ])('refuses %s', (_, name, type, message) => {
+      expect(later(name, type)).toThrow(expect.objectContaining({ message, attribute: name }));
+    });
+
+    it.each([
+      ['a tuple of another length', 'two', types.tuple([types.string]), 'two holds 1 item, where thing takes 2 items'],
+      ['an object with a name the schema does not have', 'cfg', types.object({ on: types.bool, off: types.bool }), 'thing has no attribute "off" in cfg'],
+      ['an object without a name the schema requires', 'cfg', types.object({ other: types.bool }), 'thing has no attribute "other" in cfg'],
+    ])('refuses %s', (_, name, type, message) => {
+      expect(later(name, type)).toThrow(expect.objectContaining({ message, attribute: name }));
+    });
+
+    it('takes parts of kinds that convert, or that name none, as not known', () => {
+      const fine = {
+        flags: valueOf(types.list(types.string), UNKNOWN),
+        groups: valueOf(types.map(types.list(types.dynamic)), UNKNOWN),
+        pair: valueOf(types.tuple([types.number, types.set(types.string)]), UNKNOWN),
+        two: valueOf(types.tuple([types.number, types.string]), UNKNOWN),
+        cfg: valueOf(types.object({ on: types.string }), UNKNOWN),
+      };
+
+      expect(conform('thing', held, fine)).toEqual({ flags: UNKNOWN, groups: UNKNOWN, pair: UNKNOWN, two: UNKNOWN, cfg: UNKNOWN });
+    });
+
+    it('refuses a set with a member not known yet whose members can never fit', () => {
+      const members = valueOf(types.set(types.number), [n('1'), UNKNOWN]);
+
+      expect(() => conform('thing', held, { flags: members })).toThrow(expect.objectContaining({ message: 'flags holds a number, where thing takes a boolean' }));
+    });
+
+    it('tells a sensitive value not known yet without its parts', () => {
+      const secret = withSensitive(valueOf(types.object({ on: types.number }), UNKNOWN), [[]]);
+
+      expect(() => conform('thing', held, { cfg: secret })).toThrow('cfg does not fit what thing takes; it is sensitive, so its parts are not shown');
+    });
   });
 });
