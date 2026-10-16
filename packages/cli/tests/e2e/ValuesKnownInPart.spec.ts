@@ -133,7 +133,7 @@ describe('a value known in part', () => {
   });
 
   it('reads into what is not known yet as not known yet', async () => {
-    const { outputs } = await newOrchestrator().plan(`${config}\noutput "into" { value = "\${module.k.whole.a.x}" }`);
+    const { outputs } = await newOrchestrator().plan(`${config}\noutput "into" { value = "\${module.k.whole.a}" }`);
 
     expect(isUnknown(outputs.into.new?.value)).toBe(true);
   });

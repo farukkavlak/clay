@@ -6,7 +6,6 @@ import { Context, contextIn, moduleOf, scopeOf } from '../keys';
 import { withPlace } from '../place';
 import { ScopeManager, VariableValue } from '../scope/ScopeManager';
 import { Value } from '../Value';
-import { laterAt } from './readPath';
 import { unknownOf, UnresolvedReferenceError } from './UnresolvedReferenceError';
 
 export class VariableResolver {
@@ -26,8 +25,8 @@ export class VariableResolver {
       return this.typed(reference.name, declared, this.referenceResolver.resolveValue(declared.value, state, where), where, state);
     } catch (error) {
       if (!(error instanceof UnresolvedReferenceError)) throw error;
-      // The unknown takes the variable's type, narrowed by the reference's steps.
-      throw laterAt(this.typed(reference.name, declared, unknownOf(error), where, state), error.message, reference.path);
+      // The unknown takes the variable's type, and the reader checks the reference's steps against it.
+      return this.typed(reference.name, declared, unknownOf(error), where, state);
     }
   }
 

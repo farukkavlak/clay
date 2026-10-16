@@ -159,7 +159,7 @@ describe('locals', () => {
     expect(error.module).toBe('module.m[0]');
   });
 
-  it('reports a local that fails at apply at the local, and keeps what was made before it', async () => {
+  it('refuses at plan a local that reads into a string not known yet, at the local, before anything is made', async () => {
     const config = 'resource "random_string" "s" { length = 3 }\nlocals {\n  bad = random_string.s.result.nope\n}';
 
     const error = await refusal(apply(config));
@@ -167,7 +167,7 @@ describe('locals', () => {
 
     expect(error.message).toBe('random_string.s.result is a string and cannot be read into');
     expect(error.block).toBe('local "bad"');
-    expect(Object.keys(state.resources)).toEqual(['random_string.s']);
+    expect(state.resources).toEqual({});
   });
 
   // Each step reads the one before it twice, so reading a local again for every reader would take 2^40 reads.

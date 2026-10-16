@@ -463,13 +463,17 @@ length below 1.
 - [ ] A value not known yet is refused at plan where its type can never be joined into
       a string: `"x-${thing.a.tags}"` with `tags` a map. Today the plan passes and the
       apply fails after `thing.a` is made. Terraform also waits for the apply
-- [ ] A step into a value not known yet is refused at plan where its type can never take
+- [x] A step into a value not known yet is refused at plan where its type can never take
       it: an index into a set or a map, a key into a list, a name its object type does not
-      have, any step into a string. Today the apply refuses it, and a block that makes no
-      instance never: in a block with `count = 0`, `[for log in local_file.logs : log.contnet]`
-      is valid. `clay validate` reads no data source, so `data.local_file.f.content.nope`
-      is valid to it and refused at plan. Terraform refuses at plan: "Can't access
-      attributes on a primitive-typed value (string)"
+      have, any step into a string. `random_string.r.result.nope` is refused by `validate`
+      and the plan, where the apply refused it after `random_string.r` was made, and a
+      block with `count = 0` never. So is `data.local_file.f.content.nope`, which
+      `validate` let through. Terraform refuses at plan: "Can't access attributes on a
+      primitive-typed value (string)"
+- [ ] A step into an output of a module whose `count` is not known yet is not checked:
+      `module.m[0].x.nope` is valid to `clay validate`, since the output has no type until
+      the module has instances. Resources and data sources give an unknown of their schema
+      type there and are refused
 - [ ] The body of a `for` over a collection known to be empty is never read. With
       `count = 0` on `local_file.logs`, `[for log in local_file.logs : log.contnet]` is
       valid, and with `count = 2` it is refused. A body is read once against the item type

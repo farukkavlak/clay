@@ -1,4 +1,4 @@
-import { ExactNumber, types, UNKNOWN } from '@clay/contracts';
+import { ExactNumber, Type, types, UNKNOWN } from '@clay/contracts';
 import { ConfigError } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
@@ -81,6 +81,42 @@ describe('reading a path into a value', () => {
 
     expect(read).toThrow(UnresolvedReferenceError);
     expect(read).toThrow(expect.objectContaining({ message: 'a.b.id is known only after apply', type: types.string }));
+  });
+
+  const later = (type: Type) => valueOf(type, UNKNOWN);
+  const laterIn = (type: Type) => valueOf(types.object({ id: type }), { id: UNKNOWN });
+
+  // The type says what a step can find, whatever the value turns out to be.
+  it.each([
+    ['a key the object does not have', later(types.object({ id: types.string })), ['nope'], 'var.tags has no key "nope"'],
+    ['an index on an object', later(types.object({ id: types.string })), [0], 'var.tags is an object and has no item [0]'],
+    ['an index on a map', later(types.map(types.string)), [0], 'var.tags is a map and has no item [0]'],
+    ['a key on a list', later(types.list(types.string)), ['first'], 'var.tags is a list and has no key "first"'],
+    ['an index into a set', later(types.set(types.string)), [0], 'var.tags is a set and has no item [0]: its members have no order'],
+    ['a key into a set', later(types.set(types.string)), ['a'], 'var.tags is a set and has no key "a"'],
+    ['an index past a tuple', later(types.tuple([types.string])), [1], 'var.tags has no item [1]'],
+    ['a key on a tuple', later(types.tuple([types.string])), ['first'], 'var.tags is a tuple and has no key "first"'],
+    ['a step into a string', later(types.string), ['x'], 'var.tags is a string and cannot be read into'],
+    ['a step into a number', later(types.number), [0], 'var.tags is a number and cannot be read into'],
+    ['a step into a boolean', later(types.bool), ['x'], 'var.tags is a boolean and cannot be read into'],
+    ['a step into a string below a known step', laterIn(types.string), ['id', 'x'], 'var.tags.id is a string and cannot be read into'],
+    ['a second step into a string', later(types.map(types.string)), ['a', 'x'], 'var.tags.a is a string and cannot be read into'],
+  ])('refuses %s in a value not known yet, where the reference is written', (_, value, path, message) => {
+    const error = errorOf(value, path);
+
+    expect(error.message).toBe(message);
+    expect(error.position).toEqual(at);
+  });
+
+  it.each([
+    ['a key an object has', later(types.object({ id: types.string })), ['id']],
+    ['an index of a list', later(types.list(types.string)), [3]],
+    ['an index inside a tuple', later(types.tuple([types.string])), [0]],
+    ['a key of a map', later(types.map(types.string)), ['any']],
+    ['a step into a value of no type', later(types.dynamic), ['x', 0]],
+    ['a step below a value of no type', later(types.map(types.dynamic)), ['a', 'x']],
+  ])('waits for %s in a value not known yet', (_, value, path) => {
+    expect(() => readPath(value, 'var.tags', steps(...path), at)).toThrow(UnresolvedReferenceError);
   });
 
   // The map is unknown, and the steps into it reach a string.
