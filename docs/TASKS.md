@@ -309,8 +309,9 @@ configuration hits each of these early.
       of the wrong type. The failure of a validate or a plan is hidden when a value in the
       configuration is sensitive; these are not, since an I/O error with its path is what
       a user needs to fix the run
-- [ ] A data source given a sensitive value gives it back unmarked: what it reads is
-      not sensitive. Terraform marks the same parts of what it read
+- [x] A data source given a sensitive value gives it back marked at the same parts, as
+      Terraform does; what the provider computes stays plain. A plan holds the parts
+      of what it read, so the apply keeps them
 - [ ] Other places a sensitive value starts: `sensitive = true` on a variable, an
       attribute a provider's schema marks, and the functions `sensitive` and
       `nonsensitive`, as Terraform has them

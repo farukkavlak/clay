@@ -1,13 +1,18 @@
-import { Output, Schema, UNKNOWN } from '@clay/contracts';
+import { AttributePath, Output, Schema, sensitiveUnder, UNKNOWN } from '@clay/contracts';
 import { DataBlock, spell } from '@clay/parser';
 
-import { conformValues, writtenAt } from '../conformValues';
+import { conformed, writtenAt } from '../conformValues';
 import { DataInstance } from '../keys';
 import { checkDataSourceGiven, checkDataSourceRead, heldBy, hidingReason } from '../providerResult';
 import { ProviderRegistry } from '../ProviderRegistry';
 import { withPlace } from '../place';
 import { typedValues } from '../typed';
-import { plainOf, sensitiveAmong, Value, valueOf } from '../Value';
+import { plainOf, sensitiveAmong, Value, valueOf, withSensitive } from '../Value';
+
+/** A data source gives back, at an attribute it was given, the marks it was given with. */
+function remarked(values: Record<string, Value>, given: Record<string, Value>): Record<string, Value> {
+  return Object.fromEntries(Object.entries(values).map(([name, value]) => [name, withSensitive(value, Object.hasOwn(given, name) ? (given[name].sensitive ?? []) : [])]));
+}
 
 /** Asks a data source's provider for what it reads, and keeps it where references find it. */
 export class DataSourceReader {
@@ -23,19 +28,20 @@ export class DataSourceReader {
 
     try {
       const provider = this.providers.reader(stmt.dataSourceType);
-      const conformed = conformValues(stmt.dataSourceType, schema, inputs);
-      const sensitive = sensitiveAmong(inputs);
-      await hidingReason(stmt.dataSourceType, sensitive, () => provider.validateDataSource(stmt.dataSourceType, conformed));
-      const read = await provider.readDataSource(stmt.dataSourceType, conformed);
+      const given = conformed(stmt.dataSourceType, schema, inputs);
+      const config = plainOf(given);
+      const sensitive = sensitiveAmong(given);
+      await hidingReason(stmt.dataSourceType, sensitive, () => provider.validateDataSource(stmt.dataSourceType, config));
+      const read = await provider.readDataSource(stmt.dataSourceType, config);
       const held = heldBy(stmt.dataSourceType, 'read', schema, read);
       checkDataSourceRead(stmt.dataSourceType, schema, plainOf(held));
       // A null reads as left out, so it never replaces what the configuration gave.
       const valued = Object.fromEntries(Object.entries(held).filter(([, value]) => value.data !== null));
-      checkDataSourceGiven(stmt.dataSourceType, schema, conformed, plainOf(valued), sensitive);
+      checkDataSourceGiven(stmt.dataSourceType, schema, config, plainOf(valued), sensitive);
 
       // A schema attribute neither the configuration nor the read gives is null.
       const leftOut = Object.entries(schema).map(([name, { type }]) => [name, valueOf(type, null)]);
-      return this.keep(at, { ...Object.fromEntries(leftOut), ...typedValues(schema, conformed), ...valued });
+      return this.keep(at, remarked({ ...Object.fromEntries(leftOut), ...typedValues(schema, config), ...valued }, given));
     } catch (error) {
       throw withPlace(error, writtenAt(error, stmt), spell(stmt), at);
     }
@@ -46,19 +52,20 @@ export class DataSourceReader {
     const schema = this.dataSchemas.get(stmt.dataSourceType)!;
 
     try {
-      const conformed = conformValues(stmt.dataSourceType, schema, inputs);
+      const given = conformed(stmt.dataSourceType, schema, inputs);
+      const config = plainOf(given);
       const provider = this.providers.reader(stmt.dataSourceType);
-      await hidingReason(stmt.dataSourceType, sensitiveAmong(inputs), () => provider.validateDataSource(stmt.dataSourceType, conformed));
+      await hidingReason(stmt.dataSourceType, sensitiveAmong(given), () => provider.validateDataSource(stmt.dataSourceType, config));
       const later = Object.entries(schema).map(([name, { type }]) => [name, valueOf(type, UNKNOWN)]);
-      return this.keep(at, { ...Object.fromEntries(later), ...typedValues(schema, conformed) });
+      return this.keep(at, remarked({ ...Object.fromEntries(later), ...typedValues(schema, config) }, given));
     } catch (error) {
       throw withPlace(error, writtenAt(error, stmt), spell(stmt), at);
     }
   }
 
-  /** What a plan read, so the apply reads it no more. */
-  use(at: DataInstance, saved: Record<string, Output>): void {
-    this.keep(at, Object.fromEntries(Object.entries(saved).map(([name, { type, value }]) => [name, valueOf(type, value)])));
+  /** What a plan read, so the apply reads it no more, with the parts the plan found sensitive. */
+  use(at: DataInstance, saved: Record<string, Output>, sensitive: readonly AttributePath[] = []): void {
+    this.keep(at, Object.fromEntries(Object.entries(saved).map(([name, { type, value }]) => [name, withSensitive(valueOf(type, value), sensitiveUnder(sensitive, name))])));
   }
 
   /** By the instance's address, as a plan names it. */

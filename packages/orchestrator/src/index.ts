@@ -81,7 +81,7 @@ export class Orchestrator {
     const prior = refresh ? await this.refresh(prevRun) : prevRun;
     // Planning applies count moves to a copy; the plan keeps the resources at their old addresses.
     const currentState = { ...prior, resources: copyResources(prior.resources) };
-    const { resources: desiredResources, outputs, dataSources, readAtApply } = await this.resolveAndCheck(configContent, currentState, 'plan');
+    const { resources: desiredResources, outputs, dataSources, dataSensitive, readAtApply } = await this.resolveAndCheck(configContent, currentState, 'plan');
 
     const actions = plan(desiredResources, currentState);
     // The refresh only drops resources, so prior has no type prevRun lacks.
@@ -95,6 +95,7 @@ export class Orchestrator {
       prior: prior.resources,
       schemas: await this.schemasOf(held.map((resource) => resource.resourceType)),
       dataSources,
+      ...(Object.keys(dataSensitive).length > 0 && { dataSensitive }),
       readAtApply,
     };
   }
