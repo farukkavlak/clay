@@ -1,6 +1,6 @@
 import { Address, AttributePath, ModuleAddress, Output, Resource, samePaths, Schema, State } from '@clay/contracts';
 import { Graph } from '@clay/graph';
-import { AttributeValue, DataBlock, ResourceBlock, spell, spellReference, Statement } from '@clay/parser';
+import { AttributeValue, DataBlock, ResourceBlock, spell, Statement } from '@clay/parser';
 import { DesiredResource, hasChanges } from '@clay/planner';
 import { moveResource } from '@clay/state';
 
@@ -14,9 +14,9 @@ import { ModuleInstances } from '../ModuleInstances';
 import { NotKnownYet } from '../NotKnownYet';
 import { Planned } from '../Planned';
 import { tryAt, withPlace } from '../place';
-import { checkHasKey, checkInRange, instanceKeyIn } from '../resolvers/instance';
+import { InstanceKeys } from '../resolvers/InstanceKeys';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
-import { Reference, ReferenceScanner } from '../resolvers/ReferenceScanner';
+import { ReferenceScanner } from '../resolvers/ReferenceScanner';
 import { unknownOf, UnresolvedReferenceError } from '../resolvers/UnresolvedReferenceError';
 import { ScopeManager } from '../scope/ScopeManager';
 import { carried, outputOf, sensitiveAmong, Value } from '../Value';
@@ -78,6 +78,7 @@ export class DesiredStateBuilder {
     private graphBuilder: DependencyGraphBuilder,
     private instances: Instances,
     private modules: ModuleInstances,
+    private keys: InstanceKeys,
     private planned: Planned,
     private resourcePlanner: ResourcePlanner,
     private reader: DataSourceReader
@@ -327,12 +328,7 @@ export class DesiredStateBuilder {
 
   /** A bad index or key is refused first, since an instance not made yet would read as unknown, not missing. */
   private resolveOrUnknown(value: AttributeValue, state: State, context: Context): Value {
-    for (const reference of this.scanner.referencesIn(value, context)) {
-      if (reference.kind === 'count' || reference.kind === 'each') continue;
-      if (reference.kind === 'resource') this.checkIndex(reference, spellReference([{ name: reference.reference.type }, { name: reference.reference.name }]));
-      if (reference.kind === 'data') this.checkIndex(reference, reference.name);
-      if (reference.kind === 'output') this.checkCallIndex(reference);
-    }
+    for (const reference of this.scanner.referencesIn(value, context)) if ('reference' in reference) this.keys.of(reference.reference, context, reference.position);
 
     try {
       return this.resolver.resolveValue(value, state, context);
@@ -340,20 +336,5 @@ export class DesiredStateBuilder {
       if (!(error instanceof UnresolvedReferenceError)) throw error;
       return unknownOf(error);
     }
-  }
-
-  private checkIndex({ key, block, reference, position }: Extract<Reference, { kind: 'resource' | 'data' }>, spelled: string): void {
-    const first = instanceKeyIn(reference.path);
-    const repetition = this.instances.repetitionOf(key);
-
-    if (repetition === 'count' && typeof first === 'number') checkInRange(spelled, first, this.instances.keysOf(block)?.length, position);
-    if (repetition === 'for_each' && typeof first === 'string') checkHasKey(spelled, first, this.instances.keysOf(block), position);
-  }
-
-  private checkCallIndex({ module, call, instanceKey, position }: Extract<Reference, { kind: 'output' }>): void {
-    const spelled = spellReference([{ name: 'module' }, { name: module }]);
-
-    if (typeof instanceKey === 'number') checkInRange(spelled, instanceKey, this.modules.keysOf(call)?.length, position);
-    if (typeof instanceKey === 'string') checkHasKey(spelled, instanceKey, this.modules.keysOf(call), position);
   }
 }

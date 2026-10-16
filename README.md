@@ -128,7 +128,7 @@ set twice is refused.
 
 References: `var.name`, `local.name`, `local_file.a.content`, `module.m.out`,
 `module.web[0].out`, and `random_string.s.id` for what the provider assigned. A reference reads into a map or a
-list with `.key`, `["key"]` and `[0]`: `var.tags.env`, `var.names[0]`. A resource named
+list with `.key`, `["key"]` and `[0]`: `var.tags.env`, `var.names[0]`. A bracket may hold a reference too, read where it is written: `var.names[count.index]`. A resource named
 with no attribute is an object of all its attributes: `local_file.a`, or one instance as
 `local_file.logs[0]` and `local_file.f["key"]`. With `count`, `local_file.logs` alone is
 the list of every instance, and with `for_each`, `local_file.f` is a map of them by key, so

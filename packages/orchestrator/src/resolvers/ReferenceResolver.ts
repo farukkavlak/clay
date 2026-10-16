@@ -1,4 +1,4 @@
-import { Address, emptyState, ExactNumber, ModuleAddress, Schema, State, types, UNKNOWN } from '@clay/contracts';
+import { Address, emptyState, ExactNumber, isUnknown, ModuleAddress, Schema, State, types, UNKNOWN } from '@clay/contracts';
 import {
   AttributeValue,
   BoundNode,
@@ -6,6 +6,7 @@ import {
   ConfigError,
   EachReference,
   ForNode,
+  IndexNode,
   LocalReference,
   ParsedReference,
   PathReference,
@@ -30,7 +31,9 @@ import { Planned } from '../Planned';
 import { ScopeManager } from '../scope/ScopeManager';
 import { allSensitiveIf, described, hasText, isAllSensitive, isSensitive, objectOf, tupleOf, unordered, Value, valueOf, withSensitive, wholeIf } from '../Value';
 import { DataSourceResolver } from './DataSourceResolver';
+import { keyOf } from './indexKey';
 import { COUNT_INDEX_OUTSIDE, eachOutside } from './instance';
+import { InstanceKeys } from './InstanceKeys';
 import { ModuleOutputResolver } from './ModuleOutputResolver';
 import { unknownOf, UnresolvedReferenceError } from './UnresolvedReferenceError';
 import { readPath } from './readPath';
@@ -69,6 +72,40 @@ function countIndex(where: Context, position: Position): Value {
   return valueOf(types.number, ExactNumber.parse(String(key)));
 }
 
+type Named = ReferenceNode | CallNode | BoundNode;
+
+/** The node being read, and what its indexes are read with. */
+interface Site {
+  node: Named;
+  state: State;
+  context: Context | undefined;
+  reading: Reading;
+}
+
+/** Reads the steps; `keyed` is whether an index read from a value gave one of them a key. */
+type Reader = (steps: Step[], keyed: boolean) => Value;
+
+/** `later` is the first index whose value is not known yet, and `steps` stop before it. */
+interface Keyed {
+  steps: Step[];
+  sensitive: boolean;
+  later?: Step;
+}
+
+/** What went wrong reading at a sensitive index may quote the index, so only that it did is told. */
+function hidingIf(sensitive: boolean, node: Named, read: () => Value): Value {
+  if (!sensitive) return read();
+
+  const message = `${spellNamed(node)} was read at a sensitive index, so why it failed is not shown`;
+  try {
+    return read();
+  } catch (error) {
+    if (error instanceof ConfigError) throw new ConfigError(message, node.position);
+    if (error instanceof UnresolvedReferenceError) throw new UnresolvedReferenceError(message, error.type, wholeIf(true));
+    throw error;
+  }
+}
+
 export class ReferenceResolver {
   private scopeManager: ScopeManager;
   private instances: Instances;
@@ -89,7 +126,8 @@ export class ReferenceResolver {
     dataSchemas: Map<string, Schema>,
     instances: Instances,
     modules: ModuleInstances,
-    planned: Planned
+    planned: Planned,
+    private keys: InstanceKeys
   ) {
     this.scopeManager = scopeManager;
     this.instances = instances;
@@ -103,27 +141,97 @@ export class ReferenceResolver {
   }
 
   private resolve(node: ReferenceNode, state: State, context: Context | undefined, reading: Reading): Value {
-    const reference = parseReference(node.value);
     const where = context ?? ModuleAddress.root;
-    const { value, path } = reading.asWritten ? this.writtenTarget(reference, where, node.position) : this.resolveTarget(reference, state, where, node.position);
-    const target = node.value.slice(0, node.value.length - path.length);
+    const read: Reader = (steps, keyed) => this.readReference(steps, node.position, state, where, reading, keyed);
 
-    return readPath(value, spellReference(target), path, node.position);
+    return this.readWith({ node, state, context, reading }, node.value, read);
+  }
+
+  /** `keyed` is whether an index read from a value gave a key, which the block's count or for_each may not make. */
+  private readReference(steps: Step[], position: Position, state: State, where: Context, reading: Reading, keyed: boolean): Value {
+    const reference = parseReference(steps);
+    if (keyed) this.keys.of(reference, where, position);
+    const { value, path } = reading.asWritten ? this.writtenTarget(reference, where, position) : this.resolveTarget(reference, state, where, position);
+    const target = steps.slice(0, steps.length - path.length);
+
+    return readPath(value, spellReference(target), path, position);
   }
 
   /** Looks up the function first, so an unknown name is refused whatever the argument is. */
   private resolveCall(node: CallNode, state: State, context: Context | undefined, reading: Reading): Value {
     const result = functionCalled(node)(this.resolveItem(node.args[0], state, context, reading));
+    const read: Reader = (steps) => readPath(result, spellNamed({ ...node, path: [] }), steps, node.position);
 
-    return readPath(result, spellNamed({ ...node, path: [] }), node.path, node.position);
+    return this.readWith({ node, state, context, reading }, node.path, read);
   }
 
   /** The parser only binds a name inside its for, so it always has a value here. */
-  private resolveBound(node: BoundNode, given: Given): Value {
+  private resolveBound(node: BoundNode, state: State, context: Context | undefined, reading: Reading): Value {
     const [first, ...path] = node.value;
     const name = String(stepKey(first));
+    const read: Reader = (steps) => readPath(reading.given.get(name)!, name, steps, node.position);
 
-    return readPath(given.get(name)!, name, path, node.position);
+    return this.readWith({ node, state, context, reading }, path, read);
+  }
+
+  /**
+   * An index read from a value takes the key it comes to, and what it finds is sensitive when the index is.
+   * An index not known yet makes the result unknown, sensitive when what it reads into or the index is.
+   */
+  private readWith(site: Site, steps: Step[], read: Reader): Value {
+    if (!steps.some((step) => 'index' in step)) return read(steps, false);
+
+    const keyed = this.keyed(steps, site);
+    if (keyed.later) return this.readLater(site.node, keyed, read);
+
+    return allSensitiveIf(
+      keyed.sensitive,
+      hidingIf(keyed.sensitive, site.node, () => read(keyed.steps, true))
+    );
+  }
+
+  /** The steps before the first index not known yet, with a key for each index read from a value. */
+  private keyed(steps: Step[], site: Site): Keyed {
+    const found: Step[] = [];
+    let sensitive = false;
+
+    for (const step of steps) {
+      if (!('index' in step)) {
+        found.push(step);
+        continue;
+      }
+
+      const index = this.indexOf(step.index, site);
+      sensitive = sensitive || isSensitive(index);
+      if (isUnknown(index.data)) return { steps: found, sensitive, later: step };
+
+      found.push(keyOf(index, step.spelled, step.index.position));
+    }
+
+    return { steps: found, sensitive };
+  }
+
+  private indexOf(node: IndexNode, { state, context, reading }: Site): Value {
+    try {
+      return this.resolveIn(node, state, context, reading);
+    } catch (error) {
+      if (!(error instanceof UnresolvedReferenceError)) throw error;
+      return unknownOf(error);
+    }
+  }
+
+  /** The type the rest would find is not known without the index, so the unknown has none. */
+  private readLater(node: Named, { steps, sensitive: indexSensitive }: Keyed, read: Reader): never {
+    let sensitive = indexSensitive;
+
+    try {
+      sensitive = isSensitive(hidingIf(sensitive, node, () => read(steps, false))) || sensitive;
+    } catch (error) {
+      if (!(error instanceof UnresolvedReferenceError)) throw error;
+      sensitive = error.sensitive.length > 0 || sensitive;
+    }
+
+    throw new UnresolvedReferenceError(`${spellNamed(node)} is known only after apply`, types.dynamic, wholeIf(sensitive));
   }
 
   /** Over a collection sensitive as a whole, what it gives is too: how many items it has is the collection's. */
@@ -264,7 +372,7 @@ export class ReferenceResolver {
   /** A literal list is a tuple and a literal map an object. */
   private resolveIn(node: AttributeValue, state: State, context: Context | undefined, reading: Reading): Value {
     if (node.type === 'Reference') return this.resolve(node, state, context, reading);
-    if (node.type === 'Bound') return this.resolveBound(node, reading.given);
+    if (node.type === 'Bound') return this.resolveBound(node, state, context, reading);
     if (node.type === 'Call') return this.resolveCall(node, state, context, reading);
     if (node.type === 'For') return this.resolveFor(node, state, context, reading);
     if (node.type === 'Template') return this.resolveTemplate(node.value, state, context, reading);

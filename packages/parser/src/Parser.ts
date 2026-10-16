@@ -562,10 +562,20 @@ export class Parser {
 
     if (this.matchToken(TokenType.OQuote)) key = this.stringKey(this.previous()).value;
     else if (this.check(TokenType.Number) || this.check(TokenType.Minus)) key = this.index(this.advance());
-    else return this.error("Expect a number or a string inside '['.");
+    else return this.indexFromValue();
 
     this.consume(TokenType.RBracket, "Expect ']' after the index.");
     return { key };
+  }
+
+  /** A reference or a call, read where the step is: `var.names[count.index]`. */
+  private indexFromValue(): Step {
+    if (!this.check(TokenType.Identifier)) return this.error("Expect a number, a string or a reference inside '['.");
+
+    const index = this.parseNamed(this.peek().position);
+    this.consume(TokenType.RBracket, "Expect ']' after the index.");
+
+    return { index, spelled: spellNamed(index) };
   }
 
   /** Digits only, and must fit a safe integer. */

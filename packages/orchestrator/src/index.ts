@@ -19,6 +19,7 @@ import { Planned } from './Planned';
 import { checkAttributes } from './checkAttributes';
 import { ConfigFiles } from './ConfigFiles';
 import { ProviderRegistry } from './ProviderRegistry';
+import { InstanceKeys } from './resolvers/InstanceKeys';
 import { ReferenceResolver } from './resolvers/ReferenceResolver';
 import { ReferenceScanner } from './resolvers/ReferenceScanner';
 import { RunEvent } from './RunEvent';
@@ -54,7 +55,8 @@ export class Orchestrator {
     const instances = new Instances();
     const modules = new ModuleInstances();
     const planned = new Planned();
-    const resolver = new ReferenceResolver(scopes, dataSources, schemas, dataSchemas, instances, modules, planned);
+    const keys = new InstanceKeys(instances, modules);
+    const resolver = new ReferenceResolver(scopes, dataSources, schemas, dataSchemas, instances, modules, planned, keys);
     const scanner = new ReferenceScanner(modules);
     const graphBuilder = new DependencyGraphBuilder(scanner, instances, modules);
     const resourcePlanner = new ResourcePlanner(providers);
@@ -66,7 +68,7 @@ export class Orchestrator {
       new ConfigLoader(new ModuleLoader(files, scopes), scopes, dataSources, schemas, dataSchemas, resolver, providers, instances, modules, planned),
       graphBuilder,
       new WrittenCheck(resolver, scopes, schemas, dataSchemas),
-      new DesiredStateBuilder(scopes, scanner, resolver, graphBuilder, instances, modules, planned, resourcePlanner, reader),
+      new DesiredStateBuilder(scopes, scanner, resolver, graphBuilder, instances, modules, keys, planned, resourcePlanner, reader),
       new PlanRunner(stateManager, new ActionExecutor(providers, resolver, resourcePlanner), scopes, resolver, instances, modules, reader)
     );
   }

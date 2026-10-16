@@ -229,8 +229,11 @@ configuration hits each of these early.
 - [x] A `for` expression that makes an object, `{for k, v in m : k => v}`. A key two
       items give is refused, and `...` after the value groups them
 - [ ] `if` in a `for` expression, once operators can write a condition
-- [ ] An index that is read, not written: `var.names[count.index]`. An index is digits
-      or a quoted key today, so an instance cannot take its own item from a list
+- [x] An index read from a value: `var.names[count.index]`, `local_file.f[each.key].content`,
+      `module.app[var.i].url`. A bracket holds a reference or a call, read where the reference
+      is, and it names an item of a list, a key of a map or an instance of a block. What it
+      reads is a dependency. One not known yet makes the read not known yet; a sensitive one
+      makes it sensitive. Terraform takes any expression; Clay has no operators yet
 - [x] A variable names its type: `variable "x" { type = set(string) }`. An object given
       an attribute its type does not name is refused, where Terraform drops it in silence
 - [x] `optional(type)` and `optional(type, default)` on an attribute of a variable's

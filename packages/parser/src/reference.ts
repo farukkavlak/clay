@@ -1,10 +1,18 @@
+import type { BoundNode, CallNode, ReferenceNode } from './ast';
 import { ConfigError } from './ConfigError';
 import { Position } from './Position';
 
-export type Step = { name: string } | { key: string | number };
+/** What a bracket holds when it is a value, not digits or a quoted key. */
+export type IndexNode = ReferenceNode | CallNode | BoundNode;
 
+/** `index` is read where the reference is, and `spelled` is how it was written. */
+export type Step = { name: string } | { key: string | number } | { index: IndexNode; spelled: string };
+
+/** An index read from a value has no key yet, so it is spelled, which no name or number can be. */
 export function stepKey(step: Step): string | number {
-  return 'name' in step ? step.name : step.key;
+  if ('name' in step) return step.name;
+
+  return 'key' in step ? step.key : `[${step.spelled}]`;
 }
 
 export interface VariableReference {
@@ -66,6 +74,7 @@ export const NAME = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 
 /** A key is spelled in brackets as it was written, since under for_each only that form names an instance. */
 function spellStep(part: Step, first: boolean): string {
+  if ('index' in part) return `[${part.spelled}]`;
   if ('key' in part) return `[${JSON.stringify(part.key)}]`;
 
   return first ? part.name : `.${part.name}`;

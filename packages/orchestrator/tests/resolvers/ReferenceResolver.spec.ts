@@ -1,10 +1,11 @@
-import { Address, ExactNumber, ModuleAddress, State, STATE_VERSION, types, UNKNOWN } from '@clay/contracts';
+import { Address, ExactNumber, ModuleAddress, Schema, State, STATE_VERSION, types, UNKNOWN } from '@clay/contracts';
 import { AttributeValue, CONFIG_FILE, ConfigError, Lexer, OutputBlock, Parser, TemplatePart } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
 import { Instances } from '../../src/Instances';
 import { ModuleInstances } from '../../src/ModuleInstances';
 import { Planned } from '../../src/Planned';
+import { InstanceKeys } from '../../src/resolvers/InstanceKeys';
 import { ReferenceResolver } from '../../src/resolvers/ReferenceResolver';
 import { UnresolvedReferenceError } from '../../src/resolvers/UnresolvedReferenceError';
 import { ScopeManager } from '../../src/scope/ScopeManager';
@@ -27,8 +28,14 @@ const state: State = {
   resources: { 'resource.test': { resourceType: 'resource', name: 'test', attributes: { id: 'res-123', val: 'resolved' } } },
 };
 
+const resolverOver = (scopes: ScopeManager, dataSources: Map<string, Record<string, Value>>, schemas: Map<string, Schema>, instances: Instances, planned: Planned) => {
+  const modules = new ModuleInstances();
+
+  return new ReferenceResolver(scopes, dataSources, schemas, new Map(), instances, modules, planned, new InstanceKeys(instances, modules));
+};
+
 const resolverWith = (scopes = new ScopeManager(), planned = new Planned(), dataSources = new Map<string, Record<string, Value>>()) =>
-  new ReferenceResolver(scopes, dataSources, new Map(), new Map(), new Instances(), new ModuleInstances(), planned);
+  resolverOver(scopes, dataSources, new Map(), new Instances(), planned);
 
 /** A template reading a resource not in state, so only the apply knows it. */
 const readLater = () => resolverWith().resolveValue(template('id: ', reference('resource', 'later', 'id')), state, context);
@@ -105,7 +112,7 @@ describe('ReferenceResolver', () => {
   // State may hold data outside the schema, so the error names the resource.
   it('refuses a value in state that its schema does not hold, naming the resource', () => {
     const schemas = new Map([['resource', { val: { type: types.number } }]]);
-    const resolver = new ReferenceResolver(new ScopeManager(), new Map(), schemas, new Map(), new Instances(), new ModuleInstances(), new Planned());
+    const resolver = resolverOver(new ScopeManager(), new Map(), schemas, new Instances(), new Planned());
 
     expect(() => resolver.resolveValue(reference('resource', 'test', 'val'), state, context)).toThrow(
       new ConfigError('resource.test holds what its schema does not: val is a string, where its type is a number', position)
@@ -374,7 +381,7 @@ describe('ReferenceResolver', () => {
         resources: { 'module.app[0].resource.dep[1]': { resourceType: 'resource', name: 'dep', attributes: { id: 'one' } } },
       };
 
-      const read = new ReferenceResolver(new ScopeManager(), new Map(), new Map(), new Map(), instances, new ModuleInstances(), new Planned()).resolveValue(
+      const read = resolverOver(new ScopeManager(), new Map(), new Map(), instances, new Planned()).resolveValue(
         reference('resource', 'dep', 1, 'id'),
         held,
         inInstance(ModuleAddress.root.child('app', 0))

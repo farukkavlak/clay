@@ -35,6 +35,29 @@ export function instanceKeyIn(steps: Step[]): InstanceKey | undefined {
   return steps.length > 0 && 'key' in steps[0] ? steps[0].key : undefined;
 }
 
+/** An index read from a value is a key once the instance reads it, so before that only the kind of block is checked. */
+function fromValue(steps: Step[]): boolean {
+  return steps.length > 0 && 'index' in steps[0];
+}
+
+/** A key is needed only where the block repeats; an index read from a value stands for one. */
+function checkFirst(spelled: string, repetition: Repetition | undefined, path: Step[], position?: Position): void {
+  const first = instanceKeyIn(path);
+  const given = fromValue(path);
+
+  if (repetition === undefined) {
+    if (typeof first === 'number') refuse(`${spelled} has no count, so it takes no index`, position);
+    if (given) refuse(`${spelled} has neither count nor for_each, so it takes no index`, position);
+    return;
+  }
+
+  if (path.length === 0 || given) return;
+
+  // The step is not echoed: it may be an attribute, or a key meant as the index.
+  if (repetition === 'count' && typeof first !== 'number') refuse(`${spelled} has count, so name one of it by index, as in ${spelled}[0]`, position);
+  if (repetition === 'for_each' && typeof first !== 'string') refuse(`${spelled} has for_each, so name one of it by key, as in ${spelled}["key"]`, position);
+}
+
 /** `written` is the whole path as the reference spells it after the block. */
 function readAttribute(block: string, written: Step[], steps: Step[], position?: Position): string | undefined {
   const attribute = firstKey(steps);
@@ -52,21 +75,13 @@ function readAttribute(block: string, written: Step[], steps: Step[], position?:
  * A key after a dot would read `local_file.a.content` as the instance "content", so it is refused.
  */
 export function readInstance(block: string, path: Step[], repetition: Repetition | undefined, position?: Position): InstanceRead {
-  const first = instanceKeyIn(path);
+  checkFirst(block, repetition, path, position);
   const rest = path.slice(1);
 
-  if (repetition === undefined) {
-    if (typeof first === 'number') refuse(`${block} has no count, so it takes no index`, position);
-    return { attribute: readAttribute(block, path, path, position), path: rest };
-  }
-
+  if (repetition === undefined) return { attribute: readAttribute(block, path, path, position), path: rest };
   if (path.length === 0) return { every: repetition, path: [] };
 
-  // The step is not echoed: it may be an attribute, or a key meant as the index.
-  if (repetition === 'count' && typeof first !== 'number') refuse(`${block} has count, so name one of it by index, as in ${block}[0]`, position);
-  if (repetition === 'for_each' && typeof first !== 'string') refuse(`${block} has for_each, so name one of it by key, as in ${block}["key"]`, position);
-
-  return { key: first, attribute: readAttribute(block, path, rest, position), path: rest.slice(1) };
+  return { key: instanceKeyIn(path), attribute: readAttribute(block, path, rest, position), path: rest.slice(1) };
 }
 
 export function instanceType(schema: Schema): Type {
@@ -112,21 +127,13 @@ function readOutput(reference: ModuleOutputReference, steps: Step[], position?: 
  * A key after a dot would read `module.web.url` as the instance "url", so it is refused.
  */
 export function readCall(reference: ModuleOutputReference, repetition: Repetition | undefined, position?: Position): CallRead {
-  const call = spellReference([{ name: 'module' }, { name: reference.module }]);
-  const first = instanceKeyIn(reference.path);
+  checkFirst(spellReference([{ name: 'module' }, { name: reference.module }]), repetition, reference.path, position);
   const rest = reference.path.slice(1);
 
-  if (repetition === undefined) {
-    if (typeof first === 'number') refuse(`${call} has no count, so it takes no index`, position);
-    return { output: readOutput(reference, reference.path, position), path: rest };
-  }
-
+  if (repetition === undefined) return { output: readOutput(reference, reference.path, position), path: rest };
   if (reference.path.length === 0) return { every: repetition, path: [] };
 
-  if (repetition === 'count' && typeof first !== 'number') refuse(`${call} has count, so name one of it by index, as in ${call}[0]`, position);
-  if (repetition === 'for_each' && typeof first !== 'string') refuse(`${call} has for_each, so name one of it by key, as in ${call}["key"]`, position);
-
-  return { key: first, output: readOutput(reference, rest, position), path: rest.slice(1) };
+  return { key: instanceKeyIn(reference.path), output: readOutput(reference, rest, position), path: rest.slice(1) };
 }
 
 /** Refused, since an instance that will never exist would otherwise read as unknown. */
