@@ -4,7 +4,7 @@ import { DataBlock, Position, ResourceBlock } from '@clay/parser';
 import { setOf } from './setMembers';
 import { shown } from './shown';
 import { items, spelled } from './spelled';
-import { article, child, described, isAllSensitive, isSensitive, plainOf, unordered, Value, valueOf, withSensitive } from './Value';
+import { article, child, described, isAllSensitive, isSensitive, nullSource, plainOf, unordered, Value, valueOf, withSensitive } from './Value';
 import { ObjectType, withLeftOut } from './withLeftOut';
 
 /** Carries the attribute, so the caller can report its position; undefined for a missing attribute. */
@@ -241,11 +241,6 @@ function plain(resource: string, value: Value, to: Type, path: AttributePath): V
 
 export function converted(resource: string, value: Value, to: Type, path: AttributePath): Value {
   return sensitiveAs(value, plain(resource, value, to, path));
-}
-
-/** Where a null came from, when a reference gave it. */
-function nullSource(value: Value | undefined): string {
-  return value?.nullFrom === undefined ? '' : `, and ${value.nullFrom}, which it reads, is null`;
 }
 
 /** A name set to null counts as missing, so a required one is refused at its position. */

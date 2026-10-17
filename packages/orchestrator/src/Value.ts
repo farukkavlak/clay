@@ -125,6 +125,11 @@ export function described(value: Value): string {
   return value.data === null ? 'null' : article(value.type.kind);
 }
 
+/** Where a null came from, when a reference gave it. */
+export function nullSource(value: Value | undefined): string {
+  return value?.nullFrom === undefined ? '' : `, and ${value.nullFrom}, which it reads, is null`;
+}
+
 /** The data alone, as providers, plans and state hold it; the schema types it again when read. */
 export function plainOf(values: Record<string, Value>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(values).map(([name, value]) => [name, value.data]));

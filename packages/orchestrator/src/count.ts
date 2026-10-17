@@ -1,10 +1,10 @@
 import { ExactNumber, isUnknown } from '@clay/contracts';
 
 import { NotKnownYet } from './NotKnownYet';
-import { described, isSensitive, Value } from './Value';
+import { described, isSensitive, nullSource, Value } from './Value';
 
 function notANumber(value: Value): Error {
-  return new Error(`count is a whole number from 0, not ${described(value)}`);
+  return new Error(`count is a whole number from 0, not ${described(value)}${nullSource(value)}`);
 }
 
 /** Must be a known whole number. A value not known yet has its type, so one no apply can make a number is refused first, and so is a sensitive one. */

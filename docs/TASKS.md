@@ -497,9 +497,12 @@ length below 1.
       `local_file requires "content", and stamp.a.made, which it reads, is null`. The
       value stays null and is not refused as the provider's bug, since a null may be right
       for an instance; Terraform also lets a value not known at plan come to null
-- [ ] A null a reference gives is named only where a whole required attribute is null. A
-      null that makes a nested attribute required, or a `count`, a `for_each` or a
-      variable of another type refuse its value, still gives no source
+- [x] A null a reference gives is named where a whole required attribute, a `count` or a
+      `for_each` is null: `count` says `not null, and var.k, which it reads, is null`.
+      Terraform names the expression only, by its position
+- [ ] A null a reference gives is not named where it makes a nested attribute required,
+      where a variable of another type refuses it, or in the other messages that say
+      `not null`, such as a `for` over it, the key of a `for` or a function argument
 
 ### Data sources in the graph
 

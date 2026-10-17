@@ -134,4 +134,14 @@ describe('null', () => {
     expect(error.message).toBe(message);
     expect(error.position).toMatchObject({ line: 2 });
   });
+
+  it.each([
+    ['count', 'number', 'count is a whole number from 0, not null, and var.k, which it reads, is null'],
+    ['for_each', 'map(string)', 'for_each is a map, or a list or a set of strings, not null, and var.k, which it reads, is null'],
+  ])('names the reference that came to null as %s', async (argument, type, message) => {
+    const error = await planError(`variable "k" {\n  type = ${type}\n  default = null\n}\nresource "null_resource" "n" {\n  ${argument} = var.k\n}`);
+
+    expect(error.message).toBe(message);
+    expect(error.position).toMatchObject({ line: 6 });
+  });
 });

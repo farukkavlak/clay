@@ -1,7 +1,7 @@
 import { isUnknown } from '@clay/contracts';
 
 import { NotKnownYet } from './NotKnownYet';
-import { child, described, isAllSensitive, isSensitive, Value } from './Value';
+import { child, described, isAllSensitive, isSensitive, nullSource, Value } from './Value';
 
 /** For messages: a set's members have no index. */
 const LIST = { kind: 'list', item: (index: number) => `item [${index}]`, holds: (index: number) => `item [${index}] is`, items: 'items' };
@@ -35,7 +35,7 @@ function entriesOf(value: Value): [string, Value][] {
 const TAKEN = new Set(['map', 'object', 'list', 'tuple', 'set']);
 
 function notTaken(value: Value): Error {
-  return new Error(`for_each is a map, or a list or a set of strings, not ${described(value)}`);
+  return new Error(`for_each is a map, or a list or a set of strings, not ${described(value)}${nullSource(value)}`);
 }
 
 /** A map's keys are sensitive only where the whole map is; a list's or a set's items are its keys. */
