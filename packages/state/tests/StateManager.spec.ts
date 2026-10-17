@@ -2,11 +2,37 @@ import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import path from 'node:path';
 
-import { State, STATE_VERSION } from '@clay/contracts';
+import { emptyState, State, STATE_VERSION } from '@clay/contracts';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { LocalBackend } from '../src/backends/LocalBackend';
+import { StateBackend } from '../src/StateBackend';
 import { StateManager } from '../src/StateManager';
+
+/** A backend that takes a moment to write and notes when two writes overlap. */
+const slow = (log: string[], failing: number[] = []): StateBackend => {
+  let running = 0;
+  let calls = 0;
+
+  return {
+    read: async () => emptyState(),
+    writeIfAbsent: () => Promise.resolve(true),
+    lock: () => Promise.resolve(),
+    unlock: () => Promise.resolve(),
+    write: async (state) => {
+      const call = ++calls;
+      log.push(`start ${state.serial}`);
+      running += 1;
+      if (running > 1) log.push('overlap');
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 5);
+      });
+      running -= 1;
+      log.push(`end ${state.serial}`);
+      if (failing.includes(call)) throw new Error(`write ${call} failed`);
+    },
+  };
+};
 
 describe('StateManager', () => {
   let tmpDir: string;
@@ -58,6 +84,58 @@ describe('StateManager', () => {
     const stored = await stateManager.read();
     expect(state.serial).toBe(2);
     expect(stored.serial).toBe(2);
+  });
+
+  describe('writes started together', () => {
+    it('go one after another, each with its own serial', async () => {
+      const log: string[] = [];
+      const manager = new StateManager(slow(log));
+      const state = emptyState();
+
+      await Promise.all([manager.write(state), manager.write(state), manager.write(state)]);
+
+      expect(log).toEqual(['start 1', 'end 1', 'start 2', 'end 2', 'start 3', 'end 3']);
+    });
+
+    it('keep 20 writes started together whole', async () => {
+      const manager = new StateManager(new LocalBackend(tmpDir, 'test.state.json'));
+      const state = emptyState();
+      const writes: Promise<void>[] = [];
+
+      for (let index = 0; index < 20; index++) {
+        state.resources[`mock_resource.r${index}`] = { resourceType: 'mock_resource', name: `r${index}`, attributes: {} };
+        writes.push(manager.write(state));
+      }
+      await Promise.all(writes);
+
+      const stored = await manager.read();
+      expect(stored.serial).toBe(20);
+      expect(Object.keys(stored.resources)).toHaveLength(20);
+    });
+
+    it('write the state as it is when their turn comes', async () => {
+      const manager = new StateManager(new LocalBackend(tmpDir, 'test.state.json'));
+      const state = emptyState();
+
+      const writes = [manager.write(state), manager.write(state)];
+      state.resources['mock_resource.late'] = { resourceType: 'mock_resource', name: 'late', attributes: {} };
+      await Promise.all(writes);
+
+      const stored = await manager.read();
+      expect(Object.keys(stored.resources)).toEqual(['mock_resource.late']);
+    });
+
+    it('reach the backend after one before them failed', async () => {
+      const log: string[] = [];
+      const manager = new StateManager(slow(log, [1]));
+      const state = emptyState();
+
+      const [first, second] = await Promise.allSettled([manager.write(state), manager.write(state)]);
+
+      expect(first).toMatchObject({ status: 'rejected', reason: { message: 'write 1 failed' } });
+      expect(second.status).toBe('fulfilled');
+      expect(log).toEqual(['start 1', 'end 1', 'start 2', 'end 2']);
+    });
   });
 
   // The state may now hold what the older version cannot read.
