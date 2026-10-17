@@ -472,10 +472,13 @@ length below 1.
       block with `count = 0` never. So is `data.local_file.f.content.nope`, which
       `validate` let through. Terraform refuses at plan: "Can't access attributes on a
       primitive-typed value (string)"
-- [ ] A step into an output of a module whose `count` is not known yet is not checked:
+- [x] A step into an output of a module whose `count` is not known yet is not checked:
       `module.m[0].x.nope` is valid to `clay validate`, since the output has no type until
       the module has instances. Resources and data sources give an unknown of their schema
-      type there and are refused
+      type there and are refused. Left as it is: the plan refuses a `count` not known yet,
+      so no plan or apply gets past it, and `validate` refuses the step once `count` is
+      known. Terraform checks the step only where every output of the module declares its
+      type, and not at all for an output without one
 - [x] The body of a `for` over a collection known to be empty is read against its item
       type. `[for log in local_file.logs : log.contnet]` is refused with `count = 0` or
       `for_each = {}`, as with `count = 2`, and so is a body over an empty `list(string)`
