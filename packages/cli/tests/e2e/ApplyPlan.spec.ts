@@ -485,10 +485,11 @@ describe('apply and plan against real files', () => {
     for (const resource of Object.values(state.resources)) delete resource.dependencies;
     await backend.write(state);
 
-    expect(await destroyedNames('')).toEqual(['a', 'b']);
+    // With no dependencies recorded both are deleted together, so either may finish first.
+    expect([...(await destroyedNames(''))].sort()).toEqual(['a', 'b']);
   });
 
-  // b's path is under a file, so its create fails after a's succeeds.
+  // b's path is under a file, so its create fails after a's succeeds; it reads a, so it runs after it.
   const secondFails = () => `
     resource "local_file" "a" {
       path = "${path.join(dir, 'a.txt')}"
@@ -496,7 +497,7 @@ describe('apply and plan against real files', () => {
     }
     resource "local_file" "b" {
       path = "${path.join(dir, 'a.txt', 'b.txt')}"
-      content = "hello"
+      content = local_file.a.content
     }
   `;
 
