@@ -309,11 +309,12 @@ configuration hits each of these early.
       what it comes to now, a provider result that is off its plan, and what a provider
       says when it refuses a configuration holding one. Terraform hides a provider result
       off its plan, has no check of the first, and leaves a provider's message as it words it
-- [ ] A provider's own message from a create, update, delete, refresh read or data source
-      read can quote what it was given, and so can the message about a value it returns
-      of the wrong type. The failure of a validate or a plan is hidden when a value in the
-      configuration is sensitive; these are not, since an I/O error with its path is what
-      a user needs to fix the run
+- [x] A provider's own message from a create, update, delete, refresh read or data source
+      read is shown as the provider words it, and so is the message about a value it
+      returns of the wrong type. The failure of a validate or a plan is hidden when a value
+      in the configuration is sensitive; these are not, since an I/O error with its path is
+      what a user needs to fix the run. A provider that quotes a value it was given is
+      that provider's bug
 - [x] A data source given a sensitive value gives it back marked at the same parts, as
       Terraform does; what the provider computes stays plain. A plan holds the parts
       of what it read, so the apply keeps them

@@ -118,8 +118,9 @@ failed. A data source given a sensitive value gives it back sensitive at the sam
 `data.local_file.f.path` for a sensitive `path`. A value a provider works out from a
 sensitive one is not sensitive, unless its schema marks the attribute sensitive: that
 attribute is sensitive whoever sets it, and null too.
-One thing is still open: a provider's own message from a create, update, delete or read
-can still quote such an attribute.
+A provider's own message from a create, update, delete or read is shown as it words it,
+since an I/O error with its path is what a user needs to fix the run. A provider that
+quotes a sensitive value in that message shows it plainly.
 
 A local is a value with a name: `locals { name = "${var.prefix}-x" }` is read as
 `local.name`. It may read anything, another local among them, and is worked out once for
