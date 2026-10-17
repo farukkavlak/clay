@@ -29,9 +29,24 @@ import { tryAt } from '../place';
 import { ModuleInstances } from '../ModuleInstances';
 import { Planned } from '../Planned';
 import { ScopeManager } from '../scope/ScopeManager';
-import { allSensitive, allSensitiveIf, described, hasText, isAllSensitive, isSensitive, objectOf, tupleOf, unordered, Value, valueOf, withSensitive, wholeIf } from '../Value';
+import {
+  allSensitive,
+  allSensitiveIf,
+  article,
+  described,
+  hasText,
+  isAllSensitive,
+  isSensitive,
+  objectOf,
+  tupleOf,
+  unordered,
+  Value,
+  valueOf,
+  withSensitive,
+  wholeIf,
+} from '../Value';
 import { DataSourceResolver } from './DataSourceResolver';
-import { keyOf } from './indexKey';
+import { checkUnknownIndex, keyOf } from './indexKey';
 import { COUNT_INDEX_OUTSIDE, eachOutside } from './instance';
 import { InstanceKeys } from './InstanceKeys';
 import { ModuleOutputResolver } from './ModuleOutputResolver';
@@ -207,7 +222,10 @@ export class ReferenceResolver {
 
       const index = this.indexOf(step.index, site);
       sensitive = sensitive || isSensitive(index);
-      if (isUnknown(index.data)) return { steps: found, sensitive, later: step };
+      if (isUnknown(index.data)) {
+        checkUnknownIndex(index, step.spelled, step.index.position);
+        return { steps: found, sensitive, later: step };
+      }
 
       found.push(keyOf(index, step.spelled, step.index.position));
     }
@@ -444,9 +462,26 @@ export class ReferenceResolver {
 
   /** Only a string, a number or a boolean can be joined. */
   private joined(part: ReferenceNode | CallNode | BoundNode, state: State, context: Context | undefined, reading: Reading): Value {
-    const resolved = this.resolveIn(part, state, context, reading);
-    if (resolved.data === null || !hasText(resolved.type)) throw new ConfigError(`${spellNamed(part)} is ${described(resolved)} and cannot be joined into a string`, part.position);
+    const resolved = this.resolvedPart(part, state, context, reading);
+    if (resolved.data === null || !hasText(resolved.type)) throw this.unjoinable(part, isSensitive(resolved) ? undefined : described(resolved));
 
     return resolved;
+  }
+
+  /** A value not known yet is checked by the type it will have. */
+  private resolvedPart(part: ReferenceNode | CallNode | BoundNode, state: State, context: Context | undefined, reading: Reading): Value {
+    try {
+      return this.resolveIn(part, state, context, reading);
+    } catch (error) {
+      if (!(error instanceof UnresolvedReferenceError) || hasText(error.type) || error.type.kind === 'dynamic') throw error;
+      throw this.unjoinable(part, error.sensitive.length > 0 ? undefined : article(error.type.kind));
+    }
+  }
+
+  /** `what` is left out for a sensitive value, whose type is a part of it. */
+  private unjoinable(part: ReferenceNode | CallNode | BoundNode, what: string | undefined): ConfigError {
+    const problem = what === undefined ? 'is sensitive and cannot be joined into a string: why is not shown' : `is ${what} and cannot be joined into a string`;
+
+    return new ConfigError(`${spellNamed(part)} ${problem}`, part.position);
   }
 }

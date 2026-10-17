@@ -460,9 +460,10 @@ length below 1.
       it. An output whose type alone changes is a change and is shown by the two types;
       Terraform counts it as a change too, but its plan shows nothing for it. Terraform
       shows a changed set output item by item, by index
-- [ ] A value not known yet is refused at plan where its type can never be joined into
-      a string: `"x-${thing.a.tags}"` with `tags` a map. Today the plan passes and the
-      apply fails after `thing.a` is made. Terraform also waits for the apply
+- [x] A value not known yet is refused at plan where its type can never be joined into
+      a string (`"x-${thing.a.tags}"` with `tags` a map) or be an index
+      (`names[thing.a.tags]`). The plan passed and the apply failed after `thing.a` was
+      made. A sensitive one is refused without its type. Terraform also waits for the apply
 - [x] A step into a value not known yet is refused at plan where its type can never take
       it: an index into a set or a map, a key into a list, a name its object type does not
       have, any step into a string. `random_string.r.result.nope` is refused by `validate`
