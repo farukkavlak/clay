@@ -14,6 +14,7 @@ import { ModuleInstances } from '../ModuleInstances';
 import { tryAt, withPlace } from '../place';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { RunEvent } from '../RunEvent';
+import { runTogether } from '../runTogether';
 import { ScopeManager } from '../scope/ScopeManager';
 import { shown } from '../shown';
 import { typeFits } from '../typeFits';
@@ -39,6 +40,12 @@ function groupBy(actions: PlanAction[], key: (address: Address) => string): Map<
 
   return groups;
 }
+
+/** How many actions of a layer run at once. */
+const PARALLELISM = 10;
+
+/** Held until nothing else runs, so a reader that stops at a failure cannot cut an action short. */
+const isFailure = (event: RunEvent) => event.type === 'failed';
 
 type Approved = Pick<Plan, 'actions' | 'outputs' | 'dataSources' | 'dataSensitive' | 'readAtApply'>;
 
@@ -191,7 +198,9 @@ export class PlanRunner {
       blockKey
     );
 
-    for (const layer of graph.topologicalSort())
+    for (const layer of graph.topologicalSort()) {
+      const toRun: PlanAction[] = [];
+
       for (const key of this.outputsFirst(layer, graph)) {
         const node = graph.getNode(key)!;
 
@@ -200,10 +209,23 @@ export class PlanRunner {
         if (node.kind === 'local') this.resolveLocal(node, state);
         // Only this output: a sibling may read a resource a later layer creates.
         if (node.kind === 'output') this.resolveInEvery(node, outputs, state);
-        if (node.kind === 'resource' && !(yield* this.applyBlock(blocks.get(key)!, node.module, byBlock.get(key) ?? [], state))) return false;
+        // Every block of the layer is checked before any action runs, so a wrong plan stops the run before it changes anything.
+        if (node.kind === 'resource') toRun.push(...this.actionsOf(blocks.get(key)!, node.module, byBlock.get(key) ?? [], state));
       }
 
+      if (!(yield* this.runTogether(toRun, state))) return false;
+    }
+
     return true;
+  }
+
+  /** Nothing in a layer reads another of it, so its actions run together. */
+  private runTogether(actions: PlanAction[], state: State): AsyncGenerator<RunEvent, boolean> {
+    return runTogether(
+      actions.map((action) => () => this.step(action, state)),
+      PARALLELISM,
+      isFailure
+    );
   }
 
   /** The plan's value, or a read now, after what it reads has run. A plan that has neither was made from another configuration. */
@@ -257,21 +279,19 @@ export class PlanRunner {
   }
 
   /** A saved plan may name a module instance the configuration no longer makes, which would otherwise be silently skipped. */
-  private async *applyBlock(block: ResourceBlock, module: ModuleAddress, actions: PlanAction[], state: State): AsyncGenerator<RunEvent, boolean> {
+  private actionsOf(block: ResourceBlock, module: ModuleAddress, actions: PlanAction[], state: State): PlanAction[] {
     const blocks = this.modules.of(module).map((instance) => new Address(instance, block.resourceType, block.name));
     const byInstance = groupBy(actions, (address) => address.withoutKey().toString());
 
     for (const [instance, instanceActions] of byInstance) if (!blocks.some((at) => at.toString() === instance)) throw undeclared(Address.of(instanceActions[0]));
 
-    for (const at of blocks) {
+    return blocks.flatMap((at) => {
       const instanceActions = byInstance.get(at.toString()) ?? [];
       this.readKeys(at, block, instanceActions, state);
       this.checkEveryInstancePlanned(at, block, instanceActions);
 
-      for (const action of instanceActions) if (!(yield* this.step(action, state))) return false;
-    }
-
-    return true;
+      return instanceActions;
+    });
   }
 
   /** Ordered by the dependencies in state, since the config no longer has the resource. */
@@ -279,7 +299,14 @@ export class PlanRunner {
     const deletes = new Map(actions.filter((action) => action.type === 'DELETE').map((action) => [Address.of(action).toString(), action]));
     const graph = this.deleteGraph(deletes, state);
 
-    for (const layer of graph.topologicalSort().reverse()) for (const key of layer) if (!(yield* this.step(graph.getNode(key)!, state))) return false;
+    for (const layer of graph.topologicalSort().reverse())
+      if (
+        !(yield* this.runTogether(
+          layer.map((key) => graph.getNode(key)!),
+          state
+        ))
+      )
+        return false;
 
     return true;
   }

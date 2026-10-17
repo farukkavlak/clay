@@ -548,13 +548,22 @@ module output had a value, so one that read either failed at plan.
 
 ### Parallel apply
 
-The graph sorts into layers that can run in parallel, and the runner takes them one at a
-time. Runs in parallel need a context of their own: one `ScopeManager` and one
-data-source map per engine, cleared on load, serve one run at a time.
+The graph sorts into layers, and the runner takes one layer at a time, running what is
+in it together. Two runs at once on one engine would need a context of their own: one
+`ScopeManager` and one data-source map per engine, cleared on load, serve one run at a
+time.
 
 - [ ] A run carries its own scopes and data-source values. The engine holds one of each
-      and clears them on load, which is what limits it to one run at a time
-- [ ] Resources in one layer run together; state is written once per layer
+      and clears them on load, which is what limits it to one run at a time. Two plans
+      started together on one engine gave the right answers, so no failure is known
+- [x] Resources in one layer run together, ten at a time, and so do the deletes of one
+      layer. State is still written after every action, as Terraform updates its state
+      after every resource; writes go one at a time. When an action fails, the ones
+      running finish and are saved, none starts, and the failure comes last, since the
+      CLI stops reading at it
+- [ ] `--parallelism` for how many actions run at once, ten now
+- [ ] Every failure of a run is reported. Several actions can fail together, and the CLI
+      stops at the first, which also loses a crash that comes after the failures it holds
 
 ### Lifecycle
 

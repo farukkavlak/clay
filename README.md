@@ -264,13 +264,15 @@ its instances. A plan file holds them unencrypted, a secret a data source read a
    the resource. A plan that changes a value the configuration sets is refused. The
    planner compares each plan with the state and lists the actions: create, update,
    replace, delete, or nothing.
-5. `apply` runs the actions in order, deletes in reverse order, and writes the state
-   after each one, so a failure leaves everything before it on disk. Before each
-   create, update or replace, the provider plans it again with what is known by then.
-   A value the plan showed that comes out different, or a replace where the plan showed
-   an update, stops the run before anything changes. What the provider returns is held
-   to that plan. The state is written to a temporary file and renamed, a backup is kept,
-   and a lock file stops two runs at once.
+5. `apply` runs the actions a layer of the graph at a time, ten at once, deletes in
+   reverse order, and writes the state after each one, so a failure leaves everything
+   done before it on disk. When one fails, the ones already running finish and none
+   starts, and the failure is reported last. Before each create, update or replace, the
+   provider plans it again with what is known by then. A value the plan showed that comes
+   out different, or a replace where the plan showed an update, stops the run before
+   anything changes. What the provider returns is held to that plan. The state is written
+   to a temporary file and renamed, a backup is kept, and a lock file stops two runs at
+   once.
 
 An error says where it was written:
 
