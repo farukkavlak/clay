@@ -579,7 +579,10 @@ in it together.
 ### Lifecycle
 
 - [ ] `lifecycle { create_before_destroy = true }`: today a replacement deletes first
-- [ ] `prevent_destroy`: the plan refuses to delete the resource
+- [x] `lifecycle { prevent_destroy = true }`: the plan refuses to replace the resource, and
+      to delete it. The state keeps the flag of the last apply, so a delete is judged by
+      it once the block is gone; a replace goes by the block. Terraform judges by the block
+      alone, so a resource whose block is gone is deleted
 - [ ] `ignore_changes`: named attributes do not count as a change
 
 ### Provisioners

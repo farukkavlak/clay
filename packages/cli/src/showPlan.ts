@@ -4,14 +4,14 @@ import { isDeepStrictEqual, styleText } from 'node:util';
 
 import { typeName } from './typeName';
 
-/** A move or a change of marks changes state. */
+/** A move, or a change of marks or of what a destroy is prevented, changes state. */
 function changes(action: PlanAction): boolean {
-  return action.type !== 'NO_OP' || action.movedFrom !== undefined || action.marksChange === true;
+  return action.type !== 'NO_OP' || action.movedFrom !== undefined || action.marksChange === true || action.protectionChange === true;
 }
 
-/** A no-op that changes which parts are sensitive shows and counts as an update. */
+/** A no-op that changes which parts are sensitive, or whether a destroy is prevented, shows and counts as an update. */
 export function shownType(action: PlanAction): PlanAction['type'] {
-  return action.marksChange ? 'UPDATE' : action.type;
+  return action.marksChange || action.protectionChange ? 'UPDATE' : action.type;
 }
 
 /** Apply writes drift into state, so a plan that found drift has work to do. */
@@ -111,15 +111,22 @@ function displayMarks(before: AttributePath[], after: AttributePath[]): void {
   }
 }
 
+/** Whether the block prevents a destroy, where it now differs from what the last apply kept. */
+function displayProtection(before: boolean, after: boolean): void {
+  if (before !== after) console.log(`      prevent_destroy: will ${after ? 'be set' : 'no longer be set'}`);
+}
+
 function displayAction(action: PlanAction, plan: Plan): void {
   console.log(actionLine(action, true));
   if (shownType(action) !== 'UPDATE' && action.type !== 'REPLACE') return;
 
   // The plan holds a moved resource where it was before the move.
-  const before = plan.prior[action.movedFrom ?? Address.of(action).toString()]?.sensitive ?? [];
+  const prior = plan.prior[action.movedFrom ?? Address.of(action).toString()];
+  const before = prior?.sensitive ?? [];
   const after = action.sensitive ?? [];
   if (action.changes) displayChanges(action.changes, plan.schemas[action.resourceType], [...before, ...after]);
   displayMarks(before, after);
+  displayProtection(prior?.preventDestroy === true, action.preventDestroy === true);
 }
 
 function displayChangedOutside({ address, changes }: Drift, plan: Plan): void {

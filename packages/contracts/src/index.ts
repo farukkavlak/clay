@@ -62,6 +62,8 @@ export interface Resource {
   attributes: Record<string, unknown>;
   /** The steps to each sensitive part of `attributes`, left out where there is none. The values themselves are held as they are. */
   sensitive?: AttributePath[];
+  /** The block's flag at the last apply, so a delete is judged by it once the block is gone. */
+  preventDestroy?: true;
   /** Kept so it can be deleted before them once the config drops it. */
   dependencies?: string[];
 }
@@ -91,7 +93,7 @@ export interface State {
 }
 
 /** Bump on any change to the shape after a release. A higher version was written by a newer Clay and is refused. */
-export const STATE_VERSION = 5;
+export const STATE_VERSION = 6;
 
 export function emptyState(): State {
   return { version: STATE_VERSION, serial: 0, resources: {} };
@@ -143,7 +145,16 @@ export function readPaths(paths: unknown, what: string): unknown {
   return paths.map((path: unknown) => (Array.isArray(path) ? path.map((step: unknown) => (step instanceof ExactNumber ? step.toSafeInteger(what) : step)) : path));
 }
 
-/** Checks what the engine reads without asking: the address fields, `attributes`, `sensitive` and `dependencies`. */
+/** What a resource keeps beside its values, each left out where there is none. */
+function isKeptBesideValues(value: Record<string, unknown>): boolean {
+  return (
+    (value.sensitive === undefined || isAttributePaths(value.sensitive)) &&
+    (value.preventDestroy === undefined || value.preventDestroy === true) &&
+    (value.dependencies === undefined || Array.isArray(value.dependencies))
+  );
+}
+
+/** Checks what the engine reads without asking: the address fields, `attributes`, `sensitive`, `preventDestroy` and `dependencies`. */
 function isResource(value: unknown): value is Resource {
   return (
     isRecord(value) &&
@@ -151,8 +162,7 @@ function isResource(value: unknown): value is Resource {
     typeof value.name === 'string' &&
     (value.modulePath === undefined || isModulePath(value.modulePath)) &&
     isRecord(value.attributes) &&
-    (value.sensitive === undefined || isAttributePaths(value.sensitive)) &&
-    (value.dependencies === undefined || Array.isArray(value.dependencies))
+    isKeptBesideValues(value)
   );
 }
 

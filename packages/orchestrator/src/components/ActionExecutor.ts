@@ -41,6 +41,12 @@ function offPlanMessage(off: NonNullable<ReturnType<typeof offPlan>>, hidden: At
   return `the plan showed ${off.name} = ${shown(off.planned)}, but it now comes to ${shown(off.resolved)}. Plan again.`;
 }
 
+/** What the block says now, so the state has it once the block is gone. */
+function protect(resource: Resource, { preventDestroy }: PlanAction): void {
+  if (preventDestroy) resource.preventDestroy = true;
+  else delete resource.preventDestroy;
+}
+
 export class ActionExecutor {
   constructor(
     private providers: ProviderRegistry,
@@ -49,7 +55,7 @@ export class ActionExecutor {
   ) {}
 
   async execute(action: PlanAction, currentState: State): Promise<void> {
-    // A no-op only updates its dependencies and which parts are sensitive, so it needs no provider.
+    // A no-op only updates what state keeps beside the values, so it needs no provider.
     if (action.type === 'NO_OP') {
       this.recordUnchanged(action, currentState);
       return;
@@ -156,6 +162,7 @@ export class ActionExecutor {
       dependencies: action.dependencies ?? [],
     };
     mark(currentState.resources[key], sending.sensitive);
+    protect(currentState.resources[key], action);
     this.holdToPlan(action.resourceType, sending, attributes);
   }
 
@@ -168,15 +175,17 @@ export class ActionExecutor {
     currentResource.attributes = this.returned(sending, await provider.update(action.resourceType, request));
     currentResource.dependencies = action.dependencies ?? [];
     mark(currentResource, sending.sensitive);
+    protect(currentResource, action);
     this.holdToPlan(action.resourceType, sending, currentResource.attributes);
   }
 
-  /** Dependencies, and which parts are sensitive, can change while values do not, so a no-op still updates them. */
+  /** Dependencies, which parts are sensitive and whether a destroy is prevented can change while values do not, so a no-op still updates them. */
   private recordUnchanged(action: PlanAction, currentState: State): void {
     const resource = held(action, currentState);
 
     resource.dependencies = action.dependencies ?? [];
     mark(resource, action.sensitive ?? []);
+    protect(resource, action);
   }
 
   async executeDelete(action: PlanAction, provider: Provider, currentState: State): Promise<void> {

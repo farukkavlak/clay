@@ -5,6 +5,7 @@ import {
   CallNode,
   DataBlock,
   ForNode,
+  Lifecycle,
   LocalBlock,
   ModuleBlock,
   namedIn,
@@ -140,7 +141,17 @@ export class Parser {
     const typeToken = this.consumeType("Expect resource type string after 'resource'.");
     const nameToken = this.consumeName('Expect resource name string after resource type.');
 
-    const { count, for_each: forEach, ...attributes } = this.parseAttributes('resource');
+    let lifecycle: Lifecycle | undefined;
+    const {
+      count,
+      for_each: forEach,
+      ...attributes
+    } = this.parseAttributes('resource', {
+      lifecycle: (key) => {
+        if (lifecycle) throw new ConfigError(`resource "${typeToken.value}" "${nameToken.value}" has two lifecycle blocks`, key.position);
+        lifecycle = this.parseLifecycle(key.position);
+      },
+    });
     if (count && forEach) throw new ConfigError(`resource "${typeToken.value}" "${nameToken.value}" has count or for_each, not both`, forEach.position);
 
     return {
@@ -149,9 +160,30 @@ export class Parser {
       name: nameToken.value,
       ...(count && { count }),
       ...(forEach && { forEach }),
+      ...(lifecycle && { lifecycle }),
       attributes,
       position,
     };
+  }
+
+  /** Read with the block, before any reference has a value, so it is true or false written out. */
+  private parseLifecycle(position: Position): Lifecycle {
+    this.consume(TokenType.LBrace, "Expect '{' after 'lifecycle'.");
+
+    const seen: Record<string, true> = {};
+    let preventDestroy: boolean | undefined;
+    while (!this.check(TokenType.RBrace) && !this.isAtEnd()) {
+      const key = this.consume(TokenType.Identifier, 'Expect an argument name.');
+      this.checkKey(seen, key);
+      seen[key.value] = true;
+      if (key.value !== 'prevent_destroy') throw new ConfigError(`lifecycle takes only "prevent_destroy", not "${key.value}"`, key.position);
+
+      this.consume(TokenType.Assign, "Expect '=' after the argument name.");
+      preventDestroy = this.consume(TokenType.Boolean, 'prevent_destroy is true or false.').value === 'true';
+    }
+
+    this.consume(TokenType.RBrace, "Expect '}' after lifecycle body.");
+    return { ...(preventDestroy !== undefined && { preventDestroy }), position };
   }
 
   private parseData(position: Position): DataBlock {
@@ -344,12 +376,18 @@ export class Parser {
     };
   }
 
-  private parseAttributes(block: string): Record<string, AttributeValue> {
+  /** A name in `nested` followed by `{` is a block inside this one, read by its function instead of as an attribute. */
+  private parseAttributes(block: string, nested: Record<string, (key: Token) => void> = {}): Record<string, AttributeValue> {
     this.consume(TokenType.LBrace, `Expect '{' after ${block} name.`);
 
     const attributes: Record<string, AttributeValue> = {};
     while (!this.check(TokenType.RBrace) && !this.isAtEnd()) {
       const key = this.consume(TokenType.Identifier, 'Expect attribute name.');
+      if (Object.hasOwn(nested, key.value) && this.check(TokenType.LBrace)) {
+        nested[key.value](key);
+        continue;
+      }
+
       this.checkKey(attributes, key);
       this.consume(TokenType.Assign, "Expect '=' after attribute name.");
       attributes[key.value] = this.parseValue();

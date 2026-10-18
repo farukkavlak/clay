@@ -30,6 +30,11 @@ function desiredResource(name: string, attributes: Record<string, string>, modul
   };
 }
 
+function preventing(name: string, attributes: Record<string, string>): DesiredResource {
+  const resource = desiredResource(name, attributes);
+  return { ...resource, block: { ...resource.block, lifecycle: { preventDestroy: true, position } } };
+}
+
 function stateWith(name: string, attributes: Record<string, unknown>): State {
   return {
     version: STATE_VERSION,
@@ -78,6 +83,40 @@ describe('Planner', () => {
     expect(plan([{ ...desired, replace: true }], stateWith('r', { path: 'old', size: 'large' }))[0]).toMatchObject({ type: 'REPLACE', sensitive });
     expect(plan([desired], stateWith('r', planned))[0]).toMatchObject({ type: 'NO_OP', sensitive });
     expect(plan([desiredResource('r', planned)], stateWith('r', planned))[0]).not.toHaveProperty('sensitive');
+  });
+
+  describe('prevent_destroy', () => {
+    const planned = { path: 'x' };
+    const protectedState = (): State => {
+      const state = stateWith('r', planned);
+      state.resources['mock_resource.r'].preventDestroy = true;
+      return state;
+    };
+
+    it('is carried by a create, an update, a replace and a no-op, and by none of them where the block does not say it', () => {
+      const empty = { version: STATE_VERSION, serial: 0, resources: {} };
+
+      expect(plan([preventing('r', planned)], empty)[0]).toMatchObject({ type: 'CREATE', preventDestroy: true });
+      expect(plan([preventing('r', { path: 'y' })], stateWith('r', planned))[0]).toMatchObject({ type: 'UPDATE', preventDestroy: true });
+      expect(plan([{ ...preventing('r', { path: 'y' }), replace: true }], stateWith('r', planned))[0]).toMatchObject({ type: 'REPLACE', preventDestroy: true });
+      expect(plan([preventing('r', planned)], protectedState())[0]).toMatchObject({ type: 'NO_OP', preventDestroy: true });
+      expect(plan([desiredResource('r', planned)], empty)[0]).not.toHaveProperty('preventDestroy');
+      expect(plan([desiredResource('r', planned)], protectedState())[0]).not.toHaveProperty('preventDestroy');
+    });
+
+    it('is not carried by a delete, which the state is judged by', () => {
+      const [action] = plan([], protectedState());
+
+      expect(action.type).toBe('DELETE');
+      expect(action).not.toHaveProperty('preventDestroy');
+    });
+
+    it('says a no-op changes it where the block and the state disagree, and only then', () => {
+      expect(plan([preventing('r', planned)], stateWith('r', planned))[0]).toMatchObject({ type: 'NO_OP', protectionChange: true });
+      expect(plan([desiredResource('r', planned)], protectedState())[0]).toMatchObject({ type: 'NO_OP', protectionChange: true });
+      expect(plan([preventing('r', planned)], protectedState())[0]).not.toHaveProperty('protectionChange');
+      expect(plan([desiredResource('r', planned)], stateWith('r', planned))[0]).not.toHaveProperty('protectionChange');
+    });
   });
 
   it('says a no-op changes which parts are sensitive where the state marks other parts, and only then', () => {

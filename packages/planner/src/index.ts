@@ -71,6 +71,10 @@ export interface PlanAction {
   sensitive?: AttributePath[];
   /** On a no-op: the values stay, which parts are sensitive changes. */
   marksChange?: true;
+  /** What the block says, left out where it does not prevent a destroy. A delete is judged by the state's flag instead. */
+  preventDestroy?: true;
+  /** On a no-op: the values stay, whether the block prevents a destroy changes. */
+  protectionChange?: true;
   changes?: Changes;
   dependencies?: string[];
 }
@@ -94,7 +98,7 @@ export interface Plan {
 }
 
 /** Bump on any change to the file's shape after a release, so an older plan file is refused instead of misread. */
-export const PLAN_FILE_VERSION = '26.0';
+export const PLAN_FILE_VERSION = '27.0';
 
 export interface PlanFile extends Plan {
   version: string;
@@ -242,8 +246,21 @@ function carriesValues(action: Record<string, unknown>): boolean {
   return marked && [action.planned, action.after].every((values) => (values === undefined ? !sends : sends && isChanges(values)));
 }
 
-function isMarksChange(action: Record<string, unknown>): boolean {
-  return action.marksChange === undefined || (action.marksChange === true && action.type === 'NO_OP');
+/** Only a no-op carries the mark of a change that is not one of the values. */
+function isNoOpMark(action: Record<string, unknown>, field: 'marksChange' | 'protectionChange'): boolean {
+  return action[field] === undefined || (action[field] === true && action.type === 'NO_OP');
+}
+
+/** A destroy is prevented by the block a create, update, replace or no-op was planned from; a delete has none. */
+function isProtection(action: Record<string, unknown>): boolean {
+  const prevents = action.preventDestroy === undefined || (action.preventDestroy === true && action.type !== 'DELETE');
+
+  return prevents && isNoOpMark(action, 'protectionChange');
+}
+
+/** What a plan keeps in state beside the values: the marks and the prevented destroy. */
+function isStateOnly(action: Record<string, unknown>): boolean {
+  return isNoOpMark(action, 'marksChange') && isProtection(action);
 }
 
 function isAction(action: unknown): boolean {
@@ -252,7 +269,7 @@ function isAction(action: unknown): boolean {
     (action.modulePath === undefined || isModulePath(action.modulePath)) &&
     (action.key === undefined || isInstanceKey(action.key)) &&
     isMovedFrom(action) &&
-    isMarksChange(action) &&
+    isStateOnly(action) &&
     (action.changes === undefined || isChanges(action.changes)) &&
     carriesValues(action)
   );
@@ -565,6 +582,14 @@ function marked({ sensitive }: DesiredResource): Pick<PlanAction, 'sensitive'> {
   return sensitive.length > 0 ? { sensitive } : {};
 }
 
+function prevents({ block }: DesiredResource): boolean {
+  return block.lifecycle?.preventDestroy === true;
+}
+
+function protectedBy(desired: DesiredResource): Pick<PlanAction, 'preventDestroy'> {
+  return prevents(desired) ? { preventDestroy: true } : {};
+}
+
 function processExistingResource(actions: PlanAction[], desired: DesiredResource, currentResource: Resource) {
   const moved = desired.movedFrom;
   const resource = desired.block;
@@ -576,7 +601,9 @@ function processExistingResource(actions: PlanAction[], desired: DesiredResource
       ...desired.address.fields(),
       ...(moved && { movedFrom: moved }),
       ...marked(desired),
+      ...protectedBy(desired),
       ...(!samePaths(currentResource.sensitive ?? [], desired.sensitive) && { marksChange: true }),
+      ...(prevents(desired) !== (currentResource.preventDestroy === true) && { protectionChange: true }),
       dependencies: desired.dependencies,
     });
     return;
@@ -590,6 +617,7 @@ function processExistingResource(actions: PlanAction[], desired: DesiredResource
     planned: desired.attributes,
     after: desired.after,
     ...marked(desired),
+    ...protectedBy(desired),
     changes: changes ?? {},
     dependencies: desired.dependencies,
   });
@@ -614,6 +642,7 @@ export function plan(desiredResources: DesiredResource[], currentState: State): 
         planned: desired.attributes,
         after: desired.after,
         ...marked(desired),
+        ...protectedBy(desired),
         dependencies: desired.dependencies,
       });
   }
