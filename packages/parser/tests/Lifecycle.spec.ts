@@ -33,6 +33,12 @@ describe('Parser - lifecycle block', () => {
     expect(resource('resource "local_file" "a" { lifecycle {} }').lifecycle).not.toHaveProperty('preventDestroy');
   });
 
+  it.each([true, false])('reads create_before_destroy = %s beside the other arguments', (value) => {
+    const { lifecycle } = resource(`resource "t" "a" { lifecycle { create_before_destroy = ${value} prevent_destroy = true } }`);
+
+    expect(lifecycle).toMatchObject({ createBeforeDestroy: value, preventDestroy: true });
+  });
+
   describe('ignore_changes', () => {
     it('is all, written alone', () => {
       expect(ignored('all')).toBe('all');
@@ -73,10 +79,12 @@ describe('Parser - lifecycle block', () => {
     [
       'an argument it does not take',
       'resource "t" "a" { lifecycle { replace_triggered_by = true } }',
-      'lifecycle takes only "prevent_destroy" and "ignore_changes", not "replace_triggered_by"',
+      'lifecycle takes only "prevent_destroy", "create_before_destroy" and "ignore_changes", not "replace_triggered_by"',
       1,
       32,
     ],
+    ['create_before_destroy that is not written out', 'resource "t" "a" { lifecycle { create_before_destroy = var.x } }', 'create_before_destroy is true or false.', 1, 56],
+    ['create_before_destroy twice', 'resource "t" "a" { lifecycle { create_before_destroy = true create_before_destroy = false } }', 'create_before_destroy is set twice', 1, 61],
     ['ignore_changes that is not a list or all', 'resource "t" "a" { lifecycle { ignore_changes = "x" } }', 'ignore_changes is a list of attributes, or all.', 1, 49],
     ['an ignored attribute in quotes', 'resource "t" "a" { lifecycle { ignore_changes = ["x"] } }', 'ignore_changes names an attribute, written without quotes.', 1, 50],
     ['all in a list', 'resource "t" "a" { lifecycle { ignore_changes = [x, all] } }', 'all is written alone, not in a list', 1, 53],

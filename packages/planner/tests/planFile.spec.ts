@@ -375,6 +375,18 @@ describe('reading a plan file', () => {
     expect(read(content)).toThrow(/^tfplan\.json is not a plan file$/);
   });
 
+  it.each([
+    ['anything but true', 'REPLACE', false],
+    ['on an update', 'UPDATE', true],
+    ['on a delete', 'DELETE', true],
+    ['on a create', 'CREATE', true],
+  ])('refuses create_before_destroy that is %s', (_, type, createBeforeDestroy) => {
+    const withValues = type === 'REPLACE' || type === 'UPDATE' || type === 'CREATE' ? { planned: {}, after: {} } : {};
+    const content = { ...fields(), actions: [{ type, resourceType: 'null_resource', name: 'a', createBeforeDestroy, ...withValues }] };
+
+    expect(read(content)).toThrow(/^tfplan\.json is not a plan file$/);
+  });
+
   it('names a sensitive index that is not whole', () => {
     const content = { ...fields(), actions: [{ type: 'NO_OP', resourceType: 'null_resource', name: 'a', sensitive: [['triggers', 1.5]] }] };
 

@@ -1,4 +1,4 @@
-import { Address, AttributePath, Provider, Resource, Schema, State, touchesSensitive } from '@clay/contracts';
+import { Address, AttributePath, DeposedObject, Provider, Resource, Schema, State, touchesSensitive } from '@clay/contracts';
 import { offApply, offFinal, offPlan, PlanAction } from '@clay/planner';
 
 import { conformValues } from '../conformValues';
@@ -42,6 +42,13 @@ function offPlanMessage(off: NonNullable<ReturnType<typeof offPlan>>, hidden: At
   return `the plan showed ${off.name} = ${shown(off.planned)}, but it now comes to ${shown(off.resolved)}. Plan again.`;
 }
 
+/** After any it already has for the address, so the oldest goes first. */
+function depose(state: State, key: string, old: Resource): void {
+  const left: DeposedObject = { attributes: old.attributes, ...(old.sensitive && { sensitive: old.sensitive }), ...(old.dependencies && { dependencies: old.dependencies }) };
+
+  state.deposed = { ...state.deposed, [key]: [...(state.deposed?.[key] ?? []), left] };
+}
+
 /** What the block says now, so the state has it once the block is gone. */
 function protect(resource: Resource, { preventDestroy }: PlanAction): void {
   if (preventDestroy) resource.preventDestroy = true;
@@ -76,6 +83,12 @@ export class ActionExecutor {
       case 'REPLACE': {
         // Checked before the delete, so a value off the plan or refused by the provider leaves the resource untouched.
         const sending = await this.sendingFor(action, currentState);
+        if (action.createBeforeDestroy) {
+          // The old object stays the current one until the new one exists, so a create that fails leaves it whole.
+          await this.create(action, provider, currentState, sending, held(action, currentState));
+          break;
+        }
+
         await this.executeDelete(action, provider, currentState);
         await this.create(action, provider, currentState, sending);
         break;
@@ -159,7 +172,8 @@ export class ActionExecutor {
     await this.create(action, provider, currentState, await this.sendingFor(action, currentState));
   }
 
-  private async create(action: PlanAction, provider: Provider, currentState: State, sending: Sending): Promise<void> {
+  /** `replacing` is the object a replace made first leaves deposed, once the new one is in state. */
+  private async create(action: PlanAction, provider: Provider, currentState: State, sending: Sending, replacing?: Resource): Promise<void> {
     const contextAddress = Address.of(action);
 
     const attributes = this.returned(sending, await provider.create(action.resourceType, { config: sending.inputs, planned: sending.after }));
@@ -170,6 +184,7 @@ export class ActionExecutor {
       attributes,
       dependencies: action.dependencies ?? [],
     };
+    if (replacing) depose(currentState, key, replacing);
     mark(currentState.resources[key], sending.sensitive);
     protect(currentState.resources[key], action);
     this.holdToPlan(action.resourceType, sending, attributes);

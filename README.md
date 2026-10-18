@@ -230,6 +230,15 @@ block when an attribute that forces a replace changes in the same plan. To delet
 prevents it, set `prevent_destroy = false`, apply, then delete it. The flag alone changing
 is an update that writes the state and calls no provider.
 
+`lifecycle { create_before_destroy = true }` makes a replace create the new object first.
+The old one stays in state as a deposed object, and is destroyed once everything that read
+it is updated, at the end of the apply with the deletes. A create that fails leaves the old
+object whole; a destroy that fails leaves it deposed, and the next plan destroys it. A
+resource that a resource with the flag reads gets it too, through any others in between,
+since an order made of one without the other could not hold. A module's resource is one
+block for all the instances of the module, so a flag there reaches each of them.
+`prevent_destroy` still refuses the replace.
+
 `lifecycle { ignore_changes = [content] }` keeps a change to those attributes out of the
 plan. The configuration is read as if the attribute still held what the state has, before
 the provider plans, so an ignored attribute that forces a replace forces none, and a

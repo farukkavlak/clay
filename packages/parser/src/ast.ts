@@ -48,6 +48,8 @@ export interface IgnoredPath {
 export interface Lifecycle extends Node {
   /** Refuses a plan that deletes or replaces the resource. */
   preventDestroy?: boolean;
+  /** A replace makes the new object first and destroys the old one after what depends on it is updated. */
+  createBeforeDestroy?: boolean;
   /** What a change in the configuration does not plan: these paths, or every attribute. */
   ignoreChanges?: 'all' | IgnoredPath[];
 }

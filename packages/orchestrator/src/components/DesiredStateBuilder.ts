@@ -70,6 +70,7 @@ function sharedModule(one: ModuleAddress, other: ModuleAddress): ModuleAddress {
  */
 export class DesiredStateBuilder {
   private schemas = new Map<string, Schema>();
+  private createsFirst = new Set<ResourceBlock>();
   private walk: Walk = 'plan';
 
   constructor(
@@ -85,11 +86,27 @@ export class DesiredStateBuilder {
     private reader: DataSourceReader
   ) {}
 
+  /** The blocks that say it, and every block they read, through any others. A module's block is one for all its instances. */
+  private createFirst(loadedResources: LoadedResource[], graph: Graph<GraphNode>): Set<ResourceBlock> {
+    const found = new Set<string>();
+    const queue = loadedResources.filter(({ block }) => block.lifecycle?.createBeforeDestroy === true).map(({ uniqueId }) => uniqueId);
+
+    for (let next = queue.shift(); next !== undefined; next = queue.shift()) {
+      if (found.has(next)) continue;
+
+      found.add(next);
+      queue.push(...this.graphBuilder.resourceDependencies(graph, next));
+    }
+
+    return new Set(loadedResources.filter(({ uniqueId }) => found.has(uniqueId)).map(({ block }) => block));
+  }
+
   /** Applies count moves to `state`, a copy the plan never writes, and plans the actions against it. */
   async build(loadedResources: LoadedResource[], graph: Graph<GraphNode>, state: State, schemas: Map<string, Schema>, walk: Walk): Promise<DesiredState> {
     this.planned.begin();
     this.schemas = schemas;
     this.walk = walk;
+    this.createsFirst = this.createFirst(loadedResources, graph);
     const byKey = new Map(loadedResources.map((r) => [r.address.toString(), r]));
     const resources: DesiredResource[] = [];
     const desired: DesiredState = { resources, outputs: {}, dataSources: {}, dataSensitive: {}, readAtApply: [] };
@@ -240,6 +257,7 @@ export class DesiredStateBuilder {
       replace: change.replace,
       dependencies,
       ...(ignoring && { ignored: ignoring.paths }),
+      ...(this.createsFirst.has(block) && { createBeforeDestroy: true as const }),
       ...(movedFrom && { movedFrom }),
     };
   }

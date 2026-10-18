@@ -47,6 +47,8 @@ export interface DesiredResource {
   dependencies: string[];
   /** The paths of the existing resource the configuration does not change; left out where it does not exist yet. */
   ignored?: AttributePath[];
+  /** Its block says so, or a block that reads it does: a replace makes the new object first. */
+  createBeforeDestroy?: true;
   /** Its state address before count was added or removed; the state it was planned against already has the move. */
   movedFrom?: string;
 }
@@ -71,6 +73,8 @@ export interface PlanAction {
   after?: Record<string, unknown>;
   /** The steps to each sensitive part of the resource as the plan leaves it, a no-op too. Left out where there is none. */
   sensitive?: AttributePath[];
+  /** On a replace: the new object is made first, and the old one is destroyed once what reads it is updated. */
+  createBeforeDestroy?: true;
   /** On a delete: it destroys the objects a replace left behind, not the current one. */
   deposed?: true;
   /** On a no-op: the values stay, which parts are sensitive changes. */
@@ -104,7 +108,7 @@ export interface Plan {
 }
 
 /** Bump on any change to the file's shape after a release, so an older plan file is refused instead of misread. */
-export const PLAN_FILE_VERSION = '29.0';
+export const PLAN_FILE_VERSION = '30.0';
 
 export interface PlanFile extends Plan {
   version: string;
@@ -264,6 +268,10 @@ function isProtection(action: Record<string, unknown>): boolean {
   return prevents && isNoOpMark(action, 'protectionChange');
 }
 
+function isCreatedFirst(action: Record<string, unknown>): boolean {
+  return action.createBeforeDestroy === undefined || (action.createBeforeDestroy === true && action.type === 'REPLACE');
+}
+
 function isDeposed(action: Record<string, unknown>): boolean {
   return action.deposed === undefined || (action.deposed === true && action.type === 'DELETE');
 }
@@ -275,7 +283,7 @@ function isIgnored(action: Record<string, unknown>): boolean {
 
 /** What a plan holds beside the values: the marks, the prevented destroy and the paths left as they are. */
 function isStateOnly(action: Record<string, unknown>): boolean {
-  return isNoOpMark(action, 'marksChange') && isProtection(action) && isIgnored(action) && isDeposed(action);
+  return isNoOpMark(action, 'marksChange') && isProtection(action) && isIgnored(action) && isDeposed(action) && isCreatedFirst(action);
 }
 
 function isAction(action: unknown): boolean {
@@ -610,6 +618,11 @@ function protectedBy(desired: DesiredResource): Pick<PlanAction, 'preventDestroy
   return prevents(desired) ? { preventDestroy: true } : {};
 }
 
+/** What an update or a replace holds of its resource beside the values. */
+function carriedOver(desired: DesiredResource): Pick<PlanAction, 'sensitive' | 'preventDestroy' | 'ignored' | 'createBeforeDestroy'> {
+  return { ...marked(desired), ...protectedBy(desired), ...ignoring(desired), ...(desired.replace && desired.createBeforeDestroy && { createBeforeDestroy: true as const }) };
+}
+
 function processExistingResource(actions: PlanAction[], desired: DesiredResource, currentResource: Resource) {
   const moved = desired.movedFrom;
   const resource = desired.block;
@@ -636,9 +649,7 @@ function processExistingResource(actions: PlanAction[], desired: DesiredResource
     attributes: resource.attributes,
     planned: desired.attributes,
     after: desired.after,
-    ...marked(desired),
-    ...protectedBy(desired),
-    ...ignoring(desired),
+    ...carriedOver(desired),
     changes: changes ?? {},
     dependencies: desired.dependencies,
   });

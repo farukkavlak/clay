@@ -186,9 +186,23 @@ export class Parser {
   }
 
   private parseLifecycleArgument(key: Token, lifecycle: Lifecycle): void {
-    if (key.value === 'prevent_destroy') lifecycle.preventDestroy = this.consume(TokenType.Boolean, 'prevent_destroy is true or false.').value === 'true';
-    else if (key.value === 'ignore_changes') lifecycle.ignoreChanges = this.parseIgnoreChanges();
-    else throw new ConfigError(`lifecycle takes only "prevent_destroy" and "ignore_changes", not "${key.value}"`, key.position);
+    switch (key.value) {
+      case 'prevent_destroy': {
+        lifecycle.preventDestroy = this.consume(TokenType.Boolean, 'prevent_destroy is true or false.').value === 'true';
+        break;
+      }
+      case 'create_before_destroy': {
+        lifecycle.createBeforeDestroy = this.consume(TokenType.Boolean, 'create_before_destroy is true or false.').value === 'true';
+        break;
+      }
+      case 'ignore_changes': {
+        lifecycle.ignoreChanges = this.parseIgnoreChanges();
+        break;
+      }
+      default: {
+        throw new ConfigError(`lifecycle takes only "prevent_destroy", "create_before_destroy" and "ignore_changes", not "${key.value}"`, key.position);
+      }
+    }
   }
 
   /** `all`, or a list of attributes: `[content, tags["Name"], items[0]]`. */

@@ -95,6 +95,11 @@ function deleteEdges(deletes: Map<string, PlanAction>, state: State): [string, s
   return edges;
 }
 
+/** A replace that made the new object first left the old one deposed, to be destroyed with the deletes, after what read it is updated. */
+function leftByReplaces(actions: PlanAction[]): PlanAction[] {
+  return actions.filter((action) => action.type === 'REPLACE' && action.createBeforeDestroy).map((action) => ({ type: 'DELETE', deposed: true, ...Address.of(action).fields() }));
+}
+
 /** State is written after every action, so a failed run loses nothing done before it. */
 export class PlanRunner {
   constructor(
@@ -119,7 +124,7 @@ export class PlanRunner {
     // Outputs belong to a finished run, so every write before the last omits them.
     delete state.outputs;
     if (!(yield* this.applyInOrder(saved, checked, config, graph, state, parallelism))) return;
-    if (!(yield* this.applyDeletes(actions, state, parallelism))) return;
+    if (!(yield* this.applyDeletes([...actions, ...leftByReplaces(actions)], state, parallelism))) return;
 
     // Resolved after the last action, so outputs never reflect a half-applied run.
     state.outputs = this.resolveOutputs(config.mainProgram, state, ModuleAddress.root);

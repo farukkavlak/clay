@@ -30,6 +30,10 @@ function desiredResource(name: string, attributes: Record<string, string>, modul
   };
 }
 
+function first(resource: DesiredResource): DesiredResource {
+  return { ...resource, createBeforeDestroy: true };
+}
+
 function ignoring(resource: DesiredResource, ignored: string[][]): DesiredResource {
   return { ...resource, ignored };
 }
@@ -91,6 +95,21 @@ describe('Planner', () => {
     expect(plan([{ ...desired, replace: true }], stateWith('r', { path: 'old', size: 'large' }))[0]).toMatchObject({ type: 'REPLACE', sensitive });
     expect(plan([desired], stateWith('r', planned))[0]).toMatchObject({ type: 'NO_OP', sensitive });
     expect(plan([desiredResource('r', planned)], stateWith('r', planned))[0]).not.toHaveProperty('sensitive');
+  });
+
+  describe('create_before_destroy', () => {
+    it('is carried by a replace only', () => {
+      const empty = { version: STATE_VERSION, serial: 0, resources: {} };
+
+      expect(plan([{ ...first(desiredResource('r', { path: 'y' })), replace: true }], stateWith('r', { path: 'x' }))[0]).toMatchObject({
+        type: 'REPLACE',
+        createBeforeDestroy: true,
+      });
+      expect(plan([first(desiredResource('r', { path: 'y' }))], stateWith('r', { path: 'x' }))[0]).not.toHaveProperty('createBeforeDestroy');
+      expect(plan([first(desiredResource('r', { path: 'x' }))], stateWith('r', { path: 'x' }))[0]).not.toHaveProperty('createBeforeDestroy');
+      expect(plan([first(desiredResource('r', { path: 'x' }))], empty)[0]).not.toHaveProperty('createBeforeDestroy');
+      expect(plan([{ ...desiredResource('r', { path: 'y' }), replace: true }], stateWith('r', { path: 'x' }))[0]).not.toHaveProperty('createBeforeDestroy');
+    });
   });
 
   describe('deposed objects', () => {
