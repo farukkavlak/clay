@@ -1,7 +1,7 @@
 # Tasks
 
-What Clay does today is in the README. This is what comes next, in the order it is
-worth doing. Terraform is named where it has solved the same problem.
+What Clay does today is in the README and `LANGUAGE.md`. This is what comes next, in the
+order it is worth doing. Terraform is named where it has solved the same problem.
 
 ## Bugs
 
@@ -152,6 +152,60 @@ change each.
       checked once as written, and one whose type no apply can make right is refused:
       `count = data.local_file.f.content` is a string. A plan refuses it as before.
       Terraform's validate does not expand `count` either
+- [ ] An apply stopped with Ctrl-C leaves its lock, and what was running is never
+      recorded. With `command = "sleep 3; touch made.txt"` and a SIGINT after a second, the
+      process exits 130, `made.txt` appears, the state holds nothing and
+      `clay.state.json.lock` stays, so the next apply fails on the lock and the next plan
+      creates it again. Terraform starts nothing new on the first Ctrl-C, lets what runs
+      finish, writes the state and unlocks
+- [ ] A failed apply drops every root output from state. `PlanRunner.run` deletes
+      `state.outputs` before the first action and writes them only at the end, so one
+      failed resource leaves `clay output` empty and the next plan shows every output as
+      new. `state mv` and `state rm` drop them the same way. Terraform keeps them
+- [ ] `clay apply` answered with anything but `yes`, or run with stdin closed, prints
+      "Apply cancelled." and exits 0, so a pipeline without `-y` passes. Terraform exits 1
+- [ ] A dependency and what reads it, both replaced, are replaced one at a time: with
+      `local_file.b` reading `local_file.a.id` and both paths changed, `a` is destroyed and
+      made again before `b` is destroyed, so the old `b` outlives what it read. Each replace
+      deletes and creates inside its own layer. Terraform destroys the dependent first
+- [ ] Renaming a resource whose new object is the old one destroys it. With
+      `local_file "c" { path = "f.txt" }` renamed to `"d"`, the apply creates `d`, then deletes
+      `c`, which removes `f.txt`, and says it completed. `create_before_destroy` does the
+      same where the new path spells the old file another way, `./a.txt` and `a.txt`, and
+      without it the respelling still replaces the file
+- [ ] The delete order is worked out in exponential time. `reaches` in `deleteEdges` walks
+      every path with no record of what it has seen, so a ladder of 56 resources that each
+      read the two before takes 23 seconds to destroy, and the time doubles every two more.
+      It depends on the order of keys in the state file
+- [ ] A plan file's action is checked only in part where the file is read. A `resourceType`
+      left out is refused after "applying..." as `"undefined.a"`, a `name` of `5` is shown
+      as `local_file.5` before it is refused, an attribute node of an unknown type fails as
+      `Cannot read properties of undefined (reading 'kind')`, and `dependencies: [42]` is
+      written to state. A schema's `sensitive` flag is not checked to be a boolean, and the
+      state's `dependencies`, of a resource and of a deposed object, are not checked to be
+      strings
+- [ ] `state mv`, `state rm` and a count move rewrite the dependencies of resources and
+      leave those of deposed objects naming the old address, so the delete order of that
+      deposed object is lost. `mapDependencies` walks `state.resources` only
+- [ ] `clay state mv` takes a destination no configuration can spell:
+      `clay state mv random_string.r 'random_string.has space'` succeeds, and the next plan
+      destroys it. `Address.parse` checks no name against the identifier rule
+- [ ] `command_exec` quotes a sensitive value when its command fails: with
+      `command = "false ${var.token}"` and `var.token` sensitive, the apply prints
+      `Command failed: false s3cr3t-token`. Node's `exec` error holds the whole command
+- [ ] Writing out a value the provider already takes as its default replaces the resource.
+      `special = false` added to a `random_string` that left it out plans a replace, since
+      `special` is `forceNew` and a left-out value is not `false`. The provider contract
+      has no defaults
+- [ ] `clay output --json` with no state prints a plain-text line to stdout and exits 0, so
+      a script that reads it as JSON breaks
+- [ ] `clay state rm` of an address the state does not hold exits 0, where `state show`
+      exits 1. Terraform refuses it
+- [ ] A value nested 20000 deep, or 6000 chained locals, ends in a stack overflow,
+      `Maximum call stack size exceeded`, with no position. The resolver and
+      `Graph.findCycle` recurse
+- [ ] The caret under an error points at the wrong column on a line indented with tabs:
+      `describeError` pads with spaces under a line that keeps its tabs
 
 ## 1. Language
 
@@ -325,6 +379,21 @@ configuration hits each of these early.
 - [x] A module `source` has a kind. Terraform reads a local path only when it starts with
       `./` or `../` and treats anything else as a registry address; Clay joins whatever it
       is onto the parent directory, so an absolute path is read as well
+- [ ] Operators and the conditional: `+ - * / %`, comparisons, `&& || !` and
+      `a ? b : c`. Today `1 + 2` is refused as `Unexpected character: "+"`, which does not say
+      the language has no operators. `if` in a `for` waits for this
+- [ ] More functions. Clay has `length`, `tolist`, `toset`, `sensitive`, `nonsensitive` and
+      `issensitive`; a Terraform configuration reaches for `join`, `format`, `lookup`,
+      `merge`, `upper` and `lower` early
+- [ ] `/* ... */` comments, which HCL reads beside `#` and `//`
+- [ ] `description` on a variable and an output, refused today though nearly every
+      Terraform file writes it, and `validation` on a variable
+- [ ] `depends_on`, for an order no reference shows. Written today, it is refused as an
+      attribute the resource does not have
+- [ ] A `moved` block, so a rename in the configuration moves state instead of destroying
+      and creating. `clay state mv` is the only way now
+- [ ] A module reads every `.clay` file in its directory, as Terraform reads every `.tf`;
+      today only `main.clay`
 
 ## 2. Engine
 
@@ -576,6 +645,29 @@ in it together.
       the error as before, several are listed and counted, and a crash after them still
       shows them first
 
+### Performance
+
+Measured with the local provider; a remote provider makes the sequential calls cost more.
+
+- [ ] An apply writes the whole state, and copies the last one to `.bak`, after every
+      action, so its cost grows with the square of the resources: 1000 independent
+      resources take 2 seconds, 4000 take 16 to 31. Terraform updates the state in memory
+      after each resource and persists it at intervals
+- [ ] Each instance records every instance of each block it reads as a dependency: with
+      `count = n` and `null_resource.a[count.index]`, `b[5]` lists all `n` of `a`. At 1000
+      the state is 32 MB and the apply takes two minutes. Terraform keeps dependencies by
+      block
+- [ ] The apply runs layer by layer, so one slow resource holds back every resource of the
+      next layer, and one failure stops branches that do not read it. A `sleep 3` beside a
+      chain of three `sleep 1` takes 5 seconds where 3 would do. Terraform walks the graph,
+      and skips only what reads a failed resource
+- [ ] Refresh, planning, schema loading and data source reads call the provider one at a
+      time. With 100 ms a call, 20 resources plan in 4 seconds. Terraform runs them as the
+      graph allows, ten at a time
+- [ ] `Graph.dependenciesOf` scans every node's edges on each call, and the plan calls it for
+      every resource, so a plan of 4000 blocks spends 1.8 of its 2.4 seconds there. The graph
+      can keep the reverse edges
+
 ### Lifecycle
 
 - [x] Deposed objects: state holds the earlier objects of a resource that a replace has not
@@ -625,6 +717,18 @@ Terraform has it since backends replaced `-state`.
       one in use
 - [ ] An S3 backend, with the lock a second run has to wait for; an Azure Blob backend
 
+### Safety
+
+- [ ] `.bak` is the write before the last one, not the state before the run: after an apply
+      of three resources the state is serial 4 and `.bak` serial 3, with all three in it, so
+      it cannot undo the run. Terraform writes its backup once a run
+- [ ] An apply takes the lock after it has refreshed, planned and been answered `yes`, so
+      a second apply asks its question and then fails on the lock. A plan never looks at the
+      lock. The lock file holds a time and no process or host, so a stale one cannot be told
+      from a live one
+- [ ] The state is renamed into place without an fsync, so a power loss may leave it
+      empty on a file system that reorders writes
+
 ### Format
 
 - [ ] A state a newer Clay wrote is refused, which is right, but an older one has no way
@@ -640,6 +744,14 @@ Terraform has it since backends replaced `-state`.
       and for finding it again. Terraform 1.12's resource identity
 - [ ] `clay state pull`: print the state as JSON, for a script or a backup
 - [ ] Workspaces: `clay workspace new | select | list`, one state per workspace
+- [ ] `clay destroy`, and `plan -destroy`: today the only way to remove everything is to
+      empty `main.clay`
+- [ ] A root variable takes a value from outside the configuration: `-var`, a variables
+      file and the environment. Today one with no default is refused even by `validate`
+- [ ] `plan -detailed-exitcode`, so a script can tell no changes from changes; `plan` exits
+      0 either way
+- [ ] The plan lists what a resource to create holds, and names the attribute that forces a
+      replace, so the values can be read before answering `yes`
 
 ## 4. Providers
 
@@ -687,17 +799,25 @@ by resource type, and no `provider` block exists yet.
       nodes, the graph refuses the undeclared one
 - [ ] An output that fails to resolve reports a failure. `resolveOutput` runs outside the
       step's `try`, so a throw there ends the run with no `failed` event and nothing said.
-      `readKeys`, which reads a `count` or a `for_each` again at apply, runs there too, and so do
-      `expandCall`, which reads a module's `count` or `for_each` again, the refusal of
-      a saved plan's action in an instance of a module the configuration does not make,
-      the refusal of an output that is not what the plan showed, and a local worked out
-      again at apply
+      So do `readData`, which reads a data source at apply, `readKeys`, which reads a
+      `count` or a `for_each` again at apply, `expandCall`, which reads a module's `count`
+      or `for_each` again, the refusal of a saved plan's action in an instance of a module
+      the configuration does not make, the refusal of an output that is not what the plan
+      showed, and a local worked out again at apply
 - [x] An output may be named `__proto__`. The plan and the apply collected root outputs
       into a plain object, where that name sets a prototype instead of a key, so the plan
       never held it and the apply refused it. Both collect them in a map now, as a module's
       outputs already were
-- [ ] `clay output` takes no name, and a word after it is ignored: `clay output nope`
-      prints every output and exits 0
+- [ ] A word after a command that takes none is ignored: `clay output nope` prints every
+      output and exits 0, and so do `validate`, `plan`, `init` and `state list` with one.
+      Commander takes extra arguments unless told not to
+- [ ] Error messages are written three ways: the parser's `Expect '}' after block body.`,
+      `Module "m" is missing a valid "source" attribute.` beside `module "m" has source ...`,
+      and engine wording that reaches the user,
+      `Data source "x" not found (or not resolved yet)` and
+      `Invalid resource reference ...: Resource ... not found in state`
+- [ ] A parse error names no block: a bad attribute in a variable prints `on main.clay line 3:`
+      where a resolve error adds `, in variable "region"`
 - [ ] `apply` says a missing file is missing the same way twice. A missing plan file and a
       missing configuration are reported with different prefixes today
 - [x] `Address.parse` says `got 1 parts` when it refuses an address
@@ -711,7 +831,7 @@ Nothing here changes what Clay does. Each is a place the next change has to work
 - [ ] `ActionExecutor.executeCreate`, `executeUpdate` and `executeDelete` are public only
       because tests call them
 - [ ] `validatePlanFile` is exported although `parsePlanFile` is the way in
-- [ ] `Graph.getNode` is followed by `!` at four call sites; the graph should hand back a
+- [ ] `Graph.getNode` is followed by `!` at six call sites; the graph should hand back a
       node or say it has none
 - [ ] `ModuleLoader.loadModuleTree` is `async` with nothing to await, and walks the same
       statements as `loadChildModule` does
@@ -721,7 +841,7 @@ Nothing here changes what Clay does. Each is a place the next change has to work
 - [ ] The CLI rebuilds the module file layout that `RecordingFiles` already snapshotted
 - [ ] A `state show` test feeds a resource with no `attributes`, which `parseState` now
       refuses to read; the branch it covers may be unreachable
-- [ ] `ActionExecutor.executeUpdate` says "the plan resolved these against an older
+- [x] `ActionExecutor.executeUpdate` says "the plan resolved these against an older
       state", but `action.attributes` is the parsed block and was never resolved;
       `executeCreate` does the same resolve with no comment
 - [ ] `LoadedResource.uniqueId` is `address.toString()` under a second name
@@ -730,6 +850,27 @@ Nothing here changes what Clay does. Each is a place the next change has to work
 - [x] Comments that restate the code: the `// e.g., "my_file"` trailers in `ast.ts`, the
       `// {` and `// }` trailers in `tokens.ts`, the `forceNew` explanations in the local
       provider
+
+- [ ] Plan and apply walk the graph in two classes that repeat each other: `DesiredStateBuilder`
+      and `PlanRunner` each read count and for_each, make data source instances, resolve
+      their inputs, expand module calls and work out locals and outputs, so a fix to one
+      has to be made in both
+- [ ] A value not known yet travels two ways: as `UNKNOWN` inside the data, and as a thrown
+      `UnresolvedReferenceError` that six places catch and turn back into a value. Whether an
+      unknown is an error also hangs on `Planned.begin()`, a mode that is never reset
+- [ ] `ReferenceResolver` builds its own resolvers instead of taking them in its
+      constructor, and `DesiredStateBuilder` and `ConfigLoader` take ten collaborators each,
+      most of them maps every component writes to
+- [ ] `tryAt`, `withPlace`, `hidingReason` and the refresh's `readBack` catch every error, so
+      a `TypeError` in the engine is reported as a mistake in the configuration, or hidden
+      as "failed on its configuration"
+- [ ] A saved plan holds each action's parsed attributes and the configuration's text, and
+      the apply resolves the first while it builds the graph from the second
+- [ ] `planner/src/index.ts` holds the plan file, the diff, the plan and apply checks and
+      `plan()` in one file of 700 lines
+- [ ] Workspace packages are not `"private": true`, so `npm publish -ws` would publish them;
+      four of eight have a `lint` script
+- [ ] CI runs Node 22.13 only, the lowest `engines` allows, and not the newest
 
 ### Test health
 
@@ -745,20 +886,19 @@ Nothing here changes what Clay does. Each is a place the next change has to work
       `Orchestrator.run` and `Orchestrator.ts`, which do not exist, and ask questions
       rather than state reasons
 - [ ] `describe` titles say "Phase 4" and "Phase 5", which mean nothing in the repo
-- [ ] `ApplyPlan.spec.ts` says the CLI cannot be driven from a test, and four
-      neighbouring specs drive it
-- [ ] `Graph.spec.ts` hedges that a sort "depends on implementation details" and asserts
-      the flattened list, where the layers are deterministic and should be asserted
+- [ ] `ApplyPlan.spec.ts` says the CLI parses on import, so its tests drive the
+      orchestrator, and ten other specs in the same folder run the CLI
+- [ ] `Graph.spec.ts` asserts the flattened list of a simple sort, `sorted.flat()`, where
+      the layers are deterministic and should be asserted
 - [ ] Regression tests explain what used to happen; a comment says what the test pins
 - [x] Test comments of the `// Setup`, `// Verify`, `// Mock X` kind restate the line
       below them, across `Orchestrator.spec.ts`, `StateManager.spec.ts`, `Graph.spec.ts`
       and others
-- [ ] No test puts a reference inside a list: `tags = [local_file.a.id]`. With
+- [x] No test puts a reference inside a list: `tags = [local_file.a.id]`. With
       `resolveList` passing a `Reference` node through unresolved, all 452 tests pass
-- [ ] No test has a delete fail. With `PlanRunner` ignoring a failed delete and going on
-      to write outputs, all 452 tests pass; the `failed` event, the kept state entry and
-      the released lock on that path are unpinned. A replace whose create fails after
-      the delete is untested the same way
+- [ ] No test has a delete fail. The `failed` event, the kept state entry and the
+      released lock on that path are unpinned. A replace whose create fails after the
+      delete is untested the same way
 - [x] Data sources have no end-to-end test; the only `data` block in `e2e` is an error
       case, since `LocalProvider.read` returns `{}`
 - [x] The two `command_exec` "execute" tests assert only that an id came back; they pass
@@ -779,6 +919,14 @@ Nothing here changes what Clay does. Each is a place the next change has to work
       `Apply.spec` `--yes`, both plan-file applies, the rejected plan file and the failed
       apply. The rest of each file pins what an e2e cannot see and stays
 - [ ] `ModuleLoading.spec.ts` asserts `toHaveProperty(expectedKey)` twice in a row
+- [ ] `toBeDefined()` alone pins nothing in `State.spec.ts`, `StateCommands.spec.ts`,
+      `DataSources.spec.ts`, `ModuleDataFlow.spec.ts`, `Planner.spec.ts` and
+      `LocalProvider.spec.ts`
+- [ ] 52 of the 82 e2e specs define the same `newOrchestrator` and register the local
+      provider themselves; only `start.ts` is shared
+- [ ] Each package's coverage counts what its tests import from other packages, so
+      `contracts` shows 64% with code the e2e tests cover. CI holds no threshold
+- [ ] Old test titles read `should ...` beside the plain sentences of the rest
 
 ## 6. Later
 
@@ -795,7 +943,7 @@ Ideas that need the sections above first.
 
 ## Done
 
-What shipped, by area. The README says how each works today.
+What shipped, by area. The README and `LANGUAGE.md` say how each works today.
 
 - [x] Language: `resource`, `data`, `variable`, `output` and `module` blocks; strings,
       integers, booleans, lists and maps; references and `${...}` interpolation; comments;
