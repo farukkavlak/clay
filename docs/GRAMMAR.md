@@ -102,13 +102,14 @@ What the engine reads from each:
 A resource, a data source or a module with both `count` and `for_each` is refused where
 it is written.
 
-A resource may hold one `lifecycle` block, written without `=`. It takes `prevent_destroy`,
-`true` or `false` as written, never a reference, and `ignore_changes`, either `all` or a
-list of paths: an attribute, then the keys and indexes below it, as `[content, tags["Name"],
-items[0]]`. A path is written out, with no quotes around the attribute and no reference
-or call as a key. Another argument, a second `lifecycle`, an argument twice or `all` inside
-the list is refused where it is written, and so is an attribute the resource type does not
-have or a path into a set, whose items have no place to name. `lifecycle = ...` with an equals sign is an attribute like any other.
+A resource may hold one `lifecycle` block, written without `=`. It takes `prevent_destroy`
+and `create_before_destroy`, each `true` or `false` as written and never a reference, and
+`ignore_changes`, either `all` or a list of paths: an attribute, then the keys and indexes
+below it, as `[content, tags["Name"], items[0]]`. A path is written out, with no quotes
+around the attribute and no reference or call as a key. Another argument, a second
+`lifecycle`, an argument twice or `all` inside the list is refused where it is written, and
+so is an attribute the resource type does not have or a path into a set, whose items have
+no place to name. `lifecycle = ...` with an equals sign is an attribute like any other.
 
 A module's `source` starts with `./` or `../`. Anything else, a registry address or an
 absolute path, is refused where it is written.
@@ -543,7 +544,7 @@ interface ResourceBlock {
   name: string;
   count?: AttributeValue;
   forEach?: AttributeValue;
-  lifecycle?: { preventDestroy?: boolean; ignoreChanges?: 'all' | { path: (string | number)[]; position: Position }[]; position: Position };
+  lifecycle?: { preventDestroy?: boolean; createBeforeDestroy?: boolean; ignoreChanges?: 'all' | { path: (string | number)[]; position: Position }[]; position: Position };
   attributes: Record<string, AttributeValue>;
   position: Position;
 }
@@ -615,7 +616,7 @@ throws the same for a character it does not know, a string not closed on its lin
 
 - Operators; a value is a literal, a reference, a function call or a for expression
 - A for that filters with `if`
-- `depends_on`, provisioners, and any `lifecycle` argument but `prevent_destroy` and `ignore_changes`
+- `depends_on`, provisioners, and any `lifecycle` argument but `prevent_destroy`, `create_before_destroy` and `ignore_changes`
 - Nested blocks inside a block, but `lifecycle` in a resource
 - Any file other than `main.clay`
 

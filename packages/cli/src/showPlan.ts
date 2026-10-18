@@ -65,7 +65,8 @@ export function actionLine(action: PlanAction, planned: boolean): string {
   if (type === 'NO_OP') return `  ${styleText('cyan', '>')} ${address} ${will}moved from ${action.movedFrom}`;
 
   const moved = action.movedFrom ? `, moved from ${action.movedFrom}` : '';
-  return `  ${actionSymbol(type)} ${address} ${will}${pastTense(type)}${moved}`;
+  const first = action.createBeforeDestroy ? ', the new one created first' : '';
+  return `  ${actionSymbol(type)} ${address} ${will}${pastTense(type)}${first}${moved}`;
 }
 
 function without(members: unknown[], others: unknown[]): unknown[] {
@@ -184,8 +185,12 @@ function displaySummary(actions: PlanAction[]): void {
   const count = (type: PlanAction['type']) => actions.filter((action) => shownType(action) === type).length;
   const replaced = count('REPLACE');
   const moved = actions.filter((action) => action.movedFrom).length;
+  // One delete of an address destroys all its deposed objects, so a replace that made the new one first adds none beside one already planned.
+  const planned = new Set(actions.filter((action) => action.deposed).map((action) => Address.of(action).toString()));
+  const destroyed =
+    count('DELETE') + actions.filter((action) => shownType(action) === 'REPLACE' && !(action.createBeforeDestroy && planned.has(Address.of(action).toString()))).length;
 
-  const summary = `${count('CREATE') + replaced} to add, ${count('UPDATE')} to change, ${count('DELETE') + replaced} to destroy${moved > 0 ? `, ${moved} to move` : ''}`;
+  const summary = `${count('CREATE') + replaced} to add, ${count('UPDATE')} to change, ${destroyed} to destroy${moved > 0 ? `, ${moved} to move` : ''}`;
   console.log(styleText('bold', `\nPlan: ${summary}.`));
 }
 
