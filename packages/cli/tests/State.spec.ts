@@ -177,4 +177,26 @@ describe('CLI: state command', () => {
       expect(unlockMock).toHaveBeenCalled();
     });
   });
+
+  // With no listener of its own, a Ctrl-C would end the process with the lock held.
+  it.each([
+    ['rm', 'test.t1'],
+    ['mv', 'test.t1', 'test.new'],
+  ])('finishes and unlocks after a Ctrl-C while it holds the lock: %s', async (...args) => {
+    const before = process.listenerCount('SIGINT');
+    let during = 0;
+    readMock.mockImplementation(async () => {
+      during = process.listenerCount('SIGINT');
+      process.emit('SIGINT');
+      return structuredClone(mockState);
+    });
+
+    await createStateCommand().parseAsync(['node', 'clay', ...args]);
+
+    expect(during).toBe(before + 1);
+    expect(writeMock).toHaveBeenCalled();
+    expect(unlockMock).toHaveBeenCalled();
+    expect(processExitSpy).not.toHaveBeenCalled();
+    expect(process.listenerCount('SIGINT')).toBe(before);
+  });
 });

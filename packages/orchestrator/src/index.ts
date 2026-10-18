@@ -22,6 +22,8 @@ export { DEFAULT_PARALLELISM } from './parallelism';
 export interface RunOptions {
   /** How many actions of a layer run at once. */
   parallelism?: number;
+  /** Once it aborts, no action starts and the ones running are waited for and saved. A run stopped short ends without `done`. */
+  signal?: AbortSignal;
 }
 
 /** A move changes the map, never a list in it, so a copy of the map is its own. */
@@ -87,7 +89,7 @@ export class Orchestrator {
   }
 
   /** Holds the state lock. A state written since the plan was made is refused, since the approved plan no longer matches it. */
-  async *runPlan(saved: Plan, configContent: string, { parallelism = DEFAULT_PARALLELISM }: RunOptions = {}): AsyncGenerator<RunEvent> {
+  async *runPlan(saved: Plan, configContent: string, { parallelism = DEFAULT_PARALLELISM, signal }: RunOptions = {}): AsyncGenerator<RunEvent> {
     checkParallelism(parallelism);
     await this.stateManager.lock();
 
@@ -101,7 +103,7 @@ export class Orchestrator {
       const { loader, graphBuilder, runner } = this.newRun();
       const config = await loader.load(configContent);
       const graph = graphBuilder.buildExecutionGraph(config.loadedResources, config.loadedModules);
-      yield* runner.run(saved, config, graph, state, parallelism);
+      yield* runner.run(saved, config, graph, state, { parallelism, signal });
     } finally {
       await this.stateManager.unlock();
     }

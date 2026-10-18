@@ -134,7 +134,9 @@ full path, the string, or a random UUID. Only the provider makes `id`, `result` 
    different, or a replace where the plan showed an update, stops the run before
    anything changes. What the provider returns is held to that plan. The state is
    written to a temporary file and renamed, a backup is kept, and a lock file stops two
-   runs at once.
+   runs at once. The first Ctrl-C starts nothing new, waits for what runs, saves it and
+   unlocks; a second exits at once. A terminal sends Ctrl-C to a `command_exec` command
+   too, which then fails.
 
 An error says where it was written:
 

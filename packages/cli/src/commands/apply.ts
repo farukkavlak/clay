@@ -9,6 +9,7 @@ import { styleText } from 'node:util';
 import { confirm } from '../confirm';
 import { newOrchestrator } from '../engine';
 import { describeError } from '../describeError';
+import { interruptible, INTERRUPTED } from '../interruptible';
 import { actionLine, changesNothing, displayPlan, readLine, shownType } from '../showPlan';
 import { parallelismOption } from '../parallelismOption';
 import { refreshOption } from '../refreshOption';
@@ -53,22 +54,39 @@ function reportEvent(event: RunEvent, failures: string[]): void {
   }
 }
 
-async function runAndReport(events: AsyncGenerator<RunEvent>, forgotten: number): Promise<void> {
-  console.log(styleText('blue', '\napplying...'));
+interface Ran {
+  applied: PlanAction[];
+  failures: string[];
+  /** Given only by a run that finished. */
+  outputs?: Record<string, Output>;
+}
 
-  const applied: PlanAction[] = [];
-  const failures: string[] = [];
-  let outputs: Record<string, Output> = {};
+async function collect(events: AsyncGenerator<RunEvent>): Promise<Ran> {
+  const ran: Ran = { applied: [], failures: [] };
   try {
     for await (const event of events) {
-      reportEvent(event, failures);
-      if (event.type === 'applied') applied.push(event.action);
-      if (event.type === 'done') outputs = event.outputs;
+      reportEvent(event, ran.failures);
+      if (event.type === 'applied') ran.applied.push(event.action);
+      if (event.type === 'done') ran.outputs = event.outputs;
     }
   } catch (error) {
     // A crash after the failures must not hide them.
-    printFailures(failures);
+    printFailures(ran.failures);
     throw error;
+  }
+
+  return ran;
+}
+
+async function runAndReport(start: (signal: AbortSignal) => AsyncGenerator<RunEvent>, forgotten: number): Promise<void> {
+  console.log(styleText('blue', '\napplying...'));
+
+  const { applied, failures, outputs, interrupted } = await interruptible(async (signal) => ({ ...(await collect(start(signal))), interrupted: signal.aborted }));
+  // A run that finished before the interrupt reached it is complete.
+  if (interrupted && outputs === undefined) {
+    printFailures(failures);
+    console.error(styleText('yellow', 'Apply interrupted. What finished is in the state; plan again to see what is left.'));
+    process.exit(INTERRUPTED);
   }
 
   const failed = failuresError(failures);
@@ -76,7 +94,7 @@ async function runAndReport(events: AsyncGenerator<RunEvent>, forgotten: number)
 
   console.log(styleText('green', `\nApply complete! Resources: ${summarize(applied, forgotten)}.`));
 
-  if (Object.keys(outputs).length > 0) {
+  if (outputs !== undefined && Object.keys(outputs).length > 0) {
     console.log(styleText('cyan', '\nOutputs:'));
     for (const [key, { value, sensitive }] of Object.entries(outputs)) console.log(styleText('white', `  ${key} = ${sensitive ? SENSITIVE : JSON.stringify(value)}`));
   }
@@ -114,7 +132,7 @@ async function executeApply(cwd: string, { plan, config, files }: PlannedApply, 
     return;
   }
 
-  await runAndReport(newOrchestrator(cwd, files).runPlan(plan, config, { parallelism }), forgotten(plan));
+  await runAndReport((signal) => newOrchestrator(cwd, files).runPlan(plan, config, { parallelism, signal }), forgotten(plan));
 }
 
 /** Errors name the user's file and say what to do. */
@@ -145,7 +163,7 @@ async function executeApplyFromPlan(cwd: string, planFile: PlanFile, files: Conf
   displayPlan(planFile);
   if (changesNothing(planFile)) return;
 
-  await runAndReport(orchestrator.runPlan(planFile, planFile.config, { parallelism }), forgotten(planFile));
+  await runAndReport((signal) => orchestrator.runPlan(planFile, planFile.config, { parallelism, signal }), forgotten(planFile));
 }
 
 export function createApplyCommand() {

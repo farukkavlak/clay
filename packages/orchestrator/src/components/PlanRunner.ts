@@ -11,6 +11,7 @@ import { eachFrom } from '../forEach';
 import { Instances, repetitionOfKey } from '../Instances';
 import { blockKey, Context, contextIn, DataInstance, dataSourceKey, moduleOf, scopeOf } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
+import { Pace } from '../parallelism';
 import { tryAt, withPlace } from '../place';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { RunEvent } from '../RunEvent';
@@ -60,6 +61,13 @@ type PlannedOutputs = Map<string, PlannedOutput>;
 interface Checked {
   named: Map<string, string[]>;
   outputs: PlannedOutputs;
+}
+
+/** What each layer's blocks are run with. */
+interface Layers extends Checked {
+  read: Omit<Approved, 'actions' | 'outputs'>;
+  blocks: Map<string, ResourceBlock>;
+  byBlock: Map<string, PlanAction[]>;
 }
 
 /** What a replace left behind is destroyed apart from the resource it was left by, which may be destroyed too. */
@@ -112,7 +120,7 @@ export class PlanRunner {
     private reader: DataSourceReader
   ) {}
 
-  async *run(saved: Approved, config: LoadedConfig, graph: Graph<GraphNode>, state: State, parallelism: number): AsyncGenerator<RunEvent> {
+  async *run(saved: Approved, config: LoadedConfig, graph: Graph<GraphNode>, state: State, pace: Pace): AsyncGenerator<RunEvent> {
     const { actions } = saved;
     this.checkActionsMatch(actions, graph);
     const outputs = this.plannedOutputs(saved, state);
@@ -123,8 +131,8 @@ export class PlanRunner {
 
     // Outputs belong to a finished run, so every write before the last omits them.
     delete state.outputs;
-    if (!(yield* this.applyInOrder(saved, checked, config, graph, state, parallelism))) return;
-    if (!(yield* this.applyDeletes([...actions, ...leftByReplaces(actions)], state, parallelism))) return;
+    if (!(yield* this.applyInOrder(saved, checked, config, graph, state, pace))) return;
+    if (!(yield* this.applyDeletes([...actions, ...leftByReplaces(actions)], state, pace))) return;
 
     // Resolved after the last action, so outputs never reflect a half-applied run.
     state.outputs = this.resolveOutputs(config.mainProgram, state, ModuleAddress.root);
@@ -226,39 +234,48 @@ export class PlanRunner {
     config: LoadedConfig,
     graph: Graph<GraphNode>,
     state: State,
-    parallelism: number
+    pace: Pace
   ): AsyncGenerator<RunEvent, boolean> {
-    const blocks = new Map(config.loadedResources.map(({ uniqueId, block }) => [uniqueId, block]));
-    const byBlock = groupBy(
-      actions.filter((action) => action.type !== 'DELETE'),
-      blockKey
-    );
+    const layers: Layers = {
+      named,
+      outputs,
+      read,
+      blocks: new Map(config.loadedResources.map(({ uniqueId, block }) => [uniqueId, block])),
+      byBlock: groupBy(
+        actions.filter((action) => action.type !== 'DELETE'),
+        blockKey
+      ),
+    };
 
     for (const layer of graph.topologicalSort()) {
+      // A data source is read even where no action runs; a layer of locals and outputs alone lets a run that did every action finish.
+      if (pace.signal?.aborted && layer.some((key) => graph.getNode(key)!.kind === 'data')) return false;
       const toRun: PlanAction[] = [];
 
-      for (const key of this.outputsFirst(layer, graph)) {
-        const node = graph.getNode(key)!;
+      // Every block of the layer is checked before any action runs, so a wrong plan stops the run before it changes anything.
+      for (const key of this.outputsFirst(layer, graph)) toRun.push(...(yield* this.visit(key, graph.getNode(key)!, layers, state)));
 
-        if (node.kind === 'module') this.expandCall(node, state);
-        if (node.kind === 'data') yield* this.readData(node, named.get(key), read, state);
-        if (node.kind === 'local') this.resolveLocal(node, state);
-        // Only this output: a sibling may read a resource a later layer creates.
-        if (node.kind === 'output') this.resolveInEvery(node, outputs, state);
-        // Every block of the layer is checked before any action runs, so a wrong plan stops the run before it changes anything.
-        if (node.kind === 'resource') toRun.push(...this.actionsOf(blocks.get(key)!, node.module, byBlock.get(key) ?? [], state));
-      }
-
-      if (!(yield* this.runTogether(toRun, state, parallelism))) return false;
+      if (!(yield* this.runTogether(toRun, state, pace))) return false;
     }
 
     return true;
   }
 
+  /** Gives the actions of a resource block, checked; the other kinds are resolved or read. */
+  private async *visit(key: string, node: GraphNode, { named, outputs, read, blocks, byBlock }: Layers, state: State): AsyncGenerator<RunEvent, PlanAction[]> {
+    if (node.kind === 'module') this.expandCall(node, state);
+    if (node.kind === 'data') yield* this.readData(node, named.get(key), read, state);
+    if (node.kind === 'local') this.resolveLocal(node, state);
+    // Only this output: a sibling may read a resource a later layer creates.
+    if (node.kind === 'output') this.resolveInEvery(node, outputs, state);
+
+    return node.kind === 'resource' ? this.actionsOf(blocks.get(key)!, node.module, byBlock.get(key) ?? [], state) : [];
+  }
+
   /** Nothing in a layer reads another of it, so its actions run together. */
-  private runTogether(actions: PlanAction[], state: State, parallelism: number): AsyncGenerator<RunEvent, boolean> {
+  private runTogether(actions: PlanAction[], state: State, { parallelism, signal }: Pace): AsyncGenerator<RunEvent, boolean> {
     return runTogether(
-      actions.map((action) => () => this.step(action, state)),
+      actions.map((action) => () => this.step(action, state, signal)),
       parallelism,
       isFailure
     );
@@ -331,13 +348,13 @@ export class PlanRunner {
   }
 
   /** Ordered by the dependencies in state, since the config no longer has the resource. */
-  private async *applyDeletes(actions: PlanAction[], state: State, parallelism: number): AsyncGenerator<RunEvent, boolean> {
+  private async *applyDeletes(actions: PlanAction[], state: State, pace: Pace): AsyncGenerator<RunEvent, boolean> {
     const deletes = new Map(actions.filter((action) => action.type === 'DELETE').map((action) => [deleteKey(action), action]));
     const graph = this.deleteGraph(deletes, state);
 
     for (const layer of graph.topologicalSort().reverse()) {
       const inLayer = layer.map((key) => graph.getNode(key)!);
-      if (!(yield* this.runTogether(inLayer, state, parallelism))) return false;
+      if (!(yield* this.runTogether(inLayer, state, pace))) return false;
     }
 
     return true;
@@ -353,7 +370,9 @@ export class PlanRunner {
     return graph;
   }
 
-  private async *step(action: PlanAction, state: State): AsyncGenerator<RunEvent, boolean> {
+  private async *step(action: PlanAction, state: State, signal?: AbortSignal): AsyncGenerator<RunEvent, boolean> {
+    if (signal?.aborted) return false;
+
     // A no-op is not reported; the final write saves its dependencies. A move, or a change in which parts are sensitive or in what a destroy is prevented, is reported and saved.
     const quiet = action.type === 'NO_OP' && !action.movedFrom && !action.marksChange && !action.protectionChange;
     if (!quiet) yield { type: 'started', action };
