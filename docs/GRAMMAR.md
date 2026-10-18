@@ -553,8 +553,16 @@ interface DataBlock {
   type: 'Data';
   dataSourceType: string;
   name: string;
+  count?: AttributeValue;
+  forEach?: AttributeValue;
   attributes: Record<string, AttributeValue>;
   position: Position;
+}
+
+interface TypeDefaults {
+  values?: Record<string, AttributeValue>;
+  element?: TypeDefaults;
+  within?: Record<string, TypeDefaults>;
 }
 
 interface VariableBlock {
@@ -562,6 +570,7 @@ interface VariableBlock {
   name: string;
   attributes: Record<string, AttributeValue>;
   valueType?: Type;
+  defaults?: TypeDefaults;
   sensitive?: true;
   position: Position;
 }
@@ -570,6 +579,8 @@ interface OutputBlock {
   type: 'Output';
   name: string;
   value: AttributeValue;
+  valueType?: Type;
+  defaults?: TypeDefaults;
   sensitive?: true;
   position: Position;
 }
@@ -601,9 +612,12 @@ A `Reference` holds its parts in order, each as it was written: `{ name }` after
 arguments in order, and in `path` the steps written after it, as a reference holds its
 own. A `Bound` is a name a for gives, read in its body, with its steps as a reference
 holds them. A `For` that makes an object holds its key in `key`, and `grouped` when `...`
-follows the value. A `VariableBlock` holds its type in `valueType` as the `Type` a schema
-names, `any` as `dynamic`. A `locals` block is a `LocalBlock` for each of its names,
-`{ type: 'Local', name, value }`, placed at the name.
+follows the value. A `VariableBlock` and an `OutputBlock` hold their type in `valueType`
+as the `Type` a schema names, `any` as `dynamic`, and the defaults their `optional(type,
+default)` attributes give in `defaults`: `values` by attribute name at one level,
+`element` for the items of a list, a set or a map, and `within` for a tuple's items by
+position or an object's attributes by name. A `locals` block is a `LocalBlock` for each
+of its names, `{ type: 'Local', name, value }`, placed at the name.
 
 ## Errors
 

@@ -4,6 +4,47 @@ What changed in each release, newest first. Versions follow
 [semantic versioning](https://semver.org): until 1.0.0, a minor version may change what
 a configuration means or how the state file is written.
 
+## Unreleased
+
+### Added
+
+- `count` and `for_each` on resources, modules and data sources, with addresses that name
+  one instance, `local_file.a[0]` and `module.web["eu"]`. Adding `count` to a resource or
+  a module that exists moves it to `[0]`.
+- Types: a variable and an output may name one, objects may mark an attribute optional
+  with a default, and every value carries its type through the engine. Sets hold one
+  order, so reordering one is no change.
+- Functions `length`, `tolist`, `toset`, `sensitive`, `nonsensitive` and `issensitive`
+- `for` expressions that make a list or an object, with `...` to group by key
+- A resource, a data source, a module or all their instances read as an object, a list
+  or a map, and `.key`, `["key"]` and `[0]` into any value
+- `locals` blocks, `path.module`, heredoc strings, string escapes, negative and decimal
+  numbers, and references that index with a reference or a call
+- Provider schemas: resource and data source configuration is checked and converted to
+  the type the schema names, and what a provider returns is checked too
+- The provider plans what a resource will hold, and an apply plans each resource again
+  and stops at a value that differs from the plan
+- A refresh before each plan reads every resource back and shows what changed outside
+  Clay; `--refresh=false` skips it
+- Data sources, `local_file` the first, read at plan, or at apply when a resource they
+  read changes. A saved plan carries what they read.
+- Sensitive values, followed part by part through variables, locals, modules, `for`,
+  resources and data sources, and hidden in plan, apply, `output` and `state show`
+- `lifecycle` with `prevent_destroy`, `create_before_destroy` and `ignore_changes`, and
+  deposed objects that a later plan destroys
+- `apply --parallelism`: the resources of one layer run together, ten by default, and
+  every failure of a run is reported
+
+### Fixed
+
+- Numbers stay exact from the configuration to the state and providers
+- A saved plan is refused when it does not match its configuration: an action, an
+  output or a data source missing or extra, an index `count` no longer gives
+- State writes are queued so two never overlap, and each run has its own scopes
+- A state or plan file that is not valid is refused and says what is wrong
+- Errors name what they are about by its address, point at where it is written, and
+  quote no sensitive value
+
 ## 0.1.0 - 2026-09-21
 
 The engine runs end to end: a configuration is parsed, planned against a state file and
