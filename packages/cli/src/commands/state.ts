@@ -7,6 +7,22 @@ import { exists } from '../exists';
 import { show } from '../showPlan';
 import { stateFile } from '../stateFile';
 
+/** A resource's attributes as `state show` prints them, a sensitive part hidden. */
+function printAttributes(resourceType: string, name: string, attributes: Record<string, unknown>, sensitive: Resource['sensitive']): void {
+  console.log(`resource "${resourceType}" "${name}" {`);
+  for (const [key, value] of Object.entries(attributes)) console.log(`  ${key} = ${show(value, sensitiveUnder(sensitive ?? [], key))}`);
+
+  console.log('}');
+}
+
+/** What a replace left behind goes with the resource, and nothing is left to destroy it. */
+function forgetDeposed(state: State, key: string): void {
+  if (!state.deposed) return;
+
+  delete state.deposed[key];
+  if (Object.keys(state.deposed).length === 0) delete state.deposed;
+}
+
 function getStateManager(backend = stateFile()): StateManager {
   return new StateManager(backend);
 }
@@ -44,12 +60,14 @@ export function createStateCommand(): Command {
         const backend = stateFile();
         const state = await getStateManager(backend).read();
 
-        if (Object.keys(state.resources).length === 0) {
+        const deposed = Object.keys(state.deposed ?? {});
+        if (Object.keys(state.resources).length === 0 && deposed.length === 0) {
           await reportEmpty(backend.path);
           return;
         }
 
         for (const key of Object.keys(state.resources).sort()) console.log(key);
+        for (const key of deposed.sort()) console.log(`${key} (deposed)`);
       } catch (error) {
         console.error(styleText('red', 'Error listing state:'), error instanceof Error ? error.message : String(error));
         process.exit(1);
@@ -65,17 +83,23 @@ export function createStateCommand(): Command {
         const manager = getStateManager();
         const state = await manager.read();
         const resource = findResource(state, address);
+        const parsed = Address.parse(address);
+        const deposed = state.deposed && Object.hasOwn(state.deposed, parsed.toString()) ? state.deposed[parsed.toString()] : [];
 
-        if (!resource) {
+        if (!resource && deposed.length === 0) {
           console.error(styleText('red', `Resource not found: ${address}`));
           process.exit(1);
         }
 
-        console.log(styleText('bold', `# ${address}:`));
-        console.log(`resource "${resource.resourceType}" "${resource.name}" {`);
-        for (const [key, value] of Object.entries(resource.attributes || {})) console.log(`  ${key} = ${show(value, sensitiveUnder(resource.sensitive ?? [], key))}`);
+        if (resource) {
+          console.log(styleText('bold', `# ${address}:`));
+          printAttributes(resource.resourceType, resource.name, resource.attributes || {}, resource.sensitive);
+        }
 
-        console.log('}');
+        for (const object of deposed) {
+          console.log(styleText('bold', `# ${address} deposed:`));
+          printAttributes(parsed.resourceType, parsed.name, object.attributes, object.sensitive);
+        }
       } catch (error) {
         console.error(styleText('red', 'Error showing resource:'), error instanceof Error ? error.message : String(error));
         process.exit(1);
@@ -127,13 +151,14 @@ export function createStateCommand(): Command {
           const state = await manager.read();
           const key = Address.parse(address).toString();
 
-          if (!Object.hasOwn(state.resources, key)) {
+          if (!Object.hasOwn(state.resources, key) && !(state.deposed && Object.hasOwn(state.deposed, key))) {
             console.log(styleText('yellow', `Resource not found in state: ${address}`));
             return;
           }
 
           console.log(styleText('yellow', `Removing ${key}...`));
           delete state.resources[key];
+          forgetDeposed(state, key);
           mapDependencies(state, (dependency) => (dependency === key ? undefined : dependency));
           delete state.outputs;
 

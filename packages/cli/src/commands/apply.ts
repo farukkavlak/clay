@@ -24,7 +24,8 @@ function summarize(applied: PlanAction[], forgotten: number): string {
 
 /** Resources deleted outside Clay that apply drops from state without an action. */
 function forgotten(plan: Plan): number {
-  const acted = new Set(plan.actions.map((action) => Address.of(action).toString()));
+  // A deposed object's delete leaves the resource itself, which the provider may no longer find, to be forgotten.
+  const acted = new Set(plan.actions.filter((action) => !action.deposed).map((action) => Address.of(action).toString()));
 
   return changedOutside(plan).filter((drift) => !Object.hasOwn(plan.prior, drift.address) && !acted.has(drift.address)).length;
 }

@@ -30,7 +30,7 @@ export class StateManager {
   private async save(state: State): Promise<void> {
     state.serial += 1;
     state.version = STATE_VERSION;
-    await this.backend.write({ version: state.version, serial: state.serial, outputs: state.outputs, resources: state.resources });
+    await this.backend.write({ version: state.version, serial: state.serial, outputs: state.outputs, resources: state.resources, deposed: state.deposed });
   }
 
   async writeIfAbsent(state: State): Promise<boolean> {

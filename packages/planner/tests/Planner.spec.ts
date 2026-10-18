@@ -34,6 +34,10 @@ function ignoring(resource: DesiredResource, ignored: string[][]): DesiredResour
   return { ...resource, ignored };
 }
 
+function withDeposed(state: State, ...addresses: string[]): State {
+  return { ...state, deposed: Object.fromEntries(addresses.map((address) => [address, [{ attributes: {} }]])) };
+}
+
 function preventing(name: string, attributes: Record<string, string>): DesiredResource {
   const resource = desiredResource(name, attributes);
   return { ...resource, block: { ...resource.block, lifecycle: { preventDestroy: true, position } } };
@@ -87,6 +91,30 @@ describe('Planner', () => {
     expect(plan([{ ...desired, replace: true }], stateWith('r', { path: 'old', size: 'large' }))[0]).toMatchObject({ type: 'REPLACE', sensitive });
     expect(plan([desired], stateWith('r', planned))[0]).toMatchObject({ type: 'NO_OP', sensitive });
     expect(plan([desiredResource('r', planned)], stateWith('r', planned))[0]).not.toHaveProperty('sensitive');
+  });
+
+  describe('deposed objects', () => {
+    it('are destroyed beside a resource that stays, as an action of their own', () => {
+      const actions = plan([desiredResource('r', { path: 'x' })], withDeposed(stateWith('r', { path: 'x' }), 'mock_resource.r'));
+
+      expect(actions.map((action) => action.type)).toEqual(['NO_OP', 'DELETE']);
+      expect(actions[1]).toMatchObject({ type: 'DELETE', deposed: true, resourceType: 'mock_resource', name: 'r' });
+    });
+
+    it('are destroyed with a resource the configuration drops, and where there is none', () => {
+      const dropped = plan([], withDeposed(stateWith('r', {}), 'mock_resource.r'));
+      const alone = plan([], withDeposed({ version: STATE_VERSION, serial: 0, resources: {} }, 'mock_resource.gone[1]'));
+
+      expect(dropped.map((action) => action.deposed)).toEqual([undefined, true]);
+      expect(alone).toMatchObject([{ type: 'DELETE', deposed: true, name: 'gone', key: 1 }]);
+    });
+
+    it('add no action to a state with none, and mark no other delete', () => {
+      const [action] = plan([], stateWith('r', {}));
+
+      expect(action.type).toBe('DELETE');
+      expect(action).not.toHaveProperty('deposed');
+    });
   });
 
   describe('ignored paths', () => {

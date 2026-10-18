@@ -50,6 +50,37 @@ describe('a state file that is not valid state', () => {
       `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"sensitive":"content"}}}`,
       '"local_file.a" is not a resource',
     ],
+    ['deposed objects that are not a record', `{"version":${STATE_VERSION},"serial":0,"resources":{},"deposed":"oops"}`, 'its deposed objects are not a record'],
+    [
+      'deposed objects under something that is not an address',
+      `{"version":${STATE_VERSION},"serial":0,"resources":{},"deposed":{"nope":[{"attributes":{}}]}}`,
+      '"nope" is not the address of a resource, so it cannot hold deposed objects',
+    ],
+    [
+      'an empty list of deposed objects',
+      `{"version":${STATE_VERSION},"serial":0,"resources":{},"deposed":{"local_file.a":[]}}`,
+      'the deposed objects of "local_file.a" are not a list with an object in it',
+    ],
+    [
+      'a deposed object with no attributes',
+      `{"version":${STATE_VERSION},"serial":0,"resources":{},"deposed":{"local_file.a":[{}]}}`,
+      'a deposed object of "local_file.a" has no attributes',
+    ],
+    [
+      'a deposed object whose dependencies are not a list',
+      `{"version":${STATE_VERSION},"serial":0,"resources":{},"deposed":{"local_file.a":[{"attributes":{},"dependencies":"x"}]}}`,
+      'a deposed object of "local_file.a" has no attributes, or its sensitive or dependencies',
+    ],
+    [
+      'a deposed object whose sensitive parts are not steps',
+      `{"version":${STATE_VERSION},"serial":0,"resources":{},"deposed":{"local_file.a":[{"attributes":{},"sensitive":"content"}]}}`,
+      'a deposed object of "local_file.a" has no attributes, or its sensitive or dependencies',
+    ],
+    [
+      'a deposed object with a sensitive index that is not whole',
+      `{"version":${STATE_VERSION},"serial":0,"resources":{},"deposed":{"local_file.a":[{"attributes":{},"sensitive":[["content",1.5]]}]}}`,
+      'a sensitive index of a deposed object of "local_file.a": 1.5 is not a whole number',
+    ],
     [
       'a resource whose prevent_destroy is not true',
       `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"preventDestroy":false}}}`,

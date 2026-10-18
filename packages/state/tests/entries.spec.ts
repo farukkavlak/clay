@@ -20,6 +20,26 @@ describe('moving a resource in state', () => {
     expect(state.resources['local_file.b'].dependencies).toEqual(['local_file.a[0]']);
   });
 
+  it('moves the deposed objects with it, after any the new address already holds', () => {
+    const state: State = {
+      ...emptyState(),
+      resources: { 'local_file.a': { resourceType: 'local_file', name: 'a', attributes: {} } },
+      deposed: { 'local_file.a': [{ attributes: { id: 'new' } }], 'local_file.a[0]': [{ attributes: { id: 'held' } }] },
+    };
+
+    moveResource(state, Address.parse('local_file.a'), Address.parse('local_file.a[0]'));
+
+    expect(state.deposed).toEqual({ 'local_file.a[0]': [{ attributes: { id: 'held' } }, { attributes: { id: 'new' } }] });
+  });
+
+  it('leaves the state with no deposed objects as it was', () => {
+    const state: State = { ...emptyState(), resources: { 'local_file.a': { resourceType: 'local_file', name: 'a', attributes: {} } } };
+
+    moveResource(state, Address.parse('local_file.a'), Address.parse('local_file.a[0]'));
+
+    expect(state).not.toHaveProperty('deposed');
+  });
+
   it('refuses a move from an address state holds nothing under, rather than file an empty entry', () => {
     const state = emptyState();
 

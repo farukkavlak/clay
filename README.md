@@ -179,10 +179,10 @@ A key two items give is refused, unless `...` after the value groups them.
 | `clay plan [--out file]` | Shows what `apply` would do; `--out` saves the plan with its configuration                                |
 | `clay apply [plan] [-y]` | Runs the plan it shows, or a saved one; `-y` skips the question                                           |
 | `clay output [--json]`   | Prints the root outputs from the last apply; `--json` gives each with its type, a sensitive one too       |
-| `clay state list`        | Lists the resources in state                                                                              |
-| `clay state show <addr>` | Prints one resource as it is in state                                                                     |
+| `clay state list`        | Lists the resources in state, and `<addr> (deposed)` for an address that holds deposed objects            |
+| `clay state show <addr>` | Prints one resource as it is in state, and each deposed object under it                                   |
 | `clay state mv <a> <b>`  | Renames a resource in state, so the next plan does not recreate it                                        |
-| `clay state rm <addr>`   | Forgets a resource without destroying it                                                                  |
+| `clay state rm <addr>`   | Forgets a resource, and its deposed objects, without destroying them                                      |
 
 A saved plan carries the configuration it was made from, the state it was planned
 against, what the refresh read, what each data source read at plan gave and which ones
@@ -237,6 +237,14 @@ replace for another reason keeps the old value. A path may reach into a map or a
 `tags["Name"]` or `items[0]`, but not into a set; `all` ignores every attribute. A create ignores nothing,
 there being nothing yet. A change made outside Clay still shows under "Changed outside Clay"; the refresh reads
 it, and the plan then has nothing to undo.
+
+State may hold deposed objects, apart from `resources`, by the address they were left by:
+earlier objects of a resource that a replace did not destroy. A plan destroys them as a
+delete of their own, `- local_file.db (deposed object) will be destroyed`, whether or not
+the resource is still in the configuration, and `prevent_destroy` does not hold it back,
+since the current object is not touched. They go one at a time, oldest first, each gone
+from state once its provider has destroyed it, so a failure leaves the rest for the next
+run. `clay state mv` and `rm` take them along.
 
 A data source reads something that already exists. `data "local_file" "f" { path = "x" }`
 reads a file, and `data.local_file.f.content` is what it holds. `data.local_file.f` alone

@@ -71,6 +71,8 @@ export interface PlanAction {
   after?: Record<string, unknown>;
   /** The steps to each sensitive part of the resource as the plan leaves it, a no-op too. Left out where there is none. */
   sensitive?: AttributePath[];
+  /** On a delete: it destroys the objects a replace left behind, not the current one. */
+  deposed?: true;
   /** On a no-op: the values stay, which parts are sensitive changes. */
   marksChange?: true;
   /** On an update or a replace: the paths held as the state has them, which the apply holds the same. */
@@ -102,7 +104,7 @@ export interface Plan {
 }
 
 /** Bump on any change to the file's shape after a release, so an older plan file is refused instead of misread. */
-export const PLAN_FILE_VERSION = '28.0';
+export const PLAN_FILE_VERSION = '29.0';
 
 export interface PlanFile extends Plan {
   version: string;
@@ -262,6 +264,10 @@ function isProtection(action: Record<string, unknown>): boolean {
   return prevents && isNoOpMark(action, 'protectionChange');
 }
 
+function isDeposed(action: Record<string, unknown>): boolean {
+  return action.deposed === undefined || (action.deposed === true && action.type === 'DELETE');
+}
+
 /** Only an update or a replace changes an existing resource, so only they hold a path to leave as it is. */
 function isIgnored(action: Record<string, unknown>): boolean {
   return action.ignored === undefined || ((action.type === 'UPDATE' || action.type === 'REPLACE') && isAttributePaths(action.ignored));
@@ -269,7 +275,7 @@ function isIgnored(action: Record<string, unknown>): boolean {
 
 /** What a plan holds beside the values: the marks, the prevented destroy and the paths left as they are. */
 function isStateOnly(action: Record<string, unknown>): boolean {
-  return isNoOpMark(action, 'marksChange') && isProtection(action) && isIgnored(action);
+  return isNoOpMark(action, 'marksChange') && isProtection(action) && isIgnored(action) && isDeposed(action);
 }
 
 function isAction(action: unknown): boolean {
@@ -670,6 +676,9 @@ export function plan(desiredResources: DesiredResource[], currentState: State): 
       ...Address.of(resource).fields(),
     });
   }
+
+  // Whether or not the resource they were left by is still there.
+  for (const address of Object.keys(currentState.deposed ?? {})) actions.push({ type: 'DELETE', deposed: true, ...Address.parse(address).fields() });
 
   return actions;
 }

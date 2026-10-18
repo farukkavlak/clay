@@ -81,7 +81,7 @@ export class ActionExecutor {
         break;
       }
       case 'DELETE': {
-        await this.executeDelete(action, provider, currentState);
+        await (action.deposed ? this.executeDeleteDeposed(action, provider, currentState) : this.executeDelete(action, provider, currentState));
         break;
       }
       default: {
@@ -195,6 +195,22 @@ export class ActionExecutor {
     resource.dependencies = action.dependencies ?? [];
     mark(resource, action.sensitive ?? []);
     protect(resource, action);
+  }
+
+  /** One at a time, oldest first, each gone from state once destroyed, so a failure leaves the rest to the next run. */
+  async executeDeleteDeposed(action: PlanAction, provider: Provider, currentState: State): Promise<void> {
+    const address = Address.of(action).toString();
+    const { deposed } = currentState;
+    const objects = deposed?.[address];
+    if (!deposed || !objects) throw new Error(`${address}: state holds no deposed object, so the plan was made from another state`);
+
+    while (objects.length > 0) {
+      await provider.delete(action.resourceType, objects[0].attributes);
+      objects.shift();
+    }
+
+    delete deposed[address];
+    if (Object.keys(deposed).length === 0) delete currentState.deposed;
   }
 
   async executeDelete(action: PlanAction, provider: Provider, currentState: State): Promise<void> {

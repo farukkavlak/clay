@@ -6,6 +6,14 @@ export function mapDependencies(state: State, change: (dependency: string) => st
     if (resource.dependencies) resource.dependencies = resource.dependencies.map((dependency) => change(dependency)).filter((dependency) => dependency !== undefined);
 }
 
+/** What a replace left behind goes with the resource it was left by. */
+function moveDeposed(state: State, from: string, to: string): void {
+  if (!state.deposed || !Object.hasOwn(state.deposed, from)) return;
+
+  state.deposed[to] = [...(state.deposed[to] ?? []), ...state.deposed[from]];
+  delete state.deposed[from];
+}
+
 /** The address lives in the key, the entry and every dependency on it; all of them move. */
 export function moveResource(state: State, from: Address, to: Address): void {
   // Moving a missing entry would create an empty one.
@@ -13,5 +21,6 @@ export function moveResource(state: State, from: Address, to: Address): void {
 
   state.resources[to.toString()] = { ...state.resources[from.toString()], ...to.fields() };
   delete state.resources[from.toString()];
+  moveDeposed(state, from.toString(), to.toString());
   mapDependencies(state, (dependency) => (dependency === from.toString() ? to.toString() : dependency));
 }

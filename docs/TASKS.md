@@ -578,6 +578,11 @@ in it together.
 
 ### Lifecycle
 
+- [x] Deposed objects: state holds the earlier objects of a resource that a replace has not
+      destroyed, by address and apart from `resources`, so a resource the provider no longer
+      finds, or the configuration drops, does not take them with it. A plan destroys them as
+      a delete of their own; `state list`, `show`, `mv` and `rm` know them. Nothing makes
+      one yet; `create_before_destroy` will
 - [ ] `lifecycle { create_before_destroy = true }`: today a replacement deletes first
 - [x] `lifecycle { prevent_destroy = true }`: the plan refuses to replace the resource, and
       to delete it. The state keeps the flag of the last apply, so a delete is judged by

@@ -24,6 +24,11 @@ export interface RunOptions {
   parallelism?: number;
 }
 
+/** A move changes the map, never a list in it, so a copy of the map is its own. */
+function copyDeposed(deposed: State['deposed']): Pick<State, 'deposed'> {
+  return deposed ? { deposed: { ...deposed } } : {};
+}
+
 /** Plan and apply move entries and rewrite dependencies, so each works on its own copy. */
 function copyResources(resources: Record<string, Resource>): Record<string, Resource> {
   return Object.fromEntries(Object.entries(resources).map(([key, resource]) => [key, { ...resource }]));
@@ -50,7 +55,7 @@ export class Orchestrator {
     const prevRun = await this.stateManager.read();
     const prior = refresh ? await this.refresh(prevRun) : prevRun;
     // Planning applies count moves to a copy; the plan keeps the resources at their old addresses.
-    const currentState = { ...prior, resources: copyResources(prior.resources) };
+    const currentState = { ...prior, resources: copyResources(prior.resources), ...copyDeposed(prior.deposed) };
     const { resources: desiredResources, outputs, dataSources, dataSensitive, readAtApply } = await this.resolveAndCheck(configContent, currentState, 'plan');
 
     const actions = plan(desiredResources, currentState);

@@ -1,4 +1,4 @@
-import { ExactNumber, isOutput, isRecord, NumberError, readResources, State, STATE_VERSION } from '@clay/contracts';
+import { ExactNumber, isOutput, isRecord, NumberError, readDeposed, readResources, State, STATE_VERSION } from '@clay/contracts';
 
 function checkOutputs(outputs: unknown, say: (problem: string) => never): void {
   if (!isRecord(outputs)) say('its outputs are not a record');
@@ -14,7 +14,7 @@ function check(state: unknown, source: string): asserts state is State {
 
   if (!isRecord(state)) say('it is not an object');
 
-  const { version, serial, outputs, resources } = state;
+  const { version, serial, outputs, resources, deposed } = state;
 
   if (typeof version !== 'number') say('its version is not a number');
   if (version > STATE_VERSION) throw new Error(`${source} was written by a newer Clay, version ${version}`);
@@ -22,6 +22,7 @@ function check(state: unknown, source: string): asserts state is State {
   if (typeof serial !== 'number') say('its serial is not a number');
   if (outputs !== undefined) checkOutputs(outputs, say);
   readResources(resources, 'its resources', say);
+  readDeposed(deposed, say);
 }
 
 export function serializeState(state: State): string {

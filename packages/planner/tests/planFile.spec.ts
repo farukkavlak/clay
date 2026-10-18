@@ -365,6 +365,16 @@ describe('reading a plan file', () => {
     expect(read(content)).toThrow('tfplan.json is not a plan file: an ignored index: 1.5 is not a whole number');
   });
 
+  it.each([
+    ['anything but true', 'DELETE', false],
+    ['on an update', 'UPDATE', true],
+    ['on a no-op', 'NO_OP', true],
+  ])('refuses deposed that is %s', (_, type, deposed) => {
+    const content = { ...fields(), actions: [{ type, resourceType: 'null_resource', name: 'a', deposed }] };
+
+    expect(read(content)).toThrow(/^tfplan\.json is not a plan file$/);
+  });
+
   it('names a sensitive index that is not whole', () => {
     const content = { ...fields(), actions: [{ type: 'NO_OP', resourceType: 'null_resource', name: 'a', sensitive: [['triggers', 1.5]] }] };
 

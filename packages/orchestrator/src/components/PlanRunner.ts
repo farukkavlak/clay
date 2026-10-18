@@ -62,6 +62,39 @@ interface Checked {
   outputs: PlannedOutputs;
 }
 
+/** What a replace left behind is destroyed apart from the resource it was left by, which may be destroyed too. */
+const deposedKey = (address: string) => `${address} (deposed)`;
+
+const deleteKey = (action: PlanAction) => (action.deposed ? deposedKey(Address.of(action).toString()) : Address.of(action).toString());
+
+/** From state, since the config no longer has it. */
+function dependenciesOf(action: PlanAction, state: State): string[] {
+  const address = Address.of(action).toString();
+
+  return action.deposed ? (state.deposed?.[address] ?? []).flatMap((object) => object.dependencies ?? []) : (state.resources[address]?.dependencies ?? []);
+}
+
+/**
+ * What is depended on comes first in the graph, and so is destroyed last. A resource that depends on an address waits for its deposed objects too.
+ * Objects left at different times can name each other, which no order holds, so an edge that would close a loop is dropped.
+ */
+function deleteEdges(deletes: Map<string, PlanAction>, state: State): [string, string][] {
+  const edges: [string, string][] = [];
+  const next = new Map<string, string[]>();
+  const reaches = (from: string, to: string): boolean => from === to || (next.get(from) ?? []).some((step) => reaches(step, to));
+
+  for (const [key, action] of deletes)
+    for (const dependency of dependenciesOf(action, state))
+      for (const kept of [dependency, deposedKey(dependency)]) {
+        if (!deletes.has(kept) || reaches(key, kept)) continue;
+
+        edges.push([kept, key]);
+        next.set(kept, [...(next.get(kept) ?? []), key]);
+      }
+
+  return edges;
+}
+
 /** State is written after every action, so a failed run loses nothing done before it. */
 export class PlanRunner {
   constructor(
@@ -294,7 +327,7 @@ export class PlanRunner {
 
   /** Ordered by the dependencies in state, since the config no longer has the resource. */
   private async *applyDeletes(actions: PlanAction[], state: State, parallelism: number): AsyncGenerator<RunEvent, boolean> {
-    const deletes = new Map(actions.filter((action) => action.type === 'DELETE').map((action) => [Address.of(action).toString(), action]));
+    const deletes = new Map(actions.filter((action) => action.type === 'DELETE').map((action) => [deleteKey(action), action]));
     const graph = this.deleteGraph(deletes, state);
 
     for (const layer of graph.topologicalSort().reverse()) {
@@ -310,7 +343,7 @@ export class PlanRunner {
 
     for (const [key, action] of deletes) graph.addNode(key, action);
 
-    for (const key of deletes.keys()) for (const dependency of state.resources[key]?.dependencies ?? []) if (deletes.has(dependency)) graph.addEdge(dependency, key);
+    for (const [first, then] of deleteEdges(deletes, state)) graph.addEdge(first, then);
 
     return graph;
   }
