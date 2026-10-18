@@ -77,13 +77,4 @@ export class ScopeManager {
   getDirectory(scope: string): string | undefined {
     return this.directories.get(scope);
   }
-
-  clear(): void {
-    this.variables.clear();
-    this.outputs.clear();
-    this.declaredLocals.clear();
-    this.locals.clear();
-    this.declaredOutputs.clear();
-    this.directories.clear();
-  }
 }

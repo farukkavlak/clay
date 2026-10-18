@@ -46,14 +46,11 @@ describe('ModuleInstances', () => {
     expect(modules.eachValue(ModuleAddress.root.child('other'), 'b')).toBeUndefined();
   });
 
-  it('says which modules are called with count until it is cleared', () => {
+  it('says which modules are called with count', () => {
     const modules = new ModuleInstances();
     modules.declare(ModuleAddress.root.child('a'), 'count');
 
     expect(modules.repetitionOf(ModuleAddress.root.child('a'))).toBe('count');
     expect(modules.repetitionOf(ModuleAddress.root.child('b'))).toBeUndefined();
-
-    modules.clear();
-    expect(modules.repetitionOf(ModuleAddress.root.child('a'))).toBeUndefined();
   });
 });

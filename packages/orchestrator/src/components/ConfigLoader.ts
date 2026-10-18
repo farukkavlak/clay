@@ -39,13 +39,9 @@ export class ConfigLoader {
   async load(configContent: string): Promise<LoadedConfig> {
     const mainProgram = new Parser(new Lexer(configContent, CONFIG_FILE).tokenize()).parse();
 
-    this.scopeManager.clear();
     const { resources: loadedResources, modules: loadedModules } = await this.moduleLoader.loadModuleTree(mainProgram);
     this.checkDefaults(loadedModules);
 
-    this.instances.clear();
-    // Planned values belong to one plan; the next plan makes its own, and an apply reads state.
-    this.planned.clear();
     for (const { uniqueId, block } of loadedResources) {
       if (block.count) this.instances.declare(uniqueId, 'count');
       if (block.forEach) this.instances.declare(uniqueId, 'for_each');
@@ -55,9 +51,6 @@ export class ConfigLoader {
     this.declareCalls(loadedModules);
     await this.loadSchemas(loadedResources);
     await this.loadDataSchemas(loadedModules);
-
-    // Each data source is read, or left for the apply, in its turn in the graph.
-    this.dataSources.clear();
 
     return { mainProgram, loadedResources, loadedModules, schemas: this.schemas };
   }
@@ -79,8 +72,6 @@ export class ConfigLoader {
 
   /** Loaded before any value is resolved, since resolving needs the schema's types. */
   private async loadSchemas(loaded: LoadedResource[]): Promise<void> {
-    this.schemas.clear();
-
     for (const { block, address } of loaded) {
       const type = block.resourceType;
       if (this.schemas.has(type)) continue;
@@ -95,8 +86,6 @@ export class ConfigLoader {
 
   /** With its names checked, so a misspelled input is refused before anything is read. */
   private async loadDataSchemas(loadedModules: LoadedModule[]): Promise<void> {
-    this.dataSchemas.clear();
-
     for (const { address, program } of loadedModules)
       for (const stmt of program) {
         if (stmt.type !== 'Data') continue;
@@ -128,8 +117,6 @@ export class ConfigLoader {
   }
 
   private declareCalls(loadedModules: LoadedModule[]): void {
-    this.modules.clear();
-
     for (const { address, program } of loadedModules)
       for (const stmt of program) {
         if (stmt.type === 'Module' && stmt.count) this.modules.declare(address.child(stmt.name), 'count');

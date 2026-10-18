@@ -3,29 +3,15 @@ import { outputChanges, plan, Plan } from '@clay/planner';
 import { StateManager } from '@clay/state';
 
 import { asError } from './asError';
-import { ActionExecutor } from './components/ActionExecutor';
-import { ConfigLoader } from './components/ConfigLoader';
-import { DataSourceReader } from './components/DataSourceReader';
-import { DependencyGraphBuilder } from './components/DependencyGraphBuilder';
-import { DesiredState, DesiredStateBuilder, Walk } from './components/DesiredStateBuilder';
-import { ModuleLoader } from './components/ModuleLoader';
-import { PlanRunner } from './components/PlanRunner';
-import { ResourcePlanner } from './components/ResourcePlanner';
-import { WrittenCheck } from './components/WrittenCheck';
+import { DesiredState, Walk } from './components/DesiredStateBuilder';
 import { checkRead, heldBy } from './providerResult';
-import { Instances } from './Instances';
-import { ModuleInstances } from './ModuleInstances';
-import { Planned } from './Planned';
 import { checkAttributes } from './checkAttributes';
 import { ConfigFiles } from './ConfigFiles';
 import { ProviderRegistry } from './ProviderRegistry';
-import { InstanceKeys } from './resolvers/InstanceKeys';
-import { ReferenceResolver } from './resolvers/ReferenceResolver';
-import { ReferenceScanner } from './resolvers/ReferenceScanner';
+import { newRun, Run } from './Run';
 import { RunEvent } from './RunEvent';
 import { checkParallelism, DEFAULT_PARALLELISM } from './parallelism';
-import { ScopeManager } from './scope/ScopeManager';
-import { plainOf, Value } from './Value';
+import { plainOf } from './Value';
 
 export type { RunEvent } from './RunEvent';
 export { DiskFiles, InMemoryFiles, RecordingFiles } from './ConfigFiles';
@@ -46,38 +32,12 @@ export class Orchestrator {
   constructor(
     private stateManager: StateManager,
     private providers: ProviderRegistry,
-    private loader: ConfigLoader,
-    private graphBuilder: DependencyGraphBuilder,
-    private writtenCheck: WrittenCheck,
-    private desiredStateBuilder: DesiredStateBuilder,
-    private runner: PlanRunner
+    private newRun: () => Run
   ) {}
 
   static create(stateManager: StateManager, files: ConfigFiles): Orchestrator {
     const providers = new ProviderRegistry();
-    const scopes = new ScopeManager();
-    const dataSources = new Map<string, Record<string, Value>>();
-    const schemas = new Map<string, Schema>();
-    const dataSchemas = new Map<string, Schema>();
-    const instances = new Instances();
-    const modules = new ModuleInstances();
-    const planned = new Planned();
-    const keys = new InstanceKeys(instances, modules);
-    const resolver = new ReferenceResolver(scopes, dataSources, schemas, dataSchemas, instances, modules, planned, keys);
-    const scanner = new ReferenceScanner(modules);
-    const graphBuilder = new DependencyGraphBuilder(scanner, instances, modules);
-    const resourcePlanner = new ResourcePlanner(providers);
-    const reader = new DataSourceReader(providers, dataSchemas, dataSources);
-
-    return new Orchestrator(
-      stateManager,
-      providers,
-      new ConfigLoader(new ModuleLoader(files, scopes), scopes, dataSources, schemas, dataSchemas, resolver, providers, instances, modules, planned),
-      graphBuilder,
-      new WrittenCheck(resolver, scopes, schemas, dataSchemas),
-      new DesiredStateBuilder(scopes, scanner, resolver, graphBuilder, instances, modules, keys, planned, resourcePlanner, reader),
-      new PlanRunner(stateManager, new ActionExecutor(providers, resolver, resourcePlanner), scopes, resolver, instances, modules, reader)
-    );
+    return new Orchestrator(stateManager, providers, () => newRun(stateManager, providers, files));
   }
 
   registerProvider(provider: Provider): void {
@@ -131,9 +91,10 @@ export class Orchestrator {
       // The actions were planned against the refreshed resources, so they run on those.
       state.resources = copyResources(saved.prior);
 
-      const config = await this.loader.load(configContent);
-      const graph = this.graphBuilder.buildExecutionGraph(config.loadedResources, config.loadedModules);
-      yield* this.runner.run(saved, config, graph, state, parallelism);
+      const { loader, graphBuilder, runner } = this.newRun();
+      const config = await loader.load(configContent);
+      const graph = graphBuilder.buildExecutionGraph(config.loadedResources, config.loadedModules);
+      yield* runner.run(saved, config, graph, state, parallelism);
     } finally {
       await this.stateManager.unlock();
     }
@@ -167,11 +128,12 @@ export class Orchestrator {
   }
 
   private async resolveAndCheck(configContent: string, state: State, walk: Walk): Promise<DesiredState> {
-    const { loadedResources, loadedModules, schemas } = await this.loader.load(configContent);
+    const { loader, graphBuilder, writtenCheck, desiredStateBuilder } = this.newRun();
+    const { loadedResources, loadedModules, schemas } = await loader.load(configContent);
 
-    const graph = this.graphBuilder.buildExecutionGraph(loadedResources, loadedModules);
+    const graph = graphBuilder.buildExecutionGraph(loadedResources, loadedModules);
     checkAttributes(loadedResources, schemas);
-    this.writtenCheck.check(loadedResources, loadedModules);
-    return await this.desiredStateBuilder.build(loadedResources, graph, state, schemas, walk);
+    writtenCheck.check(loadedResources, loadedModules);
+    return await desiredStateBuilder.build(loadedResources, graph, state, schemas, walk);
   }
 }
