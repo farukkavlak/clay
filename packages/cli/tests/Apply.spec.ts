@@ -88,7 +88,7 @@ describe('CLI: apply command', () => {
 
       expect(planMock).toHaveBeenCalled();
       expect(confirm).toHaveBeenCalled();
-      expect(runMock).toHaveBeenCalledWith(planned, 'content');
+      expect(runMock).toHaveBeenCalledWith(planned, 'content', { parallelism: undefined });
     });
 
     it('should print each resource as it is applied', async () => {
@@ -366,7 +366,8 @@ describe('CLI: apply command', () => {
 
       expect(runPlanMock).toHaveBeenCalledWith(
         expect.objectContaining({ serial: 2, actions: [{ type: 'CREATE', resourceType: 'test', name: 't', planned: {}, after: {} }] }),
-        'saved config'
+        'saved config',
+        { parallelism: undefined }
       );
       expect(InMemoryFiles).toHaveBeenCalledWith({ 'm/main.clay': 'saved module', 'main.clay': 'saved config' });
       expect(confirm).not.toHaveBeenCalled();

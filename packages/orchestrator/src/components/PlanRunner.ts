@@ -41,9 +41,6 @@ function groupBy(actions: PlanAction[], key: (address: Address) => string): Map<
   return groups;
 }
 
-/** How many actions of a layer run at once. */
-const PARALLELISM = 10;
-
 /** Held until nothing else runs, so a reader that stops at a failure cannot cut an action short. */
 const isFailure = (event: RunEvent) => event.type === 'failed';
 
@@ -77,7 +74,7 @@ export class PlanRunner {
     private reader: DataSourceReader
   ) {}
 
-  async *run(saved: Approved, config: LoadedConfig, graph: Graph<GraphNode>, state: State): AsyncGenerator<RunEvent> {
+  async *run(saved: Approved, config: LoadedConfig, graph: Graph<GraphNode>, state: State, parallelism: number): AsyncGenerator<RunEvent> {
     const { actions } = saved;
     this.checkActionsMatch(actions, graph);
     const outputs = this.plannedOutputs(saved, state);
@@ -88,8 +85,8 @@ export class PlanRunner {
 
     // Outputs belong to a finished run, so every write before the last omits them.
     delete state.outputs;
-    if (!(yield* this.applyInOrder(saved, checked, config, graph, state))) return;
-    if (!(yield* this.applyDeletes(actions, state))) return;
+    if (!(yield* this.applyInOrder(saved, checked, config, graph, state, parallelism))) return;
+    if (!(yield* this.applyDeletes(actions, state, parallelism))) return;
 
     // Resolved after the last action, so outputs never reflect a half-applied run.
     state.outputs = this.resolveOutputs(config.mainProgram, state, ModuleAddress.root);
@@ -190,7 +187,8 @@ export class PlanRunner {
     { named, outputs }: Checked,
     config: LoadedConfig,
     graph: Graph<GraphNode>,
-    state: State
+    state: State,
+    parallelism: number
   ): AsyncGenerator<RunEvent, boolean> {
     const blocks = new Map(config.loadedResources.map(({ uniqueId, block }) => [uniqueId, block]));
     const byBlock = groupBy(
@@ -213,17 +211,17 @@ export class PlanRunner {
         if (node.kind === 'resource') toRun.push(...this.actionsOf(blocks.get(key)!, node.module, byBlock.get(key) ?? [], state));
       }
 
-      if (!(yield* this.runTogether(toRun, state))) return false;
+      if (!(yield* this.runTogether(toRun, state, parallelism))) return false;
     }
 
     return true;
   }
 
   /** Nothing in a layer reads another of it, so its actions run together. */
-  private runTogether(actions: PlanAction[], state: State): AsyncGenerator<RunEvent, boolean> {
+  private runTogether(actions: PlanAction[], state: State, parallelism: number): AsyncGenerator<RunEvent, boolean> {
     return runTogether(
       actions.map((action) => () => this.step(action, state)),
-      PARALLELISM,
+      parallelism,
       isFailure
     );
   }
@@ -295,18 +293,14 @@ export class PlanRunner {
   }
 
   /** Ordered by the dependencies in state, since the config no longer has the resource. */
-  private async *applyDeletes(actions: PlanAction[], state: State): AsyncGenerator<RunEvent, boolean> {
+  private async *applyDeletes(actions: PlanAction[], state: State, parallelism: number): AsyncGenerator<RunEvent, boolean> {
     const deletes = new Map(actions.filter((action) => action.type === 'DELETE').map((action) => [Address.of(action).toString(), action]));
     const graph = this.deleteGraph(deletes, state);
 
-    for (const layer of graph.topologicalSort().reverse())
-      if (
-        !(yield* this.runTogether(
-          layer.map((key) => graph.getNode(key)!),
-          state
-        ))
-      )
-        return false;
+    for (const layer of graph.topologicalSort().reverse()) {
+      const inLayer = layer.map((key) => graph.getNode(key)!);
+      if (!(yield* this.runTogether(inLayer, state, parallelism))) return false;
+    }
 
     return true;
   }

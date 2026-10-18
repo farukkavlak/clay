@@ -10,6 +10,7 @@ import { confirm } from '../confirm';
 import { newOrchestrator } from '../engine';
 import { describeError } from '../describeError';
 import { actionLine, changesNothing, displayPlan, readLine, shownType } from '../showPlan';
+import { parallelismOption } from '../parallelismOption';
 import { refreshOption } from '../refreshOption';
 
 /** Counts as the plan summary does: a replace is one add and one destroy. */
@@ -78,7 +79,7 @@ async function planFromDisk(cwd: string, recording: RecordingFiles, config: stri
   return { plan, config, files: configFiles(config, recording.snapshot()) };
 }
 
-async function executeApply(cwd: string, { plan, config, files }: PlannedApply, autoConfirm: boolean): Promise<void> {
+async function executeApply(cwd: string, { plan, config, files }: PlannedApply, autoConfirm: boolean, parallelism?: number): Promise<void> {
   displayPlan(plan);
   if (changesNothing(plan)) return;
 
@@ -88,7 +89,7 @@ async function executeApply(cwd: string, { plan, config, files }: PlannedApply, 
     return;
   }
 
-  await runAndReport(newOrchestrator(cwd, files).runPlan(plan, config), forgotten(plan));
+  await runAndReport(newOrchestrator(cwd, files).runPlan(plan, config, { parallelism }), forgotten(plan));
 }
 
 /** Errors name the user's file and say what to do. */
@@ -110,7 +111,7 @@ async function readPlanFile(planFileArg: string, files: ConfigFiles): Promise<Pl
   }
 }
 
-async function executeApplyFromPlan(cwd: string, planFile: PlanFile, files: ConfigFiles): Promise<void> {
+async function executeApplyFromPlan(cwd: string, planFile: PlanFile, files: ConfigFiles, parallelism?: number): Promise<void> {
   const orchestrator = newOrchestrator(cwd, files);
 
   console.log(styleText('blue', 'Applying from saved plan...'));
@@ -119,7 +120,7 @@ async function executeApplyFromPlan(cwd: string, planFile: PlanFile, files: Conf
   displayPlan(planFile);
   if (changesNothing(planFile)) return;
 
-  await runAndReport(orchestrator.runPlan(planFile, planFile.config), forgotten(planFile));
+  await runAndReport(orchestrator.runPlan(planFile, planFile.config, { parallelism }), forgotten(planFile));
 }
 
 export function createApplyCommand() {
@@ -127,6 +128,7 @@ export function createApplyCommand() {
     .description('Create or update infrastructure')
     .option('-y, --yes', 'Approve changes automatically')
     .addOption(refreshOption())
+    .addOption(parallelismOption())
     .argument('[plan-file]', 'Plan file to apply (optional)')
     .action(async (planFileArg: string | undefined, options) => {
       const cwd = process.cwd();
@@ -140,7 +142,7 @@ export function createApplyCommand() {
           const planData = await readPlanFile(planFileArg, files);
 
           files = configFiles(planData.config, planData.modules);
-          await executeApplyFromPlan(cwd, planData, files);
+          await executeApplyFromPlan(cwd, planData, files, options.parallelism);
         } else {
           const config = recording.read(CONFIG_FILE);
           if (config === undefined) {
@@ -151,7 +153,7 @@ export function createApplyCommand() {
           const planned = await planFromDisk(cwd, recording, config, options.refresh ?? true);
 
           files = planned.files;
-          await executeApply(cwd, planned, options.yes);
+          await executeApply(cwd, planned, options.yes, options.parallelism);
         }
       } catch (error: unknown) {
         console.error(styleText('red', 'Apply failed:'), describeError(error, files));

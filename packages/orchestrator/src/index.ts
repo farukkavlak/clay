@@ -23,12 +23,19 @@ import { InstanceKeys } from './resolvers/InstanceKeys';
 import { ReferenceResolver } from './resolvers/ReferenceResolver';
 import { ReferenceScanner } from './resolvers/ReferenceScanner';
 import { RunEvent } from './RunEvent';
+import { checkParallelism, DEFAULT_PARALLELISM } from './parallelism';
 import { ScopeManager } from './scope/ScopeManager';
 import { plainOf, Value } from './Value';
 
 export type { RunEvent } from './RunEvent';
 export { DiskFiles, InMemoryFiles, RecordingFiles } from './ConfigFiles';
 export type { ConfigFiles } from './ConfigFiles';
+export { DEFAULT_PARALLELISM } from './parallelism';
+
+export interface RunOptions {
+  /** How many actions of a layer run at once. */
+  parallelism?: number;
+}
 
 /** Plan and apply move entries and rewrite dependencies, so each works on its own copy. */
 function copyResources(resources: Record<string, Resource>): Record<string, Resource> {
@@ -113,7 +120,8 @@ export class Orchestrator {
   }
 
   /** Holds the state lock. A state written since the plan was made is refused, since the approved plan no longer matches it. */
-  async *runPlan(saved: Plan, configContent: string): AsyncGenerator<RunEvent> {
+  async *runPlan(saved: Plan, configContent: string, { parallelism = DEFAULT_PARALLELISM }: RunOptions = {}): AsyncGenerator<RunEvent> {
+    checkParallelism(parallelism);
     await this.stateManager.lock();
 
     // Released however the run ends: done, failed, thrown, or abandoned by the caller.
@@ -125,7 +133,7 @@ export class Orchestrator {
 
       const config = await this.loader.load(configContent);
       const graph = this.graphBuilder.buildExecutionGraph(config.loadedResources, config.loadedModules);
-      yield* this.runner.run(saved, config, graph, state);
+      yield* this.runner.run(saved, config, graph, state, parallelism);
     } finally {
       await this.stateManager.unlock();
     }

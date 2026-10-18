@@ -99,6 +99,10 @@ describe('a layer of resources', () => {
     return events;
   };
 
+  const runWith = async (config: string, parallelism: number): Promise<void> => {
+    for await (const event of engine.runPlan(await engine.plan(config), config, { parallelism })) if (event.type === 'failed') throw event.error;
+  };
+
   const held = async () => {
     const { resources } = await new LocalBackend(dir).read();
     return Object.keys(resources).sort();
@@ -118,6 +122,33 @@ describe('a layer of resources', () => {
 
     expect(provider.most).toBe(10);
     expect(await held()).toHaveLength(12);
+  });
+
+  describe('with a parallelism given', () => {
+    it.each([1, 2, 4])('is made %i at a time', async (parallelism) => {
+      await runWith(blocks('a', 'b', 'c', 'd'), parallelism);
+
+      expect(provider.most).toBe(parallelism);
+      expect(await held()).toEqual(['slow.a', 'slow.b', 'slow.c', 'slow.d']);
+    });
+
+    it('is destroyed as many at a time too', async () => {
+      await runWith(blocks('a', 'b', 'c'), 3);
+      provider.most = 0;
+
+      await runWith('', 2);
+
+      expect(provider.most).toBe(2);
+      expect(await held()).toEqual([]);
+    });
+
+    it.each([0, -1, 2.5, Number.NaN])('refuses %s before anything is made or locked', async (parallelism) => {
+      await expect(runWith(blocks('a'), parallelism)).rejects.toThrow(`parallelism is a whole number from 1, not ${parallelism}`);
+
+      expect(provider.most).toBe(0);
+      expect(await held()).toEqual([]);
+      await expect(fs.access(path.join(dir, 'clay.state.json.lock'))).rejects.toThrow();
+    });
   });
 
   it('waits for the resource it reads', async () => {
