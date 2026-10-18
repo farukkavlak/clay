@@ -2,7 +2,7 @@ import { ExactNumber, isUnknown, SENSITIVE, Type, types, UNKNOWN } from '@clay/c
 import { ConfigError, Position } from '@clay/parser';
 
 import { UnresolvedReferenceError } from './resolvers/UnresolvedReferenceError';
-import { allSensitiveIf, child, described, hasText, isSensitive, objectOf, tupleOf, Value, valueOf, wholeIf } from './Value';
+import { allSensitiveIf, child, described, hasText, isSensitive, nullSource, objectOf, tupleOf, Value, valueOf, wholeIf } from './Value';
 
 export type ForItem = [key: Value, value: Value];
 
@@ -15,7 +15,7 @@ export function checkCollection(collection: Value, position: Position): void {
   const { kind } = collection.type;
   // `dynamic` means unknown or null.
   if (collection.data === null || !(TAKEN.has(kind) || kind === 'dynamic'))
-    throw new ConfigError(`A for goes over a list, a tuple, a set, a map or an object, not ${described(collection)}`, position);
+    throw new ConfigError(`A for goes over a list, a tuple, a set, a map or an object, not ${described(collection)}${nullSource(collection)}`, position);
 }
 
 /** A set's members are their own keys; a map's or object's values come in key order. */
@@ -49,7 +49,7 @@ export function unknownItem(type: Type): ForItem {
 /** A key must be text, so a key of another type is refused even while unknown. */
 export function checkKey(key: Value, position: Position): void {
   if (key.data === null || !(hasText(key.type) || key.type.kind === 'dynamic'))
-    throw new ConfigError(`A key in a for is a string, a number or a boolean, not ${described(key)}`, position);
+    throw new ConfigError(`A key in a for is a string, a number or a boolean, not ${described(key)}${nullSource(key)}`, position);
   // As in a map: setting it as a property would set a prototype.
   if (key.data === '__proto__') throw new ConfigError('__proto__ cannot be a name', position);
 }

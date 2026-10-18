@@ -144,4 +144,18 @@ describe('null', () => {
     expect(error.message).toBe(message);
     expect(error.position).toMatchObject({ line: 6 });
   });
+
+  it.each([
+    ['a for collection', 'list(string)', '[for i in var.k : i]', 'A for goes over a list, a tuple, a set, a map or an object, not null'],
+    ['a for key', 'string', '{ for i in ["a"] : var.k => i }', 'A key in a for is a string, a number or a boolean, not null'],
+    ['a function argument', 'string', 'length(var.k)', 'length takes a string, a list, a tuple, a set, a map or an object, not null'],
+    ['an index', 'string', 'var.m[var.k]', 'An index is a number or a string, not null'],
+  ])('names the reference that came to null as %s', async (_where, type, expression, message) => {
+    const error = await planError(
+      `variable "m" {\n  type = map(string)\n  default = { a = "x" }\n}\nvariable "k" {\n  type = ${type}\n  default = null\n}\noutput "o" {\n  value = ${expression}\n}`
+    );
+
+    expect(error.message).toBe(`${message}, and var.k, which it reads, is null`);
+    expect(error.position).toMatchObject({ line: 10 });
+  });
 });

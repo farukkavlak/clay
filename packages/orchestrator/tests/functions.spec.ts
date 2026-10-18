@@ -117,6 +117,7 @@ describe('tolist', () => {
     ['an object', written({ a: 'x' }), 'tolist takes a list, a tuple or a set, not an object'],
     ['a string', written('a'), 'tolist takes a list, a tuple or a set, not a string'],
     ['a map not known yet', valueOf(types.map(types.string), UNKNOWN), 'tolist takes a list, a tuple or a set, not a map'],
+    ['a null a reference gave', { ...valueOf(types.string, null), nullFrom: 'var.k' }, 'tolist takes a list, a tuple or a set, not null, and var.k, which it reads, is null'],
     ['a number and a boolean', written([ExactNumber.parse('1'), true]), 'tolist cannot join a number and a boolean into one type'],
     ['objects with other names', written([{ a: 'x' }, { b: 'x' }]), 'tolist cannot join an object with "b" and one without it into one type'],
   ])('refuses %s where the argument is written', (_, value, message) => {

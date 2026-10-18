@@ -1,7 +1,7 @@
 import { ExactNumber, NumberError } from '@clay/contracts';
 import { ConfigError, Position, Step } from '@clay/parser';
 
-import { article, described, hasText, isSensitive, Value } from '../Value';
+import { article, described, hasText, isSensitive, nullSource, Value } from '../Value';
 
 /** The text of an index is never quoted, since a value it was read from may be sensitive. */
 function wholeIndex(number: ExactNumber, position: Position): number {
@@ -20,7 +20,7 @@ function plainKeyOf(index: Value, position: Position): Step {
   if (typeof index.data === 'string') return { key: index.data };
   if (index.data instanceof ExactNumber) return { key: wholeIndex(index.data, position) };
 
-  throw new ConfigError(`An index is a number or a string, not ${described(index)}`, position);
+  throw new ConfigError(`An index is a number or a string, not ${described(index)}${nullSource(index)}`, position);
 }
 
 /** A sensitive value's sign, size and type are parts of it, so what is wrong with it is not told. */

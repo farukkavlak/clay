@@ -500,9 +500,12 @@ length below 1.
 - [x] A null a reference gives is named where a whole required attribute, a `count` or a
       `for_each` is null: `count` says `not null, and var.k, which it reads, is null`.
       Terraform names the expression only, by its position
-- [ ] A null a reference gives is not named where it makes a nested attribute required,
-      where a variable of another type refuses it, or in the other messages that say
-      `not null`, such as a `for` over it, the key of a `for` or a function argument
+- [x] A null a reference gives is named where a `for` goes over it, as the key of a `for`,
+      as a function argument and as an index, the way `count` does it. Joining it into a
+      string already names it
+- [ ] A null a reference gives is not named where it makes a nested attribute required or
+      where a variable of another type refuses it. The mark is lost when a value is read
+      part by part
 
 ### Data sources in the graph
 

@@ -3,7 +3,7 @@ import { CallNode, ConfigError } from '@clay/parser';
 
 import { converted, sensitiveAs } from './conformValues';
 import { isSequence, itemTypes, unified, unjoined, Unjoinable } from './unify';
-import { allSensitive, allSensitiveIf, described, isAllSensitive, isSensitive, unordered, Value, valueOf, withSensitive } from './Value';
+import { allSensitive, allSensitiveIf, described, isAllSensitive, isSensitive, nullSource, unordered, Value, valueOf, withSensitive } from './Value';
 
 /** The argument may be wholly or partly unknown. */
 type ClayFunction = (argument: Value, refuse: (message: string) => never) => Value;
@@ -22,7 +22,7 @@ const COUNTED = new Set(['string', 'list', 'tuple', 'set', 'map', 'object']);
 /** A list or map with an unknown item has a known size; a set does not, since the unknown may duplicate a member. */
 function counted(value: Value, refuse: (message: string) => never): Value {
   const takes = value.data !== null && (value.type.kind === 'dynamic' || COUNTED.has(value.type.kind));
-  if (!takes) return refuse(`length takes a string, a list, a tuple, a set, a map or an object, not ${described(value)}`);
+  if (!takes) return refuse(`length takes a string, a list, a tuple, a set, a map or an object, not ${described(value)}${nullSource(value)}`);
   if (isUnknown(value.data) || unordered(value)) return valueOf(types.number, UNKNOWN);
 
   return valueOf(types.number, ExactNumber.parse(String(sizeOf(value.data))));
@@ -48,7 +48,7 @@ function converter(kind: 'list' | 'set'): ClayFunction {
 
   return (value, refuse) => {
     if (value.type.kind === 'dynamic') return sensitiveAs(value, valueOf(types[kind](types.dynamic), value.data));
-    if (!isSequence(value.type.kind)) return refuse(`${name} takes a list, a tuple or a set, not ${described(value)}`);
+    if (!isSequence(value.type.kind)) return refuse(`${name} takes a list, a tuple or a set, not ${described(value)}${nullSource(value)}`);
 
     return converted(name, value, types[kind](elementOf(name, value, refuse)), [name]);
   };

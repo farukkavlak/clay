@@ -242,7 +242,7 @@ describe('ReferenceResolver', () => {
 
     it('refuses a null of a type it could go over', () => {
       expect(() => readWith('[for s in data.src.s.v : s]', source(valueOf(types.list(types.string), null)))).toThrow(
-        new ConfigError('A for goes over a list, a tuple, a set, a map or an object, not null', atColumn(32))
+        new ConfigError('A for goes over a list, a tuple, a set, a map or an object, not null, and data.src.s.v, which it reads, is null', atColumn(32))
       );
     });
 
