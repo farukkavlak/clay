@@ -556,13 +556,13 @@ module output had a value, so one that read either failed at plan.
 ### Parallel apply
 
 The graph sorts into layers, and the runner takes one layer at a time, running what is
-in it together. Two runs at once on one engine would need a context of their own: one
-`ScopeManager` and one data-source map per engine, cleared on load, serve one run at a
-time.
+in it together.
 
-- [ ] A run carries its own scopes and data-source values. The engine holds one of each
-      and clears them on load, which is what limits it to one run at a time. Two plans
-      started together on one engine gave the right answers, so no failure is known
+- [x] A run carries its own scopes, instances and data-source values. The engine held one
+      of each and cleared them on load, so a plan made while an apply was half way gave
+      the apply the values of its own configuration: it stopped with "the plan showed
+      ... but it now comes to ..." after some resources were made. Every plan, validate
+      and apply now builds its own. Terraform builds a walker for each operation too
 - [x] Resources in one layer run together, ten at a time, and so do the deletes of one
       layer. State is still written after every action, as Terraform updates its state
       after every resource; writes go one at a time. When an action fails, the ones

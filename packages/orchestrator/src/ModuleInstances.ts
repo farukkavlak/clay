@@ -23,13 +23,6 @@ export class ModuleInstances {
   private keys = new Map<string, InstanceKey[]>();
   private values = new Map<string, Map<string, Value>>();
 
-  clear(): void {
-    this.repetitions.clear();
-    this.instances.clear();
-    this.keys.clear();
-    this.values.clear();
-  }
-
   declare(module: ModuleAddress, repetition: Repetition): void {
     this.repetitions.set(module.toString(), repetition);
   }

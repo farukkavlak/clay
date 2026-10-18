@@ -19,12 +19,6 @@ export class Instances {
   private keys = new Map<string, InstanceKey[]>();
   private values = new Map<string, Map<string, Value>>();
 
-  clear(): void {
-    this.repetitions.clear();
-    this.keys.clear();
-    this.values.clear();
-  }
-
   declare(block: string, repetition: Repetition): void {
     this.repetitions.set(block, repetition);
   }

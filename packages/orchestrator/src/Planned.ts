@@ -8,15 +8,10 @@ export interface PlannedInstance {
   changes: boolean;
 }
 
-/** Planned values by address, so a reference reads what the plan will make. Cleared before an apply, which reads state. */
+/** Planned values by address, so a reference reads what the plan will make. An apply reads state, so it plans nothing. */
 export class Planned {
   private instances = new Map<string, PlannedInstance>();
   private planning = false;
-
-  clear(): void {
-    this.instances.clear();
-    this.planning = false;
-  }
 
   /** While planning, an item only the apply knows is UNKNOWN and the rest of the value stays known. */
   begin(): void {
