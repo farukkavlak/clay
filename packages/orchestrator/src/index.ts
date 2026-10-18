@@ -6,6 +6,7 @@ import { asError } from './asError';
 import { DesiredState, Walk } from './components/DesiredStateBuilder';
 import { checkRead, heldBy } from './providerResult';
 import { checkAttributes } from './checkAttributes';
+import { checkPreventDestroy } from './preventDestroy';
 import { ConfigFiles } from './ConfigFiles';
 import { ProviderRegistry } from './ProviderRegistry';
 import { newRun, Run } from './Run';
@@ -53,6 +54,7 @@ export class Orchestrator {
     const { resources: desiredResources, outputs, dataSources, dataSensitive, readAtApply } = await this.resolveAndCheck(configContent, currentState, 'plan');
 
     const actions = plan(desiredResources, currentState);
+    checkPreventDestroy(actions, desiredResources, currentState.resources);
     // The refresh only drops resources, so prior has no type prevRun lacks.
     const held = [...actions, ...Object.values(prevRun.resources)];
 

@@ -102,6 +102,11 @@ What the engine reads from each:
 A resource, a data source or a module with both `count` and `for_each` is refused where
 it is written.
 
+A resource may hold one `lifecycle` block, written without `=`. It takes `prevent_destroy`,
+`true` or `false` as written, never a reference. Another argument, a second `lifecycle`
+or `prevent_destroy` twice is refused where it is written. `lifecycle = ...` with an
+equals sign is an attribute like any other.
+
 A module's `source` starts with `./` or `../`. Anything else, a registry address or an
 absolute path, is refused where it is written.
 
@@ -535,6 +540,7 @@ interface ResourceBlock {
   name: string;
   count?: AttributeValue;
   forEach?: AttributeValue;
+  lifecycle?: { preventDestroy?: boolean; position: Position };
   attributes: Record<string, AttributeValue>;
   position: Position;
 }
@@ -606,8 +612,8 @@ throws the same for a character it does not know, a string not closed on its lin
 
 - Operators; a value is a literal, a reference, a function call or a for expression
 - A for that filters with `if`
-- `depends_on`, lifecycle blocks, provisioners
-- Nested blocks inside a block
+- `depends_on`, provisioners, and any `lifecycle` argument but `prevent_destroy`
+- Nested blocks inside a block, but `lifecycle` in a resource
 - Any file other than `main.clay`
 
 `TASKS.md` lists what is planned.

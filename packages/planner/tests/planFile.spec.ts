@@ -328,6 +328,25 @@ describe('reading a plan file', () => {
     expect(read(content)).toThrow(/^tfplan\.json is not a plan file$/);
   });
 
+  it.each([
+    ['anything but true', 'NO_OP', 'yes'],
+    ['false', 'NO_OP', false],
+    ['on an update', 'UPDATE', true],
+  ])('refuses a change in whether a destroy is prevented that is %s', (_, type, protectionChange) => {
+    const content = { ...fields(), actions: [{ type, resourceType: 'null_resource', name: 'a', protectionChange }] };
+
+    expect(read(content)).toThrow(/^tfplan\.json is not a plan file$/);
+  });
+
+  it.each([
+    ['anything but true', 'NO_OP', false],
+    ['on a delete', 'DELETE', true],
+  ])('refuses prevent_destroy that is %s', (_, type, preventDestroy) => {
+    const content = { ...fields(), actions: [{ type, resourceType: 'null_resource', name: 'a', preventDestroy }] };
+
+    expect(read(content)).toThrow(/^tfplan\.json is not a plan file$/);
+  });
+
   it('names a sensitive index that is not whole', () => {
     const content = { ...fields(), actions: [{ type: 'NO_OP', resourceType: 'null_resource', name: 'a', sensitive: [['triggers', 1.5]] }] };
 

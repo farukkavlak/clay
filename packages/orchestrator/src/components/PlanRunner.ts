@@ -316,8 +316,8 @@ export class PlanRunner {
   }
 
   private async *step(action: PlanAction, state: State): AsyncGenerator<RunEvent, boolean> {
-    // A no-op is not reported; the final write saves its dependencies. A move, or a change in which parts are sensitive, is reported and saved.
-    const quiet = action.type === 'NO_OP' && !action.movedFrom && !action.marksChange;
+    // A no-op is not reported; the final write saves its dependencies. A move, or a change in which parts are sensitive or in what a destroy is prevented, is reported and saved.
+    const quiet = action.type === 'NO_OP' && !action.movedFrom && !action.marksChange && !action.protectionChange;
     if (!quiet) yield { type: 'started', action };
 
     try {

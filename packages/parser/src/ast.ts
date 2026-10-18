@@ -38,6 +38,12 @@ export type AttributeValue =
   | (Node & { type: 'List'; value: AttributeValue[] })
   | (Node & { type: 'Map'; value: Record<string, AttributeValue> });
 
+/** What a `lifecycle` block inside a resource sets. */
+export interface Lifecycle extends Node {
+  /** Refuses a plan that deletes or replaces the resource. */
+  preventDestroy?: boolean;
+}
+
 export interface ResourceBlock extends Node {
   type: 'Resource';
   resourceType: string;
@@ -46,6 +52,7 @@ export interface ResourceBlock extends Node {
   count?: AttributeValue;
   /** Read by the engine, never sent to the provider. */
   forEach?: AttributeValue;
+  lifecycle?: Lifecycle;
   attributes: Record<string, AttributeValue>;
 }
 

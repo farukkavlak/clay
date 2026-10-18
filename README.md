@@ -222,6 +222,14 @@ one its value has: `{ "value": ["a", "b"], "type": { "kind": "set", ... } }`. A 
 output changes by its members too. An output whose value stays and whose type changes is
 a change, shown by the two types: `m = ["a","b"] (list(string) -> set(string))`.
 
+`lifecycle { prevent_destroy = true }` in a resource refuses a plan that replaces it. A plan
+that deletes it is refused too, with the block gone or an instance dropped by `count`
+or `for_each`, since the state keeps what the last apply found in the block. A replace
+goes by the block as it is written now, so `false` allows it, and so does removing the
+block when an attribute that forces a replace changes in the same plan. To delete a resource that
+prevents it, set `prevent_destroy = false`, apply, then delete it. The flag alone changing
+is an update that writes the state and calls no provider.
+
 A data source reads something that already exists. `data "local_file" "f" { path = "x" }`
 reads a file, and `data.local_file.f.content` is what it holds. `data.local_file.f` alone
 is an object of every attribute it has. With `count = 2` it is read twice, as
