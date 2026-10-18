@@ -88,7 +88,7 @@ describe('CLI: apply command', () => {
 
       expect(planMock).toHaveBeenCalled();
       expect(confirm).toHaveBeenCalled();
-      expect(runMock).toHaveBeenCalledWith(planned, 'content', { parallelism: undefined });
+      expect(runMock).toHaveBeenCalledWith(planned, 'content', { parallelism: undefined, signal: expect.any(AbortSignal) });
     });
 
     it('should print each resource as it is applied', async () => {
@@ -367,7 +367,7 @@ describe('CLI: apply command', () => {
       expect(runPlanMock).toHaveBeenCalledWith(
         expect.objectContaining({ serial: 2, actions: [{ type: 'CREATE', resourceType: 'test', name: 't', planned: {}, after: {} }] }),
         'saved config',
-        { parallelism: undefined }
+        { parallelism: undefined, signal: expect.any(AbortSignal) }
       );
       expect(InMemoryFiles).toHaveBeenCalledWith({ 'm/main.clay': 'saved module', 'main.clay': 'saved config' });
       expect(confirm).not.toHaveBeenCalled();
@@ -471,6 +471,49 @@ describe('CLI: apply command', () => {
 
       exitSpy.mockRestore();
       consoleSpy.mockRestore();
+    });
+  });
+
+  describe('Ctrl-C', () => {
+    const created = { type: 'CREATE', resourceType: 'test', name: 't' };
+
+    /** Ctrl-C arrives after the action, before the run gives `done` or ends without it. */
+    const interruptedRun = async (finishes: boolean) => {
+      readFiles.mockReturnValue('content');
+      const planned = { serial: 0, actions: [created], outputs: {}, prevRun: {}, prior: {}, schemas: { test: {} }, dataSources: {}, readAtApply: [] };
+      const runMock = vi.fn(async function* () {
+        yield { type: 'applied', action: created };
+        process.emit('SIGINT');
+        if (finishes) yield { type: 'done', outputs: {} };
+      });
+      vi.mocked(Orchestrator.create).mockImplementation(function () {
+        return { registerProvider: vi.fn(), plan: vi.fn().mockResolvedValue(planned), runPlan: runMock } as Partial<Orchestrator> as Orchestrator;
+      });
+
+      const exit = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
+      const printed: string[] = [];
+      const record = (...args: unknown[]) => printed.push(args.join(' '));
+      vi.spyOn(console, 'log').mockImplementation(record);
+      vi.spyOn(console, 'error').mockImplementation(record);
+
+      await createApplyCommand().parseAsync(['node', 'clay', '--yes']);
+      vi.restoreAllMocks();
+      return { exit, printed: printed.join('\n') };
+    };
+
+    it('ends a run stopped short with 130', async () => {
+      const { exit, printed } = await interruptedRun(false);
+
+      expect(printed).toContain('Apply interrupted');
+      expect(exit).toHaveBeenCalledWith(130);
+    });
+
+    it('reports a run that finished before the interrupt reached it as complete', async () => {
+      const { exit, printed } = await interruptedRun(true);
+
+      expect(printed).toContain('Apply complete!');
+      expect(printed).not.toContain('Apply interrupted');
+      expect(exit).not.toHaveBeenCalled();
     });
   });
 

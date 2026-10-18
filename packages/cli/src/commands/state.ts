@@ -4,6 +4,7 @@ import { Command } from 'commander';
 import { styleText } from 'node:util';
 
 import { exists } from '../exists';
+import { interruptible } from '../interruptible';
 import { show } from '../showPlan';
 import { stateFile } from '../stateFile';
 
@@ -114,25 +115,27 @@ export function createStateCommand(): Command {
     .action(async (source, destination) => {
       try {
         const manager = getStateManager();
-        await manager.lock();
-        try {
-          const state = await manager.read();
+        await interruptible(async () => {
+          await manager.lock();
+          try {
+            const state = await manager.read();
 
-          if (!findResource(state, source)) throw new Error(`Source resource not found: ${source}`);
+            if (!findResource(state, source)) throw new Error(`Source resource not found: ${source}`);
 
-          if (findResource(state, destination)) throw new Error(`Destination resource already exists: ${destination}`);
+            if (findResource(state, destination)) throw new Error(`Destination resource already exists: ${destination}`);
 
-          console.log(styleText('yellow', `Moving ${source} to ${destination}...`));
+            console.log(styleText('yellow', `Moving ${source} to ${destination}...`));
 
-          checkedMove(state, source, destination);
-          // Outputs belong to a finished run; the next one writes them again.
-          delete state.outputs;
+            checkedMove(state, source, destination);
+            // Outputs belong to a finished run; the next one writes them again.
+            delete state.outputs;
 
-          await manager.write(state);
-          console.log(styleText('green', 'Successfully moved resource.'));
-        } finally {
-          await manager.unlock();
-        }
+            await manager.write(state);
+            console.log(styleText('green', 'Successfully moved resource.'));
+          } finally {
+            await manager.unlock();
+          }
+        });
       } catch (error) {
         console.error(styleText('red', 'Error moving resource:'), error instanceof Error ? error.message : String(error));
         process.exit(1);
@@ -146,27 +149,29 @@ export function createStateCommand(): Command {
     .action(async (address) => {
       try {
         const manager = getStateManager();
-        await manager.lock();
-        try {
-          const state = await manager.read();
-          const key = Address.parse(address).toString();
+        await interruptible(async () => {
+          await manager.lock();
+          try {
+            const state = await manager.read();
+            const key = Address.parse(address).toString();
 
-          if (!Object.hasOwn(state.resources, key) && !(state.deposed && Object.hasOwn(state.deposed, key))) {
-            console.log(styleText('yellow', `Resource not found in state: ${address}`));
-            return;
+            if (!Object.hasOwn(state.resources, key) && !(state.deposed && Object.hasOwn(state.deposed, key))) {
+              console.log(styleText('yellow', `Resource not found in state: ${address}`));
+              return;
+            }
+
+            console.log(styleText('yellow', `Removing ${key}...`));
+            delete state.resources[key];
+            forgetDeposed(state, key);
+            mapDependencies(state, (dependency) => (dependency === key ? undefined : dependency));
+            delete state.outputs;
+
+            await manager.write(state);
+            console.log(styleText('green', 'Successfully removed resource.'));
+          } finally {
+            await manager.unlock();
           }
-
-          console.log(styleText('yellow', `Removing ${key}...`));
-          delete state.resources[key];
-          forgetDeposed(state, key);
-          mapDependencies(state, (dependency) => (dependency === key ? undefined : dependency));
-          delete state.outputs;
-
-          await manager.write(state);
-          console.log(styleText('green', 'Successfully removed resource.'));
-        } finally {
-          await manager.unlock();
-        }
+        });
       } catch (error) {
         console.error(styleText('red', 'Error removing resource:'), error instanceof Error ? error.message : String(error));
         process.exit(1);

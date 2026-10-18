@@ -152,12 +152,14 @@ change each.
       checked once as written, and one whose type no apply can make right is refused:
       `count = data.local_file.f.content` is a string. A plan refuses it as before.
       Terraform's validate does not expand `count` either
-- [ ] An apply stopped with Ctrl-C leaves its lock, and what was running is never
+- [x] An apply stopped with Ctrl-C leaves its lock, and what was running is never
       recorded. With `command = "sleep 3; touch made.txt"` and a SIGINT after a second, the
       process exits 130, `made.txt` appears, the state holds nothing and
       `clay.state.json.lock` stays, so the next apply fails on the lock and the next plan
       creates it again. Terraform starts nothing new on the first Ctrl-C, lets what runs
-      finish, writes the state and unlocks
+      finish, writes the state and unlocks. Now the first Ctrl-C starts nothing new, waits
+      for what runs, saves the state, unlocks and exits 130, and a second exits at once
+      and leaves the lock. `state mv` and `state rm` finish and unlock the same way
 - [ ] A failed apply drops every root output from state. `PlanRunner.run` deletes
       `state.outputs` before the first action and writes them only at the end, so one
       failed resource leaves `clay output` empty and the next plan shows every output as
