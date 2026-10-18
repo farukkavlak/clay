@@ -583,7 +583,11 @@ in it together.
       to delete it. The state keeps the flag of the last apply, so a delete is judged by
       it once the block is gone; a replace goes by the block. Terraform judges by the block
       alone, so a resource whose block is gone is deleted
-- [ ] `ignore_changes`: named attributes do not count as a change
+- [x] `lifecycle { ignore_changes = [...] }`: named attributes, or `all`, do not count as a
+      change. A path may reach a map key or a list index. The configuration is read as the
+      state holds those paths before the provider plans, as Terraform does, so the plan,
+      the readers of the attribute and the apply all see the old value. A change made outside
+      Clay still shows as drift
 
 ### Provisioners
 

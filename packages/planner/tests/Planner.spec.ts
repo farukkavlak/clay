@@ -30,6 +30,10 @@ function desiredResource(name: string, attributes: Record<string, string>, modul
   };
 }
 
+function ignoring(resource: DesiredResource, ignored: string[][]): DesiredResource {
+  return { ...resource, ignored };
+}
+
 function preventing(name: string, attributes: Record<string, string>): DesiredResource {
   const resource = desiredResource(name, attributes);
   return { ...resource, block: { ...resource.block, lifecycle: { preventDestroy: true, position } } };
@@ -83,6 +87,23 @@ describe('Planner', () => {
     expect(plan([{ ...desired, replace: true }], stateWith('r', { path: 'old', size: 'large' }))[0]).toMatchObject({ type: 'REPLACE', sensitive });
     expect(plan([desired], stateWith('r', planned))[0]).toMatchObject({ type: 'NO_OP', sensitive });
     expect(plan([desiredResource('r', planned)], stateWith('r', planned))[0]).not.toHaveProperty('sensitive');
+  });
+
+  describe('ignored paths', () => {
+    it('are carried by an update and a replace, and by no other action', () => {
+      const empty = { version: STATE_VERSION, serial: 0, resources: {} };
+      const ignored = [['path']];
+
+      expect(plan([ignoring(desiredResource('r', { path: 'y' }), ignored)], stateWith('r', { path: 'x' }))[0]).toMatchObject({ type: 'UPDATE', ignored });
+      expect(plan([{ ...ignoring(desiredResource('r', { path: 'y' }), ignored), replace: true }], stateWith('r', { path: 'x' }))[0]).toMatchObject({ type: 'REPLACE', ignored });
+      expect(plan([ignoring(desiredResource('r', { path: 'x' }), ignored)], stateWith('r', { path: 'x' }))[0]).not.toHaveProperty('ignored');
+      expect(plan([ignoring(desiredResource('r', { path: 'x' }), ignored)], empty)[0]).not.toHaveProperty('ignored');
+      expect(plan([], stateWith('r', { path: 'x' }))[0]).not.toHaveProperty('ignored');
+    });
+
+    it('are left out where none is ignored', () => {
+      expect(plan([ignoring(desiredResource('r', { path: 'y' }), [])], stateWith('r', { path: 'x' }))[0]).not.toHaveProperty('ignored');
+    });
   });
 
   describe('prevent_destroy', () => {

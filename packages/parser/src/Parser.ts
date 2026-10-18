@@ -5,6 +5,7 @@ import {
   CallNode,
   DataBlock,
   ForNode,
+  IgnoredPath,
   Lifecycle,
   LocalBlock,
   ModuleBlock,
@@ -24,7 +25,7 @@ import { ConfigError } from './ConfigError';
 import { readEscapes } from './escapes';
 import { flushed } from './heredoc';
 import { Position } from './Position';
-import { NAME, Step } from './reference';
+import { NAME, Step, stepKey } from './reference';
 import { Token, TokenType } from './tokens';
 
 /** Reference prefixes, so no resource type or for name may use them. */
@@ -166,24 +167,59 @@ export class Parser {
     };
   }
 
-  /** Read with the block, before any reference has a value, so it is true or false written out. */
+  /** Read with the block, before any reference has a value, so what it holds is written out. */
   private parseLifecycle(position: Position): Lifecycle {
     this.consume(TokenType.LBrace, "Expect '{' after 'lifecycle'.");
 
     const seen: Record<string, true> = {};
-    let preventDestroy: boolean | undefined;
+    const lifecycle: Lifecycle = { position };
     while (!this.check(TokenType.RBrace) && !this.isAtEnd()) {
       const key = this.consume(TokenType.Identifier, 'Expect an argument name.');
       this.checkKey(seen, key);
       seen[key.value] = true;
-      if (key.value !== 'prevent_destroy') throw new ConfigError(`lifecycle takes only "prevent_destroy", not "${key.value}"`, key.position);
-
       this.consume(TokenType.Assign, "Expect '=' after the argument name.");
-      preventDestroy = this.consume(TokenType.Boolean, 'prevent_destroy is true or false.').value === 'true';
+      this.parseLifecycleArgument(key, lifecycle);
     }
 
     this.consume(TokenType.RBrace, "Expect '}' after lifecycle body.");
-    return { ...(preventDestroy !== undefined && { preventDestroy }), position };
+    return lifecycle;
+  }
+
+  private parseLifecycleArgument(key: Token, lifecycle: Lifecycle): void {
+    if (key.value === 'prevent_destroy') lifecycle.preventDestroy = this.consume(TokenType.Boolean, 'prevent_destroy is true or false.').value === 'true';
+    else if (key.value === 'ignore_changes') lifecycle.ignoreChanges = this.parseIgnoreChanges();
+    else throw new ConfigError(`lifecycle takes only "prevent_destroy" and "ignore_changes", not "${key.value}"`, key.position);
+  }
+
+  /** `all`, or a list of attributes: `[content, tags["Name"], items[0]]`. */
+  private parseIgnoreChanges(): 'all' | IgnoredPath[] {
+    if (this.checkWord('all')) {
+      this.advance();
+      return 'all';
+    }
+
+    this.consume(TokenType.LBracket, 'ignore_changes is a list of attributes, or all.');
+    const paths: IgnoredPath[] = [];
+    while (!this.check(TokenType.RBracket) && !this.isAtEnd()) {
+      paths.push(this.parseIgnoredPath());
+      if (!this.matchToken(TokenType.Comma)) break;
+    }
+
+    this.consume(TokenType.RBracket, "Expect ']' after ignore_changes.");
+    return paths;
+  }
+
+  private parseIgnoredPath(): IgnoredPath {
+    const first = this.consume(TokenType.Identifier, 'ignore_changes names an attribute, written without quotes.');
+    if (first.value === 'all') throw new ConfigError('all is written alone, not in a list', first.position);
+
+    const path: (string | number)[] = [first.value];
+    for (const step of this.parseSteps()) {
+      if ('index' in step) throw new ConfigError('ignore_changes names keys and indexes written out, not a reference or a call', first.position);
+      path.push(stepKey(step));
+    }
+
+    return { path, position: first.position };
   }
 
   private parseData(position: Position): DataBlock {

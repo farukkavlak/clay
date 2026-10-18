@@ -2,11 +2,18 @@ import { AttributePath, containsUnknown, own, PlannedChange, PlanRequest, Provid
 import { isDeepStrictEqual } from 'node:util';
 
 import { conformed } from '../conformValues';
+import { keepPrior } from '../ignoredChanges';
 import { heldBy, hidingReason, undisclosed } from '../providerResult';
 import { ProviderRegistry } from '../ProviderRegistry';
 import { shown } from '../shown';
 import { marksOf } from '../schemaMarks';
 import { plainOf, Value } from '../Value';
+
+/** The resource as it is held now, and the paths of it the configuration does not change. */
+export interface Ignoring {
+  prior: Resource;
+  paths: AttributePath[];
+}
 
 /** `config` is converted to the schema, as the provider receives it. `sensitive` holds the steps to each sensitive part of it. */
 export interface ResourcePlan {
@@ -64,12 +71,16 @@ function checkKept(type: string, schema: Schema, prior: Record<string, unknown>,
 export class ResourcePlanner {
   constructor(private providers: ProviderRegistry) {}
 
-  /** Validates first, since planning invalid values means nothing. Unknown values are validated again at apply. */
-  async plan(type: string, schema: Schema, current: Resource | undefined, written: Record<string, Value>): Promise<ResourcePlan> {
+  /**
+   * Validates first, since planning invalid values means nothing. Unknown values are validated again at apply.
+   * An ignored path is as `ignoring.prior` held it before anything reads the configuration, so a change there plans nothing.
+   */
+  async plan(type: string, schema: Schema, current: Resource | undefined, written: Record<string, Value>, ignoring?: Ignoring): Promise<ResourcePlan> {
     const provider = this.providers.get(type);
     const given = conformed(type, schema, written);
-    const config = plainOf(given);
-    const sensitive = marksOf(schema, given);
+    const { config, sensitive } = ignoring
+      ? keepPrior(plainOf(given), marksOf(schema, given), ignoring.prior, ignoring.paths)
+      : { config: plainOf(given), sensitive: marksOf(schema, given) };
     await hidingReason(type, sensitive, () => provider.validate(type, config));
     if (!current) return { ...(await this.create(provider, type, schema, config, sensitive)), sensitive };
 

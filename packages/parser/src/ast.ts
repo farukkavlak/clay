@@ -38,10 +38,18 @@ export type AttributeValue =
   | (Node & { type: 'List'; value: AttributeValue[] })
   | (Node & { type: 'Map'; value: Record<string, AttributeValue> });
 
+/** An attribute, then the keys and indexes below it, as written in `ignore_changes`. */
+export interface IgnoredPath {
+  path: (string | number)[];
+  position: Position;
+}
+
 /** What a `lifecycle` block inside a resource sets. */
 export interface Lifecycle extends Node {
   /** Refuses a plan that deletes or replaces the resource. */
   preventDestroy?: boolean;
+  /** What a change in the configuration does not plan: these paths, or every attribute. */
+  ignoreChanges?: 'all' | IgnoredPath[];
 }
 
 export interface ResourceBlock extends Node {
