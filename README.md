@@ -230,6 +230,14 @@ block when an attribute that forces a replace changes in the same plan. To delet
 prevents it, set `prevent_destroy = false`, apply, then delete it. The flag alone changing
 is an update that writes the state and calls no provider.
 
+`lifecycle { ignore_changes = [content] }` keeps a change to those attributes out of the
+plan. The configuration is read as if the attribute still held what the state has, before
+the provider plans, so an ignored attribute that forces a replace forces none, and a
+replace for another reason keeps the old value. A path may reach into a map or a list,
+`tags["Name"]` or `items[0]`, but not into a set; `all` ignores every attribute. A create ignores nothing,
+there being nothing yet. A change made outside Clay still shows under "Changed outside Clay"; the refresh reads
+it, and the plan then has nothing to undo.
+
 A data source reads something that already exists. `data "local_file" "f" { path = "x" }`
 reads a file, and `data.local_file.f.content` is what it holds. `data.local_file.f` alone
 is an object of every attribute it has. With `count = 2` it is read twice, as

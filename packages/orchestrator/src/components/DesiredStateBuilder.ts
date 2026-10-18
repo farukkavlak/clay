@@ -8,6 +8,7 @@ import { writtenAt } from '../conformValues';
 import { countFrom } from '../count';
 import { givenTo, outputAs } from '../declared';
 import { eachFrom } from '../forEach';
+import { ignoredPaths } from '../ignoredChanges';
 import { Instances } from '../Instances';
 import { Context, contextIn, DataInstance, enclosing, scopeOf } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
@@ -23,7 +24,7 @@ import { carried, outputOf, sensitiveAmong, Value } from '../Value';
 import { DataSourceReader } from './DataSourceReader';
 import { DependencyGraphBuilder, GraphNode, LocalNode, OutputNode, ValueNode } from './DependencyGraphBuilder';
 import { LoadedResource } from './ModuleLoader';
-import { ResourcePlan, ResourcePlanner } from './ResourcePlanner';
+import { Ignoring, ResourcePlan, ResourcePlanner } from './ResourcePlanner';
 
 export interface DesiredState {
   resources: DesiredResource[];
@@ -224,17 +225,35 @@ export class DesiredStateBuilder {
   private async planInstance(address: Address, block: ResourceBlock, dependencies: string[], state: State): Promise<DesiredResource> {
     const movedFrom = tryAt(block.position, spell(block), address, () => this.moveIn(address, state));
     const current = state.resources[address.toString()];
-    const change = await this.askProvider(address, block, current, this.resolveForPlan(block, state, address));
+    const ignoring = this.ignoringIn(block, current);
+    const change = await this.askProvider(address, block, current, this.resolveForPlan(block, state, address), ignoring);
     const values = changes(current, change);
     // A change of values or of marks goes in, so a reader takes the marks from the plan too.
     if (values || !samePaths(current?.sensitive ?? [], change.sensitive)) this.planned.set(address.toString(), change.after, change.sensitive, values);
 
-    return { address, block, attributes: change.config, after: change.after, sensitive: change.sensitive, replace: change.replace, dependencies, ...(movedFrom && { movedFrom }) };
+    return {
+      address,
+      block,
+      attributes: change.config,
+      after: change.after,
+      sensitive: change.sensitive,
+      replace: change.replace,
+      dependencies,
+      ...(ignoring && { ignored: ignoring.paths }),
+      ...(movedFrom && { movedFrom }),
+    };
   }
 
-  private async askProvider(address: Address, block: ResourceBlock, current: Resource | undefined, attributes: Record<string, Value>): Promise<ResourcePlan> {
+  /** Nothing to ignore in what does not exist yet. */
+  private ignoringIn(block: ResourceBlock, current: Resource | undefined): Ignoring | undefined {
+    const paths = ignoredPaths(block.lifecycle?.ignoreChanges, this.schemas.get(block.resourceType) ?? {});
+
+    return current && paths.length > 0 ? { prior: current, paths } : undefined;
+  }
+
+  private async askProvider(address: Address, block: ResourceBlock, current: Resource | undefined, attributes: Record<string, Value>, ignoring?: Ignoring): Promise<ResourcePlan> {
     try {
-      return await this.resourcePlanner.plan(block.resourceType, this.schemas.get(block.resourceType) ?? {}, current, attributes);
+      return await this.resourcePlanner.plan(block.resourceType, this.schemas.get(block.resourceType) ?? {}, current, attributes, ignoring);
     } catch (error) {
       throw withPlace(error, writtenAt(error, block), spell(block), address);
     }

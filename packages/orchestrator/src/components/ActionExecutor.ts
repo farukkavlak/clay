@@ -2,13 +2,14 @@ import { Address, AttributePath, Provider, Resource, Schema, State, touchesSensi
 import { offApply, offFinal, offPlan, PlanAction } from '@clay/planner';
 
 import { conformValues } from '../conformValues';
+import { keepPrior } from '../ignoredChanges';
 import { heldBy, inconsistent } from '../providerResult';
 import { ProviderRegistry } from '../ProviderRegistry';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { shown } from '../shown';
 import { TypeMismatch, typedValues } from '../typed';
 import { plainOf, sensitiveAmong, Value } from '../Value';
-import { ResourcePlan, ResourcePlanner } from './ResourcePlanner';
+import { Ignoring, ResourcePlan, ResourcePlanner } from './ResourcePlanner';
 
 /** As state holds it, which is how the provider finds it. */
 function held(action: PlanAction, state: State): Resource {
@@ -101,12 +102,19 @@ export class ActionExecutor {
     const type = action.resourceType;
     const schema = await this.providers.schema(type);
     const inputs = this.resolver.resolveAttributes(action.attributes, currentState, Address.of(action));
-    const off = offPlan(schema, action.planned, conformValues(type, schema, inputs));
+    const ignoring = this.ignoringFor(action, currentState);
+    const written = conformValues(type, schema, inputs);
+    const off = offPlan(schema, action.planned, ignoring ? keepPrior(written, [], ignoring.prior, ignoring.paths).config : written);
     const hidden = [...(action.sensitive ?? []), ...sensitiveAmong(inputs)];
     if (off) throw new Error(offPlanMessage(off, hidden));
 
-    const final = await this.finalPlan(action, schema, action.after, inputs, currentState, hidden);
+    const final = await this.finalPlan(action, schema, action.after, inputs, currentState, hidden, ignoring);
     return { inputs: final.config, after: final.after, sensitive: final.sensitive, hidden, schema };
+  }
+
+  /** The paths the plan left as the state has them. A replace is still held when this runs, since the delete comes after it. */
+  private ignoringFor(action: PlanAction, currentState: State): Ignoring | undefined {
+    return action.ignored ? { prior: held(action, currentState), paths: action.ignored } : undefined;
   }
 
   /** A replace is planned as a create. The approved plan's known values must still hold. */
@@ -116,11 +124,12 @@ export class ActionExecutor {
     after: Record<string, unknown>,
     inputs: Record<string, Value>,
     currentState: State,
-    hidden: AttributePath[]
+    hidden: AttributePath[],
+    ignoring: Ignoring | undefined
   ): Promise<ResourcePlan> {
     const type = action.resourceType;
     const current = action.type === 'UPDATE' ? held(action, currentState) : undefined;
-    const final = await this.planner.plan(type, schema, current, inputs);
+    const final = await this.planner.plan(type, schema, current, inputs, ignoring);
     if (final.replace) throw new Error(`${type} planned at apply to replace what the plan changed in place, which is a bug in the provider`);
 
     const mismatches = offFinal(schema, after, final.after);

@@ -45,6 +45,8 @@ export interface DesiredResource {
   sensitive: AttributePath[];
   replace: boolean;
   dependencies: string[];
+  /** The paths of the existing resource the configuration does not change; left out where it does not exist yet. */
+  ignored?: AttributePath[];
   /** Its state address before count was added or removed; the state it was planned against already has the move. */
   movedFrom?: string;
 }
@@ -71,6 +73,8 @@ export interface PlanAction {
   sensitive?: AttributePath[];
   /** On a no-op: the values stay, which parts are sensitive changes. */
   marksChange?: true;
+  /** On an update or a replace: the paths held as the state has them, which the apply holds the same. */
+  ignored?: AttributePath[];
   /** What the block says, left out where it does not prevent a destroy. A delete is judged by the state's flag instead. */
   preventDestroy?: true;
   /** On a no-op: the values stay, whether the block prevents a destroy changes. */
@@ -98,7 +102,7 @@ export interface Plan {
 }
 
 /** Bump on any change to the file's shape after a release, so an older plan file is refused instead of misread. */
-export const PLAN_FILE_VERSION = '27.0';
+export const PLAN_FILE_VERSION = '28.0';
 
 export interface PlanFile extends Plan {
   version: string;
@@ -258,9 +262,14 @@ function isProtection(action: Record<string, unknown>): boolean {
   return prevents && isNoOpMark(action, 'protectionChange');
 }
 
-/** What a plan keeps in state beside the values: the marks and the prevented destroy. */
+/** Only an update or a replace changes an existing resource, so only they hold a path to leave as it is. */
+function isIgnored(action: Record<string, unknown>): boolean {
+  return action.ignored === undefined || ((action.type === 'UPDATE' || action.type === 'REPLACE') && isAttributePaths(action.ignored));
+}
+
+/** What a plan holds beside the values: the marks, the prevented destroy and the paths left as they are. */
 function isStateOnly(action: Record<string, unknown>): boolean {
-  return isNoOpMark(action, 'marksChange') && isProtection(action);
+  return isNoOpMark(action, 'marksChange') && isProtection(action) && isIgnored(action);
 }
 
 function isAction(action: unknown): boolean {
@@ -373,6 +382,7 @@ function readUnknownPaths(changes: unknown): void {
 function readAction(action: Record<string, unknown>): void {
   if (action.key instanceof ExactNumber) action.key = action.key.toSafeInteger('an instance key');
   if (action.sensitive !== undefined) action.sensitive = readPaths(action.sensitive, 'a sensitive index');
+  if (action.ignored !== undefined) action.ignored = readPaths(action.ignored, 'an ignored index');
   readUnknownPaths(action.changes);
   readUnknownPaths(action.planned);
   readUnknownPaths(action.after);
@@ -582,6 +592,10 @@ function marked({ sensitive }: DesiredResource): Pick<PlanAction, 'sensitive'> {
   return sensitive.length > 0 ? { sensitive } : {};
 }
 
+function ignoring({ ignored }: DesiredResource): Pick<PlanAction, 'ignored'> {
+  return ignored && ignored.length > 0 ? { ignored } : {};
+}
+
 function prevents({ block }: DesiredResource): boolean {
   return block.lifecycle?.preventDestroy === true;
 }
@@ -618,6 +632,7 @@ function processExistingResource(actions: PlanAction[], desired: DesiredResource
     after: desired.after,
     ...marked(desired),
     ...protectedBy(desired),
+    ...ignoring(desired),
     changes: changes ?? {},
     dependencies: desired.dependencies,
   });

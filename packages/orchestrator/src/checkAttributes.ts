@@ -20,12 +20,24 @@ function computedSet(block: Block, schema: Schema): { message: string; position:
   return undefined;
 }
 
+/** An ignored path starts at an attribute the type has. */
+function ignoredProblem(block: Block, schema: Schema): { message: string; position: Position } | undefined {
+  const ignore = block.type === 'Resource' ? block.lifecycle?.ignoreChanges : undefined;
+  if (ignore === undefined || ignore === 'all') return undefined;
+
+  const unknown = ignore.find(({ path }) => !Object.hasOwn(schema, path[0]));
+  if (unknown) return { message: `ignore_changes names "${unknown.path[0]}", which ${typeOf(block)} does not have`, position: unknown.position };
+
+  const inSet = ignore.find(({ path }) => path.length > 1 && schema[path[0]].type.kind === 'set');
+  return inSet && { message: `ignore_changes cannot reach into "${inSet.path[0]}", a set: its items have no place to name`, position: inSet.position };
+}
+
 /** A wrong name is reported at its position, a missing one at the block. */
 function problemIn(block: Block, schema: Schema): { message: string; position: Position } | undefined {
   const named = nameProblem(typeOf(block), namesOf(schema), Object.keys(block.attributes));
   if (named?.set !== undefined) return { message: named.message, position: block.attributes[named.set].position };
 
-  return computedSet(block, schema) ?? (named && { message: named.message, position: block.position });
+  return computedSet(block, schema) ?? ignoredProblem(block, schema) ?? (named && { message: named.message, position: block.position });
 }
 
 /** Runs before any value is resolved. */

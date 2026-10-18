@@ -347,6 +347,24 @@ describe('reading a plan file', () => {
     expect(read(content)).toThrow(/^tfplan\.json is not a plan file$/);
   });
 
+  it.each([
+    ['on a create', 'CREATE', [['content']]],
+    ['on a no-op', 'NO_OP', [['content']]],
+    ['on a delete', 'DELETE', [['content']]],
+    ['that are not steps', 'UPDATE', 'content'],
+  ])('refuses ignored paths %s', (_, type, ignored) => {
+    const withValues = type === 'UPDATE' ? { planned: {}, after: {} } : {};
+    const content = { ...fields(), actions: [{ type, resourceType: 'null_resource', name: 'a', ignored, ...withValues }] };
+
+    expect(read(content)).toThrow(/^tfplan\.json is not a plan file$/);
+  });
+
+  it('names an ignored index that is not whole', () => {
+    const content = { ...fields(), actions: [{ type: 'UPDATE', resourceType: 'null_resource', name: 'a', planned: {}, after: {}, ignored: [['items', 1.5]] }] };
+
+    expect(read(content)).toThrow('tfplan.json is not a plan file: an ignored index: 1.5 is not a whole number');
+  });
+
   it('names a sensitive index that is not whole', () => {
     const content = { ...fields(), actions: [{ type: 'NO_OP', resourceType: 'null_resource', name: 'a', sensitive: [['triggers', 1.5]] }] };
 
