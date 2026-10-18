@@ -108,6 +108,16 @@ describe('null', () => {
     expect(triggers).toEqual({ t: null });
   });
 
+  it('takes null as the input of a variable that names a type', async () => {
+    await fs.mkdir(path.join(dir, 'm'));
+    await fs.writeFile(path.join(dir, 'm', 'main.clay'), 'variable "size" {\n  type = number\n}\nresource "null_resource" "n" { triggers = { t = var.size } }', 'utf8');
+
+    await apply('module "m" {\n  source = "./m"\n  size = null\n}');
+
+    const { triggers } = await attributes('module.m.null_resource.n');
+    expect(triggers).toEqual({ t: null });
+  });
+
   it('writes an output of null to state', async () => {
     await apply('output "o" { value = null }');
 

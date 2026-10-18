@@ -208,6 +208,13 @@ describe('a configuration held to the schema', () => {
     expect(resources['tally.t'].attributes).toMatchObject({ rule: { mode: '1', port: ExactNumber.parse('80') }, pair: ['2', ExactNumber.parse('3')] });
   });
 
+  it('takes null for a name its object type requires, since null is a value of every type', async () => {
+    const config = 'variable "k" {\n  type = string\n  default = null\n}\nresource "tally" "t" {\n  rule = { mode = var.k, port = 80 }\n}';
+    const { actions } = await newOrchestrator().plan(config);
+
+    expect(actions.map(({ after }) => after?.rule)).toEqual([{ mode: null, port: ExactNumber.parse('80') }]);
+  });
+
   it('refuses an object without a name its type requires, where it is written', async () => {
     await expect(newOrchestrator().plan('resource "tally" "t" {\n  rule = { port = 80 }\n}')).rejects.toMatchObject({
       message: 'tally requires "mode" in rule',

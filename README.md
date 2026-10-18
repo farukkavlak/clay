@@ -54,8 +54,9 @@ Every value carries its type. A written list is a tuple, `["a", 1]` is
 `tuple([string, number])`, and a written map is an object; a value read from a resource or a
 data source has the type its schema names, and keeps it through variables, module inputs
 and outputs. An attribute set to `null` is left out, as if it were not written, so a
-required one is refused. `null` inside a list or a map stays there. A variable may name its
-type, `type = set(string)`, and takes what it is given as that type. An output may name its
+required one is refused. `null` inside a list, a map or an object stays there, since it is a
+value of every type: an object's attribute that its type does not make optional must be
+named, and may be `null`. A variable may name its type, `type = set(string)`, and takes what it is given as that type. An output may name its
 type the same way, and gives its value as that type, so its caller knows it before a plan.
 An attribute of an object type can be optional, with a default:
 `object({ port = optional(number, 80) })`.

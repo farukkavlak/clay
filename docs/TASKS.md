@@ -503,9 +503,13 @@ length below 1.
 - [x] A null a reference gives is named where a `for` goes over it, as the key of a `for`,
       as a function argument and as an index, the way `count` does it. Joining it into a
       string already names it
-- [ ] A null a reference gives is not named where it makes a nested attribute required or
-      where a variable of another type refuses it. The mark is lost when a value is read
-      part by part
+- [x] A null a reference gives is not named where it makes a nested attribute required
+      or a variable of another type refuse it, because neither is refused. `null` is a
+      value of every type, so an object attribute its type requires may be `null`, and a
+      required attribute of a schema may not: that is a promise to the provider, which gets
+      no value for it. A variable refuses a value of the wrong type, and null is not one.
+      Terraform: its core checks that a required attribute is present, not that it is not
+      null, at the top and inside an object alike
 
 ### Data sources in the graph
 
