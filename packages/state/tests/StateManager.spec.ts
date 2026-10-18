@@ -75,6 +75,21 @@ describe('StateManager', () => {
     expect(readState).toEqual(mockState);
   });
 
+  it('keeps the deposed objects it is given, on disk and when read back', async () => {
+    const withDeposed: State = {
+      version: STATE_VERSION,
+      serial: 0,
+      resources: {},
+      deposed: { 'mock_resource.test_a': [{ attributes: { filename: 'old.txt' }, sensitive: [['filename']], dependencies: ['mock_resource.b'] }] },
+    };
+
+    await stateManager.write(withDeposed);
+
+    const fileContent = await fs.readFile(path.join(tmpDir, 'test.state.json'));
+    expect(JSON.parse(fileContent.toString('utf8'))).toEqual(withDeposed);
+    expect(await stateManager.read()).toEqual(withDeposed);
+  });
+
   it('counts every write in the serial, on disk and in the state it was given', async () => {
     const state: State = { version: STATE_VERSION, serial: 0, resources: {} };
 

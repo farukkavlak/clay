@@ -17,7 +17,7 @@ export function checkPreventDestroy(actions: PlanAction[], desired: DesiredResou
       throw withPlace(refusal, found.block.position, spell(found.block), found.address.module);
     }
 
-    if (action.type === 'DELETE' && resources[address]?.preventDestroy === true)
+    if (action.type === 'DELETE' && !action.deposed && resources[address]?.preventDestroy === true)
       throw new Error(`${address} cannot be deleted: it was applied with prevent_destroy = true. To delete it, set prevent_destroy = false, apply, then delete it.`);
   }
 }

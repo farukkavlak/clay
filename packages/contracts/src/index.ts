@@ -83,6 +83,15 @@ export function isOutput(output: unknown): output is Output {
   return isRecord(output) && Object.hasOwn(output, 'value') && isType(output.type) && (output.sensitive === undefined || output.sensitive === true);
 }
 
+/** An earlier object of a resource that a replace has left behind, held until its provider destroys it. */
+export interface DeposedObject {
+  attributes: Record<string, unknown>;
+  /** The steps to each sensitive part of `attributes`, left out where there is none. */
+  sensitive?: AttributePath[];
+  /** Kept so it can be destroyed before what it depended on. */
+  dependencies?: string[];
+}
+
 export interface State {
   version: number;
   /** Bumped on each write. A saved plan records it, so a state written after the plan is caught. */
@@ -90,10 +99,12 @@ export interface State {
   /** Root outputs from the last run. */
   outputs?: Record<string, Output>;
   resources: Record<string, Resource>;
+  /** By the address of the resource they were left by, oldest first. Apart from `resources`: they outlive the current object, and a resource the provider no longer finds still leaves them. Left out where there are none. */
+  deposed?: Record<string, DeposedObject[]>;
 }
 
 /** Bump on any change to the shape after a release. A higher version was written by a newer Clay and is refused. */
-export const STATE_VERSION = 6;
+export const STATE_VERSION = 7;
 
 export function emptyState(): State {
   return { version: STATE_VERSION, serial: 0, resources: {} };
@@ -186,6 +197,53 @@ function checkResources(resources: Record<string, unknown>, say: (problem: strin
     // Lookups use the key, but a delete is built from the entry's own fields, so they must agree.
     const held = Address.of(resource).toString();
     if (held !== address) say(`"${address}" holds ${held}`);
+  }
+}
+
+function isDeposedObject(value: unknown): value is DeposedObject {
+  return (
+    isRecord(value) &&
+    isRecord(value.attributes) &&
+    (value.sensitive === undefined || isAttributePaths(value.sensitive)) &&
+    (value.dependencies === undefined || Array.isArray(value.dependencies))
+  );
+}
+
+function isAddress(text: string): boolean {
+  try {
+    return Address.parse(text).toString() === text;
+  } catch (error) {
+    if (error instanceof Error) return false;
+
+    throw error;
+  }
+}
+
+function readDeposedPaths(object: unknown, address: string, say: (problem: string) => never): void {
+  if (!isRecord(object) || object.sensitive === undefined) return;
+
+  try {
+    object.sensitive = readPaths(object.sensitive, `a sensitive index of a deposed object of "${address}"`);
+  } catch (error) {
+    if (error instanceof NumberError) say(error.message);
+
+    throw error;
+  }
+}
+
+/** Read with exact numbers like the resources, then checked: each address is one, and each object holds attributes. */
+export function readDeposed(deposed: unknown, say: (problem: string) => never): asserts deposed is Record<string, DeposedObject[]> | undefined {
+  if (deposed === undefined) return;
+  if (!isRecord(deposed)) say('its deposed objects are not a record');
+
+  for (const [address, objects] of Object.entries(deposed)) {
+    if (!isAddress(address)) say(`"${address}" is not the address of a resource, so it cannot hold deposed objects`);
+    if (!Array.isArray(objects) || objects.length === 0) say(`the deposed objects of "${address}" are not a list with an object in it`);
+
+    for (const object of objects as unknown[]) {
+      readDeposedPaths(object, address, say);
+      if (!isDeposedObject(object)) say(`a deposed object of "${address}" has no attributes, or its sensitive or dependencies are not what they should be`);
+    }
   }
 }
 

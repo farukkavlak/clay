@@ -59,7 +59,7 @@ function showOr(value: unknown, whenAbsent: string, sensitive: readonly Attribut
 
 /** `will be created` when `planned`, `created` after apply. */
 export function actionLine(action: PlanAction, planned: boolean): string {
-  const address = Address.of(action).toString();
+  const address = Address.of(action).toString() + (action.deposed ? ' (deposed object)' : '');
   const will = planned ? 'will be ' : '';
   const type = shownType(action);
   if (type === 'NO_OP') return `  ${styleText('cyan', '>')} ${address} ${will}moved from ${action.movedFrom}`;
