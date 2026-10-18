@@ -565,8 +565,9 @@ time.
       with a saved plan too, since a plan does not hold it. A value that is not a whole
       number from 1 is refused by the flag and by the engine; Terraform refuses a negative
       one and takes 0 as 10, which Clay does not
-- [ ] Every failure of a run is reported. Several actions can fail together, and the CLI
-      stops at the first, which also loses a crash that comes after the failures it holds
+- [x] Every failure of a run is reported. `apply` collects the failures of a run: one is
+      the error as before, several are listed and counted, and a crash after them still
+      shows them first
 
 ### Lifecycle
 

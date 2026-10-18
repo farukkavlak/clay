@@ -29,12 +29,24 @@ function forgotten(plan: Plan): number {
   return changedOutside(plan).filter((drift) => !Object.hasOwn(plan.prior, drift.address) && !acted.has(drift.address)).length;
 }
 
-function reportEvent(event: RunEvent): void {
+function printFailures(failures: string[]): void {
+  for (const failure of failures) console.error(styleText('red', 'Failed:'), failure);
+}
+
+/** One failure is the error itself; several are printed and counted. */
+function failuresError(failures: string[]): Error | undefined {
+  if (failures.length <= 1) return failures.length === 1 ? new Error(failures[0]) : undefined;
+
+  printFailures(failures);
+  return new Error(`${failures.length} actions failed`);
+}
+
+function reportEvent(event: RunEvent, failures: string[]): void {
   if (event.type === 'applied') console.log(actionLine(event.action, false));
   if (event.type === 'read') console.log(readLine(event.address, false));
   if (event.type === 'failed') {
     if (event.stateError) console.error(styleText('red', 'The state could not be saved:'), event.stateError.message);
-    throw new Error(`${Address.of(event.action).toString()}: ${event.error.message}`);
+    failures.push(`${Address.of(event.action).toString()}: ${event.error.message}`);
   }
 }
 
@@ -42,12 +54,22 @@ async function runAndReport(events: AsyncGenerator<RunEvent>, forgotten: number)
   console.log(styleText('blue', '\napplying...'));
 
   const applied: PlanAction[] = [];
+  const failures: string[] = [];
   let outputs: Record<string, Output> = {};
-  for await (const event of events) {
-    reportEvent(event);
-    if (event.type === 'applied') applied.push(event.action);
-    if (event.type === 'done') outputs = event.outputs;
+  try {
+    for await (const event of events) {
+      reportEvent(event, failures);
+      if (event.type === 'applied') applied.push(event.action);
+      if (event.type === 'done') outputs = event.outputs;
+    }
+  } catch (error) {
+    // A crash after the failures must not hide them.
+    printFailures(failures);
+    throw error;
   }
+
+  const failed = failuresError(failures);
+  if (failed) throw failed;
 
   console.log(styleText('green', `\nApply complete! Resources: ${summarize(applied, forgotten)}.`));
 

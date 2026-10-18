@@ -267,8 +267,8 @@ its instances. A plan file holds them unencrypted, a secret a data source read a
 5. `apply` runs the actions a layer of the graph at a time, ten at once or as many as
    `--parallelism` says, which a saved plan takes too. It deletes in reverse order and
    writes the state after each action, so a failure leaves everything done before it on
-   disk. When one fails, the ones already running finish and none starts, and the
-   failure is reported last. Before each create, update or replace, the provider plans
+   disk. When one fails, the ones already running finish and none starts, and every
+   failure is reported at the end. Before each create, update or replace, the provider plans
    it again with what is known by then. A value the plan showed that comes out
    different, or a replace where the plan showed an update, stops the run before
    anything changes. What the provider returns is held to that plan. The state is

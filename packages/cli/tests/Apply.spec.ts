@@ -515,6 +515,43 @@ describe('CLI: apply command', () => {
     });
   });
 
+  it('names the failures it held when the run then crashes', async () => {
+    readFiles.mockReturnValue('content');
+    const runMock = vi.fn(async function* () {
+      yield { type: 'failed', action: { type: 'CREATE', resourceType: 'test', name: 't' }, error: new Error('disk full') };
+      throw new Error('provider crashed');
+    });
+    vi.mocked(Orchestrator.create).mockImplementation(function () {
+      return {
+        registerProvider: vi.fn(),
+        plan: vi.fn().mockResolvedValue({
+          serial: 0,
+          actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }],
+          outputs: {},
+          prevRun: {},
+          prior: {},
+          schemas: { test: {} },
+          dataSources: {},
+          readAtApply: [],
+        }),
+        runPlan: runMock,
+      } as Partial<Orchestrator> as Orchestrator;
+    });
+    vi.mocked(confirm).mockResolvedValue(true);
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await createApplyCommand().parseAsync(['node', 'clay']);
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Failed:'), 'test.t: disk full');
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Apply failed:'), 'provider crashed');
+    const lines = consoleSpy.mock.calls.map((call) => String(call[1]));
+    expect(lines.indexOf('test.t: disk full')).toBeLessThan(lines.indexOf('provider crashed'));
+
+    exitSpy.mockRestore();
+    consoleSpy.mockRestore();
+  });
+
   it('should handle non-Error exceptions gracefully', async () => {
     readFiles.mockReturnValue('content');
     vi.mocked(Orchestrator.create).mockImplementation(function () {
