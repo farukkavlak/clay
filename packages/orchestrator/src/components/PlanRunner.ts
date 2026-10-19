@@ -126,6 +126,8 @@ export class PlanRunner {
     const outputs = this.plannedOutputs(saved, state);
     this.checkOutputsMatch(outputs, config.mainProgram);
     const checked = { outputs, named: this.dataNamed(saved, graph) };
+    // Every move first, as the plan made them, so each entry and every dependency on it is at its new address.
+    for (const action of actions) if (action.movedFrom) moveResource(state, Address.parse(action.movedFrom), Address.of(action));
 
     yield { type: 'planned', actions };
 
@@ -376,8 +378,6 @@ export class PlanRunner {
     if (!quiet) yield { type: 'started', action };
 
     try {
-      // Moved first, so the action finds the resource at its new address.
-      if (action.movedFrom) moveResource(state, Address.parse(action.movedFrom), Address.of(action));
       await this.executor.execute(action, state);
     } catch (error) {
       yield { type: 'failed', action, error: asError(error), stateError: await this.saveAfterFailure(state) };
