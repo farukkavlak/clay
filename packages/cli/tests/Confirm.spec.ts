@@ -26,7 +26,7 @@ describe('the confirm prompt', () => {
     expect(await confirm('Go?')).toBe(false);
   });
 
-  it('refuses when the input ends before an answer', async () => {
+  it('fails when the input ends before an answer, naming --yes', async () => {
     terminal.question.mockImplementation(async () => {
       await once(terminal, 'answer');
       return 'yes';
@@ -34,7 +34,7 @@ describe('the confirm prompt', () => {
     const asked = confirm('Go?');
     terminal.dispatchEvent(new Event('close'));
 
-    expect(await asked).toBe(false);
+    await expect(asked).rejects.toThrow('No answer: the input is closed. Run with --yes to approve without asking');
   });
 
   it('closes the terminal after the answer', async () => {

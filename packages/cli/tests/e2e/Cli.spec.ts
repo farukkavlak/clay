@@ -33,6 +33,31 @@ describe('the clay command', () => {
     expect(stdout.trim()).toBe(await declaredVersion());
   });
 
+  const failed = async (command: string) => {
+    try {
+      await run('sh', ['-c', command], { cwd: dir });
+    } catch (error) {
+      return error as { code: number; stderr: string };
+    }
+    throw new Error(`${command} exited 0`);
+  };
+
+  it('exits 1 and applies nothing when the answer is not yes', async () => {
+    const { code, stderr } = await failed(`echo no | node ${clay} apply`);
+
+    expect(code).toBe(1);
+    expect(stderr).toContain('Apply cancelled.');
+    await expect(fs.access(path.join(dir, 'a.txt'))).rejects.toThrow();
+  });
+
+  it('exits 1 and names --yes when the input is closed before an answer', async () => {
+    const { code, stderr } = await failed(`node ${clay} apply < /dev/null`);
+
+    expect(code).toBe(1);
+    expect(stderr).toContain('No answer: the input is closed. Run with --yes to approve without asking');
+    await expect(fs.access(path.join(dir, 'a.txt'))).rejects.toThrow();
+  });
+
   // `true` closes the pipe at once, so the first write hits a closed reader.
   it('says nothing about a reader that stops before it starts', async () => {
     const { stderr } = await run('sh', ['-c', `node ${clay} plan | true`], { cwd: dir });

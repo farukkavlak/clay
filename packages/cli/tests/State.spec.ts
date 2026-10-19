@@ -110,11 +110,17 @@ describe('CLI: state command', () => {
       expect(consoleLogSpy).toHaveBeenCalledWith('Successfully removed resource.');
     });
 
-    it('should handle missing resource gracefully', async () => {
+    it('exits 1 and writes nothing when rm names a resource the state does not hold', async () => {
       const command = createStateCommand();
-      await command.parseAsync(['node', 'clay', 'rm', 'missing.res']);
+      try {
+        await command.parseAsync(['node', 'clay', 'rm', 'missing.res']);
+      } catch {
+        /* ignore process exit */
+      }
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Resource not found in state'));
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.anything(), 'Resource not found in state: missing.res');
+      expect(processExitSpy).toHaveBeenCalledWith(1);
+      expect(writeMock).not.toHaveBeenCalled();
       expect(unlockMock).toHaveBeenCalled();
     });
 

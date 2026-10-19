@@ -103,6 +103,18 @@ describe('state and output against a real state file', () => {
     expect(printed.join('\n')).toContain(`No state file found at ${path.join(process.cwd(), 'clay.state.json')}`);
   });
 
+  it('exits 1 and unlocks when rm names a resource the state does not hold', async () => {
+    await applyConfig();
+    const before = await fs.readFile(path.join(dir, 'clay.state.json'), 'utf8');
+
+    await createStateCommand().parseAsync(['node', 'clay', 'rm', 'local_file.missing']);
+
+    expect(process.exit).toHaveBeenCalledWith(1);
+    expect(printed.join('\n')).toContain('Resource not found in state: local_file.missing');
+    expect(await fs.readFile(path.join(dir, 'clay.state.json'), 'utf8')).toBe(before);
+    await expect(fs.access(path.join(dir, 'clay.state.json.lock'))).rejects.toThrow();
+  });
+
   it('keeps the outputs when rm takes a resource out', async () => {
     await applyConfig();
 

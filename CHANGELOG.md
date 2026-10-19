@@ -46,6 +46,8 @@ a configuration means or how the state file is written.
   the lock; a second Ctrl-C exits at once
 - A failed apply keeps the outputs of the last finished run, and `state mv` and
   `state rm` leave them as they are
+- `clay apply` exits 1 when it is not approved, and names `--yes` when its input is
+  closed; `state rm` of an address the state does not hold exits 1
 - Errors name what they are about by its address, point at where it is written, and
   quote no sensitive value
 

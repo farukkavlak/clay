@@ -166,8 +166,9 @@ change each.
       new. `state mv` and `state rm` drop them the same way. Terraform keeps them. Now
       the state keeps the outputs of the last finished run, and `state mv` and `state rm`
       leave them as they are
-- [ ] `clay apply` answered with anything but `yes`, or run with stdin closed, prints
-      "Apply cancelled." and exits 0, so a pipeline without `-y` passes. Terraform exits 1
+- [x] `clay apply` answered with anything but `yes`, or run with stdin closed, prints
+      "Apply cancelled." and exits 0, so a pipeline without `-y` passes. Terraform exits 1.
+      Now both exit 1, and closed input says to run with `--yes`
 - [ ] A dependency and what reads it, both replaced, are replaced one at a time: with
       `local_file.b` reading `local_file.a.id` and both paths changed, `a` is destroyed and
       made again before `b` is destroyed, so the old `b` outlives what it read. Each replace
@@ -203,8 +204,8 @@ change each.
       has no defaults
 - [ ] `clay output --json` with no state prints a plain-text line to stdout and exits 0, so
       a script that reads it as JSON breaks
-- [ ] `clay state rm` of an address the state does not hold exits 0, where `state show`
-      exits 1. Terraform refuses it
+- [x] `clay state rm` of an address the state does not hold exits 0, where `state show`
+      exits 1. Terraform refuses it. Now it exits 1 and writes nothing
 - [ ] A value nested 20000 deep, or 6000 chained locals, ends in a stack overflow,
       `Maximum call stack size exceeded`, with no position. The resolver and
       `Graph.findCycle` recurse

@@ -153,10 +153,7 @@ export function createStateCommand(): Command {
             const state = await manager.read();
             const key = Address.parse(address).toString();
 
-            if (!Object.hasOwn(state.resources, key) && !(state.deposed && Object.hasOwn(state.deposed, key))) {
-              console.log(styleText('yellow', `Resource not found in state: ${address}`));
-              return;
-            }
+            if (!Object.hasOwn(state.resources, key) && !(state.deposed && Object.hasOwn(state.deposed, key))) throw new Error(`Resource not found in state: ${address}`);
 
             console.log(styleText('yellow', `Removing ${key}...`));
             delete state.resources[key];

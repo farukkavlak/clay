@@ -128,8 +128,8 @@ async function executeApply(cwd: string, { plan, config, files }: PlannedApply, 
 
   const confirmed = await confirmApply(autoConfirm);
   if (!confirmed) {
-    console.log(styleText('yellow', 'Apply cancelled.'));
-    return;
+    console.error(styleText('yellow', 'Apply cancelled.'));
+    process.exit(1);
   }
 
   await runAndReport((signal) => newOrchestrator(cwd, files).runPlan(plan, config, { parallelism, signal }), forgotten(plan));

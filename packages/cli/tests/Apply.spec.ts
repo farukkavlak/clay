@@ -159,7 +159,7 @@ describe('CLI: apply command', () => {
       expect(runMock).toHaveBeenCalled();
     });
 
-    it('should abort if confirmation declined', async () => {
+    it('exits 1 when the confirmation is declined', async () => {
       readFiles.mockReturnValue('content');
 
       const planMock = vi.fn().mockResolvedValue({
@@ -183,14 +183,19 @@ describe('CLI: apply command', () => {
       });
 
       vi.mocked(confirm).mockResolvedValue(false);
-      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      vi.spyOn(console, 'log').mockImplementation(() => {});
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+        throw new Error('ProcessExit');
+      }) as never);
 
-      await createApplyCommand().parseAsync(['node', 'clay']);
+      await expect(createApplyCommand().parseAsync(['node', 'clay'])).rejects.toThrow('ProcessExit');
 
       expect(runMock).not.toHaveBeenCalled();
-      expect(consoleSpy).toHaveBeenCalledWith('Apply cancelled.');
+      expect(errorSpy).toHaveBeenNthCalledWith(1, 'Apply cancelled.');
+      expect(exitSpy).toHaveBeenNthCalledWith(1, 1);
 
-      consoleSpy.mockRestore();
+      vi.restoreAllMocks();
     });
 
     it('should skip apply when all actions are NO_OP', async () => {
