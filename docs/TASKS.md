@@ -169,10 +169,23 @@ change each.
 - [x] `clay apply` answered with anything but `yes`, or run with stdin closed, prints
       "Apply cancelled." and exits 0, so a pipeline without `-y` passes. Terraform exits 1.
       Now both exit 1, and closed input says to run with `--yes`
-- [ ] A dependency and what reads it, both replaced, are replaced one at a time: with
+- [x] A dependency and what reads it, both replaced, are replaced one at a time: with
       `local_file.b` reading `local_file.a.id` and both paths changed, `a` is destroyed and
       made again before `b` is destroyed, so the old `b` outlives what it read. Each replace
-      deletes and creates inside its own layer. Terraform destroys the dependent first
+      deletes and creates inside its own layer. Terraform destroys the dependent first.
+      Now, before a replace destroys its object, what is going away and reads it, by the
+      dependencies in state, is destroyed first, readers first: a replace, a delete, a
+      deposed object. A replace destroyed early only creates in its own turn
+- [ ] A `create_before_destroy` replace whose old object reads a plain replace only in
+      state outlives what it read. With `x1` using `a1`, and `a` renamed `a2` while `x`
+      turns into `x2` with `create_before_destroy` and no `uses`, the apply makes `x2`, then
+      fails on `a1 cannot be destroyed while x1 uses it`: the deposed `x1` waits for the
+      deletes. Forced create first goes by the configuration alone. Terraform orders it by
+      the dependencies in state: `x2`, then `x1` destroyed, then `a1`, then `a2`
+- [ ] A replace destroyed before its turn is not reported when its create never runs. If
+      `b1` is destroyed so that `a1` can be, and the apply then fails on `a` or is
+      interrupted, the output names only `rec.a`, and nothing says `b1` is gone. The state
+      is right, and the next plan shows `b` to create
 - [ ] Renaming a resource whose new object is the old one destroys it. With
       `local_file "c" { path = "f.txt" }` renamed to `"d"`, the apply creates `d`, then deletes
       `c`, which removes `f.txt`, and says it completed. `create_before_destroy` does the
