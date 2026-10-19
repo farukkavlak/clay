@@ -176,25 +176,35 @@ change each.
       Now, before a replace destroys its object, what is going away and reads it, by the
       dependencies in state, is destroyed first, readers first: a replace, a delete, a
       deposed object. A replace destroyed early only creates in its own turn
-- [ ] A `create_before_destroy` replace whose old object reads a plain replace only in
+- [x] A `create_before_destroy` replace whose old object reads a plain replace only in
       state outlives what it read. With `x1` using `a1`, and `a` renamed `a2` while `x`
       turns into `x2` with `create_before_destroy` and no `uses`, the apply makes `x2`, then
       fails on `a1 cannot be destroyed while x1 uses it`: the deposed `x1` waits for the
       deletes. Forced create first goes by the configuration alone. Terraform orders it by
-      the dependencies in state: `x2`, then `x1` destroyed, then `a1`, then `a2`
+      the dependencies in state: `x2`, then `x1` destroyed, then `a1`, then `a2`.
+      Now the apply walks one graph: the configuration's, with a node for each object
+      destroyed apart from its block, ordered by the dependencies in state. The deletes no
+      longer wait for the end
 - [ ] A replace destroyed before its turn is not reported when its create never runs. If
       `b1` is destroyed so that `a1` can be, and the apply then fails on `a` or is
       interrupted, the output names only `rec.a`, and nothing says `b1` is gone. The state
       is right, and the next plan shows `b` to create
+- [ ] A resource that stays and used a plain replace only in state is updated after the
+      replace destroys the old object. With `b1` holding `a1` in place, and `a` renamed
+      `a2` while `b` stops holding it, `a1` and `b` run together, and a cloud refuses to
+      destroy `a1` while `b1` holds it. The same holds for a delete that has to go before a
+      plain replace: it does not wait for what stays and holds it. Any other delete waits.
+      An order that waits for it can close a loop through the configuration
 - [ ] Renaming a resource whose new object is the old one destroys it. With
       `local_file "c" { path = "f.txt" }` renamed to `"d"`, the apply creates `d`, then deletes
       `c`, which removes `f.txt`, and says it completed. `create_before_destroy` does the
       same where the new path spells the old file another way, `./a.txt` and `a.txt`, and
       without it the respelling still replaces the file
-- [ ] The delete order is worked out in exponential time. `reaches` in `deleteEdges` walks
+- [x] The delete order is worked out in exponential time. `reaches` in `deleteEdges` walks
       every path with no record of what it has seen, so a ladder of 56 resources that each
       read the two before takes 23 seconds to destroy, and the time doubles every two more.
-      It depends on the order of keys in the state file
+      It depends on the order of keys in the state file. Now the walk records what it has
+      seen, so a ladder of 200 orders at once
 - [ ] A plan file's action is checked only in part where the file is read. A `resourceType`
       left out is refused after "applying..." as `"undefined.a"`, a `name` of `5` is shown
       as `local_file.5` before it is refused, an attribute node of an unknown type fails as

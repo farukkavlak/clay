@@ -42,7 +42,7 @@ export type GraphNode =
   | ({ kind: 'data'; block: DataBlock } & InModule);
 
 /** `module.m.var.x`; a resource's key already is its address. */
-function spellNode(key: string, node: GraphNode): string {
+export function spellNode(key: string, node: GraphNode): string {
   if (node.kind === 'resource') return key;
   if (node.kind === 'module') return node.module.child(node.block.name).toString();
   if (node.kind === 'data') return dataSourceAddress(node.module.toString(), node.block.dataSourceType, node.block.name);
