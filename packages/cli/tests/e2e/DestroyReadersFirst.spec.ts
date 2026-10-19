@@ -11,8 +11,15 @@ import { start } from './start';
 const SCHEMA: Schema = {
   name: { type: types.string, required: true, forceNew: true },
   uses: { type: types.string, optional: true, forceNew: true },
+  /** Uses an object as `uses` does, but changes in place. */
+  holds: { type: types.string, optional: true },
   note: { type: types.string, optional: true },
 };
+
+function used(config: Record<string, unknown>): string | undefined {
+  const uses = config.uses ?? config.holds;
+  return typeof uses === 'string' ? uses : undefined;
+}
 
 /** As a cloud does: an object another one uses cannot be destroyed, and one cannot use an object that does not exist. */
 class Using implements Provider {
@@ -41,7 +48,7 @@ class Using implements Provider {
 
   async create(_type: string, { config }: CreateRequest): Promise<Record<string, unknown>> {
     const name = String(config.name);
-    const uses = typeof config.uses === 'string' ? config.uses : undefined;
+    const uses = used(config);
     if (uses !== undefined && !this.live.has(uses)) throw new Error(`${name} cannot use ${uses}, which does not exist`);
 
     this.live.set(name, uses);
@@ -50,6 +57,7 @@ class Using implements Provider {
   }
 
   async update(_type: string, { config }: UpdateRequest): Promise<Record<string, unknown>> {
+    this.live.set(String(config.name), used(config));
     this.seen.push(`update ${String(config.name)}`);
     return { ...config };
   }
@@ -190,7 +198,7 @@ describe('replacing a resource that something reads', () => {
 
     await applied(rec('a', 'a2') + rec('b', 'b1'));
 
-    expect(provider.seen).toEqual(['delete b-old', 'delete a1', 'create a2', 'delete c1']);
+    expect(provider.seen).toEqual(['delete c1', 'delete b-old', 'delete a1', 'create a2']);
   });
 
   it('stops where a reader cannot be destroyed, and names the replace', async () => {
@@ -204,6 +212,46 @@ describe('replacing a resource that something reads', () => {
     expect(failures.map((event) => [Address.of(event.action).toString(), event.action.type, event.error.message])).toEqual([['rec.b', 'REPLACE', 'b1 cannot be destroyed']]);
     expect(provider.seen).toEqual([]);
     expect(await heldAddresses()).toEqual(['rec.a', 'rec.b']);
+  });
+
+  it('destroys a create-first reader that reads it only in state before it', async () => {
+    await applied(rec('a', 'a1') + rec('x', 'x1', 'uses = rec.a.name'));
+
+    provider.seen.length = 0;
+
+    await applied(rec('a', 'a2') + rec('x', 'x2', 'lifecycle {\n    create_before_destroy = true\n  }'));
+
+    expect(provider.seen).toEqual(['create x2', 'delete x1', 'delete a1', 'create a2']);
+  });
+
+  it('makes a new reader of a create-first replace after the old object and what it read are gone', async () => {
+    await applied(rec('a', 'a1') + rec('x', 'x1', 'uses = rec.a.name'));
+    provider.seen.length = 0;
+
+    await applied(rec('a', 'a2') + rec('x', 'x2', 'lifecycle {\n    create_before_destroy = true\n  }') + rec('r', 'r1', 'note = rec.a.name', 'holds = rec.x.name'));
+
+    expect(provider.seen).toEqual(['create x2', 'delete x1', 'delete a1', 'create a2', 'create r1']);
+  });
+
+  it('refuses an order that waits for itself before anything runs', async () => {
+    await applied(rec('a', 'a1') + rec('x', 'x1', 'uses = rec.a.name') + rec('r', 'r1', 'note = rec.a.name', 'holds = rec.x.name'));
+    provider.seen.length = 0;
+    const before = await held();
+
+    await expect(
+      applied(rec('a', 'a2') + rec('x', 'x2', 'lifecycle {\n    create_before_destroy = true\n  }') + rec('r', 'r1', 'note = rec.a.name', 'holds = rec.x.name'))
+    ).rejects.toThrow('No order applies this plan: rec.a waits for destroying the old rec.x, which waits for rec.r, which waits for rec.a');
+    expect(provider.seen).toEqual([]);
+    expect(await held()).toEqual(before);
+  });
+
+  it('updates what stays and used a removed resource before destroying it', async () => {
+    await applied(rec('a', 'a1') + rec('b', 'b1', 'holds = rec.a.name'));
+    provider.seen.length = 0;
+
+    await applied(rec('b', 'b1'));
+
+    expect(provider.seen).toEqual(['update b1', 'delete a1']);
   });
 
   it('leaves a reader it can still update in place, and replaces only what it reads', async () => {

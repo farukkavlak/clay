@@ -34,6 +34,13 @@ export class Graph<T> {
     return [...this.adjacencyList.entries()].filter(([, neighbors]) => neighbors.has(id)).map(([from]) => from);
   }
 
+  /** Nodes this one has an edge into. */
+  dependentsOf(id: string): string[] {
+    if (!this.nodes.has(id)) throw new Error(`Node ${id} does not exist`);
+
+    return [...this.adjacencyList.get(id)!];
+  }
+
   /** Layers in dependency order; the nodes of one layer could run in parallel. */
   topologicalSort(): string[][] {
     const inDegree = this.calculateInDegrees();
