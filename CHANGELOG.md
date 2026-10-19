@@ -44,6 +44,8 @@ a configuration means or how the state file is written.
 - A state or plan file that is not valid is refused and says what is wrong
 - Ctrl-C during an apply starts nothing new, waits for what runs, saves it and releases
   the lock; a second Ctrl-C exits at once
+- A failed apply keeps the outputs of the last finished run, and `state mv` and
+  `state rm` leave them as they are
 - Errors name what they are about by its address, point at where it is written, and
   quote no sensitive value
 
