@@ -62,7 +62,8 @@ export class ActionExecutor {
     private planner: ResourcePlanner
   ) {}
 
-  async execute(action: PlanAction, currentState: State): Promise<void> {
+  /** `destroyed` is the object of a replace that was destroyed before it, so that only the create is left. */
+  async execute(action: PlanAction, currentState: State, destroyed?: Resource): Promise<void> {
     // A no-op only updates what state keeps beside the values, so it needs no provider.
     if (action.type === 'NO_OP') {
       this.recordUnchanged(action, currentState);
@@ -81,8 +82,12 @@ export class ActionExecutor {
         break;
       }
       case 'REPLACE': {
-        // Checked before the delete, so a value off the plan or refused by the provider leaves the resource untouched.
-        const sending = await this.sendingFor(action, currentState);
+        // Checked before the delete, so a value off the plan or refused by the provider leaves the resource untouched, unless it was destroyed first.
+        const sending = await this.sendingFor(action, currentState, destroyed);
+        if (destroyed) {
+          await this.create(action, provider, currentState, sending);
+          break;
+        }
         if (action.createBeforeDestroy) {
           // The old object stays the current one until the new one exists, so a create that fails leaves it whole.
           await this.create(action, provider, currentState, sending, held(action, currentState));
@@ -107,7 +112,7 @@ export class ActionExecutor {
    * Resolved again now that earlier actions have run, and each value the plan knew must match.
    * The provider then validates and plans again before anything changes, since the plan could not validate unknown values.
    */
-  private async sendingFor(action: PlanAction, currentState: State): Promise<Sending> {
+  private async sendingFor(action: PlanAction, currentState: State, destroyed?: Resource): Promise<Sending> {
     if (!action.attributes) throw new Error(`${action.type} action missing attributes`);
     if (!action.planned) throw new Error(`${action.type} action missing the values it was planned with`);
     if (!action.after) throw new Error(`${action.type} action missing what its provider planned`);
@@ -115,7 +120,7 @@ export class ActionExecutor {
     const type = action.resourceType;
     const schema = await this.providers.schema(type);
     const inputs = this.resolver.resolveAttributes(action.attributes, currentState, Address.of(action));
-    const ignoring = this.ignoringFor(action, currentState);
+    const ignoring = this.ignoringFor(action, currentState, destroyed);
     const written = conformValues(type, schema, inputs);
     const off = offPlan(schema, action.planned, ignoring ? keepPrior(written, [], ignoring.prior, ignoring.paths).config : written);
     const hidden = [...(action.sensitive ?? []), ...sensitiveAmong(inputs)];
@@ -125,9 +130,9 @@ export class ActionExecutor {
     return { inputs: final.config, after: final.after, sensitive: final.sensitive, hidden, schema };
   }
 
-  /** The paths the plan left as the state has them. A replace is still held when this runs, since the delete comes after it. */
-  private ignoringFor(action: PlanAction, currentState: State): Ignoring | undefined {
-    return action.ignored ? { prior: held(action, currentState), paths: action.ignored } : undefined;
+  /** The paths the plan left as the state has them. A replace is still held when this runs, unless it was destroyed first. */
+  private ignoringFor(action: PlanAction, currentState: State, destroyed?: Resource): Ignoring | undefined {
+    return action.ignored ? { prior: destroyed ?? held(action, currentState), paths: action.ignored } : undefined;
   }
 
   /** A replace is planned as a create. The approved plan's known values must still hold. */
@@ -226,6 +231,11 @@ export class ActionExecutor {
 
     delete deposed[address];
     if (Object.keys(deposed).length === 0) delete currentState.deposed;
+  }
+
+  /** A replace's object, destroyed before its turn so that what it reads can be destroyed after it. */
+  async destroy(action: PlanAction, currentState: State): Promise<void> {
+    await this.executeDelete(action, this.providers.get(action.resourceType), currentState);
   }
 
   async executeDelete(action: PlanAction, provider: Provider, currentState: State): Promise<void> {

@@ -1,4 +1,4 @@
-import { Address, ModuleAddress, Output, parseDataAddress, SENSITIVE, State } from '@clay/contracts';
+import { Address, ModuleAddress, Output, parseDataAddress, Resource, SENSITIVE, State } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { AttributeValue, DataBlock, OutputBlock, ResourceBlock, spell, Statement } from '@clay/parser';
 import { offPlan, Plan, PlanAction } from '@clay/planner';
@@ -103,6 +103,36 @@ function deleteEdges(deletes: Map<string, PlanAction>, state: State): [string, s
   return edges;
 }
 
+/** Gone before anything is made in its place. */
+const goesFirst = (action: PlanAction) => action.type === 'DELETE' || (action.type === 'REPLACE' && !action.createBeforeDestroy);
+
+/** What going away reads one of `addresses`, or reads what does, by the dependencies in state. */
+function readersOf(addresses: string[], going: Map<string, PlanAction>, state: State): Map<string, PlanAction> {
+  const read = new Set(addresses);
+  const readers = new Map<string, PlanAction>();
+  let grew = true;
+
+  while (grew) {
+    grew = false;
+    for (const [key, action] of going) {
+      if (readers.has(key) || !dependenciesOf(action, state).some((dependency) => read.has(dependency))) continue;
+
+      readers.set(key, action);
+      // A dependency names a resource's current object, never a deposed one.
+      if (!action.deposed) read.add(Address.of(action).toString());
+      grew = true;
+    }
+  }
+
+  return readers;
+}
+
+/** Destroyed before their turn: each replace's object by address, kept for what it ignored, and the deletes by key. */
+interface DestroyedFirst {
+  replaced: Map<string, Resource>;
+  deleted: Set<string>;
+}
+
 /** A replace that made the new object first left the old one deposed, to be destroyed with the deletes, after what read it is updated. */
 function leftByReplaces(actions: PlanAction[]): PlanAction[] {
   return actions.filter((action) => action.type === 'REPLACE' && action.createBeforeDestroy).map((action) => ({ type: 'DELETE', deposed: true, ...Address.of(action).fields() }));
@@ -131,8 +161,9 @@ export class PlanRunner {
 
     yield { type: 'planned', actions };
 
-    if (!(yield* this.applyInOrder(saved, checked, config, graph, state, pace))) return;
-    if (!(yield* this.applyDeletes([...actions, ...leftByReplaces(actions)], state, pace))) return;
+    const first: DestroyedFirst = { replaced: new Map(), deleted: new Set() };
+    if (!(yield* this.applyInOrder(saved, checked, config, graph, state, pace, first))) return;
+    if (!(yield* this.applyDeletes([...actions, ...leftByReplaces(actions)], first.deleted, state, pace))) return;
 
     // Resolved after the last action, so outputs never reflect a half-applied run.
     state.outputs = this.resolveOutputs(config.mainProgram, state, ModuleAddress.root);
@@ -234,7 +265,8 @@ export class PlanRunner {
     config: LoadedConfig,
     graph: Graph<GraphNode>,
     state: State,
-    pace: Pace
+    pace: Pace,
+    first: DestroyedFirst
   ): AsyncGenerator<RunEvent, boolean> {
     const layers: Layers = {
       named,
@@ -247,6 +279,8 @@ export class PlanRunner {
       ),
     };
 
+    const stepOf = (action: PlanAction) => this.step(action, state, pace.signal, first.replaced.get(Address.of(action).toString()));
+
     for (const layer of graph.topologicalSort()) {
       // A data source is read even where no action runs; a layer of locals and outputs alone lets a run that did every action finish.
       if (pace.signal?.aborted && layer.some((key) => graph.getNode(key)!.kind === 'data')) return false;
@@ -255,10 +289,32 @@ export class PlanRunner {
       // Every block of the layer is checked before any action runs, so a wrong plan stops the run before it changes anything.
       for (const key of this.outputsFirst(layer, graph)) toRun.push(...(yield* this.visit(key, graph.getNode(key)!, layers, state)));
 
-      if (!(yield* this.runTogether(toRun, state, pace))) return false;
+      if (!(yield* this.destroyReaders(toRun, actions, first, state, pace))) return false;
+      if (!(yield* this.runTogether(toRun, pace, stepOf))) return false;
     }
 
     return true;
+  }
+
+  /** What is going away and reads what a layer replaces is destroyed before it, readers first, so nothing outlives what it reads. */
+  private async *destroyReaders(toRun: PlanAction[], actions: PlanAction[], first: DestroyedFirst, state: State, pace: Pace): AsyncGenerator<RunEvent, boolean> {
+    const replaced = toRun.filter((action) => goesFirst(action));
+    if (replaced.length === 0) return true;
+
+    // What was destroyed already has no dependencies left in state, so it is never found again.
+    const going = new Map(actions.filter((action) => goesFirst(action)).map((action) => [deleteKey(action), action]));
+    const readers = readersOf(
+      replaced.map((action) => Address.of(action).toString()),
+      going,
+      state
+    );
+
+    for (const [key, action] of readers)
+      if (action.type === 'DELETE') first.deleted.add(key);
+      else first.replaced.set(key, state.resources[key]);
+
+    const destroy = (action: PlanAction) => (action.type === 'DELETE' ? this.step(action, state, pace.signal) : this.destroyFirst(action, state, pace.signal));
+    return yield* this.destroyInOrder(readers, state, pace, destroy);
   }
 
   /** Gives the actions of a resource block, checked; the other kinds are resolved or read. */
@@ -273,9 +329,9 @@ export class PlanRunner {
   }
 
   /** Nothing in a layer reads another of it, so its actions run together. */
-  private runTogether(actions: PlanAction[], state: State, { parallelism, signal }: Pace): AsyncGenerator<RunEvent, boolean> {
+  private runTogether(actions: PlanAction[], { parallelism }: Pace, run: (action: PlanAction) => AsyncGenerator<RunEvent, boolean>): AsyncGenerator<RunEvent, boolean> {
     return runTogether(
-      actions.map((action) => () => this.step(action, state, signal)),
+      actions.map((action) => () => run(action)),
       parallelism,
       isFailure
     );
@@ -347,14 +403,24 @@ export class PlanRunner {
     });
   }
 
-  /** Ordered by the dependencies in state, since the config no longer has the resource. */
-  private async *applyDeletes(actions: PlanAction[], state: State, pace: Pace): AsyncGenerator<RunEvent, boolean> {
-    const deletes = new Map(actions.filter((action) => action.type === 'DELETE').map((action) => [deleteKey(action), action]));
-    const graph = this.deleteGraph(deletes, state);
+  private applyDeletes(actions: PlanAction[], deletedFirst: Set<string>, state: State, pace: Pace): AsyncGenerator<RunEvent, boolean> {
+    const deletes = new Map(actions.filter((action) => action.type === 'DELETE' && !deletedFirst.has(deleteKey(action))).map((action) => [deleteKey(action), action]));
+
+    return this.destroyInOrder(deletes, state, pace, (action) => this.step(action, state, pace.signal));
+  }
+
+  /** Ordered by the dependencies in state, since the config may no longer have the resource. */
+  private async *destroyInOrder(
+    objects: Map<string, PlanAction>,
+    state: State,
+    pace: Pace,
+    destroy: (action: PlanAction) => AsyncGenerator<RunEvent, boolean>
+  ): AsyncGenerator<RunEvent, boolean> {
+    const graph = this.deleteGraph(objects, state);
 
     for (const layer of graph.topologicalSort().reverse()) {
       const inLayer = layer.map((key) => graph.getNode(key)!);
-      if (!(yield* this.runTogether(inLayer, state, pace))) return false;
+      if (!(yield* this.runTogether(inLayer, pace, destroy))) return false;
     }
 
     return true;
@@ -370,25 +436,38 @@ export class PlanRunner {
     return graph;
   }
 
-  private async *step(action: PlanAction, state: State, signal?: AbortSignal): AsyncGenerator<RunEvent, boolean> {
+  private async *step(action: PlanAction, state: State, signal?: AbortSignal, destroyed?: Resource): AsyncGenerator<RunEvent, boolean> {
     if (signal?.aborted) return false;
 
     // A no-op is not reported; the final write saves its dependencies. A move, or a change in which parts are sensitive or in what a destroy is prevented, is reported and saved.
     const quiet = action.type === 'NO_OP' && !action.movedFrom && !action.marksChange && !action.protectionChange;
     if (!quiet) yield { type: 'started', action };
 
-    try {
-      await this.executor.execute(action, state);
-    } catch (error) {
-      yield { type: 'failed', action, error: asError(error), stateError: await this.saveAfterFailure(state) };
-      return false;
-    }
-
+    if (!(yield* this.attempt(action, state, () => this.executor.execute(action, state, destroyed)))) return false;
     if (quiet) return true;
 
     await this.stateManager.write(state);
     yield { type: 'applied', action };
     return true;
+  }
+
+  /** Reports nothing of its own: the replace is reported once its new object is made, and a failure is the replace's. */
+  private async *destroyFirst(action: PlanAction, state: State, signal?: AbortSignal): AsyncGenerator<RunEvent, boolean> {
+    if (signal?.aborted) return false;
+    if (!(yield* this.attempt(action, state, () => this.executor.destroy(action, state)))) return false;
+
+    await this.stateManager.write(state);
+    return true;
+  }
+
+  private async *attempt(action: PlanAction, state: State, change: () => Promise<void>): AsyncGenerator<RunEvent, boolean> {
+    try {
+      await change();
+      return true;
+    } catch (error) {
+      yield { type: 'failed', action, error: asError(error), stateError: await this.saveAfterFailure(state) };
+      return false;
+    }
   }
 
   /** A replace may have deleted before its create failed; state is saved either way. */

@@ -1,0 +1,51 @@
+import { execFile } from 'node:child_process';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { promisify, stripVTControlCharacters } from 'node:util';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+// The tests compile to CommonJS, which has no import.meta.dirname.
+// eslint-disable-next-line unicorn/prefer-module
+const clay = path.resolve(__dirname, '../../bin/clay.js');
+
+describe('replacing a file and the file that reads it', () => {
+  let dir: string;
+
+  const clayIn = async (...args: string[]) => {
+    const { stdout } = await promisify(execFile)('node', [clay, ...args], { cwd: dir });
+    return stripVTControlCharacters(stdout);
+  };
+
+  const file = (name: string) => path.join(dir, name);
+
+  const written = (a: string, b: string) =>
+    fs.writeFile(
+      file('main.clay'),
+      `resource "local_file" "a" {\n  path    = "${file(a)}"\n  content = "x"\n}\nresource "local_file" "b" {\n  path    = "${file(b)}"\n  content = local_file.a.id\n}\n`,
+      'utf8'
+    );
+
+  beforeEach(async () => {
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-readers-files-'));
+    await clayIn('init');
+    await written('a1.txt', 'b1.txt');
+    await clayIn('apply', '--yes');
+  });
+
+  afterEach(async () => {
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it('reports each replace once, and counts each destroy once', async () => {
+    await written('a2.txt', 'b2.txt');
+
+    const applied = await clayIn('apply', '--yes');
+
+    expect(applied).toContain('  -+ local_file.a replaced\n  -+ local_file.b replaced\n');
+    expect(applied).toContain('Apply complete! Resources: 2 added, 0 changed, 2 destroyed.');
+    const files = await fs.readdir(dir);
+    expect(files.filter((name) => name.endsWith('.txt')).sort()).toEqual(['a2.txt', 'b2.txt']);
+    expect(await fs.readFile(file('b2.txt'), 'utf8')).toBe(file('a2.txt'));
+  });
+});
