@@ -129,8 +129,6 @@ export class PlanRunner {
 
     yield { type: 'planned', actions };
 
-    // Outputs belong to a finished run, so every write before the last omits them.
-    delete state.outputs;
     if (!(yield* this.applyInOrder(saved, checked, config, graph, state, pace))) return;
     if (!(yield* this.applyDeletes([...actions, ...leftByReplaces(actions)], state, pace))) return;
 

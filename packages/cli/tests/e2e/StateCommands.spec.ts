@@ -1,3 +1,4 @@
+import { types } from '@clay/contracts';
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
@@ -102,22 +103,22 @@ describe('state and output against a real state file', () => {
     expect(printed.join('\n')).toContain(`No state file found at ${path.join(process.cwd(), 'clay.state.json')}`);
   });
 
-  it('drops the outputs when rm takes a resource out', async () => {
+  it('keeps the outputs when rm takes a resource out', async () => {
     await applyConfig();
 
     await createStateCommand().parseAsync(['node', 'clay', 'rm', 'local_file.a']);
 
     const state = await new LocalBackend(dir).read();
-    expect(state.outputs).toBeUndefined();
+    expect(state.outputs).toEqual({ file: { value: path.join(dir, 'a.txt'), type: types.string } });
   });
 
-  it('drops the outputs when mv renames a resource', async () => {
+  it('keeps the outputs when mv renames a resource', async () => {
     await applyConfig();
 
     await createStateCommand().parseAsync(['node', 'clay', 'mv', 'local_file.a', 'local_file.b']);
 
     const state = await new LocalBackend(dir).read();
-    expect(state.outputs).toBeUndefined();
+    expect(state.outputs).toEqual({ file: { value: path.join(dir, 'a.txt'), type: types.string } });
   });
 
   it('moves the whole entry with mv, so a later delete finds it', async () => {

@@ -160,10 +160,12 @@ change each.
       finish, writes the state and unlocks. Now the first Ctrl-C starts nothing new, waits
       for what runs, saves the state, unlocks and exits 130, and a second exits at once
       and leaves the lock. `state mv` and `state rm` finish and unlock the same way
-- [ ] A failed apply drops every root output from state. `PlanRunner.run` deletes
+- [x] A failed apply drops every root output from state. `PlanRunner.run` deletes
       `state.outputs` before the first action and writes them only at the end, so one
       failed resource leaves `clay output` empty and the next plan shows every output as
-      new. `state mv` and `state rm` drop them the same way. Terraform keeps them
+      new. `state mv` and `state rm` drop them the same way. Terraform keeps them. Now
+      the state keeps the outputs of the last finished run, and `state mv` and `state rm`
+      leave them as they are
 - [ ] `clay apply` answered with anything but `yes`, or run with stdin closed, prints
       "Apply cancelled." and exits 0, so a pipeline without `-y` passes. Terraform exits 1
 - [ ] A dependency and what reads it, both replaced, are replaced one at a time: with
@@ -662,7 +664,9 @@ Measured with the local provider; a remote provider makes the sequential calls c
 - [ ] The apply runs layer by layer, so one slow resource holds back every resource of the
       next layer, and one failure stops branches that do not read it. A `sleep 3` beside a
       chain of three `sleep 1` takes 5 seconds where 3 would do. Terraform walks the graph,
-      and skips only what reads a failed resource
+      and skips only what reads a failed resource. Once the graph is walked, a root output
+      can be written when it resolves, so a failure leaves only the outputs that read it
+      at their old value, as Terraform does
 - [ ] Refresh, planning, schema loading and data source reads call the provider one at a
       time. With 100 ms a call, 20 resources plan in 4 seconds. Terraform runs them as the
       graph allows, ten at a time

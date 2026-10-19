@@ -127,8 +127,6 @@ export function createStateCommand(): Command {
             console.log(styleText('yellow', `Moving ${source} to ${destination}...`));
 
             checkedMove(state, source, destination);
-            // Outputs belong to a finished run; the next one writes them again.
-            delete state.outputs;
 
             await manager.write(state);
             console.log(styleText('green', 'Successfully moved resource.'));
@@ -164,7 +162,6 @@ export function createStateCommand(): Command {
             delete state.resources[key];
             forgetDeposed(state, key);
             mapDependencies(state, (dependency) => (dependency === key ? undefined : dependency));
-            delete state.outputs;
 
             await manager.write(state);
             console.log(styleText('green', 'Successfully removed resource.'));

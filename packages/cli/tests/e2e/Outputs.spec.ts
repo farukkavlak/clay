@@ -37,7 +37,7 @@ describe('outputs in the state file', () => {
       path = "${path.join(dir, 'a.txt', 'b.txt')}"
       content = "never"
     }
-    output "greeting" { value = "\${local_file.a.content}" }
+    output "greeting" { value = "\${local_file.a.content} \${local_file.b.content}" }
   `;
 
   const run = async (config: string) => {
@@ -119,13 +119,22 @@ describe('outputs in the state file', () => {
     expect(state.outputs).toEqual({ message: { value: 'hello', type: types.string } });
   });
 
-  it('keeps no outputs from before a run that failed', async () => {
+  it('keeps the outputs of the last finished run when a run fails', async () => {
     await run(withOutput('greeting'));
 
     expect(await run(failing())).toBeInstanceOf(Error);
 
     const state = await stored();
     expect(state.resources['local_file.a'].attributes.content).toBe('changed');
-    expect(state.outputs).toBeUndefined();
+    expect(state.outputs).toEqual({ greeting: { value: 'hello', type: types.string } });
+  });
+
+  it('plans no output change after a failed run, against the outputs it kept', async () => {
+    await run(withOutput('greeting'));
+    await run(failing());
+
+    const plan = await newOrchestrator().plan(withOutput('greeting'));
+
+    expect(plan.outputs).toEqual({});
   });
 });
