@@ -13,7 +13,20 @@ interface Going {
   values: Record<string, unknown>;
 }
 
+/** An object the plan makes or keeps, and how a refusal names it. */
+interface Staying {
+  address: string;
+  /** A create, so a delete elsewhere may be its rename. */
+  created: boolean;
+  refuse: (message: string) => Error;
+}
+
 type Identify = (type: string, values: Record<string, unknown>) => Promise<string | undefined>;
+
+const identifyWith =
+  (providers: ProviderRegistry): Identify =>
+  async (type, values) =>
+    await providers.get(type).identify?.(type, values);
 
 function goingIn(actions: PlanAction[], state: State): Going[] {
   return actions.flatMap<Going>((action) => {
@@ -25,52 +38,107 @@ function goingIn(actions: PlanAction[], state: State): Going[] {
   });
 }
 
-function refused(resource: DesiredResource, message: string): Error {
-  return withPlace(new Error(message), resource.block.position, spell(resource.block), resource.address.module);
+function checkOther(staying: Staying, identity: string, other: string): void {
+  if (other !== staying.address) throw staying.refuse(`${staying.address} and ${other} are both ${identity}, so each would write over the other. Give each its own.`);
 }
 
-/** Each object the plan leaves, by what it is. Two that are one thing would write over each other. */
-async function stayingByIdentity(desired: DesiredResource[], identify: Identify): Promise<Map<string, DesiredResource>> {
-  const staying = new Map<string, DesiredResource>();
+function destroysWhatStays(staying: Staying, identity: string, going: Going): Error {
+  const { address } = staying;
+  const holder = going.deposed ? `a deposed object of ${going.address}` : going.address;
+  const renamed = !going.deposed && going.action.type === 'DELETE' && staying.created;
+  const move = renamed ? ` If ${going.address} was renamed to ${address}, move it in the state first: clay state mv ${going.address} ${address}` : '';
+
+  return staying.refuse(`${address} is ${identity}, which ${holder} holds and this plan destroys, so the destroy would remove it.${move}`);
+}
+
+/** Refused, except a replace's own old object destroyed before its new one is made. */
+function checkGoing(going: Going, identity: string, staying: Staying): void {
+  if (going.deposed || staying.address !== going.address) throw destroysWhatStays(staying, identity, going);
+  if (going.action.createBeforeDestroy)
+    throw staying.refuse(`${going.address} makes its new object before it destroys the old one, but both are ${identity}, so the destroy would remove the new one.`);
+}
+
+function planned(resource: DesiredResource, actions: PlanAction[]): Staying {
+  const address = resource.address.toString();
+
+  return {
+    address,
+    created: actions.some((action) => action.type === 'CREATE' && Address.of(action).toString() === address),
+    refuse: (message) => withPlace(new Error(message), resource.block.position, spell(resource.block), resource.address.module),
+  };
+}
+
+/** Two objects that are one real thing, as two files at one path, would overwrite or destroy each other. Only the provider can tell. */
+export async function checkSameObjects(actions: PlanAction[], desired: DesiredResource[], state: State, providers: ProviderRegistry): Promise<void> {
+  const identify = identifyWith(providers);
+  const staying = new Map<string, Staying>();
 
   for (const resource of desired) {
     const identity = await identify(resource.address.resourceType, resource.after);
     if (identity === undefined) continue;
 
+    const object = planned(resource, actions);
     const other = staying.get(identity);
-    if (other) throw refused(resource, `${resource.address} and ${other.address} are both ${identity}, so each would write over the other. Give each its own.`);
-    staying.set(identity, resource);
+    if (other) checkOther(object, identity, other.address);
+    staying.set(identity, object);
   }
-
-  return staying;
-}
-
-function destroysWhatStays(resource: DesiredResource, identity: string, going: Going, actions: PlanAction[]): Error {
-  const address = resource.address.toString();
-  const holder = going.deposed ? `a deposed object of ${going.address}` : going.address;
-  const renamed = !going.deposed && going.action.type === 'DELETE' && actions.some((action) => action.type === 'CREATE' && Address.of(action).toString() === address);
-  const move = renamed ? ` If ${going.address} was renamed to ${address}, move it in the state first: clay state mv ${going.address} ${address}` : '';
-
-  return refused(resource, `${address} is ${identity}, which ${holder} holds and this plan destroys, so the destroy would remove it.${move}`);
-}
-
-/** Refused, except a replace's own old object destroyed before its new one is made. */
-function checkGoing(going: Going, identity: string, resource: DesiredResource, actions: PlanAction[]): void {
-  if (going.deposed || resource.address.toString() !== going.address) throw destroysWhatStays(resource, identity, going, actions);
-  if (going.action.createBeforeDestroy)
-    throw refused(resource, `${going.address} makes its new object before it destroys the old one, but both are ${identity}, so the destroy would remove the new one.`);
-}
-
-/** Two objects that are one real thing, as two files at one path, would overwrite or destroy each other. Only the provider can tell. */
-export async function checkSameObjects(actions: PlanAction[], desired: DesiredResource[], state: State, providers: ProviderRegistry): Promise<void> {
-  const identify: Identify = async (type, values) => await providers.get(type).identify?.(type, values);
-  const staying = await stayingByIdentity(desired, identify);
 
   for (const going of goingIn(actions, state)) {
     const identity = await identify(going.action.resourceType, going.values);
     if (identity === undefined) continue;
 
-    const resource = staying.get(identity);
-    if (resource) checkGoing(going, identity, resource, actions);
+    const object = staying.get(identity);
+    if (object) checkGoing(going, identity, object);
+  }
+}
+
+/**
+ * The same check at apply, for values only the apply knows. Only what exists then counts: an object already destroyed removes
+ * nothing, so a create after it is safe.
+ */
+export class SameObjects {
+  private readonly identify: Identify;
+  private going = new Map<Record<string, unknown>, Going>();
+  /** What each object being made or changed in this run is, before it reaches the state. */
+  private claimed = new Map<string, string>();
+
+  constructor(providers: ProviderRegistry) {
+    this.identify = identifyWith(providers);
+  }
+
+  /** The objects the plan destroys, as the state holds them before the run. */
+  expect(actions: PlanAction[], state: State): void {
+    this.going = new Map(goingIn(actions, state).map((going) => [going.values, going]));
+  }
+
+  /** Refused before the provider makes or changes the object. Nothing is awaited between the check and the claim. */
+  async claim(action: PlanAction, values: Record<string, unknown>, state: State): Promise<void> {
+    const identity = await this.identify(action.resourceType, values);
+    if (identity === undefined) return;
+
+    const held = await this.heldAs(identity, state);
+    const staying: Staying = { address: Address.of(action).toString(), created: action.type === 'CREATE', refuse: (message) => new Error(message) };
+    const other = this.claimed.get(identity);
+    if (other) checkOther(staying, identity, other);
+    for (const { address, values: attributes } of held) {
+      const going = this.going.get(attributes);
+      if (going) checkGoing(going, identity, staying);
+      else checkOther(staying, identity, address);
+    }
+
+    this.claimed.set(identity, staying.address);
+  }
+
+  /** Each object the state holds now, current or deposed, that is the given thing. */
+  private async heldAs(identity: string, state: State): Promise<{ address: string; values: Record<string, unknown> }[]> {
+    const objects = [
+      ...Object.entries(state.resources).map(([address, resource]) => ({ address, type: resource.resourceType, values: resource.attributes })),
+      ...Object.entries(state.deposed ?? {}).flatMap(([address, deposed]) =>
+        deposed.map(({ attributes }) => ({ address, type: Address.parse(address).resourceType, values: attributes }))
+      ),
+    ];
+    const identities = await Promise.all(objects.map(({ type, values }) => this.identify(type, values)));
+
+    return objects.filter((_, index) => identities[index] === identity);
   }
 }

@@ -86,4 +86,12 @@ describe('a replace whose new object is its old one', () => {
 
     expect(actions.map((action) => action.type)).toEqual(['REPLACE']);
   });
+
+  it('refuses at apply an update onto what another object is, where only the apply knows it', async () => {
+    const before = 'resource "placed" "a" {\n  place = "one"\n  label = "a1"\n}\nresource "placed" "b" {\n  place = "x"\n  label = "b1"\n}\n';
+    await apply(orchestrator, before);
+    const after = before.replace('place = "x"', 'place = placed.c.id') + 'resource "placed" "c" {\n  place = "c"\n  label = "one"\n}\n';
+
+    await expect(apply(orchestrator, after)).rejects.toThrow('placed.b and placed.a are both the place one');
+  });
 });

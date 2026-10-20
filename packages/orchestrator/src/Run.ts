@@ -18,6 +18,7 @@ import { ProviderRegistry } from './ProviderRegistry';
 import { InstanceKeys } from './resolvers/InstanceKeys';
 import { ReferenceResolver } from './resolvers/ReferenceResolver';
 import { ReferenceScanner } from './resolvers/ReferenceScanner';
+import { SameObjects } from './sameObject';
 import { ScopeManager } from './scope/ScopeManager';
 import { Value } from './Value';
 
@@ -51,6 +52,6 @@ export function newRun(stateManager: StateManager, providers: ProviderRegistry, 
     graphBuilder,
     writtenCheck: new WrittenCheck(resolver, scopes, schemas, dataSchemas),
     desiredStateBuilder: new DesiredStateBuilder(scopes, scanner, resolver, graphBuilder, instances, modules, keys, planned, resourcePlanner, reader),
-    runner: new PlanRunner(stateManager, new ActionExecutor(providers, resolver, resourcePlanner), scopes, resolver, instances, modules, reader),
+    runner: new PlanRunner(stateManager, new ActionExecutor(providers, resolver, resourcePlanner, new SameObjects(providers)), scopes, resolver, instances, modules, reader),
   };
 }
