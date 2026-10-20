@@ -1,5 +1,5 @@
 import { Address, CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, State, STATE_VERSION, types, UpdateRequest } from '@clay/contracts';
-import { DiskFiles, Orchestrator } from '@clay/orchestrator';
+import { DiskFiles, Orchestrator, RunEvent } from '@clay/orchestrator';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -180,6 +180,59 @@ describe('replacing a resource that something reads', () => {
 
     expect(provider.seen).toEqual(['delete c1']);
     expect(await heldAddresses()).toEqual(['rec.a', 'rec.b']);
+  });
+
+  it('reports a reader it destroyed first when the replace it waited for fails', async () => {
+    await applied(rec('a', 'a1') + rec('b', 'b1', 'uses = rec.a.name'));
+
+    const reported: string[][] = [];
+    for await (const event of start(engine, rec('a', 'a2', 'uses = "gone"') + rec('b', 'b2', 'uses = rec.a.name')))
+      if (event.type === 'destroyed' || event.type === 'failed') reported.push([event.type, Address.of(event.action).toString()]);
+
+    expect(reported).toEqual([
+      ['destroyed', 'rec.b'],
+      ['destroyed', 'rec.a'],
+      ['failed', 'rec.a'],
+    ]);
+  });
+
+  it('reports the object a replace destroyed when its create then fails', async () => {
+    await applied(rec('a', 'a1'));
+
+    const reported: string[][] = [];
+    for await (const event of start(engine, rec('a', 'a2', 'uses = "gone"')))
+      if (event.type === 'destroyed' || event.type === 'failed') reported.push([event.type, Address.of(event.action).toString()]);
+
+    expect(reported).toEqual([
+      ['destroyed', 'rec.a'],
+      ['failed', 'rec.a'],
+    ]);
+    expect(provider.seen).toEqual(['create a1', 'delete a1']);
+  });
+
+  it('reports no destroy when a replace stops before it', async () => {
+    await applied(rec('a', 'a1') + rec('b', 'b1'));
+    const config = rec('a', 'a2', 'uses = rec.b.name') + rec('b', 'b2');
+    const plan = await engine.plan(config);
+    provider.failingDelete.add('b1');
+
+    const reported: string[][] = [];
+    for await (const event of engine.runPlan(plan, config))
+      if (event.type === 'destroyed' || event.type === 'failed') reported.push([event.type, Address.of(event.action).toString()]);
+
+    expect(reported).toEqual([['failed', 'rec.b']]);
+  });
+
+  it('reports a reader it destroyed first when interrupted after it', async () => {
+    await applied(rec('a', 'a1') + rec('b', 'b1', 'uses = rec.a.name'));
+    const interrupt = new AbortController();
+    provider.destroyed = () => interrupt.abort();
+    const config = rec('a', 'a2') + rec('b', 'b2', 'uses = rec.a.name');
+
+    const reported: RunEvent[] = [];
+    for await (const event of engine.runPlan(await engine.plan(config), config, { signal: interrupt.signal })) if (event.type !== 'planned') reported.push(event);
+
+    expect(reported.map((event) => [event.type, 'action' in event ? Address.of(event.action).toString() : ''])).toEqual([['destroyed', 'rec.b']]);
   });
 
   it('takes a deposed reader for no read of the current object at its address', async () => {

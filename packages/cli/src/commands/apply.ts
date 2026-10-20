@@ -10,7 +10,7 @@ import { confirm } from '../confirm';
 import { newOrchestrator } from '../engine';
 import { describeError } from '../describeError';
 import { interruptible, INTERRUPTED } from '../interruptible';
-import { actionLine, changesNothing, displayPlan, readLine, shownType } from '../showPlan';
+import { actionLine, changesNothing, destroyedLine, displayPlan, readLine, shownType } from '../showPlan';
 import { parallelismOption } from '../parallelismOption';
 import { refreshOption } from '../refreshOption';
 
@@ -47,6 +47,7 @@ function failuresError(failures: string[]): Error | undefined {
 
 function reportEvent(event: RunEvent, failures: string[]): void {
   if (event.type === 'applied') console.log(actionLine(event.action, false));
+  if (event.type === 'destroyed') console.log(destroyedLine(event.action));
   if (event.type === 'read') console.log(readLine(event.address, false));
   if (event.type === 'failed') {
     if (event.stateError) console.error(styleText('red', 'The state could not be saved:'), event.stateError.message);

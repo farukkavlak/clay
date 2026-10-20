@@ -24,6 +24,11 @@ export function readLine(address: string, planned: boolean): string {
   return `  ${styleText('cyan', '<=')} ${address} ${planned ? 'will be read during apply' : 'read'}`;
 }
 
+/** A replace's old object destroyed before its new one is made. */
+export function destroyedLine(action: PlanAction): string {
+  return `  ${styleText('red', '-')} ${Address.of(action).toString()} ${styleText('red', 'destroyed')}, to be made again`;
+}
+
 function actionSymbol(actionType: PlanAction['type']): string {
   if (actionType === 'CREATE') return styleText('green', '+');
   if (actionType === 'UPDATE') return styleText('yellow', '~');
