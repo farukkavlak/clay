@@ -1,8 +1,11 @@
 import { emptyState, Provider, Resource, Schema, State } from '@clay/contracts';
+import { Graph } from '@clay/graph';
 import { outputChanges, plan, Plan } from '@clay/planner';
 import { StateManager } from '@clay/state';
 
+import { checkApplyOrder } from './applyGraph';
 import { asError } from './asError';
+import { GraphNode } from './components/DependencyGraphBuilder';
 import { DesiredState, Walk } from './components/DesiredStateBuilder';
 import { checkRead, heldBy } from './providerResult';
 import { checkAttributes } from './checkAttributes';
@@ -58,10 +61,11 @@ export class Orchestrator {
     const prior = refresh ? await this.refresh(prevRun) : prevRun;
     // Planning applies count moves to a copy; the plan keeps the resources at their old addresses.
     const currentState = { ...prior, resources: copyResources(prior.resources), ...copyDeposed(prior.deposed) };
-    const { resources: desiredResources, outputs, dataSources, dataSensitive, readAtApply } = await this.resolveAndCheck(configContent, currentState, 'plan');
+    const { resources: desiredResources, outputs, dataSources, dataSensitive, readAtApply, graph } = await this.resolveAndCheck(configContent, currentState, 'plan');
 
     const actions = plan(desiredResources, currentState);
     checkPreventDestroy(actions, desiredResources, currentState.resources);
+    checkApplyOrder(graph, actions, currentState, desiredResources);
     // The refresh only drops resources, so prior has no type prevRun lacks.
     const held = [...actions, ...Object.values(prevRun.resources)];
 
@@ -136,13 +140,13 @@ export class Orchestrator {
     }
   }
 
-  private async resolveAndCheck(configContent: string, state: State, walk: Walk): Promise<DesiredState> {
+  private async resolveAndCheck(configContent: string, state: State, walk: Walk): Promise<DesiredState & { graph: Graph<GraphNode> }> {
     const { loader, graphBuilder, writtenCheck, desiredStateBuilder } = this.newRun();
     const { loadedResources, loadedModules, schemas } = await loader.load(configContent);
 
     const graph = graphBuilder.buildExecutionGraph(loadedResources, loadedModules);
     checkAttributes(loadedResources, schemas);
     writtenCheck.check(loadedResources, loadedModules);
-    return await desiredStateBuilder.build(loadedResources, graph, state, schemas, walk);
+    return { ...(await desiredStateBuilder.build(loadedResources, graph, state, schemas, walk)), graph };
   }
 }

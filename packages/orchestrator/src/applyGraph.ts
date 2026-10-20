@@ -1,9 +1,11 @@
 import { Address, State } from '@clay/contracts';
 import { Graph } from '@clay/graph';
-import { PlanAction } from '@clay/planner';
+import { spell } from '@clay/parser';
+import { DesiredResource, PlanAction } from '@clay/planner';
 
 import { GraphNode, spellNode } from './components/DependencyGraphBuilder';
 import { blockKey } from './keys';
+import { withPlace } from './place';
 
 /** An object destroyed apart from its block: a delete, a deposed object, the old object of a create-first replace, or a replace's old object that has to go before its turn. */
 export interface DestroyNode {
@@ -148,10 +150,28 @@ function spellApply(key: string, node: ApplyNode): string {
   return node.action.deposed ? `destroying the old ${address}` : `destroying ${address}`;
 }
 
+/** Every loop runs through the old object of a create-first replace, so its block is where to break it. */
+export class NoApplyOrder extends Error {
+  constructor(
+    message: string,
+    readonly createFirst: Address
+  ) {
+    super(message);
+    this.name = 'NoApplyOrder';
+  }
+}
+
 /** Each step waits for the next. */
-function refuseLoop(graph: Graph<ApplyNode>): void {
-  const loop = graph.findCycle()?.map((key) => spellApply(key, graph.getNode(key)!));
-  if (loop) throw new Error(`No order applies this plan: ${loop[0]} waits for ${loop.slice(1).join(', which waits for ')}`);
+function refuseLoop(graph: Graph<ApplyNode>, going: Map<string, Going>): void {
+  const loop = graph.findCycle();
+  if (!loop) return;
+
+  const steps = loop.map((key) => spellApply(key, graph.getNode(key)!));
+  const message = `No order applies this plan: ${steps[0]} waits for ${steps.slice(1).join(', which waits for ')}`;
+  const createFirst = [...going].find(([key, { madeBy }]) => madeBy && loop.includes(destroyKey(key)));
+  if (!createFirst) throw new Error(message);
+
+  throw new NoApplyOrder(message, Address.of(createFirst[1].action));
 }
 
 /**
@@ -175,7 +195,20 @@ export function applyGraph(config: Graph<GraphNode>, actions: PlanAction[], stat
   for (const [key, object] of going) if (!byBlock(key)) addDestroy(graph, key, object);
   for (const [key, reads] of next) for (const read of reads) graph.addEdge(nodeOf(key), nodeOf(read));
   addWaits(graph, going, first, readersByAddress(actions, state));
-  refuseLoop(graph);
+  refuseLoop(graph, going);
 
   return graph;
+}
+
+/** Run at plan too, so a loop is refused before the plan is approved, at the block to change. */
+export function checkApplyOrder(config: Graph<GraphNode>, actions: PlanAction[], state: State, desired: DesiredResource[]): void {
+  try {
+    applyGraph(config, actions, state);
+  } catch (error) {
+    if (!(error instanceof NoApplyOrder)) throw error;
+
+    // A create-first replace is planned from its block, so the block is there.
+    const found = desired.find((resource) => resource.address.toString() === error.createFirst.toString())!;
+    throw withPlace(error, found.block.position, spell(found.block), found.address.module);
+  }
 }

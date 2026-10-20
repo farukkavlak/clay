@@ -233,14 +233,18 @@ describe('replacing a resource that something reads', () => {
     expect(provider.seen).toEqual(['create x2', 'delete x1', 'delete a1', 'create a2', 'create r1']);
   });
 
-  it('refuses an order that waits for itself before anything runs', async () => {
+  it('refuses an order that waits for itself at plan, at the create-first block', async () => {
     await applied(rec('a', 'a1') + rec('x', 'x1', 'uses = rec.a.name') + rec('r', 'r1', 'note = rec.a.name', 'holds = rec.x.name'));
     provider.seen.length = 0;
     const before = await held();
 
     await expect(
       applied(rec('a', 'a2') + rec('x', 'x2', 'lifecycle {\n    create_before_destroy = true\n  }') + rec('r', 'r1', 'note = rec.a.name', 'holds = rec.x.name'))
-    ).rejects.toThrow('No order applies this plan: rec.a waits for destroying the old rec.x, which waits for rec.r, which waits for rec.a');
+    ).rejects.toMatchObject({
+      message: 'No order applies this plan: rec.a waits for destroying the old rec.x, which waits for rec.r, which waits for rec.a',
+      position: { line: 4 },
+      block: 'resource "rec" "x"',
+    });
     expect(provider.seen).toEqual([]);
     expect(await held()).toEqual(before);
   });
