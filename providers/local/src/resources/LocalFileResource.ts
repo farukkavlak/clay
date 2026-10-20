@@ -60,4 +60,11 @@ export class LocalFileResource implements ResourceHandler {
       if (error.code !== 'ENOENT') throw error;
     });
   }
+
+  // The id once there is one, since a delete removes that; before it, the path a create writes, resolved where Clay runs.
+  identify(values: Record<string, unknown>): string | undefined {
+    const file = typeof values.id === 'string' ? values.id : values.path;
+
+    return typeof file === 'string' ? `the file ${path.resolve(file)}` : undefined;
+  }
 }

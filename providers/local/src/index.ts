@@ -62,6 +62,10 @@ export class LocalProvider implements Provider {
     await this.handler(type).delete(prior);
   }
 
+  async identify(type: string, values: Record<string, unknown>): Promise<string | undefined> {
+    return this.handler(type).identify?.(values);
+  }
+
   async getDataSourceSchema(type: string): Promise<Schema> {
     return await this.dataHandler(type).getSchema();
   }

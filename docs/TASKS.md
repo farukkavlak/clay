@@ -205,11 +205,18 @@ change each.
       updates `b` after `a1` is destroyed. Now every object going away waits for what stays
       and reads it to be updated. Where what stays reads the replace that object goes
       before, no order holds both, so that wait is dropped and the apply runs as before
-- [ ] Renaming a resource whose new object is the old one destroys it. With
+- [x] Renaming a resource whose new object is the old one destroys it. With
       `local_file "c" { path = "f.txt" }` renamed to `"d"`, the apply creates `d`, then deletes
       `c`, which removes `f.txt`, and says it completed. `create_before_destroy` does the
-      same where the new path spells the old file another way, `./a.txt` and `a.txt`, and
-      without it the respelling still replaces the file
+      same where the new path spells the old file another way, `./a.txt` and `a.txt`. Two
+      blocks with one path write over each other. Now a provider may name the real thing
+      an object is, and a plan with two objects that are one thing is refused at the
+      block, a rename with the `clay state mv` that fixes it
+- [ ] Spelling a path another way, `./a.txt` for `a.txt`, replaces the file. With
+      `create_before_destroy` the plan is refused instead. Terraform's `local_file` replaces
+      it too: its `filename` is compared as written
+- [ ] Two objects that are one file go unseen where the path is known only at apply, as
+      `path = "${random_string.x.result}.txt"`
 - [x] The delete order is worked out in exponential time. `reaches` in `deleteEdges` walks
       every path with no record of what it has seen, so a ladder of 56 resources that each
       read the two before takes 23 seconds to destroy, and the time doubles every two more.

@@ -37,7 +37,7 @@ describe('a module source that is met twice', () => {
 
   // Sibling modules load one after another, so the second must not see the first's path as a cycle.
   it('is loaded again when two modules side by side name it', async () => {
-    await fs.writeFile(path.join(dir, 'leaf', 'main.clay'), `resource "local_file" "one" { path = "${path.join(dir, 'one.txt')}" content = "one" }`, 'utf8');
+    await fs.writeFile(path.join(dir, 'leaf', 'main.clay'), `resource "null_resource" "one" {}`, 'utf8');
     await fs.writeFile(path.join(dir, 'a', 'main.clay'), `module "leaf" { source = "../leaf" }`, 'utf8');
     await fs.writeFile(
       path.join(dir, 'outer', 'main.clay'),
@@ -51,8 +51,8 @@ describe('a module source that is met twice', () => {
     const { actions } = await planned(`module "outer" { source = "./outer" }`);
 
     expect(actions.map((action) => [...(action.modulePath ?? []).map((step) => step.name), action.resourceType, action.name].join('.'))).toEqual([
-      'outer.first.leaf.local_file.one',
-      'outer.second.leaf.local_file.one',
+      'outer.first.leaf.null_resource.one',
+      'outer.second.leaf.null_resource.one',
     ]);
   });
 });

@@ -420,6 +420,25 @@ describe('LocalProvider', () => {
     });
   });
 
+  describe('identify', () => {
+    it('names a local_file by its full path, however the path is spelled', async () => {
+      expect(await provider.identify('local_file', { path: './a.txt' })).toBe(`the file ${path.resolve('a.txt')}`);
+    });
+
+    // A delete removes the file the id names, which a moved directory leaves apart from the path.
+    it('names a local_file by its id once it has one', async () => {
+      expect(await provider.identify('local_file', { path: 'a.txt', id: '/old/a.txt' })).toBe('the file /old/a.txt');
+    });
+
+    it('names no local_file whose path is known only at apply', async () => {
+      expect(await provider.identify('local_file', { path: UNKNOWN, id: UNKNOWN })).toBeUndefined();
+    });
+
+    it('names nothing for a resource that is no real thing', async () => {
+      expect(await provider.identify('null_resource', { id: 'n' })).toBeUndefined();
+    });
+  });
+
   describe('delete (generic)', () => {
     it('should not throw when deleting non-file resources', async () => {
       await expect(provider.delete('random_string', { id: 'some-random-id' })).resolves.not.toThrow();

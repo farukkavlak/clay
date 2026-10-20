@@ -155,8 +155,8 @@ describe('a module called with for_each', () => {
 
   // No key matches the bare module as count's [0] does, so it is destroyed and recreated.
   it.each([
-    ['added', 'module "web" {\n source = "./web"\n name = "ali"\n}', web('["ali"]'), 'module.web["ali"].local_file.page', 'module.web.local_file.page'],
-    ['taken off', web('["ali"]'), 'module "web" {\n source = "./web"\n name = "ali"\n}', 'module.web.local_file.page', 'module.web["ali"].local_file.page'],
+    ['added', 'module "web" {\n source = "./web"\n name = "one"\n}', web('["ali"]'), 'module.web["ali"].local_file.page', 'module.web.local_file.page'],
+    ['taken off', web('["ali"]'), 'module "web" {\n source = "./web"\n name = "one"\n}', 'module.web.local_file.page', 'module.web["ali"].local_file.page'],
   ])('moves nothing when for_each is %s', async (_, before, after, made, destroyed) => {
     await apply(before);
 
