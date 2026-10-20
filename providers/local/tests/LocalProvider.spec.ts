@@ -240,6 +240,24 @@ describe('LocalProvider', () => {
       expect(after.id).toBe('/where/it/was/made');
     });
 
+    it('plans a path spelled another way for the same file as an update, not a replace', async () => {
+      const config = { path: './a.txt', content: 'hi' };
+      const prior = { path: 'a.txt', content: 'hi', id: path.resolve('a.txt') };
+
+      expect(await provider.plan('local_file', { prior, proposed: { ...config, id: prior.id }, config })).toEqual({ after: { ...config, id: prior.id }, replace: [] });
+    });
+
+    it.each([
+      ['another file', 'b.txt', path.resolve('a.txt')],
+      // A moved directory leaves the id where the file was made, which the new path no longer names.
+      ['a spelling of the same path that no longer names the file of the id', './a.txt', '/old/a.txt'],
+    ])('replaces a file whose new path is %s', async (_, file, id) => {
+      const config = { path: file, content: 'hi' };
+      const prior = { path: 'a.txt', content: 'hi', id };
+
+      expect(await provider.plan('local_file', { prior, proposed: { ...config, id }, config })).toMatchObject({ replace: [['path']] });
+    });
+
     it('returns what a command printed, on create and on the run an update makes', async () => {
       const created = await create('command_exec', { command: 'echo made' });
       const config = { command: 'echo changed' };

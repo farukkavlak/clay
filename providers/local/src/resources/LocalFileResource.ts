@@ -4,6 +4,14 @@ import path from 'node:path';
 
 import { idOf } from './idOf';
 
+/** A path spelled another way for the file the id already is, as `./a.txt` for `a.txt`, is written in place. */
+function keepingTheFile(change: PlannedChange, prior: Record<string, unknown> | null): PlannedChange {
+  const file = change.after.path;
+  if (typeof file !== 'string' || typeof prior?.id !== 'string' || path.resolve(file) !== prior.id) return change;
+
+  return { ...change, replace: change.replace.filter(([name]) => name !== 'path') };
+}
+
 export class LocalFileResource implements ResourceHandler {
   async getSchema(): Promise<Schema> {
     return {
@@ -19,7 +27,7 @@ export class LocalFileResource implements ResourceHandler {
 
   // A relative path resolves where the apply runs, so only an absolute one gives a known id.
   async plan(request: PlanRequest): Promise<PlannedChange> {
-    const change = planFromSchema(await this.getSchema(), request);
+    const change = keepingTheFile(planFromSchema(await this.getSchema(), request), request.prior);
     const file = own(request.config, 'path');
     if (typeof file !== 'string' || !path.isAbsolute(file) || !isUnknown(change.after.id)) return change;
 

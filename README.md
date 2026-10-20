@@ -95,7 +95,7 @@ if the state has changed since.
 
 | Type            | Attributes                                                                                  |
 | --------------- | ------------------------------------------------------------------------------------------- |
-| `local_file`    | `path` (replaces on change), `content`                                                      |
+| `local_file`    | `path` (replaces when it names another file), `content`                                     |
 | `random_string` | `length`, `special`, both replace on change; the string is its `id` and its `result`        |
 | `null_resource` | `triggers`, a map; does nothing, and another resource can read its `id` to run after it     |
 | `command_exec`  | `command`, `cwd`; runs on create and on every update, and keeps what it printed in `stdout` |

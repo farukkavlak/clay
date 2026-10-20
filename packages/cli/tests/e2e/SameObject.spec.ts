@@ -114,24 +114,21 @@ describe('two objects that are one file', () => {
     expect(refused).not.toContain('clay state mv');
   });
 
-  it('refuses a create_before_destroy replace whose new object is its old one', async () => {
-    await write(fileBlock('a', 'a.txt', true));
+  // An update writes the file it already is; a replace would unlink it and write another.
+  it.each([
+    ['', false],
+    [' with create_before_destroy', true],
+  ])('updates a path spelled another way for the same file%s, keeping the file', async (_, cbd) => {
+    await write(fileBlock('a', 'a.txt', cbd));
     await clayIn('apply', '--yes');
-    await write(fileBlock('a', './a.txt', true));
+    const { ino } = await fs.stat(file('a.txt'));
+    await write(fileBlock('a', './a.txt', cbd));
 
-    const refused = await refusal('apply', '--yes');
+    const applied = await clayIn('apply', '--yes');
 
-    expect(refused).toContain(`local_file.a makes its new object before it destroys the old one, but both are the file ${file('a.txt')}`);
-    expect(await exists('a.txt')).toBe(true);
-  });
-
-  it('replaces a resource whose new object is its old one, since the old one goes first', async () => {
-    await write(fileBlock('a', 'a.txt'));
-    await clayIn('apply', '--yes');
-    await write(fileBlock('a', './a.txt'));
-
-    expect(await clayIn('apply', '--yes')).toContain('-+ local_file.a replaced');
-    expect(await exists('a.txt')).toBe(true);
+    expect(applied).toContain('~ local_file.a updated');
+    expect(applied).toContain('Resources: 0 added, 1 changed, 0 destroyed.');
+    expect(await fs.stat(file('a.txt'))).toMatchObject({ ino });
   });
 
   it('refuses a block that writes the file a deposed object holds', async () => {
