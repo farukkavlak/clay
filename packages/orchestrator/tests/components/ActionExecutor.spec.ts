@@ -10,6 +10,7 @@ import { ProviderRegistry } from '../../src/ProviderRegistry';
 import { Instances } from '../../src/Instances';
 import { InstanceKeys } from '../../src/resolvers/InstanceKeys';
 import { ReferenceResolver } from '../../src/resolvers/ReferenceResolver';
+import { SameObjects } from '../../src/sameObject';
 import { ScopeManager } from '../../src/scope/ScopeManager';
 import { str } from '../ast';
 
@@ -84,7 +85,7 @@ describe('ActionExecutor', () => {
     const instances = new Instances();
     const modules = new ModuleInstances();
     const resolver = new ReferenceResolver(new ScopeManager(), new Map(), new Map(), new Map(), instances, modules, new Planned(), new InstanceKeys(instances, modules));
-    executor = new ActionExecutor(providers, resolver, new ResourcePlanner(providers));
+    executor = new ActionExecutor(providers, resolver, new ResourcePlanner(providers), new SameObjects(providers));
   });
 
   afterEach(() => {

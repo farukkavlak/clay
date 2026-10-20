@@ -216,8 +216,10 @@ change each.
       `create_before_destroy` the plan is refused instead. Terraform's `local_file` replaces
       it too: its `filename` is compared as written. Now a path that names the file the id
       already is updates it in place
-- [ ] Two objects that are one file go unseen where the path is known only at apply, as
-      `path = "${random_string.x.result}.txt"`
+- [x] Two objects that are one file go unseen where the path is known only at apply, as
+      `path = "${random_string.x.result}.txt"`. Now the apply checks each create and update
+      before the provider runs it, against what the state holds then and what the run is
+      making. An object already destroyed counts no more, since it can remove nothing
 - [ ] Two paths that are one file through a symlink, or through case on a file system that
       ignores it, `A.txt` and `a.txt` on macOS, are taken for two files. A rename between
       them replaces the file, and with `create_before_destroy` destroys it

@@ -91,6 +91,7 @@ export class PlanRunner {
     const checked = { outputs, named: this.dataNamed(saved, graph) };
     // Every move first, as the plan made them, so each entry and every dependency on it is at its new address.
     for (const action of actions) if (action.movedFrom) moveResource(state, Address.parse(action.movedFrom), Address.of(action));
+    this.executor.expect(actions, state);
 
     const order = applyGraph(graph, actions, state);
 

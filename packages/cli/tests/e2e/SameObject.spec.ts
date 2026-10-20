@@ -13,6 +13,11 @@ const clay = path.resolve(__dirname, '../../bin/clay.js');
 const fileBlock = (name: string, at: string, cbd = false) =>
   `resource "local_file" "${name}" {\n  path    = "${at}"\n  content = "x"\n${cbd ? '  lifecycle {\n    create_before_destroy = true\n  }\n' : ''}}\n`;
 
+// A path the plan cannot know: the command prints it at apply.
+const late = 'resource "command_exec" "e" {\n  command = "printf f.txt"\n}\n';
+const lateFile = (name: string) => `resource "local_file" "${name}" {\n  path    = command_exec.e.stdout\n  content = "${name}"\n}\n`;
+const reader = (of: string) => `resource "null_resource" "u" {\n  triggers = { x = local_file.${of}.id }\n}\n`;
+
 describe('two objects that are one file', () => {
   let dir: string;
 
@@ -140,5 +145,80 @@ describe('two objects that are one file', () => {
     await write(fileBlock('a', 'a.txt'), fileBlock('b', 'b.txt'));
 
     expect(await refusal('plan')).toContain(`local_file.b is the file ${file('b.txt')}, which a deposed object of local_file.old holds and this plan destroys`);
+  });
+
+  describe('where the path is known only at apply', () => {
+    it('refuses the second of two blocks that write one file before it writes', async () => {
+      await write(late, lateFile('a'), lateFile('b'));
+
+      const refused = await refusal('apply', '--yes', '--parallelism', '1');
+
+      expect(refused).toContain(`local_file.b and local_file.a are both the file ${file('f.txt')}`);
+      expect(await fs.readFile(file('f.txt'), 'utf8')).toBe('a');
+      expect(await addresses()).toEqual(['command_exec.e', 'local_file.a']);
+    });
+
+    // Both are made in one layer, so neither is in the state when the other is checked.
+    it('refuses one of two blocks that write one file at the same time', async () => {
+      await write(late, lateFile('a'), lateFile('b'));
+
+      const refused = await refusal('apply', '--yes');
+
+      expect(refused).toMatch(/local_file\.[ab] and local_file\.[ab] are both the file/);
+      const held = await addresses();
+      const made = held.filter((address) => address.startsWith('local_file'));
+      expect(made).toHaveLength(1);
+      expect(await fs.readFile(file('f.txt'), 'utf8')).toBe(made[0].slice('local_file.'.length));
+    });
+
+    // The delete of c waits for u to stop reading it, and u's update waits for d, so d is made while c still holds the file.
+    it('refuses a create onto the file of an object still to be destroyed', async () => {
+      await write(fileBlock('c', 'f.txt'), reader('c'));
+      await clayIn('apply', '--yes');
+      await write(late, lateFile('d'), reader('d'));
+
+      const refused = await refusal('apply', '--yes');
+
+      expect(refused).toContain(`local_file.d is the file ${file('f.txt')}, which local_file.c holds and this plan destroys`);
+      expect(refused).toContain('clay state mv local_file.c local_file.d');
+      expect(await fs.readFile(file('f.txt'), 'utf8')).toBe('x');
+      expect(await addresses()).toContain('local_file.c');
+    });
+
+    it('creates onto the file of an object already destroyed', async () => {
+      await write(fileBlock('c', 'f.txt'));
+      await clayIn('apply', '--yes');
+      await write(late, lateFile('d'));
+
+      expect(await clayIn('apply', '--yes')).toContain('Resources: 2 added, 0 changed, 1 destroyed.');
+      expect(await fs.readFile(file('f.txt'), 'utf8')).toBe('d');
+    });
+
+    // c's object is left deposed, and u still reads it, so its destroy waits for u's update, which waits for d.
+    it('refuses a create onto the file of a deposed object still to be destroyed', async () => {
+      await write(fileBlock('c', 'f.txt'), reader('c'));
+      await clayIn('apply', '--yes');
+      const state = JSON.parse(await fs.readFile(file('clay.state.json'), 'utf8')) as State;
+      state.deposed = { 'local_file.c': [{ attributes: state.resources['local_file.c'].attributes }] };
+      delete state.resources['local_file.c'];
+      await fs.writeFile(file('clay.state.json'), JSON.stringify(state, null, 2), 'utf8');
+      await write(late, lateFile('d'), reader('d'));
+
+      const refused = await refusal('apply', '--yes');
+
+      expect(refused).toContain(`local_file.d is the file ${file('f.txt')}, which a deposed object of local_file.c holds and this plan destroys`);
+      expect(await fs.readFile(file('f.txt'), 'utf8')).toBe('x');
+    });
+
+    it('refuses a create_before_destroy replace whose new file, known only at apply, is its old one', async () => {
+      await write(fileBlock('a', 'f.txt', true));
+      await clayIn('apply', '--yes');
+      await write(late, fileBlock('a', 'f.txt', true).replace('"f.txt"', 'command_exec.e.stdout'));
+
+      const refused = await refusal('apply', '--yes');
+
+      expect(refused).toContain(`local_file.a makes its new object before it destroys the old one, but both are the file ${file('f.txt')}`);
+      expect(await fs.readFile(file('f.txt'), 'utf8')).toBe('x');
+    });
   });
 });

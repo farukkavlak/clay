@@ -5,6 +5,7 @@ import { conformValues } from '../conformValues';
 import { keepPrior } from '../ignoredChanges';
 import { heldBy, inconsistent } from '../providerResult';
 import { ProviderRegistry } from '../ProviderRegistry';
+import { SameObjects } from '../sameObject';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { shown } from '../shown';
 import { TypeMismatch, typedValues } from '../typed';
@@ -59,8 +60,14 @@ export class ActionExecutor {
   constructor(
     private providers: ProviderRegistry,
     private resolver: ReferenceResolver,
-    private planner: ResourcePlanner
+    private planner: ResourcePlanner,
+    private sameObjects: SameObjects
   ) {}
+
+  /** Before the run, so a create onto an object the run will destroy is refused. */
+  expect(actions: PlanAction[], currentState: State): void {
+    this.sameObjects.expect(actions, currentState);
+  }
 
   /** `destroyed` is the object of a replace that was destroyed before it, so that only the create is left. */
   async execute(action: PlanAction, currentState: State, destroyed?: Resource): Promise<void> {
@@ -110,7 +117,8 @@ export class ActionExecutor {
 
   /**
    * Resolved again now that earlier actions have run, and each value the plan knew must match.
-   * The provider then validates and plans again before anything changes, since the plan could not validate unknown values.
+   * The provider then validates and plans again before anything changes, since the plan could not validate unknown values,
+   * and what the object now is must be no other object's.
    */
   private async sendingFor(action: PlanAction, currentState: State, destroyed?: Resource): Promise<Sending> {
     if (!action.attributes) throw new Error(`${action.type} action missing attributes`);
@@ -127,6 +135,7 @@ export class ActionExecutor {
     if (off) throw new Error(offPlanMessage(off, hidden));
 
     const final = await this.finalPlan(action, schema, action.after, inputs, currentState, hidden, ignoring);
+    await this.sameObjects.claim(action, final.after, currentState);
     return { inputs: final.config, after: final.after, sensitive: final.sensitive, hidden, schema };
   }
 
