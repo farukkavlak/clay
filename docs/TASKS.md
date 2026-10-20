@@ -196,12 +196,15 @@ change each.
       did not say its old object was gone either. Now both are reported,
       `- rec.b destroyed, to be made again`. Terraform reports each half of a replace on
       its own
-- [ ] A resource that stays and used a plain replace only in state is updated after the
+- [x] A resource that stays and used a plain replace only in state is updated after the
       replace destroys the old object. With `b1` holding `a1` in place, and `a` renamed
       `a2` while `b` stops holding it, `a1` and `b` run together, and a cloud refuses to
       destroy `a1` while `b1` holds it. The same holds for a delete that has to go before a
       plain replace: it does not wait for what stays and holds it. Any other delete waits.
-      An order that waits for it can close a loop through the configuration
+      An order that waits for it can close a loop through the configuration. Terraform
+      updates `b` after `a1` is destroyed. Now every object going away waits for what stays
+      and reads it to be updated. Where what stays reads the replace that object goes
+      before, no order holds both, so that wait is dropped and the apply runs as before
 - [ ] Renaming a resource whose new object is the old one destroys it. With
       `local_file "c" { path = "f.txt" }` renamed to `"d"`, the apply creates `d`, then deletes
       `c`, which removes `f.txt`, and says it completed. `create_before_destroy` does the

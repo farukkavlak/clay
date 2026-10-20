@@ -311,6 +311,58 @@ describe('replacing a resource that something reads', () => {
     expect(provider.seen).toEqual(['update b1', 'delete a1']);
   });
 
+  it('updates what stays and used a replace only in state before the replace destroys it', async () => {
+    await applied(rec('a', 'a1') + rec('b', 'b1', 'holds = rec.a.name'));
+    provider.seen.length = 0;
+
+    await applied(rec('a', 'a2') + rec('b', 'b1'));
+
+    expect(provider.seen).toEqual(['update b1', 'delete a1', 'create a2']);
+  });
+
+  it('updates what stays and used a delete before the delete goes ahead of a replace', async () => {
+    await applied(rec('a', 'a1') + rec('d', 'd1', 'uses = rec.a.name') + rec('k', 'k1', 'holds = rec.d.name'));
+    provider.seen.length = 0;
+
+    await applied(rec('a', 'a2') + rec('k', 'k1'));
+
+    expect(provider.seen).toEqual(['update k1', 'delete d1', 'delete a1', 'create a2']);
+  });
+
+  it('updates what stays and used a replace before destroying it ahead of another replace', async () => {
+    await applied(rec('a', 'a1') + rec('b', 'b1', 'uses = rec.a.name') + rec('k', 'k1', 'holds = rec.b.name'));
+    provider.seen.length = 0;
+
+    await applied(rec('a', 'a2') + rec('b', 'b2', 'uses = rec.a.name') + rec('k', 'k1'));
+
+    expect(provider.seen).toEqual(['update k1', 'delete b1', 'delete a1', 'create a2', 'create b2']);
+  });
+
+  it('plans a create-first replace whose old object waits for what stays, where another wait gives way to it', async () => {
+    const before = rec('x', 'x1') + rec('y', 'y1') + rec('b', 'b1', 'uses = rec.x.name');
+    const after = rec('x', 'x2') + rec('y', 'y2') + rec('b', 'b2', 'lifecycle {\n    create_before_destroy = true\n  }');
+    await applied(before + rec('k', 'k1', 'note = rec.x.name', 'holds = rec.y.name') + rec('j', 'j1', 'note = rec.y.name', 'holds = rec.b.name'));
+    provider.seen.length = 0;
+
+    const failures = [];
+    for await (const event of start(engine, after + rec('k', 'k1', 'note = rec.x.name') + rec('j', 'j1', 'note = rec.y.name', 'holds = rec.b.name')))
+      if (event.type === 'failed') failures.push(event);
+
+    expect(failures.map((event) => [Address.of(event.action).toString(), event.error.message])).toEqual([['rec.y', 'y1 cannot be destroyed while k1 uses it']]);
+    expect(provider.seen).toEqual(['create b2']);
+  });
+
+  it('destroys a delete ahead of a replace that what stays reads, without waiting for it to let go', async () => {
+    await applied(rec('a', 'a1') + rec('d', 'd1', 'uses = rec.a.name') + rec('k', 'k1', 'note = rec.a.name', 'holds = rec.d.name'));
+    provider.seen.length = 0;
+
+    const failures = [];
+    for await (const event of start(engine, rec('a', 'a2') + rec('k', 'k1', 'note = rec.a.name'))) if (event.type === 'failed') failures.push(event);
+
+    expect(failures.map((event) => [Address.of(event.action).toString(), event.error.message])).toEqual([['rec.d', 'd1 cannot be destroyed while k1 uses it']]);
+    expect(provider.seen).toEqual([]);
+  });
+
   it('leaves a reader it can still update in place, and replaces only what it reads', async () => {
     await applied(rec('a', 'a1') + rec('b', 'b1', 'note = rec.a.name'));
     provider.seen.length = 0;
