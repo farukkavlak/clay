@@ -129,10 +129,11 @@ export class SameObjects {
   /** Refused before the provider makes or changes the object. Nothing is awaited between the check and the claim. */
   async claim(action: PlanAction, values: Record<string, unknown>, state: State): Promise<void> {
     const address = Address.of(action).toString();
-    const identity = await asking(this.identify, action.resourceType, values, named(address));
+    // Not named: the run reports a failure by its action.
+    const identity = await this.identify(action.resourceType, values);
     if (identity === undefined) return;
 
-    const held = await this.heldAs(identity, state);
+    const held = await this.heldAs(identity, state, address);
     const staying: Staying = { address, created: action.type === 'CREATE', refuse: (message) => new Error(message) };
     const other = this.claimed.get(identity);
     if (other) checkOther(staying, identity, other);
@@ -145,23 +146,28 @@ export class SameObjects {
     this.claimed.set(identity, staying.address);
   }
 
-  /** Each object the state holds now, current or deposed, that is the given thing. */
-  private async heldAs(identity: string, state: State): Promise<{ address: string; values: Record<string, unknown> }[]> {
+  /** Each object the state holds now, current or deposed, that is the given thing. A failure names another object than the `claimant`'s. */
+  private async heldAs(identity: string, state: State, claimant: string): Promise<{ address: string; values: Record<string, unknown> }[]> {
     const objects = [
       ...Object.entries(state.resources).map(([address, resource]) => ({ address, type: resource.resourceType, values: resource.attributes })),
       ...Object.entries(state.deposed ?? {}).flatMap(([address, deposed]) =>
         deposed.map(({ attributes }) => ({ address, type: Address.parse(address).resourceType, values: attributes }))
       ),
     ];
-    const identities = await Promise.all(objects.map(({ address, type, values }) => this.identifyHeld(address, type, values)));
+    const identities = await Promise.all(objects.map(async ({ address, type, values }) => await this.identifyHeld(type, values, address === claimant ? undefined : address)));
 
     return objects.filter((_, index) => identities[index] === identity);
   }
 
-  private identifyHeld(address: string, type: string, values: Record<string, unknown>): Promise<string | undefined> {
-    const known = this.known.get(values) ?? asking(this.identify, type, values, named(address));
+  /** A failure is named by the `holder`, left out for the action's own object, which the run names. */
+  private async identifyHeld(type: string, values: Record<string, unknown>, holder?: string): Promise<string | undefined> {
+    const known = this.known.get(values) ?? this.identify(type, values);
     this.known.set(values, known);
 
-    return known;
+    try {
+      return await known;
+    } catch (error) {
+      throw holder === undefined ? error : named(holder)(error);
+    }
   }
 }

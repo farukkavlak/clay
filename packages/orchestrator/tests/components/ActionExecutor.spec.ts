@@ -210,7 +210,7 @@ describe('ActionExecutor', () => {
         after: {},
       };
 
-      await expect(executor.executeUpdate(action, mockProvider, mockState)).rejects.toThrow('UPDATE of "test.missing", which state does not hold');
+      await expect(executor.executeUpdate(action, mockProvider, mockState)).rejects.toThrow(/^state holds no object for it, so the plan was made from another state$/);
     });
 
     it('should send only the config attributes and drop the ones the config no longer sets', async () => {
@@ -495,7 +495,7 @@ describe('ActionExecutor', () => {
         name: 'main',
       };
 
-      await expect(executor.executeDelete(action, mockProvider, mockState)).rejects.toThrow('DELETE of "test.main", which state does not hold');
+      await expect(executor.executeDelete(action, mockProvider, mockState)).rejects.toThrow(/^state holds no object for it, so the plan was made from another state$/);
       expect(mockProvider.delete).not.toHaveBeenCalled();
     });
   });

@@ -179,7 +179,7 @@ describe('deposed objects', () => {
 
     const error = await refusal('apply', 'plan.json', '--yes');
 
-    expect(error).toContain('local_file.db: state holds no deposed object');
+    expect(error).toContain('Apply failed: local_file.db: state holds no deposed object');
     expect(await exists('old.txt')).toBe(true);
   });
 

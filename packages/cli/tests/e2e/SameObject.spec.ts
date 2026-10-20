@@ -260,6 +260,13 @@ describe('two objects that are one file', () => {
       expect(refused).toContain('resource "local_file" "a"');
     });
 
+    it('names a create once where the disk cannot follow a path only the apply knows', async () => {
+      await fs.symlink('loop', file('loop'));
+      await write('resource "command_exec" "e" {\n  command = "printf loop/f.txt"\n}\n', lateFile('a'));
+
+      expect(await refusal('apply', '--yes')).toContain('Apply failed: local_file.a: ELOOP');
+    });
+
     it('refuses a new block that writes a file that exists in another case', async (context) => {
       if (!(await ignoresCase(dir))) context.skip();
       await write(fileBlock('a', 'a.txt'));
