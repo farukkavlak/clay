@@ -212,11 +212,15 @@ change each.
       blocks with one path write over each other. Now a provider may name the real thing
       an object is, and a plan with two objects that are one thing is refused at the
       block, a rename with the `clay state mv` that fixes it
-- [ ] Spelling a path another way, `./a.txt` for `a.txt`, replaces the file. With
+- [x] Spelling a path another way, `./a.txt` for `a.txt`, replaces the file. With
       `create_before_destroy` the plan is refused instead. Terraform's `local_file` replaces
-      it too: its `filename` is compared as written
+      it too: its `filename` is compared as written. Now a path that names the file the id
+      already is updates it in place
 - [ ] Two objects that are one file go unseen where the path is known only at apply, as
       `path = "${random_string.x.result}.txt"`
+- [ ] Two paths that are one file through a symlink, or through case on a file system that
+      ignores it, `A.txt` and `a.txt` on macOS, are taken for two files. A rename between
+      them replaces the file, and with `create_before_destroy` destroys it
 - [x] The delete order is worked out in exponential time. `reaches` in `deleteEdges` walks
       every path with no record of what it has seen, so a ladder of 56 resources that each
       read the two before takes 23 seconds to destroy, and the time doubles every two more.
