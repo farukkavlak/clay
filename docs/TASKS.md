@@ -189,10 +189,13 @@ change each.
       and approved, and with no line. Now the plan refuses it too, at the block of the
       create-first replace the loop runs through. Terraform builds the apply graph at plan
       to find such loops, and names no line
-- [ ] A replace destroyed before its turn is not reported when its create never runs. If
+- [x] A replace destroyed before its turn is not reported when its create never runs. If
       `b1` is destroyed so that `a1` can be, and the apply then fails on `a` or is
       interrupted, the output names only `rec.a`, and nothing says `b1` is gone. The state
-      is right, and the next plan shows `b` to create
+      is right, and the next plan shows `b` to create. A plain replace whose create fails
+      did not say its old object was gone either. Now both are reported,
+      `- rec.b destroyed, to be made again`. Terraform reports each half of a replace on
+      its own
 - [ ] A resource that stays and used a plain replace only in state is updated after the
       replace destroys the old object. With `b1` holding `a1` in place, and `a` renamed
       `a2` while `b` stops holding it, `a1` and `b` run together, and a cloud refuses to

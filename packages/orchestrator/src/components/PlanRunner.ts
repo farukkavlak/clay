@@ -325,7 +325,10 @@ export class PlanRunner {
     const quiet = action.type === 'NO_OP' && !action.movedFrom && !action.marksChange && !action.protectionChange;
     if (!quiet) yield { type: 'started', action };
 
-    if (!(yield* this.attempt(action, state, () => this.executor.execute(action, state, destroyed)))) return false;
+    const key = Address.of(action).toString();
+    const held = Object.hasOwn(state.resources, key);
+    const lost = () => held && !Object.hasOwn(state.resources, key);
+    if (!(yield* this.attempt(action, state, () => this.executor.execute(action, state, destroyed), lost))) return false;
     if (quiet) return true;
 
     await this.stateManager.write(state);
@@ -333,26 +336,30 @@ export class PlanRunner {
     return true;
   }
 
-  /** Reports nothing of its own: the replace is reported once its new object is made, and a failure is the replace's. */
+  /** Reported as it happens: the run may stop before the replace makes its new object. */
   private async *destroyFirst(action: PlanAction, state: State, signal?: AbortSignal): AsyncGenerator<RunEvent, boolean> {
     if (signal?.aborted) return false;
     if (!(yield* this.attempt(action, state, () => this.executor.destroy(action, state)))) return false;
 
     await this.stateManager.write(state);
+    yield { type: 'destroyed', action };
     return true;
   }
 
-  private async *attempt(action: PlanAction, state: State, change: () => Promise<void>): AsyncGenerator<RunEvent, boolean> {
+  /** `lost` says whether the failed change destroyed the object, as a replace does before its create. */
+  private async *attempt(action: PlanAction, state: State, change: () => Promise<void>, lost = () => false): AsyncGenerator<RunEvent, boolean> {
     try {
       await change();
       return true;
     } catch (error) {
-      yield { type: 'failed', action, error: asError(error), stateError: await this.saveAfterFailure(state) };
+      const stateError = await this.saveAfterFailure(state);
+      if (lost()) yield { type: 'destroyed', action };
+      yield { type: 'failed', action, error: asError(error), stateError };
       return false;
     }
   }
 
-  /** A replace may have deleted before its create failed; state is saved either way. */
+  /** State is saved whatever the failure left. */
   private async saveAfterFailure(state: State): Promise<Error | undefined> {
     try {
       await this.stateManager.write(state);

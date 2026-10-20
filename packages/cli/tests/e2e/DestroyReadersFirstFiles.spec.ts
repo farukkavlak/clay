@@ -17,6 +17,16 @@ describe('replacing a file and the file that reads it', () => {
     return stripVTControlCharacters(stdout);
   };
 
+  const failedIn = async (...args: string[]) => {
+    try {
+      await promisify(execFile)('node', [clay, ...args], { cwd: dir });
+    } catch (error) {
+      const { code, stdout, stderr } = error as { code: number; stdout: string; stderr: string };
+      return { code, stdout: stripVTControlCharacters(stdout), stderr: stripVTControlCharacters(stderr) };
+    }
+    throw new Error(`clay ${args.join(' ')} exited 0`);
+  };
+
   const file = (name: string) => path.join(dir, name);
 
   const written = (a: string, b: string) =>
@@ -42,10 +52,21 @@ describe('replacing a file and the file that reads it', () => {
 
     const applied = await clayIn('apply', '--yes');
 
-    expect(applied).toContain('  -+ local_file.a replaced\n  -+ local_file.b replaced\n');
+    expect(applied).toContain('  - local_file.b destroyed, to be made again\n  -+ local_file.a replaced\n  -+ local_file.b replaced\n');
     expect(applied).toContain('Apply complete! Resources: 2 added, 0 changed, 2 destroyed.');
     const files = await fs.readdir(dir);
     expect(files.filter((name) => name.endsWith('.txt')).sort()).toEqual(['a2.txt', 'b2.txt']);
     expect(await fs.readFile(file('b2.txt'), 'utf8')).toBe(file('a2.txt'));
+  });
+
+  it('names a file it destroyed first when the replace it waited for fails', async () => {
+    await written('main.clay/a2.txt', 'b2.txt');
+
+    const { code, stdout, stderr } = await failedIn('apply', '--yes');
+
+    expect(code).toBe(1);
+    expect(stdout).toContain('  - local_file.b destroyed, to be made again\n  - local_file.a destroyed, to be made again\n');
+    expect(stderr).toContain('Apply failed: local_file.a: ');
+    expect(await fs.readdir(dir)).not.toContain('b1.txt');
   });
 });
