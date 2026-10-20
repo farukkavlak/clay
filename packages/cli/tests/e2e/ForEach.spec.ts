@@ -222,7 +222,7 @@ describe('a resource with for_each', () => {
   it('moves nothing when for_each is taken off', async () => {
     await apply(files('["a"]'));
 
-    expect(await planned(`resource "local_file" "f" { path = "${path.join(dir, 'a.txt')}" content = "a" }`)).toEqual([
+    expect(await planned(`resource "local_file" "f" { path = "${path.join(dir, 'f.txt')}" content = "a" }`)).toEqual([
       ['CREATE', 'f', undefined],
       ['DELETE', 'f', 'a'],
     ]);

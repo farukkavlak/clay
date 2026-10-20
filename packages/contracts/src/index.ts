@@ -361,6 +361,9 @@ export interface Provider {
   /** Returns the whole resource. */
   update(type: string, request: UpdateRequest): Promise<Record<string, unknown>>;
   delete(type: string, prior: Record<string, unknown>): Promise<void>;
+
+  /** The real thing the values name, as `the file /tmp/a.txt`; undefined until the values say. */
+  identify?(type: string, values: Record<string, unknown>): Promise<string | undefined>;
 }
 
 export interface ResourceHandler {
@@ -379,6 +382,8 @@ export interface ResourceHandler {
   update(request: UpdateRequest): Promise<Record<string, unknown>>;
 
   delete(prior: Record<string, unknown>): Promise<void>;
+
+  identify?(values: Record<string, unknown>): string | undefined;
 }
 
 export interface DataSourceHandler {

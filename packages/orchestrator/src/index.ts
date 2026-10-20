@@ -10,6 +10,7 @@ import { DesiredState, Walk } from './components/DesiredStateBuilder';
 import { checkRead, heldBy } from './providerResult';
 import { checkAttributes } from './checkAttributes';
 import { checkPreventDestroy } from './preventDestroy';
+import { checkSameObjects } from './sameObject';
 import { ConfigFiles } from './ConfigFiles';
 import { ProviderRegistry } from './ProviderRegistry';
 import { newRun, Run } from './Run';
@@ -65,6 +66,7 @@ export class Orchestrator {
 
     const actions = plan(desiredResources, currentState);
     checkPreventDestroy(actions, desiredResources, currentState.resources);
+    await checkSameObjects(actions, desiredResources, currentState, this.providers);
     checkApplyOrder(graph, actions, currentState, desiredResources);
     // The refresh only drops resources, so prior has no type prevRun lacks.
     const held = [...actions, ...Object.values(prevRun.resources)];

@@ -112,9 +112,9 @@ describe('prevent_destroy', () => {
   });
 
   it('refuses a plan that deletes an instance count drops', async () => {
-    await written('a.txt', true, 2);
+    await written('db-${count.index}.txt', true, 2);
     await clayIn('apply', '--yes');
-    await written('a.txt', true, 1);
+    await written('db-${count.index}.txt', true, 1);
 
     const error = await refusal('plan');
 
