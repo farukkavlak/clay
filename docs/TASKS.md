@@ -220,9 +220,16 @@ change each.
       `path = "${random_string.x.result}.txt"`. Now the apply checks each create and update
       before the provider runs it, against what the state holds then and what the run is
       making. An object already destroyed counts no more, since it can remove nothing
-- [ ] Two paths that are one file through a symlink, or through case on a file system that
+- [x] Two paths that are one file through a symlink, or through case on a file system that
       ignores it, `A.txt` and `a.txt` on macOS, are taken for two files. A rename between
-      them replaces the file, and with `create_before_destroy` destroys it
+      them replaces the file, and with `create_before_destroy` destroys it. Now a file is
+      named as the disk names it, in the case it has, through the links in its
+      directories. A link at the end is a file of its own, since a delete removes the link
+- [ ] Two new paths that differ only in case, `new/A.txt` and `new/a.txt` where neither
+      exists, are taken for two files on a file system that ignores case. Both blocks write
+      the one file; the next plan refuses them, since it then exists
+- [ ] A link in a path that points nowhere is named as written, so `dang/x.txt` through a
+      link `dang` to `/gone` and `/gone/x.txt` are taken for two files
 - [x] The delete order is worked out in exponential time. `reaches` in `deleteEdges` walks
       every path with no record of what it has seen, so a ladder of 56 resources that each
       read the two before takes 23 seconds to destroy, and the time doubles every two more.

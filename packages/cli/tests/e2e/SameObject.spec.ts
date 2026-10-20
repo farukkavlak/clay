@@ -18,6 +18,15 @@ const late = 'resource "command_exec" "e" {\n  command = "printf f.txt"\n}\n';
 const lateFile = (name: string) => `resource "local_file" "${name}" {\n  path    = command_exec.e.stdout\n  content = "${name}"\n}\n`;
 const reader = (of: string) => `resource "null_resource" "u" {\n  triggers = { x = local_file.${of}.id }\n}\n`;
 
+/** Whether the directory finds a file by a name in another case. */
+async function ignoresCase(dir: string): Promise<boolean> {
+  await fs.writeFile(path.join(dir, 'probe'), '', 'utf8');
+  return fs.access(path.join(dir, 'PROBE')).then(
+    () => true,
+    () => false
+  );
+}
+
 describe('two objects that are one file', () => {
   let dir: string;
 
@@ -219,6 +228,57 @@ describe('two objects that are one file', () => {
 
       expect(refused).toContain(`local_file.a makes its new object before it destroys the old one, but both are the file ${file('f.txt')}`);
       expect(await fs.readFile(file('f.txt'), 'utf8')).toBe('x');
+    });
+  });
+
+  describe('as the disk names the file', () => {
+    it('refuses two blocks that write one file through a link', async () => {
+      await fs.mkdir(file('dir'));
+      await fs.symlink(file('dir'), file('link'));
+      await write(fileBlock('a', 'dir/f.txt'), fileBlock('b', 'link/f.txt'));
+
+      expect(await refusal('plan')).toContain(`local_file.b and local_file.a are both the file ${file('dir/f.txt')}`);
+    });
+
+    it('renames a block from a link to the file it points to, which are two files to a delete', async () => {
+      await fs.writeFile(file('real.txt'), 'y', 'utf8');
+      await fs.symlink(file('real.txt'), file('l.txt'));
+      await write(fileBlock('c', 'l.txt'));
+      await clayIn('apply', '--yes');
+      await write(fileBlock('d', 'real.txt'));
+
+      expect(await clayIn('plan')).toContain('Plan: 1 to add, 0 to change, 1 to destroy.');
+    });
+
+    it('refuses a path the disk cannot follow at its block', async () => {
+      await fs.symlink('loop', file('loop'));
+      await write(fileBlock('a', 'loop/f.txt'));
+
+      const refused = await refusal('plan');
+
+      expect(refused).toContain('ELOOP');
+      expect(refused).toContain('resource "local_file" "a"');
+    });
+
+    it('refuses a new block that writes a file that exists in another case', async (context) => {
+      if (!(await ignoresCase(dir))) context.skip();
+      await write(fileBlock('a', 'a.txt'));
+      await clayIn('apply', '--yes');
+      await write(fileBlock('a', 'a.txt'), fileBlock('b', 'A.txt'));
+
+      expect(await refusal('plan')).toContain(`local_file.b and local_file.a are both the file ${file('a.txt')}`);
+    });
+
+    it('updates a create_before_destroy file whose path changes case, keeping the file', async (context) => {
+      if (!(await ignoresCase(dir))) context.skip();
+      await write(fileBlock('a', 'a.txt', true));
+      await clayIn('apply', '--yes');
+      await write(fileBlock('a', 'A.txt', true));
+
+      const applied = await clayIn('apply', '--yes');
+
+      expect(applied).toContain('~ local_file.a updated');
+      expect(await fs.readFile(file('a.txt'), 'utf8')).toBe('x');
     });
   });
 });

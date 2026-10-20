@@ -4,10 +4,47 @@ import path from 'node:path';
 
 import { idOf } from './idOf';
 
-/** A path spelled another way for the file the id already is, as `./a.txt` for `a.txt`, is written in place. */
-function keepingTheFile(change: PlannedChange, prior: Record<string, unknown> | null): PlannedChange {
+/** Not there: the path does not exist, or runs through a file. */
+function missing(error: unknown): boolean {
+  const { code } = error as NodeJS.ErrnoException;
+  return code === 'ENOENT' || code === 'ENOTDIR';
+}
+
+/** A link's name as its directory spells it; on a file system that ignores case, `L.txt` for `l.txt`. */
+async function linkIn(dir: string, written: string, link: { dev: number; ino: number }): Promise<string> {
+  const names = await fs.readdir(dir);
+  const alike = names.filter((name) => name.toLowerCase() === written.toLowerCase());
+  const entries = await Promise.all(alike.map(async (name) => ({ name, ...(await fs.lstat(path.join(dir, name))) })));
+  const found = entries.find(({ dev, ino }) => dev === link.dev && ino === link.ino);
+
+  return found?.name ?? written;
+}
+
+/**
+ * The file a path names, as the disk names it: links followed, in the case each part has. A part not made yet is kept as written.
+ * A link at the `end` is itself, since a delete removes the link and not what it points to.
+ */
+async function onDisk(file: string, end = true): Promise<string> {
+  const absolute = path.resolve(file);
+  const parent = path.dirname(absolute);
+
+  try {
+    const entry = end ? await fs.lstat(absolute) : undefined;
+    if (!entry?.isSymbolicLink()) return await fs.realpath(absolute);
+
+    const dir = await onDisk(parent, false);
+    return path.join(dir, await linkIn(dir, path.basename(absolute), entry));
+  } catch (error) {
+    if (!missing(error)) throw error;
+
+    return parent === absolute ? absolute : path.join(await onDisk(parent, false), path.basename(absolute));
+  }
+}
+
+/** A path that names the file the id already is, as `./a.txt` for `a.txt` or a link to it, is written in place. */
+async function keepingTheFile(change: PlannedChange, prior: Record<string, unknown> | null): Promise<PlannedChange> {
   const file = change.after.path;
-  if (typeof file !== 'string' || typeof prior?.id !== 'string' || path.resolve(file) !== prior.id) return change;
+  if (typeof file !== 'string' || typeof prior?.id !== 'string' || (await onDisk(file)) !== (await onDisk(prior.id))) return change;
 
   return { ...change, replace: change.replace.filter(([name]) => name !== 'path') };
 }
@@ -27,7 +64,7 @@ export class LocalFileResource implements ResourceHandler {
 
   // A relative path resolves where the apply runs, so only an absolute one gives a known id.
   async plan(request: PlanRequest): Promise<PlannedChange> {
-    const change = keepingTheFile(planFromSchema(await this.getSchema(), request), request.prior);
+    const change = await keepingTheFile(planFromSchema(await this.getSchema(), request), request.prior);
     const file = own(request.config, 'path');
     if (typeof file !== 'string' || !path.isAbsolute(file) || !isUnknown(change.after.id)) return change;
 
@@ -69,10 +106,10 @@ export class LocalFileResource implements ResourceHandler {
     });
   }
 
-  // The id once there is one, since a delete removes that; before it, the path a create writes, resolved where Clay runs.
-  identify(values: Record<string, unknown>): string | undefined {
+  // The id once there is one, since a delete removes that; before it, the path a create writes, as the disk names it.
+  async identify(values: Record<string, unknown>): Promise<string | undefined> {
     const file = typeof values.id === 'string' ? values.id : values.path;
 
-    return typeof file === 'string' ? `the file ${path.resolve(file)}` : undefined;
+    return typeof file === 'string' ? `the file ${await onDisk(file)}` : undefined;
   }
 }

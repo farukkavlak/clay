@@ -1,4 +1,4 @@
-import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types, UpdateRequest } from '@clay/contracts';
+import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, State, types, UpdateRequest } from '@clay/contracts';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -11,6 +11,8 @@ import { apply } from './apply';
 /** A thing named by `place`, which a change of `label` replaces. */
 class PlacedProvider implements Provider {
   readonly resources = ['placed'];
+  /** A place that can no longer be told, as a disk changed under a run. */
+  lost = 'lost';
   readonly dataSources: string[] = [];
 
   async getSchema(): Promise<Schema> {
@@ -42,6 +44,7 @@ class PlacedProvider implements Provider {
   async delete(): Promise<void> {}
 
   async identify(_type: string, values: Record<string, unknown>): Promise<string | undefined> {
+    if (values.place === this.lost) throw new Error('the place is lost');
     return typeof values.place === 'string' ? `the place ${values.place}` : undefined;
   }
 
@@ -62,11 +65,13 @@ const placed = (label: string, cbd: boolean) =>
 describe('a replace whose new object is its old one', () => {
   let dir: string;
   let orchestrator: Orchestrator;
+  let provider: PlacedProvider;
 
   beforeEach(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'same-object-'));
     orchestrator = Orchestrator.create(new StateManager(new LocalBackend(dir)), new InMemoryFiles({}));
-    orchestrator.registerProvider(new PlacedProvider());
+    provider = new PlacedProvider();
+    orchestrator.registerProvider(provider);
   });
 
   afterEach(async () => {
@@ -93,5 +98,34 @@ describe('a replace whose new object is its old one', () => {
     const after = before.replace('place = "x"', 'place = placed.c.id') + 'resource "placed" "c" {\n  place = "c"\n  label = "one"\n}\n';
 
     await expect(apply(orchestrator, after)).rejects.toThrow('placed.b and placed.a are both the place one');
+  });
+
+  it('names an object in the state by its address where what it is cannot be told', async () => {
+    await apply(orchestrator, 'resource "placed" "a" {\n  place = "x"\n  label = "a1"\n}\n');
+    const state = JSON.parse(await fs.readFile(path.join(dir, 'clay.state.json'), 'utf8')) as State;
+    state.resources['placed.a'].attributes.place = 'lost';
+    await fs.writeFile(path.join(dir, 'clay.state.json'), JSON.stringify(state), 'utf8');
+
+    await expect(orchestrator.plan('')).rejects.toThrow('placed.a: the place is lost');
+  });
+
+  it('names a create by its address where only the apply finds what it is cannot be told', async () => {
+    const config = 'resource "placed" "c" {\n  place = "c"\n  label = "lost"\n}\nresource "placed" "b" {\n  place = placed.c.id\n  label = "b1"\n}\n';
+
+    await expect(apply(orchestrator, config)).rejects.toThrow('placed.b: the place is lost');
+  });
+
+  it('names an object in the state by its address where the apply can no longer tell what it is', async () => {
+    const kept = 'resource "placed" "a" {\n  place = "x"\n  label = "a1"\n}\n';
+    await apply(orchestrator, kept);
+    const config = `${kept}resource "placed" "c" {\n  place = "c"\n  label = "c1"\n}\n`;
+    const planned = await orchestrator.plan(config);
+    provider.lost = 'x';
+
+    const run = async () => {
+      for await (const event of orchestrator.runPlan(planned, config)) if (event.type === 'failed') throw event.error;
+    };
+
+    await expect(run()).rejects.toThrow('placed.a: the place is lost');
   });
 });
