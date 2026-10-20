@@ -185,6 +185,10 @@ change each.
       Now the apply walks one graph: the configuration's, with a node for each object
       destroyed apart from its block, ordered by the dependencies in state. The deletes no
       longer wait for the end
+- [x] An order that waits for itself is refused only at apply, after the plan was shown
+      and approved, and with no line. Now the plan refuses it too, at the block of the
+      create-first replace the loop runs through. Terraform builds the apply graph at plan
+      to find such loops, and names no line
 - [ ] A replace destroyed before its turn is not reported when its create never runs. If
       `b1` is destroyed so that `a1` can be, and the apply then fails on `a` or is
       interrupted, the output names only `rec.a`, and nothing says `b1` is gone. The state
