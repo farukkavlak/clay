@@ -383,7 +383,7 @@ export interface ResourceHandler {
 
   delete(prior: Record<string, unknown>): Promise<void>;
 
-  identify?(values: Record<string, unknown>): string | undefined;
+  identify?(values: Record<string, unknown>): Promise<string | undefined>;
 }
 
 export interface DataSourceHandler {

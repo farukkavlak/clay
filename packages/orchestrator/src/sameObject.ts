@@ -2,6 +2,7 @@ import { Address, State } from '@clay/contracts';
 import { spell } from '@clay/parser';
 import { DesiredResource, PlanAction } from '@clay/planner';
 
+import { asError } from './asError';
 import { withPlace } from './place';
 import { ProviderRegistry } from './ProviderRegistry';
 
@@ -27,6 +28,17 @@ const identifyWith =
   (providers: ProviderRegistry): Identify =>
   async (type, values) =>
     await providers.get(type).identify?.(type, values);
+
+/** A failure names what was asked about. */
+async function asking(identify: Identify, type: string, values: Record<string, unknown>, name: (error: unknown) => Error): Promise<string | undefined> {
+  try {
+    return await identify(type, values);
+  } catch (error) {
+    throw name(error);
+  }
+}
+
+const named = (address: string) => (error: unknown) => new Error(`${address}: ${asError(error).message}`, { cause: error });
 
 function goingIn(actions: PlanAction[], state: State): Going[] {
   return actions.flatMap<Going>((action) => {
@@ -74,7 +86,8 @@ export async function checkSameObjects(actions: PlanAction[], desired: DesiredRe
   const staying = new Map<string, Staying>();
 
   for (const resource of desired) {
-    const identity = await identify(resource.address.resourceType, resource.after);
+    const placed = (error: unknown) => withPlace(error, resource.block.position, spell(resource.block), resource.address.module);
+    const identity = await asking(identify, resource.address.resourceType, resource.after, placed);
     if (identity === undefined) continue;
 
     const object = planned(resource, actions);
@@ -84,7 +97,7 @@ export async function checkSameObjects(actions: PlanAction[], desired: DesiredRe
   }
 
   for (const going of goingIn(actions, state)) {
-    const identity = await identify(going.action.resourceType, going.values);
+    const identity = await asking(identify, going.action.resourceType, going.values, named(going.address));
     if (identity === undefined) continue;
 
     const object = staying.get(identity);
@@ -101,6 +114,8 @@ export class SameObjects {
   private going = new Map<Record<string, unknown>, Going>();
   /** What each object being made or changed in this run is, before it reaches the state. */
   private claimed = new Map<string, string>();
+  /** Asked once per state object: the state replaces values on a change, never changes them. */
+  private known = new WeakMap<Record<string, unknown>, Promise<string | undefined>>();
 
   constructor(providers: ProviderRegistry) {
     this.identify = identifyWith(providers);
@@ -113,17 +128,18 @@ export class SameObjects {
 
   /** Refused before the provider makes or changes the object. Nothing is awaited between the check and the claim. */
   async claim(action: PlanAction, values: Record<string, unknown>, state: State): Promise<void> {
-    const identity = await this.identify(action.resourceType, values);
+    const address = Address.of(action).toString();
+    const identity = await asking(this.identify, action.resourceType, values, named(address));
     if (identity === undefined) return;
 
     const held = await this.heldAs(identity, state);
-    const staying: Staying = { address: Address.of(action).toString(), created: action.type === 'CREATE', refuse: (message) => new Error(message) };
+    const staying: Staying = { address, created: action.type === 'CREATE', refuse: (message) => new Error(message) };
     const other = this.claimed.get(identity);
     if (other) checkOther(staying, identity, other);
-    for (const { address, values: attributes } of held) {
+    for (const { address: holder, values: attributes } of held) {
       const going = this.going.get(attributes);
       if (going) checkGoing(going, identity, staying);
-      else checkOther(staying, identity, address);
+      else checkOther(staying, identity, holder);
     }
 
     this.claimed.set(identity, staying.address);
@@ -137,8 +153,15 @@ export class SameObjects {
         deposed.map(({ attributes }) => ({ address, type: Address.parse(address).resourceType, values: attributes }))
       ),
     ];
-    const identities = await Promise.all(objects.map(({ type, values }) => this.identify(type, values)));
+    const identities = await Promise.all(objects.map(({ address, type, values }) => this.identifyHeld(address, type, values)));
 
     return objects.filter((_, index) => identities[index] === identity);
+  }
+
+  private identifyHeld(address: string, type: string, values: Record<string, unknown>): Promise<string | undefined> {
+    const known = this.known.get(values) ?? asking(this.identify, type, values, named(address));
+    this.known.set(values, known);
+
+    return known;
   }
 }

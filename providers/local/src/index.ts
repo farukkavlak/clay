@@ -63,7 +63,7 @@ export class LocalProvider implements Provider {
   }
 
   async identify(type: string, values: Record<string, unknown>): Promise<string | undefined> {
-    return this.handler(type).identify?.(values);
+    return await this.handler(type).identify?.(values);
   }
 
   async getDataSourceSchema(type: string): Promise<Schema> {

@@ -6,6 +6,15 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { LocalProvider } from '../src/index';
 
+/** Whether the directory finds a file by a name in another case. */
+async function ignoresCase(dir: string): Promise<boolean> {
+  await fs.writeFile(path.join(dir, 'probe'), '', 'utf8');
+  return fs.access(path.join(dir, 'PROBE')).then(
+    () => true,
+    () => false
+  );
+}
+
 describe('LocalProvider', () => {
   let provider: LocalProvider;
   let tmpDir: string;
@@ -454,6 +463,63 @@ describe('LocalProvider', () => {
 
     it('names nothing for a resource that is no real thing', async () => {
       expect(await provider.identify('null_resource', { id: 'n' })).toBeUndefined();
+    });
+
+    describe('as the disk names it', () => {
+      let real: string;
+
+      beforeEach(async () => {
+        // The temp directory may itself be reached through a link.
+        real = await fs.realpath(tmpDir);
+        await fs.mkdir(path.join(real, 'dir'));
+        await fs.symlink(path.join(real, 'dir'), path.join(real, 'link'));
+      });
+
+      it('follows a link to a directory, to a file not made yet', async () => {
+        expect(await provider.identify('local_file', { path: path.join(real, 'link', 'f.txt') })).toBe(`the file ${path.join(real, 'dir', 'f.txt')}`);
+      });
+
+      it('takes the case of a file that exists, where the file system ignores case', async (context) => {
+        await fs.writeFile(path.join(real, 'dir', 'a.txt'), 'x', 'utf8');
+        if (!(await ignoresCase(real))) context.skip();
+
+        expect(await provider.identify('local_file', { path: path.join(real, 'dir', 'A.txt') })).toBe(`the file ${path.join(real, 'dir', 'a.txt')}`);
+      });
+
+      // A delete unlinks the link and leaves what it points to, so the two are not one file.
+      it('names a link at the end of the path as itself', async () => {
+        await fs.writeFile(path.join(real, 'dir', 'real.txt'), 'x', 'utf8');
+        await fs.symlink(path.join(real, 'dir', 'real.txt'), path.join(real, 'dir', 'l.txt'));
+
+        expect(await provider.identify('local_file', { path: path.join(real, 'link', 'l.txt') })).toBe(`the file ${path.join(real, 'dir', 'l.txt')}`);
+      });
+
+      it('takes the case a link at the end has, where the file system ignores case', async (context) => {
+        await fs.symlink(path.join(real, 'dir', 'real.txt'), path.join(real, 'dir', 'L.txt'));
+        if (!(await ignoresCase(real))) context.skip();
+
+        expect(await provider.identify('local_file', { path: path.join(real, 'dir', 'l.txt') })).toBe(`the file ${path.join(real, 'dir', 'L.txt')}`);
+      });
+
+      it('names a path under a file as written', async () => {
+        await fs.writeFile(path.join(real, 'dir', 'f.txt'), 'x', 'utf8');
+
+        expect(await provider.identify('local_file', { path: path.join(real, 'link', 'f.txt', 'x') })).toBe(`the file ${path.join(real, 'dir', 'f.txt', 'x')}`);
+      });
+
+      it('fails on a path the disk cannot follow', async () => {
+        await fs.symlink('loop', path.join(real, 'loop'));
+
+        await expect(provider.identify('local_file', { path: path.join(real, 'loop', 'f.txt') })).rejects.toThrow('ELOOP');
+      });
+
+      it('plans a path through a link to the file the id is as an update', async () => {
+        const config = { path: path.join(real, 'link', 'a.txt'), content: 'hi' };
+        const prior = { path: path.join(real, 'dir', 'a.txt'), content: 'hi', id: path.join(real, 'dir', 'a.txt') };
+        await fs.writeFile(prior.id, 'hi', 'utf8');
+
+        expect(await provider.plan('local_file', { prior, proposed: { ...config, id: prior.id }, config })).toMatchObject({ replace: [] });
+      });
     });
   });
 
