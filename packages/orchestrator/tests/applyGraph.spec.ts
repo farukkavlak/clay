@@ -136,10 +136,55 @@ describe('applyGraph', () => {
     expect(layers(graph)).toEqual([['rec.b'], ['destroy:rec.a']]);
   });
 
-  it('destroys a delete that reads a replace before it, without waiting for what read the delete', () => {
+  it('destroys a delete that reads a replace before it, after what stays and read the delete is updated', () => {
     const graph = applyGraph(config(['a', 'k']), [act('REPLACE', 'a'), act('DELETE', 'd'), act('UPDATE', 'k')], stateOf([held('a'), held('d', 'a'), held('k', 'd')]));
 
-    expect(layers(graph)).toEqual([['destroy:rec.d', 'rec.k'], ['rec.a']]);
+    expect(layers(graph)).toEqual([['rec.k'], ['destroy:rec.d'], ['rec.a']]);
+  });
+
+  it('runs a replace after what stays and read it only in state is updated', () => {
+    const graph = applyGraph(config(['a', 'b']), [act('REPLACE', 'a'), act('UPDATE', 'b')], stateOf([held('a'), held('b', 'a')]));
+
+    expect(layers(graph)).toEqual([['rec.b'], ['rec.a']]);
+  });
+
+  it('destroys a replace apart after what stays and read it only in state is updated', () => {
+    const graph = applyGraph(config(['a', 'b', 'k']), [act('REPLACE', 'a'), act('REPLACE', 'b'), act('UPDATE', 'k')], stateOf([held('a'), held('b', 'a'), held('k', 'b')]));
+
+    expect(layers(graph)).toEqual([['rec.k'], ['destroy:rec.b'], ['rec.a', 'rec.b']]);
+  });
+
+  it('adds the waits of a create-first replace first, so another wait gives way to them', () => {
+    const graph = applyGraph(
+      config(
+        ['x', 'y', 'b', 'k', 'j'],
+        [
+          ['x', 'k'],
+          ['y', 'j'],
+          ['b', 'j'],
+        ]
+      ),
+      [
+        act('REPLACE', 'x'),
+        act('REPLACE', 'y'),
+        act('REPLACE', 'b', { createBeforeDestroy: true }),
+        act('UPDATE', 'k', { dependencies: ['rec.x'] }),
+        act('UPDATE', 'j', { dependencies: ['rec.y', 'rec.b'] }),
+      ],
+      stateOf([held('x'), held('y'), held('b', 'x'), held('k', 'x', 'y'), held('j', 'y', 'b')])
+    );
+
+    expect(layers(graph)).toEqual([['rec.b', 'rec.y'], ['rec.j'], ['destroy:rec.b (deposed)'], ['rec.x'], ['rec.k']]);
+  });
+
+  it('destroys a delete without waiting for what stays and read it, where the wait closes a loop through the configuration', () => {
+    const graph = applyGraph(
+      config(['a', 'k'], [['a', 'k']]),
+      [act('REPLACE', 'a'), act('DELETE', 'd'), act('UPDATE', 'k', { dependencies: ['rec.a'] })],
+      stateOf([held('a'), held('d', 'a'), held('k', 'd')])
+    );
+
+    expect(layers(graph)).toEqual([['destroy:rec.d'], ['rec.a'], ['rec.k']]);
   });
 
   it('runs a delete nothing orders as soon as it can', () => {

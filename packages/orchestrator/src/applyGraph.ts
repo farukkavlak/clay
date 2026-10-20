@@ -58,14 +58,14 @@ function goingObjects(actions: PlanAction[], state: State): Map<string, Going> {
   return going;
 }
 
-function reaches(next: Map<string, string[]>, from: string, to: string): boolean {
+function reaches(stepsFrom: (at: string) => string[], from: string, to: string): boolean {
   const seen = new Set([from]);
   const queue = [from];
 
   for (let at = queue.shift(); at !== undefined; at = queue.shift()) {
     if (at === to) return true;
 
-    for (const step of next.get(at) ?? [])
+    for (const step of stepsFrom(at))
       if (!seen.has(step)) {
         seen.add(step);
         queue.push(step);
@@ -85,7 +85,7 @@ function readsAmong(going: Map<string, Going>): Map<string, string[]> {
   for (const [key, { reads }] of going)
     for (const dependency of reads)
       for (const read of [dependency, deposedKey(dependency)]) {
-        if (!going.has(read) || reaches(next, read, key)) continue;
+        if (!going.has(read) || reaches((at) => next.get(at) ?? [], read, key)) continue;
 
         next.set(key, [...(next.get(key) ?? []), read]);
       }
@@ -135,12 +135,15 @@ function addDestroy(graph: Graph<ApplyNode>, key: string, { action, madeBy }: Go
   if (madeBy) graph.addEdge(madeBy, destroyKey(key));
 }
 
-function addWaits(graph: Graph<ApplyNode>, going: Map<string, Going>, first: Set<string>, readers: Map<string, Set<string>>): void {
-  for (const [key, { action, madeBy }] of going) {
-    if (action.type !== 'DELETE' || (first.has(key) && !madeBy)) continue;
+/**
+ * What stays and reads an object is updated before the node that destroys it.
+ * The old object of a create-first replace waits first, always. Any other wait that would close a loop is dropped: what stays reads the replace the object goes before.
+ */
+function addWaits(graph: Graph<ApplyNode>, going: Map<string, Going>, nodeOf: (key: string) => string, readers: Map<string, Set<string>>): void {
+  const waits = [...going].flatMap(([key, { action, madeBy }]) => [...(readers.get(Address.of(action).toString()) ?? [])].map((reader) => ({ reader, node: nodeOf(key), madeBy })));
 
-    for (const reader of readers.get(Address.of(action).toString()) ?? []) graph.addEdge(reader, destroyKey(key));
-  }
+  for (const { reader, node } of waits.filter(({ madeBy }) => madeBy)) graph.addEdge(reader, node);
+  for (const { reader, node } of waits.filter(({ madeBy }) => !madeBy)) if (!reaches((at) => graph.dependentsOf(at), node, reader)) graph.addEdge(reader, node);
 }
 
 function spellApply(key: string, node: ApplyNode): string {
@@ -177,8 +180,7 @@ function refuseLoop(graph: Graph<ApplyNode>, going: Map<string, Going>): void {
 /**
  * The configuration's graph, with a node for each object destroyed apart from its block.
  * A replace whose object reads nothing it has to go before is destroyed by its block, after what the block reads, so the new values are checked before the old object goes.
- * A destroy that reads nothing a replace needs gone first waits for what reads it to be updated, so nothing outlives what it reads. These waits never close a loop:
- * such a destroy leads only to destroys that lead to no block.
+ * Every object going away waits for what stays and reads it to be updated, so nothing outlives what it reads, unless what stays needs the replace made first.
  * The old object of a replace that makes the new one first always waits for what stays and reads it. A loop there is refused before anything runs.
  */
 export function applyGraph(config: Graph<GraphNode>, actions: PlanAction[], state: State): Graph<ApplyNode> {
@@ -194,7 +196,7 @@ export function applyGraph(config: Graph<GraphNode>, actions: PlanAction[], stat
 
   for (const [key, object] of going) if (!byBlock(key)) addDestroy(graph, key, object);
   for (const [key, reads] of next) for (const read of reads) graph.addEdge(nodeOf(key), nodeOf(read));
-  addWaits(graph, going, first, readersByAddress(actions, state));
+  addWaits(graph, going, nodeOf, readersByAddress(actions, state));
   refuseLoop(graph, going);
 
   return graph;
