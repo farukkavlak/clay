@@ -59,6 +59,8 @@ class PlacedProvider implements Provider {
   }
 }
 
+const placedAt = (place: string) => `resource "placed" "a" {\n  place = "${place}"\n  label = "a1"\n}\n`;
+
 const placed = (label: string, cbd: boolean) =>
   `resource "placed" "a" {\n  place = "p"\n  label = "${label}"\n${cbd ? '  lifecycle {\n    create_before_destroy = true\n  }\n' : ''}}\n`;
 
@@ -109,10 +111,11 @@ describe('a replace whose new object is its old one', () => {
     await expect(orchestrator.plan('')).rejects.toThrow('placed.a: the place is lost');
   });
 
-  it('names a create by its address where only the apply finds what it is cannot be told', async () => {
+  // The run reports a failure by its action, which names it.
+  it('fails a create unnamed, where only the apply finds its place cannot be told', async () => {
     const config = 'resource "placed" "c" {\n  place = "c"\n  label = "lost"\n}\nresource "placed" "b" {\n  place = placed.c.id\n  label = "b1"\n}\n';
 
-    await expect(apply(orchestrator, config)).rejects.toThrow('placed.b: the place is lost');
+    await expect(apply(orchestrator, config)).rejects.toThrow(/^the place is lost$/);
   });
 
   it('names an object in the state by its address where the apply can no longer tell what it is', async () => {
@@ -127,5 +130,17 @@ describe('a replace whose new object is its old one', () => {
     };
 
     await expect(run()).rejects.toThrow('placed.a: the place is lost');
+  });
+
+  it('fails an update unnamed, where the apply can no longer tell what its own old object is', async () => {
+    await apply(orchestrator, placedAt('x'));
+    const planned = await orchestrator.plan(placedAt('y'));
+    provider.lost = 'x';
+
+    const run = async () => {
+      for await (const event of orchestrator.runPlan(planned, placedAt('y'))) if (event.type === 'failed') throw event.error;
+    };
+
+    await expect(run()).rejects.toThrow(/^the place is lost$/);
   });
 });

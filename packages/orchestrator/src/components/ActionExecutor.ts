@@ -16,7 +16,7 @@ import { Ignoring, ResourcePlan, ResourcePlanner } from './ResourcePlanner';
 function held(action: PlanAction, state: State): Resource {
   const key = Address.of(action).toString();
   const resource = Object.hasOwn(state.resources, key) ? state.resources[key] : undefined;
-  if (!resource) throw new Error(`${action.type} of "${key}", which state does not hold`);
+  if (!resource) throw new Error('state holds no object for it, so the plan was made from another state');
 
   return resource;
 }
@@ -231,7 +231,7 @@ export class ActionExecutor {
     const address = Address.of(action).toString();
     const { deposed } = currentState;
     const objects = deposed?.[address];
-    if (!deposed || !objects) throw new Error(`${address}: state holds no deposed object, so the plan was made from another state`);
+    if (!deposed || !objects) throw new Error('state holds no deposed object for it, so the plan was made from another state');
 
     while (objects.length > 0) {
       await provider.delete(action.resourceType, objects[0].attributes);
