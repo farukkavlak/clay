@@ -238,15 +238,6 @@ change each.
       made and after, and a name for messages. A file's key has every part in one case
       where its directory ignores case; its name keeps the case on disk, or as written where
       not made yet
-- [ ] A directory that cannot tell whether it ignores case asks the one above, even on
-      another device, so an empty volume that tells case apart, mounted under one that
-      ignores it, has `vol/A.txt` and `vol/a.txt` refused as one file
-- [ ] Two paths that differ only in Unicode form, `é` as one character or as `e` and an
-      accent, are taken for two files where neither exists, though macOS keeps them as one.
-      Both blocks write the one file. A link's name is matched by case only, so a link
-      written in the other form is named as written
-- [ ] A link in a path that points nowhere is named as written, so `dang/x.txt` through a
-      link `dang` to `/gone` and `/gone/x.txt` are taken for two files
 - [x] The delete order is worked out in exponential time. `reaches` in `deleteEdges` walks
       every path with no record of what it has seen, so a ladder of 56 resources that each
       read the two before takes 23 seconds to destroy, and the time doubles every two more.
@@ -852,6 +843,11 @@ by resource type, and no `provider` block exists yet.
       update does nothing
 - [ ] A first remote provider to prove the shape, small enough to keep tests real: an
       HTTP or GitHub provider before an AWS one
+- [ ] `local_file` takes two paths for two files in rare file system corners. An empty
+      volume mounted under a directory with the other case rule is judged by that
+      directory. `é` as one character and as `e` with an accent are two names, though
+      macOS keeps them as one. A link that points nowhere is named as written. Each needs
+      code that only this provider uses, so it waits until a user meets it
 
 ## 5. Errors and tooling
 
