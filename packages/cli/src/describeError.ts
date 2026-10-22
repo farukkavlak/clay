@@ -1,6 +1,8 @@
 import { ConfigFiles } from '@clay/orchestrator';
 import { ConfigError, Position } from '@clay/parser';
 
+import { messageOf, printable } from './printable';
+
 /** Undefined if the file is unreadable now; the original error matters more than the source line. */
 function currentContent(file: string, files: ConfigFiles): string | undefined {
   try {
@@ -40,18 +42,21 @@ function blankUnder(line: string, column: number): string {
 function sourceLine(position: Position, files: ConfigFiles): string | undefined {
   const line = currentContent(position.file, files)?.split(/\r?\n/)[position.line - 1];
   if (line === undefined) return undefined;
+  // One code point for one, so the column still holds, and graphemes are counted as they show.
+  const shown = printable(line);
 
   const gutter = `  ${position.line}: `;
 
-  return `${gutter}${line}\n${' '.repeat(gutter.length)}${blankUnder(line, position.column)}^`;
+  return `${gutter}${shown}\n${' '.repeat(gutter.length)}${blankUnder(shown, position.column)}^`;
 }
 
+/** Printable, since the message, the line and the path come from outside Clay. */
 export function describeError(error: unknown, files: ConfigFiles): string {
-  if (!(error instanceof ConfigError)) return error instanceof Error ? error.message : String(error);
+  if (!(error instanceof ConfigError)) return messageOf(error);
 
   const inBlock = error.block ? `, in ${error.block}` : '';
   const where = `  on ${error.position.file} line ${error.position.line}${inBlock}:`;
   const inModule = error.module ? `  in ${error.module}` : undefined;
 
-  return [error.message, where, sourceLine(error.position, files), inModule].filter((paragraph) => paragraph !== undefined).join('\n\n');
+  return printable([error.message, where, sourceLine(error.position, files), inModule].filter((paragraph) => paragraph !== undefined).join('\n\n'));
 }
