@@ -272,10 +272,11 @@ change each.
       of every provider call given a sensitive value is hidden, at apply and refresh too
 - [ ] A `command_exec` whose command prints a sensitive value, `echo ${var.token}`, keeps
       it in `stdout`, which is not sensitive, so `clay state show` prints it
-- [ ] Writing out a value the provider already takes as its default replaces the resource.
+- [x] Writing out a value the provider already takes as its default replaces the resource.
       `special = false` added to a `random_string` that left it out plans a replace, since
       `special` is `forceNew` and a left-out value is not `false`. The provider contract
-      has no defaults
+      has no defaults. Terraform's plugin framework has `Default`, planned where the
+      configuration is null. Now a schema gives a default, and the plan holds it
 - [ ] `clay output --json` with no state prints a plain-text line to stdout and exits 0, so
       a script that reads it as JSON breaks
 - [x] `clay state rm` of an address the state does not hold exits 0, where `state show`

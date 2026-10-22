@@ -82,12 +82,12 @@ describe('a whole resource instance read as a value', () => {
 
   it('holds every attribute of the schema, with null for one the configuration leaves out', async () => {
     await apply(
-      'resource "random_string" "s" { length = 4 }\noutput "names" { value = [for name, value in random_string.s : name] }\noutput "special" { value = random_string.s.special }'
+      'resource "command_exec" "c" { command = "true" }\noutput "names" { value = [for name, value in command_exec.c : name] }\noutput "cwd" { value = command_exec.c.cwd }'
     );
 
-    const { names, special } = (await outputs())!;
-    expect(names.value).toEqual(['id', 'length', 'result', 'special']);
-    expect(special.value).toBeNull();
+    const { names, cwd } = (await outputs())!;
+    expect(names.value).toEqual(['command', 'cwd', 'id', 'stdout']);
+    expect(cwd.value).toBeNull();
   });
 
   it('is counted by length and read into by a for', async () => {
@@ -102,7 +102,7 @@ describe('a whole resource instance read as a value', () => {
   it('plans what the configuration sets as known and what the apply makes as unknown, each by itself', async () => {
     const { outputs: planned } = await newOrchestrator().plan('resource "random_string" "s" { length = 4 }\noutput "s" { value = random_string.s }');
 
-    expect(planned.s.new?.value).toEqual({ id: UNKNOWN, length: ExactNumber.parse('4'), result: UNKNOWN, special: null });
+    expect(planned.s.new?.value).toEqual({ id: UNKNOWN, length: ExactNumber.parse('4'), result: UNKNOWN, special: false });
   });
 
   it('plans an instance that is already in state as known in full', async () => {
@@ -204,7 +204,7 @@ describe('a whole resource instance read as a value', () => {
     it('plans what the configuration sets as known and what the apply makes as unknown, in each instance', async () => {
       const { outputs: planned } = await newOrchestrator().plan('resource "random_string" "s" {\n  count = 2\n  length = 4\n}\noutput "s" { value = random_string.s }');
 
-      const fresh = { id: UNKNOWN, length: ExactNumber.parse('4'), result: UNKNOWN, special: null };
+      const fresh = { id: UNKNOWN, length: ExactNumber.parse('4'), result: UNKNOWN, special: false };
       expect(planned.s.new?.value).toEqual([fresh, fresh]);
     });
 

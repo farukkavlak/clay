@@ -160,6 +160,11 @@ number or a bool is wanted is read as one when it spells one: `"8"` is `8`, `"tr
 map and an object. Nothing else is converted. The plan, the provider and the state all see
 the converted value.
 
+A schema may give an attribute a default, which the plan holds where the configuration
+leaves it out. Writing the default out, or taking it out again, changes nothing:
+`special = false` on a `random_string` that left it out plans no change. Taking out
+another value goes back to the default.
+
 A schema may call a list a set: its order is not a change, and a member written twice is
 held once. A plan shows a change to a set as the members it loses and gains.
 

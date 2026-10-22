@@ -277,6 +277,8 @@ export interface SchemaDefinition {
   kept?: boolean;
   /** Whatever it holds is sensitive, the configuration's or the provider's. */
   sensitive?: boolean;
+  /** Planned where the configuration leaves it out, so writing it out changes nothing. */
+  default?: unknown;
 }
 
 export type Schema = Record<string, SchemaDefinition>;
