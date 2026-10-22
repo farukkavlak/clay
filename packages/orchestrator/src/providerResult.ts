@@ -1,4 +1,16 @@
-import { AttributePath, containsUnknown, isType, isUnknown, Schema, SchemaDefinition, touchesSensitive, unknownPaths } from '@clay/contracts';
+import {
+  AttributePath,
+  containsUnknown,
+  isType,
+  isUnknown,
+  MAX_NESTING,
+  nestingOf,
+  Schema,
+  SchemaDefinition,
+  touchesSensitive,
+  typeNestingOf,
+  unknownPaths,
+} from '@clay/contracts';
 import { Mismatch, offFinal } from '@clay/planner';
 import { isDeepStrictEqual } from 'node:util';
 
@@ -76,8 +88,10 @@ export function checkDataSourceGiven(type: string, schema: Schema, given: Record
 
 /** Otherwise a bad type would only fail when a saved plan holding it is read back. */
 function checkTypes(named: string, schema: Schema): void {
-  for (const [name, definition] of Object.entries(schema))
+  for (const [name, definition] of Object.entries(schema)) {
     if (!isType(definition.type)) throw new Error(`${named} gives ${name} a type Clay cannot read, which is a bug in the provider`);
+    if (typeNestingOf(definition.type) > MAX_NESTING) throw new Error(`${named} gives ${name} a type nested more than ${MAX_NESTING} levels deep, which is a bug in the provider`);
+  }
 }
 
 /** As a plan holds it, or undefined where its type does not hold it. */
@@ -96,6 +110,7 @@ function checkDefault(type: string, name: string, definition: SchemaDefinition):
 
   if (definition.default === undefined) return;
   if (definition.default === null) throw bug(' of null');
+  if (nestingOf(definition.default) > MAX_NESTING) throw bug(` nested more than ${MAX_NESTING} levels deep`);
   if (containsUnknown(definition.default)) throw bug(' that is not known');
   if (definition.required) throw bug(', but it is required');
   if (definition.computed) throw bug(', but it computes it');
@@ -129,8 +144,20 @@ export function checkDataSourceSchema(type: string, schema: Schema): Schema {
   return schema;
 }
 
-/** A value of the wrong type is a provider bug; `did` names the step in the message. */
+/** Names what is nested too deep for Clay to hold, since every walk over a value recurses. */
+export function tooDeep(values: Record<string, unknown>): string[] {
+  return Object.keys(values).filter((name) => nestingOf(values[name]) > MAX_NESTING);
+}
+
+/** Refused before anything walks it, which could overflow the stack. */
+export function checkNesting(type: string, did: string, values: Record<string, unknown>): void {
+  const lines = tooDeep(values).map((name) => `  ${spelled([name])} is nested more than ${MAX_NESTING} levels deep`);
+  if (lines.length > 0) throw new Error([`${type} ${did} what Clay cannot hold, which is a bug in the provider:`, ...lines].join('\n'));
+}
+
+/** A value of the wrong type or nested too deep is a provider bug; `did` names the step in the message. */
 export function heldBy(type: string, did: string, schema: Schema, values: Record<string, unknown>): Record<string, Value> {
+  checkNesting(type, did, values);
   try {
     return typedValues(schema, values);
   } catch (error) {

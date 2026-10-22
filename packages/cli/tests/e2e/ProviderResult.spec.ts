@@ -1,4 +1,4 @@
-import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types, UNKNOWN, UpdateRequest } from '@clay/contracts';
+import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, Type, types, UNKNOWN, UpdateRequest } from '@clay/contracts';
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
@@ -144,6 +144,69 @@ class FickleProvider extends MisnamingProvider {
     const { after, replace } = planFromSchema(await this.getSchema(), request);
     this.plans += 1;
     return { after: { ...after, id: `plan-${this.plans}` }, replace };
+  }
+}
+
+function nestedList(levels: number): unknown {
+  let value: unknown = 'x';
+  for (let level = 0; level < levels; level++) value = [value];
+  return value;
+}
+
+function nestedListType(levels: number): Type {
+  let type: Type = types.string;
+  for (let level = 0; level < levels; level++) type = types.list(type);
+  return type;
+}
+
+/** Plans `out` as `planned` and makes it as `made`, however deep either is. */
+class DeepProvider extends LoudProvider {
+  override readonly resources = ['deep'];
+
+  constructor(
+    private planned: unknown,
+    private made: unknown = planned
+  ) {
+    super();
+  }
+
+  override async getSchema(): Promise<Schema> {
+    return { label: { type: types.string, required: true }, out: { type: types.dynamic, computed: true } };
+  }
+
+  override async plan(_type: string, request: PlanRequest): Promise<PlannedChange> {
+    const { after, replace } = planFromSchema(await this.getSchema(), request);
+    return { after: { ...after, out: this.planned }, replace };
+  }
+
+  override async create(_type: string, { config }: CreateRequest): Promise<Record<string, unknown>> {
+    return { ...config, out: this.made };
+  }
+
+  override async update(_type: string, { config }: UpdateRequest): Promise<Record<string, unknown>> {
+    return { ...config, out: this.made };
+  }
+}
+
+/** Gives `extra` a default nested `levels` deep. */
+class DeepDefaultEcho extends EchoProvider {
+  constructor(private levels: number) {
+    super();
+  }
+
+  override async getSchema(): Promise<Schema> {
+    return { label: { type: types.string, required: true }, extra: { type: types.dynamic, default: nestedList(this.levels) } };
+  }
+}
+
+/** Gives its label a list type nested `levels` deep. */
+class DeepSchemaEcho extends EchoProvider {
+  constructor(private levels: number) {
+    super();
+  }
+
+  override async getSchema(): Promise<Schema> {
+    return { label: { type: nestedListType(this.levels), required: true } };
   }
 }
 
@@ -473,5 +536,97 @@ describe('a schema a provider gives', () => {
     for await (const event of start(newOrchestrator(new EchoProvider()), config)) if (event.type === 'failed') throw event.error;
 
     await expect(newOrchestrator(new MuddledEcho()).plan(config)).rejects.toThrow(`echo.a: ${refused}`);
+  });
+});
+
+const tooDeep = (type: string, did: string, name: string) => `${type} ${did} what Clay cannot hold, which is a bug in the provider:\n  ${name} is nested more than 100 levels deep`;
+
+// Every walk over a value recurses, so the depth is refused where the value enters, past where the stack would overflow.
+describe('a value a provider gives nested too deep', () => {
+  let dir: string;
+
+  const newOrchestrator = (provider: Provider) => {
+    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
+    engine.registerProvider(provider);
+    return engine;
+  };
+
+  const apply = async (provider: Provider, config: string) => {
+    const failures: Error[] = [];
+    for await (const event of start(newOrchestrator(provider), config)) if (event.type === 'failed') failures.push(event.error);
+    return failures;
+  };
+
+  beforeEach(async () => {
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-deep-result-'));
+  });
+
+  afterEach(async () => {
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it('is kept in state and planned again as no change at 100 levels', async () => {
+    const config = 'resource "deep" "a" { label = "a" }';
+
+    expect(await apply(new DeepProvider(nestedList(100)), config)).toEqual([]);
+
+    const state = await new LocalBackend(dir).read();
+    expect(state.resources['deep.a'].attributes.out).toEqual(nestedList(100));
+    const plan = await newOrchestrator(new DeepProvider(nestedList(100))).plan(config);
+    expect(plan.actions.map((action) => action.type)).toEqual(['NO_OP']);
+  });
+
+  it.each([101, 20_000])('is refused at the resource when planned %i levels deep', async (levels) => {
+    await expect(newOrchestrator(new DeepProvider(nestedList(levels))).plan('\nresource "deep" "a" { label = "a" }')).rejects.toMatchObject({
+      message: tooDeep('deep', 'planned', 'out'),
+      position: { file: 'main.clay', line: 2, column: 1 },
+    });
+  });
+
+  // The object exists, so state keeps it to be destroyed, but without what it could not read back.
+  it('stops the run when made deeper than planned, and keeps the object in state without that value', async () => {
+    const failures = await apply(new DeepProvider(UNKNOWN, nestedList(20_000)), 'resource "deep" "a" { label = "a" }');
+
+    expect(failures.map(({ message }) => message)).toEqual([tooDeep('deep', 'returned', 'out')]);
+    const state = await new LocalBackend(dir).read();
+    expect(state.resources['deep.a'].attributes).toEqual({ label: 'a' });
+  });
+
+  it('stops the run when updated deeper than planned, and keeps the object in state without that value', async () => {
+    expect(await apply(new DeepProvider('x'), 'resource "deep" "a" { label = "a" }')).toEqual([]);
+
+    const failures = await apply(new DeepProvider(UNKNOWN, nestedList(20_000)), 'resource "deep" "a" { label = "b" }');
+
+    expect(failures.map(({ message }) => message)).toEqual([tooDeep('deep', 'returned', 'out')]);
+    const state = await new LocalBackend(dir).read();
+    expect(state.resources['deep.a'].attributes).toEqual({ label: 'b' });
+  });
+
+  it('is refused at the resource when a refresh reads it', async () => {
+    const config = 'resource "echo" "a" { label = "a" }';
+    expect(await apply(new EchoProvider(), config)).toEqual([]);
+
+    await expect(newOrchestrator(new EchoProvider({ volume: nestedList(101) })).plan(config)).rejects.toThrow(`echo.a: ${tooDeep('echo', 'read', 'volume')}`);
+  });
+
+  it('is refused at the data block when a data source reads it', async () => {
+    await expect(newOrchestrator(new DataReader({ content: nestedList(101) })).plan('\ndata "vague" "v" {}')).rejects.toMatchObject({
+      message: tooDeep('vague', 'read', 'content'),
+      position: { file: 'main.clay', line: 2, column: 1 },
+    });
+  });
+
+  it.each([101, 20_000])('is refused at the resource as a schema type %i levels deep', async (levels) => {
+    await expect(newOrchestrator(new DeepSchemaEcho(levels)).plan('\nresource "echo" "a" { label = "a" }')).rejects.toMatchObject({
+      message: 'echo gives label a type nested more than 100 levels deep, which is a bug in the provider',
+      position: { file: 'main.clay', line: 2, column: 1 },
+    });
+  });
+
+  it.each([101, 20_000])('is refused at the resource as a schema default %i levels deep', async (levels) => {
+    await expect(newOrchestrator(new DeepDefaultEcho(levels)).plan('\nresource "echo" "a" { label = "a" }')).rejects.toMatchObject({
+      message: 'echo gives extra a default nested more than 100 levels deep, which is a bug in the provider',
+      position: { file: 'main.clay', line: 2, column: 1 },
+    });
   });
 });
