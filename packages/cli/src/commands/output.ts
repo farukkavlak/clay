@@ -4,6 +4,7 @@ import { Command } from 'commander';
 import { styleText } from 'node:util';
 
 import { exists } from '../exists';
+import { messageOf } from '../printable';
 import { stateFile } from '../stateFile';
 
 /** JSON includes each type, so a script can tell a set from a list. */
@@ -43,7 +44,7 @@ export function createOutputCommand(): Command {
 
         displayOutputs(state.outputs ?? {}, options.json);
       } catch (error) {
-        console.error(styleText('red', 'Error reading outputs:'), error instanceof Error ? error.message : error);
+        console.error(styleText('red', 'Error reading outputs:'), messageOf(error));
         process.exit(1);
       }
     });

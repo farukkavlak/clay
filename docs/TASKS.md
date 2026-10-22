@@ -317,8 +317,16 @@ change each.
       a column counts code points. Now the padding keeps the line's tabs and counts each
       character as the cells it shows in. Terraform underlines the range in the line
       instead, so its output without colour marks no column
-- [ ] A carriage return inside a line, not before its line feed, is printed with the source
-      line under an error, so the terminal writes the rest of the line over its start
+- [x] A carriage return inside a line, not before its line feed, is printed with the source
+      line under an error, so the terminal writes the rest of the line over its start. An
+      escape does the same: `# \033[2J` in a comment clears the screen, and so does one in a
+      module path, a provider's message or an address on the command line. Terraform prints
+      the source line as it is. Now every error the CLI prints shows each control character,
+      and each direction mark and control, as a character of its own one cell wide
+- [ ] What `plan`, `apply`, `state list`, `state show` and `output` print to stdout can
+      carry a control character from outside Clay: a `for_each` key or a map key holding
+      DEL, a C1 control or a direction control prints raw, since `JSON.stringify` escapes
+      only C0, and so does the timestamp a plan file holds
 
 ## 1. Language
 

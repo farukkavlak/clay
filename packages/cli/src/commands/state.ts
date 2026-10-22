@@ -5,6 +5,7 @@ import { styleText } from 'node:util';
 
 import { exists } from '../exists';
 import { interruptible } from '../interruptible';
+import { messageOf, printable } from '../printable';
 import { show } from '../showPlan';
 import { stateFile } from '../stateFile';
 
@@ -70,7 +71,7 @@ export function createStateCommand(): Command {
         for (const key of Object.keys(state.resources).sort()) console.log(key);
         for (const key of deposed.sort()) console.log(`${key} (deposed)`);
       } catch (error) {
-        console.error(styleText('red', 'Error listing state:'), error instanceof Error ? error.message : String(error));
+        console.error(styleText('red', 'Error listing state:'), messageOf(error));
         process.exit(1);
       }
     });
@@ -88,7 +89,7 @@ export function createStateCommand(): Command {
         const deposed = state.deposed && Object.hasOwn(state.deposed, parsed.toString()) ? state.deposed[parsed.toString()] : [];
 
         if (!resource && deposed.length === 0) {
-          console.error(styleText('red', `Resource not found: ${address}`));
+          console.error(styleText('red', `Resource not found: ${printable(address)}`));
           process.exit(1);
         }
 
@@ -102,7 +103,7 @@ export function createStateCommand(): Command {
           printAttributes(parsed.resourceType, parsed.name, object.attributes, object.sensitive);
         }
       } catch (error) {
-        console.error(styleText('red', 'Error showing resource:'), error instanceof Error ? error.message : String(error));
+        console.error(styleText('red', 'Error showing resource:'), messageOf(error));
         process.exit(1);
       }
     });
@@ -135,7 +136,7 @@ export function createStateCommand(): Command {
           }
         });
       } catch (error) {
-        console.error(styleText('red', 'Error moving resource:'), error instanceof Error ? error.message : String(error));
+        console.error(styleText('red', 'Error moving resource:'), messageOf(error));
         process.exit(1);
       }
     });
@@ -167,7 +168,7 @@ export function createStateCommand(): Command {
           }
         });
       } catch (error) {
-        console.error(styleText('red', 'Error removing resource:'), error instanceof Error ? error.message : String(error));
+        console.error(styleText('red', 'Error removing resource:'), messageOf(error));
         process.exit(1);
       }
     });

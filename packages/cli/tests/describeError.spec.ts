@@ -52,6 +52,28 @@ describe('describeError', () => {
     expect(describeError(atAccent, files)).toContain('\n  1: xe\u0301\n      ^');
   });
 
+  // A control character would move the cursor or start a terminal sequence, so the line would not show as it is.
+  it.each([
+    ['a carriage return', 'x = "a\rb" y', 'x = "a\u240Db" y', 10],
+    ['an escape in a comment', 'x = y # \u001B[2J', 'x = y # \u241B[2J', 4],
+    ['a direction override', 'x = "\u202Eab" y', 'x = "\uFFFDab" y', 10],
+    ['a control joined by a combining accent', 'x = "a\u0007\u0301" y', 'x = "a\u2407\u0301" y', 9],
+    ['a control joined by a zero width joiner', 'x = "a\u0007\u200D" y', 'x = "a\u2407\u200D" y', 9],
+  ])('shows %s in the line as a character of its own, with the caret under the same column', (_, line, shown, before) => {
+    const files = new InMemoryFiles({ 'main.clay': line });
+    const atY = new ConfigError('Unknown name "y"', { file: 'main.clay', line: 1, column: [...line].indexOf('y') + 1 });
+
+    expect(describeError(atY, files)).toContain(`\n  1: ${shown}\n     ${' '.repeat(before)}^`);
+  });
+
+  it('shows a control character in the message as a character of its own', () => {
+    const files = new InMemoryFiles({ 'main.clay': '\u001B' });
+    const atEscape = new ConfigError('Unexpected character: "\u001B"', { file: 'main.clay', line: 1, column: 1 });
+
+    expect(describeError(atEscape, files)).toBe('Unexpected character: "\u241B"\n\n  on main.clay line 1:\n\n  1: \u241B\n     ^');
+    expect(describeError(new Error('Module source not found at: \u001B[31mx'), files)).toBe('Module source not found at: \u241B[31mx');
+  });
+
   it('lets a failure that is no file error through, rather than hide it behind the one being shown', () => {
     const files = failingWith(new TypeError('not a file problem'));
 

@@ -12,6 +12,7 @@ import { describeError } from '../describeError';
 import { interruptible, INTERRUPTED } from '../interruptible';
 import { actionLine, changesNothing, destroyedLine, displayPlan, readLine, shownType } from '../showPlan';
 import { parallelismOption } from '../parallelismOption';
+import { printable } from '../printable';
 import { refreshOption } from '../refreshOption';
 
 /** Counts as the plan summary does: a replace is one add and one destroy. */
@@ -34,7 +35,7 @@ function forgotten(plan: Plan): number {
 }
 
 function printFailures(failures: string[]): void {
-  for (const failure of failures) console.error(styleText('red', 'Failed:'), failure);
+  for (const failure of failures) console.error(styleText('red', 'Failed:'), printable(failure));
 }
 
 /** One failure is the error itself; several are printed and counted. */
@@ -50,7 +51,7 @@ function reportEvent(event: RunEvent, failures: string[]): void {
   if (event.type === 'destroyed') console.log(destroyedLine(event.action));
   if (event.type === 'read') console.log(readLine(event.address, false));
   if (event.type === 'failed') {
-    if (event.stateError) console.error(styleText('red', 'The state could not be saved:'), event.stateError.message);
+    if (event.stateError) console.error(styleText('red', 'The state could not be saved:'), printable(event.stateError.message));
     failures.push(`${Address.of(event.action).toString()}: ${event.error.message}`);
   }
 }

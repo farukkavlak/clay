@@ -3,6 +3,8 @@ import { LocalBackend, StateManager } from '@clay/state';
 import { Command } from 'commander';
 import { styleText } from 'node:util';
 
+import { messageOf } from '../printable';
+
 export function createInitCommand() {
   return new Command('init').description('Initialize a new Clay workspace').action(async () => {
     const cwd = process.cwd();
@@ -16,7 +18,7 @@ export function createInitCommand() {
 
       console.log(styleText(['bold', 'green'], '\nClay initialized successfully! 🚀'));
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = messageOf(error);
       console.error(styleText('red', 'Failed to initialize workspace:'), message);
       process.exit(1);
     }

@@ -153,6 +153,10 @@ Planning failed: var.tags is a tuple and cannot be joined into a string
   in module.app
 ```
 
+A control character in an error, from the configuration, a path or a provider, prints as
+a character of its own, `␛` for an escape, so it cannot move the cursor or start a terminal
+sequence.
+
 ## Packages
 
 | Package          | Does                                                           |
