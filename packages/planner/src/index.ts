@@ -4,6 +4,7 @@ import {
   containsUnknown,
   ExactNumber,
   InstanceKey,
+  isAddress,
   isAttributePaths,
   isDependencies,
   isInstanceKey,
@@ -12,7 +13,6 @@ import {
   isRecord,
   isType,
   isUnknown,
-  ModuleAddress,
   ModuleStep,
   NumberError,
   Output,
@@ -235,14 +235,18 @@ function isModuleFiles(modules: unknown): modules is Record<string, string> {
   return isRecord(modules) && Object.values(modules).every((content) => typeof content === 'string');
 }
 
+/** Only once `isActionAt` has checked each field it reads. */
+function addressOf(action: Record<string, unknown>): Address {
+  return Address.of(action as Pick<Resource, 'modulePath' | 'resourceType' | 'name' | 'key'>);
+}
+
 /** A move may only come from the action's own resource under its count counterpart. */
 function isMovedFrom(action: Record<string, unknown>): boolean {
   if (action.movedFrom === undefined) return true;
-  if (typeof action.resourceType !== 'string' || typeof action.name !== 'string') return false;
 
-  const module = new ModuleAddress((action.modulePath as readonly ModuleStep[] | undefined) ?? []);
-  const address = new Address(module, action.resourceType, action.name, action.key as InstanceKey | undefined);
-  return address.countCounterparts().some((kept) => kept.toString() === action.movedFrom);
+  return addressOf(action)
+    .countCounterparts()
+    .some((kept) => kept.toString() === action.movedFrom);
 }
 
 const SENDS_VALUES = new Set<ActionType>(['CREATE', 'UPDATE', 'REPLACE']);
@@ -296,6 +300,7 @@ function isActionAt(action: Record<string, unknown>): boolean {
     typeof action.name === 'string' &&
     (action.modulePath === undefined || isModulePath(action.modulePath)) &&
     (action.key === undefined || isInstanceKey(action.key)) &&
+    isAddress(addressOf(action).toString()) &&
     isDependencies(action.dependencies)
   );
 }

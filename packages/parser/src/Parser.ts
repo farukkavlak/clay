@@ -1,4 +1,4 @@
-import { ExactNumber, NumberError, Type, types } from '@clay/contracts';
+import { ExactNumber, isName, NAME_RULE, NumberError, RESERVED_TYPES, Type, types } from '@clay/contracts';
 import {
   AttributeValue,
   BoundNode,
@@ -25,14 +25,8 @@ import { ConfigError } from './ConfigError';
 import { readEscapes } from './escapes';
 import { flushed } from './heredoc';
 import { Position } from './Position';
-import { NAME, Step, stepKey } from './reference';
+import { Step, stepKey } from './reference';
 import { Token, TokenType } from './tokens';
-
-/** Reference prefixes, so no resource type or for name may use them. */
-const RESERVED_TYPES = new Set(['module', 'var', 'local', 'data', 'count', 'each', 'path']);
-
-/** A name spelled like one could never be referenced. */
-const KEYWORDS = new Set(['true', 'false', 'null']);
 
 const CLOSING = { [TokenType.RBracket]: ']', [TokenType.RBrace]: '}' };
 
@@ -688,8 +682,7 @@ export class Parser {
   private consumeName(message: string, word: 'name' | 'type' = 'name'): Token {
     const quote = this.consume(TokenType.OQuote, message);
     const token = { ...quote, value: this.plainText(quote, 'label').value };
-    if (!NAME.test(token.value) || KEYWORDS.has(token.value))
-      throw new ConfigError(`Invalid ${word} "${token.value}": a ${word} starts with a letter or underscore, then letters, digits, underscores and dashes.`, token.position);
+    if (!isName(token.value)) throw new ConfigError(`Invalid ${word} "${token.value}": a ${word} ${NAME_RULE}.`, token.position);
 
     return token;
   }

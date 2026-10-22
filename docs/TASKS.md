@@ -258,9 +258,12 @@ change each.
       deposed object is lost. `mapDependencies` walks `state.resources` only. Terraform's
       `state mv` clears the dependencies of current objects and leaves deposed ones. Now
       deposed objects are rewritten too
-- [ ] `clay state mv` takes a destination no configuration can spell:
+- [x] `clay state mv` takes a destination no configuration can spell:
       `clay state mv random_string.r 'random_string.has space'` succeeds, and the next plan
-      destroys it. `Address.parse` checks no name against the identifier rule
+      destroys it. `Address.parse` checks no name against the identifier rule. Terraform
+      reads the address with the configuration's syntax. Now every address read from the
+      command line, a state file or a plan file is held to the configuration's name rule,
+      and so is an output name in a state file
 - [ ] `command_exec` quotes a sensitive value when its command fails: with
       `command = "false ${var.token}"` and `var.token` sensitive, the apply prints
       `Command failed: false s3cr3t-token`. Node's `exec` error holds the whole command

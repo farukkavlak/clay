@@ -10,6 +10,7 @@ import type { Type } from './Type';
 export { Address, isInstanceKey, isModulePath, ModuleAddress, parseDataAddress, spellKey } from './Address';
 export type { InstanceKey, ModuleStep } from './Address';
 export { ExactNumber, NumberError } from './ExactNumber';
+export { isName, NAME, NAME_RULE, RESERVED_TYPES } from './name';
 export { isRecord } from './isRecord';
 export { isType, typeAt, types } from './Type';
 export type { Type } from './Type';
@@ -156,7 +157,7 @@ export function readPaths(paths: unknown, what: string): unknown {
   return paths.map((path: unknown) => (Array.isArray(path) ? path.map((step: unknown) => (step instanceof ExactNumber ? step.toSafeInteger(what) : step)) : path));
 }
 
-function isAddress(text: string): boolean {
+export function isAddress(text: string): boolean {
   try {
     return Address.parse(text).toString() === text;
   } catch (error) {
@@ -208,6 +209,7 @@ function checkResources(resources: Record<string, unknown>, say: (problem: strin
   for (const [address, resource] of Object.entries(resources)) {
     if (!isResource(resource)) say(`"${address}" is not a resource`);
     if (resource.key !== undefined && !isInstanceKey(resource.key)) say(`the key of "${address}" is not a key: a key is a whole number or a string`);
+    Address.parse(address, (reason) => say(`"${address}" is not the address of a resource: ${reason}`));
 
     // Lookups use the key, but a delete is built from the entry's own fields, so they must agree.
     const held = Address.of(resource).toString();

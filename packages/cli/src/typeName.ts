@@ -1,5 +1,4 @@
-import { Type } from '@clay/contracts';
-import { NAME } from '@clay/parser';
+import { NAME, Type } from '@clay/contracts';
 
 function attribute(name: string, spelled: string, optional: boolean): string {
   return `${NAME.test(name) ? name : JSON.stringify(name)} = ${optional ? `optional(${spelled})` : spelled}`;

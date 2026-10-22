@@ -268,6 +268,17 @@ describe('state and output against a real state file', () => {
     expect(Object.keys(state.resources)).toEqual(['local_file.a']);
   });
 
+  it('refuses an mv to a name no configuration can spell, and leaves the state as it was', async () => {
+    await applyConfig();
+    const before = await fs.readFile(path.join(dir, 'clay.state.json'), 'utf8');
+
+    await createStateCommand().parseAsync(['node', 'clay', 'mv', 'local_file.a', 'local_file.has space']);
+
+    expect(process.exit).toHaveBeenCalledWith(1);
+    expect(printed.join('\n')).toContain('Invalid address "local_file.has space": "has space" is not a name');
+    expect(await fs.readFile(path.join(dir, 'clay.state.json'), 'utf8')).toBe(before);
+  });
+
   it('refuses an mv that changes the type', async () => {
     await applyConfig();
 

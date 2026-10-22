@@ -1,5 +1,5 @@
-import { InstanceKey, Schema, Type, types } from '@clay/contracts';
-import { ModuleOutputReference, NAME, Position, spellReference, spellSteps, Step, stepKey } from '@clay/parser';
+import { InstanceKey, NAME, Schema, Type, types } from '@clay/contracts';
+import { ModuleOutputReference, Position, spellReference, spellSteps, Step, stepKey } from '@clay/parser';
 
 import { Repetition } from '../Instances';
 import { placed } from '../place';

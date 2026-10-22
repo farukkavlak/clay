@@ -1,3 +1,5 @@
+import { isName, NAME_RULE, RESERVED_TYPES } from './name';
+
 /** A number under `count`, a string under `for_each`. */
 export type InstanceKey = number | string;
 
@@ -57,6 +59,18 @@ export class ModuleAddress {
 const KEY_FORM = 'a key is a whole number or a quoted string, as in [0] or ["name"]';
 
 type Refuse = (reason: string) => never;
+
+/** A configuration spells each part as a name, so an address with any other could never be planned. */
+function checkNames(module: ModuleAddress, type: string, name: string, refuse: Refuse): void {
+  const checkName = (step: string) => {
+    if (!isName(step)) refuse(`"${step}" is not a name: a name ${NAME_RULE}`);
+  };
+
+  for (const step of module.path) checkName(step.name);
+  if (!isName(type)) refuse(`"${type}" is not a type: a type ${NAME_RULE}`);
+  if (RESERVED_TYPES.has(type)) refuse(`"${type}" cannot be a type: a reference reads "${type}." as something else`);
+  checkName(name);
+}
 
 function invalid(input: string): Refuse {
   return (reason) => {
@@ -147,6 +161,7 @@ export function parseDataAddress(input: string, refuse: Refuse = invalid(input))
 
   // Only the name takes an index or a key, as `data.local_file.f[0]`.
   if (rest.length !== 3 || data.name !== 'data' || data.key !== undefined || type.key !== undefined) refuse('a data source is named data, its type and its name');
+  checkNames(module, type.name, name.name, refuse);
 
   return { module, type: type.name, name: name.name, ...(name.key !== undefined && { key: name.key }) };
 }
@@ -209,15 +224,15 @@ export class Address {
     return new Address(ModuleAddress.root, resourceType, name);
   }
 
-  static parse(input: string): Address {
-    const refuse = invalid(input);
-
+  /** A caller's `refuse` says why the input is not an address, in its own words. */
+  static parse(input: string, refuse: Refuse = invalid(input)): Address {
     const { module, rest } = readModules(readSegments(input, refuse), refuse);
     const [type, name] = rest;
 
     if (rest.length < 2) refuse('an address ends with a type and a name');
     if (type.key !== undefined) refuse('a key comes after the name');
     if (rest.length > 2) refuse(`nothing may follow the name "${name.name}"`);
+    checkNames(module, type.name, name.name, refuse);
 
     return new Address(module, type.name, name.name, name.key);
   }
