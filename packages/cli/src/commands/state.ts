@@ -5,14 +5,14 @@ import { styleText } from 'node:util';
 
 import { exists } from '../exists';
 import { interruptible } from '../interruptible';
-import { messageOf, printable } from '../printable';
+import { attributeName, messageOf, printable } from '../printable';
 import { show } from '../showPlan';
 import { stateFile } from '../stateFile';
 
 /** A resource's attributes as `state show` prints them, a sensitive part hidden. */
 function printAttributes(resourceType: string, name: string, attributes: Record<string, unknown>, sensitive: Resource['sensitive']): void {
   console.log(`resource "${resourceType}" "${name}" {`);
-  for (const [key, value] of Object.entries(attributes)) console.log(`  ${key} = ${show(value, sensitiveUnder(sensitive ?? [], key))}`);
+  for (const [key, value] of Object.entries(attributes)) console.log(`  ${attributeName(key)} = ${show(value, sensitiveUnder(sensitive ?? [], key))}`);
 
   console.log('}');
 }
@@ -32,7 +32,7 @@ function getStateManager(backend = stateFile()): StateManager {
 async function reportEmpty(path: string): Promise<void> {
   const found = await exists(path);
 
-  console.log(styleText('yellow', found ? `No resources in ${path}` : `No state file found at ${path}`));
+  console.log(styleText('yellow', printable(found ? `No resources in ${path}` : `No state file found at ${path}`)));
 }
 
 /** Own keys only, so `toString` is not a resource. */

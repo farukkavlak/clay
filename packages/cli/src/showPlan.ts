@@ -1,7 +1,8 @@
-import { Address, AttributePath, isRecord, isUnknown, Output, samePaths, Schema, SENSITIVE, sensitiveUnder } from '@clay/contracts';
+import { Address, AttributePath, isRecord, isUnknown, jsonText, Output, samePaths, Schema, SENSITIVE, sensitiveUnder } from '@clay/contracts';
 import { changedOutside, Changes, Drift, OutputChanges, Plan, PlanAction } from '@clay/planner';
 import { isDeepStrictEqual, styleText } from 'node:util';
 
+import { attributeName } from './printable';
 import { typeName } from './typeName';
 
 /** A move, or a change of marks or of what a destroy is prevented, changes state. */
@@ -49,13 +50,13 @@ export function show(value: unknown, sensitive: readonly AttributePath[] = []): 
   if (sensitive.some((path) => path.length === 0)) return SENSITIVE;
   if (isUnknown(value)) return '(known after apply)';
   if (Array.isArray(value)) return `[${value.map((item, index) => show(item, sensitiveUnder(sensitive, index))).join(',')}]`;
-  // Numbers are ExactNumbers, which JSON.stringify writes exactly.
+  // Numbers are ExactNumbers, which JSON text writes exactly.
   if (isRecord(value))
     return `{${Object.entries(value)
-      .map(([key, item]) => `${JSON.stringify(key)}:${show(item, sensitiveUnder(sensitive, key))}`)
+      .map(([key, item]) => `${jsonText(key)}:${show(item, sensitiveUnder(sensitive, key))}`)
       .join(',')}}`;
 
-  return JSON.stringify(value);
+  return jsonText(value);
 }
 
 function showOr(value: unknown, whenAbsent: string, sensitive: readonly AttributePath[]): string {
@@ -94,11 +95,11 @@ function displayChanges(changes: Changes, schema: Schema, sensitive: readonly At
     const under = sensitiveUnder(sensitive, key);
     const isSet = Object.hasOwn(schema, key) && schema[key].type.kind === 'set';
     if (isSet && under.length === 0 && Array.isArray(change.old) && Array.isArray(change.new)) {
-      console.log(`      ${key}:`);
+      console.log(`      ${attributeName(key)}:`);
       displayMembers(change.old, change.new, '        ');
     }
     // An unknown, added or removed set has no members on one side to compare, and a sensitive one shows none.
-    else console.log(`      ${key}: ${showOr(change.old, '(none)', under)} -> ${showOr(change.new, '(removed)', under)}`);
+    else console.log(`      ${attributeName(key)}: ${showOr(change.old, '(none)', under)} -> ${showOr(change.new, '(removed)', under)}`);
   }
 }
 
@@ -113,7 +114,7 @@ function marksNote(before: AttributePath[], after: AttributePath[]): string | un
 function displayMarks(before: AttributePath[], after: AttributePath[]): void {
   for (const key of new Set([...before, ...after].map(([attribute]) => String(attribute)))) {
     const note = marksNote(sensitiveUnder(before, key), sensitiveUnder(after, key));
-    if (note) console.log(`      ${key}: ${note}`);
+    if (note) console.log(`      ${attributeName(key)}: ${note}`);
   }
 }
 

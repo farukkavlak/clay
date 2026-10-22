@@ -323,10 +323,14 @@ change each.
       module path, a provider's message or an address on the command line. Terraform prints
       the source line as it is. Now every error the CLI prints shows each control character,
       and each direction mark and control, as a character of its own one cell wide
-- [ ] What `plan`, `apply`, `state list`, `state show` and `output` print to stdout can
+- [x] What `plan`, `apply`, `state list`, `state show` and `output` print to stdout can
       carry a control character from outside Clay: a `for_each` key or a map key holding
       DEL, a C1 control or a direction control prints raw, since `JSON.stringify` escapes
-      only C0, and so does the timestamp a plan file holds
+      only C0, and so does the timestamp a plan file holds. Terraform quotes with Go's `%q`,
+      which escapes them, but prints a multi-line string raw. Now a quoted value, key or
+      address escapes them as `\u007f`, so `output --json` reads back as the same value;
+      an address with one raw is refused, a path shows it as a character of its own, and a
+      plan file's timestamp must be one Clay writes
 
 ## 1. Language
 

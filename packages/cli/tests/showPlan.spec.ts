@@ -76,3 +76,34 @@ describe('showing a sensitive set attribute', () => {
     expect(printed.join('\n')).not.toMatch(/"a"|"b"/);
   });
 });
+
+describe('showing an attribute whose name a configuration cannot write bare', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('quotes the name and escapes a control character in it, in a change, a set change and a change of marks', () => {
+    const plan: Plan = {
+      serial: 0,
+      actions: [
+        { type: 'UPDATE', resourceType: 'x', name: 'a', planned: {}, after: {}, changes: { ['b\u007F']: { old: 'c', new: 'd' } } },
+        { type: 'UPDATE', resourceType: 'x', name: 'b', planned: {}, after: {}, changes: { ['s\u007F']: { old: ['c'], new: ['d'] } } },
+        { type: 'UPDATE', resourceType: 'x', name: 'c', planned: {}, after: {}, sensitive: [['m\u007F']], changes: {} },
+      ],
+      outputs: {},
+      prevRun: {},
+      prior: {},
+      schemas: { x: { ['s\u007F']: { type: members } } },
+      dataSources: {},
+      readAtApply: [],
+    };
+    const printed: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => printed.push(stripVTControlCharacters(args.join(' '))));
+
+    displayPlan(plan);
+
+    expect(printed).toContain(String.raw`      "b\u007f": "c" -> "d"`);
+    expect(printed).toContain(String.raw`      "s\u007f":`);
+    expect(printed).toContain(String.raw`      "m\u007f": will be marked sensitive`);
+  });
+});

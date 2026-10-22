@@ -1,3 +1,4 @@
+import { STATE_VERSION } from '@clay/contracts';
 import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -102,12 +103,13 @@ describe('a control character in what the CLI prints', () => {
     expect(printed).not.toContain(ESCAPE);
   });
 
-  it('shows a direction override in an address the state does not hold as a character of its own', async () => {
+  it('refuses a direction override written raw in an address, shows it as a character of its own and says how to write it', async () => {
     await written('resource "null_resource" "n" {}\n');
 
     const printed = await failing('state', 'show', 'null_resource.n["a\u202Eb"]');
 
-    expect(printed).toContain('Resource not found: null_resource.n["a\uFFFDb"]');
+    expect(printed).toContain('null_resource.n["a\uFFFDb"]');
+    expect(printed).toContain(String.raw`a key is written as ["a\u202eb"]`);
     expect(printed).not.toContain('\u202E');
   });
 
@@ -133,6 +135,99 @@ describe('a control character in what the CLI prints', () => {
     const printed = await failing('state', ...args);
 
     expect(printed).toContain('\u241B[2J');
+    expect(printed).not.toContain(ESCAPE);
+  });
+});
+
+// Escaped as JSON escapes the rest, so a value reads back whole and the terminal is left alone.
+const RAW = ['\u007F', '\u0085', '\u202E'];
+const KEY = String.raw`a\u007F\u0085\u202Eb`;
+const SHOWN = String.raw`a\u007f\u0085\u202eb`;
+
+describe('a control character in what the CLI prints to stdout', () => {
+  let dir: string;
+
+  const succeeding = async (...args: string[]) => {
+    const { stdout } = await promisify(execFile)('node', [clay, ...args], { cwd: dir });
+    return stdout;
+  };
+
+  const expectEscaped = (printed: string) => {
+    expect(printed).toContain(SHOWN);
+    for (const raw of RAW) expect(printed).not.toContain(raw);
+    expect(printed).not.toContain(ESCAPE);
+  };
+
+  beforeEach(async () => {
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), `clay-control-${ESCAPE}-`));
+    const config = `
+      resource "null_resource" "n" {
+        for_each = { "${KEY}" = "${KEY}" }
+        triggers = { "${KEY}" = each.value }
+      }
+      output "o" { value = { "${KEY}" = "${KEY}" } }
+    `;
+    await fs.writeFile(path.join(dir, 'main.clay'), config, 'utf8');
+  });
+
+  afterEach(async () => {
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it('escapes them in a plan', async () => {
+    expectEscaped(await succeeding('plan'));
+  });
+
+  it('escapes them in an apply', async () => {
+    expectEscaped(await succeeding('apply', '--yes'));
+  });
+
+  it.each([
+    ['state list', ['state', 'list']],
+    ['state show', ['state', 'show', `null_resource.n["${SHOWN}"]`]],
+    ['output', ['output']],
+  ])('escapes them in %s', async (_, args) => {
+    await succeeding('apply', '--yes');
+
+    expectEscaped(await succeeding(...args));
+  });
+
+  it('quotes an attribute name with a control character in it, in state show', async () => {
+    const resource = { resourceType: 'null_resource', name: 'm', attributes: { ['x\u007F']: 'v' } };
+    await fs.writeFile(path.join(dir, 'clay.state.json'), JSON.stringify({ version: STATE_VERSION, serial: 0, resources: { 'null_resource.m': resource } }), 'utf8');
+
+    const printed = await succeeding('state', 'show', 'null_resource.m');
+
+    expect(printed).toContain(String.raw`  "x\u007f" = "v"`);
+    expect(printed).not.toContain('\u007F');
+  });
+
+  it('escapes them in output --json, which still reads back as the value', async () => {
+    await succeeding('apply', '--yes');
+
+    const printed = await succeeding('output', '--json');
+
+    expectEscaped(printed);
+    const key = `a${RAW.join('')}b`;
+    expect(JSON.parse(printed)).toMatchObject({ o: { value: { [key]: key } } });
+  });
+
+  it.each([
+    ['output', ['output']],
+    ['state list', ['state', 'list']],
+  ])('shows an escape in the path of a state it cannot find as a character of its own, in %s', async (_, args) => {
+    const printed = await succeeding(...args);
+
+    expect(printed).toContain('No state file found at');
+    expect(printed).toContain('\u241B');
+    expect(printed).not.toContain(ESCAPE);
+  });
+
+  it('shows an escape in the path a plan is saved to as a character of its own', async () => {
+    const printed = await succeeding('plan', '--out', path.join(dir, 'plan.json'));
+
+    expect(printed).toContain('Plan saved to');
+    expect(printed).toContain('\u241B');
     expect(printed).not.toContain(ESCAPE);
   });
 });

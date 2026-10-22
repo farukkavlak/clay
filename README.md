@@ -157,6 +157,10 @@ A control character in an error, from the configuration, a path or a provider, p
 a character of its own, `␛` for an escape, so it cannot move the cursor or start a terminal
 sequence.
 
+`plan`, `apply`, `state` and `output` write a control character or direction mark in a
+quoted value, key or address as JSON does, `"a\u007f"`, so `output --json` reads back as
+the same value.
+
 ## Packages
 
 | Package          | Does                                                           |

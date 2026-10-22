@@ -7,6 +7,7 @@ import { styleText } from 'node:util';
 
 import { newOrchestrator } from '../engine';
 import { describeError } from '../describeError';
+import { printable } from '../printable';
 import { displayPlan } from '../showPlan';
 import { refreshOption } from '../refreshOption';
 
@@ -22,7 +23,7 @@ async function executePlan(cwd: string, files: RecordingFiles, configContent: st
     // main.clay is saved as the plan's config, so the modules leave it out.
     const modules = Object.fromEntries(Object.entries(files.snapshot()).filter(([file]) => file !== CONFIG_FILE));
     await fs.writeFile(outFile, serializePlan(planned, configContent, modules), 'utf8');
-    console.log(styleText('green', `\nPlan saved to: ${outFile}`));
+    console.log(styleText('green', `\nPlan saved to: ${printable(outFile)}`));
   }
 }
 

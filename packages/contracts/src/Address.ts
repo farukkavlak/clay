@@ -1,3 +1,4 @@
+import { jsonText } from './jsonText';
 import { isName, NAME_RULE, RESERVED_TYPES } from './name';
 
 /** A number under `count`, a string under `for_each`. */
@@ -9,7 +10,7 @@ export function isInstanceKey(value: unknown): value is InstanceKey {
 
 /** `[0]` or `["a"]`, nothing with no key. */
 export function spellKey(key: InstanceKey | undefined): string {
-  return key === undefined ? '' : `[${JSON.stringify(key)}]`;
+  return key === undefined ? '' : `[${jsonText(key)}]`;
 }
 
 export interface ModuleStep {
@@ -98,7 +99,7 @@ function readKey(text: string, refuse: Refuse): InstanceKey {
     throw error;
   }
 
-  return JSON.stringify(key) === inner ? (key as string) : refuse(`a key is written as [${JSON.stringify(key)}]`);
+  return jsonText(key) === inner ? (key as string) : refuse(`a key is written as [${jsonText(key)}]`);
 }
 
 type Segment = ModuleStep;
