@@ -277,8 +277,9 @@ change each.
       `special` is `forceNew` and a left-out value is not `false`. The provider contract
       has no defaults. Terraform's plugin framework has `Default`, planned where the
       configuration is null. Now a schema gives a default, and the plan holds it
-- [ ] `clay output --json` with no state prints a plain-text line to stdout and exits 0, so
-      a script that reads it as JSON breaks
+- [x] `clay output --json` with no state prints a plain-text line to stdout and exits 0, so
+      a script that reads it as JSON breaks. Now it prints `{}`, as an empty state does;
+      Terraform does the same
 - [x] `clay state rm` of an address the state does not hold exits 0, where `state show`
       exits 1. Terraform refuses it. Now it exits 1 and writes nothing
 - [ ] A value nested 20000 deep, or 6000 chained locals, ends in a stack overflow,

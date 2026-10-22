@@ -64,4 +64,10 @@ describe('the clay command', () => {
 
     expect(stderr).toBe('');
   });
+
+  it('prints an empty JSON object for output --json before any state exists', async () => {
+    const { stdout } = await run('node', [clay, 'output', '--json'], { cwd: dir });
+
+    expect(JSON.parse(stdout)).toEqual({});
+  });
 });
