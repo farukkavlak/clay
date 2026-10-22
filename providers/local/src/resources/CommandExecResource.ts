@@ -16,7 +16,7 @@ export class CommandExecResource implements ResourceHandler {
       id: { type: types.string, computed: true, kept: true },
       command: { type: types.string, required: true, forceNew: false },
       cwd: { type: types.string, required: false, forceNew: false },
-      stdout: { type: types.string, computed: true },
+      stdout: { type: types.string, computed: true, sensitiveWith: ['command', 'cwd'] },
     };
   }
 

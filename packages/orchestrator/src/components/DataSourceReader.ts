@@ -42,7 +42,7 @@ export class DataSourceReader {
 
       // A schema attribute neither the configuration nor the read gives is null.
       const leftOut = Object.entries(schema).map(([name, { type }]) => [name, valueOf(type, null)]);
-      return this.keep(at, schemaRemarked(schema, remarked({ ...Object.fromEntries(leftOut), ...typedValues(schema, config), ...valued }, given)));
+      return this.keep(at, schemaRemarked(schema, remarked({ ...Object.fromEntries(leftOut), ...typedValues(schema, config), ...valued }, given), given));
     } catch (error) {
       throw withPlace(error, writtenAt(error, stmt), spell(stmt), at);
     }
@@ -58,7 +58,7 @@ export class DataSourceReader {
       const provider = this.providers.reader(stmt.dataSourceType);
       await hidingReason(stmt.dataSourceType, marksOf(schema, given), () => provider.validateDataSource(stmt.dataSourceType, config));
       const later = Object.entries(schema).map(([name, { type }]) => [name, valueOf(type, UNKNOWN)]);
-      return this.keep(at, schemaRemarked(schema, remarked({ ...Object.fromEntries(later), ...typedValues(schema, config) }, given)));
+      return this.keep(at, schemaRemarked(schema, remarked({ ...Object.fromEntries(later), ...typedValues(schema, config) }, given), given));
     } catch (error) {
       throw withPlace(error, writtenAt(error, stmt), spell(stmt), at);
     }

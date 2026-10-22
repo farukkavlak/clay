@@ -83,6 +83,36 @@ describe('a schema a provider gives', () => {
     expect(checkSchema('echo', given)).toBe(given);
   });
 
+  it.each([
+    ['a name the schema does not have', { out: { type: types.string, computed: true, sensitiveWith: ['in'] } }, 'echo marks out sensitive with in, an attribute it does not have'],
+    ['its own name', { out: { type: types.string, computed: true, sensitiveWith: ['out'] } }, 'echo marks out sensitive with itself'],
+    [
+      'a value it does not compute',
+      { in: { type: types.string }, out: { type: types.string, sensitiveWith: ['in'] } },
+      'echo marks out sensitive with others, which it does not compute; only a computed value can be',
+    ],
+    [
+      'something other than names',
+      { out: { type: types.string, computed: true, sensitiveWith: 'in' } } as unknown as Schema,
+      'echo marks out sensitive with something other than a list of names',
+    ],
+    [
+      'a list holding other than names',
+      { out: { type: types.string, computed: true, sensitiveWith: [1] } } as unknown as Schema,
+      'echo marks out sensitive with something other than a list of names',
+    ],
+  ] satisfies [string, Schema, string][])('is refused where a value is sensitive with %s', (_, given, message) => {
+    expect(() => checkSchema('echo', given)).toThrow(`${message}, which is a bug in the provider`);
+    expect(() => checkDataSourceSchema('echo', given)).toThrow(`data source ${message}, which is a bug in the provider`);
+  });
+
+  it('takes a computed value sensitive with others it has', () => {
+    const given: Schema = { in: { type: types.string }, out: { type: types.string, computed: true, sensitiveWith: ['in'] } };
+
+    expect(checkSchema('echo', given)).toBe(given);
+    expect(checkDataSourceSchema('echo', given)).toBe(given);
+  });
+
   it('is refused for a data source with a default, which is never planned', () => {
     const given: Schema = { lid: { type: types.bool, default: false } };
 

@@ -15,6 +15,8 @@ const HIDDEN_BOTH = '(sensitive value) -> (sensitive value)';
 const triggers = (name: string) =>
   `module "db" { source = "./db" }\nresource "null_resource" "n" {\n  triggers = { name = "${name}", token = module.db.password, list = ["a", module.db.password] }\n}\n`;
 
+const exec = (command: string, lifecycle = '') => `module "db" { source = "./db" }\nresource "command_exec" "c" {\n  command = "${command}"\n${lifecycle}}\n`;
+
 const pair = (a: string, b: string) => `module "db" { source = "./db" }\nresource "null_resource" "n" {\n  triggers = { a = ${a}, b = ${b} }\n}\n`;
 
 describe('a resource attribute given a sensitive value, as the CLI prints it', () => {
@@ -118,6 +120,44 @@ describe('a resource attribute given a sensitive value, as the CLI prints it', (
     const shown = await clayIn('state', 'show', 'null_resource.n');
 
     expect(shown).toContain('  triggers = {"name":"app","token":(sensitive value),"list":["a",(sensitive value)]}\n');
+    expect(shown).not.toContain('hunter2');
+  });
+
+  it('hides what a command prints when the command holds a sensitive value, and only then', async () => {
+    await written(
+      'module "db" { source = "./db" }\nresource "command_exec" "secret" { command = "echo ${module.db.password}" }\nresource "command_exec" "plain" { command = "echo hello" }\n'
+    );
+    await clayIn('apply', '--yes');
+
+    const secret = await clayIn('state', 'show', 'command_exec.secret');
+    const plain = await clayIn('state', 'show', 'command_exec.plain');
+
+    expect(secret).toContain('  stdout = (sensitive value)\n');
+    expect(secret).not.toContain('hunter2');
+    expect(plain).toContain('  stdout = "hello\\n"\n');
+  });
+
+  it('keeps what a command printed hidden while the sensitive command is ignored', async () => {
+    await written(exec('echo ${module.db.password}'));
+    await clayIn('apply', '--yes');
+    await written(exec('echo hi', '  lifecycle { ignore_changes = [command] }\n'));
+
+    const planned = await clayIn('plan');
+    await clayIn('apply', '--yes');
+    const shown = await clayIn('state', 'show', 'command_exec.c');
+
+    expect(planned).not.toContain('will no longer be marked sensitive');
+    expect(shown).toContain('  stdout = (sensitive value)\n');
+    expect(shown).not.toContain('hunter2');
+  });
+
+  it('hides the id of a file whose path is sensitive', async () => {
+    await written(`module "db" { source = "./db" }\nresource "local_file" "f" {\n  path    = "${path.join(dir, '${module.db.password}.txt')}"\n  content = "x"\n}\n`);
+    await clayIn('apply', '--yes');
+
+    const shown = await clayIn('state', 'show', 'local_file.f');
+
+    expect(shown).toContain('  id = (sensitive value)\n');
     expect(shown).not.toContain('hunter2');
   });
 

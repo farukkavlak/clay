@@ -30,9 +30,29 @@ describe('the marks a schema gives', () => {
   });
 
   it('marks as a whole the values of the attributes the schema marks, and no other', () => {
-    const marked = schemaRemarked(schema, { token: text('t'), name: text('n') });
+    const marked = schemaRemarked(schema, { token: text('t'), name: text('n') }, {});
 
     expect(marked.token.sensitive).toEqual([[]]);
     expect(marked.name).not.toHaveProperty('sensitive');
+  });
+});
+
+describe('an attribute the schema marks sensitive with others', () => {
+  const echoing: Schema = {
+    command: { type: types.string, required: true },
+    cwd: { type: types.string, optional: true },
+    stdout: { type: types.string, computed: true, sensitiveWith: ['command', 'cwd'] },
+  };
+
+  it('is sensitive as a whole where one of them holds a sensitive part', () => {
+    const command = withSensitive(valueOf(types.string, 'echo s'), [[]]);
+
+    expect(marksOf(echoing, { command })).toEqual([['stdout'], ['command']]);
+    expect(schemaRemarked(echoing, { stdout: text('s') }, { cwd: allSensitive(text('/s')) }).stdout.sensitive).toEqual([[]]);
+  });
+
+  it('is not sensitive where none of them is', () => {
+    expect(marksOf(echoing, { command: text('echo hi') })).toEqual([]);
+    expect(schemaRemarked(echoing, { stdout: text('hi') }, { command: text('echo hi') }).stdout).not.toHaveProperty('sensitive');
   });
 });

@@ -102,7 +102,7 @@ async function keepingTheFile(change: PlannedChange, prior: Record<string, unkno
 export class LocalFileResource implements ResourceHandler {
   async getSchema(): Promise<Schema> {
     return {
-      id: { type: types.string, computed: true, kept: true },
+      id: { type: types.string, computed: true, kept: true, sensitiveWith: ['path'] },
       path: { type: types.string, required: true, forceNew: true },
       content: { type: types.string, required: true, forceNew: false },
     };

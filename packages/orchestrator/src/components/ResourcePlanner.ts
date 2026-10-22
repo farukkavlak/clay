@@ -6,8 +6,8 @@ import { keepPrior } from '../ignoredChanges';
 import { heldBy, hidingReason, undisclosed } from '../providerResult';
 import { ProviderRegistry } from '../ProviderRegistry';
 import { shown } from '../shown';
-import { marksOf } from '../schemaMarks';
-import { plainOf, Value } from '../Value';
+import { withSchemaMarks } from '../schemaMarks';
+import { plainOf, sensitiveAmong, Value } from '../Value';
 
 /** The resource as it is held now, and the paths of it the configuration does not change. */
 export interface Ignoring {
@@ -88,9 +88,10 @@ export class ResourcePlanner {
   async plan(type: string, schema: Schema, current: Resource | undefined, written: Record<string, Value>, ignoring?: Ignoring): Promise<ResourcePlan> {
     const provider = this.providers.get(type);
     const given = conformed(type, schema, written);
-    const { config, sensitive } = ignoring
-      ? keepPrior(plainOf(given), marksOf(schema, given), ignoring.prior, ignoring.paths)
-      : { config: plainOf(given), sensitive: marksOf(schema, given) };
+    const kept = ignoring ? keepPrior(plainOf(given), sensitiveAmong(given), ignoring.prior, ignoring.paths) : { config: plainOf(given), sensitive: sensitiveAmong(given) };
+    // After keepPrior, so an attribute made from an ignored one follows the mark it keeps.
+    const { config } = kept;
+    const sensitive = withSchemaMarks(schema, kept.sensitive);
     await hidingReason(type, sensitive, () => provider.validate(type, config));
     if (!current) return { ...(await this.create(provider, type, schema, config, sensitive)), sensitive };
 

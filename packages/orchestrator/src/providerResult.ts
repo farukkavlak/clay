@@ -94,6 +94,23 @@ function checkTypes(named: string, schema: Schema): void {
   }
 }
 
+function sensitiveWithProblem(schema: Schema, name: string, { computed, sensitiveWith }: SchemaDefinition): string | undefined {
+  if (sensitiveWith === undefined) return undefined;
+  if (!Array.isArray(sensitiveWith) || !sensitiveWith.every((other) => typeof other === 'string')) return 'something other than a list of names';
+  if (!computed) return 'others, which it does not compute; only a computed value can be';
+  if (sensitiveWith.includes(name)) return 'itself';
+  const unknown = sensitiveWith.find((other) => !Object.hasOwn(schema, other));
+  return unknown === undefined ? undefined : `${unknown}, an attribute it does not have`;
+}
+
+/** A value made from another must name one the configuration can give, or no mark would ever reach it. */
+function checkSensitiveWith(named: string, schema: Schema): void {
+  for (const [name, definition] of Object.entries(schema)) {
+    const problem = sensitiveWithProblem(schema, name, definition);
+    if (problem) throw new Error(`${named} marks ${name} sensitive with ${problem}, which is a bug in the provider`);
+  }
+}
+
 /** As a plan holds it, or undefined where its type does not hold it. */
 function heldDefault(name: string, definition: SchemaDefinition): unknown {
   try {
@@ -123,6 +140,7 @@ function checkDefault(type: string, name: string, definition: SchemaDefinition):
 /** An invalid schema is a provider bug, refused before anything is planned with it. */
 export function checkSchema(type: string, schema: Schema): Schema {
   checkTypes(type, schema);
+  checkSensitiveWith(type, schema);
   for (const [name, definition] of Object.entries(schema)) {
     if (definition.kept && !definition.computed)
       throw new Error(`${type} keeps ${name}, which it does not compute; only a computed value can be kept, which is a bug in the provider`);
@@ -135,6 +153,7 @@ export function checkSchema(type: string, schema: Schema): Schema {
 /** A data source is only read, so `forceNew` or `kept` in its schema is a provider bug. */
 export function checkDataSourceSchema(type: string, schema: Schema): Schema {
   checkTypes(`data source ${type}`, schema);
+  checkSensitiveWith(`data source ${type}`, schema);
   for (const [name, definition] of Object.entries(schema)) {
     const flag = definition.forceNew ? 'forceNew' : definition.kept ? 'kept' : undefined;
     if (flag) throw new Error(`data source ${type} marks ${name} ${flag}, but only a resource can be ${flag}, which is a bug in the provider`);

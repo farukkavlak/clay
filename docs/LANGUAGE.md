@@ -145,7 +145,11 @@ the whole command.
 A data source given a sensitive value gives it back sensitive at the same parts,
 `data.local_file.f.path` for a sensitive `path`. A value a provider works out from a
 sensitive one is not sensitive, unless its schema marks the attribute sensitive: that
-attribute is sensitive whoever sets it, and null too.
+attribute is sensitive whoever sets it, and null too. A schema can also mark a computed
+attribute sensitive with others it is made from: `command_exec.stdout` is sensitive as a
+whole where `command` or `cwd` holds a sensitive part, so `echo ${var.token}` keeps it
+hidden, and plain otherwise. `local_file.id`, the file's full path, is sensitive where
+`path` is.
 
 Where nothing given is sensitive, a provider's own message is shown as it words it, since
 an I/O error with its path is what a user needs to fix the run.
