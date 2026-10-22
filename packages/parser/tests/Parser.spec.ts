@@ -1398,12 +1398,22 @@ describe('Clay Parser', () => {
       ['indexes read from a value', LOCAL, (levels: number) => 'a' + deep('[a', '', ']')(levels), LOCAL.length + 1 + 2 * 100 + 1],
       ['types', TYPE, deep('list(', 'string', ')'), TYPE.length + 5 * 100 + 1],
       ['lists and maps in turn', LOCAL, inTurn, LOCAL.length + 50 + 3 * 50 + 1],
+      ['parentheses', LOCAL, deep('(', '1', ')'), LOCAL.length + 100 + 1],
+      ['negations', LOCAL, deep('!', 'true', ''), LOCAL.length + 100 + 1],
+      ['conditionals', LOCAL, deep('true ? 1 : ', '1', ''), LOCAL.length + 11 * 100 + 6],
+      ['operators in a chain', LOCAL, (levels: number) => 'true' + ' && true'.repeat(levels), LOCAL.length + 4 + 8 * 100 + 2],
     ])('takes %s nested 100 levels, and refuses one more at its opening', (_, start, nested, column) => {
       expect(() => makeParser(`${start}${nested(100)} }`).parse()).not.toThrow();
 
       const error = errorOf(`${start}${nested(101)} }`);
       expect(error.message).toBe('Nested more than 100 levels deep');
       expect(error.position).toEqual(at(1, column));
+    });
+
+    it('counts only the operators around a value, not those of a chain closed before it', () => {
+      const items = Array.from({ length: 101 }, () => 'a.x == 1').join(', ');
+
+      expect(makeParser(`locals { x = [${items}] }`).parse()).toHaveLength(1);
     });
 
     it('counts only the openings around a value, not those closed before it', () => {

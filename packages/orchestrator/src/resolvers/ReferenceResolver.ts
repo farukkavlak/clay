@@ -1,13 +1,16 @@
-import { Address, emptyState, EVERY_ITEM, ExactNumber, isUnknown, MAX_NESTING, ModuleAddress, Schema, State, typeNestingOf, types, UNKNOWN } from '@clay/contracts';
+import { Address, emptyState, EVERY_ITEM, ExactNumber, isUnknown, MAX_NESTING, ModuleAddress, Schema, State, Type, typeNestingOf, types, UNKNOWN } from '@clay/contracts';
 import {
   AttributeValue,
+  BinaryNode,
   BoundNode,
   CallNode,
+  ConditionalNode,
   ConfigError,
   EachReference,
   ForNode,
   IndexNode,
   LocalReference,
+  NotNode,
   ParsedReference,
   PathReference,
   parseReference,
@@ -21,14 +24,17 @@ import {
   TemplatePart,
 } from '@clay/parser';
 
+import { converted } from '../conformValues';
 import { checkCollection, checkKey, forItems, ForItem, forObject, unknownItem } from '../forItems';
 import { Instances } from '../Instances';
 import { functionCalled } from '../functions';
 import { Context, DataInstance, instanceKeyOf, ModuleCall, moduleOf, scopeOf } from '../keys';
 import { tryAt } from '../place';
 import { ModuleInstances } from '../ModuleInstances';
+import { checkBoolean, equality, negated } from '../operators';
 import { Planned } from '../Planned';
 import { ScopeManager } from '../scope/ScopeManager';
+import { unified, Unjoinable, unjoined } from '../unify';
 import {
   allSensitive,
   allSensitiveIf,
@@ -73,10 +79,14 @@ function withinNesting(node: AttributeValue, value: Value): Value {
 /** Values bound by enclosing for expressions. */
 type Given = ReadonlyMap<string, Value>;
 
-/** With `asWritten`, a reference reads as unknown of the type it will have, and a local as its value read the same way. */
+/**
+ * With `asWritten`, a reference reads as unknown of the type it will have, and a local as its value read the same way.
+ * With `byType` too, a local and a call's result read as unknown as well, so nothing is read for its value.
+ */
 interface Reading {
   given: Given;
   asWritten: boolean;
+  byType?: true;
 }
 
 const READING: Reading = { given: new Map(), asWritten: false };
@@ -96,6 +106,21 @@ function countIndex(where: Context, position: Position): Value {
 
 type Named = ReferenceNode | CallNode | BoundNode;
 
+type Operation = BinaryNode | NotNode | ConditionalNode;
+
+function isOperation(node: AttributeValue): node is Operation {
+  return node.type === 'Binary' || node.type === 'Not' || node.type === 'Conditional';
+}
+
+function unknownAs(value: Value): Value {
+  return withSensitive(valueOf(value.type, UNKNOWN), wholeIf(isSensitive(value)));
+}
+
+/** In a read by type, a value read by its value is not known either. */
+function typeOnly(value: Value, reading: Reading): Value {
+  return reading.byType ? unknownAs(value) : value;
+}
+
 /** The node being read, and what its indexes are read with. */
 interface Site {
   node: Named;
@@ -104,8 +129,7 @@ interface Site {
   reading: Reading;
 }
 
-/** Reads the steps; `keyed` is whether an index read from a value gave one of them a key. */
-type Reader = (steps: Step[], keyed: boolean) => Value;
+type Reader = (steps: Step[]) => Value;
 
 /** `later` is the first index whose value is not known yet, and `steps` stop before it. */
 interface Keyed {
@@ -114,17 +138,41 @@ interface Keyed {
   later?: Step;
 }
 
-/** What went wrong reading at a sensitive index may quote the index, so only that it did is told. */
-function hidingIf(sensitive: boolean, node: Named, read: () => Value): Value {
+/** Only that the read failed is told, since why may say what the sensitive value is. */
+function hidingIf(sensitive: boolean, message: string, position: Position, read: () => Value): Value {
   if (!sensitive) return read();
 
-  const message = `${spellNamed(node)} was read at a sensitive index, so why it failed is not shown`;
   try {
     return read();
   } catch (error) {
-    if (error instanceof ConfigError) throw new ConfigError(message, node.position);
+    if (error instanceof ConfigError) throw new ConfigError(message, position);
     if (error instanceof UnresolvedReferenceError) throw new UnresolvedReferenceError(message, error.type, wholeIf(true));
     throw error;
+  }
+}
+
+/** What went wrong reading at a sensitive index may quote the index. */
+function atSensitiveIndex(node: Named): string {
+  return `${spellNamed(node)} was read at a sensitive index, so why it failed is not shown`;
+}
+
+/** The results in the order written: when true, then when false. */
+function resultType(node: ConditionalNode, [whenTrue, whenFalse]: Value[]): Type {
+  try {
+    return unified([whenTrue.type, whenFalse.type]);
+  } catch (error) {
+    if (!(error instanceof Unjoinable)) throw error;
+    throw new ConfigError(`The two results of a conditional ${unjoined(error, isSensitive(whenTrue) || isSensitive(whenFalse))}`, node.whenTrue.position);
+  }
+}
+
+/** The picked value takes the type both results join into, which a value of no type until read may still not fit. */
+function fitted(taken: AttributeValue, value: Value, written: Type): Value {
+  try {
+    return converted('A conditional', value, unified([written, value.type]), []);
+  } catch (error) {
+    if (!(error instanceof Unjoinable)) throw error;
+    throw new ConfigError(`The result a condition picks ${unjoined(error, isSensitive(value))}`, taken.position);
   }
 }
 
@@ -164,20 +212,23 @@ export class ReferenceResolver {
 
   private resolve(node: ReferenceNode, state: State, context: Context | undefined, reading: Reading): Value {
     const where = context ?? ModuleAddress.root;
-    const read: Reader = (steps, keyed) => this.readReference(steps, node, state, where, reading, keyed);
+    const read: Reader = (steps) => this.readReference(steps, node, state, where, reading);
 
     return this.readWith({ node, state, context, reading }, node.value, read);
   }
 
-  /** `keyed` is whether an index read from a value gave a key, which the block's count or for_each may not make. */
-  private readReference(steps: Step[], node: ReferenceNode, state: State, where: Context, reading: Reading, keyed: boolean): Value {
+  /**
+   * A key the block's count or for_each does not make is refused where it is read, since an instance not made yet would read as unknown, not
+   * missing. A read by type alone checks none, so the result a condition does not pick may name an instance that is not there.
+   */
+  private readReference(steps: Step[], node: ReferenceNode, state: State, where: Context, reading: Reading): Value {
     const { position } = node;
     const reference = parseReference(steps);
-    if (keyed) this.keys.of(reference, where, position);
+    if (!reading.asWritten) this.keys.of(reference, where, position);
     const { value, path } = reading.asWritten ? this.writtenTarget(reference, where, position) : this.resolveTarget(reference, state, where, position);
     const target = steps.slice(0, steps.length - path.length);
 
-    const read = readPath(value, spellReference(target), path, position);
+    const read = readPath(typeOnly(value, reading), spellReference(target), path, position);
 
     // As written, since an index read from a value may be a sensitive key.
     return read.data === null ? { ...read, nullFrom: spellNamed(node) } : read;
@@ -185,7 +236,7 @@ export class ReferenceResolver {
 
   /** Looks up the function first, so an unknown name is refused whatever the argument is. */
   private resolveCall(node: CallNode, state: State, context: Context | undefined, reading: Reading): Value {
-    const result = functionCalled(node)(this.resolveItem(node.args[0], state, context, reading));
+    const result = typeOnly(functionCalled(node)(this.resolveItem(node.args[0], state, context, reading)), reading);
     const read: Reader = (steps) => readPath(result, spellNamed({ ...node, path: [] }), steps, node.position);
 
     return this.readWith({ node, state, context, reading }, node.path, read);
@@ -205,14 +256,14 @@ export class ReferenceResolver {
    * An index not known yet makes the result unknown, sensitive when what it reads into or the index is.
    */
   private readWith(site: Site, steps: Step[], read: Reader): Value {
-    if (!steps.some((step) => 'index' in step)) return read(steps, false);
+    if (!steps.some((step) => 'index' in step)) return read(steps);
 
     const keyed = this.keyed(steps, site);
     if (keyed.later) return this.readLater(site.node, keyed, read);
 
     return allSensitiveIf(
       keyed.sensitive,
-      hidingIf(keyed.sensitive, site.node, () => read(keyed.steps, true))
+      hidingIf(keyed.sensitive, atSensitiveIndex(site.node), site.node.position, () => read(keyed.steps))
     );
   }
 
@@ -254,7 +305,7 @@ export class ReferenceResolver {
     let sensitive = indexSensitive;
 
     try {
-      sensitive = isSensitive(hidingIf(sensitive, node, () => read(steps, false))) || sensitive;
+      sensitive = isSensitive(hidingIf(sensitive, atSensitiveIndex(node), node.position, () => read(steps))) || sensitive;
     } catch (error) {
       if (!(error instanceof UnresolvedReferenceError)) throw error;
       sensitive = error.sensitive.length > 0 || sensitive;
@@ -420,8 +471,76 @@ export class ReferenceResolver {
     if (node.type === 'Template') return this.resolveTemplate(node.value, state, context, reading);
     if (node.type === 'List') return this.resolveList(node.value, state, context, reading);
     if (node.type === 'Map') return this.resolveMap(node.value, state, context, reading);
+    if (isOperation(node)) return this.resolveOperation(node, state, context, reading);
 
     return literal(node);
+  }
+
+  private resolveOperation(node: Operation, state: State, context: Context | undefined, reading: Reading): Value {
+    if (node.type === 'Not') return negated(this.boolean(node.value, '!', state, context, reading));
+    if (node.type === 'Conditional') return this.resolveConditional(node, state, context, reading);
+    if (node.operator === '&&' || node.operator === '||') return this.resolveLogic(node, node.operator, state, context, reading);
+
+    return equality(node.operator, this.resolveItem(node.left, state, context, reading), this.resolveItem(node.right, state, context, reading), node.operatorPosition);
+  }
+
+  private boolean(node: AttributeValue, who: string, state: State, context: Context | undefined, reading: Reading): Value {
+    const value = this.resolveItem(node, state, context, reading);
+    checkBoolean(who, value, node.position);
+
+    return value;
+  }
+
+  /** A known left side that decides the answer leaves the right read by type only, so `var.x != null && var.x.on` reads `.on` only when there is an x. */
+  private resolveLogic(node: BinaryNode, operator: '&&' | '||', state: State, context: Context | undefined, reading: Reading): Value {
+    const deciding = operator === '||';
+    const decided = (by: Value) => withSensitive(valueOf(types.bool, deciding), wholeIf(isSensitive(by)));
+
+    const left = this.boolean(node.left, operator, state, context, reading);
+    if (left.data === deciding) {
+      checkBoolean(operator, this.byType(node.right, context, reading), node.right.position);
+      return decided(left);
+    }
+
+    // A left side not known yet does not decide whether the right is read.
+    const right = hidingIf(
+      isSensitive(left) && !isUnknown(left.data),
+      `The right side of ${operator} was read for a sensitive left side, so why it failed is not shown`,
+      node.right.position,
+      () => this.boolean(node.right, operator, state, context, reading)
+    );
+    if (right.data === deciding) return decided(right);
+
+    const data = isUnknown(left.data) || isUnknown(right.data) ? UNKNOWN : !deciding;
+    return withSensitive(valueOf(types.bool, data), wholeIf(isSensitive(left) || isSensitive(right)));
+  }
+
+  /**
+   * A known condition leaves the other result read by type only, so `var.x == null ? "none" : var.x.name` reads `.name` only when there is an x.
+   * The type is what both results join into as written, so the condition changes it only where a value has no type until it is read.
+   */
+  private resolveConditional(node: ConditionalNode, state: State, context: Context | undefined, reading: Reading): Value {
+    const condition = this.boolean(node.condition, 'A condition', state, context, reading);
+    if (isUnknown(condition.data)) {
+      const results = [node.whenTrue, node.whenFalse].map((result) => this.resolveItem(result, state, context, reading));
+      const sensitive = [condition, ...results].some((value) => isSensitive(value));
+      return withSensitive(valueOf(resultType(node, results), UNKNOWN), wholeIf(sensitive));
+    }
+
+    const written = resultType(node, [this.byType(node.whenTrue, context, reading), this.byType(node.whenFalse, context, reading)]);
+    const taken = condition.data === true ? node.whenTrue : node.whenFalse;
+    const picked = hidingIf(isSensitive(condition), 'A sensitive condition picked this result, so why it failed is not shown', taken.position, () =>
+      fitted(taken, this.resolveItem(taken, state, context, reading), written)
+    );
+
+    return allSensitiveIf(isSensitive(condition), picked);
+  }
+
+  /** Every name, local and call is unknown, so what fails only for the value it would be read with is not refused. */
+  private byType(node: AttributeValue, context: Context | undefined, reading: Reading): Value {
+    const given = new Map([...reading.given].map(([name, value]) => [name, unknownAs(value)]));
+
+    return this.resolveItem(node, emptyState(), context, { given, asWritten: true, byType: true });
   }
 
   private resolveList(items: AttributeValue[], state: State, context: Context | undefined, reading: Reading): Value {

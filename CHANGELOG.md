@@ -16,6 +16,8 @@ a configuration means or how the state file is written.
   order, so reordering one is no change.
 - Functions `length`, `tolist`, `toset`, `sensitive`, `nonsensitive` and `issensitive`
 - `for` expressions that make a list or an object, with `...` to group by key
+- `==`, `!=`, `&&`, `||`, `!` and the conditional `cond ? a : b`. A known condition reads
+  only the result it picks
 - A resource, a data source, a module or all their instances read as an object, a list
   or a map, and `.key`, `["key"]` and `[0]` into any value
 - `locals` blocks, `path.module`, heredoc strings, string escapes, negative and decimal
