@@ -1,4 +1,5 @@
 import { ModuleAddress, Schema } from '@clay/contracts';
+import { Graph } from '@clay/graph';
 import { AttributeValue, DataBlock, ModuleBlock, OutputBlock, spell } from '@clay/parser';
 
 import { converted } from '../conformValues';
@@ -8,6 +9,7 @@ import { tryAt } from '../place';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { ScopeManager } from '../scope/ScopeManager';
 import { Value } from '../Value';
+import { GraphNode } from './DependencyGraphBuilder';
 import { LoadedModule, LoadedResource } from './ModuleLoader';
 
 /** Checks every value once as written, so a block is checked even when it makes no instance. */
@@ -20,17 +22,25 @@ export class WrittenCheck {
   ) {}
 
   /** Runs after names are checked, so each has a type in its schema. */
-  check(loadedResources: LoadedResource[], loadedModules: LoadedModule[]): void {
+  check(loadedResources: LoadedResource[], loadedModules: LoadedModule[], graph: Graph<GraphNode>): void {
+    this.checkLocals(graph);
     for (const loaded of loadedResources) this.checkResource(loaded);
 
     for (const { address, program } of loadedModules)
       for (const stmt of program) {
         if (stmt.type === 'Output') this.checkOutput(stmt, address);
-        if (stmt.type === 'Local') this.read(stmt.value, spell(stmt), address);
         if (stmt.type === 'Data') this.checkData(stmt, address);
         if (stmt.type === 'Variable' && stmt.attributes.default) this.checkGiven(stmt.name, stmt.attributes.default, spell(stmt), address, address);
         if (stmt.type === 'Module') this.checkCall(stmt, address.child(stmt.name));
       }
+  }
+
+  /** Each after the locals it reads, so no check reads down a chain of them, which can be longer than the call stack. */
+  private checkLocals(graph: Graph<GraphNode>): void {
+    for (const key of graph.topologicalSort().flat()) {
+      const node = graph.getNode(key)!;
+      if (node.kind === 'local') this.read(node.value, node.declaration, node.module);
+    }
   }
 
   private checkResource({ address, block }: LoadedResource): void {

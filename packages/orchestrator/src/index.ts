@@ -148,7 +148,7 @@ export class Orchestrator {
 
     const graph = graphBuilder.buildExecutionGraph(loadedResources, loadedModules);
     checkAttributes(loadedResources, schemas);
-    writtenCheck.check(loadedResources, loadedModules);
+    writtenCheck.check(loadedResources, loadedModules, graph);
     return { ...(await desiredStateBuilder.build(loadedResources, graph, state, schemas, walk)), graph };
   }
 }

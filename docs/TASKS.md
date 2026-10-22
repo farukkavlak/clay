@@ -282,9 +282,16 @@ change each.
       Terraform does the same
 - [x] `clay state rm` of an address the state does not hold exits 0, where `state show`
       exits 1. Terraform refuses it. Now it exits 1 and writes nothing
-- [ ] A value nested 20000 deep, or 6000 chained locals, ends in a stack overflow,
-      `Maximum call stack size exceeded`, with no position. The resolver and
-      `Graph.findCycle` recurse
+- [x] 6000 chained locals end in a stack overflow, `Maximum call stack size exceeded`,
+      with no position. `Graph.findCycle` recursed, on every plan, and the check of each
+      value as written read down the chain when a local came before the one it reads,
+      or a block above the locals read its end.
+      Now the search keeps a stack of its own, and the check reads each local after
+      the ones it reads
+- [ ] A value nested 20000 deep ends in a stack overflow with no position,
+      `Maximum call stack size exceeded`. The parser and every walk over a value recurse
+- [ ] A value nested 20000 deep in a state or plan file ends in the same stack overflow,
+      in `plan` and `state show`
 - [ ] The caret under an error points at the wrong column on a line indented with tabs:
       `describeError` pads with spaces under a line that keeps its tabs
 
