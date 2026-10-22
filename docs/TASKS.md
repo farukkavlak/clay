@@ -270,8 +270,13 @@ change each.
       The engine hid a provider's message only at validate and plan. Terraform's
       `local-exec` hides the output but quotes the command in its error. Now the reason
       of every provider call given a sensitive value is hidden, at apply and refresh too
-- [ ] A `command_exec` whose command prints a sensitive value, `echo ${var.token}`, keeps
-      it in `stdout`, which is not sensitive, so `clay state show` prints it
+- [x] A `command_exec` whose command prints a sensitive value, `echo ${var.token}`, keeps
+      it in `stdout`, which is not sensitive, so `clay state show` prints it. A value a
+      provider computes was sensitive only where its schema marked it always. Terraform has
+      the same gap; `local-exec` hides its output and `terraform_data` needs
+      `sensitive = true`. Now a schema can mark a computed attribute sensitive with the
+      attributes it is made from: `stdout` is sensitive where `command` or `cwd` is, and
+      `local_file.id` where `path` is, through `ignore_changes` too
 - [x] Writing out a value the provider already takes as its default replaces the resource.
       `special = false` added to a `random_string` that left it out plans a replace, since
       `special` is `forceNew` and a left-out value is not `false`. The provider contract

@@ -278,6 +278,8 @@ export interface SchemaDefinition {
   kept?: boolean;
   /** Whatever it holds is sensitive, the configuration's or the provider's. */
   sensitive?: boolean;
+  /** With `computed`: sensitive as a whole where any of these, as given, holds a sensitive part. */
+  sensitiveWith?: string[];
   /** Planned where the configuration leaves it out, so writing it out changes nothing. */
   default?: unknown;
 }

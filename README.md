@@ -102,7 +102,9 @@ if the state has changed since.
 
 Each has an `id` the provider makes and keeps until the resource is replaced: the file's
 full path, the string, or a random UUID. Only the provider makes `id`, `result` and
-`stdout`, so setting one in the configuration is refused; `null` sets none.
+`stdout`, so setting one in the configuration is refused; `null` sets none. A value made
+from a sensitive one is sensitive too: `local_file.id` where `path` is, `stdout` where
+`command` or `cwd` is.
 
 ## How a run goes
 

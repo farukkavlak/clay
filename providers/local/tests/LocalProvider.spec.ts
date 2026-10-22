@@ -220,7 +220,7 @@ describe('LocalProvider', () => {
     ])('keeps %s %s until it is replaced', async (type, name) => {
       const schema = await provider.getSchema(type);
 
-      expect(schema[name]).toEqual({ type: types.string, computed: true, kept: true });
+      expect(schema[name]).toMatchObject({ type: types.string, computed: true, kept: true });
     });
 
     it('returns the string it made as result, which is its id too', async () => {

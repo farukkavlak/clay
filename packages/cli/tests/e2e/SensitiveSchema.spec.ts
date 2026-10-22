@@ -51,13 +51,14 @@ class Vault implements Provider {
       key: { type: types.string, optional: true, sensitive: true },
       found: { type: types.string, computed: true, sensitive: true },
       kind: { type: types.string, computed: true },
+      echo: { type: types.string, computed: true, sensitiveWith: ['path'] },
     };
   }
 
   async validateDataSource(_type: string, _inputs: Record<string, unknown>): Promise<void> {}
 
   async readDataSource(_type: string, config: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return { ...config, found: 'hunter2', kind: 'plain' };
+    return { ...config, found: 'hunter2', kind: 'plain', echo: config.path };
   }
 }
 
@@ -210,5 +211,21 @@ describe('an attribute a provider marks sensitive', () => {
     const config = 'data "vault_lookup" "x" { path = "p" }\noutput "probe" { value = data.vault_lookup.x.kind }';
 
     expect(await probed(config)).toMatchObject({ value: 'plain' });
+  });
+
+  it.each([
+    ['read at plan', 'sensitive("p")'],
+    ['waiting for the apply', 'sensitive(vault.a.name)'],
+  ])('marks a data source attribute sensitive with one given a sensitive value, %s', async (_, given) => {
+    const config = `resource "vault" "a" { name = "x" }\ndata "vault_lookup" "x" { path = ${given} }\noutput "probe" { value = data.vault_lookup.x.echo }`;
+
+    await expect(newOrchestrator().plan(config)).rejects.toThrow(REFUSED('probe'));
+    expect(await probed(config.replace('{ value =', '{ sensitive = true\n value ='))).toMatchObject({ sensitive: true });
+  });
+
+  it('leaves a data source attribute sensitive with one given a plain value in plain', async () => {
+    const config = 'data "vault_lookup" "x" { path = "p" }\noutput "probe" { value = data.vault_lookup.x.echo }';
+
+    expect(await probed(config)).toMatchObject({ value: 'p' });
   });
 });
