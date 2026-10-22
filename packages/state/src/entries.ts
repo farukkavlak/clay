@@ -2,8 +2,13 @@ import { Address, State } from '@clay/contracts';
 
 /** Rewrites or drops dependencies, so none points at an address that no longer holds a resource. */
 export function mapDependencies(state: State, change: (dependency: string) => string | undefined): void {
-  for (const resource of Object.values(state.resources))
-    if (resource.dependencies) resource.dependencies = resource.dependencies.map((dependency) => change(dependency)).filter((dependency) => dependency !== undefined);
+  const mapped = (dependencies: string[]) => dependencies.map((dependency) => change(dependency)).filter((dependency) => dependency !== undefined);
+
+  for (const resource of Object.values(state.resources)) if (resource.dependencies) resource.dependencies = mapped(resource.dependencies);
+  const { deposed = {} } = state;
+  // New objects, since a copy of the map shares the ones in it.
+  for (const [address, objects] of Object.entries(deposed))
+    deposed[address] = objects.map((object) => (object.dependencies ? { ...object, dependencies: mapped(object.dependencies) } : object));
 }
 
 /** What a replace left behind goes with the resource it was left by. */

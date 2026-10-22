@@ -253,9 +253,11 @@ change each.
       address. The file no longer carries each block's expressions: the apply takes them
       from the configuration the file carries, which the parser checks, as Terraform
       evaluates its configuration snapshot
-- [ ] `state mv`, `state rm` and a count move rewrite the dependencies of resources and
+- [x] `state mv`, `state rm` and a count move rewrite the dependencies of resources and
       leave those of deposed objects naming the old address, so the delete order of that
-      deposed object is lost. `mapDependencies` walks `state.resources` only
+      deposed object is lost. `mapDependencies` walks `state.resources` only. Terraform's
+      `state mv` clears the dependencies of current objects and leaves deposed ones. Now
+      deposed objects are rewritten too
 - [ ] `clay state mv` takes a destination no configuration can spell:
       `clay state mv random_string.r 'random_string.has space'` succeeds, and the next plan
       destroys it. `Address.parse` checks no name against the identifier rule

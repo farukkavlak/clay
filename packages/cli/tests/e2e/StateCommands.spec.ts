@@ -218,6 +218,21 @@ describe('state and output against a real state file', () => {
     expect(state.resources['local_file.b'].dependencies).toEqual([]);
   });
 
+  it.each([
+    ['renames', 'mv', ['local_file.a', 'local_file.first'], ['local_file.first']],
+    ['forgets', 'rm', ['local_file.a'], []],
+  ])('%s what a deposed object reads from with %s', async (_, command, addresses, dependencies) => {
+    await run(chained());
+    const state = await stored();
+    state.deposed = { 'local_file.b': [{ attributes: state.resources['local_file.b'].attributes, dependencies: ['local_file.a'] }] };
+    await new LocalBackend(dir).write(state);
+
+    await createStateCommand().parseAsync(['node', 'clay', command, ...addresses]);
+
+    const after = await stored();
+    expect(after.deposed?.['local_file.b'][0].dependencies).toEqual(dependencies);
+  });
+
   it.each(['show', 'rm'])('refuses an address with an empty part, for %s', async (command) => {
     await applyConfig();
 
