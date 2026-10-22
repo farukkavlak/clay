@@ -1,10 +1,11 @@
-import { AttributePath, isType, isUnknown, Schema, touchesSensitive, unknownPaths } from '@clay/contracts';
+import { AttributePath, containsUnknown, isType, isUnknown, Schema, SchemaDefinition, touchesSensitive, unknownPaths } from '@clay/contracts';
 import { Mismatch, offFinal } from '@clay/planner';
+import { isDeepStrictEqual } from 'node:util';
 
 import { shown } from './shown';
 import { spelled } from './spelled';
 import { TypeMismatch, typedValues } from './typed';
-import { Value } from './Value';
+import { plainOf, Value } from './Value';
 
 /** Says that a sensitive value differs and nothing of either value, as the difference itself could give it away. */
 export function undisclosed(path: AttributePath): string {
@@ -79,12 +80,39 @@ function checkTypes(named: string, schema: Schema): void {
     if (!isType(definition.type)) throw new Error(`${named} gives ${name} a type Clay cannot read, which is a bug in the provider`);
 }
 
+/** As a plan holds it, or undefined where its type does not hold it. */
+function heldDefault(name: string, definition: SchemaDefinition): unknown {
+  try {
+    return plainOf(typedValues({ [name]: definition }, { [name]: definition.default }))[name];
+  } catch (error) {
+    if (error instanceof TypeMismatch) return undefined;
+    throw error;
+  }
+}
+
+/** A default stands in for what the configuration leaves out, so it must be a value the configuration could set, written as a plan holds it. */
+function checkDefault(type: string, name: string, definition: SchemaDefinition): void {
+  const bug = (problem: string) => new Error(`${type} gives ${name} a default${problem}, which is a bug in the provider`);
+
+  if (definition.default === undefined) return;
+  if (definition.default === null) throw bug(' of null');
+  if (containsUnknown(definition.default)) throw bug(' that is not known');
+  if (definition.required) throw bug(', but it is required');
+  if (definition.computed) throw bug(', but it computes it');
+
+  const held = heldDefault(name, definition);
+  if (held === undefined) throw bug(' its type does not hold');
+  if (!isDeepStrictEqual(held, definition.default)) throw bug(` its type holds as ${shown(held)}`);
+}
+
 /** An invalid schema is a provider bug, refused before anything is planned with it. */
 export function checkSchema(type: string, schema: Schema): Schema {
   checkTypes(type, schema);
-  for (const [name, definition] of Object.entries(schema))
+  for (const [name, definition] of Object.entries(schema)) {
     if (definition.kept && !definition.computed)
       throw new Error(`${type} keeps ${name}, which it does not compute; only a computed value can be kept, which is a bug in the provider`);
+    checkDefault(type, name, definition);
+  }
 
   return schema;
 }
@@ -95,6 +123,7 @@ export function checkDataSourceSchema(type: string, schema: Schema): Schema {
   for (const [name, definition] of Object.entries(schema)) {
     const flag = definition.forceNew ? 'forceNew' : definition.kept ? 'kept' : undefined;
     if (flag) throw new Error(`data source ${type} marks ${name} ${flag}, but only a resource can be ${flag}, which is a bug in the provider`);
+    if (definition.default !== undefined) throw new Error(`data source ${type} gives ${name} a default, but only a resource can have one, which is a bug in the provider`);
   }
 
   return schema;

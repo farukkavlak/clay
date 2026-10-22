@@ -18,7 +18,7 @@ export class RandomStringResource implements ResourceHandler {
   async getSchema(): Promise<Schema> {
     return {
       length: { type: types.number, required: true, forceNew: true },
-      special: { type: types.bool, required: false, forceNew: true },
+      special: { type: types.bool, forceNew: true, default: false },
       id: { type: types.string, computed: true, kept: true },
       result: { type: types.string, computed: true, kept: true },
     };
@@ -39,7 +39,7 @@ export class RandomStringResource implements ResourceHandler {
 
   async create({ planned }: CreateRequest): Promise<Record<string, unknown>> {
     const length = lengthOf(planned);
-    const useSpecial = (planned.special as boolean) ?? false;
+    const useSpecial = planned.special === true;
 
     const alphanumeric = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     const special = '!@#$%^&*()_+-=[]{}|;:,.<>?';

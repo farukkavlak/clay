@@ -93,12 +93,12 @@ if the state has changed since.
 
 ## Resources
 
-| Type            | Attributes                                                                                  |
-| --------------- | ------------------------------------------------------------------------------------------- |
-| `local_file`    | `path` (replaces when it names another file), `content`                                     |
-| `random_string` | `length`, `special`, both replace on change; the string is its `id` and its `result`        |
-| `null_resource` | `triggers`, a map; does nothing, and another resource can read its `id` to run after it     |
-| `command_exec`  | `command`, `cwd`; runs on create and on every update, and keeps what it printed in `stdout` |
+| Type            | Attributes                                                                                                 |
+| --------------- | ---------------------------------------------------------------------------------------------------------- |
+| `local_file`    | `path` (replaces when it names another file), `content`                                                    |
+| `random_string` | `length`, `special` (`false` if left out), both replace on change; the string is its `id` and its `result` |
+| `null_resource` | `triggers`, a map; does nothing, and another resource can read its `id` to run after it                    |
+| `command_exec`  | `command`, `cwd`; runs on create and on every update, and keeps what it printed in `stdout`                |
 
 Each has an `id` the provider makes and keeps until the resource is replaced: the file's
 full path, the string, or a random UUID. Only the provider makes `id`, `result` and
