@@ -1,4 +1,4 @@
-import { CreateRequest, DataSourceHandler, PlannedChange, PlanRequest, Provider, ResourceHandler, Schema, UpdateRequest } from '@clay/contracts';
+import { CreateRequest, DataSourceHandler, Identity, PlannedChange, PlanRequest, Provider, ResourceHandler, Schema, UpdateRequest } from '@clay/contracts';
 
 import { LocalFileDataSource } from './dataSources/LocalFileDataSource';
 import { CommandExecResource } from './resources/CommandExecResource';
@@ -62,7 +62,7 @@ export class LocalProvider implements Provider {
     await this.handler(type).delete(prior);
   }
 
-  async identify(type: string, values: Record<string, unknown>): Promise<string | undefined> {
+  async identify(type: string, values: Record<string, unknown>): Promise<Identity | undefined> {
     return await this.handler(type).identify?.(values);
   }
 
