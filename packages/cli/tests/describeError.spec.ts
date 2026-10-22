@@ -27,6 +27,31 @@ describe('describeError', () => {
     expect(describeError(onLine2, files)).toContain('\n  2: x = "abc\n         ^');
   });
 
+  // The column counts code points, which is not how wide a line shows.
+  it.each([
+    ['tabs, as tabs', '\t\tx = y', '\t\t    '],
+    ['wide characters, as two cells each', 'x = "日あア가" y', '     ' + '        ' + '  '],
+    ['CJK punctuation and a fullwidth letter, as two cells each', 'x = "、Ａ" y', '     ' + '    ' + '  '],
+    ['halfwidth kana, as one cell', 'x = "ｱ" y', '     ' + ' ' + '  '],
+    ['an emoji, as two cells', 'x = "🚀" y', '     ' + '  ' + '  '],
+    ['a text character shown as an emoji, as two cells', 'x = "❤\uFE0F" y', '     ' + '  ' + '  '],
+    ['a letter with a combining accent, as one cell', 'x = "e\u0301" y', '     ' + ' ' + '  '],
+    ['emoji joined into one, as one emoji', 'x = "👩\u200D💻" y', '     ' + '  ' + '  '],
+  ])('lines the caret up under %s', (_, line, blank) => {
+    const files = new InMemoryFiles({ 'main.clay': line });
+    const atY = new ConfigError('Unknown name "y"', { file: 'main.clay', line: 1, column: [...line].indexOf('y') + 1 });
+
+    expect(describeError(atY, files)).toContain(`\n  1: ${line}\n     ${blank}^`);
+  });
+
+  // The lexer can refuse a combining mark of its own, a column into the character it joins.
+  it('puts the caret under the whole character when the column points inside it', () => {
+    const files = new InMemoryFiles({ 'main.clay': 'xe\u0301' });
+    const atAccent = new ConfigError('Unexpected character', { file: 'main.clay', line: 1, column: 3 });
+
+    expect(describeError(atAccent, files)).toContain('\n  1: xe\u0301\n      ^');
+  });
+
   it('lets a failure that is no file error through, rather than hide it behind the one being shown', () => {
     const files = failingWith(new TypeError('not a file problem'));
 

@@ -12,13 +12,38 @@ function currentContent(file: string, files: ConfigFiles): string | undefined {
   }
 }
 
+const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
+// JS has no East_Asian_Width property, so these are the common wide ranges: a rarer wide character still counts one cell.
+const WIDE = new RegExp(
+  [
+    String.raw`\p{Emoji_Presentation}|\uFE0F`,
+    // Halfwidth kana and jamo are in these scripts but show in one cell.
+    String.raw`(?![\uFF61-\uFFDC])(?:\p{Script=Han}|\p{Script=Hiragana}|\p{Script=Katakana}|\p{Script=Hangul})`,
+    // CJK punctuation and fullwidth forms.
+    String.raw`[\u3000-\u303F\uFF01-\uFF60\uFFE0-\uFFE6]`,
+  ].join('|'),
+  'u'
+);
+
+/**
+ * As wide as `line` shows before `column`, keeping its tabs, since how wide a tab shows is up to the terminal.
+ * A column counts code points, so one inside a character points at the whole character.
+ */
+function blankUnder(line: string, column: number): string {
+  const end = [...line].slice(0, column - 1).join('').length;
+  const before = [...graphemes.segment(line)].filter(({ index, segment }) => index + segment.length <= end);
+
+  return before.map(({ segment }) => (segment === '\t' ? '\t' : WIDE.test(segment) ? '  ' : ' ')).join('');
+}
+
 function sourceLine(position: Position, files: ConfigFiles): string | undefined {
   const line = currentContent(position.file, files)?.split(/\r?\n/)[position.line - 1];
   if (line === undefined) return undefined;
 
   const gutter = `  ${position.line}: `;
 
-  return `${gutter}${line}\n${' '.repeat(gutter.length + position.column - 1)}^`;
+  return `${gutter}${line}\n${' '.repeat(gutter.length)}${blankUnder(line, position.column)}^`;
 }
 
 export function describeError(error: unknown, files: ConfigFiles): string {

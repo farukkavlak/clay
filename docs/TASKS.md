@@ -306,8 +306,14 @@ change each.
       just made is lost from state. Now a value planned, read or returned more than 100
       levels deep is refused as a provider bug, and so is a schema type or default that deep. An
       object made with one is kept in state without it
-- [ ] The caret under an error points at the wrong column on a line indented with tabs:
-      `describeError` pads with spaces under a line that keeps its tabs
+- [x] The caret under an error points at the wrong column on a line indented with tabs:
+      `describeError` pads with spaces under a line that keeps its tabs. A wide character,
+      a combining accent or a joined emoji before the column shifts it the same way, since
+      a column counts code points. Now the padding keeps the line's tabs and counts each
+      character as the cells it shows in. Terraform underlines the range in the line
+      instead, so its output without colour marks no column
+- [ ] A carriage return inside a line, not before its line feed, is printed with the source
+      line under an error, so the terminal writes the rest of the line over its start
 
 ## 1. Language
 
