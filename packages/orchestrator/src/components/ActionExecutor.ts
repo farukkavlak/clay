@@ -4,7 +4,7 @@ import { offApply, offFinal, offPlan, PlanAction } from '@clay/planner';
 
 import { conformValues } from '../conformValues';
 import { keepPrior } from '../ignoredChanges';
-import { heldBy, hidingReason, inconsistent } from '../providerResult';
+import { checkNesting, heldBy, hidingReason, inconsistent, tooDeep } from '../providerResult';
 import { ProviderRegistry } from '../ProviderRegistry';
 import { SameObjects } from '../sameObject';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
@@ -178,8 +178,14 @@ export class ActionExecutor {
     return final;
   }
 
-  /** Sets are reordered as a plan holds them, so the two compare. The resource exists whatever it holds, so data outside the schema is kept as returned. */
-  private returned({ schema }: Sending, attributes: Record<string, unknown>): Record<string, unknown> {
+  /**
+   * Sets are reordered as a plan holds them, so the two compare. The resource exists whatever it holds, so data outside the schema is kept as returned,
+   * but a value nested too deep is left out, as state could not be read back with it.
+   */
+  private returned({ schema }: Sending, returned: Record<string, unknown>): Record<string, unknown> {
+    const deep = new Set(tooDeep(returned));
+    const attributes = Object.fromEntries(Object.entries(returned).filter(([name]) => !deep.has(name)));
+
     try {
       return plainOf(typedValues(schema, attributes));
     } catch (error) {
@@ -189,9 +195,10 @@ export class ActionExecutor {
   }
 
   /** Runs after the result is in state, since the resource exists whatever its schema or the plan said. */
-  private holdToPlan(type: string, { inputs, after, hidden, schema }: Sending, returned: Record<string, unknown>): void {
-    heldBy(type, 'returned', schema, returned);
-    const mismatches = offApply(schema, after, inputs, returned);
+  private holdToPlan(type: string, { inputs, after, hidden, schema }: Sending, returned: Record<string, unknown>, kept: Record<string, unknown>): void {
+    checkNesting(type, 'returned', returned);
+    heldBy(type, 'returned', schema, kept);
+    const mismatches = offApply(schema, after, inputs, kept);
     if (mismatches.length > 0) throw inconsistent(type, 'apply', mismatches, hidden);
   }
 
@@ -220,7 +227,7 @@ export class ActionExecutor {
     if (replacing) depose(currentState, key, replacing);
     mark(currentState.resources[key], sending.sensitive);
     protect(currentState.resources[key], action);
-    this.holdToPlan(action.resourceType, sending, attributes);
+    this.holdToPlan(action.resourceType, sending, created, attributes);
   }
 
   async executeUpdate(action: PlanAction, written: Written | undefined, provider: Provider, currentState: State): Promise<void> {
@@ -235,7 +242,7 @@ export class ActionExecutor {
     currentResource.dependencies = action.dependencies ?? [];
     mark(currentResource, sending.sensitive);
     protect(currentResource, action);
-    this.holdToPlan(action.resourceType, sending, currentResource.attributes);
+    this.holdToPlan(action.resourceType, sending, updated, currentResource.attributes);
   }
 
   /** Dependencies, which parts are sensitive and whether a destroy is prevented can change while values do not, so a no-op still updates them. */

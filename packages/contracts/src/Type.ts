@@ -30,17 +30,29 @@ function isOptionalList(optional: unknown, attributes: Record<string, unknown>):
   return optional === undefined || (Array.isArray(optional) && optional.every((name) => typeof name === 'string' && Object.hasOwn(attributes, name)));
 }
 
-/** Checks the whole type, since one wrong part would check values against the wrong type. */
-export function isType(value: unknown): value is Type {
-  if (!isRecord(value)) return false;
+/** The parts `value` holds as a type, or undefined where its own fields make it none. */
+function partsOf(value: unknown): readonly unknown[] | undefined {
+  if (!isRecord(value)) return undefined;
 
   const { kind } = value;
-  if (PRIMITIVES.has(kind)) return true;
-  if (COLLECTIONS.has(kind)) return isType(value.element);
-  if (kind === 'object')
-    return isRecord(value.attributes) && Object.values(value.attributes).every((attribute) => isType(attribute)) && isOptionalList(value.optional, value.attributes);
+  if (PRIMITIVES.has(kind)) return [];
+  if (COLLECTIONS.has(kind)) return [value.element];
+  if (kind === 'object') return isRecord(value.attributes) && isOptionalList(value.optional, value.attributes) ? Object.values(value.attributes) : undefined;
 
-  return kind === 'tuple' && Array.isArray(value.elements) && value.elements.every((element) => isType(element));
+  return kind === 'tuple' && Array.isArray(value.elements) ? value.elements : undefined;
+}
+
+/** Checks every part, with a stack of its own, as a provider's type may be nested deeper than the call stack holds. */
+export function isType(value: unknown): value is Type {
+  const pending = [value];
+
+  while (pending.length > 0) {
+    const parts = partsOf(pending.pop());
+    if (parts === undefined) return false;
+    for (const part of parts) pending.push(part);
+  }
+
+  return true;
 }
 
 /** The type one step inside `type`; `dynamic` where it names none. */

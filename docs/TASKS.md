@@ -301,8 +301,11 @@ change each.
       apply: 6000 locals, each a list of the one before, plan and then fail. Now a value
       or its type worked out more than 100 levels deep is refused at the expression, at
       validate and plan, before anything is written
-- [ ] A provider result nested more than 100 levels deep is not refused. Past 500, Clay
-      writes a state it then refuses to read
+- [x] A provider result nested more than 100 levels deep is not refused. Past 500, Clay
+      writes a state it then refuses to read; at 20000 the stack overflows, and an object
+      just made is lost from state. Now a value planned, read or returned more than 100
+      levels deep is refused as a provider bug, and so is a schema type or default that deep. An
+      object made with one is kept in state without it
 - [ ] The caret under an error points at the wrong column on a line indented with tabs:
       `describeError` pads with spaces under a line that keeps its tabs
 
