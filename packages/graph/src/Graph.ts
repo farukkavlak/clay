@@ -75,34 +75,39 @@ export class Graph<T> {
 
   /** The first cycle found, each node followed by one it depends on. */
   findCycle(): string[] | undefined {
-    const visiting = new Set<string>();
     const visited = new Set<string>();
-    const path: string[] = [];
-
-    const walk = (node: string): string[] | null => {
-      visiting.add(node);
-      path.push(node);
-
-      for (const neighbor of this.adjacencyList.get(node)!) {
-        if (visiting.has(neighbor)) return [...path.slice(path.indexOf(neighbor)), neighbor];
-        if (!visited.has(neighbor)) {
-          const cycle = walk(neighbor);
-          if (cycle) return cycle;
-        }
-      }
-
-      path.pop();
-      visiting.delete(node);
-      visited.add(node);
-      return null;
-    };
 
     for (const node of this.nodes.keys())
       if (!visited.has(node)) {
-        const cycle = walk(node);
+        const cycle = this.cycleFrom(node, visited);
         // Reversed, since an edge points from a node to what depends on it.
         if (cycle) return cycle.reverse();
       }
+
+    return undefined;
+  }
+
+  /** Depth first with a stack of its own, since a chain can be longer than the call stack. */
+  private cycleFrom(start: string, visited: Set<string>): string[] | undefined {
+    const path = [start];
+    const visiting = new Set(path);
+    const untried = [this.adjacencyList.get(start)!.values()];
+
+    while (path.length > 0) {
+      const next = untried.at(-1)!.next();
+
+      if (next.done) {
+        const node = path.pop()!;
+        untried.pop();
+        visiting.delete(node);
+        visited.add(node);
+      } else if (visiting.has(next.value)) return [...path.slice(path.indexOf(next.value)), next.value];
+      else if (!visited.has(next.value)) {
+        path.push(next.value);
+        visiting.add(next.value);
+        untried.push(this.adjacencyList.get(next.value)!.values());
+      }
+    }
 
     return undefined;
   }

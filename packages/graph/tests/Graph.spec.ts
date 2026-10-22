@@ -88,6 +88,45 @@ describe('Graph', () => {
     expect(graph.findCycle()).toEqual(['A', 'B', 'C', 'A']);
   });
 
+  it('finds no cycle where two paths meet again', () => {
+    // D depends on B and C, which both depend on A.
+    const graph = new Graph<string>();
+    for (const node of ['A', 'B', 'C', 'D']) graph.addNode(node, 'val');
+    graph.addEdge('A', 'B');
+    graph.addEdge('A', 'C');
+    graph.addEdge('B', 'D');
+    graph.addEdge('C', 'D');
+
+    expect(graph.findCycle()).toBeUndefined();
+  });
+
+  it('finds only the cycle, not the path that leads into it', () => {
+    // A depends on X and on B, B on C, C on A. X comes first, so the search starts outside the cycle.
+    const graph = new Graph<string>();
+    for (const node of ['X', 'A', 'B', 'C']) graph.addNode(node, 'val');
+    graph.addEdge('X', 'A');
+    graph.addEdge('C', 'B');
+    graph.addEdge('B', 'A');
+    graph.addEdge('A', 'C');
+
+    expect(graph.findCycle()).toEqual(['A', 'B', 'C', 'A']);
+  });
+
+  it('finds a cycle through a chain longer than the call stack holds, and nothing in it before it closes', () => {
+    const length = 20_000;
+    const graph = new Graph<string>();
+    for (let i = 0; i < length; i++) graph.addNode(`n${i}`, 'val');
+    for (let i = 1; i < length; i++) graph.addEdge(`n${i - 1}`, `n${i}`);
+
+    expect(graph.findCycle()).toBeUndefined();
+
+    graph.addEdge(`n${length - 1}`, 'n0');
+    const cycle = graph.findCycle()!;
+
+    expect(cycle).toHaveLength(length + 1);
+    expect([cycle[0], cycle[1], cycle.at(-2), cycle.at(-1)]).toEqual(['n0', `n${length - 1}`, 'n1', 'n0']);
+  });
+
   it('should list every node with its data', () => {
     const graph = new Graph<string>();
     graph.addNode('A', 'first');

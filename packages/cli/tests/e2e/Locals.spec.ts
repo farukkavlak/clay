@@ -177,6 +177,30 @@ describe('locals', () => {
     await expect(validate(`locals {\n  l0 = ["a"]\n${chain}\n}\n${unused('local.l40[0]')}`)).resolves.toBeUndefined();
   });
 
+  describe('in a chain longer than the call stack holds', () => {
+    const links = Array.from({ length: 6000 }, (_, step) => `  l${step + 1} = local.l${step}`);
+    const last = 'output "last" { value = local.l6000 }';
+
+    it('is planned and applied', async () => {
+      const config = `locals {\n  l0 = "end"\n${links.join('\n')}\n}\n${last}`;
+
+      expect(await plannedOutputs(config)).toEqual({ last: 'end' });
+      expect(await apply(config)).toEqual({ last: 'end' });
+    });
+
+    it('is planned with each local written before the one it reads', async () => {
+      const config = `locals {\n${[...links].reverse().join('\n')}\n  l0 = "end"\n}\n${last}`;
+
+      expect(await plannedOutputs(config)).toEqual({ last: 'end' });
+    });
+
+    it('is planned with a resource that reads its end written before it', async () => {
+      const config = `${unused('local.l6000')}\nlocals {\n  l0 = "end"\n${links.join('\n')}\n}\n${last}`;
+
+      expect(await plannedOutputs(config)).toEqual({ last: 'end' });
+    });
+  });
+
   describe('not known until the apply', () => {
     it('is planned as unknown, and what reads it with it', async () => {
       const config =
