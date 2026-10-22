@@ -61,4 +61,12 @@ describe('the source line of an error', () => {
 
     expect(printed.join('\n')).toContain('1: output "x" { value = var.missing }');
   });
+
+  it('has its caret under the column the parser gives, on a line indented with tabs', async () => {
+    await fs.writeFile(path.join(dir, 'main.clay'), 'output "x" {\n\tvalue = var.missing\n}\n', 'utf8');
+
+    await createValidateCommand().parseAsync(['node', 'clay']);
+
+    expect(printed.join('\n')).toContain('\n  2: \tvalue = var.missing\n     \t        ^');
+  });
 });
