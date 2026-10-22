@@ -1,24 +1,23 @@
-import { Output, SENSITIVE } from '@clay/contracts';
+import { jsonText, Output, SENSITIVE } from '@clay/contracts';
 import { StateManager } from '@clay/state';
 import { Command } from 'commander';
 import { styleText } from 'node:util';
 
 import { exists } from '../exists';
-import { messageOf } from '../printable';
+import { messageOf, printable } from '../printable';
 import { stateFile } from '../stateFile';
 
 /** JSON includes each type, so a script can tell a set from a list. */
 function displayOutputs(outputs: Record<string, Output>, json: boolean): void {
   if (json) {
-    console.log(JSON.stringify(outputs, null, 2));
+    console.log(jsonText(outputs, 2));
     return;
   }
 
   if (Object.keys(outputs).length === 0) console.log(styleText('yellow', 'No outputs found in state.'));
   else {
     console.log(styleText('bold', '\nOutputs:\n'));
-    for (const [key, { value, sensitive }] of Object.entries(outputs))
-      console.log(`${styleText('cyan', key)} = ${styleText('green', sensitive ? SENSITIVE : JSON.stringify(value))}`);
+    for (const [key, { value, sensitive }] of Object.entries(outputs)) console.log(`${styleText('cyan', key)} = ${styleText('green', sensitive ? SENSITIVE : jsonText(value))}`);
 
     console.log();
   }
@@ -36,7 +35,7 @@ export function createOutputCommand(): Command {
       try {
         if (!(await exists(backend.path))) {
           if (options.json) displayOutputs({}, true);
-          else console.log(styleText('yellow', `No state file found at ${backend.path}`));
+          else console.log(styleText('yellow', `No state file found at ${printable(backend.path)}`));
           return;
         }
 

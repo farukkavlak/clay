@@ -1,3 +1,5 @@
+import { jsonText, NAME } from '@clay/contracts';
+
 // C0 but tab and line feed, DEL, C1, and the direction marks and controls that make a line show other than it is.
 // eslint-disable-next-line no-control-regex -- matching control characters is what this is for.
 const CONTROL = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/gu;
@@ -14,4 +16,9 @@ export function printable(text: string): string {
 /** What an error says, printable. */
 export function messageOf(error: unknown): string {
   return printable(error instanceof Error ? error.message : String(error));
+}
+
+/** A name as a configuration writes it, quoted when it is not one a configuration can write bare. */
+export function attributeName(name: string): string {
+  return NAME.test(name) ? name : jsonText(name);
 }

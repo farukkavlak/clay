@@ -338,7 +338,7 @@ describe('CLI: apply command', () => {
     it('should run the saved actions against the saved configuration, without asking again', async () => {
       const planFileContent = JSON.stringify({
         version: PLAN_FILE_VERSION,
-        timestamp: '2024-01-01T00:00:00Z',
+        timestamp: '2024-01-01T00:00:00.000Z',
         config: 'saved config',
         modules: { 'm/main.clay': 'saved module' },
         serial: 2,
@@ -384,7 +384,7 @@ describe('CLI: apply command', () => {
     it('should not read the configuration on disk', async () => {
       const planFileContent = JSON.stringify({
         version: PLAN_FILE_VERSION,
-        timestamp: '2024-01-01T00:00:00Z',
+        timestamp: '2024-01-01T00:00:00.000Z',
         config: 'saved config',
         modules: { 'm/main.clay': 'saved module' },
         serial: 2,
@@ -424,7 +424,7 @@ describe('CLI: apply command', () => {
     it('should display outputs when returned from plan apply', async () => {
       const planFileContent = JSON.stringify({
         version: PLAN_FILE_VERSION,
-        timestamp: '2024-01-01T00:00:00Z',
+        timestamp: '2024-01-01T00:00:00.000Z',
         config: 'saved config',
         modules: { 'm/main.clay': 'saved module' },
         serial: 2,

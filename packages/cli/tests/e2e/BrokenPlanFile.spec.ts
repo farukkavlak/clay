@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { types } from '@clay/contracts';
 import { PLAN_FILE_VERSION, serializePlan } from '@clay/planner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -89,6 +90,21 @@ describe('a plan file that cannot be read', () => {
     const output = await applyWith('tfplan.json');
 
     expect(output).toContain('"data.local_file.a b" is not a data source: "a b" is not a name');
+    expect(exitCodes).toEqual([1]);
+  });
+
+  it.each([
+    ['a timestamp Clay never writes', { timestamp: 'now\u001B[2J' }],
+    ['an output no configuration can declare', { outputs: { ['o\u001B[2J']: { new: { type: types.string, value: 'v' } } } }],
+  ])('refuses %s before it shows the plan', async (_, change) => {
+    const plan = { serial: 0, actions: [], outputs: {}, prevRun: {}, prior: {}, schemas: {}, dataSources: {}, readAtApply: [] };
+    const file: unknown = { ...JSON.parse(serializePlan(plan, '', {})), ...change };
+    await fs.writeFile(path.join(dir, 'tfplan.json'), JSON.stringify(file), 'utf8');
+
+    const output = await applyWith('tfplan.json');
+
+    expect(output).toContain('tfplan.json is not a plan file');
+    expect(output).not.toContain('Plan created');
     expect(exitCodes).toEqual([1]);
   });
 

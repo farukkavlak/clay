@@ -117,6 +117,11 @@ describe('a state file that is not valid state', () => {
       '"local_file.a b" is not the address of a resource: "a b" is not a name',
     ],
     [
+      'a resource whose key holds a control character raw',
+      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a[\\"x\\u007fy\\"]":{"resourceType":"local_file","name":"a","key":"x\\u007fy","attributes":{}}}}`,
+      String.raw`a key is written as ["x\u007fy"]`,
+    ],
+    [
       'deposed objects under an address no configuration can spell',
       `{"version":${STATE_VERSION},"serial":0,"resources":{},"deposed":{"local_file.5":[{"attributes":{}}]}}`,
       '"local_file.5" is not the address of a resource, so it cannot hold deposed objects',

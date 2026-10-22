@@ -387,7 +387,7 @@ describe('Planner', () => {
       const action = { type: 'NO_OP', resourceType: 'thing', name: 'a', sensitive };
       const planFile = {
         version: PLAN_FILE_VERSION,
-        timestamp: '',
+        timestamp: new Date().toISOString(),
         config: '',
         modules: {},
         serial: 0,

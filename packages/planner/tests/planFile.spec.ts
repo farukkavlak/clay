@@ -497,6 +497,9 @@ describe('reading a plan file', () => {
   it.each([
     ['nothing at all', {}],
     ['no timestamp', { ...fields(), timestamp: undefined }],
+    ['a timestamp in a form Clay does not write', { ...fields(), timestamp: '2024-01-01T00:00:00Z' }],
+    ['a timestamp that is no time', { ...fields(), timestamp: 'now' }],
+    ['an output no configuration can declare', { ...fields(), outputs: { 'a b': { old: undefined, new: { type: { kind: 'string' }, value: 'v' } } } }],
     ['no config', { ...fields(), config: undefined }],
     ['modules that are not files', { ...fields(), modules: { 'm/main.clay': 1 } }],
     ['actions that are not a list', { ...fields(), actions: 'oops' }],

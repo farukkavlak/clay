@@ -10,6 +10,7 @@ import {
   isInstanceKey,
   isOutput,
   isModulePath,
+  isName,
   isRecord,
   isType,
   isUnknown,
@@ -229,7 +230,7 @@ function isOutputChange(change: unknown): boolean {
 }
 
 function isOutputChanges(changes: unknown): boolean {
-  return isChanges(changes) && Object.values(changes as Record<string, unknown>).every((change) => isOutputChange(change));
+  return isChanges(changes) && Object.entries(changes as Record<string, unknown>).every(([name, change]) => isName(name) && isOutputChange(change));
 }
 
 function isModuleFiles(modules: unknown): modules is Record<string, string> {
@@ -351,11 +352,16 @@ function isPlan(plan: Partial<Plan>): plan is Plan {
   );
 }
 
+/** As `toISOString` writes it, the only form Clay saves. */
+function isTimestamp(timestamp: unknown): boolean {
+  return typeof timestamp === 'string' && !Number.isNaN(Date.parse(timestamp)) && new Date(timestamp).toISOString() === timestamp;
+}
+
 export function validatePlanFile(planFile: unknown): planFile is PlanFile {
   if (!planFile || typeof planFile !== 'object') return false;
 
   const pf = planFile as Partial<PlanFile>;
-  return pf.version === PLAN_FILE_VERSION && typeof pf.timestamp === 'string' && typeof pf.config === 'string' && isModuleFiles(pf.modules) && isPlan(pf);
+  return pf.version === PLAN_FILE_VERSION && isTimestamp(pf.timestamp) && typeof pf.config === 'string' && isModuleFiles(pf.modules) && isPlan(pf);
 }
 
 /** Plan files are machine-written, so a broken one only needs "plan again", not the reason. */

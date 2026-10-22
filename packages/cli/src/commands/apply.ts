@@ -1,4 +1,4 @@
-import { Address, Output, SENSITIVE } from '@clay/contracts';
+import { Address, jsonText, Output, SENSITIVE } from '@clay/contracts';
 import { ConfigFiles, DiskFiles, InMemoryFiles, RecordingFiles, RunEvent } from '@clay/orchestrator';
 import { CONFIG_FILE } from '@clay/parser';
 import { changedOutside, parsePlanFile, Plan, PlanAction, PlanFile } from '@clay/planner';
@@ -98,7 +98,7 @@ async function runAndReport(start: (signal: AbortSignal) => AsyncGenerator<RunEv
 
   if (outputs !== undefined && Object.keys(outputs).length > 0) {
     console.log(styleText('cyan', '\nOutputs:'));
-    for (const [key, { value, sensitive }] of Object.entries(outputs)) console.log(styleText('white', `  ${key} = ${sensitive ? SENSITIVE : JSON.stringify(value)}`));
+    for (const [key, { value, sensitive }] of Object.entries(outputs)) console.log(styleText('white', `  ${key} = ${sensitive ? SENSITIVE : jsonText(value)}`));
   }
 }
 

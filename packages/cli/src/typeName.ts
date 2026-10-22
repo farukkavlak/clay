@@ -1,7 +1,9 @@
-import { NAME, Type } from '@clay/contracts';
+import { Type } from '@clay/contracts';
+
+import { attributeName } from './printable';
 
 function attribute(name: string, spelled: string, optional: boolean): string {
-  return `${NAME.test(name) ? name : JSON.stringify(name)} = ${optional ? `optional(${spelled})` : spelled}`;
+  return `${attributeName(name)} = ${optional ? `optional(${spelled})` : spelled}`;
 }
 
 /** As a configuration writes it: `set(string)`, `object({ a = string, b = optional(number) })`. */
