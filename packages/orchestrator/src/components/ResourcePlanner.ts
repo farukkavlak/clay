@@ -84,7 +84,8 @@ export class ResourcePlanner {
     await hidingReason(type, sensitive, () => provider.validate(type, config));
     if (!current) return { ...(await this.create(provider, type, schema, config, sensitive)), sensitive };
 
-    const change = await this.ask(provider, type, schema, { prior: current.attributes, proposed: proposed(current.attributes, config, schema), config }, sensitive);
+    const request = { prior: current.attributes, proposed: proposed(current.attributes, config, schema), config };
+    const change = await this.ask(provider, type, schema, request, sensitive, [...sensitive, ...(current.sensitive ?? [])]);
     if (!replaces(change.replace, current.attributes, change.after)) {
       checkKept(type, schema, current.attributes, change.after);
       return { after: change.after, replace: false, config, sensitive };
@@ -100,8 +101,9 @@ export class ResourcePlanner {
     return { after, replace: false, config };
   }
 
-  private async ask(provider: Provider, type: string, schema: Schema, request: PlanRequest, sensitive: AttributePath[]): Promise<PlannedChange> {
-    const change = await hidingReason(type, sensitive, () => provider.plan(type, request));
+  /** `hidden` adds what the prior holds sensitive, which the provider is sent too. */
+  private async ask(provider: Provider, type: string, schema: Schema, request: PlanRequest, sensitive: AttributePath[], hidden = sensitive): Promise<PlannedChange> {
+    const change = await hidingReason(type, hidden, () => provider.plan(type, request));
     const after = plainOf(heldBy(type, 'planned', schema, change.after));
     checkPlanned(type, schema, request.config, after, sensitive);
 

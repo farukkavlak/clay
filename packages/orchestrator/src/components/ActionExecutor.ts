@@ -4,7 +4,7 @@ import { offApply, offFinal, offPlan, PlanAction } from '@clay/planner';
 
 import { conformValues } from '../conformValues';
 import { keepPrior } from '../ignoredChanges';
-import { heldBy, inconsistent } from '../providerResult';
+import { heldBy, hidingReason, inconsistent } from '../providerResult';
 import { ProviderRegistry } from '../ProviderRegistry';
 import { SameObjects } from '../sameObject';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
@@ -148,7 +148,7 @@ export class ActionExecutor {
     if (off) throw new Error(offPlanMessage(off, hidden));
 
     const final = await this.finalPlan(action, schema, action.after, inputs, currentState, hidden, ignoring);
-    await this.sameObjects.claim(action, final.after, currentState);
+    await this.sameObjects.claim(action, final.after, hidden, currentState);
     return { inputs: final.config, after: final.after, sensitive: final.sensitive, hidden, schema };
   }
 
@@ -203,7 +203,13 @@ export class ActionExecutor {
   private async create(action: PlanAction, provider: Provider, currentState: State, sending: Sending, replacing?: Resource): Promise<void> {
     const contextAddress = Address.of(action);
 
-    const attributes = this.returned(sending, await provider.create(action.resourceType, { config: sending.inputs, planned: sending.after }));
+    const created = await hidingReason(
+      action.resourceType,
+      sending.hidden,
+      () => provider.create(action.resourceType, { config: sending.inputs, planned: sending.after }),
+      'to create'
+    );
+    const attributes = this.returned(sending, created);
 
     const key = contextAddress.toString();
     currentState.resources[key] = {
@@ -223,7 +229,9 @@ export class ActionExecutor {
     const currentResource = held(action, currentState);
     const request = { prior: currentResource.attributes, config: sending.inputs, planned: sending.after };
 
-    currentResource.attributes = this.returned(sending, await provider.update(action.resourceType, request));
+    const hidden = [...sending.hidden, ...(currentResource.sensitive ?? [])];
+    const updated = await hidingReason(action.resourceType, hidden, () => provider.update(action.resourceType, request), 'to update');
+    currentResource.attributes = this.returned(sending, updated);
     currentResource.dependencies = action.dependencies ?? [];
     mark(currentResource, sending.sensitive);
     protect(currentResource, action);
@@ -247,7 +255,8 @@ export class ActionExecutor {
     if (!deposed || !objects) throw new Error('state holds no deposed object for it, so the plan was made from another state');
 
     while (objects.length > 0) {
-      await provider.delete(action.resourceType, objects[0].attributes);
+      const [object] = objects;
+      await hidingReason(action.resourceType, object.sensitive ?? [], () => provider.delete(action.resourceType, object.attributes), 'to destroy');
       objects.shift();
     }
 
@@ -261,7 +270,8 @@ export class ActionExecutor {
   }
 
   async executeDelete(action: PlanAction, provider: Provider, currentState: State): Promise<void> {
-    await provider.delete(action.resourceType, held(action, currentState).attributes);
+    const { attributes, sensitive = [] } = held(action, currentState);
+    await hidingReason(action.resourceType, sensitive, () => provider.delete(action.resourceType, attributes), 'to destroy');
     delete currentState.resources[Address.of(action).toString()];
   }
 }

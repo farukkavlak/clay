@@ -135,16 +135,20 @@ Clay" and `clay state show` print `(sensitive value)` for each sensitive part, o
 sides of a change where either side is sensitive, and name each attribute whose sensitive
 parts change: `content: will be marked sensitive`.
 
-An error about a resource names a sensitive attribute and quotes neither value, and what a
-provider says when its validate or plan fails on a configuration holding a sensitive value
-is not shown, only that it failed. A data source given a sensitive value gives it back
-sensitive at the same parts, `data.local_file.f.path` for a sensitive `path`. A value a
-provider works out from a sensitive one is not sensitive, unless its schema marks the
-attribute sensitive: that attribute is sensitive whoever sets it, and null too.
+An error about a resource names a sensitive attribute and quotes neither value. What a
+provider says when a call fails is not shown where a value given to it is sensitive, only
+that it failed: `command_exec failed to create; a value given to it is sensitive, so the
+reason is not shown`. That holds for every call, from validate and plan to create, update,
+destroy, read and identify, since a provider may quote what it was given, as `exec` quotes
+the whole command.
 
-A provider's own message from a create, update, delete or read is shown as it words it,
-since an I/O error with its path is what a user needs to fix the run. A provider that
-quotes a sensitive value in that message shows it plainly.
+A data source given a sensitive value gives it back sensitive at the same parts,
+`data.local_file.f.path` for a sensitive `path`. A value a provider works out from a
+sensitive one is not sensitive, unless its schema marks the attribute sensitive: that
+attribute is sensitive whoever sets it, and null too.
+
+Where nothing given is sensitive, a provider's own message is shown as it words it, since
+an I/O error with its path is what a user needs to fix the run.
 
 ## Schemas
 

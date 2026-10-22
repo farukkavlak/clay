@@ -264,9 +264,14 @@ change each.
       reads the address with the configuration's syntax. Now every address read from the
       command line, a state file or a plan file is held to the configuration's name rule,
       and so is an output name in a state file
-- [ ] `command_exec` quotes a sensitive value when its command fails: with
+- [x] `command_exec` quotes a sensitive value when its command fails: with
       `command = "false ${var.token}"` and `var.token` sensitive, the apply prints
-      `Command failed: false s3cr3t-token`. Node's `exec` error holds the whole command
+      `Command failed: false s3cr3t-token`. Node's `exec` error holds the whole command.
+      The engine hid a provider's message only at validate and plan. Terraform's
+      `local-exec` hides the output but quotes the command in its error. Now the reason
+      of every provider call given a sensitive value is hidden, at apply and refresh too
+- [ ] A `command_exec` whose command prints a sensitive value, `echo ${var.token}`, keeps
+      it in `stdout`, which is not sensitive, so `clay state show` prints it
 - [ ] Writing out a value the provider already takes as its default replaces the resource.
       `special = false` added to a `random_string` that left it out plans a replace, since
       `special` is `forceNew` and a left-out value is not `false`. The provider contract
