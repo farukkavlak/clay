@@ -33,7 +33,7 @@ export class DataSourceReader {
       const config = plainOf(given);
       const sensitive = marksOf(schema, given);
       await hidingReason(stmt.dataSourceType, sensitive, () => provider.validateDataSource(stmt.dataSourceType, config));
-      const read = await provider.readDataSource(stmt.dataSourceType, config);
+      const read = await hidingReason(stmt.dataSourceType, sensitive, () => provider.readDataSource(stmt.dataSourceType, config), 'to read');
       const held = heldBy(stmt.dataSourceType, 'read', schema, read);
       checkDataSourceRead(stmt.dataSourceType, schema, plainOf(held));
       // A null reads as left out, so it never replaces what the configuration gave.

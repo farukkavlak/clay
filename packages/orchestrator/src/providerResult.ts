@@ -111,11 +111,11 @@ export function heldBy(type: string, did: string, schema: Schema, values: Record
 }
 
 /** A provider words what it throws itself, a string too, and may quote what it was given, so with a sensitive value given none of it is shown. */
-export async function hidingReason<T>(type: string, sensitive: readonly AttributePath[], ask: () => Promise<T>): Promise<T> {
+export async function hidingReason<T>(type: string, sensitive: readonly AttributePath[], ask: () => Promise<T>, doing = 'on its configuration'): Promise<T> {
   try {
     return await ask();
   } catch (error) {
     if (sensitive.length === 0) throw error;
-    throw new Error(`${type} failed on its configuration; a value given to it is sensitive, so the reason is not shown`);
+    throw new Error(`${type} failed ${doing}; a value given to it is sensitive, so the reason is not shown`);
   }
 }

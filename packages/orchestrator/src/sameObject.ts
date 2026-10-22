@@ -1,9 +1,10 @@
-import { Address, Identity, State } from '@clay/contracts';
+import { Address, AttributePath, Identity, State } from '@clay/contracts';
 import { spell } from '@clay/parser';
 import { DesiredResource, PlanAction } from '@clay/planner';
 
 import { asError } from './asError';
 import { withPlace } from './place';
+import { hidingReason } from './providerResult';
 import { ProviderRegistry } from './ProviderRegistry';
 
 /** An object the plan destroys: a delete's, a deposed one, or the old one of a replace. */
@@ -12,6 +13,7 @@ interface Going {
   address: string;
   deposed: boolean;
   values: Record<string, unknown>;
+  sensitive: AttributePath[];
 }
 
 /** An object the plan makes or keeps, and how a refusal names it. */
@@ -22,17 +24,23 @@ interface Staying {
   refuse: (message: string) => Error;
 }
 
-type Identify = (type: string, values: Record<string, unknown>) => Promise<Identity | undefined>;
+type Identify = (type: string, values: Record<string, unknown>, sensitive: readonly AttributePath[]) => Promise<Identity | undefined>;
 
 const identifyWith =
   (providers: ProviderRegistry): Identify =>
-  async (type, values) =>
-    await providers.get(type).identify?.(type, values);
+  async (type, values, sensitive) =>
+    await hidingReason(type, sensitive, async () => await providers.get(type).identify?.(type, values), 'to identify');
 
 /** A failure names what was asked about. */
-async function asking(identify: Identify, type: string, values: Record<string, unknown>, name: (error: unknown) => Error): Promise<Identity | undefined> {
+async function asking(
+  identify: Identify,
+  type: string,
+  values: Record<string, unknown>,
+  sensitive: readonly AttributePath[],
+  name: (error: unknown) => Error
+): Promise<Identity | undefined> {
   try {
-    return await identify(type, values);
+    return await identify(type, values, sensitive);
   } catch (error) {
     throw name(error);
   }
@@ -43,8 +51,11 @@ const named = (address: string) => (error: unknown) => new Error(`${address}: ${
 function goingIn(actions: PlanAction[], state: State): Going[] {
   return actions.flatMap<Going>((action) => {
     const address = Address.of(action).toString();
-    if (action.deposed) return (state.deposed?.[address] ?? []).map(({ attributes }) => ({ action, address, deposed: true, values: attributes }));
-    if (action.type === 'DELETE' || action.type === 'REPLACE') return [{ action, address, deposed: false, values: state.resources[address].attributes }];
+    if (action.deposed) return (state.deposed?.[address] ?? []).map(({ attributes, sensitive = [] }) => ({ action, address, deposed: true, values: attributes, sensitive }));
+    if (action.type === 'DELETE' || action.type === 'REPLACE') {
+      const { attributes, sensitive = [] } = state.resources[address];
+      return [{ action, address, deposed: false, values: attributes, sensitive }];
+    }
 
     return [];
   });
@@ -87,7 +98,7 @@ export async function checkSameObjects(actions: PlanAction[], desired: DesiredRe
 
   for (const resource of desired) {
     const placed = (error: unknown) => withPlace(error, resource.block.position, spell(resource.block), resource.address.module);
-    const identity = await asking(identify, resource.address.resourceType, resource.after, placed);
+    const identity = await asking(identify, resource.address.resourceType, resource.after, resource.sensitive, placed);
     if (identity === undefined) continue;
 
     const object = planned(resource, actions);
@@ -97,7 +108,7 @@ export async function checkSameObjects(actions: PlanAction[], desired: DesiredRe
   }
 
   for (const going of goingIn(actions, state)) {
-    const identity = await asking(identify, going.action.resourceType, going.values, named(going.address));
+    const identity = await asking(identify, going.action.resourceType, going.values, going.sensitive, named(going.address));
     if (identity === undefined) continue;
 
     const object = staying.get(identity.key);
@@ -127,10 +138,10 @@ export class SameObjects {
   }
 
   /** Refused before the provider makes or changes the object. Nothing is awaited between the check and the claim. */
-  async claim(action: PlanAction, values: Record<string, unknown>, state: State): Promise<void> {
+  async claim(action: PlanAction, values: Record<string, unknown>, sensitive: readonly AttributePath[], state: State): Promise<void> {
     const address = Address.of(action).toString();
     // Not named: the run reports a failure by its action.
-    const identity = await this.identify(action.resourceType, values);
+    const identity = await this.identify(action.resourceType, values, sensitive);
     if (identity === undefined) return;
 
     const held = await this.heldAs(identity.key, state, address);
@@ -149,19 +160,21 @@ export class SameObjects {
   /** Each object the state holds now, current or deposed, whose thing has the `key`. A failure names another object than the `claimant`'s. */
   private async heldAs(key: string, state: State, claimant: string): Promise<{ address: string; values: Record<string, unknown> }[]> {
     const objects = [
-      ...Object.entries(state.resources).map(([address, resource]) => ({ address, type: resource.resourceType, values: resource.attributes })),
+      ...Object.entries(state.resources).map(([address, resource]) => ({ address, type: resource.resourceType, values: resource.attributes, sensitive: resource.sensitive ?? [] })),
       ...Object.entries(state.deposed ?? {}).flatMap(([address, deposed]) =>
-        deposed.map(({ attributes }) => ({ address, type: Address.parse(address).resourceType, values: attributes }))
+        deposed.map(({ attributes, sensitive = [] }) => ({ address, type: Address.parse(address).resourceType, values: attributes, sensitive }))
       ),
     ];
-    const identities = await Promise.all(objects.map(async ({ address, type, values }) => await this.identifyHeld(type, values, address === claimant ? undefined : address)));
+    const identities = await Promise.all(
+      objects.map(async ({ address, type, values, sensitive }) => await this.identifyHeld(type, values, sensitive, address === claimant ? undefined : address))
+    );
 
     return objects.filter((_, index) => identities[index]?.key === key);
   }
 
   /** A failure is named by the `holder`, left out for the action's own object, which the run names. */
-  private async identifyHeld(type: string, values: Record<string, unknown>, holder?: string): Promise<Identity | undefined> {
-    const known = this.known.get(values) ?? this.identify(type, values);
+  private async identifyHeld(type: string, values: Record<string, unknown>, sensitive: readonly AttributePath[], holder?: string): Promise<Identity | undefined> {
+    const known = this.known.get(values) ?? this.identify(type, values, sensitive);
     this.known.set(values, known);
 
     try {

@@ -1,4 +1,4 @@
-import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types } from '@clay/contracts';
+import { CreateRequest, Identity, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, State, STATE_VERSION, types, UpdateRequest } from '@clay/contracts';
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
@@ -19,6 +19,9 @@ const DB = `
 `;
 
 const MODULE = 'module "db" { source = "./db" }\n';
+
+const hidden = (doing: string) => `failed ${doing}; a value given to it is sensitive, so the reason is not shown`;
+const secretIn = (type: string) => `${MODULE}resource "${type}" "a" { label = module.db.secret }`;
 
 class Base implements Provider {
   readonly resources: string[] = [];
@@ -46,7 +49,7 @@ class Base implements Provider {
     return config;
   }
 
-  async delete(): Promise<void> {}
+  async delete(_type: string, _prior: Record<string, unknown>): Promise<void> {}
 
   async getDataSourceSchema(): Promise<Schema> {
     return { content: { type: types.string, optional: true } };
@@ -137,13 +140,71 @@ class Altering extends Base {
   }
 }
 
+/** Throws at apply, quoting the label it was given or holds. */
+class Throwing extends Base {
+  override readonly resources = ['throwing'];
+  override readonly dataSources = ['throwing'];
+
+  override async create(_type: string, { config }: CreateRequest): Promise<Record<string, unknown>> {
+    throw new Error(`label "${String(config.label)}" cannot be created`);
+  }
+
+  override async update(_type: string, { prior, config }: UpdateRequest): Promise<Record<string, unknown>> {
+    throw new Error(`label "${String(prior.label)}" cannot be updated to "${String(config.label)}"`);
+  }
+
+  override async readDataSource(_type: string, config: Record<string, unknown>): Promise<Record<string, unknown>> {
+    throw new Error(`content "${String(config.content)}" cannot be read`);
+  }
+}
+
+/** Throws when it destroys or reads back what it holds, quoting the label. */
+class Holding extends Base {
+  override readonly resources = ['holding'];
+  failRead = false;
+  failIdentify = false;
+
+  failPlan = false;
+
+  async identify(_type: string, values: Record<string, unknown>): Promise<Identity> {
+    if (this.failIdentify && SECRET(values.label)) throw new Error(`label "${String(values.label)}" cannot be identified`);
+    return { key: `holding ${String(values.label)}`, name: String(values.label) };
+  }
+
+  override async plan(type: string, request: PlanRequest): Promise<PlannedChange> {
+    if (this.failPlan && request.prior) throw new Error(`label "${String(request.prior.label)}" cannot be planned from`);
+    return super.plan(type, request);
+  }
+
+  override async read(_type: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+    if (this.failRead) throw new Error(`label "${String(prior.label)}" cannot be read`);
+    return prior;
+  }
+
+  override async delete(_type: string, prior: Record<string, unknown>): Promise<void> {
+    throw new Error(`label "${String(prior.label)}" cannot be destroyed`);
+  }
+}
+
 describe('an error about a resource, given a sensitive value', () => {
   let dir: string;
+  let holding: Holding;
 
   const newOrchestrator = () => {
     const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
     engine.registerProvider(new LocalProvider());
-    for (const provider of [new Loud(), new Wrong(), new WrongOnSecret(), new PlanThrowing(), new Shouting(), new Refusing(), new Reader(), new Altering()])
+    for (const provider of [
+      new Loud(),
+      new Wrong(),
+      new WrongOnSecret(),
+      new PlanThrowing(),
+      new Shouting(),
+      new Refusing(),
+      new Reader(),
+      new Altering(),
+      new Throwing(),
+      holding,
+    ])
       engine.registerProvider(provider);
     return engine;
   };
@@ -153,6 +214,11 @@ describe('an error about a resource, given a sensitive value', () => {
     const failures: string[] = [];
     for await (const event of engine.runPlan(await engine.plan(config), config)) if (event.type === 'failed') failures.push(event.error.message);
     return failures;
+  };
+
+  const applied = async (config: string) => {
+    const engine = newOrchestrator();
+    for await (const event of engine.runPlan(await engine.plan(config), config)) if (event.type === 'failed') throw event.error;
   };
 
   const planFails = async (run: (engine: Orchestrator) => Promise<unknown>) => {
@@ -166,6 +232,7 @@ describe('an error about a resource, given a sensitive value', () => {
 
   beforeEach(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-sensitive-errors-'));
+    holding = new Holding();
     await fs.mkdir(path.join(dir, 'db'));
     await fs.writeFile(path.join(dir, 'db', 'main.clay'), DB, 'utf8');
   });
@@ -188,6 +255,160 @@ describe('an error about a resource, given a sensitive value', () => {
     });
   });
 
+  describe('what the provider throws at apply', () => {
+    it('hides the reason of a create', async () => {
+      const failures = await failureOf(secretIn('throwing'));
+
+      expect(failures.join('\n')).toContain(`throwing ${hidden('to create')}`);
+      expect(failures.join('\n')).not.toContain('hunter2');
+    });
+
+    it('shows the reason of a create where nothing given is sensitive', async () => {
+      const failures = await failureOf('resource "throwing" "a" { label = "hunter2" }');
+
+      expect(failures.join('\n')).toContain('label "hunter2" cannot be created');
+    });
+
+    it('hides the reason of an update', async () => {
+      const state: State = { version: STATE_VERSION, serial: 0, resources: { 'throwing.a': { resourceType: 'throwing', name: 'a', attributes: { label: 'start' } } } };
+      await new LocalBackend(dir).write(state);
+
+      const failures = await failureOf(secretIn('throwing'));
+
+      expect(failures.join('\n')).toContain(`throwing ${hidden('to update')}`);
+      expect(failures.join('\n')).not.toContain('hunter2');
+    });
+
+    it('hides the reason of an update from what the state holds sensitive', async () => {
+      const resource = { resourceType: 'throwing', name: 'a', attributes: { label: 'hunter2' }, sensitive: [['label']] };
+      await new LocalBackend(dir).write({ version: STATE_VERSION, serial: 0, resources: { 'throwing.a': resource } });
+
+      const failures = await failureOf('resource "throwing" "a" { label = "start" }');
+
+      expect(failures.join('\n')).toContain(`throwing ${hidden('to update')}`);
+      expect(failures.join('\n')).not.toContain('hunter2');
+    });
+
+    it('hides the reason of a destroy of what holds a sensitive value', async () => {
+      await applied(secretIn('holding'));
+
+      const failures = await failureOf('');
+
+      expect(failures.join('\n')).toContain(`holding ${hidden('to destroy')}`);
+      expect(failures.join('\n')).not.toContain('hunter2');
+    });
+
+    it('hides the reason of a destroy of a deposed object that holds a sensitive value', async () => {
+      const state: State = {
+        version: STATE_VERSION,
+        serial: 0,
+        resources: {},
+        deposed: { 'holding.a': [{ attributes: { label: 'hunter2' }, sensitive: [['label']] }] },
+      };
+      await new LocalBackend(dir).write(state);
+
+      const failures = await failureOf('');
+
+      expect(failures.join('\n')).toContain(`holding ${hidden('to destroy')}`);
+      expect(failures.join('\n')).not.toContain('hunter2');
+    });
+
+    it('hides the reason of a read back of what holds a sensitive value', async () => {
+      await applied(secretIn('holding'));
+      holding.failRead = true;
+
+      const message = await planFails((engine) => engine.plan(secretIn('holding')));
+
+      expect(message).toContain(`holding ${hidden('to read')}`);
+      expect(message).not.toContain('hunter2');
+    });
+
+    it('hides the reason of an identify of what the plan makes', async () => {
+      holding.failIdentify = true;
+
+      const message = await planFails((engine) => engine.plan(secretIn('holding')));
+
+      expect(message).toContain(`holding ${hidden('to identify')}`);
+      expect(message).not.toContain('hunter2');
+    });
+
+    it('hides the reason of an identify of what the plan destroys', async () => {
+      await applied(secretIn('holding'));
+      holding.failIdentify = true;
+
+      const message = await planFails((engine) => engine.plan(''));
+
+      expect(message).toContain(`holding ${hidden('to identify')}`);
+      expect(message).not.toContain('hunter2');
+    });
+
+    it('hides the reason of an identify at apply', async () => {
+      const engine = newOrchestrator();
+      const plan = await engine.plan(secretIn('holding'));
+      holding.failIdentify = true;
+
+      const failures: string[] = [];
+      for await (const event of engine.runPlan(plan, secretIn('holding'))) if (event.type === 'failed') failures.push(event.error.message);
+
+      expect(failures.join('\n')).toContain(`holding ${hidden('to identify')}`);
+      expect(failures.join('\n')).not.toContain('hunter2');
+    });
+
+    it('hides the reason of an identify of what the state holds, at the apply of another', async () => {
+      await applied(secretIn('holding'));
+      const config = `${secretIn('holding')}\nresource "holding" "b" { label = "start" }`;
+      const engine = newOrchestrator();
+      const plan = await engine.plan(config);
+      holding.failIdentify = true;
+
+      const failures: string[] = [];
+      for await (const event of engine.runPlan(plan, config)) if (event.type === 'failed') failures.push(event.error.message);
+
+      expect(failures.join('\n')).toContain(`holding ${hidden('to identify')}`);
+      expect(failures.join('\n')).not.toContain('hunter2');
+    });
+
+    it('hides the reason of an identify of a deposed object the plan destroys', async () => {
+      const state: State = {
+        version: STATE_VERSION,
+        serial: 0,
+        resources: {},
+        deposed: { 'holding.a': [{ attributes: { label: 'hunter2' }, sensitive: [['label']] }] },
+      };
+      await new LocalBackend(dir).write(state);
+      holding.failIdentify = true;
+
+      const message = await planFails((engine) => engine.plan(''));
+
+      expect(message).toContain(`holding ${hidden('to identify')}`);
+      expect(message).not.toContain('hunter2');
+    });
+
+    it('hides the reason of a plan from what the state holds sensitive', async () => {
+      await applied(secretIn('holding'));
+      holding.failPlan = true;
+
+      const message = await planFails((engine) => engine.plan('resource "holding" "a" { label = "start" }'));
+
+      expect(message).toContain(`holding ${hidden('on its configuration')}`);
+      expect(message).not.toContain('hunter2');
+    });
+
+    it('hides the reason of a data source read', async () => {
+      const message = await planFails((engine) => engine.plan(`${MODULE}data "throwing" "r" { content = module.db.secret }`));
+
+      expect(message).toContain(`throwing ${hidden('to read')}`);
+      expect(message).not.toContain('hunter2');
+    });
+
+    it('hides the command of a command_exec that fails', async () => {
+      const failures = await failureOf(`${MODULE}resource "command_exec" "c" { command = "false \${module.db.secret}" }`);
+
+      expect(failures.join('\n')).toContain(`command_exec ${hidden('to create')}`);
+      expect(failures.join('\n')).not.toContain('hunter2');
+    });
+  });
+
   describe('what the provider plans', () => {
     it('hides a value planned other than the configuration sets', async () => {
       const message = await planFails((engine) => engine.plan(`${MODULE}resource "wrong" "a" { label = module.db.secret }`));
@@ -203,11 +424,6 @@ describe('an error about a resource, given a sensitive value', () => {
       expect(message).toContain('wrong planned label = "other", but the configuration sets "hunter2"');
     });
   });
-
-  const applied = async (config: string) => {
-    const engine = newOrchestrator();
-    for await (const event of engine.runPlan(await engine.plan(config), config)) if (event.type === 'failed') throw event.error;
-  };
 
   describe('a resource that is updated', () => {
     const FAILED = 'failed on its configuration; a value given to it is sensitive, so the reason is not shown';

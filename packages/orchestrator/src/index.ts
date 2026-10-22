@@ -7,7 +7,7 @@ import { checkApplyOrder } from './applyGraph';
 import { asError } from './asError';
 import { GraphNode } from './components/DependencyGraphBuilder';
 import { DesiredState, Walk } from './components/DesiredStateBuilder';
-import { checkRead, heldBy } from './providerResult';
+import { checkRead, heldBy, hidingReason } from './providerResult';
 import { checkAttributes } from './checkAttributes';
 import { checkPreventDestroy } from './preventDestroy';
 import { checkSameObjects } from './sameObject';
@@ -130,7 +130,7 @@ export class Orchestrator {
   private async readBack(key: string, resource: Resource): Promise<Record<string, unknown> | null> {
     try {
       const provider = this.providers.get(resource.resourceType);
-      const read = await provider.read(resource.resourceType, resource.attributes);
+      const read = await hidingReason(resource.resourceType, resource.sensitive ?? [], () => provider.read(resource.resourceType, resource.attributes), 'to read');
       if (read === null) return null;
 
       const schema = await this.providers.schema(resource.resourceType);
