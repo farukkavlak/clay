@@ -10,18 +10,58 @@ function missing(error: unknown): boolean {
   return code === 'ENOENT' || code === 'ENOTDIR';
 }
 
+/** One case for names a file system that ignores case takes for one: `ß` and `SS` to `ss`. Unicode folds `ı` only in Turkish. */
+function folded(name: string): string {
+  const once = [...name].map((char) => (char === 'ı' ? char : char.toUpperCase().toLowerCase())).join('');
+
+  return once === name ? name : folded(once);
+}
+
 /** A link's name as its directory spells it; on a file system that ignores case, `L.txt` for `l.txt`. */
 async function linkIn(dir: string, written: string, link: { dev: number; ino: number }): Promise<string> {
   const names = await fs.readdir(dir);
-  const alike = names.filter((name) => name.toLowerCase() === written.toLowerCase());
+  const alike = names.filter((name) => folded(name) === folded(written));
   const entries = await Promise.all(alike.map(async (name) => ({ name, ...(await fs.lstat(path.join(dir, name))) })));
   const found = entries.find(({ dev, ino }) => dev === link.dev && ino === link.ino);
 
   return found?.name ?? written;
 }
 
+const flipped = (name: string) => [...name].map((char) => (char === char.toLowerCase() ? char.toUpperCase() : char.toLowerCase())).join('');
+
+/** Whether the name in another case finds the same entry. */
+async function foundInAnyCase(dir: string, name: string): Promise<boolean> {
+  try {
+    const [entry, other] = await Promise.all([fs.lstat(path.join(dir, name)), fs.lstat(path.join(dir, flipped(name)))]);
+    return entry.dev === other.dev && entry.ino === other.ino;
+  } catch (error) {
+    if (!missing(error)) throw error;
+
+    return false;
+  }
+}
+
+/** A name that turns into another case and back, which `ı` to `I` does not. */
+const hasCase = (name: string) => flipped(name) !== name && flipped(flipped(name)) === name;
+
 /**
- * The file a path names, as the disk names it: links followed, in the case each part has. A part not made yet is kept as written.
+ * Whether a directory, or the nearest one that exists above it, ignores case. Asked of an entry whose name has case; with none,
+ * or a directory that cannot be listed, the directory above is asked, and with none up to the root, case counts.
+ */
+async function ignoresCase(dir: string): Promise<boolean> {
+  try {
+    for await (const { name } of await fs.opendir(dir)) if (hasCase(name)) return await foundInAnyCase(dir, name);
+  } catch (error) {
+    if (!missing(error) && (error as NodeJS.ErrnoException).code !== 'EACCES') throw error;
+  }
+  const parent = path.dirname(dir);
+
+  return parent !== dir && (await ignoresCase(parent));
+}
+
+/**
+ * The file a path names, as the disk names it: links followed, in the case each part has. A part not made yet is kept as written,
+ * in one case where its directory ignores case, so two spellings of one new file are one name.
  * A link at the `end` is itself, since a delete removes the link and not what it points to.
  */
 async function onDisk(file: string, end = true): Promise<string> {
@@ -37,7 +77,11 @@ async function onDisk(file: string, end = true): Promise<string> {
   } catch (error) {
     if (!missing(error)) throw error;
 
-    return parent === absolute ? absolute : path.join(await onDisk(parent, false), path.basename(absolute));
+    if (parent === absolute) return absolute;
+    const dir = await onDisk(parent, false);
+    const name = path.basename(absolute);
+
+    return path.join(dir, (await ignoresCase(dir)) ? folded(name) : name);
   }
 }
 
