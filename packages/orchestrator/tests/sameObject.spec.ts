@@ -1,4 +1,4 @@
-import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, State, types, UpdateRequest } from '@clay/contracts';
+import { CreateRequest, Identity, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, State, types, UpdateRequest } from '@clay/contracts';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { InMemoryFiles, Orchestrator } from '../src/index';
 import { apply } from './apply';
 
-/** A thing named by `place`, which a change of `label` replaces. */
+/** A thing named by `place` in any case, which a change of `label` replaces. */
 class PlacedProvider implements Provider {
   readonly resources = ['placed'];
   /** A place that can no longer be told, as a disk changed under a run. */
@@ -43,9 +43,9 @@ class PlacedProvider implements Provider {
 
   async delete(): Promise<void> {}
 
-  async identify(_type: string, values: Record<string, unknown>): Promise<string | undefined> {
+  async identify(_type: string, values: Record<string, unknown>): Promise<Identity | undefined> {
     if (values.place === this.lost) throw new Error('the place is lost');
-    return typeof values.place === 'string' ? `the place ${values.place}` : undefined;
+    return typeof values.place === 'string' ? { key: values.place.toLowerCase(), name: `the place ${values.place}` } : undefined;
   }
 
   async getDataSourceSchema(): Promise<Schema> {
@@ -92,6 +92,28 @@ describe('a replace whose new object is its old one', () => {
     const { actions } = await orchestrator.plan(placed('two', false));
 
     expect(actions.map((action) => action.type)).toEqual(['REPLACE']);
+  });
+
+  it('refuses two objects whose keys are one, named as the second spells it', async () => {
+    const config = 'resource "placed" "a" {\n  place = "p"\n  label = "a1"\n}\nresource "placed" "b" {\n  place = "P"\n  label = "b1"\n}\n';
+
+    await expect(orchestrator.plan(config)).rejects.toThrow('placed.b and placed.a are both the place P');
+  });
+
+  it('refuses at apply one of two objects made together whose keys are one', async () => {
+    const config =
+      'resource "placed" "c" {\n  place = "c"\n  label = "p"\n}\nresource "placed" "d" {\n  place = "d"\n  label = "P"\n}\n' +
+      'resource "placed" "a" {\n  place = placed.c.id\n  label = "a1"\n}\nresource "placed" "b" {\n  place = placed.d.id\n  label = "b1"\n}\n';
+
+    await expect(apply(orchestrator, config)).rejects.toThrow(/^placed\.(a and placed\.b|b and placed\.a) are both the place [pP],/);
+  });
+
+  it('refuses at apply an object whose key one in the state has', async () => {
+    const kept = 'resource "placed" "a" {\n  place = "p"\n  label = "a1"\n}\n';
+    await apply(orchestrator, kept);
+    const config = `${kept}resource "placed" "c" {\n  place = "c"\n  label = "P"\n}\nresource "placed" "b" {\n  place = placed.c.id\n  label = "b1"\n}\n`;
+
+    await expect(apply(orchestrator, config)).rejects.toThrow('placed.b and placed.a are both the place P');
   });
 
   it('refuses at apply an update onto what another object is, where only the apply knows it', async () => {

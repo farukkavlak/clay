@@ -31,6 +31,16 @@ describe('LocalProvider', () => {
   /** As the engine calls it, with the plan equal to the configuration. */
   const create = (type: string, config: Record<string, unknown>) => provider.create(type, { config, planned: config });
 
+  const identity = (values: Record<string, unknown>) => provider.identify('local_file', values);
+  const named = async (values: Record<string, unknown>) => {
+    const found = await identity(values);
+    return found?.name;
+  };
+  const keyed = async (values: Record<string, unknown>) => {
+    const found = await identity(values);
+    return found?.key;
+  };
+
   describe('Validation', () => {
     it('should validate local_file with path and content', async () => {
       await expect(
@@ -449,12 +459,12 @@ describe('LocalProvider', () => {
 
   describe('identify', () => {
     it('names a local_file by its full path, however the path is spelled', async () => {
-      expect(await provider.identify('local_file', { path: './a.txt' })).toBe(`the file ${path.resolve('a.txt')}`);
+      expect(await named({ path: './a.txt' })).toBe(`the file ${path.resolve('a.txt')}`);
     });
 
     // A delete removes the file the id names, which a moved directory leaves apart from the path.
     it('names a local_file by its id once it has one', async () => {
-      expect(await provider.identify('local_file', { path: 'a.txt', id: '/old/a.txt' })).toBe('the file /old/a.txt');
+      expect(await named({ path: 'a.txt', id: '/old/a.txt' })).toBe('the file /old/a.txt');
     });
 
     it('names no local_file whose path is known only at apply', async () => {
@@ -476,25 +486,34 @@ describe('LocalProvider', () => {
       });
 
       it('follows a link to a directory, to a file not made yet', async () => {
-        expect(await provider.identify('local_file', { path: path.join(real, 'link', 'f.txt') })).toBe(`the file ${path.join(real, 'dir', 'f.txt')}`);
+        expect(await named({ path: path.join(real, 'link', 'f.txt') })).toBe(`the file ${path.join(real, 'dir', 'f.txt')}`);
       });
 
       it('takes the case of a file that exists, where the file system ignores case', async (context) => {
         await fs.writeFile(path.join(real, 'dir', 'a.txt'), 'x', 'utf8');
         if (!(await ignoresCase(real))) context.skip();
 
-        expect(await provider.identify('local_file', { path: path.join(real, 'dir', 'A.txt') })).toBe(`the file ${path.join(real, 'dir', 'a.txt')}`);
+        expect(await named({ path: path.join(real, 'dir', 'A.txt') })).toBe(`the file ${path.join(real, 'dir', 'a.txt')}`);
       });
 
       it('folds the case of parts not made yet, where the file system ignores case', async (context) => {
         if (!(await ignoresCase(real))) context.skip();
 
-        expect(await provider.identify('local_file', { path: path.join(real, 'dir', 'New', 'A.txt') })).toBe(`the file ${path.join(real, 'dir', 'new', 'a.txt')}`);
+        expect(await keyed({ path: path.join(real, 'dir', 'New', 'A.txt') })).toBe(await keyed({ path: path.join(real, 'dir', 'new', 'a.txt') }));
+        expect(await named({ path: path.join(real, 'dir', 'New', 'A.txt') })).toBe(`the file ${path.join(real, 'dir', 'New', 'A.txt')}`);
+      });
+
+      it('gives a file the key it had before it was made', async () => {
+        const file = path.join(real, 'dir', 'New', 'A.txt');
+        const before = await keyed({ path: file });
+        await create('local_file', { path: file, content: 'x' });
+
+        expect(await keyed({ path: file })).toBe(before);
       });
 
       it('folds parts not made yet as a file system that ignores case does', async (context) => {
         if (!(await ignoresCase(real))) context.skip();
-        const identify = (name: string) => provider.identify('local_file', { path: path.join(real, 'dir', name) });
+        const identify = (name: string) => keyed({ path: path.join(real, 'dir', name) });
 
         expect(await identify('STRASSE')).toBe(await identify('Straße'));
         expect(await identify('ss')).toBe(await identify('ẞ'));
@@ -506,7 +525,7 @@ describe('LocalProvider', () => {
         await fs.symlink(path.join(real, 'dir', 'real.txt'), path.join(real, 'dir', 'STRASSE'));
         if (!(await ignoresCase(real))) context.skip();
 
-        expect(await provider.identify('local_file', { path: path.join(real, 'dir', 'Straße') })).toBe(`the file ${path.join(real, 'dir', 'STRASSE')}`);
+        expect(await named({ path: path.join(real, 'dir', 'Straße') })).toBe(`the file ${path.join(real, 'dir', 'STRASSE')}`);
       });
 
       // `ı` turns into `I`, which finds nothing even where case is ignored, so it cannot tell.
@@ -514,7 +533,7 @@ describe('LocalProvider', () => {
         if (!(await ignoresCase(real))) context.skip();
         await fs.writeFile(path.join(real, 'dir', 'ı'), 'x', 'utf8');
 
-        expect(await provider.identify('local_file', { path: path.join(real, 'dir', 'A.txt') })).toBe(`the file ${path.join(real, 'dir', 'a.txt')}`);
+        expect(await keyed({ path: path.join(real, 'dir', 'A.txt') })).toBe(await keyed({ path: path.join(real, 'dir', 'a.txt') }));
       });
 
       it('asks the directory above one that cannot be listed', async (context) => {
@@ -523,7 +542,7 @@ describe('LocalProvider', () => {
         await fs.chmod(path.join(real, 'dir'), 0o300);
 
         try {
-          expect(await provider.identify('local_file', { path: path.join(real, 'dir', 'A.txt') })).toBe(`the file ${path.join(real, 'dir', 'a.txt')}`);
+          expect(await keyed({ path: path.join(real, 'dir', 'A.txt') })).toBe(await keyed({ path: path.join(real, 'dir', 'a.txt') }));
         } finally {
           await fs.chmod(path.join(real, 'dir'), 0o700);
         }
@@ -532,7 +551,7 @@ describe('LocalProvider', () => {
       it('keeps the case of parts not made yet, where the file system tells case apart', async (context) => {
         if (await ignoresCase(real)) context.skip();
 
-        expect(await provider.identify('local_file', { path: path.join(real, 'dir', 'New', 'A.txt') })).toBe(`the file ${path.join(real, 'dir', 'New', 'A.txt')}`);
+        expect(await keyed({ path: path.join(real, 'dir', 'New', 'A.txt') })).not.toBe(await keyed({ path: path.join(real, 'dir', 'new', 'a.txt') }));
       });
 
       // Each name in the other case finds an entry, but not the same one.
@@ -541,7 +560,7 @@ describe('LocalProvider', () => {
         await fs.writeFile(path.join(real, 'dir', 'B.txt'), 'x', 'utf8');
         await fs.writeFile(path.join(real, 'dir', 'b.TXT'), 'x', 'utf8');
 
-        expect(await provider.identify('local_file', { path: path.join(real, 'dir', 'New', 'A.txt') })).toBe(`the file ${path.join(real, 'dir', 'New', 'A.txt')}`);
+        expect(await keyed({ path: path.join(real, 'dir', 'New', 'A.txt') })).not.toBe(await keyed({ path: path.join(real, 'dir', 'new', 'a.txt') }));
       });
 
       // A delete unlinks the link and leaves what it points to, so the two are not one file.
@@ -549,26 +568,34 @@ describe('LocalProvider', () => {
         await fs.writeFile(path.join(real, 'dir', 'real.txt'), 'x', 'utf8');
         await fs.symlink(path.join(real, 'dir', 'real.txt'), path.join(real, 'dir', 'l.txt'));
 
-        expect(await provider.identify('local_file', { path: path.join(real, 'link', 'l.txt') })).toBe(`the file ${path.join(real, 'dir', 'l.txt')}`);
+        expect(await named({ path: path.join(real, 'link', 'l.txt') })).toBe(`the file ${path.join(real, 'dir', 'l.txt')}`);
       });
 
       it('takes the case a link at the end has, where the file system ignores case', async (context) => {
         await fs.symlink(path.join(real, 'dir', 'real.txt'), path.join(real, 'dir', 'L.txt'));
         if (!(await ignoresCase(real))) context.skip();
 
-        expect(await provider.identify('local_file', { path: path.join(real, 'dir', 'l.txt') })).toBe(`the file ${path.join(real, 'dir', 'L.txt')}`);
+        expect(await named({ path: path.join(real, 'dir', 'l.txt') })).toBe(`the file ${path.join(real, 'dir', 'L.txt')}`);
       });
 
       it('names a path under a file as written', async () => {
         await fs.writeFile(path.join(real, 'dir', 'f.txt'), 'x', 'utf8');
 
-        expect(await provider.identify('local_file', { path: path.join(real, 'link', 'f.txt', 'x') })).toBe(`the file ${path.join(real, 'dir', 'f.txt', 'x')}`);
+        expect(await named({ path: path.join(real, 'link', 'f.txt', 'x') })).toBe(`the file ${path.join(real, 'dir', 'f.txt', 'x')}`);
       });
 
       it('fails on a path the disk cannot follow', async () => {
         await fs.symlink('loop', path.join(real, 'loop'));
 
         await expect(provider.identify('local_file', { path: path.join(real, 'loop', 'f.txt') })).rejects.toThrow('ELOOP');
+      });
+
+      it('plans a path in another case to a file removed by hand as an update, where the file system ignores case', async (context) => {
+        if (!(await ignoresCase(real))) context.skip();
+        const config = { path: path.join(real, 'dir', 'A.txt'), content: 'hi' };
+        const prior = { path: path.join(real, 'dir', 'a.txt'), content: 'hi', id: path.join(real, 'dir', 'a.txt') };
+
+        expect(await provider.plan('local_file', { prior, proposed: { ...config, id: prior.id }, config })).toMatchObject({ replace: [] });
       });
 
       it('plans a path through a link to the file the id is as an update', async () => {

@@ -1,4 +1,4 @@
-import { CreateRequest, isUnknown, own, PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema, types, UpdateRequest } from '@clay/contracts';
+import { CreateRequest, Identity, isUnknown, own, PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema, types, UpdateRequest } from '@clay/contracts';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -52,7 +52,7 @@ async function ignoresCase(dir: string): Promise<boolean> {
   try {
     for await (const { name } of await fs.opendir(dir)) if (hasCase(name)) return await foundInAnyCase(dir, name);
   } catch (error) {
-    if (!missing(error) && (error as NodeJS.ErrnoException).code !== 'EACCES') throw error;
+    if (!missing(error) && !['EACCES', 'EPERM'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error;
   }
   const parent = path.dirname(dir);
 
@@ -60,8 +60,7 @@ async function ignoresCase(dir: string): Promise<boolean> {
 }
 
 /**
- * The file a path names, as the disk names it: links followed, in the case each part has. A part not made yet is kept as written,
- * in one case where its directory ignores case, so two spellings of one new file are one name.
+ * The file a path names, as the disk names it: links followed, in the case each part has. A part not made yet is kept as written.
  * A link at the `end` is itself, since a delete removes the link and not what it points to.
  */
 async function onDisk(file: string, end = true): Promise<string> {
@@ -77,18 +76,25 @@ async function onDisk(file: string, end = true): Promise<string> {
   } catch (error) {
     if (!missing(error)) throw error;
 
-    if (parent === absolute) return absolute;
-    const dir = await onDisk(parent, false);
-    const name = path.basename(absolute);
-
-    return path.join(dir, (await ignoresCase(dir)) ? folded(name) : name);
+    return parent === absolute ? absolute : path.join(await onDisk(parent, false), path.basename(absolute));
   }
 }
+
+/** A path as the disk names it, each part in one case where its directory ignores case, so making the file leaves it the same. */
+async function inOneCase(file: string): Promise<string> {
+  const parent = path.dirname(file);
+  if (parent === file) return file;
+  const name = path.basename(file);
+
+  return path.join(await inOneCase(parent), (await ignoresCase(parent)) ? folded(name) : name);
+}
+
+const keyOf = async (file: string) => await inOneCase(await onDisk(file));
 
 /** A path that names the file the id already is, as `./a.txt` for `a.txt` or a link to it, is written in place. */
 async function keepingTheFile(change: PlannedChange, prior: Record<string, unknown> | null): Promise<PlannedChange> {
   const file = change.after.path;
-  if (typeof file !== 'string' || typeof prior?.id !== 'string' || (await onDisk(file)) !== (await onDisk(prior.id))) return change;
+  if (typeof file !== 'string' || typeof prior?.id !== 'string' || (await keyOf(file)) !== (await keyOf(prior.id))) return change;
 
   return { ...change, replace: change.replace.filter(([name]) => name !== 'path') };
 }
@@ -150,10 +156,12 @@ export class LocalFileResource implements ResourceHandler {
     });
   }
 
-  // The id once there is one, since a delete removes that; before it, the path a create writes, as the disk names it.
-  async identify(values: Record<string, unknown>): Promise<string | undefined> {
+  // The id once there is one, since a delete removes that; before it, the path a create writes.
+  async identify(values: Record<string, unknown>): Promise<Identity | undefined> {
     const file = typeof values.id === 'string' ? values.id : values.path;
+    if (typeof file !== 'string') return undefined;
+    const name = await onDisk(file);
 
-    return typeof file === 'string' ? `the file ${await onDisk(file)}` : undefined;
+    return { key: `file ${await inOneCase(name)}`, name: `the file ${name}` };
   }
 }

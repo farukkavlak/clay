@@ -231,10 +231,13 @@ change each.
       yet is named in one case where the nearest directory that exists ignores case, `ß`
       and `SS` as `ss`, as macOS folds them. The directory is asked by finding one of its
       names in another case, so nothing is written
-- [ ] A new file's name changes once it is made: in the case it was written, where before
+- [x] A new file's name changes once it is made: in the case it was written, where before
       it was folded. At apply, two blocks in one layer whose paths differ only in case and
       are known only then can each be checked on either side of the other's create, and
-      both write the one file
+      both write the one file. Now a provider gives each thing a key, the same before it is
+      made and after, and a name for messages. A file's key has every part in one case
+      where its directory ignores case; its name keeps the case on disk, or as written where
+      not made yet
 - [ ] A directory that cannot tell whether it ignores case asks the one above, even on
       another device, so an empty volume that tells case apart, mounted under one that
       ignores it, has `vol/A.txt` and `vol/a.txt` refused as one file

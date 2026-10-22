@@ -362,8 +362,16 @@ export interface Provider {
   update(type: string, request: UpdateRequest): Promise<Record<string, unknown>>;
   delete(type: string, prior: Record<string, unknown>): Promise<void>;
 
-  /** The real thing the values name, as `the file /tmp/a.txt`; undefined until the values say. */
-  identify?(type: string, values: Record<string, unknown>): Promise<string | undefined>;
+  /** The real thing the values name; undefined until the values say. */
+  identify?(type: string, values: Record<string, unknown>): Promise<Identity | undefined>;
+}
+
+/** The real thing an object is, as a file. */
+export interface Identity {
+  /** The same for every spelling of the thing, before it is made and after, and unique across kinds of thing, as `file /tmp/a.txt`. */
+  key: string;
+  /** How a message names it, as `the file /tmp/a.txt`. */
+  name: string;
 }
 
 export interface ResourceHandler {
@@ -383,7 +391,7 @@ export interface ResourceHandler {
 
   delete(prior: Record<string, unknown>): Promise<void>;
 
-  identify?(values: Record<string, unknown>): Promise<string | undefined>;
+  identify?(values: Record<string, unknown>): Promise<Identity | undefined>;
 }
 
 export interface DataSourceHandler {
