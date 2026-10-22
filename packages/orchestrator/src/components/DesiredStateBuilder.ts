@@ -15,9 +15,7 @@ import { ModuleInstances } from '../ModuleInstances';
 import { NotKnownYet } from '../NotKnownYet';
 import { Planned } from '../Planned';
 import { tryAt, withPlace } from '../place';
-import { InstanceKeys } from '../resolvers/InstanceKeys';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
-import { ReferenceScanner } from '../resolvers/ReferenceScanner';
 import { unknownOf, UnresolvedReferenceError } from '../resolvers/UnresolvedReferenceError';
 import { ScopeManager } from '../scope/ScopeManager';
 import { carried, outputOf, sensitiveAmong, Value } from '../Value';
@@ -75,12 +73,10 @@ export class DesiredStateBuilder {
 
   constructor(
     private scopeManager: ScopeManager,
-    private scanner: ReferenceScanner,
     private resolver: ReferenceResolver,
     private graphBuilder: DependencyGraphBuilder,
     private instances: Instances,
     private modules: ModuleInstances,
-    private keys: InstanceKeys,
     private planned: Planned,
     private resourcePlanner: ResourcePlanner,
     private reader: DataSourceReader
@@ -363,10 +359,7 @@ export class DesiredStateBuilder {
     return tryAt(node.position, node.declaration, context, () => this.resolveOrUnknown(value, state, context));
   }
 
-  /** A bad index or key is refused first, since an instance not made yet would read as unknown, not missing. */
   private resolveOrUnknown(value: AttributeValue, state: State, context: Context): Value {
-    for (const reference of this.scanner.referencesIn(value, context)) if ('reference' in reference) this.keys.of(reference.reference, context, reference.position);
-
     try {
       return this.resolver.resolveValue(value, state, context);
     } catch (error) {

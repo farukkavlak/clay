@@ -18,7 +18,7 @@ export class InstanceKeys {
     private modules: ModuleInstances
   ) {}
 
-  /** A key out of range is refused where it is written, and one read from a value where it is read. */
+  /** Where the key is read, so one in a result a condition does not pick, or in the body of a for over nothing, is not refused. */
   of(reference: ParsedReference, context: Context, position?: Position): void {
     if (reference.kind === 'resource') this.resource(reference.type, reference.name, reference.path, context, position);
     if (reference.kind === 'data') this.data(reference.type, reference.name, reference.path, context, position);

@@ -25,6 +25,16 @@ export type ForNode = Node & { type: 'For'; keyName?: string; valueName: string;
 
 export type TemplatePart = string | ReferenceNode | CallNode | BoundNode;
 
+export type BinaryOperator = '==' | '!=' | '&&' | '||';
+
+/** At the start of `left`, so a message about the whole value points where it begins. */
+export type BinaryNode = Node & { type: 'Binary'; operator: BinaryOperator; operatorPosition: Position; left: AttributeValue; right: AttributeValue };
+
+export type NotNode = Node & { type: 'Not'; value: AttributeValue };
+
+/** `condition ? whenTrue : whenFalse`, at the start of the condition. */
+export type ConditionalNode = Node & { type: 'Conditional'; condition: AttributeValue; whenTrue: AttributeValue; whenFalse: AttributeValue };
+
 export type AttributeValue =
   | (Node & { type: 'String'; value: string })
   | (Node & { type: 'Template'; value: TemplatePart[] })
@@ -35,6 +45,9 @@ export type AttributeValue =
   | CallNode
   | BoundNode
   | ForNode
+  | BinaryNode
+  | NotNode
+  | ConditionalNode
   | (Node & { type: 'List'; value: AttributeValue[] })
   | (Node & { type: 'Map'; value: Record<string, AttributeValue> });
 
@@ -141,6 +154,14 @@ function indexesIn(steps: Step[]): IndexNode[] {
   return steps.flatMap((step) => ('index' in step ? [step.index] : []));
 }
 
+function operandsIn(value: AttributeValue): AttributeValue[] {
+  if (value.type === 'Binary') return [value.left, value.right];
+  if (value.type === 'Not') return [value.value];
+  if (value.type === 'Conditional') return [value.condition, value.whenTrue, value.whenFalse];
+
+  return [];
+}
+
 /** Direct children only. */
 function valuesIn(value: AttributeValue): AttributeValue[] {
   if (value.type === 'List') return value.value;
@@ -150,7 +171,7 @@ function valuesIn(value: AttributeValue): AttributeValue[] {
   if (value.type === 'Map') return Object.values(value.value);
   if (value.type === 'Template') return value.value.filter((part) => typeof part !== 'string');
 
-  return [];
+  return operandsIn(value);
 }
 
 /** At any depth, an outer call before those in its arguments. */

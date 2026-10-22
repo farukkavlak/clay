@@ -26,6 +26,12 @@ export enum TokenType {
   Colon = 'COLON',
   FatArrow = 'FAT_ARROW',
   Ellipsis = 'ELLIPSIS',
+  Equal = 'EQUAL',
+  NotEqual = 'NOT_EQUAL',
+  And = 'AND',
+  Or = 'OR',
+  Bang = 'BANG',
+  Question = 'QUESTION',
   EOF = 'EOF',
 }
 

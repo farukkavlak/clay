@@ -1,6 +1,7 @@
 import { ExactNumber, isName, MAX_NESTING, NAME_RULE, NumberError, RESERVED_TYPES, Type, types } from '@clay/contracts';
 import {
   AttributeValue,
+  BinaryOperator,
   BoundNode,
   CallNode,
   DataBlock,
@@ -27,6 +28,16 @@ import { flushed } from './heredoc';
 import { Position } from './Position';
 import { Step, stepKey } from './reference';
 import { Token, TokenType } from './tokens';
+
+/** Loosest first; within a level, operators group from the left. */
+const BINARY_LEVELS: ReadonlyMap<TokenType, BinaryOperator>[] = [
+  new Map([[TokenType.Or, '||']]),
+  new Map([[TokenType.And, '&&']]),
+  new Map([
+    [TokenType.Equal, '=='],
+    [TokenType.NotEqual, '!='],
+  ]),
+];
 
 const CLOSING = { [TokenType.RBracket]: ']', [TokenType.RBrace]: '}' };
 
@@ -443,33 +454,97 @@ export class Parser {
     return attributes;
   }
 
+  /** `a ? b : c` binds loosest, and either result may be a conditional too. */
   private parseValue(): AttributeValue {
+    const condition = this.parseBinary(0);
+    if (!this.matchToken(TokenType.Question)) return condition;
+
+    return this.nested(this.previous().position, () => {
+      const whenTrue = this.parseValue();
+      this.consume(TokenType.Colon, "Expect ':' after the value a conditional gives when true.");
+
+      return { type: 'Conditional', condition, whenTrue, whenFalse: this.parseValue(), position: condition.position };
+    });
+  }
+
+  /** A chain is as deep as it is long, so each operator in it counts toward the nesting limit. */
+  private parseBinary(level: number): AttributeValue {
+    if (level === BINARY_LEVELS.length) return this.parseUnary();
+
+    const outer = this.depth;
+    try {
+      let left = this.parseBinary(level + 1);
+      for (let operator = this.matchOperator(level); operator; operator = this.matchOperator(level)) {
+        const operatorPosition = this.previous().position;
+        this.enter(operatorPosition);
+        left = { type: 'Binary', operator, operatorPosition, left, right: this.parseBinary(level + 1), position: left.position };
+      }
+
+      return left;
+    } finally {
+      this.depth = outer;
+    }
+  }
+
+  private matchOperator(level: number): BinaryOperator | undefined {
+    const operator = BINARY_LEVELS[level].get(this.peek().type);
+    if (operator) this.advance();
+
+    return operator;
+  }
+
+  private parseUnary(): AttributeValue {
+    if (!this.matchToken(TokenType.Bang)) return this.parsePrimary();
+
+    const { position } = this.previous();
+    return this.nested(position, () => ({ type: 'Not', value: this.parseUnary(), position }));
+  }
+
+  private parsePrimary(): AttributeValue {
     const position = this.peek().position;
 
     if (this.matchToken(TokenType.OQuote)) return this.parseString(position);
     if (this.matchToken(TokenType.OHeredoc)) return this.parseHeredoc(position);
+
+    if (this.matchToken(TokenType.LBracket)) return this.nested(position, () => this.parseList(position));
+    if (this.matchToken(TokenType.LBrace)) return this.nested(position, () => this.parseMap(position));
+    if (this.matchToken(TokenType.LParen)) return this.nested(position, () => this.parseParenthesized());
+
+    if (this.check(TokenType.Identifier)) return this.parseNamed(position);
+
+    return this.parseLiteral(position);
+  }
+
+  private parseLiteral(position: Position): AttributeValue {
     if (this.matchToken(TokenType.Number)) return { type: 'Number', value: this.exactNumber(this.previous().value, position), position };
     if (this.matchToken(TokenType.Minus)) return this.parseNegative(position);
     if (this.matchToken(TokenType.Boolean)) return { type: 'Boolean', value: this.previous().value === 'true', position };
     if (this.matchToken(TokenType.Null)) return { type: 'Null', position };
 
-    if (this.matchToken(TokenType.LBracket)) return this.nested(position, () => this.parseList(position));
-    if (this.matchToken(TokenType.LBrace)) return this.nested(position, () => this.parseMap(position));
-
-    if (this.check(TokenType.Identifier)) return this.parseNamed(position);
-
     return this.error(`Unexpected value: ${this.peek().value}`);
   }
 
-  private nested<T>(opening: Position, read: () => T): T {
-    if (this.depth === MAX_NESTING) throw new ConfigError(`Nested more than ${MAX_NESTING} levels deep`, opening);
+  private parseParenthesized(): AttributeValue {
+    const value = this.parseValue();
+    this.consume(TokenType.RParen, "Expect ')' after the value in parentheses.");
 
-    this.depth++;
+    return value;
+  }
+
+  private nested<T>(opening: Position, read: () => T): T {
+    const outer = this.depth;
+    this.enter(opening);
     try {
       return read();
     } finally {
-      this.depth--;
+      this.depth = outer;
     }
+  }
+
+  private enter(opening: Position): void {
+    if (this.depth === MAX_NESTING) throw new ConfigError(`Nested more than ${MAX_NESTING} levels deep`, opening);
+
+    this.depth++;
   }
 
   private parseNegative(position: Position): AttributeValue {

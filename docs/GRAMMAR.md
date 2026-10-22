@@ -24,13 +24,19 @@ in a directory; a module is another directory with its own `main.clay`.
 | `RBRACE`          | `}`                                   |                                                                         |
 | `LBRACKET`        | `[`                                   |                                                                         |
 | `RBRACKET`        | `]`                                   |                                                                         |
-| `LPAREN`          | `(`                                   | Opens a call's arguments                                                |
+| `LPAREN`          | `(`                                   | Opens a call's arguments, or groups a value                             |
 | `RPAREN`          | `)`                                   |                                                                         |
 | `COMMA`           | `,`                                   |                                                                         |
-| `COLON`           | `:`                                   | Only in a for expression                                                |
+| `COLON`           | `:`                                   | In a for expression and a conditional                                   |
 | `FAT_ARROW`       | `=>`                                  | Only in a for expression that makes an object                           |
 | `ELLIPSIS`        | `...`                                 | Only in a for expression that makes an object                           |
 | `ASSIGN`          | `=`                                   |                                                                         |
+| `EQUAL`           | `==`                                  |                                                                         |
+| `NOT_EQUAL`       | `!=`                                  |                                                                         |
+| `AND`             | `&&`                                  |                                                                         |
+| `OR`              | `\|\|`                                |                                                                         |
+| `BANG`            | `!`                                   |                                                                         |
+| `QUESTION`        | `?`                                   | Only in a conditional                                                   |
 | `DOT`             | `.`                                   |                                                                         |
 | `EOF`             |                                       | Ends every token stream                                                 |
 
@@ -117,12 +123,17 @@ absolute path, is refused where it is written.
 ## Values
 
 ```
-value   = string | heredoc | [ "-" ] NUMBER | BOOLEAN | NULL | reference | call | list | for | map
-string  = OQUOTE { QUOTED_LIT | TEMPLATE_INTERP ( reference | call ) TEMPLATE_END } CQUOTE
-heredoc = OHEREDOC { STRING_LIT | TEMPLATE_INTERP ( reference | call ) TEMPLATE_END } CHEREDOC
-list    = "[" [ value { "," value } [ "," ] ] "]"
-map     = "{" { key "=" value [ "," ] } "}"
-key     = IDENTIFIER | string
+value       = or [ "?" value ":" value ]
+or          = and { "||" and }
+and         = equality { "&&" equality }
+equality    = unary { ( "==" | "!=" ) unary }
+unary       = "!" unary | primary
+primary     = string | heredoc | [ "-" ] NUMBER | BOOLEAN | NULL | reference | call | list | for | map | "(" value ")"
+string      = OQUOTE { QUOTED_LIT | TEMPLATE_INTERP ( reference | call ) TEMPLATE_END } CQUOTE
+heredoc     = OHEREDOC { STRING_LIT | TEMPLATE_INTERP ( reference | call ) TEMPLATE_END } CHEREDOC
+list        = "[" [ value { "," value } [ "," ] ] "]"
+map         = "{" { key "=" value [ "," ] } "}"
+key         = IDENTIFIER | string
 ```
 
 A string reads `\n`, `\r`, `\t`, `\"` and `\\`, a character by number as `\uNNNN` or
@@ -139,9 +150,14 @@ a fine identifier, `true`, `false` and `null` are not, and neither is `__proto__
 attribute name either. A block is not named `true`, `false` or `null`, since a reference to
 it would read as the value.
 
-Lists, maps, a call's arguments, an index read from a value, and a type's `(...)` nest at
-most 100 levels deep, together. One more is refused where it starts: at its `[` or `{`,
-or at the name of the call or the type.
+Operators bind tighter the lower they are in the rules: `!` first, then `==` and `!=`,
+`&&`, `||`, and the conditional last. Within one level they group from the left, so
+`a && b && c` is `(a && b) && c`; a conditional in a result groups from the right.
+
+Lists, maps, a call's arguments, an index read from a value, a type's `(...)`, parentheses,
+`!`, a conditional and each operator in a chain nest at most 100 levels deep, together.
+One more is refused where it starts: at its `[`, `{`, `(`, `!`, `?` or operator, or at the
+name of the call or the type.
 
 ### Types
 

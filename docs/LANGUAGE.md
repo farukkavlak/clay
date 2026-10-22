@@ -91,6 +91,34 @@ of a string. `tolist` and `toset` turn a list, a tuple or a set into a list or a
 items take one type: a number or a boolean beside a string becomes its text, and a number
 beside a boolean, or objects with other names, are refused.
 
+## Operators
+
+`==` and `!=` compare two values: `var.env == "prod"`. A list and a tuple with the same
+items are equal, and so are a map and an object with the same keys. `null` written as it
+is compares with anything. Two values of types that can never be equal are refused where
+the operator is, even before they are known: a number and a string, a set and a list, or
+lists whose items are such types, even when both are empty. Terraform says `false` there.
+
+`&&`, `||` and `!` take booleans; anything else, `null` among them, is refused.
+`cond ? a : b` gives `a` when the condition is true and `b` when it is false: `count =
+var.env == "prod" ? 3 : 1`. Its two results join into one type, as `tolist`'s items do,
+whichever the condition picks, and a pair that cannot is refused. A value of no type, such
+as a variable that names none, has its type only once it is read.
+
+A known condition decides which result is read, and a known left side of `&&` or `||`
+that decides the answer leaves the right side unread. So `var.x == null ? "none" :
+var.x.name` reads `.name` only when there is an x, and `var.on ? local_file.f[0].path :
+null` takes a count of 0. The side not read is still checked for its type, so a mistake
+in it is refused. A condition not known until apply leaves the result unknown, and both
+sides are read.
+
+The result is sensitive when what decided it is: the condition or the result it picks, or
+any sensitive part of what `==` compares. Against `null`, only a value sensitive as a
+whole makes it so, since the answer tells only whether the value is there. When a
+sensitive condition picks a result, or a sensitive left side of `&&` or `||` leaves the
+right side to be read, and that read fails, the error does not say why, since that would
+tell the secret.
+
 ## For
 
 A for expression makes a list from a collection: `[for n in var.names : "app-${n}"]`. With

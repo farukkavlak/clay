@@ -334,8 +334,8 @@ change each.
 
 ## 1. Language
 
-The parser takes literals, references and function calls, with no operators yet. A real
-configuration hits each of these early.
+The parser takes literals, references, function calls, `== != && || !` and the
+conditional, with no arithmetic yet. A real configuration hits each of these early.
 
 - [x] Negative and decimal numbers, with an exponent, as HCL writes them; the minus is a
       token of its own, so a number never swallows the minus of a subtraction
@@ -407,7 +407,7 @@ configuration hits each of these early.
       gives it item by item and an apply that sorts the new member first moves every item
 - [x] A `for` expression that makes an object, `{for k, v in m : k => v}`. A key two
       items give is refused, and `...` after the value groups them
-- [ ] `if` in a `for` expression, once operators can write a condition
+- [ ] `if` in a `for` expression, now that `==` and `&&` can write a condition
 - [x] An index read from a value: `var.names[count.index]`, `local_file.f[each.key].content`,
       `module.app[var.i].url`. A bracket holds a reference or a call, read where the reference
       is, and it names an item of a list, a key of a map or an instance of a block. What it
@@ -504,9 +504,14 @@ configuration hits each of these early.
 - [x] A module `source` has a kind. Terraform reads a local path only when it starts with
       `./` or `../` and treats anything else as a registry address; Clay joins whatever it
       is onto the parent directory, so an absolute path is read as well
-- [ ] Operators and the conditional: `+ - * / %`, comparisons, `&& || !` and
-      `a ? b : c`. Today `1 + 2` is refused as `Unexpected character: "+"`, which does not say
-      the language has no operators. `if` in a `for` waits for this
+- [x] `==`, `!=`, `&&`, `||`, `!` and `a ? b : c`. Two values that can never be equal are
+      refused, where Terraform says `false`. A known condition reads only the result it
+      picks and the other by type, so `var.on ? local_file.f[0].path : null` takes a count
+      of 0, as in Terraform
+- [ ] Arithmetic and ordering: `+ - * / %` and `< > <= >=`. Today `1 + 2` is refused as
+      `Unexpected character: "+"`, which does not say the language has no arithmetic
+- [ ] Any value inside `${...}` and inside `[...]` read from a value, where today only a
+      reference or a call goes
 - [ ] More functions. Clay has `length`, `tolist`, `toset`, `sensitive`, `nonsensitive` and
       `issensitive`; a Terraform configuration reaches for `join`, `format`, `lookup`,
       `merge`, `upper` and `lower` early
