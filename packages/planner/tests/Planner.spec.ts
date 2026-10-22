@@ -69,7 +69,6 @@ describe('Planner', () => {
     expect(actions[0].type).toBe('CREATE');
     expect(actions[0].resourceType).toBe('mock_resource');
     expect(actions[0].name).toBe('test_resource_a');
-    expect(actions[0].attributes!.path).toEqual(str('x'));
   });
 
   // Every planned value, changed or not, so the apply can check each one.
@@ -246,12 +245,6 @@ describe('Planner', () => {
     expect(actions[0].changes!.path).toEqual({ old: 'old_path', new: 'new_path' });
   });
 
-  it('should keep the config attributes on an UPDATE so the apply can resolve them again', () => {
-    const actions = plan([desiredResource('test_resource_c', { path: 'new_path' })], stateWith('test_resource_c', { path: 'old_path' }));
-
-    expect(actions[0].attributes).toEqual({ path: str('new_path') });
-  });
-
   it('should plan NO_OP when the resolved values match the state', () => {
     const actions = plan([desiredResource('test_resource_d', { path: 'path' })], stateWith('test_resource_d', { path: 'path' }));
 
@@ -314,7 +307,6 @@ describe('Planner', () => {
 
     expect(actions).toHaveLength(1);
     expect(actions[0].type).toBe('REPLACE');
-    expect(actions[0].attributes).toEqual({ path: str('new_path') });
     expect(actions[0].changes).toEqual({ path: { old: 'old_path', new: 'new_path' } });
   });
 

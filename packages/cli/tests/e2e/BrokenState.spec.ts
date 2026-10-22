@@ -72,6 +72,21 @@ describe('a state file that is not valid state', () => {
       'a deposed object of "local_file.a" has no attributes, or its sensitive or dependencies',
     ],
     [
+      'a deposed object with a dependency that is not an address',
+      `{"version":${STATE_VERSION},"serial":0,"resources":{},"deposed":{"local_file.a":[{"attributes":{},"dependencies":[42]}]}}`,
+      'a deposed object of "local_file.a" has no attributes, or its sensitive or dependencies',
+    ],
+    [
+      'a resource with a dependency that is a number',
+      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"dependencies":[42]}}}`,
+      '"local_file.a" is not a resource',
+    ],
+    [
+      'a resource with a dependency that is not an address',
+      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"dependencies":["nothing"]}}}`,
+      '"local_file.a" is not a resource',
+    ],
+    [
       'a deposed object whose sensitive parts are not steps',
       `{"version":${STATE_VERSION},"serial":0,"resources":{},"deposed":{"local_file.a":[{"attributes":{},"sensitive":"content"}]}}`,
       'a deposed object of "local_file.a" has no attributes, or its sensitive or dependencies',

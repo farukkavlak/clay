@@ -79,63 +79,6 @@ describe('reading a plan file', () => {
     expect(change.new).toEqual(lookalike);
   });
 
-  // Values in saved attributes stay exact; positions and indexes become plain numbers.
-  it('reads the positions and indexes in saved attributes as numbers, and the values in them exactly, however deep', () => {
-    const at = { file: 'main.clay', line: 3, column: 7 };
-    const plan: Plan = {
-      serial: 4,
-      prevRun: {},
-      prior: {},
-      schemas,
-      dataSources: {},
-      readAtApply: [],
-      actions: [
-        {
-          type: 'CREATE',
-          resourceType: 'null_resource',
-          name: 'a',
-          attributes: {
-            id: { type: 'Number', value: ExactNumber.parse('12345678901234567890'), position: at },
-            tags: { type: 'List', value: [{ type: 'Map', value: { n: { type: 'Number', value: ExactNumber.parse('1'), position: at } }, position: at }], position: at },
-            label: { type: 'Template', value: ['id ', { type: 'Reference', value: [{ name: 'var' }, { name: 'ids' }, { key: 0 }], position: at }], position: at },
-            first: { type: 'Reference', value: [{ name: 'var' }, { name: 'ids' }, { key: 1 }, { name: 'name' }], position: at },
-            size: {
-              type: 'Call',
-              name: 'length',
-              args: [{ type: 'Reference', value: [{ name: 'var' }, { name: 'ids' }, { key: 2 }], position: at }],
-              path: [{ key: 0 }, { name: 'a' }],
-              position: at,
-            },
-            names: {
-              type: 'For',
-              valueName: 'n',
-              collection: { type: 'Reference', value: [{ name: 'var' }, { name: 'ids' }, { key: 3 }], position: at },
-              body: { type: 'Bound', value: [{ name: 'n' }, { key: 4 }], position: at },
-              position: at,
-            },
-            byName: {
-              type: 'For',
-              valueName: 'n',
-              collection: { type: 'Reference', value: [{ name: 'var' }, { name: 'ids' }, { key: 5 }], position: at },
-              key: { type: 'Bound', value: [{ name: 'n' }, { key: 6 }], position: at },
-              body: { type: 'Bound', value: [{ name: 'n' }], position: at },
-              grouped: true,
-              position: at,
-            },
-          },
-          planned: {},
-          after: {},
-        },
-      ],
-      outputs: {},
-    };
-
-    const read = parsePlanFile(aPlanFile(plan), 'tfplan.json');
-
-    expect(read.serial).toBe(4);
-    expect(read.actions[0].attributes).toEqual(plan.actions[0].attributes);
-  });
-
   // The known parts stay exact, and the unknown parts come back where they were.
   it('reads a value known in part back as it was written', () => {
     const tags = { env: UNKNOWN, list: ['a', UNKNOWN], size: ExactNumber.parse('12345678901234567890'), unknown: [['env']] };
@@ -473,7 +416,7 @@ describe('reading a plan file', () => {
 
   it.each(['planned', 'after'])('reads back the %s values of an action, what is not known yet and exact numbers among them', (field) => {
     const values = { tags: { a: UNKNOWN, b: 'x' }, list: ['x', UNKNOWN], id: UNKNOWN, n: ExactNumber.parse('12345678901234567890') };
-    const plan: Plan = { ...emptyPlan, actions: [{ type: 'CREATE', resourceType: 'x', name: 'a', attributes: {}, planned: {}, after: {}, [field]: values }] };
+    const plan: Plan = { ...emptyPlan, actions: [{ type: 'CREATE', resourceType: 'x', name: 'a', planned: {}, after: {}, [field]: values }] };
 
     expect(parsePlanFile(aPlanFile(plan), 'tfplan.json').actions[0]).toMatchObject({ [field]: values });
   });
@@ -484,13 +427,13 @@ describe('reading a plan file', () => {
     ['after', 'a value that is not saved as one', { path: 'x' }],
     ['after', 'no record of values', []],
   ])('refuses an action whose %s values hold %s', (field, _, values) => {
-    const action = { type: 'CREATE', resourceType: 'x', name: 'a', attributes: {}, planned: {}, after: {}, [field]: values };
+    const action = { type: 'CREATE', resourceType: 'x', name: 'a', planned: {}, after: {}, [field]: values };
 
     expect(read({ ...fields(), actions: [action] })).toThrow('tfplan.json is not a plan file');
   });
 
   it.each(['CREATE', 'UPDATE', 'REPLACE'])('refuses a %s without the values it was planned with', (type) => {
-    expect(read({ ...fields(), actions: [{ type, resourceType: 'x', name: 'a', attributes: {}, after: {} }] })).toThrow('tfplan.json is not a plan file');
+    expect(read({ ...fields(), actions: [{ type, resourceType: 'x', name: 'a', after: {} }] })).toThrow('tfplan.json is not a plan file');
   });
 
   it.each([
@@ -503,50 +446,29 @@ describe('reading a plan file', () => {
   });
 
   it.each(['CREATE', 'UPDATE', 'REPLACE'])('refuses a %s without what its provider planned', (type) => {
-    expect(read({ ...fields(), actions: [{ type, resourceType: 'x', name: 'a', attributes: {}, planned: {} }] })).toThrow('tfplan.json is not a plan file');
+    expect(read({ ...fields(), actions: [{ type, resourceType: 'x', name: 'a', planned: {} }] })).toThrow('tfplan.json is not a plan file');
+  });
+
+  it.each([
+    ['no resource type', { resourceType: undefined }],
+    ['a name that is a number', { name: 5 }],
+    ['an action type that is none', { type: 'MAKE' }],
+    ['a dependency that is a number', { dependencies: [42] }],
+    ['a dependency that is not an address', { dependencies: ['nothing'] }],
+  ])('refuses an action with %s', (_, broken) => {
+    const action = { type: 'DELETE', resourceType: 'x', name: 'a', ...broken };
+
+    expect(read({ ...fields(), actions: [action] })).toThrow(/^tfplan\.json is not a plan file$/);
+  });
+
+  it('refuses a schema whose sensitive flag is not true or false', () => {
+    const schemas = { x: { path: { type: { kind: 'string' }, sensitive: 'yes' } } };
+
+    expect(read({ ...fields(), schemas })).toThrow(/^tfplan\.json is not a plan file$/);
   });
 
   it('names a serial that is not whole', () => {
     expect(read({ ...fields(), serial: 1.5 })).toThrow('tfplan.json is not a plan file: its serial: 1.5 is not a whole number');
-  });
-
-  it('names a position that is not whole', () => {
-    const text = aPlanFile({
-      serial: 0,
-      prevRun: {},
-      prior: {},
-      schemas,
-      dataSources: {},
-      readAtApply: [],
-      actions: [
-        { type: 'CREATE', resourceType: 'null_resource', name: 'a', attributes: { n: { type: 'String', value: 'x', position: { file: 'main.clay', line: 1, column: 1 } } } },
-      ],
-      outputs: {},
-    }).replace('"line": 1', '"line": 1.5');
-
-    expect(() => parsePlanFile(text, 'tfplan.json')).toThrow("tfplan.json is not a plan file: a position's line: 1.5 is not a whole number");
-  });
-
-  it('names an index that is not whole', () => {
-    const text = aPlanFile({
-      serial: 0,
-      prevRun: {},
-      prior: {},
-      schemas,
-      dataSources: {},
-      readAtApply: [],
-      actions: [
-        {
-          type: 'CREATE',
-          resourceType: 'null_resource',
-          name: 'a',
-          attributes: { n: { type: 'Reference', value: [{ name: 'var' }, { name: 'l' }, { key: 1 }], position: { file: 'main.clay', line: 1, column: 1 } } },
-        },
-      ],
-      outputs: {},
-    }).replace(/"key":\s*1\b/, '"key": 1.5');
-
-    expect(() => parsePlanFile(text, 'tfplan.json')).toThrow('tfplan.json is not a plan file: an index: 1.5 is not a whole number');
   });
 
   it('names the file when the text is not json', () => {

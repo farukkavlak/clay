@@ -5,6 +5,7 @@ import {
   ExactNumber,
   InstanceKey,
   isAttributePaths,
+  isDependencies,
   isInstanceKey,
   isOutput,
   isModulePath,
@@ -30,7 +31,7 @@ import {
   unknownPaths,
   valueAt,
 } from '@clay/contracts';
-import { AttributeValue, ResourceBlock } from '@clay/parser';
+import { ResourceBlock } from '@clay/parser';
 import { isDeepStrictEqual } from 'node:util';
 
 export type ActionType = 'CREATE' | 'UPDATE' | 'REPLACE' | 'DELETE' | 'NO_OP';
@@ -66,7 +67,6 @@ export interface PlanAction {
   key?: InstanceKey;
   /** Its state address before count was added or removed; the move runs before the action. */
   movedFrom?: string;
-  attributes?: Record<string, AttributeValue>;
   /** Apply resolves the attributes again and checks each known value against these. */
   planned?: Record<string, unknown>;
   /** As the provider planned it after apply. */
@@ -108,7 +108,7 @@ export interface Plan {
 }
 
 /** Bump on any change to the file's shape after a release, so an older plan file is refused instead of misread. */
-export const PLAN_FILE_VERSION = '30.0';
+export const PLAN_FILE_VERSION = '31.0';
 
 export interface PlanFile extends Plan {
   version: string;
@@ -286,19 +286,27 @@ function isStateOnly(action: Record<string, unknown>): boolean {
   return isNoOpMark(action, 'marksChange') && isProtection(action) && isIgnored(action) && isDeposed(action) && isCreatedFirst(action);
 }
 
-function isAction(action: unknown): boolean {
+const ACTION_TYPES = new Set<unknown>(['CREATE', 'UPDATE', 'REPLACE', 'DELETE', 'NO_OP'] satisfies ActionType[]);
+
+/** Its kind, the address it runs at and the addresses it was planned after. */
+function isActionAt(action: Record<string, unknown>): boolean {
   return (
-    isRecord(action) &&
+    ACTION_TYPES.has(action.type) &&
+    typeof action.resourceType === 'string' &&
+    typeof action.name === 'string' &&
     (action.modulePath === undefined || isModulePath(action.modulePath)) &&
     (action.key === undefined || isInstanceKey(action.key)) &&
-    isMovedFrom(action) &&
-    isStateOnly(action) &&
-    (action.changes === undefined || isChanges(action.changes)) &&
-    carriesValues(action)
+    isDependencies(action.dependencies)
   );
 }
 
-const FLAGS = ['required', 'forceNew', 'computed', 'optional', 'kept'] as const;
+function isAction(action: unknown): boolean {
+  return (
+    isRecord(action) && isActionAt(action) && isMovedFrom(action) && isStateOnly(action) && (action.changes === undefined || isChanges(action.changes)) && carriesValues(action)
+  );
+}
+
+const FLAGS = ['required', 'forceNew', 'computed', 'optional', 'kept', 'sensitive'] as const;
 
 function isSchema(schema: unknown): schema is Schema {
   return (
@@ -351,42 +359,6 @@ function planVersion(parsed: unknown): string | undefined {
   return typeof parsed.version === 'string' ? parsed.version : undefined;
 }
 
-/** Positions are metadata, not values, so they read back as plain numbers. */
-function readPosition(position: unknown): void {
-  if (!isRecord(position)) return;
-
-  for (const field of ['line', 'column']) if (position[field] instanceof ExactNumber) position[field] = position[field].toSafeInteger(`a position's ${field}`);
-}
-
-function childrenOf(node: Record<string, unknown>): unknown[] {
-  if ((node.type === 'List' || node.type === 'Template') && Array.isArray(node.value)) return node.value;
-  if (node.type === 'Map' && isRecord(node.value)) return Object.values(node.value);
-  if (node.type === 'Call' && Array.isArray(node.args)) return node.args;
-  if (node.type === 'For') return [node.collection, node.key, node.body];
-
-  return [];
-}
-
-function readReferenceSteps(steps: unknown): unknown {
-  if (!Array.isArray(steps)) return steps;
-
-  return steps.map((step: unknown) => (isRecord(step) && step.key instanceof ExactNumber ? { key: step.key.toSafeInteger('an index') } : step));
-}
-
-/** Indexes in references, for-bound names and steps after a call read back as plain numbers too. */
-function readIndexes(node: Record<string, unknown>): void {
-  if (node.type === 'Reference' || node.type === 'Bound') node.value = readReferenceSteps(node.value);
-  if (node.type === 'Call') node.path = readReferenceSteps(node.path);
-}
-
-function readNode(node: unknown): void {
-  if (!isRecord(node)) return;
-
-  readPosition(node.position);
-  readIndexes(node);
-  for (const child of childrenOf(node)) readNode(child);
-}
-
 function readUnknownPaths(changes: unknown): void {
   if (!isRecord(changes)) return;
 
@@ -402,10 +374,9 @@ function readAction(action: Record<string, unknown>): void {
   readUnknownPaths(action.after);
   if (Array.isArray(action.modulePath))
     for (const step of action.modulePath) if (isRecord(step) && step.key instanceof ExactNumber) step.key = step.key.toSafeInteger('a module key');
-  if (isRecord(action.attributes)) for (const node of Object.values(action.attributes)) readNode(node);
 }
 
-/** The serial, action keys, positions, indexes, unknown and sensitive paths are plain numbers; every other number is a value and stays exact. */
+/** The serial, action keys, indexes, unknown and sensitive paths are plain numbers; every other number is a value and stays exact. */
 function readPlan(content: string): unknown {
   const read = ExactNumber.readJSON(content);
   if (!isRecord(read)) return read;
@@ -625,7 +596,6 @@ function carriedOver(desired: DesiredResource): Pick<PlanAction, 'sensitive' | '
 
 function processExistingResource(actions: PlanAction[], desired: DesiredResource, currentResource: Resource) {
   const moved = desired.movedFrom;
-  const resource = desired.block;
   const changes = calculateDiff(currentResource.attributes, desired.after);
 
   if (!changes && !desired.replace) {
@@ -646,7 +616,6 @@ function processExistingResource(actions: PlanAction[], desired: DesiredResource
     type: desired.replace ? 'REPLACE' : 'UPDATE',
     ...desired.address.fields(),
     ...(moved && { movedFrom: moved }),
-    attributes: resource.attributes,
     planned: desired.attributes,
     after: desired.after,
     ...carriedOver(desired),
@@ -670,7 +639,6 @@ export function plan(desiredResources: DesiredResource[], currentState: State): 
       actions.push({
         type: 'CREATE',
         ...desired.address.fields(),
-        attributes: desired.block.attributes,
         planned: desired.attributes,
         after: desired.after,
         ...marked(desired),

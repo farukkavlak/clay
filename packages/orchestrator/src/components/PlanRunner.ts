@@ -21,7 +21,7 @@ import { ScopeManager } from '../scope/ScopeManager';
 import { shown } from '../shown';
 import { typeFits } from '../typeFits';
 import { outputOf, Value } from '../Value';
-import { ActionExecutor } from './ActionExecutor';
+import { ActionExecutor, Running } from './ActionExecutor';
 import { LoadedConfig } from './ConfigLoader';
 import { DataSourceReader } from './DataSourceReader';
 import { GraphNode, LocalNode, OutputNode } from './DependencyGraphBuilder';
@@ -224,7 +224,10 @@ export class PlanRunner {
         const node = graph.getNode(key)!;
         if (node.kind === 'destroy') steps.push(() => this.destroyApart(node.action, state, pace.signal, destroyed));
         else
-          for (const action of yield* this.visit(key, node, layers, state)) steps.push(() => this.step(action, state, pace.signal, destroyed.get(Address.of(action).toString())));
+          for (const action of yield* this.visit(key, node, layers, state)) {
+            const running = { written: layers.blocks.get(key)!.attributes, destroyed: destroyed.get(Address.of(action).toString()) };
+            steps.push(() => this.step(action, state, pace.signal, running));
+          }
       }
 
       if (!(yield* runTogether(steps, pace.parallelism, isFailure))) return false;
@@ -319,7 +322,7 @@ export class PlanRunner {
     });
   }
 
-  private async *step(action: PlanAction, state: State, signal?: AbortSignal, destroyed?: Resource): AsyncGenerator<RunEvent, boolean> {
+  private async *step(action: PlanAction, state: State, signal?: AbortSignal, running: Running = {}): AsyncGenerator<RunEvent, boolean> {
     if (signal?.aborted) return false;
 
     // A no-op is not reported; the final write saves its dependencies. A move, or a change in which parts are sensitive or in what a destroy is prevented, is reported and saved.
@@ -329,7 +332,7 @@ export class PlanRunner {
     const key = Address.of(action).toString();
     const held = Object.hasOwn(state.resources, key);
     const lost = () => held && !Object.hasOwn(state.resources, key);
-    if (!(yield* this.attempt(action, state, () => this.executor.execute(action, state, destroyed), lost))) return false;
+    if (!(yield* this.attempt(action, state, () => this.executor.execute(action, state, running), lost))) return false;
     if (quiet) return true;
 
     await this.stateManager.write(state);

@@ -233,7 +233,9 @@ holds them unencrypted, a secret a data source read among them.
 A saved plan carries the configuration it was made from, the state it was planned
 against, what the refresh read, what each data source read at plan gave and which ones the
 apply reads. `apply` runs that configuration, not the one on disk now, against what the
-refresh read, and refuses the plan if the state has changed since.
+refresh read, and refuses the plan if the state has changed since. Each resource is given
+what its block in that configuration says. A field of the wrong kind in the file is
+refused before anything runs.
 
 On every apply, a value the plan showed as known that now comes out otherwise stops the
 run before that resource is touched. An output is held to the plan the same way, as soon
