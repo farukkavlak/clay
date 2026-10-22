@@ -139,6 +139,10 @@ a fine identifier, `true`, `false` and `null` are not, and neither is `__proto__
 attribute name either. A block is not named `true`, `false` or `null`, since a reference to
 it would read as the value.
 
+Lists, maps, a call's arguments, an index read from a value, and a type's `(...)` nest at
+most 100 levels deep, together. One more is refused where it starts: at its `[` or `{`,
+or at the name of the call or the type.
+
 ### Types
 
 Every value has a type. A string, a number and a boolean have theirs; a list is a tuple,
