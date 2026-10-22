@@ -1,4 +1,4 @@
-import { Address, emptyState, EVERY_ITEM, ExactNumber, isUnknown, ModuleAddress, Schema, State, types, UNKNOWN } from '@clay/contracts';
+import { Address, emptyState, EVERY_ITEM, ExactNumber, isUnknown, MAX_NESTING, ModuleAddress, Schema, State, typeNestingOf, types, UNKNOWN } from '@clay/contracts';
 import {
   AttributeValue,
   BoundNode,
@@ -61,6 +61,13 @@ const LITERALS = { String: types.string, Number: types.number, Boolean: types.bo
 /** `null` gets no type yet. */
 function literal(node: Extract<AttributeValue, { type: 'String' | 'Number' | 'Boolean' | 'Null' }>): Value {
   return node.type === 'Null' ? valueOf(types.dynamic, null) : valueOf(LITERALS[node.type], node.value);
+}
+
+/** Through references a value grows deeper than any written, until a walk over it overflows the stack. Its type is at least as deep as its data. */
+function withinNesting(node: AttributeValue, value: Value): Value {
+  if (typeNestingOf(value.type) > MAX_NESTING) throw new ConfigError(`Nested more than ${MAX_NESTING} levels deep`, node.position);
+
+  return value;
 }
 
 /** Values bound by enclosing for expressions. */
@@ -401,7 +408,7 @@ export class ReferenceResolver {
   /** A reference reads as unknown of the type it will have, and a local as its value read the same way, so one read covers every instance of the block. */
   readAsWritten(node: AttributeValue, context: Context): Value {
     // Nothing reads the state here.
-    return this.resolveItem(node, emptyState(), context, { ...READING, asWritten: true });
+    return withinNesting(node, this.resolveItem(node, emptyState(), context, { ...READING, asWritten: true }));
   }
 
   /** A literal list is a tuple and a literal map an object. */

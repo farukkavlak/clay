@@ -1,3 +1,5 @@
+import { MAX_FILE_NESTING, NestingError, nestingOf } from './nesting';
+
 // Node 22.13, the engines floor, has JSON.rawJSON and the reviver's source; the es2022 lib typings have neither.
 declare global {
   interface JSON {
@@ -116,6 +118,9 @@ export class ExactNumber {
 
   /** Every number becomes an ExactNumber; a caller turns its own counters back into plain numbers. */
   static readJSON(text: string): unknown {
+    // Read first without the reviver, which recurses where a plain parse does not.
+    if (nestingOf(JSON.parse(text)) > MAX_FILE_NESTING) throw new NestingError(MAX_FILE_NESTING);
+
     // The reviver gets a source for every primitive, so a number always has one.
     return JSON.parse(text, (_, value, context) => (typeof value === 'number' ? ExactNumber.parse(context.source as string) : value));
   }

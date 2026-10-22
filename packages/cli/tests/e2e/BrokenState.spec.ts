@@ -131,6 +131,11 @@ describe('a state file that is not valid state', () => {
       `{"version":${STATE_VERSION},"serial":0,"outputs":{"a b":{"value":"x","type":{"kind":"string"}}},"resources":{}}`,
       'its output "a b" has a name no configuration can declare',
     ],
+    [
+      'a value nested deeper than any state Clay writes',
+      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{"content":${'['.repeat(20_000)}${']'.repeat(20_000)}}}}}`,
+      'it is nested more than 500 levels deep',
+    ],
     ['no version at all', '{}', 'its version is not a number'],
     ['text that is not json', '{oops', 'the file is not JSON'],
   ])('refuses %s, and says which file', async (_, state, reason) => {

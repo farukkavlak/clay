@@ -12,6 +12,7 @@ export type { InstanceKey, ModuleStep } from './Address';
 export { ExactNumber, NumberError } from './ExactNumber';
 export { isName, NAME, NAME_RULE, RESERVED_TYPES } from './name';
 export { isRecord } from './isRecord';
+export { MAX_NESTING, NestingError, nestingOf, typeNestingOf } from './nesting';
 export { isType, typeAt, types } from './Type';
 export type { Type } from './Type';
 

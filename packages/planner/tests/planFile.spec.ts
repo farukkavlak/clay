@@ -12,9 +12,19 @@ const aPlanFile = (plan: Plan = emptyPlan) => serializePlan(plan, 'resource "a" 
 
 const fields = () => JSON.parse(aPlanFile()) as Record<string, unknown>;
 
+const nested = (levels: number): unknown => (levels === 0 ? 'x' : [nested(levels - 1)]);
+
 const read = (content: unknown) => () => parsePlanFile(typeof content === 'string' ? content : JSON.stringify(content), 'tfplan.json');
 
 describe('reading a plan file', () => {
+  // The file, its prior resources, the resource and its attributes are four levels around the value.
+  it('reads a file nested 500 levels deep, and refuses one more', () => {
+    const plan = (levels: number) => aPlanFile({ ...emptyPlan, prior: { 'x.a': { resourceType: 'x', name: 'a', attributes: { n: nested(levels - 4) } } } });
+
+    expect(parsePlanFile(plan(500), 'tfplan.json').prior['x.a'].attributes.n).toEqual(nested(496));
+    expect(read(plan(501))).toThrow('tfplan.json is not a plan file: it is nested more than 500 levels deep');
+  });
+
   // Built once: `serializePlan` stamps the time, so two calls can differ.
   it('reads back what it wrote', () => {
     const written = aPlanFile();
