@@ -243,13 +243,16 @@ change each.
       read the two before takes 23 seconds to destroy, and the time doubles every two more.
       It depends on the order of keys in the state file. Now the walk records what it has
       seen, so a ladder of 200 orders at once
-- [ ] A plan file's action is checked only in part where the file is read. A `resourceType`
+- [x] A plan file's action is checked only in part where the file is read. A `resourceType`
       left out is refused after "applying..." as `"undefined.a"`, a `name` of `5` is shown
       as `local_file.5` before it is refused, an attribute node of an unknown type fails as
       `Cannot read properties of undefined (reading 'kind')`, and `dependencies: [42]` is
       written to state. A schema's `sensitive` flag is not checked to be a boolean, and the
       state's `dependencies`, of a resource and of a deposed object, are not checked to be
-      strings
+      strings. Now each is checked where the file is read, and a dependency must be an
+      address. The file no longer carries each block's expressions: the apply takes them
+      from the configuration the file carries, which the parser checks, as Terraform
+      evaluates its configuration snapshot
 - [ ] `state mv`, `state rm` and a count move rewrite the dependencies of resources and
       leave those of deposed objects naming the old address, so the delete order of that
       deposed object is lost. `mapDependencies` walks `state.resources` only
@@ -478,8 +481,8 @@ hand shows up in the plan. Clay does too.
 
 ### What a plan carries
 
-A `PlanAction` holds the attributes as the parser wrote them, and `apply` resolves them
-again. Terraform's apply evaluates the configuration again too, since a value only an
+A plan carries the configuration it was made from, and `apply` resolves each block's
+attributes again from it. Terraform's apply evaluates the configuration again too, since a value only an
 apply makes is known only then, and its saved plan carries the configuration for that.
 What lets it promise to do what the plan showed is a check: a value the plan showed as
 known that comes out otherwise stops the run.
@@ -937,8 +940,9 @@ Nothing here changes what Clay does. Each is a place the next change has to work
 - [ ] `tryAt`, `withPlace`, `hidingReason` and the refresh's `readBack` catch every error, so
       a `TypeError` in the engine is reported as a mistake in the configuration, or hidden
       as "failed on its configuration"
-- [ ] A saved plan holds each action's parsed attributes and the configuration's text, and
-      the apply resolves the first while it builds the graph from the second
+- [x] A saved plan holds each action's parsed attributes and the configuration's text, and
+      the apply resolves the first while it builds the graph from the second. Now it holds
+      the text only, and the apply resolves each block from it
 - [ ] `planner/src/index.ts` holds the plan file, the diff, the plan and apply checks and
       `plan()` in one file of 700 lines
 - [ ] Workspace packages are not `"private": true`, so `npm publish -ws` would publish them;

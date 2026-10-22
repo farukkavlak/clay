@@ -1,4 +1,5 @@
 import { Address, AttributePath, DeposedObject, Provider, Resource, Schema, State, touchesSensitive } from '@clay/contracts';
+import { AttributeValue } from '@clay/parser';
 import { offApply, offFinal, offPlan, PlanAction } from '@clay/planner';
 
 import { conformValues } from '../conformValues';
@@ -56,6 +57,15 @@ function protect(resource: Resource, { preventDestroy }: PlanAction): void {
   else delete resource.preventDestroy;
 }
 
+/** The expressions of a resource block, as the configuration gives them. */
+export type Written = Record<string, AttributeValue>;
+
+/** What an action runs with beside the plan. */
+export interface Running {
+  written?: Written;
+  destroyed?: Resource;
+}
+
 export class ActionExecutor {
   constructor(
     private providers: ProviderRegistry,
@@ -69,8 +79,11 @@ export class ActionExecutor {
     this.sameObjects.expect(actions, currentState);
   }
 
-  /** `destroyed` is the object of a replace that was destroyed before it, so that only the create is left. */
-  async execute(action: PlanAction, currentState: State, destroyed?: Resource): Promise<void> {
+  /**
+   * `written` is what the action's block gives, resolved again for a create, an update or a replace. `destroyed` is the object of a
+   * replace that was destroyed before it, so that only the create is left.
+   */
+  async execute(action: PlanAction, currentState: State, { written, destroyed }: Running = {}): Promise<void> {
     // A no-op only updates what state keeps beside the values, so it needs no provider.
     if (action.type === 'NO_OP') {
       this.recordUnchanged(action, currentState);
@@ -81,16 +94,16 @@ export class ActionExecutor {
 
     switch (action.type) {
       case 'CREATE': {
-        await this.executeCreate(action, provider, currentState);
+        await this.executeCreate(action, written, provider, currentState);
         break;
       }
       case 'UPDATE': {
-        await this.executeUpdate(action, provider, currentState);
+        await this.executeUpdate(action, written, provider, currentState);
         break;
       }
       case 'REPLACE': {
         // Checked before the delete, so a value off the plan or refused by the provider leaves the resource untouched, unless it was destroyed first.
-        const sending = await this.sendingFor(action, currentState, destroyed);
+        const sending = await this.sendingFor(action, written, currentState, destroyed);
         if (destroyed) {
           await this.create(action, provider, currentState, sending);
           break;
@@ -120,17 +133,17 @@ export class ActionExecutor {
    * The provider then validates and plans again before anything changes, since the plan could not validate unknown values,
    * and what the object now is must be no other object's.
    */
-  private async sendingFor(action: PlanAction, currentState: State, destroyed?: Resource): Promise<Sending> {
-    if (!action.attributes) throw new Error(`${action.type} action missing attributes`);
+  private async sendingFor(action: PlanAction, written: Written | undefined, currentState: State, destroyed?: Resource): Promise<Sending> {
+    if (!written) throw new Error(`${action.type} action missing what its block gives`);
     if (!action.planned) throw new Error(`${action.type} action missing the values it was planned with`);
     if (!action.after) throw new Error(`${action.type} action missing what its provider planned`);
 
     const type = action.resourceType;
     const schema = await this.providers.schema(type);
-    const inputs = this.resolver.resolveAttributes(action.attributes, currentState, Address.of(action));
+    const inputs = this.resolver.resolveAttributes(written, currentState, Address.of(action));
     const ignoring = this.ignoringFor(action, currentState, destroyed);
-    const written = conformValues(type, schema, inputs);
-    const off = offPlan(schema, action.planned, ignoring ? keepPrior(written, [], ignoring.prior, ignoring.paths).config : written);
+    const conformed = conformValues(type, schema, inputs);
+    const off = offPlan(schema, action.planned, ignoring ? keepPrior(conformed, [], ignoring.prior, ignoring.paths).config : conformed);
     const hidden = [...(action.sensitive ?? []), ...sensitiveAmong(inputs)];
     if (off) throw new Error(offPlanMessage(off, hidden));
 
@@ -182,8 +195,8 @@ export class ActionExecutor {
     if (mismatches.length > 0) throw inconsistent(type, 'apply', mismatches, hidden);
   }
 
-  async executeCreate(action: PlanAction, provider: Provider, currentState: State): Promise<void> {
-    await this.create(action, provider, currentState, await this.sendingFor(action, currentState));
+  async executeCreate(action: PlanAction, written: Written | undefined, provider: Provider, currentState: State): Promise<void> {
+    await this.create(action, provider, currentState, await this.sendingFor(action, written, currentState));
   }
 
   /** `replacing` is the object a replace made first leaves deposed, once the new one is in state. */
@@ -204,8 +217,8 @@ export class ActionExecutor {
     this.holdToPlan(action.resourceType, sending, attributes);
   }
 
-  async executeUpdate(action: PlanAction, provider: Provider, currentState: State): Promise<void> {
-    const sending = await this.sendingFor(action, currentState);
+  async executeUpdate(action: PlanAction, written: Written | undefined, provider: Provider, currentState: State): Promise<void> {
+    const sending = await this.sendingFor(action, written, currentState);
 
     const currentResource = held(action, currentState);
     const request = { prior: currentResource.attributes, config: sending.inputs, planned: sending.after };

@@ -404,17 +404,35 @@ describe('a plan saved to a file', () => {
     });
   });
 
-  // A plan file carries its own names, so the apply checks them again.
-  it('stops on a name the schema does not have that the plan file carries, before the provider is sent it', async () => {
+  // A plan file carries its own values, so the apply holds the configuration to them again.
+  it('stops on a value the plan file carries that the configuration does not give, before the provider is sent it', async () => {
     const saved = await save(fileConfig('hello'));
-    const misspelled = saved.actions.map((action) => ({
-      ...action,
-      attributes: { ...action.attributes, contnet: action.attributes!.content },
-      planned: { ...action.planned, contnet: 'hello' },
-    }));
+    const misspelled = saved.actions.map((action) => ({ ...action, planned: { ...action.planned, contnet: 'hello' } }));
 
-    await expect(drain(newOrchestrator().runPlan({ ...saved, actions: misspelled }, saved.config))).rejects.toThrow('local_file has no attribute "contnet"');
+    await expect(drain(newOrchestrator().runPlan({ ...saved, actions: misspelled }, saved.config))).rejects.toThrow(
+      'the plan showed contnet = "hello", but it now comes to (none). Plan again.'
+    );
     await expect(fs.access(path.join(dir, 'a.txt'))).rejects.toThrow();
+  });
+
+  // The file carries the configuration, which the parser checks; a second copy of each expression would need its own check.
+  it('takes what a resource is given from the configuration it carries, not from expressions beside its actions', async () => {
+    const plan = JSON.parse(await written(fileConfig('hello'))) as { actions: Record<string, unknown>[] };
+    plan.actions[0].attributes = { content: { type: 'Nope' } };
+
+    await drain(newOrchestrator().runPlan(parsePlanFile(JSON.stringify(plan), 'plan.json'), fileConfig('hello')));
+
+    expect(await fs.readFile(path.join(dir, 'a.txt'), 'utf8')).toBe('hello');
+  });
+
+  it.each([
+    ['a resource type left out', (action: Record<string, unknown>) => delete action.resourceType],
+    ['a dependency that is a number', (action: Record<string, unknown>) => (action.dependencies = [42])],
+  ])('is refused with %s before anything runs', async (_, breaking) => {
+    const plan = JSON.parse(await written(fileConfig('hello'))) as { actions: Record<string, unknown>[] };
+    breaking(plan.actions[0]);
+
+    expect(() => parsePlanFile(JSON.stringify(plan), 'plan.json')).toThrow(/^plan\.json is not a plan file$/);
   });
 
   it('is refused once another run has written the state', async () => {

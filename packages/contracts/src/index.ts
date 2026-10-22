@@ -156,12 +156,27 @@ export function readPaths(paths: unknown, what: string): unknown {
   return paths.map((path: unknown) => (Array.isArray(path) ? path.map((step: unknown) => (step instanceof ExactNumber ? step.toSafeInteger(what) : step)) : path));
 }
 
+function isAddress(text: string): boolean {
+  try {
+    return Address.parse(text).toString() === text;
+  } catch (error) {
+    if (error instanceof Error) return false;
+
+    throw error;
+  }
+}
+
+/** The addresses of the resources an object was made after, which its delete must come before. */
+export function isDependencies(value: unknown): value is string[] | undefined {
+  return value === undefined || (Array.isArray(value) && value.every((address) => typeof address === 'string' && isAddress(address)));
+}
+
 /** What a resource keeps beside its values, each left out where there is none. */
 function isKeptBesideValues(value: Record<string, unknown>): boolean {
   return (
     (value.sensitive === undefined || isAttributePaths(value.sensitive)) &&
     (value.preventDestroy === undefined || value.preventDestroy === true) &&
-    (value.dependencies === undefined || Array.isArray(value.dependencies))
+    isDependencies(value.dependencies)
   );
 }
 
@@ -201,22 +216,7 @@ function checkResources(resources: Record<string, unknown>, say: (problem: strin
 }
 
 function isDeposedObject(value: unknown): value is DeposedObject {
-  return (
-    isRecord(value) &&
-    isRecord(value.attributes) &&
-    (value.sensitive === undefined || isAttributePaths(value.sensitive)) &&
-    (value.dependencies === undefined || Array.isArray(value.dependencies))
-  );
-}
-
-function isAddress(text: string): boolean {
-  try {
-    return Address.parse(text).toString() === text;
-  } catch (error) {
-    if (error instanceof Error) return false;
-
-    throw error;
-  }
+  return isRecord(value) && isRecord(value.attributes) && (value.sensitive === undefined || isAttributePaths(value.sensitive)) && isDependencies(value.dependencies);
 }
 
 function readDeposedPaths(object: unknown, address: string, say: (problem: string) => never): void {
