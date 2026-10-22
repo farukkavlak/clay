@@ -29,6 +29,13 @@ function errorOf(input: string, file: string = CONFIG_FILE): ConfigError {
   throw new Error(`Expected an error from: ${input}`);
 }
 
+const deep = (open: string, inner: string, close: string) => (levels: number) => open.repeat(levels) + inner + close.repeat(levels);
+const inTurn = (levels: number) => {
+  const lists = Array.from({ length: levels }, (_, level) => level % 2 === 0);
+  const closings = lists.map((list) => (list ? ']' : '}')).reverse();
+  return `${lists.map((list) => (list ? '[' : '{a=')).join('')}1${closings.join('')}`;
+};
+
 const attributesOf = (input: string) => (makeParser(input).parse()[0] as ResourceBlock).attributes;
 const valueOf = (written: string) => attributesOf(`resource "t" "n" { v = ${written} }`).v;
 const typeOf = (written: string) => (makeParser(`variable "v" { type = ${written} }`).parse()[0] as VariableBlock).valueType;
@@ -1377,6 +1384,32 @@ describe('Clay Parser', () => {
 
       expect(error.message).toBe("An optional attribute's default is a constant, so it cannot hold var.z");
       expect(error.position).toEqual(at(3, 41));
+    });
+  });
+
+  describe('nesting', () => {
+    const LOCAL = 'locals { x = ';
+    const TYPE = 'variable "v" { type = ';
+    // The column is that of the opening one level too deep.
+    it.each([
+      ['lists', LOCAL, deep('[', '1', ']'), LOCAL.length + 100 + 1],
+      ['maps', LOCAL, deep('{a=', '1', '}'), LOCAL.length + 3 * 100 + 1],
+      ['function calls', LOCAL, deep('f(', '1', ')'), LOCAL.length + 2 * 100 + 1],
+      ['indexes read from a value', LOCAL, (levels: number) => 'a' + deep('[a', '', ']')(levels), LOCAL.length + 1 + 2 * 100 + 1],
+      ['types', TYPE, deep('list(', 'string', ')'), TYPE.length + 5 * 100 + 1],
+      ['lists and maps in turn', LOCAL, inTurn, LOCAL.length + 50 + 3 * 50 + 1],
+    ])('takes %s nested 100 levels, and refuses one more at its opening', (_, start, nested, column) => {
+      expect(() => makeParser(`${start}${nested(100)} }`).parse()).not.toThrow();
+
+      const error = errorOf(`${start}${nested(101)} }`);
+      expect(error.message).toBe('Nested more than 100 levels deep');
+      expect(error.position).toEqual(at(1, column));
+    });
+
+    it('counts only the openings around a value, not those closed before it', () => {
+      const list = deep('[', '1', ']')(99);
+
+      expect(() => makeParser(`locals {\n  a = [${list}, ${list}]\n  b = ${deep('[', '1', ']')(100)}\n}`).parse()).not.toThrow();
     });
   });
 });

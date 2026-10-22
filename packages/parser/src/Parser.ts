@@ -39,6 +39,9 @@ const PRIMITIVE_TYPES = new Map<string, Type>([
 
 const HOLDING_TYPES = new Set(['list', 'set', 'map', 'tuple', 'object']);
 
+/** Every walk over a value or a type recurses, so deeper nesting is refused before one can overflow the stack. */
+const MAX_NESTING = 100;
+
 /** Reserved by a module call, so no module input may use them. */
 const INSTANCE_ARGUMENTS = new Set(['count', 'for_each']);
 
@@ -65,6 +68,8 @@ export class Parser {
   private bound: string[] = [];
   /** Checked against resource types once every block is read. */
   private forNames: Token[] = [];
+  /** Openings around what is being read. */
+  private depth = 0;
 
   constructor(tokens: Token[]) {
     this.tokens = tokens;
@@ -318,7 +323,7 @@ export class Parser {
     if (!HOLDING_TYPES.has(name.value)) throw new ConfigError(`"${name.value}" is not a type: a type is string, number, bool, any, list, set, map, tuple or object`, name.position);
 
     this.consume(TokenType.LParen, `Expect '(' after ${name.value}.`);
-    const parsed = this.parseTypeArgument(name);
+    const parsed = this.nested(name.position, () => this.parseTypeArgument(name));
     this.consume(TokenType.RParen, `Expect ')' after the type ${name.value} holds.`);
     return parsed;
   }
@@ -451,12 +456,23 @@ export class Parser {
     if (this.matchToken(TokenType.Boolean)) return { type: 'Boolean', value: this.previous().value === 'true', position };
     if (this.matchToken(TokenType.Null)) return { type: 'Null', position };
 
-    if (this.matchToken(TokenType.LBracket)) return this.parseList(position);
-    if (this.matchToken(TokenType.LBrace)) return this.parseMap(position);
+    if (this.matchToken(TokenType.LBracket)) return this.nested(position, () => this.parseList(position));
+    if (this.matchToken(TokenType.LBrace)) return this.nested(position, () => this.parseMap(position));
 
     if (this.check(TokenType.Identifier)) return this.parseNamed(position);
 
     return this.error(`Unexpected value: ${this.peek().value}`);
+  }
+
+  private nested<T>(opening: Position, read: () => T): T {
+    if (this.depth === MAX_NESTING) throw new ConfigError(`Nested more than ${MAX_NESTING} levels deep`, opening);
+
+    this.depth++;
+    try {
+      return read();
+    } finally {
+      this.depth--;
+    }
   }
 
   private parseNegative(position: Position): AttributeValue {
@@ -614,7 +630,7 @@ export class Parser {
 
   private parseNamed(position: Position): ReferenceNode | CallNode | BoundNode {
     const name = this.advance().value;
-    if (this.matchToken(TokenType.LParen)) return { type: 'Call', name, args: this.parseArguments(), path: this.parseSteps(), position };
+    if (this.matchToken(TokenType.LParen)) return { type: 'Call', name, args: this.nested(position, () => this.parseArguments()), path: this.parseSteps(), position };
     if (this.bound.includes(name)) return { type: 'Bound', value: [{ name }, ...this.parseSteps()], position };
 
     return { type: 'Reference', value: [{ name }, ...this.parseSteps()], position };
@@ -644,7 +660,7 @@ export class Parser {
 
     if (this.matchToken(TokenType.OQuote)) key = this.stringKey(this.previous()).value;
     else if (this.check(TokenType.Number) || this.check(TokenType.Minus)) key = this.index(this.advance());
-    else return this.indexFromValue();
+    else return this.nested(this.previous().position, () => this.indexFromValue());
 
     this.consume(TokenType.RBracket, "Expect ']' after the index.");
     return { key };

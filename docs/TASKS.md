@@ -288,10 +288,14 @@ change each.
       or a block above the locals read its end.
       Now the search keeps a stack of its own, and the check reads each local after
       the ones it reads
-- [ ] A value nested 20000 deep ends in a stack overflow with no position,
-      `Maximum call stack size exceeded`. The parser and every walk over a value recurse
+- [x] A value nested 20000 deep ends in a stack overflow with no position,
+      `Maximum call stack size exceeded`. The parser and every walk over a value recurse.
+      Now the parser refuses a list, map, call, index or type nested more than 100
+      levels deep, where the level one too deep starts. Terraform's HCL parser has no limit
 - [ ] A value nested 20000 deep in a state or plan file ends in the same stack overflow,
       in `plan` and `state show`
+- [ ] A value worked out deeper than it is written ends in the same stack overflow at
+      apply: 6000 locals, each a list of the one before, plan and then fail
 - [ ] The caret under an error points at the wrong column on a line indented with tabs:
       `describeError` pads with spaces under a line that keeps its tabs
 
