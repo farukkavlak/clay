@@ -1,3 +1,5 @@
+import { NAME } from '@clay/contracts';
+
 import type { BoundNode, CallNode, ReferenceNode } from './ast';
 import { ConfigError } from './ConfigError';
 import { Position } from './Position';
@@ -68,9 +70,6 @@ export interface PathReference {
 }
 
 export type ParsedReference = VariableReference | LocalReference | DataReference | ModuleOutputReference | ResourceReference | CountReference | EachReference | PathReference;
-
-/** What a reference can spell after a dot, so every declared name can be referenced. */
-export const NAME = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 
 /** A key is spelled in brackets as it was written, since under for_each only that form names an instance. */
 function spellStep(part: Step, first: boolean): string {

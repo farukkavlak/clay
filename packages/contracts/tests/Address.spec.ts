@@ -125,6 +125,18 @@ describe('Address', () => {
     ])('refuses %s and says what is wrong', (input, message) => {
       expect(() => Address.parse(input)).toThrow(message);
     });
+
+    // A configuration spells each part as a name, so no other part could ever be planned.
+    it.each([
+      ['random_string.has space', '"has space" is not a name: a name starts with a letter or underscore, then letters, digits, underscores and dashes'],
+      ['local_file.5', '"5" is not a name: a name starts with a letter or underscore, then letters, digits, underscores and dashes'],
+      ['local_file.true', '"true" is not a name: a name starts with a letter or underscore, then letters, digits, underscores and dashes'],
+      ['local file.a', '"local file" is not a type: a type starts with a letter or underscore, then letters, digits, underscores and dashes'],
+      ['var.a', '"var" cannot be a type: a reference reads "var." as something else'],
+      ['module.my app.local_file.a', '"my app" is not a name: a name starts with a letter or underscore, then letters, digits, underscores and dashes'],
+    ])('refuses %s, which no configuration can spell', (input, reason) => {
+      expect(() => Address.parse(input)).toThrow(`Invalid address "${input}": ${reason}`);
+    });
   });
 
   describe('countCounterparts', () => {
@@ -194,6 +206,14 @@ describe('Address', () => {
       ['a key after the type', 'data.local_file[0].f'],
     ])('refuses %s', (_, written) => {
       expect(() => parseDataAddress(written)).toThrow(`Invalid address "${written}": a data source is named data, its type and its name`);
+    });
+
+    it.each([
+      ['data.local_file.a b', '"a b" is not a name: a name starts with a letter or underscore, then letters, digits, underscores and dashes'],
+      ['data.count.f', '"count" cannot be a type: a reference reads "count." as something else'],
+      ['module.a-b c.data.local_file.f', '"a-b c" is not a name: a name starts with a letter or underscore, then letters, digits, underscores and dashes'],
+    ])('refuses %s, which no configuration can spell', (input, reason) => {
+      expect(() => parseDataAddress(input)).toThrow(`Invalid address "${input}": ${reason}`);
     });
   });
 

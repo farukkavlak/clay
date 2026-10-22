@@ -111,6 +111,26 @@ describe('a state file that is not valid state', () => {
       `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"b","attributes":{}}}}`,
       '"local_file.a" holds local_file.b',
     ],
+    [
+      'a resource at an address no configuration can spell',
+      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a b":{"resourceType":"local_file","name":"a b","attributes":{}}}}`,
+      '"local_file.a b" is not the address of a resource: "a b" is not a name',
+    ],
+    [
+      'deposed objects under an address no configuration can spell',
+      `{"version":${STATE_VERSION},"serial":0,"resources":{},"deposed":{"local_file.5":[{"attributes":{}}]}}`,
+      '"local_file.5" is not the address of a resource, so it cannot hold deposed objects',
+    ],
+    [
+      'a dependency no configuration can spell',
+      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"dependencies":["var.x"]}}}`,
+      '"local_file.a" is not a resource',
+    ],
+    [
+      'an output no configuration can declare',
+      `{"version":${STATE_VERSION},"serial":0,"outputs":{"a b":{"value":"x","type":{"kind":"string"}}},"resources":{}}`,
+      'its output "a b" has a name no configuration can declare',
+    ],
     ['no version at all', '{}', 'its version is not a number'],
     ['text that is not json', '{oops', 'the file is not JSON'],
   ])('refuses %s, and says which file', async (_, state, reason) => {

@@ -64,6 +64,29 @@ describe('a plan file that cannot be read', () => {
     expect(exitCodes).toEqual([1]);
   });
 
+  // The plan is otherwise whole, so only the name check in isActionAt refuses it.
+  it('refuses an action at an address no configuration can spell before it shows the plan', async () => {
+    const action = { type: 'DELETE' as const, resourceType: 'local_file', name: 'has space', modulePath: [] };
+    const plan = { serial: 0, actions: [action], outputs: {}, prevRun: {}, prior: {}, schemas: { local_file: {} }, dataSources: {}, readAtApply: [] };
+    await fs.writeFile(path.join(dir, 'tfplan.json'), serializePlan(plan, '', {}), 'utf8');
+
+    const output = await applyWith('tfplan.json');
+
+    expect(output).toContain('tfplan.json is not a plan file');
+    expect(output).not.toContain('will be destroyed');
+    expect(exitCodes).toEqual([1]);
+  });
+
+  it('says which data source name no configuration can spell', async () => {
+    const plan = { serial: 0, actions: [], outputs: {}, prevRun: {}, prior: {}, schemas: {}, dataSources: {}, readAtApply: ['data.local_file.a b'] };
+    await fs.writeFile(path.join(dir, 'tfplan.json'), serializePlan(plan, '', {}), 'utf8');
+
+    const output = await applyWith('tfplan.json');
+
+    expect(output).toContain('"data.local_file.a b" is not a data source: "a b" is not a name');
+    expect(exitCodes).toEqual([1]);
+  });
+
   // "Plan again" does not help with a missing file, so this error says only what is wrong.
   it('says a plan file it cannot find is not there, rather than reporting an open that failed', async () => {
     const output = await applyWith('nosuch.json');
