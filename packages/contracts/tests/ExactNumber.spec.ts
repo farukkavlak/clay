@@ -2,8 +2,10 @@ import { isDeepStrictEqual } from 'node:util';
 import { describe, expect, it } from 'vitest';
 
 import { ExactNumber, NumberError } from '../src/ExactNumber';
+import { NestingError } from '../src/nesting';
 
 const digits = (count: number) => '9'.repeat(count);
+const nested = (levels: number) => `${'['.repeat(levels)}1${']'.repeat(levels)}`;
 
 describe('ExactNumber', () => {
   it.each([
@@ -106,6 +108,11 @@ describe('ExactNumber', () => {
     const read = ExactNumber.readJSON('{"id": 12345678901234567890, "list": [1.50, {"n": 9007199254740993}], "text": "42"}');
 
     expect(JSON.stringify(read)).toBe('{"id":12345678901234567890,"list":[1.5,{"n":9007199254740993}],"text":"42"}');
+  });
+
+  it('reads JSON text nested 500 levels deep, and refuses text nested deeper than the call stack holds', () => {
+    expect(JSON.stringify(ExactNumber.readJSON(nested(500)))).toBe(nested(500));
+    expect(() => ExactNumber.readJSON(nested(20_000))).toThrow(new NestingError(500));
   });
 
   describe('as a JavaScript integer', () => {

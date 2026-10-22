@@ -292,10 +292,17 @@ change each.
       `Maximum call stack size exceeded`. The parser and every walk over a value recurse.
       Now the parser refuses a list, map, call, index or type nested more than 100
       levels deep, where the level one too deep starts. Terraform's HCL parser has no limit
-- [ ] A value nested 20000 deep in a state or plan file ends in the same stack overflow,
-      in `plan` and `state show`
-- [ ] A value worked out deeper than it is written ends in the same stack overflow at
-      apply: 6000 locals, each a list of the one before, plan and then fail
+- [x] A value nested 20000 deep in a state or plan file ends in the same stack overflow,
+      in `plan` and `state show`. `JSON.parse` with a reviver recurses, from about 3000
+      levels. Now a file nested more than 500 levels deep is refused before that parse;
+      a file Clay writes for a value 100 deep is about 205 levels. Terraform reads its
+      state with Go's `encoding/json`, which stops at 10000
+- [x] A value worked out deeper than it is written ends in the same stack overflow at
+      apply: 6000 locals, each a list of the one before, plan and then fail. Now a value
+      or its type worked out more than 100 levels deep is refused at the expression, at
+      validate and plan, before anything is written
+- [ ] A provider result nested more than 100 levels deep is not refused. Past 500, Clay
+      writes a state it then refuses to read
 - [ ] The caret under an error points at the wrong column on a line indented with tabs:
       `describeError` pads with spaces under a line that keeps its tabs
 

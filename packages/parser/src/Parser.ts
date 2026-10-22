@@ -1,4 +1,4 @@
-import { ExactNumber, isName, NAME_RULE, NumberError, RESERVED_TYPES, Type, types } from '@clay/contracts';
+import { ExactNumber, isName, MAX_NESTING, NAME_RULE, NumberError, RESERVED_TYPES, Type, types } from '@clay/contracts';
 import {
   AttributeValue,
   BoundNode,
@@ -38,9 +38,6 @@ const PRIMITIVE_TYPES = new Map<string, Type>([
 ]);
 
 const HOLDING_TYPES = new Set(['list', 'set', 'map', 'tuple', 'object']);
-
-/** Every walk over a value or a type recurses, so deeper nesting is refused before one can overflow the stack. */
-const MAX_NESTING = 100;
 
 /** Reserved by a module call, so no module input may use them. */
 const INSTANCE_ARGUMENTS = new Set(['count', 'for_each']);

@@ -3,9 +3,19 @@ import { describe, expect, it } from 'vitest';
 
 import { parseState, serializeState } from '../src/stateFile';
 
+const nested = (levels: number): unknown => (levels === 0 ? 'x' : [nested(levels - 1)]);
+
 const read = (content: unknown) => () => parseState(typeof content === 'string' ? content : JSON.stringify(content), 'clay.state.json');
 
 describe('reading a state file', () => {
+  // The file, its resources, the resource and its attributes are four levels around the value.
+  it('reads a file nested 500 levels deep, and refuses one more', () => {
+    const state = (levels: number) => ({ ...emptyState(), resources: { 'local_file.a': { resourceType: 'local_file', name: 'a', attributes: { content: nested(levels - 4) } } } });
+
+    expect(parseState(JSON.stringify(state(500)), 'clay.state.json').resources['local_file.a'].attributes.content).toEqual(nested(496));
+    expect(read(state(501))).toThrow('clay.state.json is not valid state: it is nested more than 500 levels deep');
+  });
+
   it('reads back what it wrote', () => {
     const state = { ...emptyState(), serial: 3, resources: { 'local_file.a': { resourceType: 'local_file', name: 'a', attributes: { path: 'a.txt' } } } };
 

@@ -14,6 +14,7 @@ import {
   isType,
   isUnknown,
   ModuleStep,
+  NestingError,
   NumberError,
   Output,
   own,
@@ -431,7 +432,7 @@ export function parsePlanFile(content: string, source: string): PlanFile {
   } catch (error) {
     if (error instanceof SyntaxError) throw new Error(`${source} is not a plan file: the file is not JSON`, { cause: error });
 
-    if (error instanceof NumberError) throw new Error(`${source} is not a plan file: ${error.message}`, { cause: error });
+    if (error instanceof NumberError || error instanceof NestingError) throw new Error(`${source} is not a plan file: ${error.message}`, { cause: error });
 
     throw error;
   }
