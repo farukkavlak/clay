@@ -98,6 +98,13 @@ describe('two objects that are one file', () => {
     expect(await exists('f.txt')).toBe(false);
   });
 
+  it('refuses two new blocks whose paths differ only in case', async (context) => {
+    if (!(await ignoresCase(dir))) context.skip();
+    await write(fileBlock('a', 'new/A.txt'), fileBlock('b', 'new/a.txt'));
+
+    expect(await refusal('plan')).toContain(`local_file.b and local_file.a are both the file ${file('new/a.txt')}`);
+  });
+
   it('refuses a new block that writes the file one that stays holds', async () => {
     await write(fileBlock('a', 'f.txt'));
     await clayIn('apply', '--yes');

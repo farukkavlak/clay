@@ -225,9 +225,23 @@ change each.
       them replaces the file, and with `create_before_destroy` destroys it. Now a file is
       named as the disk names it, in the case it has, through the links in its
       directories. A link at the end is a file of its own, since a delete removes the link
-- [ ] Two new paths that differ only in case, `new/A.txt` and `new/a.txt` where neither
+- [x] Two new paths that differ only in case, `new/A.txt` and `new/a.txt` where neither
       exists, are taken for two files on a file system that ignores case. Both blocks write
-      the one file; the next plan refuses them, since it then exists
+      the one file; the next plan refuses them, since it then exists. Now a part not made
+      yet is named in one case where the nearest directory that exists ignores case, `ß`
+      and `SS` as `ss`, as macOS folds them. The directory is asked by finding one of its
+      names in another case, so nothing is written
+- [ ] A new file's name changes once it is made: in the case it was written, where before
+      it was folded. At apply, two blocks in one layer whose paths differ only in case and
+      are known only then can each be checked on either side of the other's create, and
+      both write the one file
+- [ ] A directory that cannot tell whether it ignores case asks the one above, even on
+      another device, so an empty volume that tells case apart, mounted under one that
+      ignores it, has `vol/A.txt` and `vol/a.txt` refused as one file
+- [ ] Two paths that differ only in Unicode form, `é` as one character or as `e` and an
+      accent, are taken for two files where neither exists, though macOS keeps them as one.
+      Both blocks write the one file. A link's name is matched by case only, so a link
+      written in the other form is named as written
 - [ ] A link in a path that points nowhere is named as written, so `dang/x.txt` through a
       link `dang` to `/gone` and `/gone/x.txt` are taken for two files
 - [x] The delete order is worked out in exponential time. `reaches` in `deleteEdges` walks

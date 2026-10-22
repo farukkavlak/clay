@@ -486,6 +486,64 @@ describe('LocalProvider', () => {
         expect(await provider.identify('local_file', { path: path.join(real, 'dir', 'A.txt') })).toBe(`the file ${path.join(real, 'dir', 'a.txt')}`);
       });
 
+      it('folds the case of parts not made yet, where the file system ignores case', async (context) => {
+        if (!(await ignoresCase(real))) context.skip();
+
+        expect(await provider.identify('local_file', { path: path.join(real, 'dir', 'New', 'A.txt') })).toBe(`the file ${path.join(real, 'dir', 'new', 'a.txt')}`);
+      });
+
+      it('folds parts not made yet as a file system that ignores case does', async (context) => {
+        if (!(await ignoresCase(real))) context.skip();
+        const identify = (name: string) => provider.identify('local_file', { path: path.join(real, 'dir', name) });
+
+        expect(await identify('STRASSE')).toBe(await identify('Straße'));
+        expect(await identify('ss')).toBe(await identify('ẞ'));
+        expect(await identify('οδοσ')).toBe(await identify('ΟΔΟΣ'));
+        expect(await identify('ı.txt')).not.toBe(await identify('i.txt'));
+      });
+
+      it('takes the case a link at the end has where its name folds to another length', async (context) => {
+        await fs.symlink(path.join(real, 'dir', 'real.txt'), path.join(real, 'dir', 'STRASSE'));
+        if (!(await ignoresCase(real))) context.skip();
+
+        expect(await provider.identify('local_file', { path: path.join(real, 'dir', 'Straße') })).toBe(`the file ${path.join(real, 'dir', 'STRASSE')}`);
+      });
+
+      // `ı` turns into `I`, which finds nothing even where case is ignored, so it cannot tell.
+      it('asks the directory above where no name in the directory turns into another case and back', async (context) => {
+        if (!(await ignoresCase(real))) context.skip();
+        await fs.writeFile(path.join(real, 'dir', 'ı'), 'x', 'utf8');
+
+        expect(await provider.identify('local_file', { path: path.join(real, 'dir', 'A.txt') })).toBe(`the file ${path.join(real, 'dir', 'a.txt')}`);
+      });
+
+      it('asks the directory above one that cannot be listed', async (context) => {
+        if (!(await ignoresCase(real))) context.skip();
+        await fs.writeFile(path.join(real, 'dir', 'b.txt'), 'x', 'utf8');
+        await fs.chmod(path.join(real, 'dir'), 0o300);
+
+        try {
+          expect(await provider.identify('local_file', { path: path.join(real, 'dir', 'A.txt') })).toBe(`the file ${path.join(real, 'dir', 'a.txt')}`);
+        } finally {
+          await fs.chmod(path.join(real, 'dir'), 0o700);
+        }
+      });
+
+      it('keeps the case of parts not made yet, where the file system tells case apart', async (context) => {
+        if (await ignoresCase(real)) context.skip();
+
+        expect(await provider.identify('local_file', { path: path.join(real, 'dir', 'New', 'A.txt') })).toBe(`the file ${path.join(real, 'dir', 'New', 'A.txt')}`);
+      });
+
+      // Each name in the other case finds an entry, but not the same one.
+      it('keeps the case of parts not made yet beside two files that differ only in case', async (context) => {
+        if (await ignoresCase(real)) context.skip();
+        await fs.writeFile(path.join(real, 'dir', 'B.txt'), 'x', 'utf8');
+        await fs.writeFile(path.join(real, 'dir', 'b.TXT'), 'x', 'utf8');
+
+        expect(await provider.identify('local_file', { path: path.join(real, 'dir', 'New', 'A.txt') })).toBe(`the file ${path.join(real, 'dir', 'New', 'A.txt')}`);
+      });
+
       // A delete unlinks the link and leaves what it points to, so the two are not one file.
       it('names a link at the end of the path as itself', async () => {
         await fs.writeFile(path.join(real, 'dir', 'real.txt'), 'x', 'utf8');
