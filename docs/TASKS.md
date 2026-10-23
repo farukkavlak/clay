@@ -514,8 +514,8 @@ and every operator HCL has. A real configuration hits each of these early.
 - [x] `/` and `%`. A quotient keeps 34 significant digits, rounded half to even. Either
       one by zero is refused. Terraform gives infinity for `1 / 0`, which no state can
       hold, and the left side for `1 % 0`
-- [ ] Any value inside `[...]` read from a value, where today only a reference or a call
-      goes
+- [x] Any value inside `${...}` and inside `[...]` read from a value, where only a
+      reference or a call went
 - [ ] More functions. Clay has `length`, `tolist`, `toset`, `sensitive`, `nonsensitive` and
       `issensitive`; a Terraform configuration reaches for `join`, `format`, `lookup`,
       `merge`, `upper` and `lower` early

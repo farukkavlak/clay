@@ -1,14 +1,11 @@
 import { NAME } from '@clay/contracts';
 
-import type { BoundNode, CallNode, ReferenceNode } from './ast';
+import type { AttributeValue } from './ast';
 import { ConfigError } from './ConfigError';
 import { Position } from './Position';
 
-/** What a bracket holds when it is a value, not digits or a quoted key. */
-export type IndexNode = ReferenceNode | CallNode | BoundNode;
-
 /** `index` is read where the reference is, and `spelled` is how it was written. */
-export type Step = { name: string } | { key: string | number } | { index: IndexNode; spelled: string };
+export type Step = { name: string } | { key: string | number } | { index: AttributeValue; spelled: string };
 
 /** An index read from a value has no key yet, so it is spelled, which no name or number can be. */
 export function stepKey(step: Step): string | number {
@@ -96,15 +93,16 @@ function refuse(message: string, position?: Position): never {
 
 /** The target's parts must be names, since scope keys join them with dots; the rest is the path into its value. */
 function split(parts: Step[], count: number, position?: Position): { names: string[]; path: Step[] } {
-  const names = parts.slice(0, count).map((part) => stepKey(part));
+  const named = parts.slice(0, count);
   const spelled = () => spellReference(parts);
 
-  for (const part of names) {
-    if (typeof part === 'number') refuse(`Reference "${spelled()}" has an index where it needs a name`, position);
-    if (!NAME.test(part)) refuse(`Reference "${spelled()}" has ${JSON.stringify(part)} where it needs a name`, position);
+  for (const part of named) {
+    const name = stepKey(part);
+    if (typeof name === 'number' || 'index' in part) refuse(`Reference "${spelled()}" has an index where it needs a name`, position);
+    if (!NAME.test(name)) refuse(`Reference "${spelled()}" has ${JSON.stringify(name)} where it needs a name`, position);
   }
 
-  return { names: names as string[], path: parts.slice(count) };
+  return { names: named.map((part) => stepKey(part)) as string[], path: parts.slice(count) };
 }
 
 function variableReference(parts: Step[], position?: Position): VariableReference {

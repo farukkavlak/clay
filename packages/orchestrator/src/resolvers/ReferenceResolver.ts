@@ -8,7 +8,7 @@ import {
   ConfigError,
   EachReference,
   ForNode,
-  IndexNode,
+  isNamed,
   LocalReference,
   NegateNode,
   NotNode,
@@ -194,7 +194,7 @@ function fitted(taken: AttributeValue, value: Value, written: Type): Value {
 
 /** A value with no name is found by where it is written. */
 function spelledPart(part: AttributeValue): string {
-  return part.type === 'Reference' || part.type === 'Call' || part.type === 'Bound' ? spellNamed(part) : "The value inside '${'";
+  return isNamed(part) ? spellNamed(part) : "The value inside '${'";
 }
 
 export class ReferenceResolver {
@@ -302,17 +302,17 @@ export class ReferenceResolver {
       const index = this.indexOf(step.index, site);
       sensitive = sensitive || isSensitive(index);
       if (isUnknown(index.data)) {
-        checkUnknownIndex(index, step.spelled, step.index.position);
+        checkUnknownIndex(index, step);
         return { steps: found, sensitive, later: step };
       }
 
-      found.push(keyOf(index, step.spelled, step.index.position));
+      found.push(keyOf(index, step));
     }
 
     return { steps: found, sensitive };
   }
 
-  private indexOf(node: IndexNode, { state, context, reading }: Site): Value {
+  private indexOf(node: AttributeValue, { state, context, reading }: Site): Value {
     try {
       return this.resolveIn(node, state, context, reading);
     } catch (error) {

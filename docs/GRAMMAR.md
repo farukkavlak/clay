@@ -271,23 +271,25 @@ directory of the module that calls. `path.root` is `.`. A relative path is read 
 `clay` runs, which is the root, so `"${path.module}/index.html"` names a file next to the
 module. Any other name after `path.` is refused where it is written.
 
-After what it names, a reference may read into the value: `.name` or `["key"]` reads a
-key of a map, and `[0]` an item of a list, counted from 0. So `local_file.a.tags.env`,
-`var.names[0]` and `module.app.info["url"]` each read one value. An index is written in
-digits; a quoted key reads escapes as a map key does. A key the map does not have, an
-index past the end of the list, or a step into a string, number, bool or null is refused
-where the reference is written. So is an index into a set, whose members have no order.
-A value not known until apply is read into at apply, but a step its type cannot take is
-refused now: `random_string.r.result.nope`. An attribute of a resource or a data source
-that its schema has and nothing sets reads as `null`; a name the schema does not have is
-refused.
+After what it names, a reference may read into the value: `.name` or `["key"]` reads a key
+of a map, and `[0]` an item of a list, counted from 0. So `local_file.a.tags.env`,
+`var.names[0]` and `module.app.info["url"]` each read one value. A number written alone is
+a whole number from 0, or it is refused where it is written; a quoted key reads escapes as
+a map key does. A key the map does not have, an index past the end of the list, or a step
+into a string, number, bool or null is refused where the reference is written. So is an
+index into a set, whose members have no order. A value not known until apply is read into
+at apply, but a step its type cannot take is refused now: `random_string.r.result.nope`.
+An attribute of a resource or a data source that its schema has and nothing sets reads as
+`null`; a name the schema does not have is refused.
 
-A bracket may hold a reference or a call: `var.names[count.index]`, `local_file.f[each.key].content`,
-`module.app[var.i].url`. It is read where the reference is, and what it comes to is the key: a
-whole number from 0 for a list or a `count`, a string for a map or a `for_each`. A bool, a list,
-null, a negative number or a fraction is refused. What the index reads is a dependency of the
-reference. An index not known until apply makes the whole read not known until apply. A sensitive
-index makes what it reads sensitive, and an error about the read does not say what the index was.
+A bracket may hold any other value: `var.names[count.index]`,
+`var.names[count.index + 1]`, `local_file.f[each.key].content`, `module.app[var.i].url`.
+It is read where the reference is, and what it comes to is the key: a whole number from 0
+for a list or a `count`, a string for a map or a `for_each`. A bool, a list, null, a
+negative number or a fraction is refused. What the index reads is a dependency of the
+reference. An index not known until apply makes the whole read not known until apply. A
+sensitive index makes what it reads sensitive, and an error about the read does not say
+what the index was.
 
 The parts before that name what is read, so each is a name even when it is quoted:
 `var["region"]` is `var.region`, and `module["a.module.b"]` is refused.

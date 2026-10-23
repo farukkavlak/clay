@@ -530,6 +530,13 @@ describe('Clay Parser', () => {
       expect(error.position).toEqual(position);
     });
 
+    it('reads an index that holds an interpolation inside an interpolation', () => {
+      expect(valueOf('"${var.m["${var.k}"]}"')).toMatchObject({
+        type: 'Template',
+        value: [{ type: 'Reference', value: [{ name: 'var' }, { name: 'm' }, { spelled: '...', index: { type: 'Template', value: [reference(['var', 'k'], 36)] } }] }],
+      });
+    });
+
     it.each([
       ['a key with a dot', '"${var.m["a.b"]}"', 'a.b'],
       ['a key holding the brace that closes an interpolation', '"${var.m["a}b"]}"', 'a}b'],
@@ -541,13 +548,6 @@ describe('Clay Parser', () => {
 
     it('reads the text around an interpolation that holds a quoted key', () => {
       expect(valueOf('"x ${var.m["k"]} y"')).toEqual({ type: 'Template', value: ['x ', reference(['var', 'm', { key: 'k' }], 29), ' y'], position: at(1, 24) });
-    });
-
-    it('refuses a key that holds an interpolation inside an interpolation, where it is written', () => {
-      const error = errorOf('resource "t" "n" { v = "${var.m["${var.k}"]}" }');
-
-      expect(error.message).toBe('A map key is plain text; it cannot hold an interpolation');
-      expect(error.position).toEqual(at(1, 33));
     });
 
     // A quote where a brace belongs opens a string, so the parser cannot tell which one is at fault.
@@ -671,6 +671,7 @@ describe('Clay Parser', () => {
       ['a key with a dot in it', 'var.m["a.b"]', ['var', 'm', { key: 'a.b' }]],
       ['a key by what its escapes stand for', String.raw`var.m["a\"b"]`, ['var', 'm', { key: 'a"b' }]],
       ['an index written with leading zeros', 'var.l[007]', ['var', 'l', 7]],
+      ['an index written with an exponent', 'var.l[1e2]', ['var', 'l', 100]],
     ])('reads %s', (_, written, parts) => {
       expect(valueOf(written)).toEqual(reference(parts, 24));
     });
@@ -680,6 +681,11 @@ describe('Clay Parser', () => {
       ['count.index', 'var.l[count.index]', 'count.index', { type: 'Reference', value: steps('count', 'index'), position: at(1, 30) }],
       ['a call', 'var.l[length(var.x)]', 'length(...)', { type: 'Call', name: 'length', path: [], position: at(1, 30) }],
       ['an index in an index', 'var.l[var.m[var.i]]', 'var.m[var.i]', { type: 'Reference', position: at(1, 30) }],
+      ['an operator', 'var.l[count.index + 1]', '...', { type: 'Binary', operator: '+', position: at(1, 30) }],
+      ['an operator after a number', 'var.l[1 + var.i]', '...', { type: 'Binary', operator: '+', position: at(1, 30) }],
+      ['a conditional', 'var.l[var.on ? 0 : 1]', '...', { type: 'Conditional', position: at(1, 30) }],
+      ['a string with an interpolation', 'var.l["${var.k}"]', '...', { type: 'Template', position: at(1, 30) }],
+      ['a list', 'var.l[[0]]', '...', { type: 'List', position: at(1, 30) }],
     ])('reads %s in brackets as a step read where the reference is', (_, written, spelled, index) => {
       expect(valueOf(written)).toMatchObject({ type: 'Reference', value: [{ name: 'var' }, { name: 'l' }, { spelled, index }] });
     });
@@ -701,15 +707,13 @@ describe('Clay Parser', () => {
     });
 
     it.each([
-      ['a negative index', 'var.l[-1]', 'An index is a whole number from 0 to 9007199254740991, written in digits', at(1, 30)],
-      ['a decimal index', 'var.l[1.5]', 'An index is a whole number from 0 to 9007199254740991, written in digits', at(1, 30)],
-      ['an index with an exponent', 'var.l[1e2]', 'An index is a whole number from 0 to 9007199254740991, written in digits', at(1, 30)],
-      ['an index past what a list can hold', 'var.l[9007199254740992]', 'An index is a whole number from 0 to 9007199254740991, written in digits', at(1, 30)],
-      ['an empty index', 'var.l[]', "Expect a number, a string or a reference inside '['", at(1, 30)],
-      ['a list as an index', 'var.l[[0]]', "Expect a number, a string or a reference inside '['", at(1, 30)],
+      ['a negative index', 'var.l[-1]', 'An index is a whole number from 0 to 9007199254740991', at(1, 30)],
+      ['a decimal index', 'var.l[1.5]', 'An index is a whole number from 0 to 9007199254740991', at(1, 30)],
+      ['an index past what a list can hold', 'var.l[9007199254740992]', 'An index is a whole number from 0 to 9007199254740991', at(1, 30)],
+      ['an empty index', 'var.l[]', "Expect a value inside '['", at(1, 30)],
       ['a reference as an index never closed', 'var.l[var.i ', "Expect ']' after the index", at(1, 37)],
       ['an index never closed', 'var.l[0 ', "Expect ']' after the index", at(1, 33)],
-      ['a key with an interpolation', 'var.m["${var.k}"]', 'A map key is plain text; it cannot hold an interpolation', at(1, 30)],
+      ['more than one value', 'var.l[0 1]', "Expect ']' after the index", at(1, 32)],
     ])('refuses %s where it is written', (_, written, message, position) => {
       const error = errorOf(`resource "t" "n" { v = ${written} }`);
 

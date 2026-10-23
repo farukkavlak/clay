@@ -1,6 +1,6 @@
 import { ExactNumber, Type } from '@clay/contracts';
 import { Position } from './Position';
-import { IndexNode, spellReference, spellSteps, Step } from './reference';
+import { spellReference, spellSteps, Step } from './reference';
 
 /** The config file name, for the root and every module. */
 export const CONFIG_FILE = 'main.clay';
@@ -162,7 +162,7 @@ export function spell(statement: Statement): string {
 }
 
 /** What a reference or a call reads in the brackets of its steps. */
-function indexesIn(steps: Step[]): IndexNode[] {
+function indexesIn(steps: Step[]): AttributeValue[] {
   return steps.flatMap((step) => ('index' in step ? [step.index] : []));
 }
 
@@ -200,4 +200,13 @@ export function callsIn(value: AttributeValue): CallNode[] {
 /** For messages: `var.names[0]`, `length(...)`. */
 export function spellNamed(node: ReferenceNode | CallNode | BoundNode): string {
   return node.type === 'Call' ? `${node.name}(...)${spellSteps(node.path)}` : spellReference(node.value);
+}
+
+export function isNamed(value: AttributeValue): value is ReferenceNode | CallNode | BoundNode {
+  return value.type === 'Reference' || value.type === 'Call' || value.type === 'Bound';
+}
+
+/** For messages: an index with no name is `...`, and the error points where it is written. */
+export function spellIndex(value: AttributeValue): string {
+  return isNamed(value) ? spellNamed(value) : '...';
 }

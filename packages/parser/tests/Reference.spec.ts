@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ExactNumber } from '@clay/contracts';
 
 import { CONFIG_FILE } from '../src/ast';
 import { ConfigError } from '../src/ConfigError';
@@ -87,6 +88,10 @@ describe('a reference read into a value', () => {
     [steps('data', { key: 'module.m.local_file' }, 'd', 'content'), 'Reference "data["module.m.local_file"].d.content" has "module.m.local_file" where it needs a name'],
     [steps('local_file', { key: 'x.y' }, 'id'), 'Reference "local_file["x.y"].id" has "x.y" where it needs a name'],
     [steps('var', 0), 'Reference "var[0]" has an index where it needs a name'],
+    [
+      steps('var', { index: { type: 'Number', value: ExactNumber.parse('1'), position: { file: CONFIG_FILE, line: 1, column: 1 } }, spelled: '...' }),
+      'Reference "var[...]" has an index where it needs a name',
+    ],
     [steps('data', 'local_file', 0, 'content'), 'Reference "data.local_file[0].content" has an index where it needs a name'],
     [steps('count'), 'Reference "count" names nothing: count.index is the index of an instance'],
     [steps('count', 'id'), 'Reference "count.id" names nothing: count.index is the index of an instance'],
@@ -127,8 +132,8 @@ describe('a step read from a value', () => {
     expect(spellReference([...steps('var', 'l'), step])).toBe('var.l[var.i]');
   });
 
-  it('has a key no name or number can be, so a reference naming it where a name goes is refused', () => {
+  it('has a key no name or number can be, and is refused as an index where a name goes', () => {
     expect(stepKey(step)).toBe('[var.i]');
-    expect(errorOf([...steps('var'), step]).message).toContain('has "[var.i]" where it needs a name');
+    expect(errorOf([...steps('var'), step]).message).toBe('Reference "var[var.i]" has an index where it needs a name');
   });
 });

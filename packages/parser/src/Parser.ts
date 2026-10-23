@@ -16,6 +16,7 @@ import {
   ReferenceNode,
   ResourceBlock,
   spell,
+  spellIndex,
   spellNamed,
   Statement,
   TemplatePart,
@@ -251,7 +252,7 @@ export class Parser {
 
     const path: (string | number)[] = [first.value];
     for (const step of this.parseSteps()) {
-      if ('index' in step) throw new ConfigError('ignore_changes names keys and indexes written out, not a reference or a call', first.position);
+      if ('index' in step) throw new ConfigError('ignore_changes names keys and indexes written out, not a value to read', first.position);
       path.push(stepKey(step));
     }
 
@@ -752,34 +753,25 @@ export class Parser {
     return steps;
   }
 
+  /** A number or a string written alone is a key; any other value is read where the step is: `var.names[count.index + 1]`. */
   private parseBracket(): Step {
-    let key: string | number;
+    const opening = this.previous().position;
+    if (this.check(TokenType.RBracket)) return this.error("Expect a value inside '['.");
 
-    if (this.matchToken(TokenType.OQuote)) key = this.stringKey(this.previous()).value;
-    else if (this.check(TokenType.Number) || this.check(TokenType.Minus)) key = this.index(this.advance());
-    else return this.nested(this.previous().position, () => this.indexFromValue());
-
-    this.consume(TokenType.RBracket, "Expect ']' after the index.");
-    return { key };
-  }
-
-  /** A reference or a call, read where the step is: `var.names[count.index]`. */
-  private indexFromValue(): Step {
-    if (!this.check(TokenType.Identifier)) return this.error("Expect a number, a string or a reference inside '['.");
-
-    const index = this.parseNamed(this.peek().position);
+    const index = this.nested(opening, () => this.parseValue());
     this.consume(TokenType.RBracket, "Expect ']' after the index.");
 
-    return { index, spelled: spellNamed(index) };
+    if (index.type === 'String') return { key: index.value };
+    if (index.type === 'Number') return { key: this.index(index.value, index.position) };
+
+    return { index, spelled: spellIndex(index) };
   }
 
-  /** Digits only, and must fit a safe integer. */
-  private index(token: Token): number {
-    const index = Number(token.value);
-    if (!/^\d+$/.test(token.value) || !Number.isSafeInteger(index))
-      throw new ConfigError(`An index is a whole number from 0 to ${Number.MAX_SAFE_INTEGER}, written in digits`, token.position);
+  private index(number: ExactNumber, position: Position): number {
+    const written = number.toString();
+    if (!/^\d+$/.test(written) || !Number.isSafeInteger(Number(written))) throw new ConfigError(`An index is a whole number from 0 to ${Number.MAX_SAFE_INTEGER}`, position);
 
-    return index;
+    return Number(written);
   }
 
   private matchToken(...types: TokenType[]): boolean {
