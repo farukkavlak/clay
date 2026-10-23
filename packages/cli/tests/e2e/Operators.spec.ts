@@ -210,28 +210,16 @@ output "right" { value = random_string.r.result == "x" && false }
     const secret = 'variable "secret" {\n  default = "s"\n  sensitive = true\n}\n';
 
     it.each([
-      [
-        'the result a sensitive condition picks',
-        'var.secret == "s" ? local_file.f[0].path : "n"',
-        'local_file.f[0]',
-        'A sensitive condition picked this result, so why it failed is not shown',
-      ],
-      [
-        'the right side of && read for a sensitive left side',
-        'var.secret == "s" && local_file.f[0].path == "x"',
-        'local_file.f[0]',
-        'The right side of && was read for a sensitive left side, so why it failed is not shown',
-      ],
-    ])('hides why %s failed, since it would tell the secret', async (_, value, needle, message) => {
+      ['the result a sensitive condition picks', 'var.secret == "s" ? local_file.f[0].path : "n"'],
+      ['the right side of && read for a sensitive left side', 'var.secret == "s" && local_file.f[0].path == "x"'],
+      ['the right side of || read for a sensitive left side', 'var.secret != "s" || local_file.f[0].path == "x"'],
+    ])('tells why %s failed, like any other read', async (_, value) => {
       const config = `${secret}${file('"x"', '\n  count = 0')}output "o" {\n  value = ${value}\n  sensitive = true\n}\n`;
 
-      await expect(newOrchestrator().plan(config)).rejects.toMatchObject({ message, position: placeOf(config, needle) });
-    });
-
-    it('tells why the right side of && failed when the sensitive left side is not known yet', async () => {
-      const config = 'resource "random_string" "r" { length = 8 }\noutput "o" { value = sensitive(random_string.r.result == "x") && "yes" }';
-
-      await expect(newOrchestrator().validate(config)).rejects.toMatchObject({ message: '&& takes a boolean, not a string', position: placeOf(config, '"yes"') });
+      await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
+        message: 'local_file.f has no instances: its count is 0',
+        position: placeOf(config, 'local_file.f[0]'),
+      });
     });
 
     it.each([

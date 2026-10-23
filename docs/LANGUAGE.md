@@ -114,10 +114,9 @@ sides are read.
 
 The result is sensitive when what decided it is: the condition or the result it picks, or
 any sensitive part of what `==` compares. Against `null`, only a value sensitive as a
-whole makes it so, since the answer tells only whether the value is there. When a
-sensitive condition picks a result, or a sensitive left side of `&&` or `||` leaves the
-right side to be read, and that read fails, the error does not say why, since that would
-tell the secret.
+whole makes it so, since the answer tells only whether the value is there. A sensitive
+condition, or a sensitive left side of `&&` or `||`, can still be learned from whether
+the run fails: an error in the side it picks is shown like any other.
 
 ## For
 

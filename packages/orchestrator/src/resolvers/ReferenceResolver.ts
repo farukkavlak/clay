@@ -502,13 +502,7 @@ export class ReferenceResolver {
       return decided(left);
     }
 
-    // A left side not known yet does not decide whether the right is read.
-    const right = hidingIf(
-      isSensitive(left) && !isUnknown(left.data),
-      `The right side of ${operator} was read for a sensitive left side, so why it failed is not shown`,
-      node.right.position,
-      () => this.boolean(node.right, operator, state, context, reading)
-    );
+    const right = this.boolean(node.right, operator, state, context, reading);
     if (right.data === deciding) return decided(right);
 
     const data = isUnknown(left.data) || isUnknown(right.data) ? UNKNOWN : !deciding;
@@ -529,9 +523,7 @@ export class ReferenceResolver {
 
     const written = resultType(node, [this.byType(node.whenTrue, context, reading), this.byType(node.whenFalse, context, reading)]);
     const taken = condition.data === true ? node.whenTrue : node.whenFalse;
-    const picked = hidingIf(isSensitive(condition), 'A sensitive condition picked this result, so why it failed is not shown', taken.position, () =>
-      fitted(taken, this.resolveItem(taken, state, context, reading), written)
-    );
+    const picked = fitted(taken, this.resolveItem(taken, state, context, reading), written);
 
     return allSensitiveIf(isSensitive(condition), picked);
   }
