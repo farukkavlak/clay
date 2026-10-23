@@ -148,6 +148,37 @@ export class ExactNumber {
     return (this.negative ? '-' : '') + this.unsigned();
   }
 
+  /** `places` digits after the point, rounded half to even; a negative number that rounds to zero keeps its sign, as JavaScript does. */
+  toFixed(places: number): string {
+    const [whole, fraction = ''] = this.roundedAt(-places).unsigned().split('.');
+
+    return (this.negative ? '-' : '') + (places === 0 ? whole : `${whole}.${fraction.padEnd(places, '0')}`);
+  }
+
+  /** One digit before the point and `places` after, rounded half to even, in JavaScript's form: `1.50e+3`. */
+  toExponential(places: number): string {
+    const kept = this.roundedAt(this.magnitude() - places);
+    const digits = kept.digits.padEnd(places + 1, '0');
+    const exponent = kept.magnitude();
+
+    return `${this.negative ? '-' : ''}${digits[0]}${places === 0 ? '' : `.${digits.slice(1)}`}e${exponent < 0 ? '-' : '+'}${Math.abs(exponent)}`;
+  }
+
+  /** The power of ten of the first digit: 2 for 100, -1 for 0.5, and 0 for zero. */
+  private magnitude(): number {
+    return this.digits.length + this.exponent - 1;
+  }
+
+  /** Not checked against the reach, since only its text is written: 9.9e999 may round to 1e1000. */
+  private roundedAt(exponent: number): ExactNumber {
+    if (this.exponent >= exponent) return this;
+
+    const digits = BigInt(this.digits);
+    const scale = 10n ** BigInt(exponent - this.exponent);
+
+    return ExactNumber.normalized(this.negative, rounded(digits / scale, digits % scale, scale).toString(), exponent);
+  }
+
   private unsigned(): string {
     if (this.exponent >= 0) return this.digits + '0'.repeat(this.exponent);
 

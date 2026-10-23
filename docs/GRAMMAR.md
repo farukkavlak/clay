@@ -373,21 +373,35 @@ whole, since the keys it covers show its own.
 `format` writes the arguments in order, one for each verb in the string. `%[2]s` writes
 the second, and the verb after it the third. `%%` writes `%`.
 
-| Verb  | Writes                                                                                |
-| ----- | ------------------------------------------------------------------------------------- |
-| `%s`  | A string, a number or a boolean as its text                                           |
-| `%q`  | That text as a JSON string, in quotes                                                 |
-| `%v`  | A string, a number or a boolean as `%s` does, `null` as `null`, anything else as JSON |
-| `%#v` | Any value as JSON                                                                     |
-| `%t`  | `true` or `false`, from a boolean or a string that spells one                         |
-| `%d`  | A whole number, from a number or a string that spells one                             |
+| Verb  | Writes                                                                                       |
+| ----- | -------------------------------------------------------------------------------------------- |
+| `%s`  | A string, a number or a boolean as its text                                                  |
+| `%q`  | That text as a JSON string, in quotes                                                        |
+| `%v`  | A string, a number or a boolean as `%s` does, `null` as `null`, anything else as JSON        |
+| `%#v` | Any value as JSON                                                                            |
+| `%t`  | `true` or `false`, from a boolean or a string that spells one                                |
+| `%d`  | A whole number, from a number or a string that spells one                                    |
+| `%b`  | A whole number in base 2; `%o` in base 8, `%x` and `%X` in base 16                           |
+| `%f`  | A number with 6 places after the point, or as many as the precision gives                    |
+| `%e`  | A number with one digit before the point and an exponent: `1.234568e+03`; `%E` writes `E`    |
+| `%g`  | A number as `%e` where it is very large or small, as plain digits otherwise; `%G` writes `E` |
 
 A width pads to that many characters: `%5s` on the left, `%-5s` on the right, `%05d` with
 zeros after the sign. `%+d` and `% d` put a sign or a space before a positive number. A
 precision keeps at most that many characters of a string, `%.3s`, and writes at least that
-many digits, `%.3d`. A width or a precision is at most 1000. JSON writes the keys of a map
-or an object in order. The number verbs `%f`, `%e`, `%g`, `%b`, `%o` and `%x` are not in
-Clay yet.
+many digits, `%.3d`. `%#x` writes `0x` before the digits, `%#X` writes `0X`, `%#b` writes
+`0b` and `%#o` writes `0`. A width or a precision is at most 1000. JSON writes the keys of
+a map or an object in order.
+
+`%g` writes every digit, or as many significant digits as the precision gives, with no
+zeros at the end. It writes an exponent where it is below -4 or at least the number of
+digits kept, or at least 6 where no precision is given: `1e-05`, `1.234567e+06`.
+
+`%f`, `%e` and `%g` round a number half to even, as `/` does: `%.1f` writes `0.25` as `0.2`
+and `0.35` as `0.4`. Terraform rounds the nearest binary fraction instead, so it writes
+`0.35` as `0.3` and `0.15` as `0.2`. `%f` writes `1e999` exactly, where Terraform writes
+digits after the first 155 that the number does not have. `-` pads on the right even
+beside `0`, so `%-08.2f` writes `1.00    `, where Terraform writes `00001.00`.
 
 A verb Clay does not have is refused, and so is a flag or a precision the verb does not
 use, which Terraform ignores. A verb with no argument and an argument no verb writes are

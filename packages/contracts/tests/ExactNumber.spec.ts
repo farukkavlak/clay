@@ -178,6 +178,37 @@ describe('ExactNumber', () => {
     });
   });
 
+  describe('as text with a set number of digits', () => {
+    it.each([
+      ['3.14159', 2, '3.14'],
+      ['1.5', 3, '1.500'],
+      ['7.5', 0, '8'],
+      ['0.25', 1, '0.2'],
+      ['0.35', 1, '0.4'],
+      ['-2.5', 0, '-2'],
+      ['-0.04', 1, '-0.0'],
+      ['0', 2, '0.00'],
+      ['123456789012345678901234567890.5', 0, '123456789012345678901234567890'],
+    ])('writes %s with %i places as %s, rounded half to even', (text, places, fixed) => {
+      expect(number(text).toFixed(places)).toBe(fixed);
+    });
+
+    it.each([
+      ['1234.5678', 2, '1.23e+3'],
+      ['0.000125', 1, '1.2e-4'],
+      ['-7', 0, '-7e+0'],
+      ['9.96', 1, '1.0e+1'],
+      ['0', 2, '0.00e+0'],
+      ['5', 3, '5.000e+0'],
+    ])('writes %s with %i places in an exponent as %s, rounded half to even', (text, places, exponential) => {
+      expect(number(text).toExponential(places)).toBe(exponential);
+    });
+
+    it('writes a number that rounds up past the reach, since only its text is kept', () => {
+      expect(number(digits(1000)).toExponential(1)).toBe('1.0e+1000');
+    });
+  });
+
   // Callers catch NumberError and rethrow the rest, so every refusal must be one.
   it.each([
     ['a text that is no number', () => ExactNumber.parse('abc')],
