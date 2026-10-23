@@ -516,9 +516,9 @@ and every operator HCL has. A real configuration hits each of these early.
       hold, and the left side for `1 % 0`
 - [x] Any value inside `${...}` and inside `[...]` read from a value, where only a
       reference or a call went
-- [ ] More functions. Clay has `length`, `tolist`, `toset`, `sensitive`, `nonsensitive` and
-      `issensitive`; a Terraform configuration reaches for `join`, `format`, `lookup`,
-      `merge`, `upper` and `lower` early
+- [ ] More functions. Clay has `length`, `tolist`, `toset`, `sensitive`, `nonsensitive`,
+      `issensitive`, `upper`, `lower` and `join`; a Terraform configuration reaches for
+      `format`, `lookup` and `merge` early
 - [ ] `/* ... */` comments, which HCL reads beside `#` and `//`
 - [ ] `description` on a variable and an output, refused today though nearly every
       Terraform file writes it, and `validation` on a variable

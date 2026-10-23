@@ -255,9 +255,10 @@ export class ReferenceResolver {
     return read.data === null ? { ...read, nullFrom: spellNamed(node) } : read;
   }
 
-  /** Looks up the function first, so an unknown name is refused whatever the argument is. */
+  /** Looks up the function first, so an unknown name is refused whatever the arguments are. */
   private resolveCall(node: CallNode, state: State, context: Context | undefined, reading: Reading): Value {
-    const result = typeOnly(functionCalled(node)(this.resolveItem(node.args[0], state, context, reading)), reading);
+    const called = functionCalled(node);
+    const result = typeOnly(called(node.args.map((arg) => this.resolveItem(arg, state, context, reading))), reading);
     const read: Reader = (steps) => readPath(result, spellNamed({ ...node, path: [] }), steps, node.position);
 
     return this.readWith({ node, state, context, reading }, node.path, read);

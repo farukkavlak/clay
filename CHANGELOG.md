@@ -14,7 +14,8 @@ a configuration means or how the state file is written.
 - Types: a variable and an output may name one, objects may mark an attribute optional
   with a default, and every value carries its type through the engine. Sets hold one
   order, so reordering one is no change.
-- Functions `length`, `tolist`, `toset`, `sensitive`, `nonsensitive` and `issensitive`
+- Functions `length`, `tolist`, `toset`, `sensitive`, `nonsensitive`, `issensitive`,
+  `upper`, `lower` and `join`
 - `for` expressions that make a list or an object, with `...` to group by key and `if`
   to keep some items
 - `==`, `!=`, `&&`, `||`, `!` and the conditional `cond ? a : b`. A known condition reads
