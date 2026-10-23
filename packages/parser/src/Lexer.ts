@@ -25,7 +25,8 @@ export class Lexer {
   private modes: Mode[] = [];
   private input: string;
 
-  private skip = /\s+|#[^\n]*|\/\/[^\n]*/y;
+  // A block comment ends at its first `*/`, as HCL's does, so one inside another closes both.
+  private skip = /\s+|#[^\n]*|\/\/[^\n]*|\/\*[\s\S]*?\*\//y;
 
   // `\"` and `$${` stay raw text; the parser decodes them. A line break ends the match, so a quoted string must close on its line.
   private literal = /(?:[^"\\$\n]|\\[^\n]|\$\$\{|\$(?!\{))+/y;
@@ -108,12 +109,14 @@ export class Lexer {
   private codeToken(): Token | undefined {
     const skipped = this.matchHere(this.skip);
     if (skipped !== undefined) {
-      // The comment would swallow the closing `}` and quote, so the error would point at the wrong place.
+      // A line comment would swallow the closing `}` and quote, so the error would point at the wrong place.
       if (this.mode() && !/^\s/.test(skipped)) throw new ConfigError("A comment cannot sit inside '${'", this.here());
 
       this.advance(skipped);
       return undefined;
     }
+
+    if (this.input.startsWith('/*', this.cursor)) throw new ConfigError(this.mode() ? "A comment cannot sit inside '${'" : "This comment is never closed with '*/'", this.here());
 
     if (this.input.startsWith('<<', this.cursor)) return this.openHeredoc();
 

@@ -48,21 +48,22 @@ in a directory; a module is another directory with its own `main.clay`.
 | `DOT`             | `.`                                   |                                                                         |
 | `EOF`             |                                       | Ends every token stream                                                 |
 
-Whitespace and comments are skipped. A comment runs from `#` or
-`//` to the end of the line. Every token carries the file, line and column it starts at. A
-line break written as CRLF is read as LF, so no value changes with how a checkout wrote
-the file's line breaks.
+Whitespace and comments are skipped. A comment runs from `#` or `//` to the end of the
+line, or from `/*` to the first `*/`, over as many lines as it takes: `/* a /* b */` is one
+comment, as in HCL. One that is never closed is refused where it opens. Every token
+carries the file, line and column it starts at. A line break written as CRLF is read as
+LF, so no value changes with how a checkout wrote the file's line breaks.
 
 Inside quotes the lexer reads text until `"` or `${`. A `${` reads tokens as outside
 quotes until its `}`: a quote there opens a string of its own, so `"${var.tags["a.b"]}"`
-reads a key, and a comment there is refused. A string still open at the end of its line
-is refused where it opens; write `\n` for a line break, or use a heredoc. When a `${` is
-open too, the first open `${` is named: a `}` left out opens a string at the quote meant
-to close, and that looks the same as a key not closed on its line, so the message names
-both. Inside a `${` a line break is whitespace, and a `{` opens a map, so the `}` that
-closes the map does not close the `${`. A heredoc is read the same
-way, a line at a time, until its closing line; one still open at the end is refused where
-it opens.
+reads a key, and a comment there is refused, where HCL reads a block comment. A string
+still open at the end of its line is refused where it opens; write `\n` for a line break,
+or use a heredoc. When a `${` is open too, the first open `${` is named: a `}` left out
+opens a string at the quote meant to close, and that looks the same as a key not closed on
+its line, so the message names both. Inside a `${` a line break is whitespace, and a `{`
+opens a map, so the `}` that closes the map does not close the `${`. A heredoc is read the
+same way, a line at a time, until its closing line; one still open at the end is refused
+where it opens.
 
 There are no keywords. `resource`, `data`, `variable`, `locals`, `output` and `module`
 start a block only at the top level; anywhere else they are ordinary identifiers, so

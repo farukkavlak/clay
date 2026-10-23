@@ -336,12 +336,38 @@ describe('Clay Parser', () => {
   it.each([
     ['a line comment', '# first\nresource "null_resource" "a" { v = "x" }', at(2, 36)],
     ['a comment ending the line before', 'resource "null_resource" "a" { // here\n v = "x" }', at(2, 6)],
+    ['a comment over several lines', '/* first\nsecond */ resource "null_resource" "a" { v = "x" }', at(2, 46)],
+    ['a comment inside a line', 'resource "null_resource" "a" { /* c */ v = "x" }', at(1, 44)],
   ])('keeps the position right after %s', (_, input, position) => {
     expect(attributesOf(input).v).toMatchObject({ value: 'x', position });
   });
 
   it('keeps a comment marker inside a string as part of the string', () => {
-    expect(attributesOf('resource "null_resource" "a" { v = "a # b // c" }').v).toMatchObject({ value: 'a # b // c' });
+    expect(attributesOf('resource "null_resource" "a" { v = "a # b // c /* d */" }').v).toMatchObject({ value: 'a # b // c /* d */' });
+  });
+
+  it('skips a block inside a comment, with the comments inside it', () => {
+    const input = 'resource "null_resource" "a" { v = "x" }\n/*\nresource "null_resource" "b" {\n  v = "y" # old\n}\n*/\n';
+
+    expect(
+      makeParser(input)
+        .parse()
+        .map((block) => (block as ResourceBlock).name)
+    ).toEqual(['a']);
+  });
+
+  it('ends a comment at its first */, as HCL does', () => {
+    const error = errorOf('/* a /* b */ c */\nresource "null_resource" "a" {}');
+
+    expect(error.message).toBe('Unexpected token: c');
+    expect(error.position).toEqual(at(1, 14));
+  });
+
+  it('refuses a comment that is never closed where it opens', () => {
+    const error = errorOf('resource "null_resource" "a" {}\n  /* old\nresource "null_resource" "b" {}');
+
+    expect(error.message).toBe("This comment is never closed with '*/'");
+    expect(error.position).toEqual(at(2, 3));
   });
 
   it('puts the end of the file after a trailing comment, as after any other token', () => {
@@ -523,6 +549,8 @@ describe('Clay Parser', () => {
       ['one holding a character the lexer knows nothing about', '"${a@b}"', 'Unexpected character: "@"', at(1, 28)],
       ['one holding a comment', '"${var.x # note}"', "A comment cannot sit inside '${'", at(1, 33)],
       ['one holding a comment of the other kind', '"${var.x // note}"', "A comment cannot sit inside '${'", at(1, 33)],
+      ['one holding a comment that closes', '"${var.x /* note */}"', "A comment cannot sit inside '${'", at(1, 33)],
+      ['one holding a comment that never closes', '"${var.x /* note}"', "A comment cannot sit inside '${'", at(1, 33)],
     ])('refuses %s where it is written', (_, written, message, position) => {
       const error = errorOf(`resource "t" "n" { v = ${written} }`);
 

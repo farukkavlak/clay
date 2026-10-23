@@ -518,7 +518,7 @@ and every operator HCL has. A real configuration hits each of these early.
       reference or a call went
 - [x] More functions: `upper`, `lower`, `join`, `lookup`, `merge` and `format`, beside
       `length`, `tolist`, `toset`, `sensitive`, `nonsensitive` and `issensitive`
-- [ ] `/* ... */` comments, which HCL reads beside `#` and `//`
+- [x] `/* ... */` comments, which HCL reads beside `#` and `//`
 - [ ] `description` on a variable and an output, refused today though nearly every
       Terraform file writes it, and `validation` on a variable
 - [ ] `depends_on`, for an order no reference shows. Written today, it is refused as an
