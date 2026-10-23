@@ -102,7 +102,13 @@ A value they refuse is refused where it is given, at the default or at the modul
 with the first failing rule's message: `variable "port": port is 70000; it must be 1 to
 65535`. A rule that reads a part of the value not known until the apply is checked at
 the apply. A message that holds a sensitive value is not shown, but the value is still
-refused. A rule reads only its variable and functions.
+refused.
+
+A rule may read anything else in the module that declares the variable: other variables,
+locals, resources and data sources. For a module input, that is the module, not the call.
+The variable then waits for what its rules read, and a rule that reads what reads the
+variable is refused as a cycle. A rule that reads a resource not created yet is checked at
+the apply, after the resource is.
 
 ## Functions
 

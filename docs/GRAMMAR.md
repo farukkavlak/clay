@@ -102,10 +102,9 @@ as a number, a reference or a `${...}`, is refused where it is written; Terrafor
 number into text.
 
 A `variable` may hold any number of `validation { condition = value error_message = value }`
-blocks, each with both attributes and nothing else. Both read only the variable itself and
-functions, and the condition has to read the variable, or it would check nothing.
-Terraform lets a rule read other variables, locals and resources too. Any other block in a
-`variable` or an `output` is refused where it is written.
+blocks, each with both attributes and nothing else. The condition has to read the
+variable, or it would check nothing. Any other block in a `variable` or an `output` is
+refused where it is written.
 
 `locals` takes no name of its own. Each attribute is a local of the module, read as
 `local.name`. A file may hold several `locals` blocks, and they are read as one: a name

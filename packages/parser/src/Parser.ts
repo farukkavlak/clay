@@ -28,7 +28,7 @@ import { ConfigError } from './ConfigError';
 import { readEscapes } from './escapes';
 import { flushed } from './heredoc';
 import { Position } from './Position';
-import { parseReference, Step, stepKey } from './reference';
+import { ParsedReference, parseReference, Step, stepKey } from './reference';
 import { Token, TokenType } from './tokens';
 
 /** Loosest first; within a level, operators group from the left. */
@@ -92,6 +92,8 @@ function defaultsFrom(found: { values?: Record<string, AttributeValue>; within?:
   const defaults = Object.fromEntries(Object.entries(found).filter(([, record]) => Object.keys(record).length > 0));
   return Object.keys(defaults).length > 0 ? { defaults } : {};
 }
+
+const readsVariable = (reference: ParsedReference, name: string) => reference.kind === 'variable' && reference.name === name;
 
 export class Parser {
   private tokens: Token[];
@@ -375,23 +377,10 @@ export class Parser {
 
     const { condition, error_message: errorMessage } = read;
     if (condition === undefined || errorMessage === undefined) throw new ConfigError(`validation needs ${condition ? 'an error_message' : 'a condition'}`, position);
-    this.checkRuleReads(variable, condition);
-    this.checkRuleReads(variable, errorMessage);
-    if (!namedIn(condition).some((named) => named.type === 'Reference'))
+    if (!namedIn(condition).some((named) => named.type === 'Reference' && readsVariable(parseReference(named.value, named.position), variable)))
       throw new ConfigError(`A validation's condition reads var.${variable}, or it checks nothing`, condition.position);
 
     return { condition, errorMessage, position };
-  }
-
-  /** A rule is read with the variable's own value, before anything else in the module has one. */
-  private checkRuleReads(variable: string, value: AttributeValue): void {
-    for (const named of namedIn(value)) {
-      if (named.type === 'Call') continue;
-
-      const reference = parseReference(named.value, named.position);
-      if (reference.kind !== 'variable' || reference.name !== variable)
-        throw new ConfigError(`A validation reads only var.${variable} and functions, not ${spellNamed(named)}`, named.position);
-    }
   }
 
   /** Read by people only, so it is checked and dropped. */
