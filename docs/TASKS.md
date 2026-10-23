@@ -331,11 +331,10 @@ change each.
       address escapes them as `\u007f`, so `output --json` reads back as the same value;
       an address with one raw is refused, a path shows it as a character of its own, and a
       plan file's timestamp must be one Clay writes
-- [ ] A choice not known at plan marks what it gives where only one side is sensitive, so
+- [x] A choice not known at plan marks what it gives where only one side is sensitive, so
       `issensitive` answers `true` at plan and `false` at apply, and the apply fails. A
-      condition, `&&`, `||`, `lookup`, `merge` and an index keep only the marks they have
-      whichever way the apply goes; a `for` whose `if`, key or collection is not known yet
-      still marks from one side, or more than every item has
+      condition, `&&`, `||`, `lookup`, `merge`, an index and a `for` not known at plan now
+      keep only the marks they have whichever way the apply goes
 - [ ] In a module called with `count = 0`, `count = sensitive(var.n)` and
       `for_each = sensitive({ a = var.x })` pass the plan; with `count = 1` both are refused
       as sensitive. Read as written, a value with a part not known loses its marks, which
@@ -343,6 +342,13 @@ change each.
 - [ ] A provider's `validate` runs only for an instance, so in a module called with
       `count = 0`, `local_file` with `path = ""` passes the plan; with `count = 1` it is
       refused: `local_file "path" must not be empty`
+- [ ] Two items a `for` keeps for certain under an `if` not known yet that give the same
+      key pass the plan; the apply then refuses `Two items give the key`:
+      `{ for x in ["a", "b", "c"] : (x == "c" ? "z" : "k") => x if x != "c" || cond }`
+- [ ] A value not known yet that is sensitive somewhere in every outcome, but at a place
+      the plan does not know, carries no mark, so an output that holds all of it passes the
+      plan and is refused at apply. Here `a` or `b` is sensitive, never neither:
+      `cond ? { a = sensitive("x"), b = "y" } : { a = "x", b = sensitive("y") }`
 
 ## 1. Language
 

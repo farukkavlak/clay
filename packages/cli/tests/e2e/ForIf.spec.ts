@@ -133,8 +133,10 @@ resource "local_file" "f" {
       expect(plan.outputs.o.new).toEqual({ value: UNKNOWN, type: types.number });
     });
 
-    it('makes what it gives sensitive as a whole with a sensitive key under an if not known yet', async () => {
-      await expect(newOrchestrator().plan(`${secret}${RANDOM}output "o" { value = length({ for x in ["a"] : var.secret => 1 if ${LATER} }) }\n`)).rejects.toThrow(REFUSED);
+    it('makes what it gives sensitive as a whole with a sensitive key of an item it keeps for certain, under an if not known yet for another', async () => {
+      const value = `{ for x in ["a", "b"] : (x == "a" ? var.secret : x) => 1 if x == "a" || ${LATER} }`;
+
+      await expect(newOrchestrator().plan(`${secret}${RANDOM}output "o" { value = length(${value}) }\n`)).rejects.toThrow(REFUSED);
     });
 
     it.each([

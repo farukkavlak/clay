@@ -43,7 +43,7 @@ import {
 } from '@clay/parser';
 
 import { converted } from '../conformValues';
-import { checkCollection, checkKey, forItems, ForItem, forObject, unknownItem } from '../forItems';
+import { checkCollection, checkKey, forItems, ForItem, forObject, laterObjectMarks, laterTupleMarks, markedItem, markedSteps, under, unknownItem } from '../forItems';
 import { Instances } from '../Instances';
 import { functionCalled } from '../functions';
 import { Context, DataInstance, instanceKeyOf, ModuleCall, moduleOf, scopeOf } from '../keys';
@@ -54,10 +54,11 @@ import { Planned } from '../Planned';
 import { ScopeManager } from '../scope/ScopeManager';
 import { unified, Unjoinable, unjoined } from '../unify';
 import {
-  allSensitive,
   allSensitiveIf,
   article,
   described,
+  everyItemMarks,
+  fewest,
   hasText,
   isAllSensitive,
   isSensitive,
@@ -148,14 +149,21 @@ const FOR_IF = 'The if of a for';
 /** The items an if may keep; `later` where its value for one is not known yet. */
 interface Picked {
   items: Reading[];
+  /** For each item, whether the if keeps it whatever the apply finds. */
+  kept: boolean[];
   sensitive: boolean;
   later: boolean;
 }
 
-interface ReadOnce {
+interface ReadItem {
   key?: Value;
-  body?: Value;
+  body: Value;
   condition?: Value;
+}
+
+/** Read with an item that stands for every one, and again with each item the collection marks at a known step. */
+interface ReadOnce extends Partial<ReadItem> {
+  marked: (ReadItem & { step: string | number })[];
 }
 
 /** The node being read, and what its indexes are read with. */
@@ -198,6 +206,19 @@ function atSensitiveIndex(node: Named): string {
 /** The marks under `keys`. */
 function marksAlong(paths: AttributePath[], keys: (string | number)[]): AttributePath[] {
   return keys.reduce((marks, key) => sensitiveUnder(marks, key), paths);
+}
+
+/**
+ * Each item has what the body has for every item; one the collection marks at a known step is there for certain, so it keeps its marks at its key,
+ * or, with no if, at its place.
+ */
+function laterForMarks(node: ForNode, every: ReadItem, marked: (ReadItem & { step: string | number })[]): AttributePath[] {
+  const kept = marked.map((item) => item.condition === undefined || item.condition.data === true);
+  const entry = (item: ReadItem): ForItem => [item.key ?? valueOf(types.dynamic, UNKNOWN), item.body];
+  if (node.key) return laterObjectMarks([entry(every), ...marked.map((item) => entry(item))], [false, ...kept], node.grouped === true);
+
+  const places = node.condition ? [] : marked.flatMap((item) => (typeof item.step === 'number' ? under(item.step, item.body.sensitive ?? []) : []));
+  return fewest([...everyItemMarks([every.body, ...marked.map((item) => item.body)]), ...places]);
 }
 
 /** Neither side decides `&&` or `||` yet. One not known may still decide alone, so a mark on the other is the answer's only where both have it. */
@@ -379,7 +400,7 @@ export class ReferenceResolver {
     const names = forItems(collection, node.collection.position).map((item) => withNames(reading, node, item));
     const picked = this.picked(node, names, state, context);
     const sensitive = isAllSensitive(collection) || picked.sensitive;
-    if (picked.later) throw this.laterPicked(node, picked.items, sensitive, state, context);
+    if (picked.later) throw this.laterPicked(node, picked, sensitive, state, context);
 
     const made = node.key
       ? this.resolveForObject(node, node.key, picked.items, sensitive, state, context)
@@ -391,13 +412,15 @@ export class ReferenceResolver {
   /** The items the if may keep. One it leaves out is read by type only, so `x.name if x != null` reads `.name` only where there is an x. */
   private picked(node: ForNode, names: Reading[], state: State, context: Context | undefined): Picked {
     const { condition } = node;
-    if (!condition) return { items: names, sensitive: false, later: false };
+    if (!condition) return { items: names, kept: names.map(() => true), sensitive: false, later: false };
 
     const ifs = names.map((itemNames) => this.boolean(condition, FOR_IF, state, context, itemNames));
     for (const [index, itemNames] of names.entries()) if (ifs[index].data === false) this.readItemByType(node, itemNames, context);
 
+    const maybe = ifs.filter((value) => value.data !== false);
     return {
       items: names.filter((_, index) => ifs[index].data !== false),
+      kept: maybe.map((value) => value.data === true),
       sensitive: ifs.some((value) => isSensitive(value)),
       later: ifs.some((value) => isUnknown(value.data)),
     };
@@ -410,17 +433,24 @@ export class ReferenceResolver {
 
   /**
    * Which items an if keeps, and so which keys clash, waits for the apply. Every item it may keep is read now, so a mistake in any is found.
-   * As for a collection not known yet, a sensitive key makes it sensitive as a whole, and a sensitive body each item.
+   * Only marks every outcome has are kept: a sensitive key of an item kept for certain makes it sensitive as a whole.
    */
-  private laterPicked(node: ForNode, items: Reading[], sensitive: boolean, state: State, context: Context | undefined): UnresolvedReferenceError {
+  private laterPicked(node: ForNode, { items, kept }: Picked, sensitive: boolean, state: State, context: Context | undefined): UnresolvedReferenceError {
     const { key } = node;
     const keys = key ? items.map((itemNames) => this.checkedKey(key, state, context, itemNames)) : [];
     const bodies = items.map((itemNames) => this.resolveItem(node.body, state, context, itemNames));
 
     const message = 'The if of a for is known only after apply for an item, so what the for gives is not known yet';
-    if (sensitive || keys.some((found) => isSensitive(found))) return new UnresolvedReferenceError(message, types.dynamic, wholeIf(true));
+    if (sensitive || keys.some((found, index) => kept[index] && isSensitive(found))) return new UnresolvedReferenceError(message, types.dynamic, wholeIf(true));
 
-    return new UnresolvedReferenceError(message, types.dynamic, bodies.some((body) => isSensitive(body)) ? [[EVERY_ITEM]] : []);
+    const marks = key
+      ? laterObjectMarks(
+          keys.map((found, index): ForItem => [found, bodies[index]]),
+          kept,
+          node.grouped === true
+        )
+      : laterTupleMarks(bodies, kept);
+    return new UnresolvedReferenceError(message, types.dynamic, marks);
   }
 
   private checkedKey(key: AttributeValue, state: State, context: Context | undefined, itemNames: Reading): Value {
@@ -462,25 +492,36 @@ export class ReferenceResolver {
   }
 
   /**
-   * Its size and keys are the collection's, the key's and the if's, so it is sensitive as a whole where any is. Where only the body is, each item
-   * is, and the body sees an item as sensitive as the collection's. It has no type: a for makes a tuple or an object whatever it iterates.
+   * Its size and keys are the collection's, the key's and the if's, so it is sensitive as a whole where any is, or where an item it keeps for certain
+   * has a sensitive key. It has no type: a for makes a tuple or an object whatever it iterates.
    */
   private laterFor(node: ForNode, collection: Value, message: string, state: State, context: Context | undefined, reading: Reading): UnresolvedReferenceError {
-    const { key, body, condition } = this.readOnce(node, collection, state, context, reading);
-    const whole = [key, condition].some((part) => part !== undefined && isSensitive(part)) || isAllSensitive(collection);
-    const items = body === undefined ? isSensitive(collection) : isSensitive(body);
-
+    const { key, body, condition, marked } = this.readOnce(node, collection, state, context, reading);
+    const kept = marked.filter((item) => item.condition === undefined || item.condition.data === true);
+    // A marked item is there whatever the apply finds, so its sensitive if, or the key of one it keeps, decides the size or the keys.
+    const decided = marked.some((item) => item.condition !== undefined && isSensitive(item.condition)) || kept.some((item) => item.key !== undefined && isSensitive(item.key));
+    const whole = [key, condition].some((part) => part !== undefined && isSensitive(part)) || isAllSensitive(collection) || decided;
     if (whole) return new UnresolvedReferenceError(message, types.dynamic, wholeIf(true));
 
-    return new UnresolvedReferenceError(message, types.dynamic, items ? [[EVERY_ITEM]] : []);
+    // Read without a body outside the plan, where no mark is shown, so each item is marked where any of the collection is.
+    if (body === undefined) return new UnresolvedReferenceError(message, types.dynamic, isSensitive(collection) ? [[EVERY_ITEM]] : []);
+
+    return new UnresolvedReferenceError(message, types.dynamic, laterForMarks(node, { key, body }, marked));
   }
 
   /** The key, the body and the if with an unknown item, so an error or a sensitive value in them is found before the collection is known. */
   private readOnce(node: ForNode, collection: Value, state: State, context: Context | undefined, reading: Reading): ReadOnce {
-    if (!(reading.asWritten || this.planned.isPlanning())) return {};
+    if (!(reading.asWritten || this.planned.isPlanning())) return { marked: [] };
 
     const [itemKey, itemValue] = unknownItem(collection.type);
-    const names = withNames(reading, node, [itemKey, isSensitive(collection) ? allSensitive(itemValue) : itemValue]);
+    const once = this.readItem(node, [itemKey, withSensitive(itemValue, sensitiveUnder(collection.sensitive ?? [], EVERY_ITEM))], state, context, reading);
+    const marked = markedSteps(collection).map((step) => ({ step, ...this.readItem(node, markedItem(collection, step), state, context, reading) }));
+
+    return { ...once, marked };
+  }
+
+  private readItem(node: ForNode, item: ForItem, state: State, context: Context | undefined, reading: Reading): ReadItem {
+    const names = withNames(reading, node, item);
     const key = node.key && this.resolveItem(node.key, state, context, names);
     const body = this.resolveItem(node.body, state, context, names);
     if (key && node.key) checkKey(key, node.key.position);

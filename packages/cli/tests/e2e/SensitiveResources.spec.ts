@@ -219,7 +219,7 @@ describe('a resource given a sensitive value', () => {
   describe('given a for over a list not known yet', () => {
     const rows = '[for v in tolist(toset([random_string.r.result])) : { name = v, token = module.db.password }]';
     const config = `module "db" { source = "./db" }\nresource "random_string" "r" { length = 8 }\nresource "null_resource" "n" {\n  triggers = { rows = ${rows} }\n}`;
-    const itemsOnly = [['triggers', 'rows', EVERY_ITEM]];
+    const itemsOnly = [['triggers', 'rows', EVERY_ITEM, 'token']];
 
     it('marks every item in the plan, and the parts the apply finds sensitive in the state', async () => {
       const engine = newOrchestrator();
@@ -232,7 +232,8 @@ describe('a resource given a sensitive value', () => {
 
     it.each([
       ['whose body ignores the item', '[for r in null_resource.n.triggers.rows : "x"]', true],
-      ['whose body reads the item', '[for r in null_resource.n.triggers.rows : r.name]', false],
+      ['whose body reads a part of the item no item marks', '[for r in null_resource.n.triggers.rows : r.name]', true],
+      ['whose body reads a part of the item every item marks', '[for r in null_resource.n.triggers.rows : r.token]', false],
     ])('marks each item of a for over what it marks every item of, %s', async (_, value, accepted) => {
       const probe = `${config}\noutput "probe" { value = ${value} }`;
 

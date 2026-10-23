@@ -202,8 +202,12 @@ a variable, a string, a function and a `for`. It is followed part by part, so in
 `{ name = "app", password = module.db.password }` only `password` is sensitive. A set is
 sensitive as a whole when one member is, since its order and size give the member away.
 `length` of a list is not sensitive when only an item is. A `for` not known until apply is
-sensitive as a whole when its collection or a key is, and its `length` with it. When only
-its body reads a sensitive value, each item is sensitive and its `length` is not.
+sensitive as a whole when its collection, a key or an `if` is, and its `length` with it.
+Otherwise each item has the marks every possible body has, and its `length` is not
+sensitive. An item kept for certain has its own marks at its key, or at its place where no
+item before it may be dropped, and its sensitive key makes the whole sensitive; grouped,
+a key has the marks every value that may join it has. A `for` over such a value keeps the
+marks at the keys and places that value has for certain.
 
 Other values chosen at apply keep, at plan, the marks every choice has. `lookup` with a
 key not known yet has the marks every value and the default share, and is sensitive as a
