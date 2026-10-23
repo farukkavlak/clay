@@ -63,7 +63,7 @@ On top of these:
 - `count` and `for_each` make many instances of a resource, a data source or a module.
 - Types: `type = set(string)`, objects with `optional(number, 80)` attributes.
 - Functions `length`, `tolist`, `toset`, `sensitive`, `nonsensitive`, `issensitive`.
-- `for` expressions that make a list or an object.
+- `for` expressions that make a list or an object, with `if` to keep some items.
 - `==`, `!=`, `&&`, `||`, `!` and the conditional `cond ? a : b`.
 - Sensitive values, followed part by part and hidden wherever they would be printed.
 - `lifecycle` with `prevent_destroy`, `create_before_destroy` and `ignore_changes`.

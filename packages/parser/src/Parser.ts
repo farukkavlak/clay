@@ -634,7 +634,7 @@ export class Parser {
     this.consume(TokenType.Colon, "Expect ':' after the collection in a for expression.");
 
     this.bound.push(...names.map((name) => name.value));
-    const made = closing === TokenType.RBrace ? this.parseEntry() : { body: this.parseValue() };
+    const made = { ...(closing === TokenType.RBrace ? this.parseEntry() : { body: this.parseValue() }), ...this.parseForCondition() };
     this.bound.splice(-names.length);
 
     this.consume(closing, `Expect '${CLOSING[closing]}' after the for expression.`);
@@ -648,6 +648,13 @@ export class Parser {
     const body = this.parseValue();
 
     return { key, body, ...(this.matchToken(TokenType.Ellipsis) && { grouped: true }) };
+  }
+
+  private parseForCondition(): Pick<ForNode, 'condition'> {
+    if (!this.checkWord('if')) return {};
+
+    this.advance();
+    return { condition: this.parseValue() };
   }
 
   private parseForNames(): Token[] {

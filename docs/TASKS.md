@@ -407,7 +407,8 @@ conditional, with no arithmetic yet. A real configuration hits each of these ear
       gives it item by item and an apply that sorts the new member first moves every item
 - [x] A `for` expression that makes an object, `{for k, v in m : k => v}`. A key two
       items give is refused, and `...` after the value groups them
-- [ ] `if` in a `for` expression, now that `==` and `&&` can write a condition
+- [x] `if` in a `for` expression. An item it leaves out is read by type only, like the result
+      a condition does not pick, where Terraform does not read it at all
 - [x] An index read from a value: `var.names[count.index]`, `local_file.f[each.key].content`,
       `module.app[var.i].url`. A bracket holds a reference or a call, read where the reference
       is, and it names an item of a list, a key of a map or an instance of a block. What it

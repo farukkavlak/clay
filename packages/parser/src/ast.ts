@@ -19,9 +19,18 @@ export type BoundNode = Node & { type: 'Bound'; value: Step[] };
 
 /**
  * `[for key, value in collection : body]`, or `{for … : key => body}` for an object.
- * With `grouped` (`body...`), the values of one key are collected into a tuple.
+ * With `grouped` (`body...`), the values of one key are collected into a tuple. With `condition` (`if …`), only the items it is true for.
  */
-export type ForNode = Node & { type: 'For'; keyName?: string; valueName: string; collection: AttributeValue; key?: AttributeValue; body: AttributeValue; grouped?: true };
+export type ForNode = Node & {
+  type: 'For';
+  keyName?: string;
+  valueName: string;
+  collection: AttributeValue;
+  key?: AttributeValue;
+  body: AttributeValue;
+  grouped?: true;
+  condition?: AttributeValue;
+};
 
 export type TemplatePart = string | ReferenceNode | CallNode | BoundNode;
 
@@ -167,7 +176,7 @@ function valuesIn(value: AttributeValue): AttributeValue[] {
   if (value.type === 'List') return value.value;
   if (value.type === 'Call') return [...value.args, ...indexesIn(value.path)];
   if (value.type === 'Reference' || value.type === 'Bound') return indexesIn(value.value);
-  if (value.type === 'For') return [value.collection, ...(value.key ? [value.key] : []), value.body];
+  if (value.type === 'For') return [value.collection, value.key, value.body, value.condition].filter((part) => part !== undefined);
   if (value.type === 'Map') return Object.values(value.value);
   if (value.type === 'Template') return value.value.filter((part) => typeof part !== 'string');
 
