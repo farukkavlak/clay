@@ -1,4 +1,19 @@
-import { Address, emptyState, EVERY_ITEM, ExactNumber, isUnknown, MAX_NESTING, ModuleAddress, Schema, State, Type, typeNestingOf, types, UNKNOWN } from '@clay/contracts';
+import {
+  Address,
+  AttributePath,
+  emptyState,
+  EVERY_ITEM,
+  ExactNumber,
+  isUnknown,
+  MAX_NESTING,
+  ModuleAddress,
+  Schema,
+  State,
+  Type,
+  typeNestingOf,
+  types,
+  UNKNOWN,
+} from '@clay/contracts';
 import {
   AttributeValue,
   BinaryNode,
@@ -173,6 +188,13 @@ function hidingIf(sensitive: boolean, message: string, position: Position, read:
 /** What went wrong reading at a sensitive index may quote the index. */
 function atSensitiveIndex(node: Named): string {
   return `${spellNamed(node)} was read at a sensitive index, so why it failed is not shown`;
+}
+
+/** Neither side decides `&&` or `||` yet. One not known may still decide alone, so a mark on the other is the answer's only where both have it. */
+function undecidedMarks(left: Value, right: Value): AttributePath[] {
+  const [leftMarked, rightMarked] = [isSensitive(left), isSensitive(right)];
+
+  return wholeIf((leftMarked && !isUnknown(right.data)) || (rightMarked && !isUnknown(left.data)) || (leftMarked && rightMarked));
 }
 
 /** The results in the order written: when true, then when false. */
@@ -601,10 +623,12 @@ export class ReferenceResolver {
     }
 
     const right = this.boolean(node.right, operator, state, context, reading);
-    if (right.data === deciding) return decided(right);
+    const later = isUnknown(left.data);
+    // With the left side not known yet, either side may decide, so a mark only one of them has waits for the apply.
+    if (right.data === deciding) return !later || isSensitive(left) === isSensitive(right) ? decided(right) : valueOf(types.bool, UNKNOWN);
 
-    const data = isUnknown(left.data) || isUnknown(right.data) ? UNKNOWN : !deciding;
-    return withSensitive(valueOf(types.bool, data), wholeIf(isSensitive(left) || isSensitive(right)));
+    const data = later || isUnknown(right.data) ? UNKNOWN : !deciding;
+    return withSensitive(valueOf(types.bool, data), undecidedMarks(left, right));
   }
 
   /**
@@ -615,7 +639,8 @@ export class ReferenceResolver {
     const condition = this.boolean(node.condition, 'A condition', state, context, reading);
     if (isUnknown(condition.data)) {
       const results = [node.whenTrue, node.whenFalse].map((result) => this.resolveItem(result, state, context, reading));
-      const sensitive = [condition, ...results].some((value) => isSensitive(value));
+      // Only one result is the value, so a mark is its own where the condition or both results have one.
+      const sensitive = isSensitive(condition) || results.every((value) => isSensitive(value));
       return withSensitive(valueOf(resultType(node, results), UNKNOWN), wholeIf(sensitive));
     }
 

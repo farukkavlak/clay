@@ -119,7 +119,7 @@ resource "local_file" "f" {
 
     it.each([
       ['an if that reads it', '[for x in ["a", "b"] : x if x == var.secret]'],
-      ['an if that reads it, not known yet', `[for x in ["a"] : x if ${LATER} && var.secret == "a"]`],
+      ['an if that reads it, not known yet', '[for x in ["a"] : x if var.secret == random_string.r.result]'],
       ['an if that reads it over a collection not known yet', '[for x in tolist(toset([random_string.r.result])) : x if var.secret == "a"]'],
     ])('makes what it gives sensitive as a whole with %s', async (_, value) => {
       await expect(newOrchestrator().plan(`${secret}${RANDOM}output "o" { value = length(${value}) }\n`)).rejects.toThrow(REFUSED);
