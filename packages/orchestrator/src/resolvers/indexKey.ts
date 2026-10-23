@@ -16,17 +16,10 @@ function wholeIndex(number: ExactNumber, position: Position): number {
   }
 }
 
-function plainKeyOf(index: Value, position: Position): Step {
-  if (typeof index.data === 'string') return { key: index.data };
-  if (index.data instanceof ExactNumber) return { key: wholeIndex(index.data, position) };
-
-  throw new ConfigError(`An index is a number or a string, not ${described(index)}${nullSource(index)}`, position);
-}
-
 /** An index read from a value, and how it is written. */
 type IndexStep = { index: AttributeValue; spelled: string };
 
-/** A sensitive value's sign, size and type are parts of it, so what is wrong with it is not told. */
+/** What is wrong with a sensitive number tells what it is, so it is not told. */
 function unlessSensitive<T>(index: Value, step: IndexStep, run: () => T): T {
   try {
     return run();
@@ -39,14 +32,16 @@ function unlessSensitive<T>(index: Value, step: IndexStep, run: () => T): T {
 
 /** The key a known value comes to as an index: a whole number for a list or a count, a string for a map or a for_each. */
 export function keyOf(index: Value, step: IndexStep): Step {
-  return unlessSensitive(index, step, () => plainKeyOf(index, step.index.position));
+  const { data } = index;
+  if (typeof data === 'string') return { key: data };
+  if (!(data instanceof ExactNumber)) throw new ConfigError(`An index is a number or a string, not ${described(index)}${nullSource(index)}`, step.index.position);
+
+  return { key: unlessSensitive(index, step, () => wholeIndex(data, step.index.position)) };
 }
 
 /** An index not known yet is refused when its type can never be a number or a string. */
 export function checkUnknownIndex(index: Value, step: IndexStep): void {
   if (hasText(index.type) || index.type.kind === 'dynamic') return;
 
-  unlessSensitive(index, step, () => {
-    throw new ConfigError(`An index is a number or a string, not ${article(index.type.kind)}`, step.index.position);
-  });
+  throw new ConfigError(`An index is a number or a string, not ${article(index.type.kind)}`, step.index.position);
 }

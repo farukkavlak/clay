@@ -49,16 +49,15 @@ function mismatchWithin(one: Type, other: Type, at: Step[]): Pair | undefined {
   return undefined;
 }
 
-/** Checked by type, so `validate` finds it before any value is known. A sensitive value's type is a part of it, so it is not named. */
+/** Checked by type, so `validate` finds it before any value is known. A sensitive value's keys and positions are parts of it, so its items are not named. */
 function checkComparable(operator: string, left: Value, right: Value, position: Position): void {
   const top = differs(left.type, right.type);
   const inside = top ? undefined : mismatchWithin(left.type, right.type, []);
   if (!top && !inside) return;
 
-  if (isSensitive(left) || isSensitive(right)) throw new ConfigError(`${operator} compares values that can never be equal; one is sensitive, so no more is shown`, position);
-
   const compared = `${operator} compares ${article(left.type.kind)} with ${article(right.type.kind)}`;
   if (!inside) throw new ConfigError(`${compared}, which are never equal`, position);
+  if (isSensitive(left) || isSensitive(right)) throw new ConfigError(`${compared} whose items differ in type; one is sensitive, so no more is shown`, position);
 
   const [one, other, at] = inside;
   const where = at.length > 0 ? ` at ${spellSteps(at)}` : '';
@@ -90,12 +89,11 @@ export function equality(operator: '==' | '!=', left: Value, right: Value, posit
   return withSensitive(valueOf(types.bool, data), wholeIf(sensitive));
 }
 
-/** Null and any other type are refused. A sensitive value's type is a part of it, so it is not named. */
+/** Null and any other type are refused. */
 export function checkBoolean(who: string, value: Value, position: Position): void {
   if (value.data !== null && (value.type.kind === 'bool' || value.type.kind === 'dynamic')) return;
 
-  const problem = isSensitive(value) ? 'and this sensitive value is not one; why is not shown' : `not ${described(value)}${nullSource(value)}`;
-  throw new ConfigError(`${who} takes a boolean, ${problem}`, position);
+  throw new ConfigError(`${who} takes a boolean, not ${described(value)}${nullSource(value)}`, position);
 }
 
 export function negated(value: Value): Value {
@@ -107,9 +105,7 @@ export type Arithmetic = '+' | '-' | '*' | '/' | '%';
 export type Ordering = '<' | '>' | '<=' | '>=';
 
 function notANumber(who: string, value: Value, position: Position): ConfigError {
-  const problem = isSensitive(value) ? 'and this sensitive value is not one; why is not shown' : `not ${described(value)}${nullSource(value)}`;
-
-  return new ConfigError(`${who} takes a number, ${problem}`, position);
+  return new ConfigError(`${who} takes a number, not ${described(value)}${nullSource(value)}`, position);
 }
 
 /** Null and any type but a number or a string are refused by type, so `validate` finds them. */

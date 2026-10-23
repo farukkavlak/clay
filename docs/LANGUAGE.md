@@ -172,6 +172,8 @@ key shows in an address, and so is a sensitive `count`, since a plan shows how m
 instances it makes. `for_each = { primary = module.db.password }` is taken: only
 `each.value` is sensitive. An error raised while a value is worked out does not quote a
 sensitive one: `enabled: (sensitive value) is not a boolean, which is "true" or "false"`.
+It names the value's type, a list or null, since the configuration sets that: `&& takes a
+boolean, not a string`. It does not name its keys, its size or what it holds.
 
 A resource attribute given a sensitive value is sensitive where it is read back, so
 `local_file.conf.content` in a root output needs `sensitive = true` too. The state keeps

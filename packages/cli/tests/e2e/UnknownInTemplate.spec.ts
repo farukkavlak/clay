@@ -73,28 +73,28 @@ describe('a value not known yet joined into a string or used as an index', () =>
     expect(error.block).toBe('output "o"');
   });
 
-  it('refuses a sensitive one as an index without saying what it is', async () => {
+  it('refuses a sensitive one as an index by its type', async () => {
     const config = `${RANDOM}\nlocals {\n  names = ["a"]\n  list  = sensitive(${LIST})\n}\noutput "o" {\n  value = local.names[local.list]\n}`;
 
     const error = await errorOf(() => newOrchestrator().plan(config));
 
-    expect(error.message).toBe('local.list is sensitive and is no index: why is not shown');
+    expect(error.message).toBe('An index is a number or a string, not a list');
   });
 
-  it('is refused as a part without saying its type when it is sensitive', async () => {
+  it('is refused as a part by its type when it is sensitive', async () => {
     const config = `${RANDOM}\nlocals {\n  list = sensitive(${LIST})\n}\noutput "o" {\n  sensitive = true\n  value     = "x-\${local.list}"\n}`;
 
     const error = await errorOf(() => newOrchestrator().plan(config));
 
-    expect(error.message).toBe('local.list is sensitive and cannot be joined into a string: why is not shown');
+    expect(error.message).toBe('local.list is a list and cannot be joined into a string');
   });
 
-  it('is refused as a known part without saying its type when it is sensitive', async () => {
+  it('is refused as a known part by its type when it is sensitive', async () => {
     const config = `locals {\n  list = sensitive(["a"])\n}\noutput "o" {\n  sensitive = true\n  value     = "x-\${local.list}"\n}`;
 
     const error = await errorOf(() => newOrchestrator().plan(config));
 
-    expect(error.message).toBe('local.list is sensitive and cannot be joined into a string: why is not shown');
+    expect(error.message).toBe('local.list is a tuple and cannot be joined into a string');
   });
 
   it.each([

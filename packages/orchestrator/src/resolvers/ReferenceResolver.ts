@@ -661,7 +661,7 @@ export class ReferenceResolver {
   /** Only a string, a number or a boolean can be joined. */
   private joined(part: AttributeValue, state: State, context: Context | undefined, reading: Reading): Value {
     const resolved = this.resolvedPart(part, state, context, reading);
-    if (resolved.data === null || !hasText(resolved.type)) throw this.unjoinable(part, isSensitive(resolved) ? undefined : described(resolved));
+    if (resolved.data === null || !hasText(resolved.type)) throw this.unjoinable(part, described(resolved));
 
     return resolved;
   }
@@ -672,14 +672,11 @@ export class ReferenceResolver {
       return this.resolveIn(part, state, context, reading);
     } catch (error) {
       if (!(error instanceof UnresolvedReferenceError) || hasText(error.type) || error.type.kind === 'dynamic') throw error;
-      throw this.unjoinable(part, error.sensitive.length > 0 ? undefined : article(error.type.kind));
+      throw this.unjoinable(part, article(error.type.kind));
     }
   }
 
-  /** `what` is left out for a sensitive value, whose type is a part of it. */
-  private unjoinable(part: AttributeValue, what: string | undefined): ConfigError {
-    const problem = what === undefined ? 'is sensitive and cannot be joined into a string: why is not shown' : `is ${what} and cannot be joined into a string`;
-
-    return new ConfigError(`${spelledPart(part)} ${problem}`, part.position);
+  private unjoinable(part: AttributeValue, what: string): ConfigError {
+    return new ConfigError(`${spelledPart(part)} is ${what} and cannot be joined into a string`, part.position);
   }
 }
