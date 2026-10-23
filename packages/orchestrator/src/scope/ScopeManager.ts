@@ -1,5 +1,5 @@
 import { ModuleAddress, Type } from '@clay/contracts';
-import { AttributeValue, LocalBlock, TypeDefaults } from '@clay/parser';
+import { AttributeValue, LocalBlock, TypeDefaults, Validation } from '@clay/parser';
 
 import { ModuleCall } from '../keys';
 import { Value } from '../Value';
@@ -12,6 +12,8 @@ export interface VariableValue {
   defaults?: TypeDefaults;
   sensitive?: true;
   block: string;
+  /** The variable's rules, and its own block, where a mistake in one is placed. */
+  validations?: { rules: readonly Validation[]; declaration: string };
 }
 
 /** Variables per module, since each instance reads the same values; locals and outputs per instance, since each has its own. */

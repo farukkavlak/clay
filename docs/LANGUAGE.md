@@ -82,6 +82,28 @@ each instance of its module, after what it reads. It names no type and has the o
 value has. Only its own module reads it. A file may hold several `locals` blocks; a name
 set twice is refused.
 
+## Validation
+
+A `validation` block gives a rule the value of a variable must meet, and the message to
+give where it does not:
+
+```
+variable "port" {
+  type = number
+  validation {
+    condition     = var.port > 0 && var.port < 65536
+    error_message = "port is ${var.port}; it must be 1 to 65535"
+  }
+}
+```
+
+The rules are checked in order at plan, after the type, for each instance of the module.
+A value they refuse is refused where it is given, at the default or at the module call,
+with the first failing rule's message: `variable "port": port is 70000; it must be 1 to
+65535`. A rule that reads a part of the value not known until the apply is checked at
+the apply. A message that holds a sensitive value is not shown, but the value is still
+refused. A rule reads only its variable and functions.
+
 ## Functions
 
 A function is called by its name: `count = length(var.names)`, or `"${length(var.names)}"`

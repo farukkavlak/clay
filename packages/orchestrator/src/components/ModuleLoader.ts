@@ -1,11 +1,15 @@
 import { Address, ModuleAddress, Type, types } from '@clay/contracts';
-import { CONFIG_FILE, ConfigError, Lexer, ModuleBlock, Parser, ResourceBlock, Statement, spell } from '@clay/parser';
+import { CONFIG_FILE, ConfigError, Lexer, ModuleBlock, Parser, ResourceBlock, Statement, spell, VariableBlock } from '@clay/parser';
 import path from 'node:path';
 
 import { ConfigFiles } from '../ConfigFiles';
 import { required } from '../declared';
 import { ModuleCall, scopeOf } from '../keys';
 import { ScopeManager } from '../scope/ScopeManager';
+
+function validationsOf(variable: VariableBlock) {
+  return variable.validations && { validations: { rules: variable.validations, declaration: spell(variable) } };
+}
 
 export interface LoadedResource {
   uniqueId: string;
@@ -122,6 +126,7 @@ export class ModuleLoader {
         defaults: variable.defaults,
         sensitive: variable.sensitive,
         block,
+        ...validationsOf(variable),
       });
     }
   }
@@ -145,6 +150,7 @@ export class ModuleLoader {
         defaults: stmt.defaults,
         sensitive: stmt.sensitive,
         block: spell(stmt),
+        ...validationsOf(stmt),
       });
     }
   }

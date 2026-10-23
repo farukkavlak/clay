@@ -100,6 +100,14 @@ export interface VariableBlock extends Node {
   defaults?: TypeDefaults;
   /** Every value the variable takes is sensitive. */
   sensitive?: true;
+  validations?: Validation[];
+}
+
+/** A rule the variable's value must meet; both read only the variable and functions. */
+export interface Validation {
+  condition: AttributeValue;
+  errorMessage: AttributeValue;
+  position: Position;
 }
 
 /** The defaults of `optional(type, default)`, nested the way the type is. */
