@@ -1,4 +1,4 @@
-import { AttributePath, containsUnknown, ExactNumber, isRecord, Output, own, sensitiveUnder, Type, typeAt, types } from '@clay/contracts';
+import { AttributePath, containsUnknown, EVERY_ITEM, ExactNumber, isRecord, isUnknown, Output, own, sensitiveUnder, Type, typeAt, types, UNKNOWN } from '@clay/contracts';
 
 /**
  * `data` is a string, an `ExactNumber`, a boolean, null, an array (list, set, tuple) or a record (map, object), with UNKNOWN at any depth.
@@ -41,6 +41,49 @@ export function isAllSensitive(value: Value): boolean {
 /** The whole value where `sensitive`, and no part of it otherwise. */
 export function wholeIf(sensitive: boolean): AttributePath[] {
   return sensitive ? [[]] : [];
+}
+
+/** Whether `paths` mark all of what is at `at`: a path to it, or to what holds it. */
+function covers(paths: readonly AttributePath[], at: AttributePath): boolean {
+  return paths.some((path) => path.length <= at.length && path.every((step, index) => step === EVERY_ITEM || String(step) === String(at[index])));
+}
+
+/** What both paths mark: the deeper of the two, with an item where the other says every item; none where they part. */
+function meet(left: AttributePath, right: AttributePath): AttributePath | undefined {
+  const steps: AttributePath = [];
+  for (let index = 0; index < Math.max(left.length, right.length); index++) {
+    const [a, b] = [left[index], right[index]];
+    if (a !== undefined && b !== undefined && a !== EVERY_ITEM && b !== EVERY_ITEM && String(a) !== String(b)) return undefined;
+    steps.push(a === undefined || a === EVERY_ITEM ? (b ?? a) : a);
+  }
+
+  return steps;
+}
+
+/** Each once, and none that another already covers. */
+export function fewest(paths: AttributePath[]): AttributePath[] {
+  const keys = paths.map((path) => path.map(String).join('\0'));
+  const once = paths.filter((_, index) => keys.indexOf(keys[index]) === index);
+
+  return once.filter((path, index) => !covers([...once.slice(0, index), ...once.slice(index + 1)], path));
+}
+
+/** What both sets of marks mark. */
+function meets(marks: AttributePath[], paths: readonly AttributePath[]): AttributePath[] {
+  return marks.flatMap((mark) => paths.map((path) => meet(mark, path)).filter((met): met is AttributePath => met !== undefined));
+}
+
+/** The marks every one of `values` has, so a value that is one of them, not known which, has them for certain. */
+export function sharedMarks(values: Value[]): AttributePath[] {
+  const [first, ...rest] = values;
+  if (first === undefined) return [];
+
+  return fewest(rest.reduce((marks, value) => meets(marks, value.sensitive ?? []), [...(first.sensitive ?? [])]));
+}
+
+/** The marks of each item of what is not known yet, where each may be any of `values`. */
+export function everyItemMarks(values: Value[]): AttributePath[] {
+  return sharedMarks(values).map((path) => [EVERY_ITEM, ...path]);
 }
 
 /** Sensitive as a whole where `sensitive`, and as it was otherwise. */
@@ -97,6 +140,15 @@ export function child(value: Value, step: string | number): Value {
   const type = typeAt(value.type, step);
 
   return withSensitive(valueOf(type.kind === 'dynamic' ? inferred(data) : type, data), sensitiveUnder(value.sensitive ?? [], step));
+}
+
+/** The items of `collection`; one not known yet stands for all of its items, with the marks every item has. */
+export function itemsOf(collection: Value): Value[] {
+  if (collection.data === null) return [];
+  if (isUnknown(collection.data)) return [withSensitive(valueOf(types.dynamic, UNKNOWN), sensitiveUnder(collection.sensitive ?? [], EVERY_ITEM))];
+
+  const steps = Array.isArray(collection.data) ? collection.data.map((_, index) => index) : Object.keys(collection.data as Record<string, unknown>);
+  return steps.map((step) => child(collection, step));
 }
 
 /** A set with an unknown member has no order or size until apply. */

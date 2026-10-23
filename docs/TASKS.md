@@ -333,9 +333,9 @@ change each.
       plan file's timestamp must be one Clay writes
 - [ ] A choice not known at plan marks what it gives where only one side is sensitive, so
       `issensitive` answers `true` at plan and `false` at apply, and the apply fails. A
-      condition and `&&` or `||` keep only the marks they have whichever way the apply goes;
-      `lookup` with a key not known yet, an index not known yet, a `for` whose `if` is not
-      known yet and `merge` with an argument not known yet still mark from one side
+      condition, `&&`, `||`, `lookup`, `merge` and an index keep only the marks they have
+      whichever way the apply goes; a `for` whose `if`, key or collection is not known yet
+      still marks from one side, or more than every item has
 - [ ] In a module called with `count = 0`, `count = sensitive(var.n)` and
       `for_each = sensitive({ a = var.x })` pass the plan; with `count = 1` both are refused
       as sensitive. Read as written, a value with a part not known loses its marks, which
