@@ -69,6 +69,17 @@ describe('a string with an interpolation', () => {
     expect(resources['local_file.f'].attributes.content).toBe('n=8');
   });
 
+  it('joins any value written inside an interpolation, a string holding its own included', async () => {
+    const config = `
+      variable "n" { default = 8 }
+      resource "local_file" "f" { path = "${path.join(dir, 'f.txt')}" content = "\${var.n / 2}-\${var.n > 4 ? "big" : "small"}-\${"n\${var.n}"}" }
+    `;
+
+    const resources = await applied(config);
+
+    expect(resources['local_file.f'].attributes.content).toBe('4-big-n8');
+  });
+
   // The parser turns `$${` into text, so the engine never reads it as a reference.
   it('writes an escape as what it stands for, and $${ as text', async () => {
     const config = `resource "local_file" "f" { path = "${path.join(dir, 'f.txt')}" content = "a\\tb\\nprice $\${price}" }`;

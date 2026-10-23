@@ -490,15 +490,35 @@ describe('Clay Parser', () => {
       expect(valueOf('"a ${\n  local_file.f.id}"')).toEqual({ type: 'Template', value: ['a ', reference(['local_file', 'f', 'id'], 3, 2)], position: at(1, 24) });
     });
 
+    it.each([
+      ['a number', '"${1}"', [{ type: 'Number', value: ExactNumber.parse('1'), position: at(1, 27) }]],
+      [
+        'an operator',
+        '"${var.x + 1}"',
+        [
+          {
+            type: 'Binary',
+            operator: '+',
+            operatorPosition: at(1, 33),
+            left: reference(['var', 'x'], 27),
+            right: { type: 'Number', value: ExactNumber.parse('1'), position: at(1, 35) },
+            position: at(1, 27),
+          },
+        ],
+      ],
+      ['a string holding an interpolation of its own', '"a${"b${var.x}"}"', ['a', { type: 'Template', value: ['b', reference(['var', 'x'], 32)], position: at(1, 28) }]],
+    ])('reads %s inside an interpolation', (_, written, parts) => {
+      expect(valueOf(written)).toEqual({ type: 'Template', value: parts, position: at(1, 24) });
+    });
+
     it('keeps a string with no interpolation a string', () => {
       expect(valueOf('"$ { } $x"')).toEqual({ type: 'String', value: '$ { } $x', position: at(1, 24) });
     });
 
     it.each([
       ['one that is never closed', '"a ${var.x"', "This '${' is never closed with '}'", at(1, 27)],
-      ['one that is empty', '"${}"', "Expect a reference or a function call inside '${'", at(1, 27)],
-      ['one that holds no reference', '"${1}"', "Expect a reference or a function call inside '${'", at(1, 27)],
-      ['one with more than a reference', '"${var.x y}"', "Expect '}' after the reference", at(1, 33)],
+      ['one that is empty', '"${}"', "Expect a value inside '${'", at(1, 27)],
+      ['one with more than a value', '"${var.x y}"', "Expect '}' after the value inside '${'", at(1, 33)],
       ['one whose reference ends on a dot', '"${var.}"', 'Expect property name after dot', at(1, 31)],
       ['one holding a character the lexer knows nothing about', '"${a@b}"', 'Unexpected character: "@"', at(1, 28)],
       ['one holding a comment', '"${var.x # note}"', "A comment cannot sit inside '${'", at(1, 33)],
@@ -523,14 +543,11 @@ describe('Clay Parser', () => {
       expect(valueOf('"x ${var.m["k"]} y"')).toEqual({ type: 'Template', value: ['x ', reference(['var', 'm', { key: 'k' }], 29), ' y'], position: at(1, 24) });
     });
 
-    it.each([
-      ['a key that holds an interpolation', '"${var.m["${var.k}"]}"', 'A map key is plain text; it cannot hold an interpolation', at(1, 33)],
-      ['a string where a reference should be', '"${"x"}"', "Expect a reference or a function call inside '${'.", at(1, 27)],
-    ])('refuses %s inside an interpolation, where it is written', (_, written, message, position) => {
-      const error = errorOf(`resource "t" "n" { v = ${written} }`);
+    it('refuses a key that holds an interpolation inside an interpolation, where it is written', () => {
+      const error = errorOf('resource "t" "n" { v = "${var.m["${var.k}"]}" }');
 
-      expect(error.message).toBe(message);
-      expect(error.position).toEqual(position);
+      expect(error.message).toBe('A map key is plain text; it cannot hold an interpolation');
+      expect(error.position).toEqual(at(1, 33));
     });
 
     // A quote where a brace belongs opens a string, so the parser cannot tell which one is at fault.
@@ -767,7 +784,7 @@ describe('Clay Parser', () => {
       ['arguments with no comma between', 'length(var.x var.y)', "Expect ')' after the arguments.", at(1, 37)],
       ['a comma with no argument before it', 'length(,)', 'Unexpected value: ,', at(1, 31)],
       ['a closing parenthesis on its own', ')', 'Unexpected value: )', at(1, 24)],
-      ['more than a call inside an interpolation', '"${length(var.x) y}"', "Expect '}' after the function call.", at(1, 41)],
+      ['more than a call inside an interpolation', '"${length(var.x) y}"', "Expect '}' after the value inside '${'.", at(1, 41)],
     ])('refuses %s where it is written', (_, written, message, position) => {
       const error = errorOf(`resource "t" "n" { v = ${written} }`);
 
@@ -1428,6 +1445,7 @@ describe('Clay Parser', () => {
       ['types', TYPE, deep('list(', 'string', ')'), TYPE.length + 5 * 100 + 1],
       ['lists and maps in turn', LOCAL, inTurn, LOCAL.length + 50 + 3 * 50 + 1],
       ['parentheses', LOCAL, deep('(', '1', ')'), LOCAL.length + 100 + 1],
+      ['interpolations', LOCAL, deep('"${', '1', '}"'), LOCAL.length + 3 * 100 + 2],
       ['negations', LOCAL, deep('!', 'true', ''), LOCAL.length + 100 + 1],
       ['minuses', LOCAL, deep('-', 'a', ''), LOCAL.length + 100 + 1],
       ['arithmetic in a chain', LOCAL, (levels: number) => '1' + ' + 1'.repeat(levels), LOCAL.length + 1 + 4 * 100 + 2],

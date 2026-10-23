@@ -32,7 +32,7 @@ export type ForNode = Node & {
   condition?: AttributeValue;
 };
 
-export type TemplatePart = string | ReferenceNode | CallNode | BoundNode;
+export type TemplatePart = string | AttributeValue;
 
 export type BinaryOperator = '==' | '!=' | '&&' | '||' | '<' | '>' | '<=' | '>=' | '+' | '-' | '*' | '/' | '%';
 
