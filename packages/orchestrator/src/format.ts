@@ -89,15 +89,17 @@ function signOf({ flags }: Verb, negative: boolean): string {
   return flags.includes('+') ? '+' : flags.includes(' ') ? ' ' : '';
 }
 
-/** As Go writes an integer: the precision is the fewest digits, and `0` pads after the sign where no precision is given. */
+/** As Go writes an integer: the precision is the fewest digits, and `0` pads after the sign where no precision is given. Zero at precision 0 is only the width. */
 function integer(writing: Writing): string {
   const { verb } = writing;
-  const text = numberOf(writing).toString();
+  const number = numberOf(writing);
+  const text = number.toString();
   if (text.includes('.')) return refused(writing, 'a whole number');
+  if (verb.precision === 0 && number.isZero()) return padded(verb, '', ' ');
 
   const sign = signOf(verb, text.startsWith('-'));
   const unsigned = text.replace('-', '');
-  const digits = verb.precision === 0 && unsigned === '0' ? '' : unsigned.padStart(verb.precision ?? 0, '0');
+  const digits = unsigned.padStart(verb.precision ?? 0, '0');
   const zeros = verb.flags.includes('0') && !verb.flags.includes('-') && verb.precision === undefined;
 
   return padded(verb, sign + (zeros ? digits.padStart((verb.width ?? 0) - sign.length, '0') : digits), ' ');

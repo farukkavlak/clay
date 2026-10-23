@@ -440,6 +440,7 @@ describe('format', () => {
     ['a sign or a space', '%+d|% d|% d', [number('7'), number('7'), number('-7')], '+7| 7|-7'],
     ['the fewest digits a precision asks', '%.3d|%6.3d|%05.3d', [number('7'), number('7'), number('42')], '007|   007|  042'],
     ['nothing for zero at precision 0', '[%.0d]', [number('0')], '[]'],
+    ['no sign for zero at precision 0, only the width', '[%+.0d][% .0d][%+3.0d][%03.0d]', [number('0'), number('0'), number('0'), number('0')], '[][][   ][   ]'],
   ])('writes %s', (_, template, values, result) => {
     expect(formatOf(template, ...values)).toEqual(text(result));
   });
