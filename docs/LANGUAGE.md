@@ -124,7 +124,10 @@ A for expression makes a list from a collection: `[for n in var.names : "app-${n
 two names it reads a key too: a list's index, a map's key, or a set's member again, as in
 `[for i, n in var.names : "${i}-${n}"]`. With braces and `=>` it makes an object instead:
 `{for n in var.names : n => "app-${n}"}`. A key two items give is refused, unless `...`
-after the value groups them.
+after the value groups them. An `if` after the value keeps only the items it is true for:
+`{ for k, v in var.servers : k => v if v.on }`. An item it leaves out is read by type
+only, like the result a condition does not pick. A sensitive `if` makes what the for gives
+sensitive, and like a sensitive condition it can be learned from whether the run fails.
 
 ## Sensitive values
 

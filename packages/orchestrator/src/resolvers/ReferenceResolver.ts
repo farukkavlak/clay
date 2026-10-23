@@ -121,6 +121,21 @@ function typeOnly(value: Value, reading: Reading): Value {
   return reading.byType ? unknownAs(value) : value;
 }
 
+const FOR_IF = 'The if of a for';
+
+/** The items an if may keep; `later` where its value for one is not known yet. */
+interface Picked {
+  items: Reading[];
+  sensitive: boolean;
+  later: boolean;
+}
+
+interface ReadOnce {
+  key?: Value;
+  body?: Value;
+  condition?: Value;
+}
+
 /** The node being read, and what its indexes are read with. */
 interface Site {
   node: Named;
@@ -314,21 +329,65 @@ export class ReferenceResolver {
     throw new UnresolvedReferenceError(`${spellNamed(node)} is known only after apply`, types.dynamic, wholeIf(sensitive));
   }
 
-  /** Over a collection sensitive as a whole, what it gives is too: how many items it has is the collection's. */
+  /** Over a collection sensitive as a whole, or with a sensitive if, what it gives is too: how many items it keeps tells the if. */
   private resolveFor(node: ForNode, state: State, context: Context | undefined, reading: Reading): Value {
     const collection = this.collectionOf(node, state, context, reading);
     const names = forItems(collection, node.collection.position).map((item) => withNames(reading, node, item));
-    const sensitive = isAllSensitive(collection);
+    const picked = this.picked(node, names, state, context);
+    const sensitive = isAllSensitive(collection) || picked.sensitive;
+    if (picked.later) throw this.laterPicked(node, picked.items, sensitive, state, context);
+
     const made = node.key
-      ? this.resolveForObject(node, node.key, names, sensitive, state, context)
-      : tupleOf(names.map((itemNames) => this.resolveItem(node.body, state, context, itemNames)));
+      ? this.resolveForObject(node, node.key, picked.items, sensitive, state, context)
+      : tupleOf(picked.items.map((itemNames) => this.resolveItem(node.body, state, context, itemNames)));
 
     return allSensitiveIf(sensitive, made);
   }
 
+  /** The items the if may keep. One it leaves out is read by type only, so `x.name if x != null` reads `.name` only where there is an x. */
+  private picked(node: ForNode, names: Reading[], state: State, context: Context | undefined): Picked {
+    const { condition } = node;
+    if (!condition) return { items: names, sensitive: false, later: false };
+
+    const ifs = names.map((itemNames) => this.boolean(condition, FOR_IF, state, context, itemNames));
+    for (const [index, itemNames] of names.entries()) if (ifs[index].data === false) this.readItemByType(node, itemNames, context);
+
+    return {
+      items: names.filter((_, index) => ifs[index].data !== false),
+      sensitive: ifs.some((value) => isSensitive(value)),
+      later: ifs.some((value) => isUnknown(value.data)),
+    };
+  }
+
+  private readItemByType(node: ForNode, itemNames: Reading, context: Context | undefined): void {
+    if (node.key) checkKey(this.byType(node.key, context, itemNames), node.key.position);
+    this.byType(node.body, context, itemNames);
+  }
+
+  /**
+   * Which items an if keeps, and so which keys clash, waits for the apply. Every item it may keep is read now, so a mistake in any is found.
+   * As for a collection not known yet, a sensitive key makes it sensitive as a whole, and a sensitive body each item.
+   */
+  private laterPicked(node: ForNode, items: Reading[], sensitive: boolean, state: State, context: Context | undefined): UnresolvedReferenceError {
+    const { key } = node;
+    const keys = key ? items.map((itemNames) => this.checkedKey(key, state, context, itemNames)) : [];
+    const bodies = items.map((itemNames) => this.resolveItem(node.body, state, context, itemNames));
+
+    const message = 'The if of a for is known only after apply for an item, so what the for gives is not known yet';
+    if (sensitive || keys.some((found) => isSensitive(found))) return new UnresolvedReferenceError(message, types.dynamic, wholeIf(true));
+
+    return new UnresolvedReferenceError(message, types.dynamic, bodies.some((body) => isSensitive(body)) ? [[EVERY_ITEM]] : []);
+  }
+
+  private checkedKey(key: AttributeValue, state: State, context: Context | undefined, itemNames: Reading): Value {
+    const found = this.resolveItem(key, state, context, itemNames);
+    checkKey(found, key.position);
+    return found;
+  }
+
   /** Resolves every key and value first, so an error in any item is found even when another key is unknown. */
-  private resolveForObject(node: ForNode, key: AttributeValue, names: Reading[], sensitive: boolean, state: State, context: Context | undefined): Value {
-    const entries = names.map((itemNames): ForItem => [this.resolveItem(key, state, context, itemNames), this.resolveItem(node.body, state, context, itemNames)]);
+  private resolveForObject(node: ForNode, key: AttributeValue, items: Reading[], sensitive: boolean, state: State, context: Context | undefined): Value {
+    const entries = items.map((itemNames): ForItem => [this.resolveItem(key, state, context, itemNames), this.resolveItem(node.body, state, context, itemNames)]);
 
     return forObject(entries, node.grouped === true, sensitive, key.position);
   }
@@ -354,12 +413,12 @@ export class ReferenceResolver {
   }
 
   /**
-   * Its size and keys are the collection's and the key's, so it is sensitive as a whole where either is. Where only the body is, each item
+   * Its size and keys are the collection's, the key's and the if's, so it is sensitive as a whole where any is. Where only the body is, each item
    * is, and the body sees an item as sensitive as the collection's. It has no type: a for makes a tuple or an object whatever it iterates.
    */
   private laterFor(node: ForNode, collection: Value, message: string, state: State, context: Context | undefined, reading: Reading): UnresolvedReferenceError {
-    const { key, body } = this.readOnce(node, collection, state, context, reading);
-    const whole = isAllSensitive(collection) || (key !== undefined && isSensitive(key));
+    const { key, body, condition } = this.readOnce(node, collection, state, context, reading);
+    const whole = [key, condition].some((part) => part !== undefined && isSensitive(part)) || isAllSensitive(collection);
     const items = body === undefined ? isSensitive(collection) : isSensitive(body);
 
     if (whole) return new UnresolvedReferenceError(message, types.dynamic, wholeIf(true));
@@ -367,8 +426,8 @@ export class ReferenceResolver {
     return new UnresolvedReferenceError(message, types.dynamic, items ? [[EVERY_ITEM]] : []);
   }
 
-  /** The key and the body with an unknown item, so an error or a sensitive value in them is found before the collection is known. */
-  private readOnce(node: ForNode, collection: Value, state: State, context: Context | undefined, reading: Reading): { key?: Value; body?: Value } {
+  /** The key, the body and the if with an unknown item, so an error or a sensitive value in them is found before the collection is known. */
+  private readOnce(node: ForNode, collection: Value, state: State, context: Context | undefined, reading: Reading): ReadOnce {
     if (!(reading.asWritten || this.planned.isPlanning())) return {};
 
     const [itemKey, itemValue] = unknownItem(collection.type);
@@ -376,8 +435,9 @@ export class ReferenceResolver {
     const key = node.key && this.resolveItem(node.key, state, context, names);
     const body = this.resolveItem(node.body, state, context, names);
     if (key && node.key) checkKey(key, node.key.position);
+    const condition = node.condition && this.boolean(node.condition, FOR_IF, state, context, names);
 
-    return { key, body };
+    return { key, body, condition };
   }
 
   private resolveTarget(reference: ParsedReference, state: State, where: Context, position: Position): { value: Value; path: Step[] } {

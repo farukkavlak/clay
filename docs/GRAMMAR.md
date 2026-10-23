@@ -330,8 +330,8 @@ takes, is refused where the call is written, in a module nothing is made of too.
 ### For
 
 ```
-for = "[" "for" names "in" value ":" value "]"
-    | "{" "for" names "in" value ":" value "=>" value [ "..." ] "}"
+for = "[" "for" names "in" value ":" value [ "if" value ] "]"
+    | "{" "for" names "in" value ":" value "=>" value [ "..." ] [ "if" value ] "}"
 names = IDENTIFIER [ "," IDENTIFIER ]
 ```
 
@@ -379,6 +379,16 @@ the key holds a tuple of their values, in the order of the items.
 A value not known until apply is not known in the object either, under a key the plan
 shows. A key not known until apply leaves the whole for to the apply, since the keys say
 what the object holds; a mistake in another item is still refused at plan.
+
+`[for x in var.l : x.name if x != null]` keeps only the items the `if` is true for, and
+reads the `if` with the names the for gives. An item it leaves out is not read by its
+value, so `x.name` is never read on a `null`, but it is still read by type, so a mistake in
+it is refused. An `if` that is not a boolean, `null` too, is refused where it is written.
+One not known until apply for any item leaves the whole for to the apply, since which
+items stay is not known, so a key two items give is refused only at apply; every item is
+still read, so a mistake in any is found. A sensitive `if` makes the whole for sensitive,
+since how many items stay tells it. Like a sensitive condition, it can still be learned
+from whether the run fails: an error in an item it keeps is shown like any other.
 
 ### Count
 

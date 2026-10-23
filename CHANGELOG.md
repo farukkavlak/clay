@@ -15,7 +15,8 @@ a configuration means or how the state file is written.
   with a default, and every value carries its type through the engine. Sets hold one
   order, so reordering one is no change.
 - Functions `length`, `tolist`, `toset`, `sensitive`, `nonsensitive` and `issensitive`
-- `for` expressions that make a list or an object, with `...` to group by key
+- `for` expressions that make a list or an object, with `...` to group by key and `if`
+  to keep some items
 - `==`, `!=`, `&&`, `||`, `!` and the conditional `cond ? a : b`. A known condition reads
   only the result it picks
 - A resource, a data source, a module or all their instances read as an object, a list

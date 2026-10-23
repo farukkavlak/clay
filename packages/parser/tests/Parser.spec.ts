@@ -811,6 +811,33 @@ describe('Clay Parser', () => {
       });
     });
 
+    it('reads an if after the body, with the names the for gives', () => {
+      const written = '[for n in var.names : n if n != null]';
+
+      expect(valueOf(written)).toMatchObject({
+        body: bound(['n'], 24 + written.indexOf('n if')),
+        condition: { type: 'Binary', operator: '!=', left: bound(['n'], 24 + written.indexOf('n !=')), right: { type: 'Null' } },
+      });
+    });
+
+    it('reads no if where none is written', () => {
+      expect(valueOf('[for n in var.names : n]')).not.toHaveProperty('condition');
+    });
+
+    it('finds the references in its if', () => {
+      expect(namedIn(valueOf('[for n in var.x : n if var.on]')).map((node) => spellNamed(node))).toEqual(['var.x', 'var.on']);
+    });
+
+    it.each([
+      ['an if with nothing after it', '[for n in var.x : n if]', 'Unexpected value: ]', at(1, 46)],
+      ['a second if', '[for n in var.x : n if true if true]', "Expect ']' after the for expression.", at(1, 52)],
+    ])('refuses %s where it is written', (_, written, message, position) => {
+      const error = errorOf(`resource "t" "n" { v = ${written} }`);
+
+      expect(error.message).toBe(message);
+      expect(error.position).toEqual(position);
+    });
+
     it('reads the steps written after a name the for gives', () => {
       expect(valueOf('[for f in var.files : f.paths["a.b"][0]]')).toMatchObject({ body: bound(['f', 'paths', { key: 'a.b' }, 0], 46) });
     });
@@ -878,7 +905,6 @@ describe('Clay Parser', () => {
       ['a for with no in', '[for n of var.x : n]', "Expect 'in' after the names in a for expression.", at(1, 31)],
       ['a for with no colon', '[for n in var.x n]', "Expect ':' after the collection in a for expression.", at(1, 40)],
       ['a for with more than its body', '[for n in var.x : n n]', "Expect ']' after the for expression.", at(1, 44)],
-      ['a for that filters with if', '[for n in var.x : n if n]', "Expect ']' after the for expression.", at(1, 44)],
       ['a for never closed', '[for n in var.x : n', "Expect ']' after the for expression.", at(1, 44)],
       ['a key and a value of one name', '[for i, i in var.x : i]', 'The key and the value of a for need names of their own', at(1, 32)],
       ['a name a for around it gives', '[for n in var.x : [for n in n : n]]', '"n" is named by a for around this one already', at(1, 47)],
@@ -925,6 +951,10 @@ describe('Clay Parser', () => {
 
     it('groups the values of one key when the value has ... after it', () => {
       expect(valueOf('{for n in var.l : n => n...}')).toMatchObject({ key: bound(['n'], 42), body: bound(['n'], 47), grouped: true });
+    });
+
+    it('reads an if after the ... that groups', () => {
+      expect(valueOf('{for n in var.l : n => n... if n}')).toMatchObject({ grouped: true, condition: bound(['n'], 55) });
     });
 
     it('reads a number right before ... as the number', () => {
