@@ -309,19 +309,20 @@ A name with `(` after it calls a function; any other name starts a reference, so
 resource type may be spelled as a function is. An argument is any value, a call too. The
 steps after the `)` read into what the function gives, as a reference's do.
 
-| Function                     | Gives                                                                                          |
-| ---------------------------- | ---------------------------------------------------------------------------------------------- |
-| `length(value)`              | How many items a list, a tuple or a set holds, keys a map or an object, or characters a string |
-| `tolist(value)`              | A list, a tuple or a set as a list of the one type its items share                             |
-| `toset(value)`               | A list, a tuple or a set as a set of the one type its items share, each member once            |
-| `sensitive(value)`           | The value, marked sensitive as a whole                                                         |
-| `nonsensitive(value)`        | The value with every sensitive mark taken off, of any part                                     |
-| `issensitive(value)`         | `true` when any part of the value is sensitive, else `false`; not known only if nothing says   |
-| `upper(string)`              | The string with each letter in upper case                                                      |
-| `lower(string)`              | The string with each letter in lower case                                                      |
-| `join(separator, list, ...)` | The items of one or more lists of strings, in order, with the separator between each two       |
-| `lookup(map, key, default)`  | The value a map or an object holds at the key, or the default where it holds none              |
-| `merge(map, ...)`            | One map or object of every key the maps and objects hold, a later key over an earlier one      |
+| Function                     | Gives                                                                                                  |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `length(value)`              | How many items a list, a tuple or a set holds, keys a map or an object, or characters a string         |
+| `tolist(value)`              | A list, a tuple or a set as a list of the one type its items share                                     |
+| `toset(value)`               | A list, a tuple or a set as a set of the one type its items share, each member once                    |
+| `sensitive(value)`           | The value, marked sensitive as a whole                                                                 |
+| `nonsensitive(value)`        | The value with every sensitive mark taken off, of any part                                             |
+| `issensitive(value)`         | `true` when any part of the value is sensitive, else `false`; not known only if nothing says           |
+| `upper(string)`              | The string with each letter in upper case                                                              |
+| `lower(string)`              | The string with each letter in lower case                                                              |
+| `join(separator, list, ...)` | The items of one or more lists of strings, in order, with the separator between each two               |
+| `lookup(map, key, default)`  | The value a map or an object holds at the key, or the default where it holds none                      |
+| `merge(map, ...)`            | One map or object of every key the maps and objects hold, a later key over an earlier one              |
+| `format(string, value, ...)` | The string with each verb in it, such as `%s` or `%03d`, replaced by an argument as the verb writes it |
 
 A character is what a reader counts as one: a letter with its accent, or an emoji made of
 several code points, is one. A number, a boolean or `null` is refused where the argument
@@ -368,6 +369,37 @@ map not known yet leaves its keys unknown, so the result is not known until appl
 object not known yet still names its attributes. A sensitive part stays sensitive where
 the result keeps it, and an argument sensitive as a whole makes the result sensitive as a
 whole, since the keys it covers show its own.
+
+`format` writes the arguments in order, one for each verb in the string. `%[2]s` writes
+the second, and the verb after it the third. `%%` writes `%`.
+
+| Verb  | Writes                                                                                |
+| ----- | ------------------------------------------------------------------------------------- |
+| `%s`  | A string, a number or a boolean as its text                                           |
+| `%q`  | That text as a JSON string, in quotes                                                 |
+| `%v`  | A string, a number or a boolean as `%s` does, `null` as `null`, anything else as JSON |
+| `%#v` | Any value as JSON                                                                     |
+| `%t`  | `true` or `false`, from a boolean or a string that spells one                         |
+| `%d`  | A whole number, from a number or a string that spells one                             |
+
+A width pads to that many characters: `%5s` on the left, `%-5s` on the right, `%05d` with
+zeros after the sign. `%+d` and `% d` put a sign or a space before a positive number. A
+precision keeps at most that many characters of a string, `%.3s`, and writes at least that
+many digits, `%.3d`. A width or a precision is at most 1000. JSON writes the keys of a map
+or an object in order. The number verbs `%f`, `%e`, `%g`, `%b`, `%o` and `%x` are not in
+Clay yet.
+
+A verb Clay does not have is refused, and so is a flag or a precision the verb does not
+use, which Terraform ignores. A verb with no argument and an argument no verb writes are
+refused too; Terraform takes an argument that `%[n]` skips. The string is read and each
+argument checked by its type before they are known, so `validate` finds these, and a list
+given to `%s`. Terraform skips every check while an argument is not known. Only `%v` takes
+`null`. The result is not known until apply while an argument is not, and it is sensitive
+as a whole where any part of an argument is. A problem with a sensitive string does not say which verb it is.
+
+`%v` writes a number as `${}` does, `1000000000000000000000`, where Terraform writes
+`1e+21`. JSON escapes no `<`, `>` or `&`, where Terraform writes `\u003c`. `%.0s` writes
+nothing, where Terraform writes the whole string.
 
 A name no function has, or a call with another number of arguments than the function
 takes, is refused where the call is written, in a module nothing is made of too.

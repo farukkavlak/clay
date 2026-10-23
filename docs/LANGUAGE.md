@@ -93,6 +93,7 @@ beside a boolean, or objects with other names, are refused. `upper` and `lower` 
 case of a string, and `join(", ", var.names)` makes one string of the items of a list.
 `merge(local.common, { env = "prod" })` gives every key of both, the later one winning,
 and `lookup(var.sizes, var.env, "small")` reads a key, with a default where it is not.
+`format("%s-%02d", var.name, count.index + 1)` writes `web-01`, `web-02` and so on.
 
 ## Operators
 

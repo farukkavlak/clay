@@ -148,6 +148,9 @@ describe('a function call', () => {
     ['lookup with no default', 'lookup({ a = "x" }, "a")', 'lookup(', 'lookup takes 3 arguments, not 2; without a default, read the key with map["key"]'],
     ['lookup in a list', 'lookup(var.names, "a", "x")', 'var.names, "a"', 'lookup takes a map or an object, not a tuple'],
     ['merge of a list', 'merge({ a = "x" }, var.names)', 'var.names)', 'merge takes maps or objects, not a tuple'],
+    ['format with a verb it does not take', 'format("%z")', '"%z")', 'format cannot read "%z": there is no verb %z; format takes %s, %q, %v, %t, %d and %%'],
+    ['format of a list as a string', 'format("%s", var.names)', 'var.names)', 'format cannot write a tuple with "%s"'],
+    ['format with an argument it does not use', 'format("%s", "a", "b")', '"b")', "format's string has no verb for this argument"],
     ['a number', 'length(5)', '5)', 'length takes a string, a list, a tuple, a set, a map or an object, not a number'],
     ['null', 'length(null)', 'null)', 'length takes a string, a list, a tuple, a set, a map or an object, not null'],
     ['a step into the number it gives', 'length(var.names)[0]', 'length(var.names)[0]', 'length(...) is a number and cannot be read into'],
@@ -345,6 +348,41 @@ ${file('f', '"${local.tags.team}-${local.tags.env}-${lookup(local.tags, "zone", 
     await expect(newOrchestrator().validate(config)).rejects.toMatchObject({
       message: 'lookup cannot join a string and a tuple into one type',
       position: placeOf(config, '["x"]'),
+    });
+  });
+
+  it('writes what format gives', async () => {
+    await apply(`locals {\n  n = 7\n}\n${file('f', '"${format("%s-%03d %q %v", "web", local.n, "a", { b = 1 })}"')}`);
+
+    expect(await read('f')).toBe('web-007 "a" {"b":1}');
+  });
+
+  it('names one file per instance with format', async () => {
+    await apply(`
+      resource "local_file" "f" {
+        count = 2
+        path = format("%s/f-%02d.txt", "${dir}", count.index + 1)
+        content = "x"
+      }
+    `);
+
+    expect(await textFiles()).toEqual(['f-01.txt', 'f-02.txt']);
+  });
+
+  it('keeps sensitive what format writes from a sensitive value', async () => {
+    const config = `variable "token" {\n  default   = "t"\n  sensitive = true\n}\noutput "o" {\n  value = format("Bearer %s", var.token)\n}`;
+
+    const error = await planError(config);
+
+    expect(error.message).toBe('output "o" holds a sensitive value; write sensitive = true to export it');
+  });
+
+  it('refuses at validate a value format cannot write before it is known', async () => {
+    const config = 'resource "random_string" "s" { length = 4 }\noutput "o" {\n  value = format("%s", [random_string.s.result])\n}';
+
+    await expect(newOrchestrator().validate(config)).rejects.toMatchObject({
+      message: 'format cannot write a tuple with "%s"',
+      position: placeOf(config, '[random_string.s.result])'),
     });
   });
 
