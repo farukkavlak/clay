@@ -331,10 +331,15 @@ change each.
       address escapes them as `\u007f`, so `output --json` reads back as the same value;
       an address with one raw is refused, a path shows it as a character of its own, and a
       plan file's timestamp must be one Clay writes
+- [ ] A choice not known at plan marks what it gives where only one side is sensitive, so
+      `issensitive` answers `true` at plan and `false` at apply, and the apply fails. A
+      condition and `&&` or `||` keep only the marks they have whichever way the apply goes;
+      `lookup` with a key not known yet, an index not known yet, a `for` whose `if` is not
+      known yet and `merge` with an argument not known yet still mark from one side
 - [ ] In a module called with `count = 0`, `count = sensitive(var.n)` and
       `for_each = sensitive({ a = var.x })` pass the plan; with `count = 1` both are refused
-      as sensitive. Read as written, a value with a part not known loses its marks, since a
-      condition not known marks its result where either branch is marked
+      as sensitive. Read as written, a value with a part not known loses its marks, which
+      stays needed until no choice not known at plan marks from one side
 - [ ] A provider's `validate` runs only for an instance, so in a module called with
       `count = 0`, `local_file` with `path = ""` passes the plan; with `count = 1` it is
       refused: `local_file "path" must not be empty`

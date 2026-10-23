@@ -225,7 +225,7 @@ output "right" { value = random_string.r.result == "x" && false }
     it.each([
       ['a sensitive condition', 'var.secret == "s" ? "a" : "b"'],
       ['a sensitive result the condition picks', 'true ? var.secret : "b"'],
-      ['a sensitive result while the condition is not known', 'random_string.r.result == "x" ? var.secret : "b"'],
+      ['sensitive results on both sides while the condition is not known', 'random_string.r.result == "x" ? var.secret : var.secret'],
       ['a comparison with a sensitive part', '{ a = sensitive("x") } == { a = "x" }'],
       ['&& with a sensitive side', 'true && var.secret == "s"'],
       ['a sensitive side that decides &&', 'var.secret == "x" && true'],
