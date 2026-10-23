@@ -799,7 +799,7 @@ Measured with the local provider; a remote provider makes the sequential calls c
 - [ ] Refresh, planning, schema loading and data source reads call the provider one at a
       time. With 100 ms a call, 20 resources plan in 4 seconds. Terraform runs them as the
       graph allows, ten at a time
-- [ ] `Graph.dependenciesOf` scans every node's edges on each call, and the plan calls it for
+- [x] `Graph.dependenciesOf` scans every node's edges on each call, and the plan calls it for
       every resource, so a plan of 4000 blocks spends 1.8 of its 2.4 seconds there. The graph
       can keep the reverse edges
 

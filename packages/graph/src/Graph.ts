@@ -1,11 +1,14 @@
 export class Graph<T> {
   private nodes: Map<string, T> = new Map();
   private adjacencyList: Map<string, Set<string>> = new Map();
+  /** The edges turned around, so what a node depends on is read without scanning every node. */
+  private reverseList: Map<string, Set<string>> = new Map();
 
   addNode(id: string, data: T): void {
     if (this.nodes.has(id)) throw new Error(`Node ${id} already exists`);
     this.nodes.set(id, data);
     this.adjacencyList.set(id, new Set());
+    this.reverseList.set(id, new Set());
   }
 
   addEdge(from: string, to: string): void {
@@ -13,6 +16,7 @@ export class Graph<T> {
     if (!this.nodes.has(to)) throw new Error(`Node ${to} does not exist`);
 
     this.adjacencyList.get(from)!.add(to);
+    this.reverseList.get(to)!.add(from);
   }
 
   getNode(id: string): T | undefined {
@@ -31,7 +35,7 @@ export class Graph<T> {
   dependenciesOf(id: string): string[] {
     if (!this.nodes.has(id)) throw new Error(`Node ${id} does not exist`);
 
-    return [...this.adjacencyList.entries()].filter(([, neighbors]) => neighbors.has(id)).map(([from]) => from);
+    return [...this.reverseList.get(id)!];
   }
 
   /** Nodes this one has an edge into. */
