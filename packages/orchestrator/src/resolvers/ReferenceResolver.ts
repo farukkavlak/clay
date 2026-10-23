@@ -192,6 +192,11 @@ function fitted(taken: AttributeValue, value: Value, written: Type): Value {
   }
 }
 
+/** A value with no name is found by where it is written. */
+function spelledPart(part: AttributeValue): string {
+  return part.type === 'Reference' || part.type === 'Call' || part.type === 'Bound' ? spellNamed(part) : "The value inside '${'";
+}
+
 export class ReferenceResolver {
   private scopeManager: ScopeManager;
   private instances: Instances;
@@ -643,7 +648,7 @@ export class ReferenceResolver {
   }
 
   /** Collects an unknown part into `unresolved`. */
-  private textOf(part: ReferenceNode | CallNode | BoundNode, state: State, context: Context | undefined, reading: Reading, unresolved: UnresolvedReferenceError[]): Value {
+  private textOf(part: AttributeValue, state: State, context: Context | undefined, reading: Reading, unresolved: UnresolvedReferenceError[]): Value {
     try {
       return this.joined(part, state, context, reading);
     } catch (error) {
@@ -654,7 +659,7 @@ export class ReferenceResolver {
   }
 
   /** Only a string, a number or a boolean can be joined. */
-  private joined(part: ReferenceNode | CallNode | BoundNode, state: State, context: Context | undefined, reading: Reading): Value {
+  private joined(part: AttributeValue, state: State, context: Context | undefined, reading: Reading): Value {
     const resolved = this.resolvedPart(part, state, context, reading);
     if (resolved.data === null || !hasText(resolved.type)) throw this.unjoinable(part, isSensitive(resolved) ? undefined : described(resolved));
 
@@ -662,7 +667,7 @@ export class ReferenceResolver {
   }
 
   /** A value not known yet is checked by the type it will have. */
-  private resolvedPart(part: ReferenceNode | CallNode | BoundNode, state: State, context: Context | undefined, reading: Reading): Value {
+  private resolvedPart(part: AttributeValue, state: State, context: Context | undefined, reading: Reading): Value {
     try {
       return this.resolveIn(part, state, context, reading);
     } catch (error) {
@@ -672,9 +677,9 @@ export class ReferenceResolver {
   }
 
   /** `what` is left out for a sensitive value, whose type is a part of it. */
-  private unjoinable(part: ReferenceNode | CallNode | BoundNode, what: string | undefined): ConfigError {
+  private unjoinable(part: AttributeValue, what: string | undefined): ConfigError {
     const problem = what === undefined ? 'is sensitive and cannot be joined into a string: why is not shown' : `is ${what} and cannot be joined into a string`;
 
-    return new ConfigError(`${spellNamed(part)} ${problem}`, part.position);
+    return new ConfigError(`${spelledPart(part)} ${problem}`, part.position);
   }
 }

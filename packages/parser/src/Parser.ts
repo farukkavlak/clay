@@ -607,15 +607,17 @@ export class Parser {
     return { type: 'Template', value: joined, position };
   }
 
-  /** Only a reference, a call or a for name. */
-  private parseInterpolation(): ReferenceNode | CallNode | BoundNode {
-    this.advance();
-    if (!this.check(TokenType.Identifier)) return this.error("Expect a reference or a function call inside '${'.");
+  /** A string inside may hold an interpolation of its own, so each counts toward the nesting limit. */
+  private parseInterpolation(): AttributeValue {
+    const opening = this.advance().position;
+    if (this.check(TokenType.TemplateEnd)) return this.error("Expect a value inside '${'.");
 
-    const named = this.parseNamed(this.peek().position);
-    this.consume(TokenType.TemplateEnd, `Expect '}' after the ${named.type === 'Call' ? 'function call' : 'reference'}.`);
+    return this.nested(opening, () => {
+      const value = this.parseValue();
+      this.consume(TokenType.TemplateEnd, "Expect '}' after the value inside '${'.");
 
-    return named;
+      return value;
+    });
   }
 
   private plainText(quote: Token, what: string): Token {

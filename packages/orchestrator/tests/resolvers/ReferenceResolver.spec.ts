@@ -109,6 +109,14 @@ describe('ReferenceResolver', () => {
     expect(() => resolverWith(scopes).resolveValue(template('a ', reference('var', 'x')), state, context)).toThrow(new ConfigError(message, position));
   });
 
+  it('joins any value written inside an interpolation', () => {
+    expect(read('"${1 + 2}-${true ? "a" : "b"}-${"c${4 % 3}"}"')).toEqual(valueOf(types.string, '3-a-c1'));
+  });
+
+  it('refuses to join a value that has no text and no name, where it is written', () => {
+    expect(() => read('"a ${[1]}"')).toThrow(new ConfigError("The value inside '${' is a tuple and cannot be joined into a string", atColumn(27)));
+  });
+
   // State may hold data outside the schema, so the error names the resource.
   it('refuses a value in state that its schema does not hold, naming the resource', () => {
     const schemas = new Map([['resource', { val: { type: types.number } }]]);
