@@ -145,6 +145,9 @@ describe('a function call', () => {
     ['join with nothing to join', 'join("-")', 'join("-")', 'join takes at least 2 arguments, not 1'],
     ['upper of a list', 'upper(var.names)', 'var.names)', 'upper takes a string, not a tuple'],
     ['join of a map after a list', 'join("-", var.names, { a = "x" })', '{ a = "x" })', 'join takes lists of strings after the separator, not an object'],
+    ['lookup with no default', 'lookup({ a = "x" }, "a")', 'lookup(', 'lookup takes 3 arguments, not 2; without a default, read the key with map["key"]'],
+    ['lookup in a list', 'lookup(var.names, "a", "x")', 'var.names, "a"', 'lookup takes a map or an object, not a tuple'],
+    ['merge of a list', 'merge({ a = "x" }, var.names)', 'var.names)', 'merge takes maps or objects, not a tuple'],
     ['a number', 'length(5)', '5)', 'length takes a string, a list, a tuple, a set, a map or an object, not a number'],
     ['null', 'length(null)', 'null)', 'length takes a string, a list, a tuple, a set, a map or an object, not null'],
     ['a step into the number it gives', 'length(var.names)[0]', 'length(var.names)[0]', 'length(...) is a number and cannot be read into'],
@@ -293,6 +296,56 @@ describe('a function call', () => {
     const error = await planError(config);
 
     expect(error.message).toBe('output "j" holds a sensitive value; write sensitive = true to export it');
+  });
+
+  it('writes what lookup and merge give', async () => {
+    const config = `locals {
+  common = { team = "web", env = "dev" }
+  tags   = merge(local.common, { env = "prod" })
+}
+${file('f', '"${local.tags.team}-${local.tags.env}-${lookup(local.tags, "zone", "none")}"')}`;
+
+    await apply(config);
+
+    expect(await read('f')).toBe('web-prod-none');
+  });
+
+  it('makes an instance for each key merge gives', async () => {
+    await apply(`
+      resource "local_file" "f" {
+        for_each = merge({ a = "1", b = "2" }, { b = "3" })
+        path = "${path.join(dir, 'f-${each.key}.txt')}"
+        content = each.value
+      }
+    `);
+
+    expect(await textFiles()).toEqual(['f-a.txt', 'f-b.txt']);
+    expect(await read('f-b')).toBe('3');
+  });
+
+  it('keeps sensitive only the part merge keeps from a sensitive value', async () => {
+    const config = `variable "token" {\n  default   = "t"\n  sensitive = true\n}\noutput "o" {\n  value = merge({ a = var.token, b = "x" }, { a = "y" })\n}`;
+
+    await apply(config);
+
+    expect(await outputs()).toEqual({ o: { value: { a: 'y', b: 'x' }, type: types.object({ a: types.string, b: types.string }) } });
+  });
+
+  it('keeps sensitive what lookup reads at a sensitive key', async () => {
+    const config = `variable "key" {\n  default   = "a"\n  sensitive = true\n}\noutput "o" {\n  value = lookup({ a = "x" }, var.key, "none")\n}`;
+
+    const error = await planError(config);
+
+    expect(error.message).toBe('output "o" holds a sensitive value; write sensitive = true to export it');
+  });
+
+  it('refuses at validate a default no value of the map joins with', async () => {
+    const config = 'variable "m" {\n  type    = map(string)\n  default = { a = "x" }\n}\noutput "o" {\n  value = lookup(var.m, "a", ["x"])\n}';
+
+    await expect(newOrchestrator().validate(config)).rejects.toMatchObject({
+      message: 'lookup cannot join a string and a tuple into one type',
+      position: placeOf(config, '["x"]'),
+    });
   });
 
   it('refuses at validate a list of lists to join before what it holds is known', async () => {

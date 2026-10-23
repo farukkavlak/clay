@@ -1,17 +1,37 @@
+import { isDeepStrictEqual } from 'node:util';
+
 import { containsUnknown, ExactNumber, isUnknown, Type, types, UNKNOWN } from '@clay/contracts';
 import { CallNode, ConfigError } from '@clay/parser';
 
 import { converted, sensitiveAs } from './conformValues';
 import { isSequence, itemTypes, unified, unjoined, Unjoinable } from './unify';
-import { allSensitive, allSensitiveIf, article, described, hasText, isAllSensitive, isSensitive, nullSource, unordered, Value, valueOf, wholeIf, withSensitive } from './Value';
+import {
+  allSensitive,
+  allSensitiveIf,
+  article,
+  child,
+  described,
+  hasText,
+  isAllSensitive,
+  isSensitive,
+  nullSource,
+  objectOf,
+  sensitiveAmong,
+  unordered,
+  Value,
+  valueOf,
+  wholeIf,
+  withSensitive,
+} from './Value';
 
 /** Refuses at the argument `at`, the first where it is left out. */
 type Refuse = (message: string, at?: number) => never;
 
-/** `takes` arguments, or with `more`, at least that many. Each may be wholly or partly unknown. */
+/** `takes` arguments, or with `more`, at least that many. Each may be wholly or partly unknown. `fewer` says what to write instead of too few. */
 interface ClayFunction {
   readonly takes: number;
   readonly more?: true;
+  readonly fewer?: string;
   readonly call: (args: Value[], refuse: Refuse) => Value;
 }
 
@@ -68,8 +88,8 @@ function converter(kind: 'list' | 'set'): OfOne {
 }
 
 /** A number or a boolean is read as its text, as `${}` reads it. */
-function textOf(takes: string, value: Value, refuse: Refuse): string | typeof UNKNOWN {
-  if (value.data === null || !(hasText(value.type) || value.type.kind === 'dynamic')) return refuse(`${takes}, not ${described(value)}${nullSource(value)}`);
+function textOf(takes: string, value: Value, refuse: Refuse, at = 0): string | typeof UNKNOWN {
+  if (value.data === null || !(hasText(value.type) || value.type.kind === 'dynamic')) return refuse(`${takes}, not ${described(value)}${nullSource(value)}`, at);
 
   return isUnknown(value.data) ? UNKNOWN : String(value.data);
 }
@@ -106,6 +126,90 @@ function join([separator, ...lists]: Value[], refuse: Refuse): Value {
   return withSensitive(valueOf(types.string, items.map(String).join(between)), sensitive);
 }
 
+const KEYED = new Set<Type['kind']>(['map', 'object', 'dynamic']);
+
+/** What a map or an object holds at `key`, not known where the whole is not. */
+function entryOf(value: Value, key: string): Value {
+  return isUnknown(value.data) ? { ...child(value, key), data: UNKNOWN } : child(value, key);
+}
+
+function unknownFrom(type: Type, args: Value[]): Value {
+  return withSensitive(valueOf(type, UNKNOWN), wholeIf(args.some((arg) => isSensitive(arg))));
+}
+
+/** A map's value and the default join into one type, as the two results of a conditional do. */
+function lookupType(map: Value, element: Type, fallback: Value, refuse: Refuse): Type {
+  try {
+    return unified([element, fallback.type]);
+  } catch (error) {
+    if (!(error instanceof Unjoinable)) throw error;
+    return refuse(`lookup ${unjoined(error, isSensitive(map) || isSensitive(fallback))}`, 2);
+  }
+}
+
+function fromMap(args: Value[], element: Type, key: string | typeof UNKNOWN, refuse: Refuse): Value {
+  const [map, , fallback] = args;
+  const type = lookupType(map, element, fallback, refuse);
+  if (key === UNKNOWN || isUnknown(map.data)) return unknownFrom(type, args);
+
+  const found = Object.hasOwn(map.data as Record<string, unknown>, key) ? child(map, key) : fallback;
+  return converted('lookup', found, type, []);
+}
+
+/** An object's attributes are known by its type, so its value or the default is given as it is. */
+function fromObject(args: Value[], key: string | typeof UNKNOWN): Value {
+  const [object, , fallback] = args;
+  if (key === UNKNOWN || object.type.kind !== 'object') return unknownFrom(types.dynamic, args);
+
+  return Object.hasOwn(object.type.attributes, key) ? entryOf(object, key) : fallback;
+}
+
+/** Sensitive as a whole where the key or every key is, since whether it gives the default tells whether the key is there. */
+function lookup(args: Value[], refuse: Refuse): Value {
+  const [map, key] = args;
+  if (map.data === null || !KEYED.has(map.type.kind)) return refuse(`lookup takes a map or an object, not ${described(map)}${nullSource(map)}`);
+
+  const name = textOf('lookup takes a string as the key', key, refuse, 1);
+  const found = map.type.kind === 'map' ? fromMap(args, map.type.element, name, refuse) : fromObject(args, name);
+
+  return allSensitiveIf(isSensitive(key) || isAllSensitive(map), found);
+}
+
+/** Arguments of one type merge into that type; anything else into an object. */
+function sharedType(given: Value[]): Type | undefined {
+  const [first] = given;
+  if (first === undefined) return undefined;
+
+  return given.every((arg) => isDeepStrictEqual(arg.type, first.type)) ? first.type : undefined;
+}
+
+function keysOf(value: Value): string[] {
+  return Object.keys(value.type.kind === 'object' ? value.type.attributes : (value.data as Record<string, unknown>));
+}
+
+/** A map not known yet leaves the keys unknown, so an object made with it is not known at all. */
+function merged(given: Value[]): Value {
+  const shared = sharedType(given);
+  if (given.some((arg) => arg.type.kind === 'dynamic' || (arg.type.kind === 'map' && isUnknown(arg.data)))) return unknownFrom(shared ?? types.dynamic, given);
+
+  const entries = new Map(given.flatMap((arg) => keysOf(arg).map((key): [string, Value] => [key, entryOf(arg, key)])));
+  if (!shared) return objectOf([...entries]);
+
+  const values = Object.fromEntries(entries);
+  return withSensitive(valueOf(shared, Object.fromEntries(Object.entries(values).map(([key, value]) => [key, value.data]))), sensitiveAmong(values));
+}
+
+/** Later keys win, and a null is left out. Sensitive as a whole where one is, since the keys it holds are a part of it. */
+function merge(args: Value[], refuse: Refuse): Value {
+  for (const [index, arg] of args.entries()) if (!KEYED.has(arg.type.kind)) refuse(`merge takes maps or objects, not ${article(arg.type.kind)}`, index);
+
+  const given = args.filter((arg) => arg.data !== null);
+  return allSensitiveIf(
+    given.some((arg) => isAllSensitive(arg)),
+    merged(given)
+  );
+}
+
 /** Unknown only when nothing says it is sensitive: a mark is known before the value is. */
 function issensitive(value: Value): Value {
   if (isSensitive(value)) return valueOf(types.bool, true);
@@ -123,6 +227,8 @@ const FUNCTIONS = new Map<string, ClayFunction>([
   ['upper', cased('upper', (text) => text.toUpperCase())],
   ['lower', cased('lower', (text) => text.toLowerCase())],
   ['join', { takes: 2, more: true, call: join }],
+  ['lookup', { takes: 3, fewer: 'without a default, read the key with map["key"]', call: lookup }],
+  ['merge', { takes: 1, more: true, call: merge }],
 ]);
 
 function counts({ takes, more }: ClayFunction): string {
@@ -135,7 +241,10 @@ export function functionCalled(call: CallNode): (args: Value[]) => Value {
   if (!found) throw new ConfigError(`There is no function "${call.name}"`, call.position);
 
   const given = call.args.length;
-  if (found.more ? given < found.takes : given !== found.takes) throw new ConfigError(`${call.name} takes ${counts(found)}, not ${given}`, call.position);
+  if (found.more ? given < found.takes : given !== found.takes) {
+    const instead = given < found.takes && found.fewer ? `; ${found.fewer}` : '';
+    throw new ConfigError(`${call.name} takes ${counts(found)}, not ${given}${instead}`, call.position);
+  }
 
   return (args) =>
     found.call(args, (message, at = 0) => {

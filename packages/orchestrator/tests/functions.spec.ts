@@ -261,3 +261,147 @@ describe('join', () => {
     expect(error.position).toEqual(at(column));
   });
 });
+
+const sizes = valueOf(types.map(types.string), { dev: 'small', prod: 'large' });
+
+describe('lookup', () => {
+  it.each([
+    ['the value at a key a map holds', sizes, 'prod', written('none'), text('large')],
+    ['the default for a key a map does not hold', sizes, 'test', written('none'), text('none')],
+    ['the default as the type the map and it join into', sizes, 'test', number('3'), text('3')],
+    ['a number as the type it joins into with a string default', valueOf(types.map(types.number), { a: ExactNumber.parse('1') }), 'a', written('x'), text('1')],
+    ['the attribute of an object, as its own type', written({ a: ExactNumber.parse('1'), b: 'x' }), 'a', written('none'), number('1')],
+    ['the default for a name an object does not have, as its own type', written({ a: 'x' }), 'b', written(true), written(true)],
+    ['a key given as a number, by its text', valueOf(types.map(types.string), { '1': 'one' }), number('1'), written('none'), text('one')],
+    ['the default for a key a map inherits from nowhere', sizes, 'constructor', written('none'), text('none')],
+    ['the default for a name an object inherits from nowhere', written({ a: 'x' }), 'toString', written('none'), text('none')],
+  ])('gives %s', (_, map, key, fallback, result) => {
+    expect(called('lookup', map, typeof key === 'string' ? written(key) : key, fallback)).toEqual(result);
+  });
+
+  it.each([
+    ['a key not known yet in a map, as the type it joins into', sizes, valueOf(types.string, UNKNOWN), written('x'), text(UNKNOWN)],
+    [
+      'a key not known yet in a map of numbers with a string default, as a string',
+      valueOf(types.map(types.number), {}),
+      valueOf(types.string, UNKNOWN),
+      written('x'),
+      text(UNKNOWN),
+    ],
+    ['a map not known yet', valueOf(types.map(types.string), UNKNOWN), written('a'), written('x'), text(UNKNOWN)],
+    ['a key not known yet in an object, as any type', written({ a: 'x' }), valueOf(types.string, UNKNOWN), written('x'), valueOf(types.dynamic, UNKNOWN)],
+    ['an object not known yet, as its attribute', valueOf(types.object({ a: types.number }), UNKNOWN), written('a'), written('x'), valueOf(types.number, UNKNOWN)],
+    ['a value not known yet whose type nothing names', valueOf(types.dynamic, UNKNOWN), written('a'), written('x'), valueOf(types.dynamic, UNKNOWN)],
+  ])('does not know %s', (_, map, key, fallback, result) => {
+    expect(called('lookup', map, key, fallback)).toEqual(result);
+  });
+
+  it.each([
+    ['a sensitive key that is there', sizes, allSensitive(written('prod')), written('none'), allSensitive(text('large'))],
+    ['a sensitive key that is not', sizes, allSensitive(written('test')), written('none'), allSensitive(text('none'))],
+    ['a map sensitive as a whole', allSensitive(sizes), written('test'), written('none'), allSensitive(text('none'))],
+    ['a value sensitive at the key it reads', withSensitive(sizes, [['prod']]), written('prod'), written('none'), allSensitive(text('large'))],
+    ['a sensitive default it gives', sizes, written('test'), allSensitive(written('none')), allSensitive(text('none'))],
+    ['a key not known yet with a sensitive default', sizes, valueOf(types.string, UNKNOWN), allSensitive(written('x')), allSensitive(text(UNKNOWN))],
+  ])('is sensitive with %s', (_, map, key, fallback, result) => {
+    expect(called('lookup', map, key, fallback)).toEqual(result);
+  });
+
+  it.each([
+    ['a value sensitive at another key', withSensitive(sizes, [['dev']]), 'prod', written('none'), text('large')],
+    ['a sensitive default it does not give', sizes, 'prod', allSensitive(written('none')), text('large')],
+  ])('is not sensitive with %s', (_, map, key, fallback, result) => {
+    expect(called('lookup', map, written(key), fallback)).toEqual(result);
+  });
+
+  it.each([
+    ['a list to read', [written(['a']), written('a'), written('x')], 'lookup takes a map or an object, not a tuple', 8],
+    [
+      'null to read',
+      [{ ...valueOf(types.map(types.string), null), nullFrom: 'var.m' }, written('a'), written('x')],
+      'lookup takes a map or an object, not null, and var.m, which it reads, is null',
+      8,
+    ],
+    ['a key that is a list', [sizes, written(['a']), written('x')], 'lookup takes a string as the key, not a tuple', 18],
+    ['a default no value of the map joins with', [sizes, written('a'), written(['x'])], 'lookup cannot join a string and a tuple into one type', 28],
+    [
+      'such a default for a map not known yet',
+      [valueOf(types.map(types.string), UNKNOWN), written('a'), written(['x'])],
+      'lookup cannot join a string and a tuple into one type',
+      28,
+    ],
+    ['such a default for a key not known yet', [sizes, valueOf(types.string, UNKNOWN), written(['x'])], 'lookup cannot join a string and a tuple into one type', 28],
+    [
+      'such a default for a sensitive map, without its names',
+      [allSensitive(valueOf(types.map(types.object({ password: types.string })), {})), written('a'), written({ password: ['x'] })],
+      'lookup cannot join what it holds into one type; a part of it is sensitive, so no more is shown',
+      28,
+    ],
+  ])('refuses %s where it is written', (_, values, message, column) => {
+    const error = errorOf('lookup', ...values);
+
+    expect(error.message).toBe(message);
+    expect(error.position).toEqual(at(column));
+  });
+
+  it('refuses two arguments at the call, and says how to read a key with no default', () => {
+    expect(() => functionCalled(callOf('lookup', 2))).toThrow(new ConfigError('lookup takes 3 arguments, not 2; without a default, read the key with map["key"]', at(1)));
+  });
+
+  it('refuses four arguments at the call without saying it', () => {
+    expect(() => functionCalled(callOf('lookup', 4))).toThrow(new ConfigError('lookup takes 3 arguments, not 4', at(1)));
+  });
+});
+
+const map = (data: Record<string, unknown>) => valueOf(types.map(types.string), data);
+
+describe('merge', () => {
+  it.each([
+    ['maps of one type into that map, the later key winning', [map({ a: 'x', b: 'y' }), map({ b: 'z' })], map({ a: 'x', b: 'z' })],
+    ['one map as it is', [map({ a: 'x' })], map({ a: 'x' })],
+    ['objects into an object of every attribute', [written({ a: 'x' }), written({ b: true })], written({ a: 'x', b: true })],
+    ['a later attribute of another type over an earlier one', [written({ a: 'x' }), written({ a: true })], written({ a: true })],
+    ['maps of other types into an object', [map({ a: 'x' }), valueOf(types.map(types.bool), { b: true })], written({ a: 'x', b: true })],
+    ['a map and an object into an object', [map({ a: 'x' }), written({ b: 'y' })], written({ a: 'x', b: 'y' })],
+    ['a null left out', [map({ a: 'x' }), valueOf(types.map(types.string), null), valueOf(types.dynamic, null)], map({ a: 'x' })],
+    ['only null into an empty object', [valueOf(types.dynamic, null)], written({})],
+  ])('gives %s', (_, values, result) => {
+    expect(called('merge', ...values)).toEqual(result);
+  });
+
+  it.each([
+    ['a map not known yet, among maps of its type', [map({ a: 'x' }), valueOf(types.map(types.string), UNKNOWN)], valueOf(types.map(types.string), UNKNOWN)],
+    ['a map not known yet, beside an object', [written({ a: 'x' }), valueOf(types.map(types.string), UNKNOWN)], valueOf(types.dynamic, UNKNOWN)],
+    ['a value not known yet whose type nothing names', [map({ a: 'x' }), valueOf(types.dynamic, UNKNOWN)], valueOf(types.dynamic, UNKNOWN)],
+  ])('does not know the result with %s', (_, values, result) => {
+    expect(called('merge', ...values)).toEqual(result);
+  });
+
+  it('knows the attributes of an object not known yet, and the values it does not cover', () => {
+    const later = valueOf(types.object({ b: types.string }), UNKNOWN);
+
+    expect(called('merge', written({ a: 'x', b: 'y' }), later)).toEqual(valueOf(types.object({ a: types.string, b: types.string }), { a: 'x', b: UNKNOWN }));
+  });
+
+  it.each([
+    ['a part sensitive at a key that stays', [withSensitive(map({ a: 'x', b: 'y' }), [['a']]), map({ b: 'z' })], withSensitive(map({ a: 'x', b: 'z' }), [['a']])],
+    ['a part sensitive at a key a later one covers', [withSensitive(map({ a: 'x' }), [['a']]), map({ a: 'z' })], map({ a: 'z' })],
+    ['a later object sensitive at an attribute', [written({ a: 'x' }), withSensitive(written({ b: 'y' }), [['b']])], withSensitive(written({ a: 'x', b: 'y' }), [['b']])],
+  ])('keeps sensitive only what stays: %s', (_, values, result) => {
+    expect(called('merge', ...values)).toEqual(result);
+  });
+
+  it('is sensitive as a whole where an argument is, since the keys it covers show its own', () => {
+    expect(called('merge', map({ a: 'x' }), allSensitive(map({ b: 'y' })))).toEqual(allSensitive(map({ a: 'x', b: 'y' })));
+  });
+
+  it.each([
+    ['a list', [map({ a: 'x' }), written(['a'])], 'merge takes maps or objects, not a tuple', 18],
+    ['a string that is null', [valueOf(types.string, null)], 'merge takes maps or objects, not a string', 8],
+  ])('refuses %s where it is written', (_, values, message, column) => {
+    const error = errorOf('merge', ...values);
+
+    expect(error.message).toBe(message);
+    expect(error.position).toEqual(at(column));
+  });
+});

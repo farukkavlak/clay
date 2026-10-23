@@ -320,6 +320,8 @@ steps after the `)` read into what the function gives, as a reference's do.
 | `upper(string)`              | The string with each letter in upper case                                                      |
 | `lower(string)`              | The string with each letter in lower case                                                      |
 | `join(separator, list, ...)` | The items of one or more lists of strings, in order, with the separator between each two       |
+| `lookup(map, key, default)`  | The value a map or an object holds at the key, or the default where it holds none              |
+| `merge(map, ...)`            | One map or object of every key the maps and objects hold, a later key over an earlier one      |
 
 A character is what a reader counts as one: a letter with its accent, or an emoji made of
 several code points, is one. A number, a boolean or `null` is refused where the argument
@@ -350,6 +352,22 @@ tuple or a set of strings, numbers or booleans after the separator; one that hol
 anything else is refused by its type, so `validate` finds it. A `null` item is refused,
 without saying which item it is. The string is not known until apply while the separator
 or any item is not, and it is sensitive as a whole where any part of what it joins is.
+
+`lookup` takes the key as `join` takes the separator. From a map, the value it finds and
+the default join into one type, as the two results of a conditional do, so
+`lookup(var.ports, "web", "none")` is a string where `var.ports` is a `map(number)`. From
+an object, it gives the attribute or the default as it is. The default is written each
+time: `lookup(m, "k")` is refused, since `m["k"]` reads a key without one. Terraform takes
+it. The result is not known until apply while the key or the map is not, and sensitive as
+a whole where the key is or the map is as a whole, since whether it gives the default
+shows whether the key is there.
+
+`merge` takes maps and objects, and leaves out a `null`. Maps of one type merge into that
+type; anything else merges into an object, each attribute of the type its value has. A
+map not known yet leaves its keys unknown, so the result is not known until apply; an
+object not known yet still names its attributes. A sensitive part stays sensitive where
+the result keeps it, and an argument sensitive as a whole makes the result sensitive as a
+whole, since the keys it covers show its own.
 
 A name no function has, or a call with another number of arguments than the function
 takes, is refused where the call is written, in a module nothing is made of too.
