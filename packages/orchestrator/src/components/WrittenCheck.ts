@@ -1,14 +1,18 @@
-import { ModuleAddress, Schema } from '@clay/contracts';
+import { containsUnknown, ModuleAddress, Schema } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { AttributeValue, DataBlock, ModuleBlock, OutputBlock, spell, VariableBlock } from '@clay/parser';
 
 import { converted } from '../conformValues';
+import { countFrom } from '../count';
 import { declaredOf, givenTo } from '../declared';
+import { eachFrom } from '../forEach';
 import { Context, ModuleCall, scopeOf } from '../keys';
+import { NotKnownYet } from '../NotKnownYet';
 import { tryAt } from '../place';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { ScopeManager } from '../scope/ScopeManager';
-import { Value } from '../Value';
+import { checkWritten } from '../validations';
+import { Value, withSensitive } from '../Value';
 import { GraphNode } from './DependencyGraphBuilder';
 import { LoadedModule, LoadedResource } from './ModuleLoader';
 
@@ -48,14 +52,14 @@ export class WrittenCheck {
     // Every schema is loaded by now.
     const schema = this.schemas.get(block.resourceType)!;
 
-    for (const value of [block.count, block.forEach]) if (value) this.read(value, declaration, address);
+    this.checkRepetition(block, declaration, address);
     this.checkAttributes(block.resourceType, block.attributes, schema, declaration, address);
   }
 
   private checkData(block: DataBlock, module: ModuleAddress): void {
     const declaration = spell(block);
 
-    for (const value of [block.count, block.forEach]) if (value) this.read(value, declaration, module);
+    this.checkRepetition(block, declaration, module);
     // Every data schema is loaded by now, its names checked.
     this.checkAttributes(block.dataSourceType, block.attributes, this.dataSchemas.get(block.dataSourceType)!, declaration, module);
   }
@@ -71,7 +75,7 @@ export class WrittenCheck {
     const declaration = spell(block);
     const call = new ModuleCall(module);
 
-    for (const value of [block.count, block.forEach]) if (value) this.read(value, declaration, call.caller);
+    this.checkRepetition(block, declaration, call.caller);
     // `source` is checked too: it is a string, and no variable may take that name.
     for (const [name, value] of Object.entries(block.attributes)) this.checkGiven(name, value, declaration, call, module);
   }
@@ -87,7 +91,27 @@ export class WrittenCheck {
     const declaration = spell(variable);
 
     if (variable.attributes.default) this.checkGiven(variable.name, variable.attributes.default, declaration, module, module);
-    for (const { condition, errorMessage } of variable.validations ?? []) for (const value of [condition, errorMessage]) this.read(value, declaration, module);
+    for (const rule of variable.validations ?? []) tryAt(rule.position, declaration, module, () => checkWritten(rule, (node) => this.read(node, declaration, module)));
+  }
+
+  private checkRepetition({ count, forEach }: { count?: AttributeValue; forEach?: AttributeValue }, declaration: string, context: Context): void {
+    if (count) this.checkInstances(count, countFrom, declaration, context);
+    if (forEach) this.checkInstances(forEach, eachFrom, declaration, context);
+  }
+
+  /**
+   * A value known as written is every instance's value, so it is checked whole.
+   * One with any part not known has its type, but its marks may come from a branch an instance does not take, so they are left out.
+   */
+  private checkInstances(value: AttributeValue, instancesFrom: (read: Value) => unknown, declaration: string, context: Context): void {
+    const read = this.read(value, declaration, context);
+    tryAt(value.position, declaration, context, () => {
+      try {
+        instancesFrom(containsUnknown(read.data) ? withSensitive(read, []) : read);
+      } catch (error) {
+        if (!(error instanceof NotKnownYet)) throw error;
+      }
+    });
   }
 
   private checkGiven(name: string, value: AttributeValue, declaration: string, context: Context, module: ModuleAddress): void {

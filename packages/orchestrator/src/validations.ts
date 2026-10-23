@@ -1,5 +1,5 @@
 import { containsUnknown, ModuleAddress, State } from '@clay/contracts';
-import { AttributeValue, ConfigError } from '@clay/parser';
+import { AttributeValue, ConfigError, Validation } from '@clay/parser';
 
 import { checkBoolean } from './operators';
 import { tryAt } from './place';
@@ -26,9 +26,11 @@ function readOrUnknown(read: () => Value): Value {
   }
 }
 
+const notAString = (message: Value, node: AttributeValue) => new ConfigError(`A validation's error_message is a string, not ${described(message)}`, node.position);
+
 function messageOf(message: Value, node: AttributeValue): string {
   if (containsUnknown(message.data)) throw new ConfigError("A validation's error_message is not known until the apply", node.position);
-  if (message.data === null || message.type.kind !== 'string') throw new ConfigError(`A validation's error_message is a string, not ${described(message)}`, node.position);
+  if (message.data === null || message.type.kind !== 'string') throw notAString(message, node);
   if (isSensitive(message)) return 'the error_message holds a sensitive value, so it is not shown';
 
   return (message.data as string).trim();
@@ -54,4 +56,13 @@ export function validate(name: string, { validations }: VariableValue, value: Va
 
     throw new ValidationFailed(`variable "${name}": ${inRule(errorMessage, (read) => messageOf(read, errorMessage))}`);
   }
+}
+
+/** Read as written, before any instance: a condition that can be no boolean, or a message that can be no string, is refused. */
+export function checkWritten({ condition, errorMessage }: Validation, read: (node: AttributeValue) => Value): void {
+  checkBoolean("A validation's condition", read(condition), condition.position);
+
+  const message = read(errorMessage);
+  if (message.type.kind !== 'string' && message.type.kind !== 'dynamic') throw notAString(message, errorMessage);
+  if (!containsUnknown(message.data)) messageOf(message, errorMessage);
 }
