@@ -24,8 +24,8 @@ export class WrittenTypes {
   typeOf(reference: Unread, where: Context, position: Position): { type: Type; path: Step[] } {
     const module = moduleOf(where);
 
-    // The graph has already refused undeclared variables.
-    if (reference.kind === 'variable') return { type: this.scopeManager.getVariable(scopeOf(module), reference.name)!.type ?? types.dynamic, path: reference.path };
+    // The graph has already refused undeclared variables; each is declared once for all instances of its module.
+    if (reference.kind === 'variable') return { type: this.scopeManager.getVariable(scopeOf(module.withoutKeys()), reference.name)!.type ?? types.dynamic, path: reference.path };
     if (reference.kind === 'count') return { type: types.number, path: reference.path };
     if (reference.kind === 'each') return { type: reference.name === 'key' ? types.string : types.dynamic, path: reference.path };
     if (reference.kind === 'module') return this.callType(reference, where, position);

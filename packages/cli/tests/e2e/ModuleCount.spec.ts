@@ -223,6 +223,15 @@ describe('a module called with count', () => {
     expect(actions.map((action) => Address.of(action).toString())).toEqual(['module.web.local_file.page']);
   });
 
+  // `false &&` reads the right side by type alone, which looks up the variable's declared type.
+  it('reads the type of a variable inside an instance, where the module declares it once', async () => {
+    await writeModule('check', 'variable "x" { type = string }\noutput "o" { value = false && var.x == "a" }');
+
+    const outputs = await apply('module "k" {\n  source = "./check"\n  count  = 1\n  x      = "b"\n}\noutput "o" { value = module.k[0].o }');
+
+    expect(outputs.o).toMatchObject({ value: false });
+  });
+
   it('refuses an index into a module called without count', async () => {
     const config = 'module "one" {\n source = "./web"\n name = "x"\n}\noutput "o" { value = "${module.one[0].path}" }';
 
