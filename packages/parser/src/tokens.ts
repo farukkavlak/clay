@@ -34,6 +34,8 @@ export enum TokenType {
   Question = 'QUESTION',
   Plus = 'PLUS',
   Star = 'STAR',
+  Slash = 'SLASH',
+  Percent = 'PERCENT',
   Less = 'LESS',
   LessEqual = 'LESS_EQUAL',
   Greater = 'GREATER',

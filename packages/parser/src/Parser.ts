@@ -47,7 +47,11 @@ const BINARY_LEVELS: ReadonlyMap<TokenType, BinaryOperator>[] = [
     [TokenType.Plus, '+'],
     [TokenType.Minus, '-'],
   ]),
-  new Map([[TokenType.Star, '*']]),
+  new Map([
+    [TokenType.Star, '*'],
+    [TokenType.Slash, '/'],
+    [TokenType.Percent, '%'],
+  ]),
 ];
 
 const CLOSING = { [TokenType.RBracket]: ']', [TokenType.RBrace]: '}' };

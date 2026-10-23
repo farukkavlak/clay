@@ -19,7 +19,8 @@ a configuration means or how the state file is written.
   to keep some items
 - `==`, `!=`, `&&`, `||`, `!` and the conditional `cond ? a : b`. A known condition reads
   only the result it picks
-- `+`, `-`, `*` and `<`, `<=`, `>`, `>=` on numbers, which stay exact
+- `+`, `-`, `*`, `/`, `%` and `<`, `<=`, `>`, `>=` on numbers, which stay exact; a
+  quotient keeps 34 significant digits
 - A resource, a data source, a module or all their instances read as an object, a list
   or a map, and `.key`, `["key"]` and `[0]` into any value
 - `locals` blocks, `path.module`, heredoc strings, string escapes, negative and decimal

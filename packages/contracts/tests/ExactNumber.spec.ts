@@ -117,6 +117,43 @@ describe('ExactNumber', () => {
     });
 
     it.each([
+      ['10', '4', '2.5'],
+      ['1', '-8', '-0.125'],
+      ['-0.25', '-0.5', '0.5'],
+      ['5', '2e-3', '2500'],
+      ['0', '7', '0'],
+      ['1', '3', '0.3333333333333333333333333333333333'],
+      ['2', '3', '0.6666666666666666666666666666666667'],
+      ['10', '3', '3.333333333333333333333333333333333'],
+      ['1e-5', '3', '0.000003333333333333333333333333333333333'],
+      ['99999999999999999999999999999999995', '10', '10000000000000000000000000000000000'],
+      ['12345678901234567890123456789012345', '10', '1234567890123456789012345678901234'],
+      ['12345678901234567890123456789012355', '10', '1234567890123456789012345678901236'],
+      ['12345678901234567890123456789012345000001', '1e7', '1234567890123456789012345678901235'],
+    ])('divides %s by %s into %s, kept to 34 digits and rounded half to even', (left, right, quotient) => {
+      expect(number(left).dividedBy(number(right)).toString()).toBe(quotient);
+    });
+
+    it.each([
+      ['5', '3', '2'],
+      ['-5', '3', '-2'],
+      ['5', '-3', '2'],
+      ['5.5', '2', '1.5'],
+      ['-0.3', '0.2', '-0.1'],
+      ['6', '3', '0'],
+      ['1e-3', '1e3', '0.001'],
+    ])('takes %s modulo %s exactly as %s, with the sign of the first', (left, right, remainder) => {
+      expect(number(left).remainder(number(right)).toString()).toBe(remainder);
+    });
+
+    it.each([
+      ['a division', () => number('1').dividedBy(number('0'))],
+      ['a remainder', () => number('1').remainder(number('0.0'))],
+    ])('throws on %s by zero, which a caller refuses first', (_, divided) => {
+      expect(divided).toThrow(new RangeError('A number cannot be divided by zero'));
+    });
+
+    it.each([
       ['5', '-5'],
       ['-0.5', '0.5'],
       ['0', '0'],
@@ -133,6 +170,7 @@ describe('ExactNumber', () => {
       ['a sum past a thousand places up', () => number(digits(1000)).plus(number('1')), '10000000000000000000… (1001 characters)'],
       ['a product past a thousand places up', () => number('1e999').times(number('10')), '10000000000000000000… (1001 characters)'],
       ['a product past a thousand places down', () => number('1e-1000').times(number('0.1')), '0.000000000000000000… (1003 characters)'],
+      ['a quotient past a thousand places down', () => number('1e-1000').dividedBy(number('3')), '0.000000000000000000… (1036 characters)'],
     ])('refuses %s, as a number written past it is', (_, computed, shown) => {
       const problem = 'is out of range: a number reaches at most 1000 places either side of the point';
 

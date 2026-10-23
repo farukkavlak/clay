@@ -34,7 +34,7 @@ export type ForNode = Node & {
 
 export type TemplatePart = string | ReferenceNode | CallNode | BoundNode;
 
-export type BinaryOperator = '==' | '!=' | '&&' | '||' | '<' | '>' | '<=' | '>=' | '+' | '-' | '*';
+export type BinaryOperator = '==' | '!=' | '&&' | '||' | '<' | '>' | '<=' | '>=' | '+' | '-' | '*' | '/' | '%';
 
 /** At the start of `left`, so a message about the whole value points where it begins. */
 export type BinaryNode = Node & { type: 'Binary'; operator: BinaryOperator; operatorPosition: Position; left: AttributeValue; right: AttributeValue };

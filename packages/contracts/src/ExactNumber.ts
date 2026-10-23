@@ -14,6 +14,9 @@ const NUMERAL = /^(-)?(\d+)(?:\.(\d+))?(?:[Ee]([+-]?\d+))?$/;
 /** Caps the exponent, which would round past 2^53, and the length of the plain form. */
 const MAX_PLACES = 1000;
 
+/** A quotient's significant digits, as decimal128 keeps; most have no end. */
+const QUOTIENT_DIGITS = 34;
+
 const OUT_OF_RANGE = `is out of range: a number reaches at most ${MAX_PLACES} places either side of the point`;
 
 /** Its own class, so a caller can catch it and rethrow anything else. */
@@ -27,6 +30,14 @@ export class NumberError extends Error {
   ) {
     super(message);
   }
+}
+
+/** Half to even: up past the half, and at it only to an even last digit. */
+function rounded(quotient: bigint, rest: bigint, divisor: bigint): bigint {
+  const twice = rest * 2n;
+  const up = twice > divisor || (twice === divisor && quotient % 2n === 1n);
+
+  return up ? quotient + 1n : quotient;
 }
 
 /** Shortens a long number in an error message. */
@@ -93,6 +104,35 @@ export class ExactNumber {
     return ExactNumber.computed(this.scaledTo(this.exponent) * other.scaledTo(other.exponent), this.exponent + other.exponent);
   }
 
+  /** Rounded half to even, where the quotient has more digits than it keeps. */
+  dividedBy(other: ExactNumber): ExactNumber {
+    if (other.isZero()) throw new RangeError('A number cannot be divided by zero');
+    if (this.isZero()) return this;
+
+    // Enough digits that one more than are kept is known, to round by.
+    const shift = Math.max(0, QUOTIENT_DIGITS + 1 + other.digits.length - this.digits.length);
+    const dividend = BigInt(this.digits) * 10n ** BigInt(shift);
+    const divisor = BigInt(other.digits);
+    const dropped = (dividend / divisor).toString().length - QUOTIENT_DIGITS;
+    const scale = divisor * 10n ** BigInt(dropped);
+    const kept = rounded(dividend / scale, dividend % scale, scale);
+
+    return ExactNumber.computed(this.negative === other.negative ? kept : -kept, this.exponent - other.exponent - shift + dropped);
+  }
+
+  /** Takes off whole times the divisor goes in, so the remainder has the sign of this one, and is exact. */
+  remainder(other: ExactNumber): ExactNumber {
+    if (other.isZero()) throw new RangeError('A number cannot be divided by zero');
+
+    const exponent = Math.min(this.exponent, other.exponent);
+
+    return ExactNumber.computed(this.scaledTo(exponent) % other.scaledTo(exponent), exponent);
+  }
+
+  isZero(): boolean {
+    return this.digits === '0';
+  }
+
   negated(): ExactNumber {
     return ExactNumber.normalized(!this.negative, this.digits, this.exponent);
   }
@@ -124,7 +164,7 @@ export class ExactNumber {
   }
 
   private sign(): number {
-    if (this.digits === '0') return 0;
+    if (this.isZero()) return 0;
 
     return this.negative ? -1 : 1;
   }
