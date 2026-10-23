@@ -103,7 +103,7 @@ export interface VariableBlock extends Node {
   validations?: Validation[];
 }
 
-/** A rule the variable's value must meet; both read only the variable and functions. */
+/** A rule the variable's value must meet; the condition reads the variable. */
 export interface Validation {
   condition: AttributeValue;
   errorMessage: AttributeValue;

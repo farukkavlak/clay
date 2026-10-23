@@ -1358,6 +1358,14 @@ describe('Clay Parser', () => {
       expect(validations?.[0].condition).toMatchObject({ left: { type: 'Call', name: 'length' } });
     });
 
+    it('takes other variables, locals and resources in a rule', () => {
+      const { validations } = variableOf(
+        'variable "v" {\n  validation {\n    condition     = var.v > var.w && var.v != local_file.f.id\n    error_message = "${local.why}"\n  }\n}'
+      );
+
+      expect(validations?.[0]).toMatchObject({ condition: { type: 'Binary', operator: '&&' }, errorMessage: { type: 'Template' } });
+    });
+
     it.each([
       ['a condition left out', 'variable "v" {\n  validation {\n    error_message = "x"\n  }\n}', 'validation needs a condition', at(2, 3)],
       ['a message left out', 'variable "v" {\n  validation {\n    condition = var.v\n  }\n}', 'validation needs an error_message', at(2, 3)],
@@ -1381,22 +1389,10 @@ describe('Clay Parser', () => {
         at(3, 17),
       ],
       [
-        'another variable',
-        'variable "v" {\n  validation {\n    condition = var.v > var.w\n    error_message = "x"\n  }\n}',
-        'A validation reads only var.v and functions, not var.w',
-        at(3, 25),
-      ],
-      [
-        'a local in the message',
-        'variable "v" {\n  validation {\n    condition = var.v\n    error_message = "${local.why}"\n  }\n}',
-        'A validation reads only var.v and functions, not local.why',
-        at(4, 24),
-      ],
-      [
-        'a resource',
-        'variable "v" {\n  validation {\n    condition = var.v != local_file.f.id\n    error_message = "x"\n  }\n}',
-        'A validation reads only var.v and functions, not local_file.f.id',
-        at(3, 26),
+        'a condition that reads only another variable',
+        'variable "v" {\n  validation {\n    condition = var.w > 0\n    error_message = "x"\n  }\n}',
+        "A validation's condition reads var.v, or it checks nothing",
+        at(3, 17),
       ],
       ['another kind of block', 'variable "v" {\n  lifecycle {}\n}', 'Variable "v" takes only validation blocks, not a "lifecycle" block.', at(2, 3)],
       ['a validation in an output', 'output "o" {\n  value = 1\n  validation {}\n}', 'Output "o" takes no blocks, not a "validation" block.', at(3, 3)],

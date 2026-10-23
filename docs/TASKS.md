@@ -523,7 +523,7 @@ and every operator HCL has. A real configuration hits each of these early.
       Terraform file writes it
 - [x] `validation` on a variable, a condition its value must meet and the message to give
       where it does not
-- [ ] A validation rule that reads other variables, locals and resources, as Terraform's
+- [x] A validation rule that reads other variables, locals and resources, as Terraform's
       does since 1.9. The variable then depends on what its rules read
 - [ ] `alltrue` and `anytrue`, and the `[*]` splat, which a rule over a list reaches for:
       `alltrue([for p in var.ports : p > 0])`, `var.servers[*].port`

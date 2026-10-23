@@ -215,4 +215,109 @@ describe('a variable with validation', () => {
     expect(error.message).toBe("A validation's error_message is not known until the apply");
     expect(error.position).toMatchObject(placeOf(rule, '"too small'));
   });
+
+  it('reads another variable in a rule', async () => {
+    const config =
+      'variable "max" { default = 100 }\nvariable "port" {\n  default = 200\n  validation {\n    condition     = var.port <= var.max\n    error_message = "port is above ${var.max}"\n  }\n}';
+
+    const error = await planError(config);
+
+    expect(error.message).toBe('variable "port": port is above 100');
+    expect(error.position).toMatchObject(placeOf(config, '200'));
+  });
+
+  it("reads a module input's rule in the module, not in the call", async () => {
+    await module(
+      'locals { limit = 10 }\nvariable "n" {\n  type = number\n  validation {\n    condition     = var.n <= local.limit\n    error_message = "n is above ${local.limit}"\n  }\n}'
+    );
+    const config = 'locals { limit = 1000 }\nmodule "m" {\n  source = "./m"\n  n      = 50\n}';
+
+    const error = await planError(config);
+
+    expect(error.message).toBe('variable "n": n is above 10');
+    expect(error.position).toMatchObject(placeOf(config, '50'));
+  });
+
+  it("reads the module's own variable in a module input's rule, not the caller's", async () => {
+    await module(
+      'variable "max" { default = 10 }\nvariable "n" {\n  type = number\n  validation {\n    condition     = var.n <= var.max\n    error_message = "n is above ${var.max}"\n  }\n}'
+    );
+    const config = 'variable "max" { default = 1000 }\nmodule "m" {\n  source = "./m"\n  n      = var.max\n}';
+
+    const error = await planError(config);
+
+    expect(error.message).toBe('variable "n": n is above 10');
+  });
+
+  it('reads a data source in a rule after the data source is read', async () => {
+    const reserved = path.join(dir, 'reserved.txt');
+    await fs.writeFile(reserved, 'admin');
+    // Declared after the variable, so only the dependency reads it first.
+    const config = `variable "name" {\n  default = "admin"\n  validation {\n    condition     = var.name != data.local_file.reserved.content\n    error_message = "\${var.name} is reserved"\n  }\n}\ndata "local_file" "reserved" { path = "${reserved}" }`;
+
+    const error = await planError(config);
+
+    expect(error.message).toBe('variable "name": admin is reserved');
+  });
+
+  it('checks at the apply, after the resource is created, a rule that reads it', async () => {
+    const config =
+      'resource "random_string" "s" { length = 4 }\nvariable "id" {\n  default = "abc"\n  validation {\n    condition     = length(var.id) == length(random_string.s.result)\n    error_message = "id has ${length(var.id)} characters, not ${length(random_string.s.result)}"\n  }\n}';
+
+    const plan = await newOrchestrator().plan(config);
+    const error = await failure(() => apply(config));
+
+    expect(plan.actions.map((action) => `${action.type} ${action.name}`)).toEqual(['CREATE s']);
+    expect(error.message).toBe('variable "id": id has 3 characters, not 4');
+    expect(error.position).toMatchObject(placeOf(config, '"abc"'));
+  });
+
+  it('records what a rule reads as a dependency of a resource that reads the variable', async () => {
+    const file = path.join(dir, 'id.txt');
+    const config = `resource "random_string" "s" { length = 4 }\nvariable "id" {\n  default = "abc"\n  validation {\n    condition     = length(random_string.s.result) > length(var.id)\n    error_message = "x"\n  }\n}\nresource "local_file" "f" {\n  path    = "${file}"\n  content = var.id\n}`;
+
+    await apply(config);
+
+    const state = await new LocalBackend(dir).read();
+    expect(state.resources['local_file.f'].dependencies).toEqual(['random_string.s']);
+  });
+
+  it.each([
+    ['in the root module', ''],
+    ['in a module called with count = 0', 'module "m" {\n  source = "./m"\n  count  = 0\n}'],
+  ])('refuses at plan a rule that reads an attribute the resource does not have, %s', async (_, call) => {
+    const rule =
+      'resource "random_string" "s" { length = 4 }\nvariable "n" {\n  default = "a"\n  validation {\n    condition     = var.n != random_string.s.no_such\n    error_message = "x"\n  }\n}';
+    if (call) await module(rule);
+
+    const error = await planError(call || rule);
+
+    expect(error.message).toBe('random_string has no attribute "no_such"');
+    expect(error.position).toMatchObject(placeOf(rule, 'random_string.s.no_such'));
+  });
+
+  it('refuses a rule that reads what reads its variable, as a cycle', async () => {
+    const config =
+      'locals { doubled = var.n * 2 }\nvariable "n" {\n  default = 1\n  validation {\n    condition     = local.doubled > var.n\n    error_message = "n is negative"\n  }\n}';
+
+    const error = await planError(config);
+
+    expect(error.message).toBe('Dependency cycle detected: local.doubled -> var.n -> local.doubled');
+    expect(error.position).toMatchObject(placeOf(config, 'var.n * 2'));
+  });
+
+  it.each([
+    ['a local the module does not declare', 'var.n > local.min', 'local.min', 'local "min" is not defined'],
+    ['count.index, though the call has count', 'var.n > count.index', 'count.index', 'count.index is only known inside a resource, a data source or a module call that has count'],
+  ])('refuses a rule that reads %s, where the module writes it', async (_, condition, needle, expected) => {
+    const rule = `variable "n" {\n  type = number\n  validation {\n    condition     = ${condition}\n    error_message = "x"\n  }\n}`;
+    await module(rule);
+
+    const error = await planError('module "m" {\n  source = "./m"\n  count  = 2\n  n      = 1\n}');
+
+    expect(error.message).toBe(expected);
+    expect(error.position).toMatchObject(placeOf(rule, needle));
+    expect(error.block).toBe('variable "n"');
+    expect(error.module).toBe('module.m');
+  });
 });

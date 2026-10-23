@@ -1,6 +1,6 @@
 import { ModuleAddress, Schema } from '@clay/contracts';
 import { Graph } from '@clay/graph';
-import { AttributeValue, DataBlock, ModuleBlock, OutputBlock, spell } from '@clay/parser';
+import { AttributeValue, DataBlock, ModuleBlock, OutputBlock, spell, VariableBlock } from '@clay/parser';
 
 import { converted } from '../conformValues';
 import { declaredOf, givenTo } from '../declared';
@@ -30,7 +30,7 @@ export class WrittenCheck {
       for (const stmt of program) {
         if (stmt.type === 'Output') this.checkOutput(stmt, address);
         if (stmt.type === 'Data') this.checkData(stmt, address);
-        if (stmt.type === 'Variable' && stmt.attributes.default) this.checkGiven(stmt.name, stmt.attributes.default, spell(stmt), address, address);
+        if (stmt.type === 'Variable') this.checkVariable(stmt, address);
         if (stmt.type === 'Module') this.checkCall(stmt, address.child(stmt.name));
       }
   }
@@ -80,6 +80,14 @@ export class WrittenCheck {
     const declaration = spell(block);
     const read = this.read(block.value, declaration, module);
     tryAt(block.value.position, declaration, module, () => givenTo('output', block.name, read, declaredOf(block), (node) => this.read(node, declaration, module)));
+  }
+
+  /** Its rules are read in the module that declares it, as each instance's are. */
+  private checkVariable(variable: VariableBlock, module: ModuleAddress): void {
+    const declaration = spell(variable);
+
+    if (variable.attributes.default) this.checkGiven(variable.name, variable.attributes.default, declaration, module, module);
+    for (const { condition, errorMessage } of variable.validations ?? []) for (const value of [condition, errorMessage]) this.read(value, declaration, module);
   }
 
   private checkGiven(name: string, value: AttributeValue, declaration: string, context: Context, module: ModuleAddress): void {

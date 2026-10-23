@@ -75,9 +75,11 @@ interface Dependent {
   key: string;
   declaration: string;
   context: Context;
+  /** A value the dependent is given, so reading it is no dependency: a rule's own variable. */
+  given?: string;
 }
 
-type ReferencePlace = Omit<Dependent, 'key'> & { position: Position };
+type ReferencePlace = Omit<Dependent, 'key' | 'given'> & { position: Position };
 
 const edgeKey = (from: string, to: string) => `${from} -> ${to}`;
 
@@ -102,6 +104,7 @@ export class DependencyGraphBuilder {
     const moduleScopes = new Set(loadedModules.map((mod) => scopeOf(mod.address)));
     for (const [key, node] of graph.entries()) this.addNodeDependencies(key, node, graph, moduleScopes);
     for (const resource of loadedResources) this.addResourceDependencies(resource, graph, moduleScopes);
+    for (const loaded of loadedModules) this.addRuleDependencies(loaded, graph, moduleScopes);
     for (const [key, node] of graph.entries()) if (!node.module.isRoot()) graph.addEdge(callKey(node.module), key);
 
     this.refuseCycle(graph);
@@ -153,6 +156,18 @@ export class DependencyGraphBuilder {
       if (value) tryAt(value.position, dependent.declaration, module, () => this.addDependencies(value, graph, dependent, moduleScopes));
     for (const value of Object.values(block.attributes))
       tryAt(value.position, dependent.declaration, module, () => this.addDependencies(value, graph, dependent, moduleScopes, repetition));
+  }
+
+  /** A rule is read in the module that declares the variable, wherever its value is given. */
+  private addRuleDependencies({ address, program }: LoadedModule, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
+    for (const variable of program) {
+      if (variable.type !== 'Variable') continue;
+
+      const key = variableKey(scopeOf(address), variable.name);
+      const dependent = { key, declaration: spell(variable), context: address, given: key };
+      for (const { condition, errorMessage } of variable.validations ?? [])
+        for (const value of [condition, errorMessage]) tryAt(value.position, dependent.declaration, address, () => this.addDependencies(value, graph, dependent, moduleScopes));
+    }
   }
 
   /** One value at a time, so an error points at the value, not the block. count and for_each are read before any instance, so they have no key. */
@@ -264,6 +279,8 @@ export class DependencyGraphBuilder {
         checkInstanceReference(reference, repetition);
         continue;
       }
+
+      if (reference.key === dependent.given) continue;
 
       // With the module known to exist, its call says whether the first step must be an index.
       if (reference.kind === 'output' && moduleScopes.has(reference.scope)) readCall(reference.reference, this.modules.repetitionOf(reference.call), reference.position);
