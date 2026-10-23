@@ -1,17 +1,18 @@
-import { State } from '@clay/contracts';
+import { ModuleAddress, State } from '@clay/contracts';
 import { AttributeValue, VariableReference } from '@clay/parser';
 import { SchemaMismatch } from '../conformValues';
 import { givenTo } from '../declared';
 import { Context, contextIn, moduleOf, scopeOf } from '../keys';
 import { withPlace } from '../place';
 import { ScopeManager, VariableValue } from '../scope/ScopeManager';
+import { RuleReader, validate, ValidationFailed } from '../validations';
 import { Value } from '../Value';
 import { unknownOf, UnresolvedReferenceError } from './UnresolvedReferenceError';
 
 export class VariableResolver {
   constructor(
     private scopeManager: ScopeManager,
-    private referenceResolver: { resolveValue: (value: AttributeValue, state: State, context?: Context) => Value }
+    private referenceResolver: RuleReader & { resolveValue: (value: AttributeValue, state: State, context?: Context) => Value }
   ) {}
 
   resolve(reference: VariableReference, context: Context, state: State): Value {
@@ -22,20 +23,25 @@ export class VariableResolver {
 
     const where = contextIn(declared.context, module);
     try {
-      return this.typed(reference.name, declared, this.referenceResolver.resolveValue(declared.value, state, where), where, state);
+      return this.typed(reference.name, declared, this.referenceResolver.resolveValue(declared.value, state, where), { where, module }, state);
     } catch (error) {
       if (!(error instanceof UnresolvedReferenceError)) throw error;
       // The unknown takes the variable's type, and the reader checks the reference's steps against it.
-      return this.typed(reference.name, declared, unknownOf(error), where, state);
+      return this.typed(reference.name, declared, unknownOf(error), { where, module }, state);
     }
   }
 
-  /** A wrong type is reported where the value is written, not where it is read. */
-  private typed(name: string, declared: VariableValue, resolved: Value, where: Context, state: State): Value {
+  /**
+   * A wrong type, or a value a rule refuses, is reported where the value is written, not where it is read.
+   * `where` is where the value is written, and `module` the instance that declares the variable.
+   */
+  private typed(name: string, declared: VariableValue, resolved: Value, { where, module }: { where: Context; module: ModuleAddress }, state: State): Value {
     try {
-      return givenTo('variable', name, resolved, declared, (node) => this.referenceResolver.resolveValue(node, state, where));
+      const value = givenTo('variable', name, resolved, declared, (node) => this.referenceResolver.resolveValue(node, state, where));
+      validate(name, declared, value, { module, state, reader: this.referenceResolver });
+      return value;
     } catch (error) {
-      if (error instanceof SchemaMismatch) throw withPlace(error, declared.value.position, declared.block, where);
+      if (error instanceof SchemaMismatch || error instanceof ValidationFailed) throw withPlace(error, declared.value.position, declared.block, where);
       throw error;
     }
   }

@@ -24,7 +24,7 @@ import { outputOf, Value } from '../Value';
 import { ActionExecutor, Running } from './ActionExecutor';
 import { LoadedConfig } from './ConfigLoader';
 import { DataSourceReader } from './DataSourceReader';
-import { GraphNode, LocalNode, OutputNode } from './DependencyGraphBuilder';
+import { GraphNode, LocalNode, OutputNode, ValueNode } from './DependencyGraphBuilder';
 
 function undeclared(address: Address | string): Error {
   return new Error(`The plan has "${address}", which the configuration does not declare`);
@@ -250,6 +250,7 @@ export class PlanRunner {
     if (node.kind === 'module') this.expandCall(node, state);
     if (node.kind === 'data') yield* this.readData(node, named.get(key), read, state);
     if (node.kind === 'local') this.resolveLocal(node, state);
+    if (node.kind === 'variable') this.checkVariable(node, state);
     // Only this output: a sibling may read a resource a later layer creates.
     if (node.kind === 'output') this.resolveInEvery(node, outputs, state);
 
@@ -393,6 +394,11 @@ export class PlanRunner {
     const isOutput = (key: string) => graph.getNode(key)!.kind === 'output';
 
     return [...layer.filter((key) => isOutput(key)), ...layer.filter((key) => !isOutput(key))];
+  }
+
+  /** Read again, after what it reads has run, so its type and rules check a value the plan did not know even where nothing reads it. */
+  private checkVariable(node: ValueNode, state: State): void {
+    for (const instance of this.modules.of(node.module)) this.resolver.resolveVariable(node.name, instance, state);
   }
 
   /** Worked out again, after what it reads has run. */

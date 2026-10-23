@@ -521,8 +521,12 @@ and every operator HCL has. A real configuration hits each of these early.
 - [x] `/* ... */` comments, which HCL reads beside `#` and `//`
 - [x] `description` on a variable and an output, refused before though nearly every
       Terraform file writes it
-- [ ] `validation` on a variable, a condition its value must meet and the message to give
+- [x] `validation` on a variable, a condition its value must meet and the message to give
       where it does not
+- [ ] A validation rule that reads other variables, locals and resources, as Terraform's
+      does since 1.9. The variable then depends on what its rules read
+- [ ] `alltrue` and `anytrue`, and the `[*]` splat, which a rule over a list reaches for:
+      `alltrue([for p in var.ports : p > 0])`, `var.servers[*].port`
 - [ ] `depends_on`, for an order no reference shows. Written today, it is refused as an
       attribute the resource does not have
 - [ ] A `moved` block, so a rename in the configuration moves state instead of destroying

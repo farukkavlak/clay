@@ -27,6 +27,8 @@ a configuration means or how the state file is written.
 - `locals` blocks, `path.module`, heredoc strings, string escapes, negative and decimal
   numbers, `/* ... */` comments, `description` on a variable and an output, and
   references that index with a reference or a call
+- `validation` blocks on a variable, checked at plan, or at apply where the value is not
+  known until then
 - Provider schemas: resource and data source configuration is checked and converted to
   the type the schema names, and what a provider returns is checked too
 - The provider plans what a resource will hold, and an apply plans each resource again

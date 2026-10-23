@@ -38,6 +38,7 @@ const inTurn = (levels: number) => {
 
 const attributesOf = (input: string) => (makeParser(input).parse()[0] as ResourceBlock).attributes;
 const valueOf = (written: string) => attributesOf(`resource "t" "n" { v = ${written} }`).v;
+const variableOf = (input: string) => makeParser(input).parse()[0] as VariableBlock;
 const typeOf = (written: string) => (makeParser(`variable "v" { type = ${written} }`).parse()[0] as VariableBlock).valueType;
 const reference = (parts: (string | number | Step)[], column: number, line = 1) => ({ type: 'Reference', value: steps(...parts), position: at(line, column) });
 
@@ -1323,6 +1324,87 @@ describe('Clay Parser', () => {
 
       expect(error.message).toBe('module "m" has count or for_each, not both');
       expect(error.position).toEqual(at(1, 50));
+    });
+  });
+
+  describe('Validation', () => {
+    it('reads each validation of a variable in order, with its condition and its message', () => {
+      const input = `variable "port" {
+  validation {
+    condition     = var.port > 0
+    error_message = "too low"
+  }
+  validation {
+    condition     = var.port < 65536
+    error_message = "too high: \${var.port}"
+  }
+}`;
+
+      const { validations } = variableOf(input);
+
+      expect(validations).toMatchObject([
+        { condition: { type: 'Binary', operator: '>' }, errorMessage: { type: 'String', value: 'too low' }, position: at(2, 3) },
+        { condition: { type: 'Binary', operator: '<' }, errorMessage: { type: 'Template' }, position: at(6, 3) },
+      ]);
+    });
+
+    it('leaves a variable without one with none', () => {
+      expect(variableOf('variable "v" { default = 1 }')).not.toHaveProperty('validations');
+    });
+
+    it('takes functions in a rule', () => {
+      const { validations } = variableOf('variable "v" {\n  validation {\n    condition     = length(var.v) > 2\n    error_message = upper("short")\n  }\n}');
+
+      expect(validations?.[0].condition).toMatchObject({ left: { type: 'Call', name: 'length' } });
+    });
+
+    it.each([
+      ['a condition left out', 'variable "v" {\n  validation {\n    error_message = "x"\n  }\n}', 'validation needs a condition', at(2, 3)],
+      ['a message left out', 'variable "v" {\n  validation {\n    condition = var.v\n  }\n}', 'validation needs an error_message', at(2, 3)],
+      [
+        'another attribute',
+        'variable "v" {\n  validation {\n    condition = var.v\n    error_message = "x"\n    when = true\n  }\n}',
+        'validation takes only "condition" and "error_message", not "when".',
+        at(5, 12),
+      ],
+      ['a condition set twice', 'variable "v" {\n  validation {\n    condition = var.v\n    condition = var.v\n  }\n}', 'condition is set twice', at(4, 5)],
+      [
+        'a condition that reads nothing',
+        'variable "v" {\n  validation {\n    condition = true\n    error_message = "x"\n  }\n}',
+        "A validation's condition reads var.v, or it checks nothing",
+        at(3, 17),
+      ],
+      [
+        'a condition that reads only a function',
+        'variable "v" {\n  validation {\n    condition = length("ab") > 1\n    error_message = "x"\n  }\n}',
+        "A validation's condition reads var.v, or it checks nothing",
+        at(3, 17),
+      ],
+      [
+        'another variable',
+        'variable "v" {\n  validation {\n    condition = var.v > var.w\n    error_message = "x"\n  }\n}',
+        'A validation reads only var.v and functions, not var.w',
+        at(3, 25),
+      ],
+      [
+        'a local in the message',
+        'variable "v" {\n  validation {\n    condition = var.v\n    error_message = "${local.why}"\n  }\n}',
+        'A validation reads only var.v and functions, not local.why',
+        at(4, 24),
+      ],
+      [
+        'a resource',
+        'variable "v" {\n  validation {\n    condition = var.v != local_file.f.id\n    error_message = "x"\n  }\n}',
+        'A validation reads only var.v and functions, not local_file.f.id',
+        at(3, 26),
+      ],
+      ['another kind of block', 'variable "v" {\n  lifecycle {}\n}', 'Variable "v" takes only validation blocks, not a "lifecycle" block.', at(2, 3)],
+      ['a validation in an output', 'output "o" {\n  value = 1\n  validation {}\n}', 'Output "o" takes no blocks, not a "validation" block.', at(3, 3)],
+    ])('refuses %s, where it is written', (_, input, message, position) => {
+      const error = errorOf(input);
+
+      expect(error.message).toBe(message);
+      expect(error.position).toEqual(position);
     });
   });
 

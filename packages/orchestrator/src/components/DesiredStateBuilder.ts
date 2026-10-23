@@ -18,6 +18,7 @@ import { tryAt, withPlace } from '../place';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { unknownOf, UnresolvedReferenceError } from '../resolvers/UnresolvedReferenceError';
 import { ScopeManager } from '../scope/ScopeManager';
+import { validate } from '../validations';
 import { carried, outputOf, sensitiveAmong, Value } from '../Value';
 import { DataSourceReader } from './DataSourceReader';
 import { DependencyGraphBuilder, GraphNode, LocalNode, OutputNode, ValueNode } from './DependencyGraphBuilder';
@@ -330,10 +331,13 @@ export class DesiredStateBuilder {
   private planVariable(node: ValueNode, instance: ModuleAddress, state: State): void {
     if (node.value === undefined) return;
 
-    const declared = this.scopeManager.getVariable(scopeOf(node.module), node.name) ?? {};
+    const declared = this.scopeManager.getVariable(scopeOf(node.module), node.name);
     const value = this.resolveNode(node, node.value, instance, state);
     const read = (constant: AttributeValue) => this.resolveNode(node, constant, instance, state);
-    tryAt(node.position, node.declaration, contextIn(node.context, instance), () => givenTo('variable', node.name, value, declared, read));
+    tryAt(node.position, node.declaration, contextIn(node.context, instance), () => {
+      const typed = givenTo('variable', node.name, value, declared ?? {}, read);
+      if (declared) validate(node.name, declared, typed, { module: instance, state, reader: this.resolver });
+    });
   }
 
   private planOutput(node: OutputNode, instance: ModuleAddress, state: State, rootOutputs: Map<string, Output>): void {

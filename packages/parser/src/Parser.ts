@@ -21,13 +21,14 @@ import {
   Statement,
   TemplatePart,
   TypeDefaults,
+  Validation,
   VariableBlock,
 } from './ast';
 import { ConfigError } from './ConfigError';
 import { readEscapes } from './escapes';
 import { flushed } from './heredoc';
 import { Position } from './Position';
-import { Step, stepKey } from './reference';
+import { parseReference, Step, stepKey } from './reference';
 import { Token, TokenType } from './tokens';
 
 /** Loosest first; within a level, operators group from the left. */
@@ -68,6 +69,13 @@ const HOLDING_TYPES = new Set(['list', 'set', 'map', 'tuple', 'object']);
 
 /** Reserved by a module call, so no module input may use them. */
 const INSTANCE_ARGUMENTS = new Set(['count', 'for_each']);
+
+interface TypedBody {
+  attributes: Record<string, AttributeValue>;
+  declared?: ParsedType;
+  flagged?: boolean;
+  validations: Validation[];
+}
 
 interface ParsedType {
   type: Type;
@@ -283,7 +291,7 @@ export class Parser {
     if (INSTANCE_ARGUMENTS.has(nameToken.value)) throw new ConfigError(`"${nameToken.value}" cannot be a variable name: a module call keeps it for itself.`, nameToken.position);
 
     this.consume(TokenType.LBrace, "Expect '{' after variable name.");
-    const { attributes, declared, flagged } = this.parseTypedBody(`Variable "${nameToken.value}"`, 'default', 'sensitive');
+    const { attributes, declared, flagged, validations } = this.parseTypedBody(`Variable "${nameToken.value}"`, 'default', 'sensitive', nameToken.value);
 
     // A module input replaces the default, so a reference or a call in it might never be checked.
     if (attributes.default) this.checkConstant(attributes.default, "A variable's default");
@@ -295,6 +303,7 @@ export class Parser {
       ...(declared && { valueType: declared.type }),
       ...(declared?.defaults && { defaults: declared.defaults }),
       ...(flagged && { sensitive: true }),
+      ...(validations.length > 0 && { validations }),
       position,
     };
   }
@@ -304,41 +313,85 @@ export class Parser {
     if (named) throw new ConfigError(`${what} is a constant, so it cannot hold ${spellNamed(named)}`, named.position);
   }
 
-  /** Only the one value, `type`, the flag where the block has one, and a description; any other name is refused, since nothing would read it. */
-  private parseTypedBody(block: string, valueName: string, flag?: string): { attributes: Record<string, AttributeValue>; declared?: ParsedType; flagged?: boolean } {
-    const attributes: Record<string, AttributeValue> = {};
-    let declared: ParsedType | undefined;
-    let flagged: boolean | undefined;
+  /**
+   * Only the one value, `type`, the flag where the block has one, and a description; any other name is refused, since nothing would read it.
+   * A variable's block, named by `variable`, takes `validation` blocks too.
+   */
+  private parseTypedBody(block: string, valueName: string, flag?: string, variable?: string): TypedBody {
+    const body: TypedBody = { attributes: {}, validations: [] };
     const names = [valueName, 'type', ...(flag ? [flag] : []), 'description'].map((name) => `"${name}"`);
-    const taken = `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+    const taken = `${block} takes only ${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
     const seen: Record<string, true> = {};
     while (!this.check(TokenType.RBrace) && !this.isAtEnd()) {
       const key = this.consume(TokenType.Identifier, 'Expect attribute name.');
+      if (variable !== undefined && key.value === 'validation') {
+        body.validations.push(this.parseValidation(variable, key.position));
+        continue;
+      }
+
+      if (this.check(TokenType.LBrace))
+        throw new ConfigError(`${block} takes ${variable === undefined ? 'no blocks' : 'only validation blocks'}, not a "${key.value}" block.`, key.position);
+
       this.checkKey(seen, key);
       seen[key.value] = true;
       this.consume(TokenType.Assign, "Expect '=' after attribute name.");
-
-      if (key.value === 'type') {
-        declared = this.parseType();
-        continue;
-      }
-      if (key.value === flag) {
-        // Read with the block, before any reference has a value.
-        flagged = this.consume(TokenType.Boolean, `${flag} is true or false.`).value === 'true';
-        continue;
-      }
-      if (key.value === 'description') {
-        this.checkDescription(this.parseValue());
-        continue;
-      }
-
-      const value = this.parseValue();
-      if (key.value !== valueName) throw new ConfigError(`${block} takes only ${taken}, not "${key.value}".`, value.position);
-      attributes[valueName] = value;
+      this.parseTypedAttribute(key.value, body, { valueName, flag, taken });
     }
 
     this.consume(TokenType.RBrace, "Expect '}' after block body.");
-    return { attributes, declared, flagged };
+    return body;
+  }
+
+  private parseTypedAttribute(name: string, body: TypedBody, { valueName, flag, taken }: { valueName: string; flag?: string; taken: string }): void {
+    if (name === 'type') {
+      body.declared = this.parseType();
+      return;
+    }
+    if (name === flag) {
+      // Read with the block, before any reference has a value.
+      body.flagged = this.consume(TokenType.Boolean, `${flag} is true or false.`).value === 'true';
+      return;
+    }
+
+    const value = this.parseValue();
+    if (name === 'description') this.checkDescription(value);
+    else if (name === valueName) body.attributes[valueName] = value;
+    else throw new ConfigError(`${taken}, not "${name}".`, value.position);
+  }
+
+  private parseValidation(variable: string, position: Position): Validation {
+    this.consume(TokenType.LBrace, "Expect '{' after validation.");
+    const read: Record<string, AttributeValue> = {};
+    while (!this.check(TokenType.RBrace) && !this.isAtEnd()) {
+      const key = this.consume(TokenType.Identifier, 'Expect attribute name.');
+      this.checkKey(read, key);
+      this.consume(TokenType.Assign, "Expect '=' after attribute name.");
+      const value = this.parseValue();
+      if (key.value !== 'condition' && key.value !== 'error_message')
+        throw new ConfigError(`validation takes only "condition" and "error_message", not "${key.value}".`, value.position);
+      read[key.value] = value;
+    }
+    this.consume(TokenType.RBrace, "Expect '}' after validation body.");
+
+    const { condition, error_message: errorMessage } = read;
+    if (condition === undefined || errorMessage === undefined) throw new ConfigError(`validation needs ${condition ? 'an error_message' : 'a condition'}`, position);
+    this.checkRuleReads(variable, condition);
+    this.checkRuleReads(variable, errorMessage);
+    if (!namedIn(condition).some((named) => named.type === 'Reference'))
+      throw new ConfigError(`A validation's condition reads var.${variable}, or it checks nothing`, condition.position);
+
+    return { condition, errorMessage, position };
+  }
+
+  /** A rule is read with the variable's own value, before anything else in the module has one. */
+  private checkRuleReads(variable: string, value: AttributeValue): void {
+    for (const named of namedIn(value)) {
+      if (named.type === 'Call') continue;
+
+      const reference = parseReference(named.value, named.position);
+      if (reference.kind !== 'variable' || reference.name !== variable)
+        throw new ConfigError(`A validation reads only var.${variable} and functions, not ${spellNamed(named)}`, named.position);
+    }
   }
 
   /** Read by people only, so it is checked and dropped. */

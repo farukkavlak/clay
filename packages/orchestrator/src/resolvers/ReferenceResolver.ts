@@ -23,6 +23,7 @@ import {
   Step,
   stepKey,
   TemplatePart,
+  VariableReference,
 } from '@clay/parser';
 
 import { converted } from '../conformValues';
@@ -88,6 +89,8 @@ interface Reading {
   given: Given;
   asWritten: boolean;
   byType?: true;
+  /** A variable's value, already worked out, so its own rules read it without reading it again. */
+  variable?: { name: string; value: Value };
 }
 
 const READING: Reading = { given: new Map(), asWritten: false };
@@ -246,7 +249,7 @@ export class ReferenceResolver {
     const { position } = node;
     const reference = parseReference(steps);
     if (!reading.asWritten) this.keys.of(reference, where, position);
-    const { value, path } = reading.asWritten ? this.writtenTarget(reference, where, position) : this.resolveTarget(reference, state, where, position);
+    const { value, path } = reading.asWritten ? this.writtenTarget(reference, where, position) : this.resolveTarget(reference, state, where, position, reading);
     const target = steps.slice(0, steps.length - path.length);
 
     const read = readPath(typeOnly(value, reading), spellReference(target), path, position);
@@ -447,8 +450,8 @@ export class ReferenceResolver {
     return { key, body, condition };
   }
 
-  private resolveTarget(reference: ParsedReference, state: State, where: Context, position: Position): { value: Value; path: Step[] } {
-    if (reference.kind === 'variable') return { value: this.variables.resolve(reference, where, state), path: reference.path };
+  private resolveTarget(reference: ParsedReference, state: State, where: Context, position: Position, reading: Reading): { value: Value; path: Step[] } {
+    if (reference.kind === 'variable') return { value: this.variable(reference, where, state, reading), path: reference.path };
     if (reference.kind === 'local') return { value: this.local(reference, where), path: reference.path };
     if (reference.kind === 'data') return this.dataSources.resolve(reference, where, position);
     if (reference.kind === 'module') return this.moduleOutputs.resolve(reference, where, position);
@@ -457,6 +460,10 @@ export class ReferenceResolver {
     if (reference.kind === 'path') return { value: valueOf(types.string, this.directory(reference, where)), path: reference.path };
 
     return this.resources.resolve(reference, where, state, position);
+  }
+
+  private variable(reference: VariableReference, where: Context, state: State, { variable }: Reading): Value {
+    return variable?.name === reference.name ? variable.value : this.variables.resolve(reference, where, state);
   }
 
   /** The graph runs a local before anything that reads it, in every module instance. */
@@ -480,7 +487,7 @@ export class ReferenceResolver {
 
   /** Paths are known at load, and a local is read as written in its turn; anything else is unknown. */
   private writtenTarget(reference: ParsedReference, where: Context, position: Position): { value: Value; path: Step[] } {
-    if (reference.kind === 'path') return this.resolveTarget(reference, emptyState(), where, position);
+    if (reference.kind === 'path') return this.resolveTarget(reference, emptyState(), where, position, READING);
     if (reference.kind === 'local') return { value: this.writtenLocal(reference, where), path: reference.path };
 
     const { type, path } = this.written.typeOf(reference, where, position);
@@ -521,6 +528,16 @@ export class ReferenceResolver {
 
   resolveValue(node: AttributeValue, state: State, context?: Context): Value {
     return this.resolveIn(node, state, context, READING);
+  }
+
+  /** Reads `var.name` in a module instance, as a reference to it does. */
+  resolveVariable(name: string, module: ModuleAddress, state: State): Value {
+    return this.variables.resolve({ kind: 'variable', name, path: [] }, module, state);
+  }
+
+  /** Reads `var.name` as `value`, for a rule of that variable. */
+  resolveWithVariable(node: AttributeValue, state: State, context: ModuleAddress, name: string, value: Value): Value {
+    return this.resolveIn(node, state, context, { ...READING, variable: { name, value } });
   }
 
   /** A reference reads as unknown of the type it will have, and a local as its value read the same way, so one read covers every instance of the block. */
