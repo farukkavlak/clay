@@ -32,6 +32,12 @@ export enum TokenType {
   Or = 'OR',
   Bang = 'BANG',
   Question = 'QUESTION',
+  Plus = 'PLUS',
+  Star = 'STAR',
+  Less = 'LESS',
+  LessEqual = 'LESS_EQUAL',
+  Greater = 'GREATER',
+  GreaterEqual = 'GREATER_EQUAL',
   EOF = 'EOF',
 }
 

@@ -37,6 +37,17 @@ const BINARY_LEVELS: ReadonlyMap<TokenType, BinaryOperator>[] = [
     [TokenType.Equal, '=='],
     [TokenType.NotEqual, '!='],
   ]),
+  new Map([
+    [TokenType.Less, '<'],
+    [TokenType.LessEqual, '<='],
+    [TokenType.Greater, '>'],
+    [TokenType.GreaterEqual, '>='],
+  ]),
+  new Map([
+    [TokenType.Plus, '+'],
+    [TokenType.Minus, '-'],
+  ]),
+  new Map([[TokenType.Star, '*']]),
 ];
 
 const CLOSING = { [TokenType.RBracket]: ']', [TokenType.RBrace]: '}' };
@@ -494,10 +505,11 @@ export class Parser {
   }
 
   private parseUnary(): AttributeValue {
-    if (!this.matchToken(TokenType.Bang)) return this.parsePrimary();
+    const { position } = this.peek();
+    if (this.matchToken(TokenType.Bang)) return this.nested(position, () => ({ type: 'Not', value: this.parseUnary(), position }));
+    if (this.matchToken(TokenType.Minus)) return this.parseNegative(position);
 
-    const { position } = this.previous();
-    return this.nested(position, () => ({ type: 'Not', value: this.parseUnary(), position }));
+    return this.parsePrimary();
   }
 
   private parsePrimary(): AttributeValue {
@@ -517,7 +529,6 @@ export class Parser {
 
   private parseLiteral(position: Position): AttributeValue {
     if (this.matchToken(TokenType.Number)) return { type: 'Number', value: this.exactNumber(this.previous().value, position), position };
-    if (this.matchToken(TokenType.Minus)) return this.parseNegative(position);
     if (this.matchToken(TokenType.Boolean)) return { type: 'Boolean', value: this.previous().value === 'true', position };
     if (this.matchToken(TokenType.Null)) return { type: 'Null', position };
 
@@ -547,10 +558,11 @@ export class Parser {
     this.depth++;
   }
 
+  /** `-` before a number is part of it, so `-1e5000` is refused as written. */
   private parseNegative(position: Position): AttributeValue {
-    const number = this.consume(TokenType.Number, "Expect a number after '-'.");
+    if (!this.matchToken(TokenType.Number)) return this.nested(position, () => ({ type: 'Negate', value: this.parseUnary(), position }));
 
-    return { type: 'Number', value: this.exactNumber(`-${number.value}`, position), position };
+    return { type: 'Number', value: this.exactNumber(`-${this.previous().value}`, position), position };
   }
 
   private parseString(position: Position): AttributeValue {

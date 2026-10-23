@@ -10,6 +10,7 @@ import {
   ForNode,
   IndexNode,
   LocalReference,
+  NegateNode,
   NotNode,
   ParsedReference,
   PathReference,
@@ -31,7 +32,7 @@ import { functionCalled } from '../functions';
 import { Context, DataInstance, instanceKeyOf, ModuleCall, moduleOf, scopeOf } from '../keys';
 import { tryAt } from '../place';
 import { ModuleInstances } from '../ModuleInstances';
-import { checkBoolean, equality, negated } from '../operators';
+import { Arithmetic, arithmetic, asNumber, checkBoolean, equality, isOrdering, negated, negative, NumberValue, Ordering, ordering } from '../operators';
 import { Planned } from '../Planned';
 import { ScopeManager } from '../scope/ScopeManager';
 import { unified, Unjoinable, unjoined } from '../unify';
@@ -106,10 +107,10 @@ function countIndex(where: Context, position: Position): Value {
 
 type Named = ReferenceNode | CallNode | BoundNode;
 
-type Operation = BinaryNode | NotNode | ConditionalNode;
+type Operation = BinaryNode | NotNode | NegateNode | ConditionalNode;
 
 function isOperation(node: AttributeValue): node is Operation {
-  return node.type === 'Binary' || node.type === 'Not' || node.type === 'Conditional';
+  return node.type === 'Binary' || node.type === 'Not' || node.type === 'Negate' || node.type === 'Conditional';
 }
 
 function unknownAs(value: Value): Value {
@@ -538,10 +539,24 @@ export class ReferenceResolver {
 
   private resolveOperation(node: Operation, state: State, context: Context | undefined, reading: Reading): Value {
     if (node.type === 'Not') return negated(this.boolean(node.value, '!', state, context, reading));
+    if (node.type === 'Negate') return negative(this.number(node.value, '-', state, context, reading));
     if (node.type === 'Conditional') return this.resolveConditional(node, state, context, reading);
     if (node.operator === '&&' || node.operator === '||') return this.resolveLogic(node, node.operator, state, context, reading);
+    if (node.operator === '==' || node.operator === '!=')
+      return equality(node.operator, this.resolveItem(node.left, state, context, reading), this.resolveItem(node.right, state, context, reading), node.operatorPosition);
 
-    return equality(node.operator, this.resolveItem(node.left, state, context, reading), this.resolveItem(node.right, state, context, reading), node.operatorPosition);
+    return this.resolveNumbers(node, node.operator, state, context, reading);
+  }
+
+  private resolveNumbers(node: BinaryNode, operator: Arithmetic | Ordering, state: State, context: Context | undefined, reading: Reading): Value {
+    const left = this.number(node.left, operator, state, context, reading);
+    const right = this.number(node.right, operator, state, context, reading);
+
+    return isOrdering(operator) ? ordering(operator, left, right, node.operatorPosition) : arithmetic(operator, left, right, node.operatorPosition);
+  }
+
+  private number(node: AttributeValue, who: string, state: State, context: Context | undefined, reading: Reading): NumberValue {
+    return asNumber(who, this.resolveItem(node, state, context, reading), node.position);
   }
 
   private boolean(node: AttributeValue, who: string, state: State, context: Context | undefined, reading: Reading): Value {

@@ -5,6 +5,7 @@ import { ExactNumber, NumberError } from '../src/ExactNumber';
 import { NestingError } from '../src/nesting';
 
 const digits = (count: number) => '9'.repeat(count);
+const number = (text: string) => ExactNumber.parse(text);
 const nested = (levels: number) => `${'['.repeat(levels)}1${']'.repeat(levels)}`;
 
 describe('ExactNumber', () => {
@@ -80,6 +81,63 @@ describe('ExactNumber', () => {
     ['12345678901234567890', '12345678901234567891', -1],
   ])('compares %s with %s as %d', (left, right, order) => {
     expect(Math.sign(ExactNumber.parse(left).compare(ExactNumber.parse(right)))).toBe(order);
+  });
+
+  describe('arithmetic', () => {
+    it.each([
+      ['1', '2', '3'],
+      ['0.1', '0.2', '0.3'],
+      ['1.5', '-1.5', '0'],
+      ['9007199254740992', '1', '9007199254740993'],
+      ['1e3', '0.001', '1000.001'],
+      ['-2', '-0.25', '-2.25'],
+    ])('adds %s and %s exactly into %s', (left, right, sum) => {
+      expect(number(left).plus(number(right)).toString()).toBe(sum);
+    });
+
+    it.each([
+      ['3', '5', '-2'],
+      ['0.3', '0.1', '0.2'],
+      ['-1', '-1', '0'],
+      ['1e3', '1e-3', '999.999'],
+    ])('takes %s minus %s as %s', (left, right, difference) => {
+      expect(number(left).minus(number(right)).toString()).toBe(difference);
+    });
+
+    it.each([
+      ['6', '7', '42'],
+      ['0.1', '0.1', '0.01'],
+      ['-2', '1.5', '-3'],
+      ['-2', '-3', '6'],
+      ['0', '-5', '0'],
+      ['9007199254740993', '10', '90071992547409930'],
+      ['2.5', '4', '10'],
+    ])('multiplies %s by %s exactly into %s', (left, right, product) => {
+      expect(number(left).times(number(right)).toString()).toBe(product);
+    });
+
+    it.each([
+      ['5', '-5'],
+      ['-0.5', '0.5'],
+      ['0', '0'],
+    ])('negates %s into %s', (text, negated) => {
+      expect(number(text).negated().toString()).toBe(negated);
+    });
+
+    it('gives each result one form, as a number written so would have', () => {
+      expect(isDeepStrictEqual(number('0.5').plus(number('0.5')), number('1'))).toBe(true);
+      expect(isDeepStrictEqual(number('0').negated(), number('0'))).toBe(true);
+    });
+
+    it.each([
+      ['a sum past a thousand places up', () => number(digits(1000)).plus(number('1')), '10000000000000000000… (1001 characters)'],
+      ['a product past a thousand places up', () => number('1e999').times(number('10')), '10000000000000000000… (1001 characters)'],
+      ['a product past a thousand places down', () => number('1e-1000').times(number('0.1')), '0.000000000000000000… (1003 characters)'],
+    ])('refuses %s, as a number written past it is', (_, computed, shown) => {
+      const problem = 'is out of range: a number reaches at most 1000 places either side of the point';
+
+      expect(computed).toThrow(expect.objectContaining({ name: 'NumberError', message: `${shown} ${problem}`, problem }));
+    });
   });
 
   // Callers catch NumberError and rethrow the rest, so every refusal must be one.

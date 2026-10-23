@@ -14,6 +14,8 @@ const NUMERAL = /^(-)?(\d+)(?:\.(\d+))?(?:[Ee]([+-]?\d+))?$/;
 /** Caps the exponent, which would round past 2^53, and the length of the plain form. */
 const MAX_PLACES = 1000;
 
+const OUT_OF_RANGE = `is out of range: a number reaches at most ${MAX_PLACES} places either side of the point`;
+
 /** Its own class, so a caller can catch it and rethrow anything else. */
 export class NumberError extends Error {
   override name = 'NumberError';
@@ -50,11 +52,22 @@ export class ExactNumber {
 
     const [, sign, whole, fraction = '', exponent = '0'] = match;
     const number = ExactNumber.normalized(sign === '-', whole + fraction, Number(exponent) - fraction.length);
-
-    if (number.digits.length + number.exponent > MAX_PLACES || -number.exponent > MAX_PLACES)
-      throw refused(`is out of range: a number reaches at most ${MAX_PLACES} places either side of the point`);
+    if (!number.inReach()) throw refused(OUT_OF_RANGE);
 
     return number;
+  }
+
+  /** A result past the reach is refused, as a number written past it is. */
+  private static computed(value: bigint, exponent: number): ExactNumber {
+    const negative = value < 0n;
+    const number = ExactNumber.normalized(negative, (negative ? -value : value).toString(), exponent);
+    if (!number.inReach()) throw new NumberError(`${shown(number.toString())} ${OUT_OF_RANGE}`, OUT_OF_RANGE);
+
+    return number;
+  }
+
+  private inReach(): boolean {
+    return this.digits.length + this.exponent <= MAX_PLACES && -this.exponent <= MAX_PLACES;
   }
 
   private static normalized(negative: boolean, digits: string, exponent: number): ExactNumber {
@@ -64,6 +77,31 @@ export class ExactNumber {
     const trimmed = significant.replace(/0+$/, '');
 
     return new ExactNumber(negative, trimmed, exponent + significant.length - trimmed.length);
+  }
+
+  plus(other: ExactNumber): ExactNumber {
+    const exponent = Math.min(this.exponent, other.exponent);
+
+    return ExactNumber.computed(this.scaledTo(exponent) + other.scaledTo(exponent), exponent);
+  }
+
+  minus(other: ExactNumber): ExactNumber {
+    return this.plus(other.negated());
+  }
+
+  times(other: ExactNumber): ExactNumber {
+    return ExactNumber.computed(this.scaledTo(this.exponent) * other.scaledTo(other.exponent), this.exponent + other.exponent);
+  }
+
+  negated(): ExactNumber {
+    return ExactNumber.normalized(!this.negative, this.digits, this.exponent);
+  }
+
+  /** The signed digits for an exponent no larger than this one's. */
+  private scaledTo(exponent: number): bigint {
+    const scaled = BigInt(this.digits) * 10n ** BigInt(this.exponent - exponent);
+
+    return this.negative ? -scaled : scaled;
   }
 
   toString(): string {

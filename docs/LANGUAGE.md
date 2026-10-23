@@ -118,6 +118,14 @@ whole makes it so, since the answer tells only whether the value is there. A sen
 condition, or a sensitive left side of `&&` or `||`, can still be learned from whether
 the run fails: an error in the side it picks is shown like any other.
 
+`+`, `-` and `*` work on numbers, and `-var.n` negates one: `count = var.zones * 2`.
+Numbers stay exact, so `0.1 + 0.2` is `0.3`; a result past a thousand places either side
+of the point is refused. `<`, `<=`, `>` and `>=` order two numbers. A string that spells a
+number is read as one, as a schema reads it: `"8" + 1` is `9`, and `"8 MB" + 1` is
+refused. Anything else, `null` among them, is refused, and a boolean or a list by its type
+before any value is known. A side not known until apply leaves the result unknown, and a
+sensitive side makes it sensitive.
+
 ## For
 
 A for expression makes a list from a collection: `[for n in var.names : "app-${n}"]`. With

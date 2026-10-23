@@ -17,7 +17,7 @@ in a directory; a module is another directory with its own `main.clay`.
 | `STRING_LIT`      | A heredoc's text, a line at a time    | No escapes                                                              |
 | `CHEREDOC`        | A line holding only `NAME`            | Closes a heredoc; spaces or tabs may come around the name               |
 | `NUMBER`          | `[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?` | No sign; `007` is `7`; at most 1000 places either side of the point     |
-| `MINUS`           | `-`                                   | Only before a number                                                    |
+| `MINUS`           | `-`                                   | Part of the number it stands before, else a subtraction or a negation   |
 | `BOOLEAN`         | `true`, `false`                       |                                                                         |
 | `NULL`            | `null`                                |                                                                         |
 | `LBRACE`          | `{`                                   |                                                                         |
@@ -37,6 +37,12 @@ in a directory; a module is another directory with its own `main.clay`.
 | `OR`              | `\|\|`                                |                                                                         |
 | `BANG`            | `!`                                   |                                                                         |
 | `QUESTION`        | `?`                                   | Only in a conditional                                                   |
+| `PLUS`            | `+`                                   |                                                                         |
+| `STAR`            | `*`                                   |                                                                         |
+| `LESS`            | `<`                                   |                                                                         |
+| `LESS_EQUAL`      | `<=`                                  |                                                                         |
+| `GREATER`         | `>`                                   |                                                                         |
+| `GREATER_EQUAL`   | `>=`                                  |                                                                         |
 | `DOT`             | `.`                                   |                                                                         |
 | `EOF`             |                                       | Ends every token stream                                                 |
 
@@ -126,9 +132,12 @@ absolute path, is refused where it is written.
 value       = or [ "?" value ":" value ]
 or          = and { "||" and }
 and         = equality { "&&" equality }
-equality    = unary { ( "==" | "!=" ) unary }
-unary       = "!" unary | primary
-primary     = string | heredoc | [ "-" ] NUMBER | BOOLEAN | NULL | reference | call | list | for | map | "(" value ")"
+equality    = ordering { ( "==" | "!=" ) ordering }
+ordering    = sum { ( "<" | "<=" | ">" | ">=" ) sum }
+sum         = product { ( "+" | "-" ) product }
+product     = unary { "*" unary }
+unary       = "!" unary | "-" NUMBER | "-" unary | primary
+primary     = string | heredoc | NUMBER | BOOLEAN | NULL | reference | call | list | for | map | "(" value ")"
 string      = OQUOTE { QUOTED_LIT | TEMPLATE_INTERP ( reference | call ) TEMPLATE_END } CQUOTE
 heredoc     = OHEREDOC { STRING_LIT | TEMPLATE_INTERP ( reference | call ) TEMPLATE_END } CHEREDOC
 list        = "[" [ value { "," value } [ "," ] ] "]"
@@ -141,8 +150,9 @@ A string reads `\n`, `\r`, `\t`, `\"` and `\\`, a character by number as `\uNNNN
 An escape is read in a string's text, not inside a `${...}`; a quoted map key reads them
 too, and a block label never holds one.
 
-A minus may stand apart from its number: `- 5` is `-5`. A name keeps its dash, so
-`a-1` is one identifier, not `a` minus `1`.
+A minus before a number is part of it, and may stand apart: `- 5` is `-5`. Before
+anything else it negates: `-var.n`. Between two values it subtracts: `3-1` is `3` minus
+`1`. A name keeps its dash, so `a-1` is one identifier, not `a` minus `1`; write `a - 1`.
 
 A list needs a comma between items and may end with one. A map does not need commas.
 A map key may be a bare identifier or a quoted string, and appears once; a block kind is
@@ -150,14 +160,15 @@ a fine identifier, `true`, `false` and `null` are not, and neither is `__proto__
 attribute name either. A block is not named `true`, `false` or `null`, since a reference to
 it would read as the value.
 
-Operators bind tighter the lower they are in the rules: `!` first, then `==` and `!=`,
-`&&`, `||`, and the conditional last. Within one level they group from the left, so
-`a && b && c` is `(a && b) && c`; a conditional in a result groups from the right.
+Operators bind tighter the lower they are in the rules: `!` and `-` first, then `*`, `+`
+and `-`, `<`, `<=`, `>` and `>=`, `==` and `!=`, `&&`, `||`, and the conditional last.
+Within one level they group from the left, so `a - b + c` is `(a - b) + c`; a conditional
+in a result groups from the right.
 
 Lists, maps, a call's arguments, an index read from a value, a type's `(...)`, parentheses,
-`!`, a conditional and each operator in a chain nest at most 100 levels deep, together.
-One more is refused where it starts: at its `[`, `{`, `(`, `!`, `?` or operator, or at the
-name of the call or the type.
+`!`, a `-` that negates, a conditional and each operator in a chain nest at most 100
+levels deep, together. One more is refused where it starts: at its `[`, `{`, `(`, `!`,
+`-`, `?` or operator, or at the name of the call or the type.
 
 ### Types
 
@@ -394,10 +405,10 @@ from whether the run fails: an error in an item it keeps is shown like any other
 
 A resource with `count = n` makes `n` instances, addressed `type.name[0]` to
 `type.name[n-1]`. `n` is a whole number from 0, known when planning: a literal, a
-variable, a value a resource already has, or one the configuration sets on a resource to
-be created or changed. One that reads a value only an apply makes, such as an id, is
-refused where it is written. So is a sensitive one, since a plan shows how many
-instances it makes.
+variable, a value a resource already has, one the configuration sets on a resource to be
+created or changed, or one worked out from these, as `var.n * 2` is. One that reads a
+value only an apply makes, such as an id, is refused where it is written. So is a
+sensitive one, since a plan shows how many instances it makes.
 
 Inside the block, `count.index` is the index of the instance being made. Anywhere else,
 and in `count` itself, it is refused where it is written.
@@ -658,7 +669,7 @@ throws the same for a character it does not know, a string not closed on its lin
 
 ## Not in the language
 
-- Arithmetic and ordering: `+ - * / %` and `< > <= >=`
+- `/` and `%`
 - `depends_on`, provisioners, and any `lifecycle` argument but `prevent_destroy`, `create_before_destroy` and `ignore_changes`
 - Nested blocks inside a block, but `lifecycle` in a resource
 - Any file other than `main.clay`

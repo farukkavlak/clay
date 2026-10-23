@@ -18,13 +18,23 @@ const column = (written: string, needle: string, from = 0) => PREFIX.length + wr
 /** The tree without positions, operators as `[left, operator, right]`, so a test reads how it groups. */
 type Shape = string | boolean | null | Shape[] | { [key: string]: Shape };
 
-function shapeOf(value: AttributeValue): Shape {
-  if (value.type === 'Binary') return [shapeOf(value.left), value.operator, shapeOf(value.right)];
-  if (value.type === 'Not') return ['!', shapeOf(value.value)];
-  if (value.type === 'Conditional') return [shapeOf(value.condition), '?', shapeOf(value.whenTrue), ':', shapeOf(value.whenFalse)];
+/** What needs no shape of its parts. */
+function leafShape(value: AttributeValue): Shape | undefined {
+  if (value.type === 'Number') return value.value.toString();
   if (value.type === 'Reference') return value.value.map((step) => ('name' in step ? step.name : '[]')).join('.');
   if (value.type === 'Boolean') return value.value;
   if (value.type === 'Null') return null;
+
+  return undefined;
+}
+
+function shapeOf(value: AttributeValue): Shape {
+  const leaf = leafShape(value);
+  if (leaf !== undefined) return leaf;
+  if (value.type === 'Binary') return [shapeOf(value.left), value.operator, shapeOf(value.right)];
+  if (value.type === 'Not') return ['!', shapeOf(value.value)];
+  if (value.type === 'Negate') return ['-', shapeOf(value.value)];
+  if (value.type === 'Conditional') return [shapeOf(value.condition), '?', shapeOf(value.whenTrue), ':', shapeOf(value.whenFalse)];
   if (value.type === 'List') return value.value.map((item) => shapeOf(item));
   if (value.type === 'For') return { for: shapeOf(value.collection), body: shapeOf(value.body) };
 
@@ -53,6 +63,13 @@ describe('operators', () => {
     ['||', TokenType.Or],
     ['!', TokenType.Bang],
     ['?', TokenType.Question],
+    ['+', TokenType.Plus],
+    ['-', TokenType.Minus],
+    ['*', TokenType.Star],
+    ['<', TokenType.Less],
+    ['<=', TokenType.LessEqual],
+    ['>', TokenType.Greater],
+    ['>=', TokenType.GreaterEqual],
     ['=>', TokenType.FatArrow],
     ['=', TokenType.Assign],
   ])('reads %s as one token', (written, type) => {
@@ -73,6 +90,18 @@ describe('operators', () => {
     ['a conditional in the false result to the right', 'a.x ? b.x : c.x ? d.x : e.x', ['a.x', '?', 'b.x', ':', ['c.x', '?', 'd.x', ':', 'e.x']]],
     ['a conditional in the true result', 'a.x ? b.x ? c.x : d.x : e.x', ['a.x', '?', ['b.x', '?', 'c.x', ':', 'd.x'], ':', 'e.x']],
     ['! twice', '!!a.x', ['!', ['!', 'a.x']]],
+    ['* before +', 'a.x + b.x * c.x', ['a.x', '+', ['b.x', '*', 'c.x']]],
+    ['* before - on the left too', 'a.x * b.x - c.x', [['a.x', '*', 'b.x'], '-', 'c.x']],
+    ['+ and - from the left alike', 'a.x - b.x + c.x', [['a.x', '-', 'b.x'], '+', 'c.x']],
+    ['+ before <', 'a.x + 1 < b.x', [['a.x', '+', '1'], '<', 'b.x']],
+    ['< before ==', 'a.x < b.x == c.x >= d.x', [['a.x', '<', 'b.x'], '==', ['c.x', '>=', 'd.x']]],
+    ['ordering from the left', 'a.x <= b.x > c.x', [['a.x', '<=', 'b.x'], '>', 'c.x']],
+    ['a minus between two numbers as a subtraction', '3-1', ['3', '-', '1']],
+    ['a minus before a number as part of it', '2 * -1', ['2', '*', '-1']],
+    ['a minus before anything else as a negation', '-a.x * b.x', [['-', 'a.x'], '*', 'b.x']],
+    ['a negation before the steps it reads', '-a.x[0]', ['-', 'a.x.[]']],
+    ['two minuses', '--1', ['-', '-1']],
+    ['! and - together', '!-a.x', ['!', ['-', 'a.x']]],
   ])('groups %s', (_, written, grouped) => {
     expect(shape(written)).toEqual(grouped);
   });

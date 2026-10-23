@@ -64,13 +64,14 @@ On top of these:
 - Types: `type = set(string)`, objects with `optional(number, 80)` attributes.
 - Functions `length`, `tolist`, `toset`, `sensitive`, `nonsensitive`, `issensitive`.
 - `for` expressions that make a list or an object, with `if` to keep some items.
-- `==`, `!=`, `&&`, `||`, `!` and the conditional `cond ? a : b`.
+- `==`, `!=`, `&&`, `||`, `!`, the conditional `cond ? a : b`, `+`, `-`, `*` and `<`, `<=`,
+  `>`, `>=`.
 - Sensitive values, followed part by part and hidden wherever they would be printed.
 - `lifecycle` with `prevent_destroy`, `create_before_destroy` and `ignore_changes`.
 
 `docs/LANGUAGE.md` says what each of these does, and `docs/GRAMMAR.md` how it is written.
 
-Not there yet: arithmetic and ordering, `depends_on`, `destroy`, values for root
+Not there yet: `/` and `%`, `depends_on`, `destroy`, values for root
 variables from the command line, and more than one file per module. `docs/TASKS.md` has
 the full list.
 

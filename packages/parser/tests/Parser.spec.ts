@@ -380,9 +380,7 @@ describe('Clay Parser', () => {
       ['an exponent with no digit', '1e', '"1e" is not a number', at(1, 24)],
       ['an exponent sign with no digit', '1e+', '"1e+" is not a number', at(1, 24)],
       ['a point with no digit before it', '.5', 'Unexpected value: .', at(1, 24)],
-      ['a minus before a reference', '-var.x', "Expect a number after '-'", at(1, 25)],
-      ['two minuses', '--1', "Expect a number after '-'", at(1, 25)],
-      ['a minus before a brace', '-', "Expect a number after '-'", at(1, 26)],
+      ['a minus before a brace', '-', 'Unexpected value: }', at(1, 26)],
       ['a negative number out of range', '-1e5000', '"-1e5000" is out of range', at(1, 24)],
     ])('refuses %s where it is written', (_, written, message, position) => {
       const error = errorOf(`resource "t" "n" { v = ${written} }`);
@@ -502,7 +500,7 @@ describe('Clay Parser', () => {
       ['one that holds no reference', '"${1}"', "Expect a reference or a function call inside '${'", at(1, 27)],
       ['one with more than a reference', '"${var.x y}"', "Expect '}' after the reference", at(1, 33)],
       ['one whose reference ends on a dot', '"${var.}"', 'Expect property name after dot', at(1, 31)],
-      ['one holding a character the lexer knows nothing about', '"${a+b}"', 'Unexpected character: "+"', at(1, 28)],
+      ['one holding a character the lexer knows nothing about', '"${a@b}"', 'Unexpected character: "@"', at(1, 28)],
       ['one holding a comment', '"${var.x # note}"', "A comment cannot sit inside '${'", at(1, 33)],
       ['one holding a comment of the other kind', '"${var.x // note}"', "A comment cannot sit inside '${'", at(1, 33)],
     ])('refuses %s where it is written', (_, written, message, position) => {
@@ -1093,6 +1091,7 @@ describe('Clay Parser', () => {
       ['a reference in a list', 'variable "v" { default = ["a", var.p] }', 'var.p', at(1, 32)],
       ['a call before the reference it is given', 'variable "v" { default = length(var.p) }', 'length(...)', at(1, 26)],
       ['a reference deep in a map', 'variable "v" { default = { a = { b = var.p } } }', 'var.p', at(1, 38)],
+      ['a reference behind a minus', 'variable "v" { default = -var.p }', 'var.p', at(1, 27)],
     ])('refuses %s in a variable default, where it is written', (_, input, named, position) => {
       const error = errorOf(input);
 
@@ -1430,6 +1429,8 @@ describe('Clay Parser', () => {
       ['lists and maps in turn', LOCAL, inTurn, LOCAL.length + 50 + 3 * 50 + 1],
       ['parentheses', LOCAL, deep('(', '1', ')'), LOCAL.length + 100 + 1],
       ['negations', LOCAL, deep('!', 'true', ''), LOCAL.length + 100 + 1],
+      ['minuses', LOCAL, deep('-', 'a', ''), LOCAL.length + 100 + 1],
+      ['arithmetic in a chain', LOCAL, (levels: number) => '1' + ' + 1'.repeat(levels), LOCAL.length + 1 + 4 * 100 + 2],
       ['conditionals', LOCAL, deep('true ? 1 : ', '1', ''), LOCAL.length + 11 * 100 + 6],
       ['operators in a chain', LOCAL, (levels: number) => 'true' + ' && true'.repeat(levels), LOCAL.length + 4 + 8 * 100 + 2],
     ])('takes %s nested 100 levels, and refuses one more at its opening', (_, start, nested, column) => {
