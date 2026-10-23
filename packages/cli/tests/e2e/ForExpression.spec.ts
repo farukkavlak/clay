@@ -301,6 +301,42 @@ describe('a for expression', () => {
       expect(error.position).toMatchObject(placeOf(config, 'n => 1'));
     });
 
+    // The marks name keys every value the condition may give holds.
+    const both = `(${later} ? { a = sensitive("1"), b = sensitive("2") } : { a = sensitive("3"), b = sensitive("4") })`;
+
+    it.each([
+      ['an object', `(${later} ? { a = "1", b = "2" } : { a = "3", b = "4" })`],
+      ['an object with one attribute sensitive', `(${later} ? { a = sensitive("1"), b = "2" } : { a = sensitive("3"), b = "4" })`],
+      ['an object marked at both attributes', both],
+      ['a tuple', `(${later} ? ["1", "2"] : ["3", "4"])`],
+    ])('refuses at plan a key two items give, over %s not known yet that holds both whatever the apply finds', async (_, collection) => {
+      const config = `${random}\noutput "o" {\n  value = { for k, v in ${collection} : "k" => v }\n  sensitive = true\n}`;
+
+      const error = await planError(config);
+
+      expect(error.message).toBe('Two items give the key "k"; write "..." after the value to group them');
+      expect(error.position).toMatchObject(placeOf(config, '"k" =>'));
+    });
+
+    it('refuses at plan a mistake in an item a collection not known yet holds for certain, read with its type', async () => {
+      const config = `${random}\noutput "o" {\n  value = { for k, v in (${later} ? { a = "1" } : { a = "2" }) : k => v.name }\n}`;
+
+      const error = await planError(config);
+
+      expect(error.message).toBe('v is a string and cannot be read into');
+      expect(error.position).toMatchObject(placeOf(config, 'v.name'));
+    });
+
+    it.each([
+      ['grouped', `{ for k, v in ${both} : "k" => v... }`, { k: ['1', '2'] }],
+      ['where the if may leave one out', `{ for k, v in ${both} : "k" => v if k == "a" || !(${later}) }`, { k: '1' }],
+    ])('waits for the apply with a key two items give over a collection not known yet, %s', async (_, value, expected) => {
+      await apply(`${random}\noutput "o" {\n  value = ${value}\n  sensitive = true\n}`);
+
+      const held = await outputs();
+      expect(held?.o.value).toEqual(expected);
+    });
+
     it('runs a saved plan whose instances it gives', async () => {
       const config = `${names}
         resource "local_file" "f" {

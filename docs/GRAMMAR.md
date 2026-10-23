@@ -460,9 +460,11 @@ An item not known until apply is not known in what the for gives either, and the
 known. A collection not known at all leaves the whole for to the apply, and so does a set
 with a member not known yet: that member may sort before the others and move every item.
 The key and the value are still read once at plan, with an item not known yet, so a
-reference that cannot be read is refused then. A sensitive key, or a collection sensitive as
-a whole, makes the whole for sensitive. A sensitive value in the body makes each item
-sensitive, and the size is not.
+reference that cannot be read is refused then. They are read again for each item the
+collection holds whatever the apply finds: an attribute its object type names, a place of
+its tuple type, or a key its marks name. Each is read with its own type. A sensitive key,
+or a collection sensitive as a whole, makes the whole for sensitive. A sensitive value in
+the body makes each item sensitive, and the size is not.
 A for over a constant may be a variable's default.
 
 `{for n in var.names : n => "app-${n}"}` makes an object: the key before `=>` and the
@@ -472,7 +474,8 @@ refused where the key is written, at plan too when the key is known only after a
 its type is known, and when the collection is not known yet, is empty, or is in a block
 that makes no instance. `__proto__` is refused as a key, as in a map.
 
-A key two items give is refused where the key is written. With `...` after the value,
+A key two items give is refused where the key is written, at plan too when the
+collection is not known yet but holds both. With `...` after the value,
 `{for f in var.files : f.dir => f.name...}`, the items of one key are grouped instead:
 the key holds a tuple of their values, in the order of the items.
 

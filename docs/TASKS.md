@@ -346,11 +346,12 @@ change each.
       key pass the plan; the apply then refuses `Two items give the key`:
       `{ for x in ["a", "b", "c"] : (x == "c" ? "z" : "k") => x if x != "c" || cond }`.
       Now the plan refuses them
-- [ ] Two items a `for` over a collection not known yet holds for certain that give the
+- [x] Two items a `for` over a collection not known yet holds for certain that give the
       same key pass the plan; the apply then refuses `Two items give the key`. The type
       says which items are there (the attributes of an object, the places of a tuple), and
       so do the marks:
-      `{ for k, v in (cond ? { a = "1", b = "2" } : { a = "3", b = "4" }) : "k" => v }`
+      `{ for k, v in (cond ? { a = "1", b = "2" } : { a = "3", b = "4" }) : "k" => v }`.
+      Now the plan refuses them
 - [ ] A value not known yet that is sensitive somewhere in every outcome, but at a place
       the plan does not know, carries no mark, so an output that holds all of it passes the
       plan and is refused at apply. Here `a` or `b` is sensitive, never neither:
