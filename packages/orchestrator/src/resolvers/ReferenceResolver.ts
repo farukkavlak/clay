@@ -8,6 +8,7 @@ import {
   MAX_NESTING,
   ModuleAddress,
   Schema,
+  sensitiveUnder,
   State,
   Type,
   typeNestingOf,
@@ -60,7 +61,9 @@ import {
   hasText,
   isAllSensitive,
   isSensitive,
+  itemsOf,
   objectOf,
+  sharedMarks,
   tupleOf,
   unordered,
   Value,
@@ -170,6 +173,8 @@ interface Keyed {
   steps: Step[];
   sensitive: boolean;
   later?: Step;
+  /** The key of each step after `later`; every item where another index is not known yet. */
+  rest: (string | number)[];
 }
 
 /** Only that the read failed is told, since why may say what the sensitive value is. */
@@ -188,6 +193,11 @@ function hidingIf(sensitive: boolean, message: string, position: Position, read:
 /** What went wrong reading at a sensitive index may quote the index. */
 function atSensitiveIndex(node: Named): string {
   return `${spellNamed(node)} was read at a sensitive index, so why it failed is not shown`;
+}
+
+/** The marks under `keys`. */
+function marksAlong(paths: AttributePath[], keys: (string | number)[]): AttributePath[] {
+  return keys.reduce((marks, key) => sensitiveUnder(marks, key), paths);
 }
 
 /** Neither side decides `&&` or `||` yet. One not known may still decide alone, so a mark on the other is the answer's only where both have it. */
@@ -300,7 +310,7 @@ export class ReferenceResolver {
 
   /**
    * An index read from a value takes the key it comes to, and what it finds is sensitive when the index is.
-   * An index not known yet makes the result unknown, sensitive when what it reads into or the index is.
+   * An index not known yet makes the result unknown, with the marks every item has along the steps after it, or whole where an index is sensitive.
    */
   private readWith(site: Site, steps: Step[], read: Reader): Value {
     if (!steps.some((step) => 'index' in step)) return read(steps);
@@ -314,28 +324,30 @@ export class ReferenceResolver {
     );
   }
 
-  /** The steps before the first index not known yet, with a key for each index read from a value. */
+  /** The steps before the first index not known yet, with a key for each index read from a value, and the keys after it. */
   private keyed(steps: Step[], site: Site): Keyed {
-    const found: Step[] = [];
-    let sensitive = false;
+    const keyed: Keyed = { steps: [], sensitive: false, rest: [] };
 
     for (const step of steps) {
-      if (!('index' in step)) {
-        found.push(step);
-        continue;
-      }
-
-      const index = this.indexOf(step.index, site);
-      sensitive = sensitive || isSensitive(index);
-      if (isUnknown(index.data)) {
-        checkUnknownIndex(index, step);
-        return { steps: found, sensitive, later: step };
-      }
-
-      found.push(keyOf(index, step));
+      const { key, sensitive } = this.keyOfStep(step, site);
+      keyed.sensitive = keyed.sensitive || sensitive;
+      if (keyed.later) keyed.rest.push(key === undefined ? EVERY_ITEM : stepKey(key));
+      else if (key === undefined) keyed.later = step;
+      else keyed.steps.push(key);
     }
 
-    return { steps: found, sensitive };
+    return keyed;
+  }
+
+  /** A step as it reads, with the key an index comes to; none for an index not known yet. */
+  private keyOfStep(step: Step, site: Site): { key?: Step; sensitive: boolean } {
+    if (!('index' in step)) return { key: step, sensitive: false };
+
+    const index = this.indexOf(step.index, site);
+    if (!isUnknown(index.data)) return { key: keyOf(index, step), sensitive: isSensitive(index) };
+
+    checkUnknownIndex(index, step);
+    return { sensitive: isSensitive(index) };
   }
 
   private indexOf(node: AttributeValue, { state, context, reading }: Site): Value {
@@ -347,18 +359,18 @@ export class ReferenceResolver {
     }
   }
 
-  /** The type the rest would find is not known without the index, so the unknown has none. */
-  private readLater(node: Named, { steps, sensitive: indexSensitive }: Keyed, read: Reader): never {
-    let sensitive = indexSensitive;
+  /** The type the rest would find is not known without the index, so the unknown has none. Whichever item it reads, it has what every item has. */
+  private readLater(node: Named, { steps, sensitive: indexSensitive, rest }: Keyed, read: Reader): never {
+    let items: Value[];
 
     try {
-      sensitive = isSensitive(hidingIf(sensitive, atSensitiveIndex(node), node.position, () => read(steps))) || sensitive;
+      items = itemsOf(hidingIf(indexSensitive, atSensitiveIndex(node), node.position, () => read(steps)));
     } catch (error) {
       if (!(error instanceof UnresolvedReferenceError)) throw error;
-      sensitive = error.sensitive.length > 0 || sensitive;
+      items = itemsOf(unknownOf(error));
     }
 
-    throw new UnresolvedReferenceError(`${spellNamed(node)} is known only after apply`, types.dynamic, wholeIf(sensitive));
+    throw new UnresolvedReferenceError(`${spellNamed(node)} is known only after apply`, types.dynamic, indexSensitive ? [[]] : marksAlong(sharedMarks(items), rest));
   }
 
   /** Over a collection sensitive as a whole, or with a sensitive if, what it gives is too: how many items it keeps tells the if. */
@@ -644,9 +656,8 @@ export class ReferenceResolver {
     const condition = this.boolean(node.condition, 'A condition', state, context, reading);
     if (isUnknown(condition.data)) {
       const results = [node.whenTrue, node.whenFalse].map((result) => this.resolveItem(result, state, context, reading));
-      // Only one result is the value, so a mark is its own where the condition or both results have one.
-      const sensitive = isSensitive(condition) || results.every((value) => isSensitive(value));
-      return withSensitive(valueOf(resultType(node, results), UNKNOWN), wholeIf(sensitive));
+      // Only one result is the value, so it has the condition's mark and the marks both results have.
+      return withSensitive(valueOf(resultType(node, results), UNKNOWN), isSensitive(condition) ? [[]] : sharedMarks(results));
     }
 
     const written = resultType(node, [this.byType(node.whenTrue, context, reading), this.byType(node.whenFalse, context, reading)]);

@@ -152,10 +152,10 @@ the run fails: an error in the side it picks is shown like any other.
 
 Where the condition, or a side of `&&` or `||`, is not known until apply, the result is
 sensitive at plan only where it would be whichever way the apply goes: `cond ? sensitive(a)
-: b` is not, and `cond ? sensitive(a) : sensitive(b)` is. A mark that depends on the way
-waits for the apply, which knows it and checks there, so `issensitive` gives the same
-answer at plan and apply. Terraform marks the result of such a condition where either side
-is marked.
+: b` is not, `cond ? sensitive(a) : sensitive(b)` is, and of two objects only the parts
+both mark are. A mark that depends on the way waits for the apply, which knows it and
+checks there, so `issensitive` gives the same answer at plan and apply. Terraform marks
+the result of such a condition where either side is marked.
 
 `+`, `-`, `*`, `/` and `%` work on numbers, and `-var.n` negates one:
 `count = var.zones * 2`. Numbers stay exact, so `0.1 + 0.2` is `0.3`; a result past a
@@ -204,6 +204,14 @@ sensitive as a whole when one member is, since its order and size give the membe
 `length` of a list is not sensitive when only an item is. A `for` not known until apply is
 sensitive as a whole when its collection or a key is, and its `length` with it. When only
 its body reads a sensitive value, each item is sensitive and its `length` is not.
+
+Other values chosen at apply keep, at plan, the marks every choice has. `lookup` with a
+key not known yet has the marks every value and the default share, and is sensitive as a
+whole where the key or the whole map is; with a key a value not known yet marks, it has
+that key's marks. An index not known yet gives the marks every item has along the rest of
+the reference, or the whole where an index is sensitive. `merge` with an argument not
+known yet gives each key the marks every value has, and a key some argument gives for
+certain the marks shared by that argument and every later one not known yet.
 
 A root output that holds a sensitive value and does not say `sensitive = true` is refused,
 at `validate`, `plan` and `apply`. A `for_each` with a sensitive key is refused, since a

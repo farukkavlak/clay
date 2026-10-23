@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
 
-import { containsUnknown, ExactNumber, isUnknown, Type, types, UNKNOWN } from '@clay/contracts';
+import { AttributePath, containsUnknown, EVERY_ITEM, ExactNumber, isUnknown, Type, types, UNKNOWN } from '@clay/contracts';
 import { CallNode, ConfigError } from '@clay/parser';
 
 import { charactersOf } from './characters';
@@ -13,12 +13,16 @@ import {
   article,
   child,
   described,
+  everyItemMarks,
+  fewest,
   hasText,
   isAllSensitive,
   isSensitive,
+  itemsOf,
   nullSource,
   objectOf,
   sensitiveAmong,
+  sharedMarks,
   unordered,
   Value,
   valueOf,
@@ -132,8 +136,26 @@ function entryOf(value: Value, key: string): Value {
   return isUnknown(value.data) ? { ...child(value, key), data: UNKNOWN } : child(value, key);
 }
 
-function unknownFrom(type: Type, args: Value[]): Value {
-  return withSensitive(valueOf(type, UNKNOWN), wholeIf(args.some((arg) => isSensitive(arg))));
+function keysOf(value: Value): string[] {
+  return Object.keys(value.type.kind === 'object' ? value.type.attributes : (value.data as Record<string, unknown>));
+}
+
+/** Each value a map or an object holds; one not known yet stands for all of them. */
+function entriesOf(value: Value): Value[] {
+  return value.type.kind === 'object' ? keysOf(value).map((key) => entryOf(value, key)) : itemsOf(value);
+}
+
+/** Marks below `key` say every value it may be holds the key, since a value not known yet is marked only where every value it may be is. */
+function marksKey(value: Value, key: string): boolean {
+  return (value.sensitive ?? []).some(([first]) => first !== undefined && first !== EVERY_ITEM && String(first) === key);
+}
+
+/** Where the key or the map is not known yet, it gives an entry or the default, so only the marks all of them have. */
+function laterLookup([map, , fallback]: Value[], key: string | typeof UNKNOWN, type: Type): Value {
+  if (key !== UNKNOWN && marksKey(map, key)) return withSensitive(valueOf(type, UNKNOWN), entryOf(map, key).sensitive ?? []);
+
+  const entries = key === UNKNOWN ? entriesOf(map) : [entryOf(map, key)];
+  return withSensitive(valueOf(type, UNKNOWN), sharedMarks([...entries, fallback]));
 }
 
 /** A map's value and the default join into one type, as the two results of a conditional do. */
@@ -149,7 +171,7 @@ function lookupType(map: Value, element: Type, fallback: Value, refuse: Refuse):
 function fromMap(args: Value[], element: Type, key: string | typeof UNKNOWN, refuse: Refuse): Value {
   const [map, , fallback] = args;
   const type = lookupType(map, element, fallback, refuse);
-  if (key === UNKNOWN || isUnknown(map.data)) return unknownFrom(type, args);
+  if (key === UNKNOWN || isUnknown(map.data)) return laterLookup(args, key, type);
 
   const found = Object.hasOwn(map.data as Record<string, unknown>, key) ? child(map, key) : fallback;
   return converted('lookup', found, type, []);
@@ -158,7 +180,7 @@ function fromMap(args: Value[], element: Type, key: string | typeof UNKNOWN, ref
 /** An object's attributes are known by its type, so its value or the default is given as it is. */
 function fromObject(args: Value[], key: string | typeof UNKNOWN): Value {
   const [object, , fallback] = args;
-  if (key === UNKNOWN || object.type.kind !== 'object') return unknownFrom(types.dynamic, args);
+  if (key === UNKNOWN || object.type.kind !== 'object') return laterLookup(args, key, types.dynamic);
 
   return Object.hasOwn(object.type.attributes, key) ? entryOf(object, key) : fallback;
 }
@@ -182,14 +204,34 @@ function sharedType(given: Value[]): Type | undefined {
   return given.every((arg) => isDeepStrictEqual(arg.type, first.type)) ? first.type : undefined;
 }
 
-function keysOf(value: Value): string[] {
-  return Object.keys(value.type.kind === 'object' ? value.type.attributes : (value.data as Record<string, unknown>));
+const keysLater = (arg: Value) => arg.type.kind === 'dynamic' || (arg.type.kind === 'map' && isUnknown(arg.data));
+
+/** The keys an argument gives for certain: all of a known one's, and those one not known yet marks, since a value not known yet is marked only where every value it may be is. */
+function keysGiven(arg: Value): string[] {
+  if (!keysLater(arg)) return keysOf(arg);
+
+  return (arg.sensitive ?? []).flatMap(([first]) => (first === undefined || first === EVERY_ITEM ? [] : [String(first)]));
+}
+
+/** A key comes from the last argument that gives it for certain, or from one not known yet after it, so it has the marks all of those share. */
+function keyMarks(given: Value[], key: string): AttributePath[] {
+  const from = given.length - 1 - [...given].reverse().findIndex((arg) => keysGiven(arg).includes(key));
+  const values = given.slice(from).filter((arg, index) => index === 0 || keysLater(arg));
+
+  return sharedMarks(values.map((arg) => entryOf(arg, key))).map((path) => [key, ...path]);
+}
+
+/** Which keys it holds waits for the apply, so each has the marks every value has, and a key given for certain its own. */
+function laterMerged(given: Value[], type: Type): Value {
+  const keys = new Set(given.flatMap((arg) => keysGiven(arg)));
+
+  return withSensitive(valueOf(type, UNKNOWN), fewest([...everyItemMarks(given.flatMap((arg) => entriesOf(arg))), ...[...keys].flatMap((key) => keyMarks(given, key))]));
 }
 
 /** A map not known yet leaves the keys unknown, so an object made with it is not known at all. */
 function merged(given: Value[]): Value {
   const shared = sharedType(given);
-  if (given.some((arg) => arg.type.kind === 'dynamic' || (arg.type.kind === 'map' && isUnknown(arg.data)))) return unknownFrom(shared ?? types.dynamic, given);
+  if (given.some((arg) => keysLater(arg))) return laterMerged(given, shared ?? types.dynamic);
 
   const entries = new Map(given.flatMap((arg) => keysOf(arg).map((key): [string, Value] => [key, entryOf(arg, key)])));
   if (!shared) return objectOf([...entries]);

@@ -1,4 +1,4 @@
-import { ExactNumber, types, UNKNOWN } from '@clay/contracts';
+import { EVERY_ITEM, ExactNumber, types, UNKNOWN } from '@clay/contracts';
 import { CallNode, ConfigError } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
@@ -292,6 +292,15 @@ describe('lookup', () => {
     ['a key not known yet in an object, as any type', written({ a: 'x' }), valueOf(types.string, UNKNOWN), written('x'), valueOf(types.dynamic, UNKNOWN)],
     ['an object not known yet, as its attribute', valueOf(types.object({ a: types.number }), UNKNOWN), written('a'), written('x'), valueOf(types.number, UNKNOWN)],
     ['a value not known yet whose type nothing names', valueOf(types.dynamic, UNKNOWN), written('a'), written('x'), valueOf(types.dynamic, UNKNOWN)],
+    [
+      'a key a map not known yet may not hold, though it marks another and every value',
+      withSensitive(valueOf(types.map(types.string), UNKNOWN), [['a'], [EVERY_ITEM]]),
+      written('b'),
+      written('x'),
+      text(UNKNOWN),
+    ],
+    ['a key not known yet with a sensitive default it may not give', sizes, valueOf(types.string, UNKNOWN), allSensitive(written('x')), text(UNKNOWN)],
+    ['a key not known yet in a map sensitive at one key', withSensitive(sizes, [['prod']]), valueOf(types.string, UNKNOWN), written('x'), text(UNKNOWN)],
   ])('does not know %s', (_, map, key, fallback, result) => {
     expect(called('lookup', map, key, fallback)).toEqual(result);
   });
@@ -302,7 +311,16 @@ describe('lookup', () => {
     ['a map sensitive as a whole', allSensitive(sizes), written('test'), written('none'), allSensitive(text('none'))],
     ['a value sensitive at the key it reads', withSensitive(sizes, [['prod']]), written('prod'), written('none'), allSensitive(text('large'))],
     ['a sensitive default it gives', sizes, written('test'), allSensitive(written('none')), allSensitive(text('none'))],
-    ['a key not known yet with a sensitive default', sizes, valueOf(types.string, UNKNOWN), allSensitive(written('x')), allSensitive(text(UNKNOWN))],
+    ['a key a map not known yet marks', withSensitive(valueOf(types.map(types.string), UNKNOWN), [['a']]), written('a'), written('x'), allSensitive(text(UNKNOWN))],
+    ['a sensitive key not known yet', sizes, allSensitive(valueOf(types.string, UNKNOWN)), written('x'), allSensitive(text(UNKNOWN))],
+    [
+      'a key not known yet where every value and the default are sensitive',
+      withSensitive(sizes, [[EVERY_ITEM]]),
+      valueOf(types.string, UNKNOWN),
+      allSensitive(written('x')),
+      allSensitive(text(UNKNOWN)),
+    ],
+    ['a key not known yet in a map sensitive as a whole', allSensitive(sizes), valueOf(types.string, UNKNOWN), written('x'), allSensitive(text(UNKNOWN))],
   ])('is sensitive with %s', (_, map, key, fallback, result) => {
     expect(called('lookup', map, key, fallback)).toEqual(result);
   });
@@ -403,6 +421,17 @@ describe('merge', () => {
 
     expect(error.message).toBe(message);
     expect(error.position).toEqual(at(column));
+  });
+
+  const later = (paths: (string | number)[][]) => withSensitive(valueOf(types.map(types.string), UNKNOWN), paths);
+
+  it.each([
+    ['a key an argument not known yet marks, where every later value is sensitive', [later([['a']]), later([[EVERY_ITEM]])], [['a']]],
+    ['no key an argument marks, where a later one may give it plain', [later([['a']]), later([])], []],
+    ['a key a known argument gives after the last one not known yet', [later([]), withSensitive(map({ a: 'x' }), [['a']])], [['a']]],
+    ['a key a known argument gives before one not known yet, where that one marks every value', [withSensitive(map({ a: 'x' }), [['a']]), later([[EVERY_ITEM]])], [[EVERY_ITEM]]],
+  ])('keeps, with an argument not known yet, %s', (_, values, marks) => {
+    expect(called('merge', ...values).sensitive ?? []).toEqual(marks);
   });
 });
 

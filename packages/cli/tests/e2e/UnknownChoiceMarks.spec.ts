@@ -1,4 +1,4 @@
-import { types } from '@clay/contracts';
+import { types, UNKNOWN } from '@clay/contracts';
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
@@ -12,7 +12,10 @@ import { start } from './start';
 // Not known at plan, and false once the string is made.
 const LATER = 'length(random_string.s.result) == 5';
 
-const output = (value: string) => `resource "random_string" "s" { length = 4 }\noutput "o" {\n  value = ${value}\n}`;
+const output = (value: string, list = '[]') => `resource "random_string" "s" { length = 4 }\nlocals { l = ${list} }\noutput "o" {\n  value = ${value}\n}`;
+
+// Read at the index the string's length gives once made: 1.
+const AT = 'local.l[length(random_string.s.result) - 3]';
 
 const REFUSED = 'output "o" holds a sensitive value; write sensitive = true to export it';
 
@@ -54,8 +57,22 @@ describe('a value a choice not known at plan makes', () => {
     ['issensitive of && with only its left side sensitive, both not known', `issensitive(sensitive(length(random_string.s.result) == 4) && ${LATER})`, false],
     ['issensitive of || with a known sensitive left side and a right side that decides', `issensitive(sensitive(false) || !(${LATER}))`, false],
     ['issensitive of || with only its left side sensitive, both not known', `issensitive(sensitive(${LATER}) || !(${LATER}))`, false],
-  ])('is sensitive only where the side the apply takes is, for %s', async (_, value, expected) => {
-    await apply(output(value));
+    ['issensitive of lookup with a key not known yet', 'issensitive(lookup({ a = sensitive("x") }, random_string.s.result, "d"))', false],
+    [
+      'issensitive of merge with an argument not known yet',
+      `issensitive(merge({ a = sensitive("x") }, { for k in [random_string.s.result] : (length(k) == 4 ? "a" : "b") => "y" }))`,
+      false,
+    ],
+    ['issensitive of an index not known yet', `issensitive(${AT})`, false, '[sensitive("a"), "b"]'],
+    ['issensitive of a plain part an index not known yet reads', 'issensitive(local.l[length(random_string.s.result) - 4].b)', false, '[{ a = sensitive("x"), b = "y" }]'],
+    [
+      'issensitive of a part only one result of a condition marks',
+      'issensitive(local.l.b)',
+      false,
+      'length(random_string.s.result) == 4 ? { a = sensitive("x"), b = "y" } : { a = "x", b = sensitive("y") }',
+    ],
+  ])('is sensitive only where the side the apply takes is, for %s', async (_, value, expected, list?: string) => {
+    await apply(output(value, list));
 
     expect(await outputs()).toEqual({ o: expected });
   });
@@ -81,7 +98,49 @@ describe('a value a choice not known at plan makes', () => {
     ['a sensitive left side of &&', `sensitive(${LATER}) && true`],
     ['both sides of && where its right side decides', `sensitive(${LATER}) && sensitive(false)`],
     ['both sides of && not known', `sensitive(length(random_string.s.result) == 4) && sensitive(${LATER})`],
-  ])('refuses at plan an output sensitive whichever side the apply takes, for %s', async (_, value) => {
-    await expect(newOrchestrator().plan(output(value))).rejects.toThrow(REFUSED);
+    ['lookup with a sensitive key not known yet', 'lookup({ a = "x" }, sensitive(random_string.s.result), "d")'],
+    ['lookup in a sensitive map with a key not known yet', 'lookup(sensitive({ a = "x" }), random_string.s.result, "d")'],
+    ['merge with a sensitive argument and one not known yet', 'merge(sensitive({ a = "x" }), { for k in [random_string.s.result] : k => "y" })'],
+    ['a sensitive index not known yet', 'local.l[sensitive(length(random_string.s.result) - 3)]', '["a", "b"]'],
+    ['an index not known yet into a sensitive list', AT, 'sensitive(["a", "b"])'],
+    ['an index not known yet where every item is sensitive', AT, '[sensitive("a"), sensitive("b")]'],
+    [
+      'an index not known yet into a for not known yet where every item is sensitive',
+      'local.l[length(random_string.s.result) - 4]',
+      `[for x in ["a", "b"] : sensitive(x) if x == "a" || ${LATER}]`,
+    ],
+    ['a part both results of a condition mark', 'local.l.a', `${LATER} ? { a = sensitive("x"), b = "y" } : { a = sensitive("z"), b = "w" }`],
+    ['an index not known yet where every item marks the part read', `${AT}.a`, '[{ a = sensitive("x") }, { a = sensitive("y") }]'],
+    ['an index not known yet where every item has a sensitive part', AT, '[{ a = sensitive("x") }, { a = sensitive("y") }]'],
+    ['an index past one not known yet where every item marks every item', `${AT}[0]`, '[[sensitive("x")], [sensitive("y")]]'],
+    ['lookup with a key not known yet where every value and the default are sensitive', 'lookup({ a = sensitive("x") }, random_string.s.result, sensitive("d"))'],
+    ['a known index past one not known yet', `${AT}[1 - 1]`, '[[sensitive("x")], [sensitive("y")]]'],
+    ['a sensitive index past one not known yet', `${AT}[sensitive(1 - 1)]`, '[["a"], ["b"]]'],
+    ['merge with an argument not known yet that marks a key it gives', `merge(${AT}, {})`, '[{ a = sensitive("x"), b = "1" }, { a = sensitive("y"), b = "2" }]'],
+    ['lookup of a key a value not known yet marks', `lookup(${AT}, "a", "d")`, '[{ a = sensitive("x"), b = "1" }, { a = sensitive("y"), b = "2" }]'],
+    ['merge where every value of every argument is sensitive', 'merge({ a = sensitive("x") }, { for k in tolist(toset([random_string.s.result])) : k => sensitive(k) })'],
+    ['merge with a sensitive key after its last argument not known yet', 'merge({ for k in [random_string.s.result] : k => "y" }, { a = sensitive("x") })'],
+  ])('refuses at plan an output sensitive whichever side the apply takes, for %s', async (_, value, list?: string) => {
+    await expect(newOrchestrator().plan(output(value, list))).rejects.toThrow(REFUSED);
+  });
+
+  it.each([
+    ['a part only one result of a condition marks', 'local.l.b', `${LATER} ? { a = sensitive("x"), b = "y" } : { a = sensitive("z"), b = "w" }`],
+    ['an index not known yet into an empty list', AT, '[]'],
+    [
+      'lookup of a key a value not known yet does not mark, with a sensitive default',
+      `lookup(${AT}, "b", sensitive("d"))`,
+      '[{ a = sensitive("x"), b = "1" }, { a = sensitive("y"), b = "2" }]',
+    ],
+    ['merge where a later argument gives the key one not known yet marks', `merge(${AT}, { a = "z" })`, '[{ a = sensitive("x"), b = "1" }, { a = sensitive("y"), b = "2" }]'],
+    [
+      'an index not known yet past another, where the part it reads is marked in no item',
+      `${AT}[length(random_string.s.result) - 4]`,
+      '[["a", sensitive("x")], ["b", sensitive("y")]]',
+    ],
+  ])('leaves to the apply what no outcome marks at plan, for %s', async (_, value, list) => {
+    const plan = await newOrchestrator().plan(output(value, list));
+
+    expect(plan.outputs.o.new?.value).toBe(UNKNOWN);
   });
 });

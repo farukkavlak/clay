@@ -1,4 +1,4 @@
-import { ExactNumber, types, UNKNOWN } from '@clay/contracts';
+import { EVERY_ITEM, ExactNumber, types, UNKNOWN } from '@clay/contracts';
 import { ConfigError } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
@@ -6,7 +6,7 @@ import { converted, SchemaMismatch } from '../src/conformValues';
 import { declaredAs, givenTo } from '../src/declared';
 import { forObject } from '../src/forItems';
 import { readPath } from '../src/resolvers/readPath';
-import { allSensitive, child, inferred, objectOf, tupleOf, Value, valueOf, withSensitive } from '../src/Value';
+import { allSensitive, child, everyItemMarks, inferred, itemsOf, objectOf, sharedMarks, tupleOf, Value, valueOf, withSensitive } from '../src/Value';
 import { steps } from './ast';
 
 const at = { file: 'main.clay', line: 1, column: 1 };
@@ -81,6 +81,53 @@ const conn = objectOf([
   ['enabled', written('yes')],
   ['password', secret],
 ]);
+
+describe('the marks some values all have', () => {
+  const marked = (...paths: (string | number)[][]) => withSensitive(written({ a: 'x', b: 'y' }), paths);
+
+  it.each([
+    ['none where one value has none', [marked(['a']), written({ a: 'x', b: 'y' })], []],
+    ['a part every value marks', [marked(['a']), marked(['a'], ['b'])], [['a']]],
+    ['a part one value marks and another holds in one marked whole', [marked(['a']), allSensitive(written({ a: 'x' }))], [['a']]],
+    ['the whole where every value is sensitive as a whole', [allSensitive(written('x')), allSensitive(written('y'))], [[]]],
+    [
+      'the part both mark where one marks it under every item of a list and another at one',
+      [withSensitive(written([{ a: 'x' }]), [[EVERY_ITEM, 'a']]), withSensitive(written([{ a: 'y' }]), [[0, 'a']])],
+      [[0, 'a']],
+    ],
+    [
+      'the part where a mark under every item meets one at an item',
+      [withSensitive(written([{ a: 'x' }]), [[EVERY_ITEM, 'a']]), withSensitive(written([{ a: 'y' }]), [[0]])],
+      [[0, 'a']],
+    ],
+    [
+      'the part where two marks under every item meet',
+      [withSensitive(written([{ a: 'x' }]), [[EVERY_ITEM, 'a']]), withSensitive(written([{ a: 'y' }]), [[0, EVERY_ITEM]])],
+      [[0, 'a']],
+    ],
+    ['one path for an index written as a number or as text', [withSensitive(written(['x']), [[0], ['0']]), withSensitive(written(['y']), [[0]])], [[0]]],
+    ['one path where it covers another both have', [withSensitive(written(['x']), [[EVERY_ITEM], [0]]), withSensitive(written(['y']), [[EVERY_ITEM]])], [[EVERY_ITEM]]],
+    ['none for no values', [], []],
+  ])('are %s', (_, values, marks) => {
+    expect(sharedMarks(values)).toEqual(marks);
+  });
+
+  it('are under every item where each item may be any of them', () => {
+    expect(everyItemMarks([marked(['a']), marked(['a'])])).toEqual([[EVERY_ITEM, 'a']]);
+  });
+
+  it.each([
+    ['one for each item of a list', withSensitive(written(['x', 'y']), [[1]]), [written('x'), allSensitive(written('y'))]],
+    ['none for an empty list', written([]), []],
+    [
+      'one with what every item has for a list not known yet',
+      withSensitive(valueOf(types.list(types.string), UNKNOWN), [[EVERY_ITEM]]),
+      [allSensitive(valueOf(types.dynamic, UNKNOWN))],
+    ],
+  ])('of a collection are %s', (_, collection, items) => {
+    expect(itemsOf(collection)).toEqual(items);
+  });
+});
 
 describe('an error about a value with a sensitive part', () => {
   it.each([
