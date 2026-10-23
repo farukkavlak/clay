@@ -102,9 +102,13 @@ describe('==', () => {
     expect(equal(valueOf(types.dynamic, UNKNOWN), written(number('1')))).toEqual(bool(UNKNOWN));
   });
 
-  it('names no type when a side is sensitive', () => {
-    expect(refusal(() => equal(allSensitive(written(number('1'))), written('a'))).message).toBe(
-      '== compares values that can never be equal; one is sensitive, so no more is shown'
+  it('names the types when a side is sensitive', () => {
+    expect(refusal(() => equal(allSensitive(written(number('1'))), written('a'))).message).toBe('== compares a number with a string, which are never equal');
+  });
+
+  it('names no item when a side is sensitive, since a for can make its keys', () => {
+    expect(refusal(() => equal(allSensitive(written({ k: number('1') })), written({ k: 'a' }))).message).toBe(
+      '== compares an object with an object whose items differ in type; one is sensitive, so no more is shown'
     );
   });
 
@@ -126,7 +130,7 @@ describe('a boolean operand', () => {
     ['a string', written('true'), '&& takes a boolean, not a string'],
     ['null', nullOf, '&& takes a boolean, not null'],
     ['a null read through a reference', { ...nullOf, nullFrom: 'var.on' }, '&& takes a boolean, not null, and var.on, which it reads, is null'],
-    ['a sensitive string', allSensitive(written('x')), '&& takes a boolean, and this sensitive value is not one; why is not shown'],
+    ['a sensitive string', allSensitive(written('x')), '&& takes a boolean, not a string'],
   ])('refuses %s', (_, value, message) => {
     const error = refusal(() => checkBoolean('&&', value, position));
 
@@ -172,7 +176,7 @@ describe('a number operand', () => {
     ['a tuple', written([number('1')]), '+ takes a number, not a tuple'],
     ['null', nullOf, '+ takes a number, not null'],
     ['a null read through a reference', { ...nullOf, nullFrom: 'var.n' }, '+ takes a number, not null, and var.n, which it reads, is null'],
-    ['a sensitive tuple', allSensitive(written([])), '+ takes a number, and this sensitive value is not one; why is not shown'],
+    ['a sensitive tuple', allSensitive(written([])), '+ takes a number, not a tuple'],
   ])('refuses %s', (_, value, message) => {
     const error = refusal(() => asNumber('+', value, position));
 
