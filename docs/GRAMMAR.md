@@ -94,9 +94,12 @@ the module's path, or `count` or `for_each`, which a module call keeps for itsel
 
 `attributes` is zero or more `name = value` pairs, in any order, without separators, and
 no name twice.
-`output` must have `value`, and may have `type` and `sensitive`. `variable` may have
-`default`, `type` and `sensitive`. `sensitive` is `true` or `false` as written, never
-another value or a reference.
+`output` must have `value`, and may have `type`, `sensitive` and `description`. `variable`
+may have `default`, `type`, `sensitive` and `description`. `sensitive` is `true` or `false`
+as written, never another value or a reference. `description` is plain text, in quotes or
+a heredoc, for people to read; Clay checks it and keeps nothing of it. Anything else, such
+as a number, a reference or a `${...}`, is refused where it is written; Terraform turns a
+number into text.
 
 `locals` takes no name of its own. Each attribute is a local of the module, read as
 `local.name`. A file may hold several `locals` blocks, and they are read as one: a name
@@ -105,14 +108,14 @@ with a variable or an output.
 
 What the engine reads from each:
 
-| Block      | Reads                                                                                                                             |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `resource` | `count` or `for_each`, read by the engine; every other attribute goes to the provider                                             |
-| `data`     | `count` or `for_each`, read by the engine; every other attribute goes to the provider                                             |
-| `variable` | `default`, a constant: no reference or function call; `type`, read below; `sensitive`; another attribute is refused where written |
-| `locals`   | every attribute, as a value of any kind; it may read anything a resource's attribute may, another local among them                |
-| `output`   | `value`; `type`, read below; `sensitive`, which hides the value of a root output wherever it is printed                           |
-| `module`   | `source`, a literal string naming a directory relative to the file; `count` or `for_each`; every other attribute is an input      |
+| Block      | Reads                                                                                                                                                                 |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `resource` | `count` or `for_each`, read by the engine; every other attribute goes to the provider                                                                                 |
+| `data`     | `count` or `for_each`, read by the engine; every other attribute goes to the provider                                                                                 |
+| `variable` | `default`, a constant: no reference or function call; `type`, read below; `sensitive`; `description`, checked and dropped; another attribute is refused where written |
+| `locals`   | every attribute, as a value of any kind; it may read anything a resource's attribute may, another local among them                                                    |
+| `output`   | `value`; `type`, read below; `sensitive`, which hides the value of a root output wherever it is printed; `description`, checked and dropped                           |
+| `module`   | `source`, a literal string naming a directory relative to the file; `count` or `for_each`; every other attribute is an input                                          |
 
 A resource, a data source or a module with both `count` and `for_each` is refused where
 it is written.

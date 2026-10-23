@@ -304,12 +304,13 @@ export class Parser {
     if (named) throw new ConfigError(`${what} is a constant, so it cannot hold ${spellNamed(named)}`, named.position);
   }
 
-  /** Only the one value, `type`, and the flag where the block has one; any other name is refused, since nothing would read it. */
+  /** Only the one value, `type`, the flag where the block has one, and a description; any other name is refused, since nothing would read it. */
   private parseTypedBody(block: string, valueName: string, flag?: string): { attributes: Record<string, AttributeValue>; declared?: ParsedType; flagged?: boolean } {
     const attributes: Record<string, AttributeValue> = {};
     let declared: ParsedType | undefined;
     let flagged: boolean | undefined;
-    const taken = flag ? `"${valueName}", "type" and "${flag}"` : `"${valueName}" and "type"`;
+    const names = [valueName, 'type', ...(flag ? [flag] : []), 'description'].map((name) => `"${name}"`);
+    const taken = `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
     const seen: Record<string, true> = {};
     while (!this.check(TokenType.RBrace) && !this.isAtEnd()) {
       const key = this.consume(TokenType.Identifier, 'Expect attribute name.');
@@ -326,6 +327,10 @@ export class Parser {
         flagged = this.consume(TokenType.Boolean, `${flag} is true or false.`).value === 'true';
         continue;
       }
+      if (key.value === 'description') {
+        this.checkDescription(this.parseValue());
+        continue;
+      }
 
       const value = this.parseValue();
       if (key.value !== valueName) throw new ConfigError(`${block} takes only ${taken}, not "${key.value}".`, value.position);
@@ -334,6 +339,11 @@ export class Parser {
 
     this.consume(TokenType.RBrace, "Expect '}' after block body.");
     return { attributes, declared, flagged };
+  }
+
+  /** Read by people only, so it is checked and dropped. */
+  private checkDescription(value: AttributeValue): void {
+    if (value.type !== 'String') throw new ConfigError('A description is plain text, in quotes or a heredoc, with no ${...}', value.position);
   }
 
   private parseType(): ParsedType {

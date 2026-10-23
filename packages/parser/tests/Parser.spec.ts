@@ -264,11 +264,23 @@ describe('Clay Parser', () => {
       expect(program.map((statement) => statement.type)).toEqual(['Resource', 'Data']);
     });
 
-    it('takes only "value", "type" and "sensitive" in an output block, not any name', () => {
+    it('takes only "value", "type", "sensitive" and "description" in an output block, not any name', () => {
       const error = errorOf('output "o" { data = 1 }');
 
-      expect(error.message).toBe('Output "o" takes only "value", "type" and "sensitive", not "data".');
+      expect(error.message).toBe('Output "o" takes only "value", "type", "sensitive" and "description", not "data".');
       expect(error.position).toEqual(at(1, 21));
+    });
+
+    it.each([
+      [
+        'a variable',
+        'variable "v" {\n  description = "Why it is there"\n  default = "a"\n}',
+        { type: 'Variable', name: 'v', attributes: { default: { type: 'String', value: 'a', position: at(3, 13) } } },
+      ],
+      ['a variable, written as a heredoc', 'variable "v" {\n  description = <<EOT\nWhy it is there\nEOT\n}', { type: 'Variable', name: 'v', attributes: {} }],
+      ['an output', 'output "o" {\n  value = "x"\n  description = "What it gives"\n}', { type: 'Output', name: 'o', value: { type: 'String', value: 'x', position: at(2, 11) } }],
+    ])('reads the description of %s, and keeps nothing of it', (_, input, block) => {
+      expect(makeParser(input).parse()).toEqual([{ ...block, position: at(1, 1) }]);
     });
 
     it('marks an output sensitive, and leaves one that says false as one that says nothing', () => {
@@ -1112,19 +1124,31 @@ describe('Clay Parser', () => {
       expect(error.position).toEqual(position);
     });
 
+    it('refuses a misspelled default in a variable block, at its value', () => {
+      const error = errorOf('variable "v" { defualt = "a" }');
+
+      expect(error.message).toBe('Variable "v" takes only "default", "type", "sensitive" and "description", not "defualt".');
+      expect(error.position).toEqual(at(1, 26));
+    });
+
     it.each([
-      ['a misspelled default', 'variable "v" { defualt = "a" }', 'defualt', at(1, 26)],
-      ['a description it does not keep', 'variable "v" { default = "a" description = "why" }', 'description', at(1, 44)],
-    ])('refuses %s in a variable block, at its value', (_, input, attribute, position) => {
+      ['an interpolation', 'variable "v" { description = "for ${var.env}" }', at(1, 30)],
+      ['a reference', 'output "o" {\n  value = 1\n  description = local.why\n}', at(3, 17)],
+      ['a number', 'variable "v" { description = 5 }', at(1, 30)],
+      ['a heredoc with an interpolation', 'variable "v" {\n  description = <<EOT\n${var.env}\nEOT\n}', at(2, 17)],
+      ['a function call', 'variable "v" { description = upper("a") }', at(1, 30)],
+      ['a boolean', 'variable "v" { description = true }', at(1, 30)],
+    ])('refuses a description that holds %s, where it is written', (_, input, position) => {
       const error = errorOf(input);
 
-      expect(error.message).toBe(`Variable "v" takes only "default", "type" and "sensitive", not "${attribute}".`);
+      expect(error.message).toBe('A description is plain text, in quotes or a heredoc, with no ${...}');
       expect(error.position).toEqual(position);
     });
 
     it.each([
       ['default', 'variable "v" { default = "a" default = "b" }', at(1, 30)],
       ['type', 'variable "v" { type = string type = number }', at(1, 30)],
+      ['description', 'variable "v" { description = "a" description = "b" }', at(1, 34)],
     ])('refuses %s set twice in a variable block', (name, input, position) => {
       const error = errorOf(input);
 

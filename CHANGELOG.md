@@ -25,7 +25,8 @@ a configuration means or how the state file is written.
 - A resource, a data source, a module or all their instances read as an object, a list
   or a map, and `.key`, `["key"]` and `[0]` into any value
 - `locals` blocks, `path.module`, heredoc strings, string escapes, negative and decimal
-  numbers, `/* ... */` comments, and references that index with a reference or a call
+  numbers, `/* ... */` comments, `description` on a variable and an output, and
+  references that index with a reference or a call
 - Provider schemas: resource and data source configuration is checked and converted to
   the type the schema names, and what a provider returns is checked too
 - The provider plans what a resource will hold, and an apply plans each resource again

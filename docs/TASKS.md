@@ -519,8 +519,10 @@ and every operator HCL has. A real configuration hits each of these early.
 - [x] More functions: `upper`, `lower`, `join`, `lookup`, `merge` and `format`, beside
       `length`, `tolist`, `toset`, `sensitive`, `nonsensitive` and `issensitive`
 - [x] `/* ... */` comments, which HCL reads beside `#` and `//`
-- [ ] `description` on a variable and an output, refused today though nearly every
-      Terraform file writes it, and `validation` on a variable
+- [x] `description` on a variable and an output, refused before though nearly every
+      Terraform file writes it
+- [ ] `validation` on a variable, a condition its value must meet and the message to give
+      where it does not
 - [ ] `depends_on`, for an order no reference shows. Written today, it is refused as an
       attribute the resource does not have
 - [ ] A `moved` block, so a rename in the configuration moves state instead of destroying
