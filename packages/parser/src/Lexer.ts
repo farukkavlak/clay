@@ -65,6 +65,8 @@ export class Lexer {
     { type: TokenType.Question, regex: /\?/y },
     { type: TokenType.Plus, regex: /\+/y },
     { type: TokenType.Star, regex: /\*/y },
+    { type: TokenType.Slash, regex: /\//y },
+    { type: TokenType.Percent, regex: /%/y },
     { type: TokenType.LessEqual, regex: /<=/y },
     { type: TokenType.Less, regex: /</y },
     { type: TokenType.GreaterEqual, regex: />=/y },

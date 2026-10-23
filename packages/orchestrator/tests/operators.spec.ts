@@ -186,6 +186,9 @@ describe('arithmetic', () => {
     ['+', '1.5', '2', '3.5'],
     ['-', '1', '2.5', '-1.5'],
     ['*', '-1.5', '4', '-6'],
+    ['/', '1', '4', '0.25'],
+    ['/', '2', '3', '0.6666666666666666666666666666666667'],
+    ['%', '-7', '3', '-1'],
   ] as const)('works out %s on %s and %s as %s', (operator, left, right, result) => {
     expect(arithmetic(operator, numeric(left), numeric(right), position)).toEqual(numeric(result));
   });
@@ -202,6 +205,23 @@ describe('arithmetic', () => {
     ['the right', numeric('1'), secretNumber('2')],
   ])('makes the result sensitive where %s is', (_, left, right) => {
     expect(arithmetic('*', left, right, position)).toEqual(allSensitive(numeric('2')));
+  });
+
+  it.each(['/', '%'] as const)('refuses %s by zero, at the operator', (operator) => {
+    const error = refusal(() => arithmetic(operator, numeric('1'), numeric('0.0'), position));
+
+    expect(error.message).toBe(`${operator} divides by zero, which has no result`);
+    expect(error.position).toEqual(position);
+  });
+
+  it('refuses a sensitive divisor of zero without saying why', () => {
+    const error = refusal(() => arithmetic('/', numeric('1'), secretNumber('0'), position));
+
+    expect(error.message).toBe('/ cannot divide by this sensitive value; why is not shown');
+  });
+
+  it('leaves a division to the apply while the divisor is not known yet', () => {
+    expect(arithmetic('/', numeric('1'), numeric(UNKNOWN), position)).toEqual(numeric(UNKNOWN));
   });
 
   it('refuses a result past the reach without naming it, since a side may be sensitive', () => {

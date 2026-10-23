@@ -118,13 +118,20 @@ whole makes it so, since the answer tells only whether the value is there. A sen
 condition, or a sensitive left side of `&&` or `||`, can still be learned from whether
 the run fails: an error in the side it picks is shown like any other.
 
-`+`, `-` and `*` work on numbers, and `-var.n` negates one: `count = var.zones * 2`.
-Numbers stay exact, so `0.1 + 0.2` is `0.3`; a result past a thousand places either side
-of the point is refused. `<`, `<=`, `>` and `>=` order two numbers. A string that spells a
-number is read as one, as a schema reads it: `"8" + 1` is `9`, and `"8 MB" + 1` is
-refused. Anything else, `null` among them, is refused, and a boolean or a list by its type
-before any value is known. A side not known until apply leaves the result unknown, and a
-sensitive side makes it sensitive.
+`+`, `-`, `*`, `/` and `%` work on numbers, and `-var.n` negates one:
+`count = var.zones * 2`. Numbers stay exact, so `0.1 + 0.2` is `0.3`; a result past a
+thousand places either side of the point is refused. A quotient keeps 34 significant
+digits, rounded half to even, so `1 / 3` is `0.3333333333333333333333333333333333` and
+`10 / 4` is `2.5`, but `2 / 3 * 3` is `2.0000000000000000000000000000000001`. `%` gives
+what is left after whole times, with the sign of the left side: `-7 % 3` is `-1`. Either
+one by zero is refused. Terraform gives infinity for `1 / 0` and the left side for
+`1 % 0`.
+
+`<`, `<=`, `>` and `>=` order two numbers. A string that spells a number is read as one,
+as a schema reads it: `"8" + 1` is `9`, and `"8 MB" + 1` is refused. Anything else,
+`null` among them, is refused, and a boolean or a list by its type before any value is
+known. A side not known until apply leaves the result unknown, and a sensitive side makes
+it sensitive.
 
 ## For
 

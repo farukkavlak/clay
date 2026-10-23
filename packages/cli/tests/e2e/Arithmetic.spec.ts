@@ -66,6 +66,10 @@ resource "local_file" "f" {
     ['parentheses first', '(1 + 2) * 3', '9'],
     ['a minus before a reference', '-var.n * 2', '-6'],
     ['a string that spells a number', 'var.s + 1', '9'],
+    ['a division that ends', '10 / 4', '2.5'],
+    ['a division that does not, kept to 34 digits', '2 / var.n', '0.6666666666666666666666666666666667'],
+    ['a remainder, with the sign of the first', '-7 % var.n', '-1'],
+    ['/ and % with * from the left', '7 / 2 * 2 % 4', '3'],
   ])('works out %s exactly into the state', async (_, value, result) => {
     await apply(`variable "n" { default = 3 }\nvariable "s" { default = "8" }\noutput "o" { value = ${value} }\n`);
 
@@ -81,6 +85,31 @@ resource "local_file" "f" {
     await apply(`variable "n" { default = 3 }\noutput "o" { value = ${value} }\n`);
 
     expect(await outputs()).toMatchObject({ o: { value: answer } });
+  });
+
+  it('makes as many instances as a division gives', async () => {
+    await apply(`variable "n" { default = 6 }
+resource "local_file" "f" {
+  count = var.n / 3
+  path = "${path.join(dir, 'f')}\${count.index}.txt"
+  content = "x"
+}
+`);
+
+    const found = await fs.readdir(dir);
+    expect(found.filter((name) => name.endsWith('.txt')).sort()).toEqual(['f0.txt', 'f1.txt']);
+  });
+
+  it.each([
+    ['/', '1 / var.z'],
+    ['%', '1 % var.z'],
+  ])('refuses %s by zero at its operator', async (operator, value) => {
+    const config = `variable "z" { default = 0 }\noutput "o" { value = ${value} }\n`;
+
+    await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
+      message: `${operator} divides by zero, which has no result`,
+      position: placeOf(config, `${operator} var.z`),
+    });
   });
 
   it.each([

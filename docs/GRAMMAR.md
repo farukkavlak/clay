@@ -39,6 +39,8 @@ in a directory; a module is another directory with its own `main.clay`.
 | `QUESTION`        | `?`                                   | Only in a conditional                                                   |
 | `PLUS`            | `+`                                   |                                                                         |
 | `STAR`            | `*`                                   |                                                                         |
+| `SLASH`           | `/`                                   |                                                                         |
+| `PERCENT`         | `%`                                   |                                                                         |
 | `LESS`            | `<`                                   |                                                                         |
 | `LESS_EQUAL`      | `<=`                                  |                                                                         |
 | `GREATER`         | `>`                                   |                                                                         |
@@ -135,7 +137,7 @@ and         = equality { "&&" equality }
 equality    = ordering { ( "==" | "!=" ) ordering }
 ordering    = sum { ( "<" | "<=" | ">" | ">=" ) sum }
 sum         = product { ( "+" | "-" ) product }
-product     = unary { "*" unary }
+product     = unary { ( "*" | "/" | "%" ) unary }
 unary       = "!" unary | "-" NUMBER | "-" unary | primary
 primary     = string | heredoc | NUMBER | BOOLEAN | NULL | reference | call | list | for | map | "(" value ")"
 string      = OQUOTE { QUOTED_LIT | TEMPLATE_INTERP ( reference | call ) TEMPLATE_END } CQUOTE
@@ -160,8 +162,9 @@ a fine identifier, `true`, `false` and `null` are not, and neither is `__proto__
 attribute name either. A block is not named `true`, `false` or `null`, since a reference to
 it would read as the value.
 
-Operators bind tighter the lower they are in the rules: `!` and `-` first, then `*`, `+`
-and `-`, `<`, `<=`, `>` and `>=`, `==` and `!=`, `&&`, `||`, and the conditional last.
+Operators bind tighter the lower they are in the rules: `!` and `-` first, then `*`, `/`
+and `%`, `+` and `-`, `<`, `<=`, `>` and `>=`, `==` and `!=`, `&&`, `||`, and the
+conditional last.
 Within one level they group from the left, so `a - b + c` is `(a - b) + c`; a conditional
 in a result groups from the right.
 
@@ -669,7 +672,6 @@ throws the same for a character it does not know, a string not closed on its lin
 
 ## Not in the language
 
-- `/` and `%`
 - `depends_on`, provisioners, and any `lifecycle` argument but `prevent_destroy`, `create_before_destroy` and `ignore_changes`
 - Nested blocks inside a block, but `lifecycle` in a resource
 - Any file other than `main.clay`

@@ -102,7 +102,7 @@ export function negated(value: Value): Value {
   return withSensitive(valueOf(types.bool, isUnknown(value.data) ? UNKNOWN : !value.data), value.sensitive ?? []);
 }
 
-export type Arithmetic = '+' | '-' | '*';
+export type Arithmetic = '+' | '-' | '*' | '/' | '%';
 
 export type Ordering = '<' | '>' | '<=' | '>=';
 
@@ -142,7 +142,11 @@ const ARITHMETIC: Record<Arithmetic, (left: ExactNumber, right: ExactNumber) => 
   '+': (left, right) => left.plus(right),
   '-': (left, right) => left.minus(right),
   '*': (left, right) => left.times(right),
+  '/': (left, right) => left.dividedBy(right),
+  '%': (left, right) => left.remainder(right),
 };
+
+const DIVIDING: ReadonlySet<Arithmetic> = new Set(['/', '%']);
 
 const ORDERING: Record<Ordering, (order: number) => boolean> = {
   '<': (order) => order < 0,
@@ -168,6 +172,11 @@ function computed(operator: string, left: NumberValue, right: NumberValue, posit
 }
 
 export function arithmetic(operator: Arithmetic, left: NumberValue, right: NumberValue, position: Position): Value {
+  if (DIVIDING.has(operator) && right.data !== UNKNOWN && right.data.isZero()) {
+    const problem = isSensitive(right) ? 'cannot divide by this sensitive value; why is not shown' : 'divides by zero, which has no result';
+    throw new ConfigError(`${operator} ${problem}`, position);
+  }
+
   const data = computed(operator, left, right, position, ARITHMETIC[operator]);
 
   return withSensitive(valueOf(types.number, data), wholeIf(isSensitive(left) || isSensitive(right)));
