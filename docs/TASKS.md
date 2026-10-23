@@ -946,6 +946,9 @@ by resource type, and no `provider` block exists yet.
 - [ ] A reference in a string that fails as it is resolved points at the string, not at
       the reference. The parse and the graph point at the reference; a resolver throws
       plain errors, and one of them means "not in state yet", so it cannot be wrapped blindly
+- [ ] A `for` over a tuple not known yet gives its item no type, so a mistake in the body
+      waits for the apply: `[for x in (cond ? ["a"] : ["b"]) : x + 1]` plans, and the apply
+      refuses `+` on a string. A tuple whose items share a type could give that type
 - [ ] "Did you mean": a reference to a name one edit away from a declared one says so
 - [ ] Provider errors carry what to do next, not only what went wrong
 - [x] A module output that does not exist is reported two ways. Read from a resource,
