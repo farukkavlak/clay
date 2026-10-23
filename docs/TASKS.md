@@ -334,8 +334,9 @@ change each.
 
 ## 1. Language
 
-The parser takes literals, references, function calls, `== != && || !` and the
-conditional, with no arithmetic yet. A real configuration hits each of these early.
+The parser takes literals, references, function calls, for expressions, `== != && || !`
+and the conditional, with no arithmetic or ordering yet. A real configuration hits each of
+these early.
 
 - [x] Negative and decimal numbers, with an exponent, as HCL writes them; the minus is a
       token of its own, so a number never swallows the minus of a subtraction

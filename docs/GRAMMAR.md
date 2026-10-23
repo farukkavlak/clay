@@ -658,8 +658,7 @@ throws the same for a character it does not know, a string not closed on its lin
 
 ## Not in the language
 
-- Operators; a value is a literal, a reference, a function call or a for expression
-- A for that filters with `if`
+- Arithmetic and ordering: `+ - * / %` and `< > <= >=`
 - `depends_on`, provisioners, and any `lifecycle` argument but `prevent_destroy`, `create_before_destroy` and `ignore_changes`
 - Nested blocks inside a block, but `lifecycle` in a resource
 - Any file other than `main.clay`

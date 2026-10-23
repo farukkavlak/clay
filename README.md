@@ -70,7 +70,7 @@ On top of these:
 
 `docs/LANGUAGE.md` says what each of these does, and `docs/GRAMMAR.md` how it is written.
 
-Not there yet: arithmetic and `<`, `>`, `depends_on`, `destroy`, values for root
+Not there yet: arithmetic and ordering, `depends_on`, `destroy`, values for root
 variables from the command line, and more than one file per module. `docs/TASKS.md` has
 the full list.
 
