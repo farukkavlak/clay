@@ -3,7 +3,7 @@ import { CallNode, ConfigError } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
 import { functionCalled } from '../src/functions';
-import { allSensitive, inferred, Value, valueOf, withSensitive } from '../src/Value';
+import { allSensitive, inferred, isAllSensitive, Value, valueOf, withSensitive } from '../src/Value';
 
 const at = (column: number) => ({ file: 'main.clay', line: 1, column });
 
@@ -403,5 +403,137 @@ describe('merge', () => {
 
     expect(error.message).toBe(message);
     expect(error.position).toEqual(at(column));
+  });
+});
+
+const formatOf = (template: string, ...values: Value[]) => called('format', written(template), ...values);
+
+describe('format', () => {
+  it.each([
+    ['a string', '%s', [written('web')], 'web'],
+    ['a number as its text', '%s', [number('1.50')], '1.5'],
+    ['a boolean as its text', '%s', [written(true)], 'true'],
+    ['an argument picked by its place, and the one after it next', '%[2]s-%s-%[1]s', [written('a'), written('b'), written('c')], 'b-c-a'],
+    ['a percent sign', '100%%', [], '100%'],
+    ['nothing but text', 'plain', [], 'plain'],
+    ['a string quoted', '%q', [written('a "b"\n')], String.raw`"a \"b\"\n"`],
+    ['a string cut to its first characters', '%.2s', [written('héllo')], 'hé'],
+    ['a string cut to nothing', '%.0s', [written('abc')], ''],
+    ['a string cut before it is quoted', '%.2q', [written('abc')], '"ab"'],
+    ['a string padded to a width', '%5s|%-5s|%05s', [written('ab'), written('ab'), written('ab')], '   ab|ab   |000ab'],
+    ['a width counted in characters', '%3s', [written('\u{1F468}‍\u{1F469}‍\u{1F467}')], '  \u{1F468}‍\u{1F469}‍\u{1F467}'],
+    ['a number as its text with %v', '%v', [number('1e21')], '1000000000000000000000'],
+    ['a string as it is with %v', '%v', [written('a')], 'a'],
+    ['a boolean with %v', '%v', [written(false)], 'false'],
+    ['null with %v', '%v', [valueOf(types.string, null)], 'null'],
+    ['null padded with %v', '%6v|', [valueOf(types.string, null)], '  null|'],
+    ['a string padded to the widest width', '%1000s', [written('a')], `${' '.repeat(999)}a`],
+    ['an object as JSON with its keys in order', '%v', [written({ b: ExactNumber.parse('2'), a: ['x', true, null] })], '{"a":["x",true,null],"b":2}'],
+    ['a string as JSON with %#v', '%#v|%#v', [written('a'), number('5')], '"a"|5'],
+    ['a value padded with %v', '%-4v|', [written(true)], 'true|'],
+    ['true with %t', '%t', [written(true)], 'true'],
+    ['a string that spells a boolean with %t', '%t', [written('false')], 'false'],
+    ['an integer', '%d', [number('-42')], '-42'],
+    ['a string that spells an integer', '%d', [written('12')], '12'],
+    ['an integer past 2^53 exactly', '%d', [number('123456789012345678901')], '123456789012345678901'],
+    ['zeros after the sign', '%05d|%+05d|%-05d|', [number('-42'), number('42'), number('42')], '-0042|+0042|42   |'],
+    ['a sign or a space', '%+d|% d|% d', [number('7'), number('7'), number('-7')], '+7| 7|-7'],
+    ['the fewest digits a precision asks', '%.3d|%6.3d|%05.3d', [number('7'), number('7'), number('42')], '007|   007|  042'],
+    ['nothing for zero at precision 0', '[%.0d]', [number('0')], '[]'],
+  ])('writes %s', (_, template, values, result) => {
+    expect(formatOf(template, ...values)).toEqual(text(result));
+  });
+
+  it.each([
+    ['an argument not known yet', valueOf(types.number, UNKNOWN)],
+    ['a list with an item not known yet', written(['a', UNKNOWN])],
+    ['a value whose type nothing names', valueOf(types.dynamic, UNKNOWN)],
+  ])('does not know the string with %s', (_, value) => {
+    expect(formatOf('x-%v', value)).toEqual(text(UNKNOWN));
+  });
+
+  it('does not know the string, and reads nothing of it, while the string is not known', () => {
+    expect(called('format', valueOf(types.string, UNKNOWN), written(['a']))).toEqual(text(UNKNOWN));
+  });
+
+  it.each([
+    ['a sensitive argument', [written('%s-%s'), written('a'), allSensitive(written('b'))]],
+    ['a sensitive part of an argument', [written('%s-%v'), written('a'), withSensitive(written({ k: 'b' }), [['k']])]],
+    ['a sensitive string', [allSensitive(written('%s-b')), written('a')]],
+  ])('is sensitive as a whole with %s', (_, values) => {
+    expect(isAllSensitive(called('format', ...values))).toBe(true);
+  });
+
+  it('is sensitive while not known with a sensitive argument', () => {
+    expect(formatOf('%s', allSensitive(valueOf(types.string, UNKNOWN)))).toEqual(allSensitive(text(UNKNOWN)));
+  });
+
+  it.each([
+    ['a string that is a list', [written(['%s'])], 'format takes a string first, not a tuple', 8],
+    ['a verb it does not take', [written('%z')], 'format cannot read "%z": there is no verb %z; format takes %s, %q, %v, %t, %d and %%', 8],
+    ['a string that ends before its verb', [written('50%')], 'format cannot read "%": the string ends before a verb', 8],
+    ['a flag the verb does not take', [written('%+s'), written('a')], 'format cannot read "%+s": %s takes no "+" flag', 8],
+    ['a precision the verb does not take', [written('%.2v'), written('a')], 'format cannot read "%.2v": %v takes no precision', 8],
+    ['a width past the cap', [written('%1001s'), written('a')], 'format cannot read "%1001s": a width or a precision is at most 1000', 8],
+    ['argument 0', [written('%[0]s'), written('a')], 'format cannot read "%[0]s": an argument is picked as [1], [2] and so on', 8],
+    ['an argument with a leading zero', [written('%[01]s'), written('a')], 'format cannot read "%[01]s": an argument is picked as [1], [2] and so on', 8],
+    ['a verb with no argument', [written('%s %s'), written('a')], 'format cannot read "%s": it needs argument 2 after the string, and there is 1', 8],
+    ['an argument past the last', [written('%[3]s'), written('a'), written('b')], 'format cannot read "%[3]s": it needs argument 3 after the string, and there are 2', 8],
+    ['an argument after the last verb', [written('%s'), written('a'), written('b')], "format's string has no verb for this argument", 28],
+    ['an argument a picked one skips', [written('%[2]s'), written('a'), written('b')], "format's string has no verb for this argument", 18],
+    ['an argument with no verb at all', [written('x'), written('a')], "format's string has no verb for this argument", 18],
+    ['null', [written('%s'), valueOf(types.string, null)], 'format cannot write null with "%s"; only %v writes null', 18],
+    [
+      'null a reference reads',
+      [written('%d'), { ...valueOf(types.number, null), nullFrom: 'var.n' }],
+      'format cannot write null with "%d"; only %v writes null, and var.n, which it reads, is null',
+      18,
+    ],
+    ['a list as a string', [written('%s'), written(['a'])], 'format cannot write a tuple with "%s"', 18],
+    ['a list not known yet as a string', [written('%s'), valueOf(types.list(types.string), UNKNOWN)], 'format cannot write a list with "%s"', 18],
+    ['a list held where nothing names the type', [written('%s'), valueOf(types.dynamic, ['a'])], 'format cannot write a tuple with "%s"', 18],
+    ['a boolean as an integer', [written('%d'), written(true)], 'format cannot write a boolean with "%d"', 18],
+    ['a number as a boolean', [written('%t'), number('1')], 'format cannot write a number with "%t"', 18],
+    ['a fraction as an integer', [written('%d'), number('1.5')], 'format cannot write 1.5 with "%d", which takes a whole number', 18],
+    ['a string that spells no number', [written('%d'), written('abc')], 'format cannot write "abc" with "%d", which takes a whole number; it is not a number', 18],
+    ['a string that spells no boolean', [written('%t'), written('yes')], 'format cannot write "yes" with "%t", which takes true or false', 18],
+    [
+      'a sensitive value, without showing it',
+      [written('%d'), allSensitive(written('abc'))],
+      'format cannot write (sensitive value) with "%d", which takes a whole number; it is not a number',
+      18,
+    ],
+    ['a verb of a sensitive string, without showing it', [allSensitive(written('%z'))], 'format cannot read a verb in its string; it is sensitive, so its parts are not shown', 8],
+    [
+      'an argument to a sensitive string, without showing the verb',
+      [allSensitive(written('%d')), written(['a'])],
+      'format cannot write a tuple with a verb of its sensitive string',
+      18,
+    ],
+    [
+      'a value a sensitive string cannot write, without saying what the verb takes',
+      [allSensitive(written('%d')), written('abc')],
+      'format cannot write "abc" with a verb of its sensitive string',
+      18,
+    ],
+    [
+      'null to a sensitive string, without saying which verb takes it',
+      [allSensitive(written('%s')), valueOf(types.string, null)],
+      'format cannot write null with a verb of its sensitive string',
+      18,
+    ],
+  ])('refuses %s where it is written', (_, values, message, column) => {
+    const error = errorOf('format', ...values);
+
+    expect(error.message).toBe(message);
+    expect(error.position).toEqual(at(column));
+  });
+
+  it('refuses an argument not known yet by its type, so validate finds it', () => {
+    expect(errorOf('format', written('%d %s'), number('1'), valueOf(types.map(types.string), UNKNOWN)).message).toBe('format cannot write a map with "%s"');
+  });
+
+  it('refuses no string at the call', () => {
+    expect(() => functionCalled(callOf('format', 0))).toThrow(new ConfigError('format takes at least 1 argument, not 0', at(1)));
   });
 });

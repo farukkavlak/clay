@@ -3,7 +3,9 @@ import { isDeepStrictEqual } from 'node:util';
 import { containsUnknown, ExactNumber, isUnknown, Type, types, UNKNOWN } from '@clay/contracts';
 import { CallNode, ConfigError } from '@clay/parser';
 
+import { charactersOf } from './characters';
 import { converted, sensitiveAs } from './conformValues';
+import { formatted, FormatError } from './format';
 import { isSequence, itemTypes, unified, unjoined, Unjoinable } from './unify';
 import {
   allSensitive,
@@ -41,11 +43,8 @@ function one(call: OfOne): ClayFunction {
   return { takes: 1, call: ([value], refuse) => call(value, refuse) };
 }
 
-/** Grapheme clusters, so an accented letter or a multi-code-point emoji counts as one. */
-const characters = new Intl.Segmenter('en', { granularity: 'grapheme' });
-
 function sizeOf(data: unknown): number {
-  if (typeof data === 'string') return [...characters.segment(data)].length;
+  if (typeof data === 'string') return charactersOf(data).length;
 
   return Array.isArray(data) ? data.length : Object.keys(data as Record<string, unknown>).length;
 }
@@ -210,6 +209,20 @@ function merge(args: Value[], refuse: Refuse): Value {
   );
 }
 
+/** Sensitive as a whole where any part of any argument is, as `join` is. */
+function format([template, ...values]: Value[], refuse: Refuse): Value {
+  const text = textOf('format takes a string first', template, refuse);
+  const sensitive = wholeIf([template, ...values].some((arg) => isSensitive(arg)));
+  if (text === UNKNOWN) return withSensitive(valueOf(types.string, UNKNOWN), sensitive);
+
+  try {
+    return withSensitive(valueOf(types.string, formatted(text, values, isSensitive(template))), sensitive);
+  } catch (error) {
+    if (error instanceof FormatError) return refuse(error.message, error.at);
+    throw error;
+  }
+}
+
 /** Unknown only when nothing says it is sensitive: a mark is known before the value is. */
 function issensitive(value: Value): Value {
   if (isSensitive(value)) return valueOf(types.bool, true);
@@ -229,6 +242,7 @@ const FUNCTIONS = new Map<string, ClayFunction>([
   ['join', { takes: 2, more: true, call: join }],
   ['lookup', { takes: 3, fewer: 'without a default, read the key with map["key"]', call: lookup }],
   ['merge', { takes: 1, more: true, call: merge }],
+  ['format', { takes: 1, more: true, call: format }],
 ]);
 
 function counts({ takes, more }: ClayFunction): string {
