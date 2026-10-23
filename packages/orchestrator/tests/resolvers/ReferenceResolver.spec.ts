@@ -117,6 +117,18 @@ describe('ReferenceResolver', () => {
     expect(() => read('"a ${[1]}"')).toThrow(new ConfigError("The value inside '${' is a tuple and cannot be joined into a string", atColumn(27)));
   });
 
+  it.each([
+    ['an operator', '[for l in [["a", "b", "c"]] : l[1 + 1]]', 'c'],
+    ['a conditional', '[for m in [{ x = "a", y = "b" }] : m[true ? "y" : "x"]]', 'b'],
+    ['a string with an interpolation', '[for m in [{ ab = "z" }] : m["a${"b"}"]]', 'z'],
+  ])('reads at any value written as an index: %s', (_, value, found) => {
+    expect(read(value).data).toEqual([found]);
+  });
+
+  it('refuses an index with no name that is no number or string, where it is written', () => {
+    expect(() => read('[for l in [["a"]] : l[[0]]]')).toThrow(new ConfigError('An index is a number or a string, not a tuple', atColumn(44)));
+  });
+
   // State may hold data outside the schema, so the error names the resource.
   it('refuses a value in state that its schema does not hold, naming the resource', () => {
     const schemas = new Map([['resource', { val: { type: types.number } }]]);

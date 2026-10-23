@@ -1,5 +1,5 @@
 import { ExactNumber, NumberError } from '@clay/contracts';
-import { ConfigError, Position, Step } from '@clay/parser';
+import { AttributeValue, ConfigError, isNamed, Position, Step } from '@clay/parser';
 
 import { article, described, hasText, isSensitive, nullSource, Value } from '../Value';
 
@@ -23,26 +23,30 @@ function plainKeyOf(index: Value, position: Position): Step {
   throw new ConfigError(`An index is a number or a string, not ${described(index)}${nullSource(index)}`, position);
 }
 
+/** An index read from a value, and how it is written. */
+type IndexStep = { index: AttributeValue; spelled: string };
+
 /** A sensitive value's sign, size and type are parts of it, so what is wrong with it is not told. */
-function unlessSensitive<T>(index: Value, spelled: string, position: Position, run: () => T): T {
+function unlessSensitive<T>(index: Value, step: IndexStep, run: () => T): T {
   try {
     return run();
   } catch (error) {
     if (!(error instanceof ConfigError && isSensitive(index))) throw error;
-    throw new ConfigError(`${spelled} is sensitive and is no index: why is not shown`, position);
+    const named = isNamed(step.index) ? step.spelled : "The value inside '['";
+    throw new ConfigError(`${named} is sensitive and is no index: why is not shown`, step.index.position);
   }
 }
 
 /** The key a known value comes to as an index: a whole number for a list or a count, a string for a map or a for_each. */
-export function keyOf(index: Value, spelled: string, position: Position): Step {
-  return unlessSensitive(index, spelled, position, () => plainKeyOf(index, position));
+export function keyOf(index: Value, step: IndexStep): Step {
+  return unlessSensitive(index, step, () => plainKeyOf(index, step.index.position));
 }
 
 /** An index not known yet is refused when its type can never be a number or a string. */
-export function checkUnknownIndex(index: Value, spelled: string, position: Position): void {
+export function checkUnknownIndex(index: Value, step: IndexStep): void {
   if (hasText(index.type) || index.type.kind === 'dynamic') return;
 
-  unlessSensitive(index, spelled, position, () => {
-    throw new ConfigError(`An index is a number or a string, not ${article(index.type.kind)}`, position);
+  unlessSensitive(index, step, () => {
+    throw new ConfigError(`An index is a number or a string, not ${article(index.type.kind)}`, step.index.position);
   });
 }

@@ -127,6 +127,19 @@ describe('an index read from a value', () => {
       expect([await read('f-0.txt'), await read('f-1.txt')]).toEqual(['a', 'b']);
     });
 
+    it('takes the item of a list at a value worked out from count.index', async () => {
+      await apply(`
+        variable "l" { default = ["a", "b", "c"] }
+        resource "local_file" "f" {
+          count   = 2
+          path    = ${file('f-${count.index}.txt')}
+          content = var.l[count.index + 1]
+        }
+      `);
+
+      expect([await read('f-0.txt'), await read('f-1.txt')]).toEqual(['b', 'c']);
+    });
+
     it('takes the value of a map at each.key', async () => {
       await apply(`
         variable "m" { default = { x = "one", y = "two" } }
@@ -275,7 +288,7 @@ describe('an index read from a value', () => {
     });
 
     it('still checks the type the index can never have', async () => {
-      await refused(randomRead('var.l[[random_string.r.result]]'), "Expect a number, a string or a reference inside '['", '[random_string.r.result]');
+      await refused(randomRead('var.l[[random_string.r.result]]'), 'An index is a number or a string, not a tuple', '[random_string.r.result]');
     });
   });
 
@@ -406,12 +419,13 @@ describe('an index read from a value', () => {
     });
 
     it.each([
-      ['negative', 'module.db.negative'],
-      ['a boolean', 'module.db.flag'],
-    ])('does not say why a sensitive index is no index: %s', async (_, index) => {
+      ['negative', 'module.db.negative', 'module.db.negative'],
+      ['a boolean', 'module.db.flag', 'module.db.flag'],
+      ['worked out, with no name', 'module.db.negative * 2', "The value inside '['"],
+    ])('does not say why a sensitive index is no index: %s', async (_, index, named) => {
       const error = await errorOf(() => newOrchestrator().plan(probe(`var.l[${index}]`, '\nsensitive = true')));
 
-      expect(error.message).toContain(`${index} is sensitive and is no index: why is not shown`);
+      expect(error.message).toContain(`${named} is sensitive and is no index: why is not shown`);
       expect(error.message).not.toMatch(/not negative|a boolean/);
     });
 
