@@ -108,6 +108,24 @@ resource "local_file" "f" {
     expect(await outputs()).toMatchObject({ o: { value: {} } });
   });
 
+  it.each([
+    ['one it keeps for certain and one it may leave out', `{ for x in ["a", "b"] : "k" => x if x == "a" || ${LATER} }`, { k: 'a' }],
+    ['two it keeps for certain, grouped', `{ for x in ["a", "b", "c"] : "k" => x... if x != "c" || ${LATER} }`, { k: ['a', 'b'] }],
+  ])('waits for the apply with two items that give one key, %s', async (_, value, result) => {
+    await apply(`${RANDOM}output "o" { value = ${value} }\n`);
+
+    expect(await outputs()).toMatchObject({ o: { value: result } });
+  });
+
+  it('refuses at plan two items it keeps for certain that give one key, while the if of another is not known', async () => {
+    const config = `${RANDOM}output "o" { value = { for x in ["a", "b", "c"] : (x == "c" ? x : "k") => x if x != "c" || ${LATER} } }\n`;
+
+    await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
+      message: 'Two items give the key "k"; write "..." after the value to group them',
+      position: placeOf(config, 'x == "c" ?'),
+    });
+  });
+
   it('reads every item while an if is not known, so a mistake in any is found', async () => {
     const config = `${RANDOM}output "o" { value = [for x in [{ a = 1 }, "b"] : x.a if ${LATER}] }\n`;
 
@@ -137,6 +155,15 @@ resource "local_file" "f" {
       const value = `{ for x in ["a", "b"] : (x == "a" ? var.secret : x) => 1 if x == "a" || ${LATER} }`;
 
       await expect(newOrchestrator().plan(`${secret}${RANDOM}output "o" { value = length(${value}) }\n`)).rejects.toThrow(REFUSED);
+    });
+
+    it('refuses at plan, and hides, a sensitive key two items it keeps for certain give, while the if of another is not known', async () => {
+      const config = `${secret}${RANDOM}output "o" {\n  value = { for x in ["a", "b", "c"] : (x == "c" ? x : var.secret) => 1 if x != "c" || ${LATER} }\n  sensitive = true\n}\n`;
+
+      await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
+        message: 'Two items give the key (sensitive value); write "..." after the value to group them',
+        position: placeOf(config, 'x == "c" ?'),
+      });
     });
 
     it.each([

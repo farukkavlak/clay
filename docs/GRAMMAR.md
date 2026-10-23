@@ -485,10 +485,11 @@ reads the `if` with the names the for gives. An item it leaves out is not read b
 value, so `x.name` is never read on a `null`, but it is still read by type, so a mistake in
 it is refused. An `if` that is not a boolean, `null` too, is refused where it is written.
 One not known until apply for any item leaves the whole for to the apply, since which
-items stay is not known, so a key two items give is refused only at apply; every item is
-still read, so a mistake in any is found. A sensitive `if` makes the whole for sensitive,
-since how many items stay tells it. Like a sensitive condition, it can still be learned
-from whether the run fails: an error in an item it keeps is shown like any other.
+items stay is not known, so a key two items give waits for the apply unless the `if` keeps
+both for certain; every item is still read, so a mistake in any is found. A sensitive `if`
+makes the whole for sensitive, since how many items stay tells it. Like a sensitive
+condition, it can still be learned from whether the run fails: an error in an item it
+keeps is shown like any other.
 
 ### Count
 

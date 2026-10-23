@@ -70,10 +70,22 @@ export function checkKey(key: Value, position: Position): void {
 }
 
 /** Hidden where any item that gives the key is sensitive, since the message would say what the sensitive one is. */
-function shownKey(text: string, entries: ForItem[]): string {
-  const sensitive = entries.some(([key]) => isSensitive(key) && !isUnknown(key.data) && String(key.data) === text);
+function shownKey(text: string, keys: Value[]): string {
+  const sensitive = keys.some((key) => isSensitive(key) && !isUnknown(key.data) && String(key.data) === text);
 
   return sensitive ? SENSITIVE : `"${text}"`;
+}
+
+/** Two items that give one known key, where the for does not group them. */
+export function refuseDuplicateKeys(keys: Value[], position: Position): void {
+  const seen = new Set<string>();
+  for (const key of keys) {
+    if (isUnknown(key.data)) continue;
+
+    const text = String(key.data);
+    if (seen.has(text)) throw new ConfigError(`Two items give the key ${shownKey(text, keys)}; write "..." after the value to group them`, position);
+    seen.add(text);
+  }
 }
 
 export const under = (step: string | number, marks: readonly AttributePath[]) => marks.map((path) => [step, ...path]);
@@ -109,16 +121,12 @@ export function laterTupleMarks(bodies: Value[], kept: boolean[]): AttributePath
  * A sensitive key makes the whole object sensitive, since its names are its shape. `sensitive` says the collection is, as a whole.
  */
 export function forObject(entries: ForItem[], grouped: boolean, sensitive: boolean, position: Position): Value {
-  const keys = new Map<string, Value[]>();
-  for (const [key, value] of entries) {
-    checkKey(key, position);
-    if (isUnknown(key.data)) continue;
-
-    const text = String(key.data);
-    const values = keys.get(text) ?? [];
-    if (values.length > 0 && !grouped) throw new ConfigError(`Two items give the key ${shownKey(text, entries)}; write "..." after the value to group them`, position);
-    keys.set(text, [...values, value]);
-  }
+  for (const [key] of entries) checkKey(key, position);
+  if (!grouped)
+    refuseDuplicateKeys(
+      entries.map(([key]) => key),
+      position
+    );
 
   // One unknown key makes the object's shape unknown; every item is there, so a sensitive key makes the whole sensitive.
   if (entries.some(([key]) => isUnknown(key.data))) {
@@ -131,6 +139,12 @@ export function forObject(entries: ForItem[], grouped: boolean, sensitive: boole
           grouped
         );
     throw new UnresolvedReferenceError('A key in a for is known only after apply, so what the for gives is not known yet', types.dynamic, marks);
+  }
+
+  const keys = new Map<string, Value[]>();
+  for (const [key, value] of entries) {
+    const text = String(key.data);
+    keys.set(text, [...(keys.get(text) ?? []), value]);
   }
 
   return allSensitiveIf(
