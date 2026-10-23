@@ -1,3 +1,4 @@
+import { types, UNKNOWN } from '@clay/contracts';
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { ConfigError } from '@clay/parser';
 import { LocalProvider } from '@clay/provider-local';
@@ -6,6 +7,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import { start } from './start';
 
 const errorOf = async (run: () => Promise<unknown>): Promise<ConfigError> => {
   try {
@@ -119,5 +122,26 @@ describe('a value not known yet joined into a string or used as an index', () =>
     const { actions } = await newOrchestrator().plan(config);
 
     expect(actions.map((action) => action.type)).toEqual(['CREATE']);
+  });
+
+  it.each([
+    ['a condition', 'length(random_string.r.result) == 4 ? "a" : "b"', 'x-a'],
+    ['arithmetic', 'length(random_string.r.result) + 1', 'x-5'],
+    ['a comparison', 'random_string.r.result == "a"', 'x-false'],
+  ])('leaves the string to the apply where %s in it is not known yet', async (_, part, expected) => {
+    const config = output(part);
+
+    const plan = await newOrchestrator().plan(config);
+    for await (const event of start(newOrchestrator(), config)) if (event.type === 'failed') throw event.error;
+
+    expect(plan.outputs.o.new).toEqual({ value: UNKNOWN, type: types.string });
+    const state = await new LocalBackend(dir).read();
+    expect(state.outputs?.o.value).toBe(expected);
+  });
+
+  it('keeps a sensitive part not known yet sensitive in the string', async () => {
+    await expect(newOrchestrator().plan(output('sensitive(length(random_string.r.result) == 4) ? "a" : "b"'))).rejects.toThrow(
+      'output "o" holds a sensitive value; write sensitive = true to export it'
+    );
   });
 });

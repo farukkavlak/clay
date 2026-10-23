@@ -107,6 +107,40 @@ describe('a for expression', () => {
     expect(held?.l.value).toEqual([await result(), 'z'].sort());
   });
 
+  // Not known at plan, and true once the string is made.
+  const later = 'length(random_string.s.result) == 4';
+
+  it.each([
+    ['a condition', `[for x in (${later} ? ["a", "b"] : ["c"]) : x]`, ['a', 'b']],
+    ['a condition read with an if', `[for x in (${later} ? ["a", "b"] : ["c"]) : x if x == "a"]`, ['a']],
+    ['a condition made into an object', `{ for k, v in (${later} ? { a = "1" } : { a = "2" }) : k => v }`, { a: '1' }],
+  ])('leaves the whole for to the apply where %s gives a collection not known yet', async (_, value, expected) => {
+    const config = `${random}\noutput "l" { value = ${value} }`;
+
+    const plan = await newOrchestrator().plan(config);
+    await apply(config);
+
+    expect(plan.outputs.l.new).toEqual({ value: UNKNOWN, type: types.dynamic });
+    const held = await outputs();
+    expect(held?.l.value).toEqual(expected);
+  });
+
+  it.each([
+    ['a sensitive condition', `[for x in (sensitive(${later}) ? ["a"] : ["b"]) : x]`],
+    ['a sensitive body', `[for x in (${later} ? ["a"] : ["b"]) : sensitive(x)]`],
+  ])('keeps the marks of a for over a value not known yet, with %s', async (_, value) => {
+    await expect(newOrchestrator().plan(`${random}\noutput "l" { value = ${value} }`)).rejects.toThrow('output "l" holds a sensitive value; write sensitive = true to export it');
+  });
+
+  it('refuses a value not known yet that can be no collection, where it is written', async () => {
+    const config = `${random}\noutput "l" { value = [for x in (${later} ? 1 : 2) : x] }`;
+
+    const error = await planError(config);
+
+    expect(error.message).toBe('A for goes over a list, a tuple, a set, a map or an object, not a number');
+    expect(error.position).toMatchObject(placeOf(config, 'length('));
+  });
+
   it('reads the index of each instance of a resource in its body', async () => {
     await apply(`${names}
       resource "local_file" "f" {
