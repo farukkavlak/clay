@@ -148,7 +148,12 @@ describe('a function call', () => {
     ['lookup with no default', 'lookup({ a = "x" }, "a")', 'lookup(', 'lookup takes 3 arguments, not 2; without a default, read the key with map["key"]'],
     ['lookup in a list', 'lookup(var.names, "a", "x")', 'var.names, "a"', 'lookup takes a map or an object, not a tuple'],
     ['merge of a list', 'merge({ a = "x" }, var.names)', 'var.names)', 'merge takes maps or objects, not a tuple'],
-    ['format with a verb it does not take', 'format("%z")', '"%z")', 'format cannot read "%z": there is no verb %z; format takes %s, %q, %v, %t, %d and %%'],
+    [
+      'format with a verb it does not take',
+      'format("%z")',
+      '"%z")',
+      'format cannot read "%z": there is no verb %z; format takes %s, %q, %v, %t, %d, %b, %o, %x, %X, %f, %e, %E, %g, %G and %%',
+    ],
     ['format of a list as a string', 'format("%s", var.names)', 'var.names)', 'format cannot write a tuple with "%s"'],
     ['format with an argument it does not use', 'format("%s", "a", "b")', '"b")', "format's string has no verb for this argument"],
     ['a number', 'length(5)', '5)', 'length takes a string, a list, a tuple, a set, a map or an object, not a number'],
@@ -355,6 +360,12 @@ ${file('f', '"${local.tags.team}-${local.tags.env}-${lookup(local.tags, "zone", 
     await apply(`locals {\n  n = 7\n}\n${file('f', '"${format("%s-%03d %q %v", "web", local.n, "a", { b = 1 })}"')}`);
 
     expect(await read('f')).toBe('web-007 "a" {"b":1}');
+  });
+
+  it('writes numbers with the number verbs of format', async () => {
+    await apply(`locals {\n  n = 2.675\n}\n${file('f', '"${format("%.2f %.1e %g %#x", local.n, 1234, 0.00001, 255)}"')}`);
+
+    expect(await read('f')).toBe('2.68 1.2e+03 1e-05 0xff');
   });
 
   it('names one file per instance with format', async () => {

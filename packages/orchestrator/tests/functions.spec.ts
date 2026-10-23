@@ -440,7 +440,30 @@ describe('format', () => {
     ['a sign or a space', '%+d|% d|% d', [number('7'), number('7'), number('-7')], '+7| 7|-7'],
     ['the fewest digits a precision asks', '%.3d|%6.3d|%05.3d', [number('7'), number('7'), number('42')], '007|   007|  042'],
     ['nothing for zero at precision 0', '[%.0d]', [number('0')], '[]'],
-    ['no sign for zero at precision 0, only the width', '[%+.0d][% .0d][%+3.0d][%03.0d]', [number('0'), number('0'), number('0'), number('0')], '[][][   ][   ]'],
+    [
+      'no sign for zero at precision 0, only the width',
+      '[%+.0d][% .0d][%+3.0d][%03.0d][%#.0x][%#5.0b]',
+      [number('0'), number('0'), number('0'), number('0'), number('0'), number('0')],
+      '[][][   ][   ][][     ]',
+    ],
+    ['an integer in base 2, 8 and 16', '%b %o %x %X', [number('5'), number('8'), number('255'), number('255')], '101 10 ff FF'],
+    ['the prefix of each base', '%#b %#o %#x %#X', [number('5'), number('8'), number('255'), number('255')], '0b101 010 0xff 0XFF'],
+    ['zeros after the sign and the prefix', '%#08x|%+#08x|%-#8x|', [number('-255'), number('255'), number('255')], '-0x000ff|+0x000ff|0xff    |'],
+    ['an integer past 2^53 in base 16', '%x', [number('123456789012345678901')], '6b14e9f812f366c35'],
+    ['six places with %f', '%f|%f', [number('1'), number('-1234.5678')], '1.000000|-1234.567800'],
+    ['a precision with %f', '%.2f|%.0f', [number('3.14159'), number('7.9')], '3.14|8'],
+    ['a half rounded to the even digit with %f', '%.1f %.1f %.0f %.0f %.2f', [number('0.25'), number('0.35'), number('2.5'), number('3.5'), number('2.675')], '0.2 0.4 2 4 2.68'],
+    ['a negative number rounded to zero, keeping its sign', '%.1f', [number('-0.04')], '-0.0'],
+    ['every digit of a number past 2^53 with %f', '%.1f', [number('123456789012345678901234567890.15')], '123456789012345678901234567890.2'],
+    ['zeros, a sign and a width with %f', '%08.2f|%+.1f|% .1f|%-7.1f|', [number('-3.14159'), number('1'), number('1'), number('1')], '-0003.14|+1.0| 1.0|1.0    |'],
+    ['a string that spells a number with %f', '%.1f', [written('2.25')], '2.2'],
+    ['an exponent of two digits with %e', '%e|%.2E|%.0e', [number('1234.5678'), number('0.000012'), number('7')], '1.234568e+03|1.20E-05|7e+00'],
+    ['a half rounded up to the next power with %e', '%.0e|%.1e', [number('9.5'), number('0.0995')], '1e+01|1.0e-01'],
+    ['an exponent past 99 with %e', '%.1e', [number('-1.25e-150')], '-1.2e-150'],
+    ['every digit and no trailing zeros with %g', '%g|%g|%g', [number('1234.5678'), number('1.50'), number('0.0001')], '1234.5678|1.5|0.0001'],
+    ['an exponent below -4 or from 6 up with %g', '%g|%g|%G', [number('0.00001234'), number('1234567'), number('1e23')], '1.234e-05|1.234567e+06|1E+23'],
+    ['significant digits with %g', '%.3g|%.3g|%.0g|%.3g', [number('1234'), number('3.14159'), number('0.25'), number('1.20001')], '1.23e+03|3.14|0.2|1.2'],
+    ['zero with %g', '%g|%.3g', [number('0'), number('0')], '0|0'],
   ])('writes %s', (_, template, values, result) => {
     expect(formatOf(template, ...values)).toEqual(text(result));
   });
@@ -471,7 +494,7 @@ describe('format', () => {
 
   it.each([
     ['a string that is a list', [written(['%s'])], 'format takes a string first, not a tuple', 8],
-    ['a verb it does not take', [written('%z')], 'format cannot read "%z": there is no verb %z; format takes %s, %q, %v, %t, %d and %%', 8],
+    ['a verb it does not take', [written('%z')], 'format cannot read "%z": there is no verb %z; format takes %s, %q, %v, %t, %d, %b, %o, %x, %X, %f, %e, %E, %g, %G and %%', 8],
     ['a string that ends before its verb', [written('50%')], 'format cannot read "%": the string ends before a verb', 8],
     ['a flag the verb does not take', [written('%+s'), written('a')], 'format cannot read "%+s": %s takes no "+" flag', 8],
     ['a precision the verb does not take', [written('%.2v'), written('a')], 'format cannot read "%.2v": %v takes no precision', 8],
@@ -496,6 +519,11 @@ describe('format', () => {
     ['a boolean as an integer', [written('%d'), written(true)], 'format cannot write a boolean with "%d"', 18],
     ['a number as a boolean', [written('%t'), number('1')], 'format cannot write a number with "%t"', 18],
     ['a fraction as an integer', [written('%d'), number('1.5')], 'format cannot write 1.5 with "%d", which takes a whole number', 18],
+    ['a fraction in base 16', [written('%x'), number('1.5')], 'format cannot write 1.5 with "%x", which takes a whole number', 18],
+    ['a string that spells no number with %f', [written('%f'), written('abc')], 'format cannot write "abc" with "%f", which takes a number; it is not a number', 18],
+    ['a boolean with %g', [written('%g'), written(true)], 'format cannot write a boolean with "%g"', 18],
+    ['a prefix flag on a decimal verb', [written('%#f'), number('1')], 'format cannot read "%#f": %f takes no "#" flag', 8],
+    ['a prefix flag on %d', [written('%#d'), number('1')], 'format cannot read "%#d": %d takes no "#" flag', 8],
     ['a string that spells no number', [written('%d'), written('abc')], 'format cannot write "abc" with "%d", which takes a whole number; it is not a number', 18],
     ['a string that spells no boolean', [written('%t'), written('yes')], 'format cannot write "yes" with "%t", which takes true or false', 18],
     [

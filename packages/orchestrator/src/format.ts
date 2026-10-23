@@ -71,14 +71,14 @@ function refused(writing: Writing, takes: string, problem?: string): never {
   throw new FormatError(`format cannot write ${what} with ${namedIn(writing)}${why}`, writing.verb.arg + 1);
 }
 
-function numberOf(writing: Writing): ExactNumber {
+function numberOf(writing: Writing, takes: string): ExactNumber {
   const { data } = writing.value;
   if (data instanceof ExactNumber) return data;
 
   try {
     return ExactNumber.parse(data as string);
   } catch (error) {
-    if (error instanceof NumberError) return refused(writing, 'a whole number', error.problem);
+    if (error instanceof NumberError) return refused(writing, takes, error.problem);
     throw error;
   }
 }
@@ -89,20 +89,79 @@ function signOf({ flags }: Verb, negative: boolean): string {
   return flags.includes('+') ? '+' : flags.includes(' ') ? ' ' : '';
 }
 
-/** As Go writes an integer: the precision is the fewest digits, and `0` pads after the sign where no precision is given. Zero at precision 0 is only the width. */
+/** Zeros from a `0` flag go after the sign and the prefix, as Go writes them. */
+function signed(verb: Verb, text: string, prefix: string, zeros: boolean): string {
+  const lead = signOf(verb, text.startsWith('-')) + prefix;
+  const digits = text.replace(/^-/u, '');
+  const filled = zeros && verb.flags.includes('0') && !verb.flags.includes('-') ? digits.padStart((verb.width ?? 0) - lead.length, '0') : digits;
+
+  return padded(verb, lead + filled, ' ');
+}
+
+const BASES: Record<string, { readonly base: number; readonly prefix: string }> = {
+  d: { base: 10, prefix: '' },
+  b: { base: 2, prefix: '0b' },
+  o: { base: 8, prefix: '0' },
+  x: { base: 16, prefix: '0x' },
+  X: { base: 16, prefix: '0X' },
+};
+
+/** As Go writes an integer: the precision is the fewest digits, `#` writes the prefix of the base, and `0` pads where no precision is given. Zero at precision 0 is only the width. */
 function integer(writing: Writing): string {
   const { verb } = writing;
-  const number = numberOf(writing);
+  const number = numberOf(writing, 'a whole number');
   const text = number.toString();
   if (text.includes('.')) return refused(writing, 'a whole number');
   if (verb.precision === 0 && number.isZero()) return padded(verb, '', ' ');
 
-  const sign = signOf(verb, text.startsWith('-'));
-  const unsigned = text.replace('-', '');
+  const { base, prefix } = BASES[verb.letter];
+  const unsigned = BigInt(text.replace(/^-/u, '')).toString(base);
   const digits = unsigned.padStart(verb.precision ?? 0, '0');
-  const zeros = verb.flags.includes('0') && !verb.flags.includes('-') && verb.precision === undefined;
+  const written = signed(verb, (text.startsWith('-') ? '-' : '') + digits, verb.flags.includes('#') ? prefix : '', verb.precision === undefined);
 
-  return padded(verb, sign + (zeros ? digits.padStart((verb.width ?? 0) - sign.length, '0') : digits), ' ');
+  return verb.letter === 'X' ? written.toUpperCase() : written;
+}
+
+/** At least two digits in the exponent, as Go writes it: `1.5e+03`. */
+function exponential(text: string): string {
+  return text.replace(/e([+-])(\d)$/u, 'e$10$2');
+}
+
+function significantDigits(number: ExactNumber): number {
+  return number.toString().replaceAll(/[-.]/gu, '').replace(/^0+/u, '').replace(/0+$/u, '').length;
+}
+
+/**
+ * As Go writes %g: rounded to `precision` significant digits, or every digit where none is given, and without trailing zeros.
+ * It is %e where the exponent is below -4 or at least the digits kept, or 6 where none is given, and plain otherwise.
+ */
+function general(number: ExactNumber, precision?: number): string {
+  if (number.isZero()) return '0';
+
+  const kept = Math.max(precision ?? significantDigits(number), 1);
+  const [mantissa, power] = number.toExponential(kept - 1).split('e');
+  const sign = mantissa.startsWith('-') ? '-' : '';
+  const digits = mantissa.replaceAll(/[-.]/gu, '').replace(/0+$/u, '');
+  const exponent = Number(power);
+  const limit = precision === undefined ? 6 : kept;
+
+  if (exponent < -4 || exponent >= limit) return exponential(`${sign}${digits[0]}${digits.length > 1 ? `.${digits.slice(1)}` : ''}e${power}`);
+  return sign + ExactNumber.parse(`${digits}e${exponent - digits.length + 1}`).toString();
+}
+
+const DECIMALS: Record<string, (number: ExactNumber, precision?: number) => string> = {
+  f: (number, precision = 6) => number.toFixed(precision),
+  e: (number, precision = 6) => exponential(number.toExponential(precision)),
+  E: (number, precision = 6) => exponential(number.toExponential(precision)).toUpperCase(),
+  g: general,
+  G: (number, precision) => general(number, precision).toUpperCase(),
+};
+
+/** Rounded half to even on the number as written, where Terraform rounds the nearest binary fraction. */
+function decimal(writing: Writing): string {
+  const { verb } = writing;
+
+  return signed(verb, DECIMALS[verb.letter](numberOf(writing, 'a number'), verb.precision), '', true);
 }
 
 function boolean(writing: Writing): string {
@@ -132,16 +191,26 @@ function asIs({ verb, value: { data } }: Writing): string {
 }
 
 const TEXT: readonly Type['kind'][] = ['string', 'number', 'bool'];
+const NUMBER: readonly Type['kind'][] = ['number', 'string'];
 
 const RULES: Record<string, Rule> = {
   s: { flags: '-0', precision: true, takes: TEXT, write: ({ verb, value }) => padded(verb, cut(verb, String(value.data))) },
   q: { flags: '-0', precision: true, takes: TEXT, write: ({ verb, value }) => padded(verb, jsonText(cut(verb, String(value.data)))) },
   v: { flags: '-#', precision: false, write: asIs },
   t: { flags: '-', precision: false, takes: ['bool', 'string'], write: boolean },
-  d: { flags: '-+ 0', precision: true, takes: ['number', 'string'], write: integer },
+  d: { flags: '-+ 0', precision: true, takes: NUMBER, write: integer },
+  b: { flags: '-+ 0#', precision: true, takes: NUMBER, write: integer },
+  o: { flags: '-+ 0#', precision: true, takes: NUMBER, write: integer },
+  x: { flags: '-+ 0#', precision: true, takes: NUMBER, write: integer },
+  X: { flags: '-+ 0#', precision: true, takes: NUMBER, write: integer },
+  f: { flags: '-+ 0', precision: true, takes: NUMBER, write: decimal },
+  e: { flags: '-+ 0', precision: true, takes: NUMBER, write: decimal },
+  E: { flags: '-+ 0', precision: true, takes: NUMBER, write: decimal },
+  g: { flags: '-+ 0', precision: true, takes: NUMBER, write: decimal },
+  G: { flags: '-+ 0', precision: true, takes: NUMBER, write: decimal },
 };
 
-const VERBS = '%s, %q, %v, %t, %d and %%';
+const VERBS = '%s, %q, %v, %t, %d, %b, %o, %x, %X, %f, %e, %E, %g, %G and %%';
 
 function sizeOf(text: string, unreadable: (reason: string) => FormatError): number {
   const size = Number(text);
