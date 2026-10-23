@@ -1,10 +1,10 @@
 import { isDeepStrictEqual } from 'node:util';
 
-import { containsUnknown, isUnknown, Type, types, UNKNOWN } from '@clay/contracts';
+import { AttributePath, containsUnknown, ExactNumber, isUnknown, NumberError, SENSITIVE, Type, types, UNKNOWN } from '@clay/contracts';
 import { ConfigError, Position, spellSteps, Step } from '@clay/parser';
 
 import { itemTypes } from './unify';
-import { article, described, isAllSensitive, isSensitive, nullSource, Value, valueOf, wholeIf, withSensitive } from './Value';
+import { article, described, inferred, isAllSensitive, isSensitive, nullSource, Value, valueOf, wholeIf, withSensitive } from './Value';
 
 /** A list and a tuple hold items alike, and so do a map and an object. A set has no order, so it equals only a set. */
 const COMPARED_AS: Record<Type['kind'], string> = {
@@ -100,4 +100,85 @@ export function checkBoolean(who: string, value: Value, position: Position): voi
 
 export function negated(value: Value): Value {
   return withSensitive(valueOf(types.bool, isUnknown(value.data) ? UNKNOWN : !value.data), value.sensitive ?? []);
+}
+
+export type Arithmetic = '+' | '-' | '*';
+
+export type Ordering = '<' | '>' | '<=' | '>=';
+
+function notANumber(who: string, value: Value, position: Position): ConfigError {
+  const problem = isSensitive(value) ? 'and this sensitive value is not one; why is not shown' : `not ${described(value)}${nullSource(value)}`;
+
+  return new ConfigError(`${who} takes a number, ${problem}`, position);
+}
+
+/** Null and any type but a number or a string are refused by type, so `validate` finds them. */
+function checkNumber(who: string, value: Value, position: Position): void {
+  if (value.data === null || !(value.type.kind === 'number' || value.type.kind === 'string' || value.type.kind === 'dynamic')) throw notANumber(who, value, position);
+}
+
+export type NumberValue = Value & { data: ExactNumber | typeof UNKNOWN };
+
+function numberOf(data: ExactNumber | typeof UNKNOWN, sensitive: readonly AttributePath[]): NumberValue {
+  return { ...withSensitive(valueOf(types.number, data), sensitive), data };
+}
+
+/** A string that spells a number is read as one, as where a schema wants a number. */
+export function asNumber(who: string, value: Value, position: Position): NumberValue {
+  checkNumber(who, value, position);
+  if (value.data === UNKNOWN || value.data instanceof ExactNumber) return numberOf(value.data, value.sensitive ?? []);
+  // A value of no type is told by what it holds.
+  if (typeof value.data !== 'string') throw notANumber(who, { ...value, type: inferred(value.data) }, position);
+
+  try {
+    return numberOf(ExactNumber.parse(value.data), value.sensitive ?? []);
+  } catch (error) {
+    if (error instanceof NumberError) throw new ConfigError(`${who} takes a number, and ${isSensitive(value) ? `${SENSITIVE} ${error.problem}` : error.message}`, position);
+    throw error;
+  }
+}
+
+const ARITHMETIC: Record<Arithmetic, (left: ExactNumber, right: ExactNumber) => ExactNumber> = {
+  '+': (left, right) => left.plus(right),
+  '-': (left, right) => left.minus(right),
+  '*': (left, right) => left.times(right),
+};
+
+const ORDERING: Record<Ordering, (order: number) => boolean> = {
+  '<': (order) => order < 0,
+  '>': (order) => order > 0,
+  '<=': (order) => order <= 0,
+  '>=': (order) => order >= 0,
+};
+
+export function isOrdering(operator: Arithmetic | Ordering): operator is Ordering {
+  return Object.hasOwn(ORDERING, operator);
+}
+
+/** Both sides are numbers. The result never names a number, since either side may be sensitive. */
+function computed(operator: string, left: NumberValue, right: NumberValue, position: Position, compute: (left: ExactNumber, right: ExactNumber) => unknown): unknown {
+  if (left.data === UNKNOWN || right.data === UNKNOWN) return UNKNOWN;
+
+  try {
+    return compute(left.data, right.data);
+  } catch (error) {
+    if (error instanceof NumberError) throw new ConfigError(`What ${operator} gives ${error.problem}`, position);
+    throw error;
+  }
+}
+
+export function arithmetic(operator: Arithmetic, left: NumberValue, right: NumberValue, position: Position): Value {
+  const data = computed(operator, left, right, position, ARITHMETIC[operator]);
+
+  return withSensitive(valueOf(types.number, data), wholeIf(isSensitive(left) || isSensitive(right)));
+}
+
+export function ordering(operator: Ordering, left: NumberValue, right: NumberValue, position: Position): Value {
+  const data = computed(operator, left, right, position, (one, other) => ORDERING[operator](one.compare(other)));
+
+  return withSensitive(valueOf(types.bool, data), wholeIf(isSensitive(left) || isSensitive(right)));
+}
+
+export function negative(value: NumberValue): Value {
+  return withSensitive(valueOf(types.number, value.data === UNKNOWN ? UNKNOWN : value.data.negated()), value.sensitive ?? []);
 }

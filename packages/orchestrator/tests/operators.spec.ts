@@ -2,7 +2,7 @@ import { ExactNumber, types, UNKNOWN } from '@clay/contracts';
 import { ConfigError } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
-import { checkBoolean, equality, negated } from '../src/operators';
+import { arithmetic, asNumber, checkBoolean, equality, negated, negative, NumberValue, ordering } from '../src/operators';
 import { allSensitive, inferred, Value, valueOf, withSensitive } from '../src/Value';
 
 const position = { file: 'main.clay', line: 1, column: 5 };
@@ -143,5 +143,104 @@ describe('!', () => {
     [allSensitive(bool(true)), allSensitive(bool(false))],
   ])('turns %o into %o', (value, result) => {
     expect(negated(value)).toEqual(result);
+  });
+});
+
+const numeric = (text: string | typeof UNKNOWN): NumberValue => ({ ...valueOf(types.number, null), data: text === UNKNOWN ? UNKNOWN : number(text) });
+
+const secretNumber = (text: string): NumberValue => ({ ...numeric(text), sensitive: [[]] });
+
+describe('a number operand', () => {
+  it.each([
+    ['a number', numeric('1.5'), numeric('1.5')],
+    ['a string that spells one', written('8'), numeric('8')],
+    ['a string with an exponent', written('1e3'), numeric('1000')],
+    ['a number not known yet', numeric(UNKNOWN), numeric(UNKNOWN)],
+    ['a string not known yet', valueOf(types.string, UNKNOWN), numeric(UNKNOWN)],
+    ['a value of no type not known yet', valueOf(types.dynamic, UNKNOWN), numeric(UNKNOWN)],
+    ['a sensitive string', allSensitive(written('8')), allSensitive(numeric('8'))],
+  ])('takes %s', (_, value, taken) => {
+    expect(asNumber('+', value, position)).toEqual(taken);
+  });
+
+  it.each([
+    ['a string that spells none', written('8 MB'), '+ takes a number, and "8 MB" is not a number'],
+    ['a sensitive string that spells none', allSensitive(written('8 MB')), '+ takes a number, and (sensitive value) is not a number'],
+    ['a string past the reach', written('1e5000'), '+ takes a number, and "1e5000" is out of range: a number reaches at most 1000 places either side of the point'],
+    ['a boolean', bool(true), '+ takes a number, not a boolean'],
+    ['a boolean of no type', valueOf(types.dynamic, true), '+ takes a number, not a boolean'],
+    ['a tuple', written([number('1')]), '+ takes a number, not a tuple'],
+    ['null', nullOf, '+ takes a number, not null'],
+    ['a null read through a reference', { ...nullOf, nullFrom: 'var.n' }, '+ takes a number, not null, and var.n, which it reads, is null'],
+    ['a sensitive tuple', allSensitive(written([])), '+ takes a number, and this sensitive value is not one; why is not shown'],
+  ])('refuses %s', (_, value, message) => {
+    const error = refusal(() => asNumber('+', value, position));
+
+    expect(error.message).toBe(message);
+    expect(error.position).toEqual(position);
+  });
+});
+
+describe('arithmetic', () => {
+  it.each([
+    ['+', '1.5', '2', '3.5'],
+    ['-', '1', '2.5', '-1.5'],
+    ['*', '-1.5', '4', '-6'],
+  ] as const)('works out %s on %s and %s as %s', (operator, left, right, result) => {
+    expect(arithmetic(operator, numeric(left), numeric(right), position)).toEqual(numeric(result));
+  });
+
+  it.each([
+    ['the left', numeric(UNKNOWN), numeric('1')],
+    ['the right', numeric('1'), numeric(UNKNOWN)],
+  ])('leaves the result to the apply where %s is not known yet', (_, left, right) => {
+    expect(arithmetic('+', left, right, position)).toEqual(numeric(UNKNOWN));
+  });
+
+  it.each([
+    ['the left', secretNumber('1'), numeric('2')],
+    ['the right', numeric('1'), secretNumber('2')],
+  ])('makes the result sensitive where %s is', (_, left, right) => {
+    expect(arithmetic('*', left, right, position)).toEqual(allSensitive(numeric('2')));
+  });
+
+  it('refuses a result past the reach without naming it, since a side may be sensitive', () => {
+    const error = refusal(() => arithmetic('*', secretNumber('1e999'), numeric('10'), position));
+
+    expect(error.message).toBe('What * gives is out of range: a number reaches at most 1000 places either side of the point');
+    expect(error.position).toEqual(position);
+  });
+});
+
+describe('ordering', () => {
+  it.each([
+    ['<', '1', '2', true],
+    ['<', '2', '2', false],
+    ['>', '2', '1', true],
+    ['>', '2', '2', false],
+    ['<=', '2', '2.0', true],
+    ['<=', '3', '2', false],
+    ['>=', '2', '2', true],
+    ['>=', '-1', '0', false],
+    ['<', '9007199254740992', '9007199254740993', true],
+  ] as const)('answers %s for %s and %s as %s', (operator, left, right, answer) => {
+    expect(ordering(operator, numeric(left), numeric(right), position)).toEqual(bool(answer));
+  });
+
+  it('leaves the answer to the apply where a side is not known yet, and makes it sensitive where a side is', () => {
+    expect(ordering('<', numeric(UNKNOWN), numeric('1'), position)).toEqual(bool(UNKNOWN));
+    expect(ordering('<', secretNumber('1'), numeric('2'), position)).toEqual(allSensitive(bool(true)));
+    expect(ordering('<', numeric('1'), secretNumber('2'), position)).toEqual(allSensitive(bool(true)));
+  });
+});
+
+describe('-', () => {
+  it.each([
+    [numeric('2'), numeric('-2')],
+    [numeric('-0.5'), numeric('0.5')],
+    [numeric(UNKNOWN), numeric(UNKNOWN)],
+    [secretNumber('2'), allSensitive(numeric('-2'))],
+  ])('turns %o into %o', (value, result) => {
+    expect(negative(value)).toEqual(result);
   });
 });

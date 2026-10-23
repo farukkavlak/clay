@@ -63,6 +63,12 @@ export class Lexer {
     { type: TokenType.Or, regex: /\|\|/y },
     { type: TokenType.Bang, regex: /!/y },
     { type: TokenType.Question, regex: /\?/y },
+    { type: TokenType.Plus, regex: /\+/y },
+    { type: TokenType.Star, regex: /\*/y },
+    { type: TokenType.LessEqual, regex: /<=/y },
+    { type: TokenType.Less, regex: /</y },
+    { type: TokenType.GreaterEqual, regex: />=/y },
+    { type: TokenType.Greater, regex: />/y },
   ];
 
   // Git may check out CRLF line endings, which must not change a heredoc's value.

@@ -334,9 +334,9 @@ change each.
 
 ## 1. Language
 
-The parser takes literals, references, function calls, for expressions, `== != && || !`
-and the conditional, with no arithmetic or ordering yet. A real configuration hits each of
-these early.
+The parser takes literals, references, function calls, for expressions, `== != && || !`,
+the conditional, `+ - *` and `< > <= >=`, with no `/` or `%` yet. A real configuration
+hits each of these early.
 
 - [x] Negative and decimal numbers, with an exponent, as HCL writes them; the minus is a
       token of its own, so a number never swallows the minus of a subtraction
@@ -510,8 +510,10 @@ these early.
       refused, where Terraform says `false`. A known condition reads only the result it
       picks and the other by type, so `var.on ? local_file.f[0].path : null` takes a count
       of 0, as in Terraform
-- [ ] Arithmetic and ordering: `+ - * / %` and `< > <= >=`. Today `1 + 2` is refused as
-      `Unexpected character: "+"`, which does not say the language has no arithmetic
+- [x] `+ - *` and `< > <= >=`, exact on numbers, where Terraform holds 512-bit binary
+      floats. A string that spells a number is read as one, as in Terraform
+- [ ] `/` and `%`. Today `1 / 2` is refused as `Unexpected character: "/"`, which does not
+      say the language cannot divide
 - [ ] Any value inside `${...}` and inside `[...]` read from a value, where today only a
       reference or a call goes
 - [ ] More functions. Clay has `length`, `tolist`, `toset`, `sensitive`, `nonsensitive` and

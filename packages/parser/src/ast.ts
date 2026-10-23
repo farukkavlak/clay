@@ -34,12 +34,14 @@ export type ForNode = Node & {
 
 export type TemplatePart = string | ReferenceNode | CallNode | BoundNode;
 
-export type BinaryOperator = '==' | '!=' | '&&' | '||';
+export type BinaryOperator = '==' | '!=' | '&&' | '||' | '<' | '>' | '<=' | '>=' | '+' | '-' | '*';
 
 /** At the start of `left`, so a message about the whole value points where it begins. */
 export type BinaryNode = Node & { type: 'Binary'; operator: BinaryOperator; operatorPosition: Position; left: AttributeValue; right: AttributeValue };
 
 export type NotNode = Node & { type: 'Not'; value: AttributeValue };
+
+export type NegateNode = Node & { type: 'Negate'; value: AttributeValue };
 
 /** `condition ? whenTrue : whenFalse`, at the start of the condition. */
 export type ConditionalNode = Node & { type: 'Conditional'; condition: AttributeValue; whenTrue: AttributeValue; whenFalse: AttributeValue };
@@ -56,6 +58,7 @@ export type AttributeValue =
   | ForNode
   | BinaryNode
   | NotNode
+  | NegateNode
   | ConditionalNode
   | (Node & { type: 'List'; value: AttributeValue[] })
   | (Node & { type: 'Map'; value: Record<string, AttributeValue> });
@@ -165,7 +168,7 @@ function indexesIn(steps: Step[]): IndexNode[] {
 
 function operandsIn(value: AttributeValue): AttributeValue[] {
   if (value.type === 'Binary') return [value.left, value.right];
-  if (value.type === 'Not') return [value.value];
+  if (value.type === 'Not' || value.type === 'Negate') return [value.value];
   if (value.type === 'Conditional') return [value.condition, value.whenTrue, value.whenFalse];
 
   return [];
