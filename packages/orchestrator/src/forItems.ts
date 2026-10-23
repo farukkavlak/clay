@@ -1,4 +1,4 @@
-import { AttributePath, EVERY_ITEM, ExactNumber, isUnknown, SENSITIVE, sensitiveUnder, Type, types, UNKNOWN } from '@clay/contracts';
+import { AttributePath, EVERY_ITEM, ExactNumber, isUnknown, SENSITIVE, sensitiveUnder, Type, typeAt, types, UNKNOWN } from '@clay/contracts';
 import { ConfigError, Position } from '@clay/parser';
 
 import { UnresolvedReferenceError } from './resolvers/UnresolvedReferenceError';
@@ -46,19 +46,25 @@ export function unknownItem(type: Type): ForItem {
   return [valueOf(keyType(type), UNKNOWN), valueOf(value, UNKNOWN)];
 }
 
-/** The keys and places a collection not known yet marks, which every value it may be holds. */
-export function markedSteps(collection: Value): (string | number)[] {
-  const steps = (collection.sensitive ?? []).flatMap(([first]) => (first === undefined || first === EVERY_ITEM ? [] : [first]));
+/** The attributes of an object type, an optional one too since a value is filled to its type, and the places of a tuple type. */
+function typeSteps(type: Type): (string | number)[] {
+  if (type.kind === 'object') return Object.keys(type.attributes);
 
-  return [...new Map(steps.map((step) => [String(step), step])).values()];
+  return type.kind === 'tuple' ? type.elements.map((_, index) => index) : [];
 }
 
-/** An item of a collection not known yet at a step it marks: its key or index is known, its value is not. */
-export function markedItem(collection: Value, step: string | number): ForItem {
-  const [, value] = unknownItem(collection.type);
+/** The keys and places every value a collection not known yet may be holds: those its type names, and those it marks. */
+export function certainSteps(collection: Value): (string | number)[] {
+  const marked = (collection.sensitive ?? []).flatMap(([first]) => (first === undefined || first === EVERY_ITEM ? [] : [first]));
+
+  return [...new Map([...typeSteps(collection.type), ...marked].map((step) => [String(step), step])).values()];
+}
+
+/** An item of a collection not known yet at a step it holds for certain: its key or index is known, its value is not. */
+export function certainItem(collection: Value, step: string | number): ForItem {
   const key = typeof step === 'number' ? valueOf(types.number, ExactNumber.parse(String(step))) : valueOf(types.string, step);
 
-  return [key, withSensitive(value, sensitiveUnder(collection.sensitive ?? [], step))];
+  return [key, withSensitive(valueOf(typeAt(collection.type, step), UNKNOWN), sensitiveUnder(collection.sensitive ?? [], step))];
 }
 
 /** A key must be text, so a key of another type is refused even while unknown. */

@@ -44,6 +44,8 @@ import {
 
 import { converted } from '../conformValues';
 import {
+  certainItem,
+  certainSteps,
   checkCollection,
   checkKey,
   forItems,
@@ -51,8 +53,6 @@ import {
   forObject,
   laterObjectMarks,
   laterTupleMarks,
-  markedItem,
-  markedSteps,
   refuseDuplicateKeys,
   under,
   unknownItem,
@@ -174,9 +174,9 @@ interface ReadItem {
   condition?: Value;
 }
 
-/** Read with an item that stands for every one, and again with each item the collection marks at a known step. */
+/** Read with an item that stands for every one, and again with each item the collection holds for certain. */
 interface ReadOnce extends Partial<ReadItem> {
-  marked: (ReadItem & { step: string | number })[];
+  certain: (ReadItem & { step: string | number })[];
 }
 
 /** The node being read, and what its indexes are read with. */
@@ -222,16 +222,15 @@ function marksAlong(paths: AttributePath[], keys: (string | number)[]): Attribut
 }
 
 /**
- * Each item has what the body has for every item; one the collection marks at a known step is there for certain, so it keeps its marks at its key,
- * or, with no if, at its place.
+ * Each item has what the body has for every item; one the collection holds for certain keeps its marks at its key, or, with no if, at its place.
  */
-function laterForMarks(node: ForNode, every: ReadItem, marked: (ReadItem & { step: string | number })[]): AttributePath[] {
-  const kept = marked.map((item) => item.condition === undefined || item.condition.data === true);
+function laterForMarks(node: ForNode, every: ReadItem, certain: (ReadItem & { step: string | number })[]): AttributePath[] {
+  const kept = certain.map((item) => item.condition === undefined || item.condition.data === true);
   const entry = (item: ReadItem): ForItem => [item.key ?? valueOf(types.dynamic, UNKNOWN), item.body];
-  if (node.key) return laterObjectMarks([entry(every), ...marked.map((item) => entry(item))], [false, ...kept], node.grouped === true);
+  if (node.key) return laterObjectMarks([entry(every), ...certain.map((item) => entry(item))], [false, ...kept], node.grouped === true);
 
-  const places = node.condition ? [] : marked.flatMap((item) => (typeof item.step === 'number' ? under(item.step, item.body.sensitive ?? []) : []));
-  return fewest([...everyItemMarks([every.body, ...marked.map((item) => item.body)]), ...places]);
+  const places = node.condition ? [] : certain.flatMap((item) => (typeof item.step === 'number' ? under(item.step, item.body.sensitive ?? []) : []));
+  return fewest([...everyItemMarks([every.body, ...certain.map((item) => item.body)]), ...places]);
 }
 
 /** Neither side decides `&&` or `||` yet. One not known may still decide alone, so a mark on the other is the answer's only where both have it. */
@@ -515,28 +514,33 @@ export class ReferenceResolver {
    * has a sensitive key. It has no type: a for makes a tuple or an object whatever it iterates.
    */
   private laterFor(node: ForNode, collection: Value, message: string, state: State, context: Context | undefined, reading: Reading): UnresolvedReferenceError {
-    const { key, body, condition, marked } = this.readOnce(node, collection, state, context, reading);
-    const kept = marked.filter((item) => item.condition === undefined || item.condition.data === true);
-    // A marked item is there whatever the apply finds, so its sensitive if, or the key of one it keeps, decides the size or the keys.
-    const decided = marked.some((item) => item.condition !== undefined && isSensitive(item.condition)) || kept.some((item) => item.key !== undefined && isSensitive(item.key));
+    const { key, body, condition, certain } = this.readOnce(node, collection, state, context, reading);
+    const kept = certain.filter((item) => item.condition === undefined || item.condition.data === true);
+    if (node.key && !node.grouped)
+      refuseDuplicateKeys(
+        kept.flatMap((item) => (item.key === undefined ? [] : [item.key])),
+        node.key.position
+      );
+    // An item held for certain is there whatever the apply finds, so its sensitive if, or the key of one it keeps, decides the size or the keys.
+    const decided = certain.some((item) => item.condition !== undefined && isSensitive(item.condition)) || kept.some((item) => item.key !== undefined && isSensitive(item.key));
     const whole = [key, condition].some((part) => part !== undefined && isSensitive(part)) || isAllSensitive(collection) || decided;
     if (whole) return new UnresolvedReferenceError(message, types.dynamic, wholeIf(true));
 
     // Read without a body outside the plan, where no mark is shown, so each item is marked where any of the collection is.
     if (body === undefined) return new UnresolvedReferenceError(message, types.dynamic, isSensitive(collection) ? [[EVERY_ITEM]] : []);
 
-    return new UnresolvedReferenceError(message, types.dynamic, laterForMarks(node, { key, body }, marked));
+    return new UnresolvedReferenceError(message, types.dynamic, laterForMarks(node, { key, body }, certain));
   }
 
   /** The key, the body and the if with an unknown item, so an error or a sensitive value in them is found before the collection is known. */
   private readOnce(node: ForNode, collection: Value, state: State, context: Context | undefined, reading: Reading): ReadOnce {
-    if (!(reading.asWritten || this.planned.isPlanning())) return { marked: [] };
+    if (!(reading.asWritten || this.planned.isPlanning())) return { certain: [] };
 
     const [itemKey, itemValue] = unknownItem(collection.type);
     const once = this.readItem(node, [itemKey, withSensitive(itemValue, sensitiveUnder(collection.sensitive ?? [], EVERY_ITEM))], state, context, reading);
-    const marked = markedSteps(collection).map((step) => ({ step, ...this.readItem(node, markedItem(collection, step), state, context, reading) }));
+    const certain = certainSteps(collection).map((step) => ({ step, ...this.readItem(node, certainItem(collection, step), state, context, reading) }));
 
-    return { ...once, marked };
+    return { ...once, certain };
   }
 
   private readItem(node: ForNode, item: ForItem, state: State, context: Context | undefined, reading: Reading): ReadItem {

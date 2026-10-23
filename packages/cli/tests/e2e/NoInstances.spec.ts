@@ -74,6 +74,12 @@ describe('a module called with count = 0', () => {
     ["a rule's message that is no string", rule('var.p > 0', '5'), '5\n', "A validation's error_message is a string, not a number"],
     ["a rule's message not known yet that is no string", rule('var.p > 0', 'var.p'), 'var.p\n', "A validation's error_message is a string, not a number"],
     ["a rule's message that is a list with a part not known yet", rule('var.p > 0', '[var.p]'), '[var.p]', "A validation's error_message is a string, not a tuple"],
+    [
+      'a key two attributes of an object give, one of them optional',
+      'variable "o" {\n  type = object({ a = string, b = optional(string) })\n  default = { a = "1" }\n}\noutput "x" {\n  value = { for k, v in var.o : "k" => v }\n}',
+      '"k" =>',
+      'Two items give the key "k"; write "..." after the value to group them',
+    ],
   ])('refuses %s, where the module writes it', async (_, content, needle, message) => {
     await module(content);
 
