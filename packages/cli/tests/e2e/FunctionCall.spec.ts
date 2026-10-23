@@ -142,6 +142,9 @@ describe('a function call', () => {
     ['a name no function has', 'lenght(var.names)', 'lenght(var.names)', 'There is no function "lenght"'],
     ['no argument', 'length()', 'length()', 'length takes 1 argument, not 0'],
     ['an argument too many', 'length(var.names, var.names)', 'length(var.names, var.names)', 'length takes 1 argument, not 2'],
+    ['join with nothing to join', 'join("-")', 'join("-")', 'join takes at least 2 arguments, not 1'],
+    ['upper of a list', 'upper(var.names)', 'var.names)', 'upper takes a string, not a tuple'],
+    ['join of a map after a list', 'join("-", var.names, { a = "x" })', '{ a = "x" })', 'join takes lists of strings after the separator, not an object'],
     ['a number', 'length(5)', '5)', 'length takes a string, a list, a tuple, a set, a map or an object, not a number'],
     ['null', 'length(null)', 'null)', 'length takes a string, a list, a tuple, a set, a map or an object, not null'],
     ['a step into the number it gives', 'length(var.names)[0]', 'length(var.names)[0]', 'length(...) is a number and cannot be read into'],
@@ -266,6 +269,39 @@ describe('a function call', () => {
 
     expect(error.message).toBe('tolist cannot join a number and a boolean into one type');
     expect(error.position).toMatchObject(placeOf(config, '[1, true]'));
+  });
+
+  it('writes what upper, lower and join give', async () => {
+    await apply(`${names}\n${file('f', 'join(", ", [upper("a"), lower("B")], var.names, [3])')}`);
+
+    expect(await read('f')).toBe('A, b, a, b, 3');
+  });
+
+  it('gives join of a value only the apply makes once it is made', async () => {
+    const config = `resource "random_string" "s" { length = 4 }\noutput "j" { value = join("-", ["id", length(random_string.s.result)]) }`;
+
+    const plan = await newOrchestrator().plan(config);
+    await apply(config);
+
+    expect(plan.outputs.j.new).toEqual({ value: UNKNOWN, type: types.string });
+    expect(await outputs()).toEqual({ j: { value: 'id-4', type: types.string } });
+  });
+
+  it('keeps the string join and upper make sensitive where what they read is', async () => {
+    const config = `variable "token" {\n  default   = "t"\n  sensitive = true\n}\n${names}\noutput "j" {\n  value = join("-", var.names, [upper(var.token)])\n}`;
+
+    const error = await planError(config);
+
+    expect(error.message).toBe('output "j" holds a sensitive value; write sensitive = true to export it');
+  });
+
+  it('refuses at validate a list of lists to join before what it holds is known', async () => {
+    const config = 'resource "random_string" "s" { length = 4 }\noutput "j" {\n  value = join("-", [[random_string.s.result]])\n}';
+
+    await expect(newOrchestrator().validate(config)).rejects.toMatchObject({
+      message: 'join takes lists of strings, and this one holds a tuple',
+      position: placeOf(config, '[[random'),
+    });
   });
 
   it('runs a saved plan that reads into what a function gives', async () => {

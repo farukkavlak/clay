@@ -309,14 +309,17 @@ A name with `(` after it calls a function; any other name starts a reference, so
 resource type may be spelled as a function is. An argument is any value, a call too. The
 steps after the `)` read into what the function gives, as a reference's do.
 
-| Function              | Gives                                                                                          |
-| --------------------- | ---------------------------------------------------------------------------------------------- |
-| `length(value)`       | How many items a list, a tuple or a set holds, keys a map or an object, or characters a string |
-| `tolist(value)`       | A list, a tuple or a set as a list of the one type its items share                             |
-| `toset(value)`        | A list, a tuple or a set as a set of the one type its items share, each member once            |
-| `sensitive(value)`    | The value, marked sensitive as a whole                                                         |
-| `nonsensitive(value)` | The value with every sensitive mark taken off, of any part                                     |
-| `issensitive(value)`  | `true` when any part of the value is sensitive, else `false`; not known only if nothing says   |
+| Function                     | Gives                                                                                          |
+| ---------------------------- | ---------------------------------------------------------------------------------------------- |
+| `length(value)`              | How many items a list, a tuple or a set holds, keys a map or an object, or characters a string |
+| `tolist(value)`              | A list, a tuple or a set as a list of the one type its items share                             |
+| `toset(value)`               | A list, a tuple or a set as a set of the one type its items share, each member once            |
+| `sensitive(value)`           | The value, marked sensitive as a whole                                                         |
+| `nonsensitive(value)`        | The value with every sensitive mark taken off, of any part                                     |
+| `issensitive(value)`         | `true` when any part of the value is sensitive, else `false`; not known only if nothing says   |
+| `upper(string)`              | The string with each letter in upper case                                                      |
+| `lower(string)`              | The string with each letter in lower case                                                      |
+| `join(separator, list, ...)` | The items of one or more lists of strings, in order, with the separator between each two       |
 
 A character is what a reader counts as one: a letter with its accent, or an emoji made of
 several code points, is one. A number, a boolean or `null` is refused where the argument
@@ -339,6 +342,14 @@ not a list, a tuple or a set. `null` gives `null`.
 `tolist` of a set gives its members in that order. A set with a member not known yet has
 no order, so `tolist` of it is not known until apply; `toset` of a list with an item not
 known yet keeps the members it knows.
+
+`upper` and `lower` follow Unicode, the same on every machine: `upper("straße")` is
+`"STRASSE"`, where Terraform keeps the `ß`. `upper`, `lower` and the separator of `join`
+take a number or a boolean as its text, and refuse anything else. `join` takes a list, a
+tuple or a set of strings, numbers or booleans after the separator; one that holds
+anything else is refused by its type, so `validate` finds it. A `null` item is refused,
+without saying which item it is. The string is not known until apply while the separator
+or any item is not, and it is sensitive as a whole where any part of what it joins is.
 
 A name no function has, or a call with another number of arguments than the function
 takes, is refused where the call is written, in a module nothing is made of too.

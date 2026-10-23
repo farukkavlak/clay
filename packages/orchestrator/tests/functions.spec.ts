@@ -3,14 +3,20 @@ import { CallNode, ConfigError } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
 import { functionCalled } from '../src/functions';
-import { inferred, Value, valueOf } from '../src/Value';
+import { allSensitive, inferred, Value, valueOf, withSensitive } from '../src/Value';
 
 const at = (column: number) => ({ file: 'main.clay', line: 1, column });
 
-/** `length(null)`; the written argument does not matter, since the function gets a value. */
-const call: CallNode = { type: 'Call', name: 'length', args: [{ type: 'Null', position: at(8) }], path: [], position: at(1) };
+/** The written arguments do not matter, since the function gets values; the first is at column 8 and each after it 10 on. */
+const callOf = (name: string, count: number): CallNode => ({
+  type: 'Call',
+  name,
+  args: Array.from({ length: count }, (_, index) => ({ type: 'Null', position: at(8 + index * 10) })),
+  path: [],
+  position: at(1),
+});
 
-const called = (name: string, value: Value) => functionCalled({ ...call, name })(value);
+const called = (name: string, ...values: Value[]) => functionCalled(callOf(name, values.length))(values);
 
 const length = (value: Value) => called('length', value);
 
@@ -19,9 +25,9 @@ const written = (data: unknown): Value => valueOf(inferred(data), data);
 
 const number = (text: string) => valueOf(types.number, ExactNumber.parse(text));
 
-const errorOf = (name: string, value: Value): ConfigError => {
+const errorOf = (name: string, ...values: Value[]): ConfigError => {
   try {
-    called(name, value);
+    called(name, ...values);
   } catch (error) {
     if (error instanceof ConfigError) return error;
 
@@ -30,6 +36,21 @@ const errorOf = (name: string, value: Value): ConfigError => {
 
   throw new Error(`Expected ${name} to refuse the value`);
 };
+
+describe('a call', () => {
+  it.each([
+    ['length', 0, 'length takes 1 argument, not 0'],
+    ['length', 2, 'length takes 1 argument, not 2'],
+    ['upper', 2, 'upper takes 1 argument, not 2'],
+    ['join', 1, 'join takes at least 2 arguments, not 1'],
+  ])('refuses %s with %i arguments at the call', (name, count, message) => {
+    expect(() => functionCalled(callOf(name, count))).toThrow(new ConfigError(message, at(1)));
+  });
+
+  it('takes as many lists as join is given', () => {
+    expect(called('join', written('-'), written(['a']), written(['b']), written(['c']))).toEqual(written('a-b-c'));
+  });
+});
 
 describe('length', () => {
   it.each([
@@ -144,5 +165,99 @@ describe('toset', () => {
 
     expect(error.message).toBe('toset takes a list, a tuple or a set, not a map');
     expect(error.position).toEqual(at(8));
+  });
+});
+
+const text = (data: unknown) => valueOf(types.string, data);
+
+describe('upper and lower', () => {
+  it.each([
+    ['upper', written('Hello'), 'HELLO'],
+    ['lower', written('Hello'), 'hello'],
+    ['upper', written('stra\u00DFe'), 'STRASSE'],
+    ['upper', written('i'), 'I'],
+    ['lower', written('\u00C7I'), '\u00E7i'],
+    ['upper', number('1.5'), '1.5'],
+    ['upper', written(true), 'TRUE'],
+  ])('%s gives %o as text', (name, value, result) => {
+    expect(called(name, value)).toEqual(text(result));
+  });
+
+  it.each([
+    ['a string not known yet', valueOf(types.string, UNKNOWN), text(UNKNOWN)],
+    ['a value not known yet whose type nothing names', valueOf(types.dynamic, UNKNOWN), text(UNKNOWN)],
+    ['a sensitive string', allSensitive(written('a')), allSensitive(text('A'))],
+    ['a sensitive string not known yet', allSensitive(valueOf(types.string, UNKNOWN)), allSensitive(text(UNKNOWN))],
+  ])('gives %s', (_, value, result) => {
+    expect(called('upper', value)).toEqual(result);
+  });
+
+  it.each([
+    ['a list', written(['a']), 'lower takes a string, not a tuple'],
+    ['null', valueOf(types.dynamic, null), 'lower takes a string, not null'],
+    ['a null a reference gave', { ...valueOf(types.string, null), nullFrom: 'var.k' }, 'lower takes a string, not null, and var.k, which it reads, is null'],
+    ['a map not known yet', valueOf(types.map(types.string), UNKNOWN), 'lower takes a string, not a map'],
+  ])('refuses %s where the argument is written', (_, value, message) => {
+    const error = errorOf('lower', value);
+
+    expect(error.message).toBe(message);
+    expect(error.position).toEqual(at(8));
+  });
+});
+
+describe('join', () => {
+  it.each([
+    ['a tuple of strings', written(['a', 'b']), 'a, b'],
+    ['a number and a boolean as their text', written([ExactNumber.parse('1.5'), true]), '1.5, true'],
+    ['a list', strings('a', 'b'), 'a, b'],
+    ['a set, in the order its members are held', valueOf(types.set(types.string), ['a', 'b']), 'a, b'],
+    ['an empty tuple', written([]), ''],
+  ])('joins %s', (_, list, result) => {
+    expect(called('join', written(', '), list)).toEqual(text(result));
+  });
+
+  it.each([
+    ['an item not known yet', written(['a']), written(['b', UNKNOWN])],
+    ['a list not known yet', written(['a']), valueOf(types.list(types.string), UNKNOWN)],
+    ['a value not known yet whose type nothing names', written(['a']), valueOf(types.dynamic, UNKNOWN)],
+    ['a set with a member not known yet', written(['a']), valueOf(types.set(types.string), ['b', UNKNOWN])],
+  ])('does not know the string with %s', (_, first, second) => {
+    expect(called('join', written('-'), first, second)).toEqual(text(UNKNOWN));
+  });
+
+  it('does not know the string with a separator not known yet', () => {
+    expect(called('join', valueOf(types.string, UNKNOWN), written(['a']))).toEqual(text(UNKNOWN));
+  });
+
+  it.each([
+    ['a sensitive item', withSensitive(written(['a', 'b']), [[1]]), written('-')],
+    ['a sensitive separator', written(['a', 'b']), allSensitive(written('-'))],
+  ])('is sensitive as a whole with %s', (_, list, separator) => {
+    expect(called('join', separator, list)).toEqual(allSensitive(text('a-b')));
+  });
+
+  it('is sensitive while not known with a sensitive item', () => {
+    expect(called('join', written('-'), withSensitive(written(['a', UNKNOWN]), [[0]]))).toEqual(allSensitive(text(UNKNOWN)));
+  });
+
+  it.each([
+    ['a separator that is a list', [written(['-']), written(['a'])], 'join takes a string as the separator, not a tuple', 8],
+    ['a map to join', [written('-'), written(['a']), valueOf(types.map(types.string), { a: 'x' })], 'join takes lists of strings after the separator, not a map', 28],
+    ['null to join', [written('-'), valueOf(types.dynamic, null)], 'join takes lists of strings after the separator, not null', 18],
+    [
+      'a list that is null',
+      [written('-'), { ...valueOf(types.list(types.string), null), nullFrom: 'var.l' }],
+      'join takes lists of strings after the separator, not null, and var.l, which it reads, is null',
+      18,
+    ],
+    ['a list of lists', [written('-'), written([['a']])], 'join takes lists of strings, and this one holds a tuple', 18],
+    ['a list of lists not known yet', [written('-'), valueOf(types.list(types.list(types.string)), UNKNOWN)], 'join takes lists of strings, and this one holds a list', 18],
+    ['a null item', [written('-'), written(['a', null])], 'join takes lists of strings, and this one holds null', 18],
+    ['a null item of a sensitive list, without saying which', [written('-'), allSensitive(written(['a', null]))], 'join takes lists of strings, and this one holds null', 18],
+  ])('refuses %s where it is written', (_, values, message, column) => {
+    const error = errorOf('join', ...values);
+
+    expect(error.message).toBe(message);
+    expect(error.position).toEqual(at(column));
   });
 });
