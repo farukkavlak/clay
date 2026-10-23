@@ -292,6 +292,15 @@ describe('a for expression', () => {
       expect(error.block).toBe('output "o"');
     });
 
+    it('refuses a key of a type no key has before a key two items give', async () => {
+      const config = `output "o" {\n  value = {for n in ["a", "a", null] : n => 1}\n}`;
+
+      const error = await planError(config);
+
+      expect(error.message).toBe('A key in a for is a string, a number or a boolean, not null');
+      expect(error.position).toMatchObject(placeOf(config, 'n => 1'));
+    });
+
     it('runs a saved plan whose instances it gives', async () => {
       const config = `${names}
         resource "local_file" "f" {

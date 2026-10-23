@@ -342,9 +342,15 @@ change each.
 - [ ] A provider's `validate` runs only for an instance, so in a module called with
       `count = 0`, `local_file` with `path = ""` passes the plan; with `count = 1` it is
       refused: `local_file "path" must not be empty`
-- [ ] Two items a `for` keeps for certain under an `if` not known yet that give the same
+- [x] Two items a `for` keeps for certain under an `if` not known yet that give the same
       key pass the plan; the apply then refuses `Two items give the key`:
-      `{ for x in ["a", "b", "c"] : (x == "c" ? "z" : "k") => x if x != "c" || cond }`
+      `{ for x in ["a", "b", "c"] : (x == "c" ? "z" : "k") => x if x != "c" || cond }`.
+      Now the plan refuses them
+- [ ] Two items a `for` over a collection not known yet holds for certain that give the
+      same key pass the plan; the apply then refuses `Two items give the key`. The type
+      says which items are there (the attributes of an object, the places of a tuple), and
+      so do the marks:
+      `{ for k, v in (cond ? { a = "1", b = "2" } : { a = "3", b = "4" }) : "k" => v }`
 - [ ] A value not known yet that is sensitive somewhere in every outcome, but at a place
       the plan does not know, carries no mark, so an output that holds all of it passes the
       plan and is refused at apply. Here `a` or `b` is sensitive, never neither:

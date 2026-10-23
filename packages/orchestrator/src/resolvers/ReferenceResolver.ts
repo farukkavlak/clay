@@ -43,7 +43,20 @@ import {
 } from '@clay/parser';
 
 import { converted } from '../conformValues';
-import { checkCollection, checkKey, forItems, ForItem, forObject, laterObjectMarks, laterTupleMarks, markedItem, markedSteps, under, unknownItem } from '../forItems';
+import {
+  checkCollection,
+  checkKey,
+  forItems,
+  ForItem,
+  forObject,
+  laterObjectMarks,
+  laterTupleMarks,
+  markedItem,
+  markedSteps,
+  refuseDuplicateKeys,
+  under,
+  unknownItem,
+} from '../forItems';
 import { Instances } from '../Instances';
 import { functionCalled } from '../functions';
 import { Context, DataInstance, instanceKeyOf, ModuleCall, moduleOf, scopeOf } from '../keys';
@@ -432,13 +445,19 @@ export class ReferenceResolver {
   }
 
   /**
-   * Which items an if keeps, and so which keys clash, waits for the apply. Every item it may keep is read now, so a mistake in any is found.
+   * Which items an if keeps waits for the apply, but two it keeps for certain are there whatever the apply finds, so a key both give is refused now.
+   * Every item it may keep is read now, so a mistake in any is found.
    * Only marks every outcome has are kept: a sensitive key of an item kept for certain makes it sensitive as a whole.
    */
   private laterPicked(node: ForNode, { items, kept }: Picked, sensitive: boolean, state: State, context: Context | undefined): UnresolvedReferenceError {
     const { key } = node;
     const keys = key ? items.map((itemNames) => this.checkedKey(key, state, context, itemNames)) : [];
     const bodies = items.map((itemNames) => this.resolveItem(node.body, state, context, itemNames));
+    if (key && !node.grouped)
+      refuseDuplicateKeys(
+        keys.filter((_, index) => kept[index]),
+        key.position
+      );
 
     const message = 'The if of a for is known only after apply for an item, so what the for gives is not known yet';
     if (sensitive || keys.some((found, index) => kept[index] && isSensitive(found))) return new UnresolvedReferenceError(message, types.dynamic, wholeIf(true));
