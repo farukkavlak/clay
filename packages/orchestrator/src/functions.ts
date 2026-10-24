@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
 
-import { AttributePath, containsUnknown, EVERY_ITEM, ExactNumber, isUnknown, Type, types, UNKNOWN } from '@clay/contracts';
+import { AttributePath, containsUnknown, ExactNumber, isMarker, isUnknown, Type, types, UNKNOWN } from '@clay/contracts';
 import { CallNode, ConfigError } from '@clay/parser';
 
 import { charactersOf } from './characters';
@@ -147,7 +147,7 @@ function entriesOf(value: Value): Value[] {
 
 /** Marks below `key` say every value it may be holds the key, since a value not known yet is marked only where every value it may be is. */
 function marksKey(value: Value, key: string): boolean {
-  return (value.sensitive ?? []).some(([first]) => first !== undefined && first !== EVERY_ITEM && String(first) === key);
+  return (value.sensitive ?? []).some(([first]) => first !== undefined && !isMarker(first) && String(first) === key);
 }
 
 /** Where the key or the map is not known yet, it gives an entry or the default, so only the marks all of them have. */
@@ -210,7 +210,7 @@ const keysLater = (arg: Value) => arg.type.kind === 'dynamic' || (arg.type.kind 
 function keysGiven(arg: Value): string[] {
   if (!keysLater(arg)) return keysOf(arg);
 
-  return (arg.sensitive ?? []).flatMap(([first]) => (first === undefined || first === EVERY_ITEM ? [] : [String(first)]));
+  return (arg.sensitive ?? []).flatMap(([first]) => (first === undefined || isMarker(first) ? [] : [String(first)]));
 }
 
 /** A key comes from the last argument that gives it for certain, or from one not known yet after it, so it has the marks all of those share. */

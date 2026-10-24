@@ -355,14 +355,29 @@ change each.
 - [x] `issensitive` of a known value with a part not known yet answers `false` at plan
       where no mark says otherwise, though the apply may find that part sensitive and
       fail: `issensitive({ a = cond ? "y" : sensitive("x") })`. Now it is not known yet
-- [ ] A mark on every item of a collection not known yet counts as sensitive at plan,
+- [x] A mark on every item of a collection not known yet counts as sensitive at plan,
       though the collection may come out empty: `issensitive` of
       `[for x in (cond ? ["a"] : []) : sensitive(x)]` answers `true` at plan and `false` at
-      apply, and the plan refuses an output holding it that the apply would take
-- [ ] A value not known yet that is sensitive somewhere in every outcome, but at a place
+      apply, and the plan refuses an output holding it that the apply would take. A
+      condition between `[sensitive("a")]` and such a `for` counted item `0` as marked. Now
+      a mark under every item counts only over items that are there, and two choices share
+      a mark only at a part both hold
+- [x] A value not known yet that is sensitive somewhere in every outcome, but at a place
       the plan does not know, carries no mark, so an output that holds all of it passes the
       plan and is refused at apply. Here `a` or `b` is sensitive, never neither:
-      `cond ? { a = sensitive("x"), b = "y" } : { a = "x", b = sensitive("y") }`
+      `cond ? { a = sensitive("x"), b = "y" } : { a = "x", b = sensitive("y") }`. Now it is
+      marked sensitive somewhere, and so is a `for` with a sensitive body over a set with a
+      member known only after apply
+- [ ] A `for` over a value not known yet forgets where an item it holds for certain lands,
+      so an output reading that place passes the plan and is refused at apply. Grouped under
+      one key, the first item is first in the group: `{ for v in l : "g" => v... }` and
+      `m.g[0]`. Over an object, the items come in key order: `[for k, v in obj : v][0]`
+- [ ] A `for` or `merge` over a value sensitive somewhere forgets it, so an output of
+      `[for v in l : v]` or `merge(l, {})` passes the plan and is refused at apply, where
+      `l` is `cond ? [sensitive("a"), "b"] : ["c", sensitive("d")]`
+- [ ] `tolist` of a set with a member known only after apply forgets the set holds a
+      member, so a `for` with a sensitive body over it passes the plan and is refused at
+      apply. The plan would need to know that a list not known yet is not empty
 
 ## 1. Language
 
@@ -966,6 +981,9 @@ by resource type, and no `provider` block exists yet.
 - [ ] A reference in a string that fails as it is resolved points at the string, not at
       the reference. The parse and the graph point at the reference; a resolver throws
       plain errors, and one of them means "not in state yet", so it cannot be wrapped blindly
+- [ ] A literal cannot be indexed, where HCL reads one: `value = [1, 2][0]` and
+      `value = { a = 1 }.a` are refused with `Expect attribute name.`, and inside a call with
+      `Expect ')' after the arguments.`
 - [ ] A `for` over a tuple not known yet gives its item no type, so a mistake in the body
       waits for the apply: `[for x in (cond ? ["a"] : ["b"]) : x + 1]` plans, and the apply
       refuses `+` on a string. A tuple whose items share a type could give that type
