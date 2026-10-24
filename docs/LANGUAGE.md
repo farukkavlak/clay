@@ -194,7 +194,8 @@ file hold it unencrypted.
 A variable with `sensitive = true` is sensitive wherever it is read, its default and the
 value a module call gives it. `sensitive(x)` marks a value sensitive as a whole,
 `nonsensitive(x)` takes every mark off it, and `issensitive(x)` is true when any part of it
-is sensitive. A value given to a sensitive variable that does not fit its `type` is refused
+is sensitive. While a part is not known yet and no mark says so, `issensitive` waits for
+the apply. A value given to a sensitive variable that does not fit its `type` is refused
 without quoting it in the message.
 
 A module's sensitive output stays sensitive wherever its caller takes it: through a local,

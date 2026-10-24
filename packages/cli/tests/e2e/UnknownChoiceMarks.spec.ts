@@ -117,6 +117,13 @@ describe('a value a choice not known at plan makes', () => {
       `{ for x in ["a", "b", "c"] : x => (x == "a" ? sensitive("s") : "p") if x != "c" || ${LATER} }`,
       '{ for k, v in local.l : k => v }',
     ],
+    ['issensitive of a known value with a part a condition not known yet makes sensitive', `issensitive({ a = ${LATER} ? "y" : sensitive("x") })`, true],
+    [
+      'issensitive of a merge that gives a part a condition not known yet makes sensitive',
+      'issensitive(merge(local.l, {}))',
+      true,
+      `${LATER} ? { a = "x" } : { a = sensitive("y") }`,
+    ],
   ])('is sensitive only where the side the apply takes is, for %s', async (_, value, expected, list?: string, over?: string) => {
     await apply(output(value, list, over));
 
