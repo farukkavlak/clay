@@ -325,7 +325,7 @@ steps after the `)` read into what the function gives, as a reference's do.
 | `toset(value)`               | A list, a tuple or a set as a set of the one type its items share, each member once                    |
 | `sensitive(value)`           | The value, marked sensitive as a whole                                                                 |
 | `nonsensitive(value)`        | The value with every sensitive mark taken off, of any part                                             |
-| `issensitive(value)`         | `true` when any part of the value is sensitive, else `false`; not known only if nothing says           |
+| `issensitive(value)`         | `true` when any part is sensitive, else `false`; not known while a part is not and no mark says so     |
 | `upper(string)`              | The string with each letter in upper case                                                              |
 | `lower(string)`              | The string with each letter in lower case                                                              |
 | `join(separator, list, ...)` | The items of one or more lists of strings, in order, with the separator between each two               |

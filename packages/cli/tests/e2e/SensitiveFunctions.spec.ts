@@ -96,8 +96,11 @@ describe('the functions sensitive, nonsensitive and issensitive', () => {
     expect(await planned(value)).toMatchObject({ value: expected });
   });
 
-  it('issensitive of a plain value known only after apply is not known yet', async () => {
-    expect(await planned('issensitive(random_string.r.result)')).toMatchObject({ value: UNKNOWN });
+  it.each([
+    ['a plain value known only after apply', 'issensitive(random_string.r.result)'],
+    ['a known value with a plain part known only after apply', 'issensitive({ a = random_string.r.result, b = "x" })'],
+  ])('issensitive of %s is not known yet', async (_, value) => {
+    expect(await planned(value)).toMatchObject({ value: UNKNOWN });
   });
 });
 

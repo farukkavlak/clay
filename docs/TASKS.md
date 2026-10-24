@@ -352,6 +352,13 @@ change each.
       so do the marks:
       `{ for k, v in (cond ? { a = "1", b = "2" } : { a = "3", b = "4" }) : "k" => v }`.
       Now the plan refuses them
+- [x] `issensitive` of a known value with a part not known yet answers `false` at plan
+      where no mark says otherwise, though the apply may find that part sensitive and
+      fail: `issensitive({ a = cond ? "y" : sensitive("x") })`. Now it is not known yet
+- [ ] A mark on every item of a collection not known yet counts as sensitive at plan,
+      though the collection may come out empty: `issensitive` of
+      `[for x in (cond ? ["a"] : []) : sensitive(x)]` answers `true` at plan and `false` at
+      apply, and the plan refuses an output holding it that the apply would take
 - [ ] A value not known yet that is sensitive somewhere in every outcome, but at a place
       the plan does not know, carries no mark, so an output that holds all of it passes the
       plan and is refused at apply. Here `a` or `b` is sensitive, never neither:

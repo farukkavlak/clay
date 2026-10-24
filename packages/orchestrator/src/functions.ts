@@ -265,11 +265,11 @@ function format([template, ...values]: Value[], refuse: Refuse): Value {
   }
 }
 
-/** Unknown only when nothing says it is sensitive: a mark is known before the value is. */
+/** A mark is known before the value is, so it is unknown only while no mark says so and a part is not known yet. */
 function issensitive(value: Value): Value {
   if (isSensitive(value)) return valueOf(types.bool, true);
 
-  return valueOf(types.bool, isUnknown(value.data) ? UNKNOWN : false);
+  return valueOf(types.bool, containsUnknown(value.data) ? UNKNOWN : false);
 }
 
 const FUNCTIONS = new Map<string, ClayFunction>([
