@@ -374,9 +374,17 @@ change each.
       `m.g[0]`. Over an object, the items come in key order: `[for k, v in obj : v][0]`.
       Now an item kept for certain before any that may be dropped or join its group keeps
       its place, under an if too
-- [ ] A `for` or `merge` over a value sensitive somewhere forgets it, so an output of
+- [x] A `for` or `merge` over a value sensitive somewhere forgets it, so an output of
       `[for v in l : v]` or `merge(l, {})` passes the plan and is refused at apply, where
-      `l` is `cond ? [sensitive("a"), "b"] : ["c", sensitive("d")]`
+      `l` is `cond ? [sensitive("a"), "b"] : ["c", sensitive("d")]`. Now a `for` whose body
+      keeps the whole item, or makes it sensitive, keeps it, and so does a `merge` where no
+      later argument may give a key the value holds
+- [ ] A mark on a value not known yet does not say which choice it waits on, so what is
+      sensitive in every outcome passes the plan and is refused at apply where the parts
+      are read apart. Here `l` is
+      `cond ? { a = sensitive("x"), b = "y", c = "0" } : { a = "z", b = sensitive("w"), c = "0" }`:
+      `{ p = l.a, q = l.b }` and `merge(l, { c = "1" })`. So is `[for v in t : v.a]` where
+      `t` holds an object with a sensitive `a` at one place or the other
 - [ ] `tolist` of a set with a member known only after apply forgets the set holds a
       member, so a `for` with a sensitive body over it passes the plan and is refused at
       apply. The plan would need to know that a list not known yet is not empty

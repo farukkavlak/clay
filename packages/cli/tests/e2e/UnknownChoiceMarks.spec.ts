@@ -150,6 +150,20 @@ describe('a value a choice not known at plan makes', () => {
   it.each([
     ['a condition', 'local.l', `${LATER} ? { a = sensitive("x"), b = "y" } : { a = "x", b = sensitive("y") }`],
     ['an index not known yet', AT, '[{ a = sensitive("x"), b = "y" }, { a = "x", b = sensitive("y") }]'],
+    ['a for over it that gives each item', '[for v in local.l : v]', `${LATER} ? [sensitive("a"), "b"] : ["c", sensitive("d")]`],
+    ['a for over it that gives each value in key order', '[for k, v in local.l : v]', `${LATER} ? { a = sensitive("x"), b = "y" } : { a = "z", b = sensitive("w") }`],
+    ['a for over it that makes an object', '{ for k, v in local.l : k => v }', `${LATER} ? { a = sensitive("x"), b = "y" } : { a = "z", b = sensitive("w") }`],
+    ['a for over it that groups', '{ for v in local.l : "g" => v... }', `${LATER} ? [sensitive("a"), "b"] : ["c", sensitive("d")]`],
+    ['a for over it whose body is sensitive where the item is', '[for v in local.l : upper(v)]', `${LATER} ? [sensitive("a"), "b"] : ["c", sensitive("d")]`],
+    ['a merge of it with nothing after', 'merge(local.l, {})', `${LATER} ? { a = sensitive("x"), b = "y" } : { a = "z", b = sensitive("w") }`],
+    ['a merge of it with a key after it does not hold', 'merge(local.l, { c = "1" })', `${LATER} ? { a = sensitive("x"), b = "y" } : { a = "z", b = sensitive("w") }`],
+    ['a merge of it after a key', 'merge({ c = "1" }, local.l)', `${LATER} ? { a = sensitive("x"), b = "y" } : { a = "z", b = sensitive("w") }`],
+    [
+      'a for over it whose if reads the item, which makes how many it keeps sensitive',
+      'length([for v in local.l : v if v != random_string.s.result])',
+      `${LATER} ? [sensitive("a"), "b"] : ["c", sensitive("d")]`,
+    ],
+    ['a for over it whose key is the item, which makes its keys sensitive', '{ for v in local.l : v => 1 }', `${LATER} ? [sensitive("a"), "b"] : ["c", sensitive("d")]`],
   ])('knows at plan that what is sensitive somewhere in every outcome is sensitive, for %s', async (_, value, list) => {
     const plan = await newOrchestrator().plan(output(`issensitive(${value})`, list));
 
@@ -391,6 +405,37 @@ describe('a value a choice not known at plan makes', () => {
       'local.m.g[3]',
       `${LATER} ? tolist([sensitive("a"), "b", sensitive("e")]) : tolist([sensitive("c"), "d", sensitive("f")])`,
       '{ for v in local.l : "g" => v... }',
+    ],
+    [
+      'issensitive of a for over what is sensitive somewhere, whose body reads one part',
+      'issensitive([for k, v in local.l : v.a])',
+      `${LATER} ? { p = { a = sensitive("x"), b = "y" }, q = { a = "z", b = "w" } } : { p = { a = "x", b = "y" }, q = { a = "z", b = sensitive("w") } }`,
+    ],
+    [
+      'issensitive of a for over what is sensitive somewhere, whose if is not known yet and does not read the item',
+      `issensitive([for v in local.l : v if random_string.s.result == "q"])`,
+      `${LATER} ? [sensitive("a"), "b"] : ["c", sensitive("d")]`,
+    ],
+    [
+      'issensitive of a merge of what is sensitive somewhere, with a key after it holds',
+      'issensitive(merge(local.l, { a = "q" }))',
+      `${LATER} ? { a = sensitive("x"), b = "y" } : { a = "z", b = sensitive("w") }`,
+    ],
+    [
+      'issensitive of a merge of what is sensitive somewhere, with a map not known yet after it',
+      'issensitive(merge(local.l, { for k in [random_string.s.result] : k => "q" }))',
+      `${LATER} ? { a = sensitive("x"), b = "y" } : { a = "z", b = sensitive("w") }`,
+    ],
+    [
+      'issensitive of a for over what is sensitive somewhere, keyed by the item under an if not known yet',
+      'issensitive({ for v in local.l : v => 1 if random_string.s.result == "q" })',
+      `${LATER} ? [sensitive("a"), "b"] : ["c", sensitive("d")]`,
+    ],
+    [
+      'issensitive of a for over a list not known yet whose every item is sensitive somewhere, which may come out empty',
+      'issensitive([for v in local.m : v])',
+      `[for x in (${LATER} ? ["a"] : []) : (x == "q" ? { a = sensitive("x"), b = "y" } : { a = "z", b = sensitive("w") })]`,
+      '[for x in local.l : x]',
     ],
   ])('leaves to the apply what no outcome marks at plan, for %s', async (_, value, list, over?: string) => {
     const plan = await newOrchestrator().plan(output(value, list, over));

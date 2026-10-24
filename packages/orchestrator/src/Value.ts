@@ -90,6 +90,11 @@ export function isSensitive(value: Value): boolean {
   return value.sensitive?.some((path) => allHold([value], path, true)) === true;
 }
 
+/** Sensitive somewhere the plan cannot name, as a whole and not only in a part. */
+export function sensitiveSomewhere(value: Value): boolean {
+  return value.sensitive?.some((path) => path.length === 1 && path[0] === SOMEWHERE) === true;
+}
+
 export function isAllSensitive(value: Value): boolean {
   return value.sensitive?.some((path) => path.length === 0) === true;
 }

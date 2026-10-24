@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
 
-import { AttributePath, containsUnknown, ExactNumber, isMarker, isUnknown, Type, types, UNKNOWN } from '@clay/contracts';
+import { AttributePath, containsUnknown, ExactNumber, isMarker, isUnknown, SOMEWHERE, Type, types, UNKNOWN } from '@clay/contracts';
 import { CallNode, ConfigError } from '@clay/parser';
 
 import { charactersOf } from './characters';
@@ -22,6 +22,7 @@ import {
   nullSource,
   objectOf,
   sensitiveAmong,
+  sensitiveSomewhere,
   sharedMarks,
   unordered,
   Value,
@@ -240,14 +241,22 @@ function merged(given: Value[]): Value {
   return withSensitive(valueOf(shared, Object.fromEntries(Object.entries(values).map(([key, value]) => [key, value.data]))), sensitiveAmong(values));
 }
 
+const mayHold = (arg: Value, key: string) => arg.type.kind !== 'object' || Object.hasOwn(arg.type.attributes, key);
+
+/** An argument sensitive somewhere leaves the merge so where every later one gives only known keys it cannot hold. */
+function somewhereKept(given: Value[]): boolean {
+  return given.some((arg, index) => sensitiveSomewhere(arg) && given.slice(index + 1).every((later) => !keysLater(later) && keysOf(later).every((key) => !mayHold(arg, key))));
+}
+
 /** Later keys win, and a null is left out. Sensitive as a whole where one is, since the keys it holds are a part of it. */
 function merge(args: Value[], refuse: Refuse): Value {
   for (const [index, arg] of args.entries()) if (!KEYED.has(arg.type.kind)) refuse(`merge takes maps or objects, not ${article(arg.type.kind)}`, index);
 
   const given = args.filter((arg) => arg.data !== null);
+  const result = merged(given);
   return allSensitiveIf(
     given.some((arg) => isAllSensitive(arg)),
-    merged(given)
+    somewhereKept(given) ? withSensitive(result, fewest([...(result.sensitive ?? []), [SOMEWHERE]])) : result
   );
 }
 

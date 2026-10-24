@@ -1,4 +1,4 @@
-import { EVERY_ITEM, ExactNumber, types, UNKNOWN } from '@clay/contracts';
+import { EVERY_ITEM, ExactNumber, SOMEWHERE, types, UNKNOWN } from '@clay/contracts';
 import { CallNode, ConfigError } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
@@ -434,6 +434,8 @@ describe('merge', () => {
       [withSensitive(map({ a: 'x' }), [['a']]), later([[EVERY_ITEM]])],
       [[EVERY_ITEM], ['a']],
     ],
+    ['somewhere of an argument sensitive somewhere, where no later one gives a key', [later([[SOMEWHERE]]), map({})], [[SOMEWHERE]]],
+    ['no somewhere of a map sensitive somewhere, where a later one gives a key the map may hold', [later([[SOMEWHERE]]), map({ c: 'x' })], []],
   ])('keeps, with an argument not known yet, %s', (_, values, marks) => {
     expect(called('merge', ...values).sensitive ?? []).toEqual(marks);
   });
