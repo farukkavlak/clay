@@ -72,7 +72,7 @@ import { ModuleInstances } from '../ModuleInstances';
 import { Arithmetic, arithmetic, asNumber, checkBoolean, equality, isOrdering, negated, negative, NumberValue, Ordering, ordering } from '../operators';
 import { Planned } from '../Planned';
 import { ScopeManager } from '../scope/ScopeManager';
-import { unified, Unjoinable, unjoined } from '../unify';
+import { unified, unifiedLater, Unjoinable, unjoined } from '../unify';
 import {
   allSensitiveIf,
   anyItemMarks,
@@ -303,20 +303,20 @@ function eitherDecides(answer: boolean, left: Value, right: Value): Value {
   return withSensitive(valueOf(types.bool, answer), marksOfWhole(whole, []));
 }
 
-/** The results in the order written: when true, then when false. */
-function resultType(node: ConditionalNode, [whenTrue, whenFalse]: Value[]): Type {
+/** The results in the order written: when true, then when false. With `later`, the one picked is still to come, so one of no type may take any shape. */
+function resultType(node: ConditionalNode, [whenTrue, whenFalse]: Value[], later = false): Type {
   try {
-    return unified([whenTrue.type, whenFalse.type]);
+    return later ? unifiedLater([whenTrue, whenFalse]) : unified([whenTrue.type, whenFalse.type]);
   } catch (error) {
     if (!(error instanceof Unjoinable)) throw error;
     throw new ConfigError(`The two results of a conditional ${unjoined(error, mayBeSensitive(whenTrue) || mayBeSensitive(whenFalse))}`, node.whenTrue.position);
   }
 }
 
-/** The picked value takes the type both results join into, which a value of no type until read may still not fit. */
+/** The picked value takes the type both results join into, which a value of no type until read may still not fit; one still to come keeps its own. */
 function fitted(taken: AttributeValue, value: Value, written: Type): Value {
   try {
-    return converted('A conditional', value, unified([written, value.type]), []);
+    return converted('A conditional', value, unifiedLater([value], [], [written]), []);
   } catch (error) {
     if (!(error instanceof Unjoinable)) throw error;
     throw new ConfigError(`The result a condition picks ${unjoined(error, mayBeSensitive(value))}`, taken.position);
@@ -829,7 +829,7 @@ export class ReferenceResolver {
       const results = [node.whenTrue, node.whenFalse].map((result) => this.resolveItem(result, state, context, reading));
       // Only one result is the value, so it has the condition's mark and the marks both results have.
       return withSensitive(
-        valueOf(resultType(node, results), UNKNOWN),
+        valueOf(resultType(node, results, true), UNKNOWN),
         marksOfWhole({ sensitive: isSensitive(condition), maybe: mayBeSensitive(condition) }, sharedMarks(results))
       );
     }

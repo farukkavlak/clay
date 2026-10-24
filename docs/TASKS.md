@@ -425,11 +425,18 @@ change each.
       so `t[1].c` with `t = [for i, v in (cond ? ["x", m] : ["x", m]) : v if i == 0 || cond2]`
       is refused as an output. Its items that the collection may hold are read after the rest,
       not in the order the `for` goes over them, so the place each may land at is not known
-- [ ] A mark for certain under every item of one value, met with one at a place of another,
-      stays certain at that place, though the first may not have it, and a place with a mark
-      for certain is read as there: with `o = { k = sensitive("s"), c = "0" }`,
-      `{ for v in l : "a" => v.c }` where `l = cond ? [for x in (cond ? [1] : [1, 2]) : o] : [o, o]`
-      is refused at plan, `Two items give the key "a"`, though the apply finds one item
+- [x] A value of no type yet, joined with a structure, takes the structure's shape, so the
+      plan holds as there for certain what the apply may not have: with
+      `o = { k = sensitive("s"), c = "0" }`, `{ for v in l : "a" => v.c }` where
+      `l = cond ? [for x in (cond ? [1] : [1, 2]) : o] : [o, o]` is refused at plan,
+      `Two items give the key "a"`, though the apply finds one item. So it is through the
+      default of a `lookup` not known yet. Now, as in HCL, a value still to come of no type
+      joined with a structure gives no type
+- [ ] A join of known values with one of no type yet, through `tolist`, a variable of
+      `list(any)` or the instances of a module, takes the shape of the others and converts
+      them to it, though the apply may join them into another: `tolist([one, [1]])[1][0]`, with
+      `one` of no type at plan, is `1` at plan and `"1"` at apply, so the apply fails. As in
+      cty, such a join is not known until apply, and keeps its marks
 - [ ] A mark under every item of a list not known yet, cut to a set, counts as sensitive for
       certain, though the list may come out empty: `issensitive(toset(l))` with
       `l = [for x in (cond ? ["a"] : []) : sensitive(x)]` answers `true` at plan and `false`
