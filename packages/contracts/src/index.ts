@@ -159,6 +159,11 @@ export function isExact(path: AttributePath): boolean {
   return path.at(-1) === EXACT;
 }
 
+/** Whether `path` says its first step is there for certain: a mark for certain, or the step held exactly, not a key or place below it. */
+export function holdsFirst(path: AttributePath): boolean {
+  return path[0] !== undefined && !isMarker(path[0]) && !isMaybe(path) && (!isExact(path) || path.length === 2);
+}
+
 /** The marks themselves, without the paths that only say a key or place is exact. */
 export function marksOnly(paths: readonly AttributePath[]): AttributePath[] {
   return paths.filter((path) => !isExact(path));

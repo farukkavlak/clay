@@ -403,6 +403,17 @@ change each.
       `w = { for k, v in l : (k == "a" ? r : k) => v }`, and `t[0]` with
       `t = [for i, v in ["0", sensitive("x")] : v if i == 0 || cond]`. Now such a key or
       place is marked exact, and what every other item may hold does not reach it
+- [x] A key or place held for certain is forgotten below another key, through a `for` over
+      a value not known yet, and in an item that may be dropped, so a plain part is refused as
+      an output. With `m = merge({ for k in [r] : k => sensitive("q") }, { c = "0" })`:
+      `[for x in l : m][0].c`, `w.c` with `w = cond ? { w = m } : { w = m }`, and
+      `lookup(o, "a", { c = "1" }).c` with `o = { for k, v in { a = m } : k => v if cond }`.
+      Now a key or place every value that may be there holds exactly, as a known value holds
+      each of its own, stays so at any depth
+- [ ] A mark under every item covers the places a `for` keeps for certain first, though they
+      have their own, so what the items after them hold exactly is lost: `t[1].c` with
+      `t = [for i, v in ["x", m] : v if i == 0 || cond]` is refused as an output. A mark for
+      the places after the first ones would keep it
 - [ ] A mark under every item of a list not known yet, cut to a set, counts as sensitive for
       certain, though the list may come out empty: `issensitive(toset(l))` with
       `l = [for x in (cond ? ["a"] : []) : sensitive(x)]` answers `true` at plan and `false`
