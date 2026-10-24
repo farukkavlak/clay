@@ -110,6 +110,12 @@ describe('a string with an interpolation', () => {
     });
   });
 
+  it('names a call read into that cannot be joined into text', async () => {
+    const planned = newOrchestrator().plan('output "o" { value = "x${tolist([["a"]])[0]}" }');
+
+    await expect(planned).rejects.toMatchObject({ message: 'tolist(...)[0] is a tuple and cannot be joined into a string' });
+  });
+
   // An error about one reference in a string points at that reference, not the string.
   it.each([
     ['one that is not declared', 'resource "null_resource" "t" { triggers = { label = "a ${var.tags} b ${var.nope}" } }', 'variable "nope" is not defined', 72],

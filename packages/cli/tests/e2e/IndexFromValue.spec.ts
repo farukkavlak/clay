@@ -418,8 +418,16 @@ describe('an index read from a value', () => {
       expect(error.message).not.toContain('"a"');
     });
 
+    it('hides a key a sensitive index does not find in what a call gives', async () => {
+      const error = await errorOf(() => newOrchestrator().plan(probe('merge({ b = "x" })[module.db.key]', '\nsensitive = true')));
+
+      expect(error.message).toContain('merge(...)[module.db.key] was read at a sensitive index, so why it failed is not shown');
+      expect(error.message).not.toContain('"a"');
+    });
+
     it.each([
       ['negative', 'module.db.negative', 'module.db.negative'],
+      ['read out of a call', 'tolist([module.db.negative])[0]', 'tolist(...)[0]'],
       ['worked out, with no name', 'module.db.negative * 2', "The value inside '['"],
     ])('does not say why a sensitive index is no index: %s', async (_, index, named) => {
       const error = await errorOf(() => newOrchestrator().plan(probe(`var.l[${index}]`, '\nsensitive = true')));

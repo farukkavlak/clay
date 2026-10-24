@@ -12,7 +12,6 @@ const callOf = (name: string, count: number): CallNode => ({
   type: 'Call',
   name,
   args: Array.from({ length: count }, (_, index) => ({ type: 'Null', position: at(8 + index * 10) })),
-  path: [],
   position: at(1),
 });
 

@@ -11,8 +11,10 @@ interface Node {
 
 export type ReferenceNode = Node & { type: 'Reference'; value: Step[] };
 
-/** `path` is the steps after the call, as in `tolist(x)[0]`. */
-export type CallNode = Node & { type: 'Call'; name: string; args: AttributeValue[]; path: Step[] };
+export type CallNode = Node & { type: 'Call'; name: string; args: AttributeValue[] };
+
+/** Steps into a value that is not a reference: `tolist(x)[0]`, `[1, 2][0]`, `{ a = 1 }.a`. */
+export type IndexNode = Node & { type: 'Index'; value: AttributeValue; path: Step[] };
 
 /** A name bound by a `for`, then the steps after it. */
 export type BoundNode = Node & { type: 'Bound'; value: Step[] };
@@ -54,6 +56,7 @@ export type AttributeValue =
   | (Node & { type: 'Null' })
   | ReferenceNode
   | CallNode
+  | IndexNode
   | BoundNode
   | ForNode
   | BinaryNode
@@ -169,7 +172,7 @@ export function spell(statement: Statement): string {
   return `${statement.type.toLowerCase()} "${statement.name}"`;
 }
 
-/** What a reference or a call reads in the brackets of its steps. */
+/** What a reference or a value read into reads in the brackets of its steps. */
 function indexesIn(steps: Step[]): AttributeValue[] {
   return steps.flatMap((step) => ('index' in step ? [step.index] : []));
 }
@@ -185,7 +188,8 @@ function operandsIn(value: AttributeValue): AttributeValue[] {
 /** Direct children only. */
 function valuesIn(value: AttributeValue): AttributeValue[] {
   if (value.type === 'List') return value.value;
-  if (value.type === 'Call') return [...value.args, ...indexesIn(value.path)];
+  if (value.type === 'Call') return value.args;
+  if (value.type === 'Index') return [value.value, ...indexesIn(value.path)];
   if (value.type === 'Reference' || value.type === 'Bound') return indexesIn(value.value);
   if (value.type === 'For') return [value.collection, value.key, value.body, value.condition].filter((part) => part !== undefined);
   if (value.type === 'Map') return Object.values(value.value);
@@ -207,14 +211,21 @@ export function callsIn(value: AttributeValue): CallNode[] {
 
 /** For messages: `var.names[0]`, `length(...)`. */
 export function spellNamed(node: ReferenceNode | CallNode | BoundNode): string {
-  return node.type === 'Call' ? `${node.name}(...)${spellSteps(node.path)}` : spellReference(node.value);
+  return node.type === 'Call' ? `${node.name}(...)` : spellReference(node.value);
 }
 
-export function isNamed(value: AttributeValue): value is ReferenceNode | CallNode | BoundNode {
+function isNamed(value: AttributeValue): value is ReferenceNode | CallNode | BoundNode {
   return value.type === 'Reference' || value.type === 'Call' || value.type === 'Bound';
+}
+
+/** How a value with a name is spelled, with the steps read into it; none for one without. */
+export function nameOf(value: AttributeValue): string | undefined {
+  if (value.type === 'Index') return isNamed(value.value) ? `${spellNamed(value.value)}${spellSteps(value.path)}` : undefined;
+
+  return isNamed(value) ? spellNamed(value) : undefined;
 }
 
 /** For messages: an index with no name is `...`, and the error points where it is written. */
 export function spellIndex(value: AttributeValue): string {
-  return isNamed(value) ? spellNamed(value) : '...';
+  return nameOf(value) ?? '...';
 }

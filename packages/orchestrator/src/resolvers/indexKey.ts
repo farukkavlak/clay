@@ -1,5 +1,5 @@
 import { ExactNumber, NumberError } from '@clay/contracts';
-import { AttributeValue, ConfigError, isNamed, Position, Step } from '@clay/parser';
+import { AttributeValue, ConfigError, nameOf, Position, Step } from '@clay/parser';
 
 import { article, described, hasText, isSensitive, nullSource, Value } from '../Value';
 
@@ -16,8 +16,8 @@ function wholeIndex(number: ExactNumber, position: Position): number {
   }
 }
 
-/** An index read from a value, and how it is written. */
-type IndexStep = { index: AttributeValue; spelled: string };
+/** An index read from a value. */
+type IndexStep = { index: AttributeValue };
 
 /** What is wrong with a sensitive number tells what it is, so it is not told. */
 function unlessSensitive<T>(index: Value, step: IndexStep, run: () => T): T {
@@ -25,7 +25,7 @@ function unlessSensitive<T>(index: Value, step: IndexStep, run: () => T): T {
     return run();
   } catch (error) {
     if (!(error instanceof ConfigError && isSensitive(index))) throw error;
-    const named = isNamed(step.index) ? step.spelled : "The value inside '['";
+    const named = nameOf(step.index) ?? "The value inside '['";
     throw new ConfigError(`${named} is sensitive and is no index: why is not shown`, step.index.position);
   }
 }

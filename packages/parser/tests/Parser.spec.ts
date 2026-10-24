@@ -1,7 +1,21 @@
 import { ExactNumber, types } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { BoundNode, callsIn, CONFIG_FILE, DataBlock, ModuleBlock, namedIn, OutputBlock, ReferenceNode, ResourceBlock, spellNamed, VariableBlock } from '../src/ast';
+import {
+  BoundNode,
+  CallNode,
+  callsIn,
+  CONFIG_FILE,
+  DataBlock,
+  ModuleBlock,
+  namedIn,
+  OutputBlock,
+  ReferenceNode,
+  ResourceBlock,
+  spellIndex,
+  spellNamed,
+  VariableBlock,
+} from '../src/ast';
 import { ConfigError } from '../src/ConfigError';
 import { Lexer } from '../src/Lexer';
 import { Parser } from '../src/Parser';
@@ -720,7 +734,7 @@ describe('Clay Parser', () => {
     it.each([
       ['a reference', 'var.l[var.i]', 'var.i', { type: 'Reference', value: steps('var', 'i'), position: at(1, 30) }],
       ['count.index', 'var.l[count.index]', 'count.index', { type: 'Reference', value: steps('count', 'index'), position: at(1, 30) }],
-      ['a call', 'var.l[length(var.x)]', 'length(...)', { type: 'Call', name: 'length', path: [], position: at(1, 30) }],
+      ['a call', 'var.l[length(var.x)]', 'length(...)', { type: 'Call', name: 'length', position: at(1, 30) }],
       ['an index in an index', 'var.l[var.m[var.i]]', 'var.m[var.i]', { type: 'Reference', position: at(1, 30) }],
       ['an operator', 'var.l[count.index + 1]', '...', { type: 'Binary', operator: '+', position: at(1, 30) }],
       ['an operator after a number', 'var.l[1 + var.i]', '...', { type: 'Binary', operator: '+', position: at(1, 30) }],
@@ -733,10 +747,6 @@ describe('Clay Parser', () => {
 
     it('reads a name a for binds in brackets as a step too', () => {
       expect(valueOf('[for i in var.a : var.l[i]]')).toMatchObject({ body: { value: [{ name: 'var' }, { name: 'l' }, { spelled: 'i', index: { type: 'Bound' } }] } });
-    });
-
-    it('reads an index after a call', () => {
-      expect(valueOf('tolist(var.s)[var.i]')).toMatchObject({ type: 'Call', path: [{ spelled: 'var.i', index: { type: 'Reference' } }] });
     });
 
     it('reads an index inside an interpolation', () => {
@@ -763,8 +773,57 @@ describe('Clay Parser', () => {
     });
   });
 
+  describe('Steps after a value', () => {
+    it.each([
+      ['a list', '[1, 2][0]', { type: 'List' }, [0]],
+      ['a map', '{ a = 1 }.a', { type: 'Map' }, ['a']],
+      ['a value in parentheses', '(var.on ? var.l : var.m)[0]', { type: 'Conditional' }, [0]],
+      ['a reference in parentheses', '(var.l)[0]', { type: 'Reference', value: steps('var', 'l') }, [0]],
+      ['a for', '[for n in var.l : n][0].a', { type: 'For' }, [0, 'a']],
+      ['a string', '"ab"[0]', { type: 'String' }, [0]],
+      ['a call', 'tolist(var.x)[0].name["k"]', { type: 'Call', name: 'tolist' }, [0, 'name', { key: 'k' }]],
+    ])('reads them after %s, at where the value starts', (_, written, value, path) => {
+      expect(valueOf(written)).toMatchObject({ type: 'Index', value, path: steps(...path), position: at(1, 24) });
+    });
+
+    it.each([
+      ['an argument', 'f([1][0])', { type: 'Call', args: [{ type: 'Index', value: { type: 'List' } }] }],
+      ['an interpolation', '"${[1][0]} x"', { type: 'Template', value: [{ type: 'Index', value: { type: 'List' } }, ' x'] }],
+      ['an index', 'var.l[[0][0]]', { type: 'Reference', value: [{ name: 'var' }, { name: 'l' }, { spelled: '...', index: { type: 'Index' } }] }],
+      ['what a minus negates', '-[1][0]', { type: 'Negate', value: { type: 'Index', value: { type: 'List' } } }],
+    ])('reads them inside %s', (_, written, expected) => {
+      expect(valueOf(written)).toMatchObject(expected);
+    });
+
+    it('reads an index read from a value after a list, where the step is', () => {
+      expect(valueOf('[1, 2][var.i]')).toMatchObject({ type: 'Index', path: [{ spelled: 'var.i', index: { type: 'Reference' } }] });
+    });
+
+    it('keeps a value with no step after it as it is', () => {
+      expect(valueOf('[1]')).toMatchObject({ type: 'List' });
+    });
+
+    it('finds a call inside a value read into, and inside an index after it', () => {
+      expect(callsIn(valueOf('[f(1)][g(2)]')).map((found) => found.name)).toEqual(['f', 'g']);
+    });
+
+    it.each([
+      ['a call with its steps', 'f(1, 2)[0].a', 'f(...)[0].a'],
+      ['a value with no name', '[1][0]', '...'],
+    ])('spells %s as an index', (_, written, spelled) => {
+      expect(spellIndex(valueOf(written))).toBe(spelled);
+    });
+
+    it('refuses a dot with no name after a value where it is written', () => {
+      const error = errorOf('resource "t" "n" { v = [1]. }');
+
+      expect(error.message).toBe('Expect property name after dot.');
+      expect(error.position).toEqual(at(1, 29));
+    });
+  });
+
   describe('Function calls', () => {
-    const call = (name: string, args: unknown[], path: (string | number)[] = [], column = 24) => ({ type: 'Call', name, args, path: steps(...path), position: at(1, column) });
+    const call = (name: string, args: unknown[], column = 24) => ({ type: 'Call', name, args, position: at(1, column) });
 
     it('reads a name with parentheses after it as a call, with its argument where it was written', () => {
       expect(valueOf('length(var.x)')).toEqual(call('length', [reference(['var', 'x'], 31)]));
@@ -784,11 +843,7 @@ describe('Clay Parser', () => {
     });
 
     it('reads a call as an argument of another', () => {
-      expect(valueOf('f(g(var.x))')).toEqual(call('f', [call('g', [reference(['var', 'x'], 28)], [], 26)]));
-    });
-
-    it('reads the steps into what a call gives', () => {
-      expect(valueOf('tolist(var.x)[0].name["k"]')).toMatchObject({ type: 'Call', name: 'tolist', path: steps(0, 'name', { key: 'k' }) });
+      expect(valueOf('f(g(var.x))')).toEqual(call('f', [call('g', [reference(['var', 'x'], 28)], 26)]));
     });
 
     it('reads a call with a space before its parentheses', () => {
@@ -800,7 +855,7 @@ describe('Clay Parser', () => {
     });
 
     it('reads a call inside an interpolation, with the text around it', () => {
-      expect(valueOf('"n ${length(var.x)} m"')).toEqual({ type: 'Template', value: ['n ', call('length', [reference(['var', 'x'], 36)], [], 29), ' m'], position: at(1, 24) });
+      expect(valueOf('"n ${length(var.x)} m"')).toEqual({ type: 'Template', value: ['n ', call('length', [reference(['var', 'x'], 36)], 29), ' m'], position: at(1, 24) });
     });
 
     it.each([
@@ -842,10 +897,10 @@ describe('Clay Parser', () => {
     });
 
     it.each([
-      ['a call without its arguments, with its steps', 'f(1, 2)[0].a', 'f(...)[0].a'],
+      ['a call without its arguments', 'f(1, 2)', 'f(...)'],
       ['a reference as it is written', 'var.m["a.b"][0]', 'var.m["a.b"][0]'],
     ])('spells %s', (_, written, spelled) => {
-      expect(spellNamed(valueOf(written) as ReferenceNode)).toBe(spelled);
+      expect(spellNamed(valueOf(written) as ReferenceNode | CallNode)).toBe(spelled);
     });
   });
 
