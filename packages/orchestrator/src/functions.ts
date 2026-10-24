@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
 
-import { AttributePath, containsUnknown, ExactNumber, isMarker, isMaybe, isUnknown, SOMEWHERE, Type, types, UNKNOWN } from '@clay/contracts';
+import { AttributePath, containsUnknown, EVERY_ITEM, ExactNumber, isMarker, isMaybe, isUnknown, sensitiveUnder, SOMEWHERE, Type, types, UNKNOWN } from '@clay/contracts';
 import { CallNode, ConfigError } from '@clay/parser';
 
 import { charactersOf } from './characters';
@@ -19,6 +19,7 @@ import {
   isSensitive,
   itemsOf,
   mayBeAllSensitive,
+  maybeMarks,
   mayBeSensitive,
   nullSource,
   objectOf,
@@ -217,19 +218,40 @@ function keysGiven(arg: Value): string[] {
   return (arg.sensitive ?? []).flatMap((path) => (path[0] === undefined || isMarker(path[0]) || isMaybe(path) ? [] : [String(path[0])]));
 }
 
-/** A key comes from the last argument that gives it for certain, or from one not known yet after it, so it has the marks all of those share. */
-function keyMarks(given: Value[], key: string): AttributePath[] {
-  const from = given.length - 1 - [...given].reverse().findIndex((arg) => keysGiven(arg).includes(key));
-  const values = given.slice(from).filter((arg, index) => index === 0 || keysLater(arg));
+/** The keys a mark of an argument not known yet names, so it may give them, and all of a known one's. */
+function keysNamed(arg: Value): string[] {
+  if (!keysLater(arg)) return keysOf(arg);
 
-  return sharedMarks(values.map((arg) => entryOf(arg, key))).map((path) => [key, ...path]);
+  return (arg.sensitive ?? []).flatMap(([first]) => (first === undefined || isMarker(first) ? [] : [String(first)]));
 }
 
-/** Which keys it holds waits for the apply, so each has the marks every value has, and a key given for certain its own. */
-function laterMerged(given: Value[], type: Type): Value {
-  const keys = new Set(given.flatMap((arg) => keysGiven(arg)));
+/**
+ * A key comes from the last argument that gives it for certain, or from one not known yet after it, so it has the marks all of those share.
+ * Where none gives it for certain, it may not be there, so it has only those any argument not known yet may give it.
+ */
+function keyMarks(given: Value[], key: string): AttributePath[] {
+  const last = [...given].reverse().findIndex((arg) => keysGiven(arg).includes(key));
+  const later = (values: Value[]) => values.filter((arg, index) => index === 0 || keysLater(arg)).map((arg) => entryOf(arg, key));
+  const marks = last === -1 ? maybeMarks(given.filter((arg) => keysLater(arg)).map((arg) => entryOf(arg, key))) : sharedMarks(later(given.slice(given.length - 1 - last)));
 
-  return withSensitive(valueOf(type, UNKNOWN), fewest([...everyItemMarks(given.flatMap((arg) => entriesOf(arg))), ...[...keys].flatMap((key) => keyMarks(given, key))]));
+  return marks.map((path) => [key, ...path]);
+}
+
+/** What an argument not known yet holds at a key no mark of it names. */
+function otherEntry(arg: Value): Value {
+  return withSensitive(valueOf(types.dynamic, UNKNOWN), sensitiveUnder(arg.sensitive ?? [], EVERY_ITEM));
+}
+
+/** Which keys it holds waits for the apply. Each has the marks every value has, and those an argument whose keys are not known may give; a key given for certain has its own. */
+function laterMerged(given: Value[], type: Type): Value {
+  const keys = new Set(given.flatMap((arg) => keysNamed(arg)));
+
+  const every = everyItemMarks(
+    given.flatMap((arg) => entriesOf(arg)),
+    given.filter((arg) => keysLater(arg)).map((arg) => otherEntry(arg))
+  );
+
+  return withSensitive(valueOf(type, UNKNOWN), fewest([...every, ...[...keys].flatMap((key) => keyMarks(given, key))]));
 }
 
 /** A map not known yet leaves the keys unknown, so an object made with it is not known at all. */

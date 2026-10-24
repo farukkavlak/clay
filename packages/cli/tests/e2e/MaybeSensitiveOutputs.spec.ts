@@ -15,6 +15,11 @@ const NOW = 'length(random_string.s.result) == 4';
 
 const ONE_SIDE = `${LATER} ? "a" : sensitive("b")`;
 const EITHER_PART = `${LATER} ? { a = sensitive("x"), b = "y", c = "0" } : { a = "z", b = sensitive("w"), c = "0" }`;
+const BOTH_KEY = `${LATER} ? { a = sensitive("x"), c = "0" } : { a = sensitive("y"), c = "0" }`;
+const ONE_PLACE = `${LATER} ? [sensitive("x"), "0"] : ["y", "0"]`;
+const ONE_KEY = `${LATER} ? { a = sensitive("x"), c = "0" } : { a = "y", c = "0" }`;
+const KEYED = `{ for k, v in (${ONE_KEY}) : k => v }`;
+const PLACED = `[for v in (${ONE_PLACE}) : v]`;
 
 const MAYBE_REFUSED = 'output "o" may hold a sensitive value, by what the apply finds; write sensitive = true to export it';
 
@@ -35,6 +40,15 @@ const MAYBE: [string, string, string][] = [
   ['a for over a list tolist makes of a set with a member not known yet', '[for v in tolist(toset([random_string.s.result])) : sensitive(v)]', 'local.l'],
   ['an object made of parts each outcome marks apart', EITHER_PART, '{ p = local.l.a, q = local.l.b }'],
   ['merge over a plain key of such a value', EITHER_PART, 'merge(local.l, { c = "1" })'],
+  ['a key merge keeps beside a map not known yet, which one outcome marks', ONE_KEY, 'merge(local.l, { for k in [random_string.s.result] : k => "q" }).a'],
+  ['a key a for keeps, which one outcome marks', `{ for k, v in (${ONE_KEY}) : k => v }`, 'local.l.a'],
+  ['a key a for may keep, which one outcome marks', `{ for k, v in (${ONE_KEY}) : k => v if ${NOW} }`, 'local.l.a'],
+  ['a group a for keeps, which one outcome marks', `{ for k, v in (${ONE_KEY}) : k => v... }`, 'local.l.a[0]'],
+  ['a group a for may keep, which one outcome marks', `{ for k, v in (${ONE_KEY}) : k => v... if ${NOW} }`, 'local.l.a[0]'],
+  ['a key a for over what a for gives keeps, which one outcome marks', `{ for k, v in ${KEYED} : k => v }`, 'local.l.a'],
+  ['a key merge keeps of what a for gives, which one outcome marks', KEYED, 'merge(local.l, {}).a'],
+  ['a place a for over what a for gives keeps, which one outcome marks', `[for v in ${PLACED} : v]`, 'local.l[0]'],
+  ['a place a for keeps, which one outcome marks', `[for v in (${LATER} ? [sensitive("x"), "0"] : ["y", "0"]) : v]`, 'local.l[0]'],
   [
     'a for reading one part, which one item or another marks',
     `${LATER} ? [{ a = sensitive("x") }, { a = "y" }] : [{ a = "y" }, { a = sensitive("x") }]`,
@@ -186,6 +200,15 @@ describe('a root output that may hold a sensitive value', () => {
     ['a part plain in each outcome of a value sensitive somewhere', EITHER_PART, 'local.l.c', '0'],
     ['lookup of such a part', EITHER_PART, 'lookup(local.l, "c", "d")', '0'],
     ['such a part, where that value is one side of another condition', `${NOW} ? (${EITHER_PART}) : { a = "1", b = "2", c = "3" }`, 'local.l.c', '0'],
+    ['a known key merge keeps beside a map not known yet', ONE_KEY, 'merge(local.l, { for k in [random_string.s.result] : k => "q" }).c', '0'],
+    ['a known key a for over such a value keeps', `{ for k, v in (${ONE_KEY}) : k => v }`, 'local.l.c', '0'],
+    ['a known key a for over such a value may keep', `{ for k, v in (${ONE_KEY}) : k => v if ${NOW} }`, 'local.l.c', '0'],
+    ['a known group a for over such a value keeps', `{ for k, v in (${ONE_KEY}) : k => v... }`, 'local.l.c[0]', '0'],
+    ['a known group a for over such a value may keep', `{ for k, v in (${ONE_KEY}) : k => v... if ${NOW} }`, 'local.l.c[0]', '0'],
+    ['a known key a for over what a for gives keeps', `{ for k, v in ${KEYED} : k => v }`, 'local.l.c', '0'],
+    ['a known key merge keeps of what a for gives', KEYED, 'merge(local.l, {}).c', '0'],
+    ['a known place a for over what a for gives keeps', `[for v in ${PLACED} : v]`, 'local.l[1]', '0'],
+    ['a known place a for over such a tuple keeps', `[for v in (${LATER} ? [sensitive("x"), "0"] : ["y", "0"]) : v]`, 'local.l[1]', '0'],
   ])('is not refused where no outcome is sensitive, for %s', async (_, local, value, expected) => {
     await apply(config(local, output(value)));
 
@@ -201,6 +224,21 @@ describe('a root output that may hold a sensitive value', () => {
     const plan = await newOrchestrator().plan(config('1', file + output(`issensitive(${value})`)));
 
     expect(plan.outputs.o.new?.value).toBe(UNKNOWN);
+  });
+
+  it.each([
+    ['a key a for may keep', `{ for k, v in (${BOTH_KEY}) : k => v if ${LATER} }`, 'lookup(local.l, "a", "d")'],
+    ['a group a for may keep', `{ for k, v in (${BOTH_KEY}) : k => v... if ${LATER} }`, 'lookup(local.l, "a", ["d"])'],
+    ['a place only a mark that it may be sensitive names', `[for v in [for w in (${LATER} ? tolist([sensitive("x")]) : tolist([])) : w] : sensitive(v)]`, 'local.l'],
+    ['a key only a mark that it may be sensitive names', `{ for k, v in { for k, w in { a = sensitive("x") } : k => w if ${LATER} } : k => sensitive(v) }`, 'local.l'],
+  ])('leaves issensitive not known at plan for %s, since the apply may drop it', async (_, local, value) => {
+    const text = config(local, output(`issensitive(${value})`));
+    const plan = await newOrchestrator().plan(text);
+    expect(plan.outputs.o.new?.value).toBe(UNKNOWN);
+
+    await apply(text);
+    const state = await new LocalBackend(dir).read();
+    expect(state.outputs?.o).toMatchObject({ value: false });
   });
 
   it('refuses at plan an attribute a provider makes from one that may be sensitive', async () => {

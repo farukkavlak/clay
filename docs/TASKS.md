@@ -391,12 +391,18 @@ change each.
       member, so a `for` with a sensitive body over it passes the plan and is refused at
       apply. The plan would need to know that a list not known yet is not empty. Now
       the plan refuses it as an output that may hold a sensitive value
-- [ ] A `merge` or `for` over a value not known yet marks every key or place as one that
+- [x] A `merge` or `for` over a value not known yet marks every key or place as one that
       may be sensitive, known ones too, so a part plain in every outcome is refused as an
       output: `merge(l, { for k in [r] : k => "q" }).c`, and `w.c` with
       `w = { for k, v in l : k => v }` where `l` is
-      `cond ? { a = sensitive("x"), c = "0" } : { a = "y", c = "0" }`. An item whose key or
-      place is known should give its marks only there
+      `cond ? { a = sensitive("x"), c = "0" } : { a = "y", c = "0" }`. Now an item whose key
+      or place is known gives what it may hold only there
+- [ ] A key or place held for certain still takes what every other item may hold, though
+      none of them can land there, so a plain part is refused as an output: `merge(m, l).c`
+      where `m` is a map not known yet with a sensitive value, `w.c` with
+      `w = { for k, v in l : (k == "a" ? r : k) => v }`, and `t[0]` with
+      `t = [for i, v in ["0", sensitive("x")] : v if i == 0 || cond]`. A mark under every
+      item has no way to leave out the keys and places marks name
 - [ ] A mark under every item of a list not known yet, cut to a set, counts as sensitive for
       certain, though the list may come out empty: `issensitive(toset(l))` with
       `l = [for x in (cond ? ["a"] : []) : sensitive(x)]` answers `true` at plan and `false`
