@@ -397,12 +397,12 @@ change each.
       `w = { for k, v in l : k => v }` where `l` is
       `cond ? { a = sensitive("x"), c = "0" } : { a = "y", c = "0" }`. Now an item whose key
       or place is known gives what it may hold only there
-- [ ] A key or place held for certain still takes what every other item may hold, though
+- [x] A key or place held for certain still takes what every other item may hold, though
       none of them can land there, so a plain part is refused as an output: `merge(m, l).c`
       where `m` is a map not known yet with a sensitive value, `w.c` with
       `w = { for k, v in l : (k == "a" ? r : k) => v }`, and `t[0]` with
-      `t = [for i, v in ["0", sensitive("x")] : v if i == 0 || cond]`. A mark under every
-      item has no way to leave out the keys and places marks name
+      `t = [for i, v in ["0", sensitive("x")] : v if i == 0 || cond]`. Now such a key or
+      place is marked exact, and what every other item may hold does not reach it
 - [ ] A mark under every item of a list not known yet, cut to a set, counts as sensitive for
       certain, though the list may come out empty: `issensitive(toset(l))` with
       `l = [for x in (cond ? ["a"] : []) : sensitive(x)]` answers `true` at plan and `false`

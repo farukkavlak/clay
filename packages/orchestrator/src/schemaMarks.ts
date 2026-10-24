@@ -1,4 +1,4 @@
-import { AttributePath, isMaybe, MAYBE, Schema } from '@clay/contracts';
+import { AttributePath, isMaybe, marksOnly, MAYBE, Schema } from '@clay/contracts';
 
 import { sensitiveAmong, Value, withSensitive } from './Value';
 
@@ -13,7 +13,7 @@ interface Marked {
  * One made only from attributes that may be sensitive may be so too.
  */
 export function schemaMarked(schema: Schema, marks: readonly AttributePath[]): Marked {
-  const reached = (name: string, maybe: boolean) => marks.some((path) => path[0] === name && isMaybe(path) === maybe);
+  const reached = (name: string, maybe: boolean) => marksOnly(marks).some((path) => path[0] === name && isMaybe(path) === maybe);
   const by = (maybe: boolean) =>
     Object.entries(schema)
       .filter(([, { sensitive, sensitiveWith = [] }]) => (!maybe && sensitive === true) || sensitiveWith.some((other) => reached(other, maybe)))

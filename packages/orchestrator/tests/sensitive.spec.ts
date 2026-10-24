@@ -1,13 +1,15 @@
-import { EVERY_ITEM, ExactNumber, isMaybe, MAYBE, sensitiveUnder, SOMEWHERE, types, UNKNOWN } from '@clay/contracts';
+import { EVERY_ITEM, EXACT, ExactNumber, isMaybe, MAYBE, sensitiveUnder, SOMEWHERE, types, UNKNOWN } from '@clay/contracts';
 import { ConfigError } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
-import { converted, SchemaMismatch } from '../src/conformValues';
+import { converted, SchemaMismatch, sensitiveAs } from '../src/conformValues';
 import { declaredAs, givenTo } from '../src/declared';
 import { forObject, laterObjectMarks } from '../src/forItems';
 import { readPath } from '../src/resolvers/readPath';
+import { schemaMarked } from '../src/schemaMarks';
 import {
   allSensitive,
+  anyItemMarks,
   child,
   everyItemMarks,
   fewest,
@@ -31,6 +33,9 @@ const at = { file: 'main.clay', line: 1, column: 1 };
 const written = (data: unknown): Value => valueOf(inferred(data), data);
 
 const secret = allSensitive(valueOf(types.string, 's3cret'));
+
+/** A map not known yet with these marks. */
+const laterMap = (...paths: (string | number)[][]) => withSensitive(valueOf(types.map(types.dynamic), UNKNOWN), paths);
 
 describe('the sensitive parts of a value', () => {
   it('are left out where it has none, so it is the value it was', () => {
@@ -194,6 +199,139 @@ describe('the marks a value may have', () => {
     ['none, where no value has a mark', [pair, pair], []],
   ])('of a value made from others are %s', (_, values, marks) => {
     expect(wholeOf(...values)).toEqual(marks);
+  });
+});
+
+describe('an exact key or place', () => {
+  it.each([
+    [
+      'one that may be at it, beside one that may be under every item',
+      [
+        [EVERY_ITEM, MAYBE],
+        ['c', MAYBE],
+        ['c', EXACT],
+      ],
+      [
+        [EVERY_ITEM, MAYBE],
+        ['c', MAYBE],
+        ['c', EXACT],
+      ],
+    ],
+    ['a value sensitive somewhere, beside it', [[SOMEWHERE], [EVERY_ITEM, MAYBE], [0, EXACT]], [[SOMEWHERE], [EVERY_ITEM, MAYBE], [0, EXACT]]],
+    [
+      'none where it keeps nothing out',
+      [
+        ['c', EXACT],
+        ['c', 'p'],
+      ],
+      [['c', 'p']],
+    ],
+    [
+      'none where what may be so under every item is under another key',
+      [
+        ['a', 'c', EXACT],
+        ['b', EVERY_ITEM, MAYBE],
+      ],
+      [['b', EVERY_ITEM, MAYBE]],
+    ],
+    [
+      'none that may be at a key of the same name under another key',
+      [
+        ['a', 'c', EXACT],
+        ['a', EVERY_ITEM, MAYBE],
+        ['b', EVERY_ITEM, MAYBE],
+        ['b', 'c', MAYBE],
+      ],
+      [
+        ['a', 'c', EXACT],
+        ['a', EVERY_ITEM, MAYBE],
+        ['b', EVERY_ITEM, MAYBE],
+      ],
+    ],
+    [
+      'it, beside a mark at a key spelled as it',
+      [
+        ['c', '-4'],
+        ['c', EXACT],
+        [EVERY_ITEM, MAYBE],
+      ],
+      [
+        ['c', '-4'],
+        ['c', EXACT],
+        [EVERY_ITEM, MAYBE],
+      ],
+    ],
+    ['none that may be at it, under every item for certain', [[EVERY_ITEM], [EVERY_ITEM, 'z', MAYBE], ['c', MAYBE], ['c', EXACT]], [[EVERY_ITEM], ['c', EXACT]]],
+  ])('keeps, of the fewest, %s', (_, paths, kept) => {
+    expect(fewest(paths)).toEqual(kept);
+  });
+
+  it('is no mark of a value alone', () => {
+    expect(mayBeSensitive(laterMap(['c', EXACT]))).toBe(false);
+  });
+
+  it('is not sensitive, though a tuple not known yet holds one inside', () => {
+    const tuples = types.tuple([types.tuple([types.string, types.string])]);
+
+    expect(
+      isSensitive(
+        withSensitive(valueOf(tuples, UNKNOWN), [
+          [0, EXACT],
+          [EVERY_ITEM, MAYBE],
+        ])
+      )
+    ).toBe(false);
+  });
+
+  it('stays out of what a value that is one of others may have', () => {
+    expect(sharedMarks([laterMap([EVERY_ITEM, 'p', MAYBE], ['c', EXACT]), written({ c: { p: 'x' } })])).toEqual([[EVERY_ITEM, 'p', MAYBE]]);
+  });
+
+  it('is not kept where only one of the values has it, beside one that marks every item for certain', () => {
+    const exact = laterMap(['k', EXACT], [EVERY_ITEM, MAYBE], ['z']);
+    const every = withSensitive(valueOf(types.object({ k: types.string, z: types.string }), UNKNOWN), [[EVERY_ITEM]]);
+
+    expect(sensitiveUnder(sharedMarks([exact, every]), 'k')).toEqual([[MAYBE]]);
+  });
+
+  it('is not kept where only one of the values has it', () => {
+    expect(sharedMarks([laterMap([EVERY_ITEM, MAYBE], ['c', EXACT]), laterMap([EVERY_ITEM, MAYBE])])).toEqual([[EVERY_ITEM, MAYBE]]);
+  });
+
+  it('keeps, where every value has it, what one value has there by a mark for certain under every item', () => {
+    const one = laterMap([EVERY_ITEM, 'x'], [EVERY_ITEM, 'y'], [EVERY_ITEM, 'z', MAYBE], ['c', EXACT]);
+    const other = laterMap([EVERY_ITEM, 'y'], [EVERY_ITEM, 'z', MAYBE], ['c', EXACT]);
+
+    expect(sensitiveUnder(sharedMarks([one, other]), 'c')).toContainEqual(['x', MAYBE]);
+  });
+
+  it('stays out of what an item the plan cannot name may have', () => {
+    expect(
+      anyItemMarks([
+        [EVERY_ITEM, 'p', MAYBE],
+        ['c', EXACT],
+      ])
+    ).toEqual([['p', MAYBE]]);
+  });
+
+  it('leaves a set made of the tuple only as one that may be sensitive', () => {
+    const tuple = withSensitive(valueOf(types.tuple([types.string, types.string]), UNKNOWN), [
+      [EVERY_ITEM, MAYBE],
+      [0, EXACT],
+    ]);
+
+    expect(sensitiveAs(tuple, valueOf(types.set(types.string), UNKNOWN)).sensitive).toEqual([[MAYBE]]);
+  });
+
+  it('makes no attribute sensitive that the schema marks with the one it is at', () => {
+    const schema = { a: { type: types.map(types.string) }, b: { type: types.string, computed: true, sensitiveWith: ['a'] } };
+
+    expect(
+      schemaMarked(schema, [
+        ['a', EVERY_ITEM, MAYBE],
+        ['a', 'c', EXACT],
+      ])
+    ).toEqual({ certain: [], maybe: ['b'] });
   });
 });
 

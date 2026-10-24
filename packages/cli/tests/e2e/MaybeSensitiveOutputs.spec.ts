@@ -20,6 +20,8 @@ const ONE_PLACE = `${LATER} ? [sensitive("x"), "0"] : ["y", "0"]`;
 const ONE_KEY = `${LATER} ? { a = sensitive("x"), c = "0" } : { a = "y", c = "0" }`;
 const KEYED = `{ for k, v in (${ONE_KEY}) : k => v }`;
 const PLACED = `[for v in (${ONE_PLACE}) : v]`;
+const MERGED = 'merge({ for k in [random_string.s.result] : k => sensitive("q") }, { c = "0" })';
+const PICKED = `[for i, v in ["0", sensitive("x")] : v if i == 0 || ${LATER}]`;
 
 const MAYBE_REFUSED = 'output "o" may hold a sensitive value, by what the apply finds; write sensitive = true to export it';
 
@@ -135,6 +137,7 @@ const HIDDEN: [string, string, string, string | RegExp][] = [
 // Each takes `v`, and `lookup` an `m` and a default `d` too.
 const MODULES = {
   m: 'variable "v" {}\noutput "o" { value = var.v }\n',
+  kz: 'variable "v" {\n  type = object({ k = string, z = string })\n}\noutput "o" { value = var.v }\n',
   t: 'variable "v" {\n  type = any\n}\noutput "o" { value = var.v }\n',
   list: 'variable "v" {\n  type = list(string)\n}\n',
   any: 'variable "v" {\n  type = list(any)\n}\n',
@@ -209,11 +212,55 @@ describe('a root output that may hold a sensitive value', () => {
     ['a known key merge keeps of what a for gives', KEYED, 'merge(local.l, {}).c', '0'],
     ['a known place a for over what a for gives keeps', `[for v in ${PLACED} : v]`, 'local.l[1]', '0'],
     ['a known place a for over such a tuple keeps', `[for v in (${LATER} ? [sensitive("x"), "0"] : ["y", "0"]) : v]`, 'local.l[1]', '0'],
+    ['a key merge gives last, after a map not known yet', MERGED, 'local.l.c', '0'],
+    ['a known key a for gives beside a key not known yet', '{ for k, v in { a = sensitive("x"), c = "0" } : (k == "a" ? random_string.s.result : k) => v }', 'local.l.c', '0'],
+    ['a place a for keeps for certain before one it may drop', PICKED, 'local.l[0]', '0'],
+    ['lookup of such a key merge gives, with a sensitive default', MERGED, 'lookup(local.l, "c", sensitive("d"))', '0'],
+    ['such a key, merged again', MERGED, 'merge(local.l, {}).c', '0'],
+    ['such a key, on each side of a condition', `${LATER} ? ${MERGED} : ${MERGED}`, 'local.l.c', '0'],
+    ['such a key, through a for', `{ for k, v in (${MERGED}) : k => v }`, 'local.l.c', '0'],
+    ['such a place, through a for', `[for v in (${PICKED}) : v]`, 'local.l[0]', '0'],
   ])('is not refused where no outcome is sensitive, for %s', async (_, local, value, expected) => {
     await apply(config(local, output(value)));
 
     const state = await new LocalBackend(dir).read();
     expect(state.outputs?.o).toMatchObject({ value: expected });
+  });
+
+  // The apply finds each plain, but only by the key the string comes to, which the plan cannot know.
+  it.each([
+    ['a key merge gives before a map not known yet', '{ c = "0" }', `merge(local.l, { for k in [random_string.s.result] : k => sensitive("q") }).c`],
+    [
+      'a known key whose item a for may drop',
+      `{ for k, v in { a = sensitive("x"), c = "0" } : (k == "a" ? random_string.s.result : k) => v if k == "a" || ${LATER} }`,
+      'lookup(local.l, "c", "d")',
+    ],
+    [
+      'a known group an item with a key not known yet may join',
+      '{ for k, v in { a = sensitive("x"), c = "0" } : (k == "a" ? random_string.s.result : k) => v... }',
+      'local.l.c[0]',
+    ],
+    ['a place after one a for may drop', `[for i, v in ["0", sensitive("x"), "1"] : v if i != 1 || ${LATER}]`, 'local.l[1]'],
+  ])('is still refused at plan where an item the plan cannot name may land, for %s', async (_, local, value) => {
+    await expect(newOrchestrator().plan(config(local, output(value)))).rejects.toThrow(MAYBE_REFUSED);
+  });
+
+  it('is refused at plan for a key one side of a condition holds exactly, where the other marks every item', async () => {
+    const every = 'module "kz" {\n  source = "./kz"\n  v = { for k in [random_string.s.result, "x"] : (k == "x" ? "z" : "k") => sensitive(k) }\n}\n';
+    const local = `${NOW} ? module.kz.o : merge({ for k in [random_string.s.result] : k => (${LATER} ? sensitive("q") : "q") }, { k = "a", z = sensitive("s") })`;
+
+    await expect(newOrchestrator().plan(config(local, every + output('local.l.k')))).rejects.toThrow(MAYBE_REFUSED);
+  });
+
+  it('leaves issensitive not known at plan for the default of a lookup at a group a for may not make', async () => {
+    const local = `{ for k, v in { a = sensitive("x"), c = "0" } : (k == "a" ? random_string.s.result : k) => v... if k == "a" || ${LATER} }`;
+    const text = config(local, output('issensitive(lookup(local.l, "c", [sensitive("d")]))'));
+    const plan = await newOrchestrator().plan(text);
+    expect(plan.outputs.o.new?.value).toBe(UNKNOWN);
+
+    await apply(text);
+    const state = await new LocalBackend(dir).read();
+    expect(state.outputs?.o).toMatchObject({ value: true });
   });
 
   it.each([

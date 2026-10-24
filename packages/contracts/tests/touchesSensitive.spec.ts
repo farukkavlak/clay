@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { EVERY_ITEM, MAYBE, touchesSensitive } from '../src';
+import { EVERY_ITEM, EXACT, MAYBE, touchesSensitive } from '../src';
 
 describe('touchesSensitive', () => {
   const marks = [
@@ -51,5 +51,24 @@ describe('touchesSensitive', () => {
     ['any part of a value that may be sensitive as a whole', [[MAYBE]], ['anything', 2]],
   ])('takes %s', (_, marks, at) => {
     expect(touchesSensitive(marks, at)).toBe(true);
+  });
+
+  it.each([
+    ['leaves out an exact key, which a mark that may be so under every item does not reach', ['c'], false],
+    ['takes another key beside it', ['a'], true],
+  ])('%s', (_, at, touched) => {
+    expect(
+      touchesSensitive(
+        [
+          [EVERY_ITEM, MAYBE],
+          ['c', EXACT],
+        ],
+        at
+      )
+    ).toBe(touched);
+  });
+
+  it('takes nothing where a path only says a key is exact', () => {
+    expect(touchesSensitive([['c', EXACT]], [])).toBe(false);
   });
 });
