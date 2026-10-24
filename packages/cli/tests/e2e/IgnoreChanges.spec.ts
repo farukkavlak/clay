@@ -93,6 +93,14 @@ describe('ignore_changes', () => {
     expect(await clayIn('plan')).toContain('No changes.');
   });
 
+  it('refuses an ignored attribute its provider refuses, as written', async () => {
+    await written('a.txt', 'one', '[path]');
+    await clayIn('apply', '--yes');
+    await fs.writeFile(file('main.clay'), 'resource "local_file" "f" {\n  path    = ""\n  content = "one"\n  lifecycle {\n    ignore_changes = [path]\n  }\n}\n', 'utf8');
+
+    expect(await refusal('plan')).toContain('local_file "path" must not be empty');
+  });
+
   it('keeps the ignored value when another attribute replaces the resource', async () => {
     await written('a.txt', 'one', '[content]');
     await clayIn('apply', '--yes');
