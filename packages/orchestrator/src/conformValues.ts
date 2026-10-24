@@ -194,15 +194,15 @@ function ordered(value: Value): unknown {
 }
 
 /**
- * A set is sorted and holds each member once, so a path into one ends at the set; one that may be sensitive still only may be.
+ * A set is sorted and holds each member once, so a path into one ends at the set; one that may be sensitive, or that is not held for certain, still only may be.
  * A member has no key or place, so none is exact.
  */
-function endedAtSet(type: Type, path: AttributePath): AttributePath[] {
+function endedAtSet(type: Type, path: AttributePath, certain: () => boolean): AttributePath[] {
   let current = type;
 
   for (const [index, step] of path.entries()) {
     if (current.kind === 'set' && isExact(path)) return [];
-    if (current.kind === 'set') return [isMaybe(path) ? [...path.slice(0, index), MAYBE] : path.slice(0, index)];
+    if (current.kind === 'set') return [isMaybe(path) || !certain() ? [...path.slice(0, index), MAYBE] : path.slice(0, index)];
     current = typeAt(current, step);
   }
   return [path];
@@ -212,7 +212,7 @@ function endedAtSet(type: Type, path: AttributePath): AttributePath[] {
 export function sensitiveAs(value: Value, result: Value): Value {
   return withSensitive(
     result,
-    (value.sensitive ?? []).flatMap((path) => endedAtSet(result.type, path))
+    (value.sensitive ?? []).flatMap((path) => endedAtSet(result.type, path, () => isSensitive(withSensitive(value, [path]))))
   );
 }
 

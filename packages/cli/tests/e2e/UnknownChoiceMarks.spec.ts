@@ -130,6 +130,8 @@ describe('a value a choice not known at plan makes', () => {
       `issensitive(${LATER} ? [sensitive("a")] : [for x in (${LATER} ? ["a"] : []) : sensitive(x)])`,
       false,
     ],
+    ['issensitive of a set made from a for over a collection not known yet that comes out empty', `issensitive(toset([for x in (${LATER} ? ["a"] : []) : sensitive(x)]))`, false],
+    ['issensitive of a set made from a for over a known collection', 'issensitive(toset([for x in ["a"] : sensitive(x)]))', true],
   ])('is sensitive only where the side the apply takes is, for %s', async (_, value, expected, list?: string, over?: string) => {
     await apply(output(value, list, over));
 
@@ -143,6 +145,7 @@ describe('a value a choice not known at plan makes', () => {
     ['||', `${LATER} || sensitive(false)`],
     ['a for over a collection not known yet that may come out empty, with every item sensitive', `[for x in (${LATER} ? ["a"] : []) : sensitive(x)]`],
     ['a value that holds such a for', `{ o = [for x in (${LATER} ? ["a"] : []) : sensitive(x)] }`],
+    ['a set made from such a for', `toset([for x in (${LATER} ? ["a"] : []) : sensitive(x)])`],
   ])('refuses at plan an output that may hold a sensitive value by what the apply finds, for %s', async (_, value) => {
     await expect(newOrchestrator().plan(output(value))).rejects.toThrow(MAYBE_REFUSED);
   });

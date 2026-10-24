@@ -1,4 +1,4 @@
-import { AttributePath, containsUnknown, own, PlannedChange, PlanRequest, Provider, Resource, Schema, touchesSensitive, valueAt } from '@clay/contracts';
+import { AttributePath, containsUnknown, own, PlannedChange, PlanRequest, Provider, Resource, Schema, sensitiveUnder, touchesSensitive, valueAt } from '@clay/contracts';
 import { isDeepStrictEqual } from 'node:util';
 
 import { conformed } from '../conformValues';
@@ -6,8 +6,8 @@ import { keepPrior } from '../ignoredChanges';
 import { heldBy, hidingReason, undisclosed } from '../providerResult';
 import { ProviderRegistry } from '../ProviderRegistry';
 import { shown } from '../shown';
-import { withSchemaMarks } from '../schemaMarks';
-import { plainOf, sensitiveAmong, Value } from '../Value';
+import { marksOf } from '../schemaMarks';
+import { plainOf, sensitiveAmong, Value, valueOf, withSensitive } from '../Value';
 
 /** The resource as it is held now, and the paths of it the configuration does not change. */
 export interface Ignoring {
@@ -78,6 +78,10 @@ function checkKept(type: string, schema: Schema, prior: Record<string, unknown>,
   }
 }
 
+function valuesOf(schema: Schema, { config, sensitive }: { config: Record<string, unknown>; sensitive: AttributePath[] }): Record<string, Value> {
+  return Object.fromEntries(Object.entries(config).map(([name, data]) => [name, withSensitive(valueOf(schema[name].type, data), sensitiveUnder(sensitive, name))]));
+}
+
 export class ResourcePlanner {
   constructor(private providers: ProviderRegistry) {}
 
@@ -91,7 +95,7 @@ export class ResourcePlanner {
     const kept = ignoring ? keepPrior(plainOf(given), sensitiveAmong(given), ignoring.prior, ignoring.paths) : { config: plainOf(given), sensitive: sensitiveAmong(given) };
     // After keepPrior, so an attribute made from an ignored one follows the mark it keeps.
     const { config } = kept;
-    const sensitive = withSchemaMarks(schema, kept.sensitive);
+    const sensitive = marksOf(schema, valuesOf(schema, kept));
     await hidingReason(type, sensitive, () => provider.validate(type, config));
     if (!current) return { ...(await this.create(provider, type, schema, config, sensitive)), sensitive };
 

@@ -400,14 +400,28 @@ describe('an exact key or place', () => {
     expect(sensitiveAs(tuple, valueOf(types.set(types.string), UNKNOWN)).sensitive).toEqual([[MAYBE]]);
   });
 
+  it('marks a set only as one that may be sensitive, where every item of a list not known yet is', () => {
+    const list = withSensitive(valueOf(types.list(types.string), UNKNOWN), [[EVERY_ITEM]]);
+
+    expect(sensitiveAs(list, valueOf(types.set(types.string), UNKNOWN)).sensitive).toEqual([[MAYBE]]);
+  });
+
+  it('marks a set as a whole, where every item of a list that holds one is', () => {
+    const list = withSensitive(valueOf(types.list(types.string), ['a']), [[EVERY_ITEM]]);
+
+    expect(sensitiveAs(list, valueOf(types.set(types.string), ['a'])).sensitive).toEqual([[]]);
+  });
+
   it('makes no attribute sensitive that the schema marks with the one it is at', () => {
     const schema = { a: { type: types.map(types.string) }, b: { type: types.string, computed: true, sensitiveWith: ['a'] } };
 
     expect(
-      schemaMarked(schema, [
-        ['a', EVERY_ITEM, MAYBE],
-        ['a', 'c', EXACT],
-      ])
+      schemaMarked(schema, {
+        a: withSensitive(valueOf(types.map(types.string), UNKNOWN), [
+          [EVERY_ITEM, MAYBE],
+          ['c', EXACT],
+        ]),
+      })
     ).toEqual({ certain: [], maybe: ['b'] });
   });
 });

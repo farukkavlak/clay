@@ -457,7 +457,7 @@ change each.
       make join: `tolist([t, 1, true])`, with `t` of no type at plan, is refused as a number
       and a boolean, though `t` may come to a string, which holds both; objects with other
       names beside it are refused too, though it may come to a map
-- [ ] A mark under every item of a list not known yet, cut to a set, counts as sensitive for
+- [x] A mark under every item of a list not known yet, cut to a set, counts as sensitive for
       certain, though the list may come out empty: `issensitive(toset(l))` with
       `l = [for x in (cond ? ["a"] : []) : sensitive(x)]` answers `true` at plan and `false`
       at apply. A schema's `sensitiveWith` over a list attribute takes such a mark the same way

@@ -1,4 +1,4 @@
-import { MAYBE, Schema, types } from '@clay/contracts';
+import { EVERY_ITEM, MAYBE, Schema, types, UNKNOWN } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { marksOf, schemaRemarked } from '../src/schemaMarks';
@@ -70,5 +70,24 @@ describe('an attribute the schema marks sensitive with others', () => {
     const command = withSensitive(valueOf(types.string, 'echo s'), [[MAYBE]]);
 
     expect(marksOf(echoing, { command, cwd: allSensitive(text('/s')) })).toEqual([['stdout'], ['command', MAYBE], ['cwd']]);
+  });
+});
+
+describe('an attribute the schema marks sensitive with a list', () => {
+  const joining: Schema = {
+    parts: { type: types.list(types.string), required: true },
+    joined: { type: types.string, computed: true, sensitiveWith: ['parts'] },
+  };
+  const everyItem = (data: unknown) => withSensitive(valueOf(types.list(types.string), data), [[EVERY_ITEM]]);
+
+  it('may be sensitive where every item of a list not known yet is, since it may come out empty', () => {
+    expect(marksOf(joining, { parts: everyItem(UNKNOWN) })).toEqual([
+      ['joined', MAYBE],
+      ['parts', EVERY_ITEM],
+    ]);
+  });
+
+  it('is sensitive where every item of a list that holds one is', () => {
+    expect(marksOf(joining, { parts: everyItem(['a']) })).toEqual([['joined'], ['parts', EVERY_ITEM]]);
   });
 });
