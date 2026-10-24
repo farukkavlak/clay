@@ -25,8 +25,9 @@ import {
   ConfigError,
   EachReference,
   ForNode,
-  isNamed,
+  IndexNode,
   LocalReference,
+  nameOf,
   NegateNode,
   NotNode,
   ParsedReference,
@@ -35,6 +36,7 @@ import {
   Position,
   ReferenceNode,
   spell,
+  spellIndex,
   spellNamed,
   spellReference,
   Step,
@@ -152,7 +154,7 @@ function countIndex(where: Context, position: Position): Value {
   return valueOf(types.number, ExactNumber.parse(String(key)));
 }
 
-type Named = ReferenceNode | CallNode | BoundNode;
+type Named = ReferenceNode | IndexNode | BoundNode;
 
 type Operation = BinaryNode | NotNode | NegateNode | ConditionalNode;
 
@@ -235,7 +237,7 @@ function hidingIf(sensitive: boolean, message: string, position: Position, read:
 
 /** What went wrong reading at a sensitive index may quote the index. */
 function atSensitiveIndex(node: Named): string {
-  return `${spellNamed(node)} was read at a sensitive index, so why it failed is not shown`;
+  return `${spellIndex(node)} was read at a sensitive index, so why it failed is not shown`;
 }
 
 /** The marks under `keys`. */
@@ -322,7 +324,7 @@ function fitted(taken: AttributeValue, value: Value, written: Type): Value {
 
 /** A value with no name is found by where it is written. */
 function spelledPart(part: AttributeValue): string {
-  return isNamed(part) ? spellNamed(part) : "The value inside '${'";
+  return nameOf(part) ?? "The value inside '${'";
 }
 
 export class ReferenceResolver {
@@ -387,7 +389,14 @@ export class ReferenceResolver {
   private resolveCall(node: CallNode, state: State, context: Context | undefined, reading: Reading): Value {
     const called = functionCalled(node);
     const result = typeOnly(called(node.args.map((arg) => this.resolveItem(arg, state, context, reading))), reading);
-    const read: Reader = (steps) => readPath(result, spellNamed({ ...node, path: [] }), steps, node.position);
+
+    return readPath(result, spellNamed(node), [], node.position);
+  }
+
+  /** A value not known yet is read into by its type, so a step it cannot have is refused at plan. */
+  private resolveIndex(node: IndexNode, state: State, context: Context | undefined, reading: Reading): Value {
+    const value = this.indexOf(node.value, { node, state, context, reading });
+    const read: Reader = (steps) => readPath(value, spellIndex(node.value), steps, node.position);
 
     return this.readWith({ node, state, context, reading }, node.path, read);
   }
@@ -465,7 +474,7 @@ export class ReferenceResolver {
       items = itemsOf(unknownOf(error));
     }
 
-    throw new UnresolvedReferenceError(`${spellNamed(node)} is known only after apply`, types.dynamic, marksOfWhole(whole, marksAlong(sharedMarks(items), rest)));
+    throw new UnresolvedReferenceError(`${spellIndex(node)} is known only after apply`, types.dynamic, marksOfWhole(whole, marksAlong(sharedMarks(items), rest)));
   }
 
   /** Over a collection sensitive as a whole, or with a sensitive if, what it gives is too: how many items it keeps tells the if. */
@@ -750,6 +759,7 @@ export class ReferenceResolver {
     if (node.type === 'Reference') return this.resolve(node, state, context, reading);
     if (node.type === 'Bound') return this.resolveBound(node, state, context, reading);
     if (node.type === 'Call') return this.resolveCall(node, state, context, reading);
+    if (node.type === 'Index') return this.resolveIndex(node, state, context, reading);
     if (node.type === 'For') return this.resolveFor(node, state, context, reading);
     if (node.type === 'Template') return this.resolveTemplate(node.value, state, context, reading);
     if (node.type === 'List') return this.resolveList(node.value, state, context, reading);

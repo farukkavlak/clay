@@ -1013,9 +1013,10 @@ by resource type, and no `provider` block exists yet.
 - [ ] A reference in a string that fails as it is resolved points at the string, not at
       the reference. The parse and the graph point at the reference; a resolver throws
       plain errors, and one of them means "not in state yet", so it cannot be wrapped blindly
-- [ ] A literal cannot be indexed, where HCL reads one: `value = [1, 2][0]` and
+- [x] A literal cannot be indexed, where HCL reads one: `value = [1, 2][0]` and
       `value = { a = 1 }.a` are refused with `Expect attribute name.`, and inside a call with
-      `Expect ')' after the arguments.`
+      `Expect ')' after the arguments.` Now any value that is not a reference takes steps:
+      a list, a map, a `for`, a call and a value in parentheses
 - [ ] A `for` over a tuple not known yet gives its item no type, so a mistake in the body
       waits for the apply: `[for x in (cond ? ["a"] : ["b"]) : x + 1]` plans, and the apply
       refuses `+` on a string. A tuple whose items share a type could give that type

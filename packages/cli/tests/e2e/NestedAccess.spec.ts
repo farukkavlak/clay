@@ -86,6 +86,74 @@ describe('a reference that reads into a list or a map', () => {
     expect(await written('f.txt')).toBe('http://x:443');
   });
 
+  it.each([
+    ['a list', '["ana", "bo"][1]', 'bo'],
+    ['a map', '{ team = "core" }.team', 'core'],
+    ['a value in parentheses', '(var.on ? ["a"] : ["b"])[0]', 'a'],
+    ['a for', '[for n in ["ana", "bo"] : upper(n)][1]', 'BO'],
+    ['a list, at an index read from a value', '["ana", "bo"][var.i]', 'bo'],
+    ['a list given to a call', 'upper(["ana", "bo"][0])', 'ANA'],
+    ['a list inside a string', '"${["ana", "bo"][0]}-x"', 'ana-x'],
+  ])('reads into %s', async (_, read, content) => {
+    await apply(`
+      variable "on" { default = true }
+      variable "i" { default = 1 }
+      ${file('f', read)}
+    `);
+
+    expect(await written('f.txt')).toBe(content);
+  });
+
+  it.each([
+    ['sensitive where it is', 'a', 'yes'],
+    ['plain beside it', 'b', 'no'],
+  ])('keeps a part of a map read into %s', async (_, key, content) => {
+    await apply(file('f', `issensitive({ a = sensitive("x"), b = "y" }.${key}) ? "yes" : "no"`));
+
+    expect(await written('f.txt')).toBe(content);
+  });
+
+  it('waits for what a value read into refers to', async () => {
+    await apply(`
+      resource "random_string" "r" { length = 4 }
+      ${file('f', '[random_string.r.result][0]')}
+    `);
+
+    const state = JSON.parse(await fs.readFile(path.join(dir, 'clay.state.json'), 'utf8')) as {
+      resources: Record<string, { attributes: { result?: string }; dependencies: string[] }>;
+    };
+
+    expect(state.resources['local_file.f'].dependencies).toEqual(['random_string.r']);
+    expect(await written('f.txt')).toBe(state.resources['random_string.r'].attributes.result);
+  });
+
+  it('reads into a value known only after apply', async () => {
+    await apply(`
+      resource "random_string" "r" { length = 4 }
+      ${file('f', '[for x in (random_string.r.result == "" ? ["a"] : ["b"]) : x][0]')}
+    `);
+
+    expect(await written('f.txt')).toBe('b');
+  });
+
+  it('refuses at plan a step a value known only after apply cannot have by its type', async () => {
+    const error = await planError(`resource "random_string" "r" { length = 4 }\n${file('f', '(random_string.r.result).x')}`);
+
+    expect(error.message).toBe('random_string.r.result is a string and cannot be read into');
+  });
+
+  it.each([
+    ['a string', '"ab"[0]', '... is a string and cannot be read into'],
+    ['an index past the end of a list', '["ana"][1]', '... has no item [1]: it holds 1'],
+    ['a key a map does not have', '{ a = 1 }.b', '... has no key "b"'],
+  ])('refuses a step into %s where the value starts', async (_, read, message) => {
+    const config = `variable "on" { default = true }\n${file('f', read)}`;
+    const error = await planError(config);
+
+    expect(error.message).toBe(message);
+    expect(error.position).toMatchObject({ line: 2, column: config.split('\n')[1].indexOf(read) + 1 });
+  });
+
   // A missing key is a typo; planning it as unknown would hide it until apply.
   it('refuses a key the map does not have, where it is written, rather than plan it as unknown', async () => {
     await apply('resource "null_resource" "a" { triggers = { env = "prod" } }');

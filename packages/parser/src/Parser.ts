@@ -570,6 +570,14 @@ export class Parser {
   }
 
   private parsePrimary(): AttributeValue {
+    const { position } = this.peek();
+    const value = this.parseTerm();
+    const path = this.parseSteps();
+
+    return path.length === 0 ? value : { type: 'Index', value, path, position };
+  }
+
+  private parseTerm(): AttributeValue {
     const position = this.peek().position;
 
     if (this.matchToken(TokenType.OQuote)) return this.parseString(position);
@@ -780,7 +788,7 @@ export class Parser {
 
   private parseNamed(position: Position): ReferenceNode | CallNode | BoundNode {
     const name = this.advance().value;
-    if (this.matchToken(TokenType.LParen)) return { type: 'Call', name, args: this.nested(position, () => this.parseArguments()), path: this.parseSteps(), position };
+    if (this.matchToken(TokenType.LParen)) return { type: 'Call', name, args: this.nested(position, () => this.parseArguments()), position };
     if (this.bound.includes(name)) return { type: 'Bound', value: [{ name }, ...this.parseSteps()], position };
 
     return { type: 'Reference', value: [{ name }, ...this.parseSteps()], position };
