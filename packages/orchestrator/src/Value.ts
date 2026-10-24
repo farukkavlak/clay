@@ -309,7 +309,7 @@ interface Among {
 /**
  * The marks every one of `values` has, where `certain`, and those any of `maybeFrom` has as ones it may have.
  * A key or place every one of `values`, and of `others`, holds exactly stays so at any depth, with the marks the parts of `values` have there,
- * since no mark that may be so under every item reaches it.
+ * since no mark that may be so under every item reaches it. Below a step some value may not hold exactly, only the marks they may have.
  */
 function marksAmong(among: Among, certain: boolean): AttributePath[] {
   const exact = exactSteps(among.values).flatMap((step) => {
@@ -317,7 +317,7 @@ function marksAmong(among: Among, certain: boolean): AttributePath[] {
     const inner: Among = { values: parts(among.values), maybeFrom: parts(among.maybeFrom), others: parts(among.others) };
     const here = [...among.values, ...among.others].every((value) => exactAt(value.sensitive ?? [], step) || heldKnown(value, step));
 
-    return [...(here ? [[step, EXACT]] : []), ...marksAmong(inner, certain).map((path) => [step, ...path])];
+    return [...(here ? [[step, EXACT]] : []), ...marksAmong(inner, certain && here).map((path) => [step, ...path])];
   });
 
   return fewest([...(certain ? certainShared(among.values) : []), ...maybeOfEach(among.maybeFrom), ...exact]);

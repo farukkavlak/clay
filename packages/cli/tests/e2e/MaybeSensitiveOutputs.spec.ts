@@ -22,6 +22,9 @@ const KEYED = `{ for k, v in (${ONE_KEY}) : k => v }`;
 const PLACED = `[for v in (${ONE_PLACE}) : v]`;
 const MERGED = 'merge({ for k in [random_string.s.result] : k => sensitive("q") }, { c = "0" })';
 const PICKED = `[for i, v in ["0", sensitive("x")] : v if i == 0 || ${LATER}]`;
+// Sensitive at `k` for certain, and exact at `c`.
+const KEYED_EXACT = 'merge({ k = sensitive("s") }, { for k in [random_string.s.result] : k => sensitive("q") }, { c = "0" })';
+const MAY_DROP = (keys: string) => `{ for k, v in { ${keys} } : k => v if ${LATER} }`;
 const BEFORE = 'merge({ c = "0" }, { for k in [random_string.s.result] : k => sensitive("q") })';
 const SOME = `(${LATER} ? [1] : [1, 2])`;
 
@@ -222,6 +225,12 @@ describe('a root output that may hold a sensitive value', () => {
     ['such a key, on each side of a condition', `${LATER} ? ${MERGED} : ${MERGED}`, 'local.l.c', '0'],
     ['such a key, through a for', `{ for k, v in (${MERGED}) : k => v }`, 'local.l.c', '0'],
     ['such a place, through a for', `[for v in (${PICKED}) : v]`, 'local.l[0]', '0'],
+    [
+      'a key for items a for may drop, on each side of a condition',
+      `${LATER} ? ${MAY_DROP(`a = ${KEYED_EXACT}, e = ${KEYED_EXACT}`)} : ${MAY_DROP(`a = ${KEYED_EXACT}, e = ${KEYED_EXACT}`)}`,
+      '{ for v in local.l : "a" => v.c }',
+      {},
+    ],
     ['such a key in every item of a for over a tuple not known yet', `[for x in ${SOME} : ${MERGED}]`, 'local.l[0].c', '0'],
     ['such a key in every item, through a for again', `[for v in [for x in ${SOME} : ${MERGED}] : v]`, 'local.l[0].c', '0'],
     ['such a key in every item of a group', `{ for x in ${SOME} : "g" => ${MERGED}... }`, 'local.l.g[0].c', '0'],
@@ -270,6 +279,11 @@ describe('a root output that may hold a sensitive value', () => {
     ['lookup of a key a for may drop', `{ for k, v in { a = ${MERGED} } : k => v if ${LATER} }`, 'lookup(local.l, "a", { c = sensitive("1") }).c'],
     ['a merge over a group a for may drop', `{ for k, v in { a = ${MERGED} } : "g" => v... if ${LATER} }`, 'merge({ g = [{ c = sensitive("1") }] }, local.l).g[0].c'],
     ['a merge over a key merge may give', `merge({ for k, v in { a = ${MERGED} } : k => v if ${LATER} }, {})`, 'merge({ a = { c = sensitive("1") } }, local.l).a.c'],
+    [
+      'a merge over a key a for may drop, on each side of a condition',
+      `${LATER} ? ${MAY_DROP(`a = ${KEYED_EXACT}`)} : ${MAY_DROP(`a = ${KEYED_EXACT}`)}`,
+      'merge({ a = { c = sensitive("1") } }, local.l).a.c',
+    ],
     ['a for over a key a for may drop', `{ for k, v in { a = ${MERGED} } : k => v if ${LATER} }`, 'merge({ x = { c = sensitive("1") } }, { for k, v in local.l : "x" => v }).x.c'],
   ])('is refused at plan where a key that may be missing holds another exactly, for %s', async (_, local, value) => {
     await expect(newOrchestrator().plan(config(local, output(value)))).rejects.toThrow(MAYBE_REFUSED);
