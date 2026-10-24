@@ -303,7 +303,7 @@ function eitherDecides(answer: boolean, left: Value, right: Value): Value {
   return withSensitive(valueOf(types.bool, answer), marksOfWhole(whole, []));
 }
 
-/** The results in the order written: when true, then when false. With `later`, the one picked is still to come, so one of no type may take any shape. */
+/** The results in the order written: when true, then when false. With `later`, the one picked is still to come, so one of no type may turn out to be of any type. */
 function resultType(node: ConditionalNode, [whenTrue, whenFalse]: Value[], later = false): Type {
   try {
     return later ? unifiedLater([whenTrue, whenFalse]) : unified([whenTrue.type, whenFalse.type]);

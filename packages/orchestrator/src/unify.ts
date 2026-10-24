@@ -110,10 +110,10 @@ function mapping(found: readonly Type[], at: Step[], join: Join): Type {
   );
 }
 
-/** A part of a value not known yet that has no type: once known it may take any shape, so a structure joined with it has none, as in HCL. */
+/** A part of a value not known yet that has no type: once known it may be of any type, so what is joined with it has none, as in HCL. */
 const LATER: Type = { kind: 'dynamic' };
 
-/** Throws `Unjoinable`. `dynamic` (an unknown or a null) fits any type, and a structure joined with a part still to come of no type has none. `at` locates the types for the message. */
+/** Throws `Unjoinable`. `dynamic` (an unknown or a null) fits any type, and what is joined with a part still to come of no type has none. `at` locates the types for the message. */
 export function unified(found: readonly Type[], at: Step[] = []): Type {
   const named = found.filter((type) => type.kind !== 'dynamic');
   if (named.length === 0) return types.dynamic;
@@ -121,7 +121,7 @@ export function unified(found: readonly Type[], at: Step[] = []): Type {
   const [first] = named;
   const other = named.find((type) => FAMILIES[type.kind] !== FAMILIES[first.kind]);
   if (other) throw unjoinable(`${article(first.kind)} and ${article(other.kind)}`, at);
-  if (found.includes(LATER) && FAMILIES[first.kind] !== 'primitive') return types.dynamic;
+  if (found.includes(LATER)) return types.dynamic;
 
   if (FAMILIES[first.kind] === 'primitive') return primitive(named, at);
   return FAMILIES[first.kind] === 'sequence' ? sequence(named, at, unified) : mapping(named, at, unified);
@@ -171,7 +171,7 @@ function laterUnion(type: Type, found: readonly Type[]): Type {
     : type;
 }
 
-/** The type of `data`, with each part not known yet that has no type as one that may take any shape. */
+/** The type of `data`, with each part not known yet that has no type as one that may be of any type. */
 function laterType(type: Type, data: unknown): Type {
   if (type.kind === 'dynamic') return isUnknown(data) ? LATER : type;
   if (type.kind === 'tuple') return types.tuple(type.elements.map((element, index) => laterType(element, dataAt(data, index))));
@@ -191,15 +191,15 @@ function laterType(type: Type, data: unknown): Type {
   );
 }
 
-/** The type the values of `map` share, with each part not known yet that has no type as one that may take any shape. */
+/** The type the values of `map` share, with each part not known yet that has no type as one that may be of any type. */
 export function elementLater(map: Value): Type {
   const type = laterType(map.type, map.data);
   return 'element' in type ? type.element : types.dynamic;
 }
 
 /**
- * As `unified`, for the types of values, beside `written` types: where a value not known yet has no type, it may take any shape once known,
- * so a structure joined with it has none.
+ * As `unified`, for the types of values, beside `written` types: where a value not known yet has no type, it may be of any type once known,
+ * so what is joined with it has none.
  */
 export function unifiedLater(values: readonly Value[], at: Step[] = [], written: readonly Type[] = []): Type {
   unified([...written, ...values.map((value) => value.type)], at);

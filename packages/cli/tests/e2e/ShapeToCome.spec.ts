@@ -13,6 +13,8 @@ const NOW = 'length(random_string.s.result) == 4';
 // A list of one item at apply, of no type at plan: a for over a collection not known yet.
 const ONE = `[for x in (${NOW} ? [1] : [1, 2]) : { k = "s" }]`;
 const TWO = '[{ k = "s" }, { k = "s" }]';
+// The string "s" at apply, of no type at plan.
+const TEXT = `[for x in (${NOW} ? [1] : [1, 2]) : "s"][0]`;
 
 const config = (local: string, extra = '') => `resource "random_string" "s" { length = 4 }
 locals {
@@ -23,7 +25,13 @@ ${extra}output "o" {
 }
 `;
 
-describe('a value of no type yet joined with a structure', () => {
+const output = (value: string, extra = '') => `resource "random_string" "s" { length = 4 }
+${extra}output "o" {
+  value = ${value}
+}
+`;
+
+describe('a value of no type yet joined with others', () => {
   let dir: string;
 
   const newOrchestrator = () => {
@@ -91,5 +99,26 @@ describe('a value of no type yet joined with a structure', () => {
 
     const state = await new LocalBackend(dir).read();
     expect(state.outputs?.o).toMatchObject({ value: { a: 's' } });
+  });
+
+  // A number at plan would be the string "s" at apply, which the plan did not show.
+  it.each([
+    ['as one result of a condition not known yet', `${NOW} ? ${TEXT} : 1`],
+    ['as the result a known condition picks', `true ? ${TEXT} : 1`],
+  ])('takes no type from a number beside it, %s', async (_, value) => {
+    await apply(output(value));
+
+    const state = await new LocalBackend(dir).read();
+    expect(state.outputs?.o).toMatchObject({ value: 's' });
+  });
+
+  it('takes no type from the numbers of a map, as the default of a lookup at a key not known yet', async () => {
+    await module('n', 'variable "m" {\n  type = map(any)\n}\nvariable "k" {}\nvariable "d" {}\noutput "o" { value = lookup(var.m, var.k, var.d) }\n');
+    const call = `module "n" {\n  source = "./n"\n  m      = { x = 1 }\n  k      = random_string.s.result\n  d      = ${TEXT}\n}\n`;
+
+    await apply(output('module.n.o', call));
+
+    const state = await new LocalBackend(dir).read();
+    expect(state.outputs?.o).toMatchObject({ value: 's' });
   });
 });

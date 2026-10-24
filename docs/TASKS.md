@@ -432,11 +432,15 @@ change each.
       `Two items give the key "a"`, though the apply finds one item. So it is through the
       default of a `lookup` not known yet. Now, as in HCL, a value still to come of no type
       joined with a structure gives no type
+- [x] A value of no type yet, joined with a string, a number or a bool, takes its type, though
+      the apply may give another: `cond ? t : 1`, with `t` the string `"s"` at apply and of no
+      type at plan, is a number at plan, so the apply fails. Now, as in HCL, it gives no type
 - [ ] A join of known values with one of no type yet, through `tolist`, a variable of
-      `list(any)` or the instances of a module, takes the shape of the others and converts
-      them to it, though the apply may join them into another: `tolist([one, [1]])[1][0]`, with
-      `one` of no type at plan, is `1` at plan and `"1"` at apply, so the apply fails. As in
-      cty, such a join is not known until apply, and keeps its marks
+      `list(any)` or `map(any)`, a `lookup` or the instances of a module, takes the type of the
+      others and converts them to it, though the apply may join them into another:
+      `tolist([one, [1]])[1][0]`, with `one` of no type at plan, is `1` at plan and `"1"` at
+      apply, so the apply fails; so is `tolist([t, 1])[1]`. Only the places such a value
+      reaches are not known until apply; the rest, and the length, stay known
 - [ ] A mark under every item of a list not known yet, cut to a set, counts as sensitive for
       certain, though the list may come out empty: `issensitive(toset(l))` with
       `l = [for x in (cond ? ["a"] : []) : sensitive(x)]` answers `true` at plan and `false`

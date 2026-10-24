@@ -70,7 +70,7 @@ describe('unifiedLater', () => {
   it.each<[string, Value[], Type]>([
     ['a structure beside a value of no type still to come as no type', [later, known(['a', 'b'])], dynamic],
     ['a structure with a part of no type still to come as no type there', [known(['a', UNKNOWN]), known(['a', ['b', 'c']])], types.tuple([string, dynamic])],
-    ['a primitive beside a value of no type still to come as that primitive', [later, known('a')], string],
+    ['a primitive beside a value of no type still to come as no type', [later, known('a')], dynamic],
     ['a structure beside a null of no type as that structure', [known(null), known(['a', 'b'])], types.tuple([string, string])],
   ])('joins %s', (_, values, type) => {
     expect(unifiedLater(values)).toEqual(type);
