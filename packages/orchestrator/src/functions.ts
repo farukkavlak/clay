@@ -4,9 +4,9 @@ import { AttributePath, containsUnknown, EVERY_ITEM, EXACT, ExactNumber, holdsFi
 import { CallNode, ConfigError } from '@clay/parser';
 
 import { charactersOf } from './characters';
-import { converted, sensitiveAs } from './conformValues';
+import { sensitiveAs } from './conformValues';
 import { formatted, FormatError } from './format';
-import { elementLater, isSequence, itemTypes, unified, unifiedLater, unjoined, Unjoinable } from './unify';
+import { convertedLater, elementLater, isSequence, itemTypes, joinedLater, laterOf, unifiedLater, unjoined, Unjoinable } from './unify';
 import {
   allSensitive,
   article,
@@ -76,7 +76,7 @@ function length(value: Value, refuse: Refuse): Value {
 
 function elementOf(name: string, value: Value, refuse: Refuse): Type {
   try {
-    return unified(itemTypes(value.type));
+    return joinedLater(itemTypes(laterOf(value)));
   } catch (error) {
     if (error instanceof Unjoinable) return refuse(`${name} ${unjoined(error, mayBeSensitive(value))}`);
     throw error;
@@ -91,7 +91,7 @@ function converter(kind: 'list' | 'set'): OfOne {
     if (value.type.kind === 'dynamic') return sensitiveAs(value, valueOf(types[kind](types.dynamic), value.data));
     if (!isSequence(value.type.kind)) return refuse(`${name} takes a list, a tuple or a set, not ${described(value)}${nullSource(value)}`);
 
-    return converted(name, value, types[kind](elementOf(name, value, refuse)), [name]);
+    return convertedLater(name, value, types[kind](elementOf(name, value, refuse)), [name]);
   };
 }
 
@@ -164,22 +164,22 @@ function laterLookup([map, , fallback]: Value[], key: string | typeof UNKNOWN, t
 }
 
 /** A map's value and the default join into one type, as the two results of a conditional do. */
-function lookupType(map: Value, element: Type, fallback: Value, refuse: Refuse): Type {
+function lookupType(map: Value, fallback: Value, refuse: Refuse): Type {
   try {
-    return unified([element, fallback.type]);
+    return joinedLater([elementLater(map), laterOf(fallback)]);
   } catch (error) {
     if (!(error instanceof Unjoinable)) throw error;
     return refuse(`lookup ${unjoined(error, mayBeSensitive(map) || mayBeSensitive(fallback))}`, 2);
   }
 }
 
-function fromMap(args: Value[], element: Type, key: string | typeof UNKNOWN, refuse: Refuse): Value {
+function fromMap(args: Value[], key: string | typeof UNKNOWN, refuse: Refuse): Value {
   const [map, , fallback] = args;
-  const type = lookupType(map, element, fallback, refuse);
+  const type = lookupType(map, fallback, refuse);
   if (key === UNKNOWN || isUnknown(map.data)) return laterLookup(args, key, unifiedLater([fallback], [], [elementLater(map)]));
 
   const found = Object.hasOwn(map.data as Record<string, unknown>, key) ? child(map, key) : fallback;
-  return converted('lookup', found, type, []);
+  return convertedLater('lookup', found, type, []);
 }
 
 /** An object's attributes are known by its type, so its value or the default is given as it is. */
@@ -196,7 +196,7 @@ function lookup(args: Value[], refuse: Refuse): Value {
   if (map.data === null || !KEYED.has(map.type.kind)) return refuse(`lookup takes a map or an object, not ${described(map)}${nullSource(map)}`);
 
   const name = textOf('lookup takes a string as the key', key, refuse, 1);
-  const found = map.type.kind === 'map' ? fromMap(args, map.type.element, name, refuse) : fromObject(args, name);
+  const found = map.type.kind === 'map' ? fromMap(args, name, refuse) : fromObject(args, name);
 
   return wholeWhere(found, isSensitive(key) || isAllSensitive(map), mayBeSensitive(key) || mayBeAllSensitive(map));
 }

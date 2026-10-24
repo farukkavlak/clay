@@ -1,3 +1,4 @@
+import { ExactNumber, types, UNKNOWN } from '@clay/contracts';
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
@@ -15,6 +16,8 @@ const ONE = `[for x in (${NOW} ? [1] : [1, 2]) : { k = "s" }]`;
 const TWO = '[{ k = "s" }, { k = "s" }]';
 // The string "s" at apply, of no type at plan.
 const TEXT = `[for x in (${NOW} ? [1] : [1, 2]) : "s"][0]`;
+// A list of the string "s" at apply, of no type at plan: joined with [1], it makes it ["1"].
+const TEXTS = `[for x in (${NOW} ? [1] : [1, 2]) : "s"]`;
 
 const config = (local: string, extra = '') => `resource "random_string" "s" { length = 4 }
 locals {
@@ -120,5 +123,122 @@ describe('a value of no type yet joined with others', () => {
 
     const state = await new LocalBackend(dir).read();
     expect(state.outputs?.o).toMatchObject({ value: 's' });
+  });
+
+  // The tuple [ONE, TWO] joins into a list only once ONE is known.
+  it('takes no shape from the other items of a list', async () => {
+    await apply(config(`tolist([${ONE}, ${TWO}])[0]`));
+
+    const state = await new LocalBackend(dir).read();
+    expect(state.outputs?.o).toMatchObject({ value: { a: 's' } });
+  });
+
+  it.each([
+    ['a list', `tolist([${TEXTS}, [1]])[1][0]`],
+    ['a string, in a list', `tolist([${TEXT}, 1])[1]`],
+  ])('converts a known value only at apply, beside %s of no type yet', async (_, value) => {
+    const text = output(value);
+    const plan = await newOrchestrator().plan(text);
+    expect(plan.outputs.o.new).toEqual({ value: UNKNOWN, type: types.dynamic });
+
+    await apply(text);
+    const state = await new LocalBackend(dir).read();
+    expect(state.outputs?.o).toMatchObject({ value: '1' });
+  });
+
+  it('keeps sensitive a part not known until apply, beside a value of no type yet', async () => {
+    await expect(newOrchestrator().plan(output(`tolist([${TEXTS}, [sensitive(1)]])[1][0]`))).rejects.toThrow('output "o" holds a sensitive value');
+  });
+
+  it('keeps sensitive as a whole a list of a value of no type yet and a known one', async () => {
+    await expect(newOrchestrator().plan(output(`length(tolist(sensitive([${TEXTS}, [1]])))`))).rejects.toThrow('output "o" holds a sensitive value');
+  });
+
+  it('keeps sensitive as a whole a map of a value of no type yet and a known one', async () => {
+    await module('n', 'variable "v" {\n  type = map(any)\n}\noutput "o" { value = length(var.v) }\n');
+    const text = output('module.n.o', `module "n" {\n  source = "./n"\n  v      = sensitive({ x = ${TEXTS}, y = [1] })\n}\n`);
+
+    await expect(newOrchestrator().plan(text)).rejects.toThrow('holds a sensitive value');
+  });
+
+  it('keeps a null known at plan, beside a value of no type yet', async () => {
+    const text = output(`tolist([null, ${TEXTS}])[0]`);
+    const plan = await newOrchestrator().plan(text);
+    expect(plan.outputs.o.new?.value).toBeNull();
+
+    await apply(text);
+    const state = await new LocalBackend(dir).read();
+    expect(state.outputs?.o).toMatchObject({ value: null });
+  });
+
+  // A string holds any primitive as text, so the join is a string whatever the other comes to.
+  it('keeps known at plan a string beside a value of no type yet', async () => {
+    const text = output(`tolist([${TEXT}, "x"])[1]`);
+    const plan = await newOrchestrator().plan(text);
+    expect(plan.outputs.o.new).toEqual({ value: 'x', type: types.string });
+
+    await apply(text);
+    const state = await new LocalBackend(dir).read();
+    expect(state.outputs?.o).toMatchObject({ value: 'x' });
+  });
+
+  it('keeps every mark of a list a value of no type yet joins, though a part is not known until apply', async () => {
+    const merged = `merge(${NOW} ? { a = sensitive(1), b = 2 } : { a = 1, b = sensitive(2) }, { c = 3 })`;
+    const plan = await newOrchestrator().plan(output(`issensitive(tolist([{ a = ${TEXT}, b = 1, c = 1 }, ${merged}])[1])`));
+    expect(plan.outputs.o.new?.value).toBe(true);
+  });
+
+  it('gives a string at plan for a condition not known yet between a value of no type yet and a string', async () => {
+    const plan = await newOrchestrator().plan(output(`${NOW} ? ${TEXT} : "x"`));
+    expect(plan.outputs.o.new).toEqual({ value: UNKNOWN, type: types.string });
+  });
+
+  it('keeps known at plan the length of a list an item of no type yet joins', async () => {
+    const text = output(`length(tolist([${TEXTS}, [1]]))`);
+    const plan = await newOrchestrator().plan(text);
+    expect(plan.outputs.o.new).toEqual({ value: ExactNumber.parse('2'), type: types.number });
+  });
+
+  it('keeps known at plan a part a value of no type yet does not reach', async () => {
+    const text = output(`tolist([{ a = ${TEXT}, b = 1 }, { a = 1, b = "x" }])[0].b`);
+    const plan = await newOrchestrator().plan(text);
+    expect(plan.outputs.o.new).toEqual({ value: '1', type: types.string });
+
+    await apply(text);
+    const state = await new LocalBackend(dir).read();
+    expect(state.outputs?.o).toMatchObject({ value: '1' });
+  });
+
+  it.each([
+    ['a list of any type', 'list(any)', `[${TEXTS}, [1]]`, 'var.v[1][0]'],
+    ['a map of any type', 'map(any)', `{ x = ${TEXTS}, y = [1] }`, 'var.v.y[0]'],
+    ['a list of any type in an object', 'object({ a = list(any) })', `{ a = [${TEXTS}, [1]] }`, 'var.v.a[1][0]'],
+    ['a list of lists of any type', 'list(list(any))', `[[${TEXT}], [1]]`, 'var.v[1][0]'],
+    ['a map of lists of any type', 'map(list(any))', `{ x = [${TEXT}], y = [1] }`, 'var.v.y[0]'],
+  ])('converts a known value only at apply, in a variable of %s', async (_, type, given, read) => {
+    await module('n', `variable "v" {\n  type = ${type}\n}\noutput "o" { value = ${read} }\n`);
+    const text = output('module.n.o', `module "n" {\n  source = "./n"\n  v      = ${given}\n}\n`);
+
+    await apply(text);
+    const state = await new LocalBackend(dir).read();
+    expect(state.outputs?.o).toMatchObject({ value: '1' });
+  });
+
+  it('converts a known value only at apply, in a lookup with a default of no type yet', async () => {
+    await module('n', 'variable "m" {\n  type = map(any)\n}\nvariable "d" {}\noutput "o" { value = lookup(var.m, "x", var.d)[0] }\n');
+    const text = output('module.n.o', `module "n" {\n  source = "./n"\n  m      = { x = [1] }\n  d      = ${TEXTS}\n}\n`);
+
+    await apply(text);
+    const state = await new LocalBackend(dir).read();
+    expect(state.outputs?.o).toMatchObject({ value: '1' });
+  });
+
+  it('converts a known value only at apply, in the instances of a module read together', async () => {
+    await module('m', 'variable "v" {}\noutput "o" { value = var.v }\n');
+    const call = `module "m" {\n  count  = 2\n  source = "./m"\n  v      = count.index == 0 ? ${TEXTS} : [1]\n}\n`;
+
+    await apply(output('[for m in module.m : m.o][1][0]', call));
+    const state = await new LocalBackend(dir).read();
+    expect(state.outputs?.o).toMatchObject({ value: '1' });
   });
 });

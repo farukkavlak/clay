@@ -1,7 +1,7 @@
-import { Type, types, UNKNOWN } from '@clay/contracts';
+import { ExactNumber, Type, types, UNKNOWN } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { unified, unifiedLater, Unjoinable } from '../src/unify';
+import { convertedLater, itemTypes, joinedLater, laterOf, unified, unifiedLater, Unjoinable } from '../src/unify';
 import { inferred, Value, valueOf } from '../src/Value';
 
 const { string, number, bool, dynamic } = types;
@@ -70,7 +70,9 @@ describe('unifiedLater', () => {
   it.each<[string, Value[], Type]>([
     ['a structure beside a value of no type still to come as no type', [later, known(['a', 'b'])], dynamic],
     ['a structure with a part of no type still to come as no type there', [known(['a', UNKNOWN]), known(['a', ['b', 'c']])], types.tuple([string, dynamic])],
-    ['a primitive beside a value of no type still to come as no type', [later, known('a')], dynamic],
+    ['a number beside a value of no type still to come as no type', [later, valueOf(number, ExactNumber.parse('1'))], dynamic],
+    ['a bool beside a value of no type still to come as no type', [later, known(true)], dynamic],
+    ['a string beside a value of no type still to come as a string, which holds any primitive', [later, known('a'), valueOf(number, ExactNumber.parse('1'))], string],
     ['a structure beside a null of no type as that structure', [known(null), known(['a', 'b'])], types.tuple([string, string])],
   ])('joins %s', (_, values, type) => {
     expect(unifiedLater(values)).toEqual(type);
@@ -85,5 +87,36 @@ describe('unifiedLater', () => {
 
   it('refuses what the values could never join into, though one is still to come', () => {
     expect(() => unifiedLater([later, known(['a']), known([['a']])])).toThrow('cannot join a string and a tuple into one type');
+  });
+});
+
+const listed = (value: Value) => convertedLater('tolist', value, types.list(joinedLater(itemTypes(laterOf(value)))), []);
+const knownValue = (data: unknown) => valueOf(inferred(data), data);
+
+describe('convertedLater', () => {
+  it('leaves not known each item a value of no type still to come joins with, and keeps how many there are', () => {
+    expect(listed(knownValue([UNKNOWN, ['a']]))).toEqual(valueOf(types.list(dynamic), [UNKNOWN, UNKNOWN]));
+  });
+
+  it('converts a part no value of no type still to come reaches', () => {
+    const value = knownValue([
+      { a: UNKNOWN, b: true },
+      { a: ExactNumber.parse('1'), b: 'x' },
+    ]);
+
+    expect(listed(value)).toEqual(
+      valueOf(types.list(types.object({ a: dynamic, b: string })), [
+        { a: UNKNOWN, b: 'true' },
+        { a: UNKNOWN, b: 'x' },
+      ])
+    );
+  });
+
+  it('converts as before where no part is still to come', () => {
+    expect(listed(knownValue([['a'], [true]]))).toEqual(valueOf(types.list(types.tuple([string])), [['a'], ['true']]));
+  });
+
+  it('refuses items that could never join, though one is still to come', () => {
+    expect(() => listed(knownValue([UNKNOWN, ['a'], [['a']]]))).toThrow('cannot join a string and a tuple into one type');
   });
 });

@@ -3,7 +3,7 @@ import { AttributeValue, TypeDefaults } from '@clay/parser';
 
 import { converted, SchemaMismatch, toldWhole } from './conformValues';
 import { setOf } from './setMembers';
-import { itemTypes, unified, unjoined, Unjoinable } from './unify';
+import { convertedLater, itemTypes, joinedLater, laterOf, unified, unjoined, Unjoinable } from './unify';
 import { allSensitiveIf, child, isSensitive, mayBeSensitive, objectOf, tupleOf, unordered, Value, valueOf, wholeAs } from './Value';
 
 /** `read` evaluates a default, which is always a constant. */
@@ -27,14 +27,14 @@ function namesOptional(type: Type): boolean {
   return (type.kind === 'object' && (type.optional?.length ?? 0) > 0) || itemTypes(type).some((item) => namesOptional(item));
 }
 
-/** Replaces each `any` with the found type; a collection's items share one type, as with `tolist`. */
+/** Replaces each `any` with the found type, which keeps the places `laterOf` marks; a collection's items share one type, as with `tolist`. */
 function settled(declared: Type, found: Type): Type {
   if (!namesAny(declared)) return declared;
   if (declared.kind === 'dynamic') return found;
 
   if (declared.kind === 'object') return types.object(Object.fromEntries(Object.entries(declared.attributes).map(([name, type]) => [name, settled(type, typeAt(found, name))])));
   if (declared.kind === 'tuple') return types.tuple(declared.elements.map((type, index) => settled(type, typeAt(found, index))));
-  if (declared.kind === 'list' || declared.kind === 'set' || declared.kind === 'map') return types[declared.kind](settled(declared.element, unified(itemTypes(found))));
+  if (declared.kind === 'list' || declared.kind === 'set' || declared.kind === 'map') return types[declared.kind](settled(declared.element, joinedLater(itemTypes(found))));
 
   return declared;
 }
@@ -120,7 +120,7 @@ function fillWith(holder: string, read: Defaults['read'] | undefined): Fill {
 function heldAs(value: Value, type: Type, defaults: TypeDefaults | undefined, fill: Fill, path: AttributePath): Value {
   try {
     const written = fill.walk(value, type, defaults, path);
-    return converted(fill.holder, written, settled(required(type), written.type), path);
+    return convertedLater(fill.holder, written, settled(required(type), laterOf(written)), path);
   } catch (error) {
     if (error instanceof Unjoinable) throw new SchemaMismatch(`${fill.holder} ${unjoined(error, mayBeSensitive(value))}`, String(path[0]));
     throw error;

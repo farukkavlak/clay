@@ -1,13 +1,12 @@
 import { ModuleAddress } from '@clay/contracts';
 import { ModuleOutputReference, Position, spellReference, Step } from '@clay/parser';
 
-import { converted } from '../conformValues';
 import { Repetition } from '../Instances';
 import { Context, moduleOf, scopeOf } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
 import { placed } from '../place';
 import { ScopeManager } from '../scope/ScopeManager';
-import { unified, unjoined, Unjoinable } from '../unify';
+import { convertedLater, joinedLater, laterOf, unjoined, Unjoinable } from '../unify';
 import { mayBeSensitive, objectOf, tupleOf, Value } from '../Value';
 import { everyOf, outputsType, readCall } from './instance';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
@@ -51,7 +50,7 @@ export class ModuleOutputResolver {
     const value = repetition === 'count' ? tupleOf(instances) : objectOf(keys.map((key, index) => [String(key), instances[index]]));
 
     try {
-      return converted(spelled, value, everyOf(repetition, unified([written, ...instances.map((instance) => instance.type)])), []);
+      return convertedLater(spelled, value, everyOf(repetition, joinedLater([written, ...instances.map((instance) => laterOf(instance))])), []);
     } catch (error) {
       if (!(error instanceof Unjoinable)) throw error;
       throw placed(`${spelled} ${unjoined(error, mayBeSensitive(value))}`, position);
