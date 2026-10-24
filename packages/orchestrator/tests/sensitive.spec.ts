@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { converted, SchemaMismatch } from '../src/conformValues';
 import { declaredAs, givenTo } from '../src/declared';
-import { forObject } from '../src/forItems';
+import { forObject, laterObjectMarks } from '../src/forItems';
 import { readPath } from '../src/resolvers/readPath';
 import {
   allSensitive,
@@ -306,6 +306,22 @@ describe('the marks some values all have', () => {
 
   it('are under every item where each item may be any of them', () => {
     expect(everyItemMarks([marked(['a']), marked(['a'])])).toEqual([[EVERY_ITEM, 'a']]);
+  });
+
+  it.each([
+    ['a key', false, [['a', MAYBE]]],
+    ['a group', true, [['a', EVERY_ITEM, MAYBE]]],
+  ])('of %s a for may drop are only ones it may have, since the key may not be there', (_, grouped, marks) => {
+    const entries: [Value, Value][] = [
+      [written('a'), allSensitive(valueOf(types.string, UNKNOWN))],
+      [written('c'), valueOf(types.string, UNKNOWN)],
+    ];
+
+    expect(laterObjectMarks(entries, [false, true], grouped)).toEqual(marks);
+  });
+
+  it('are under every item as ones it may have only where a value not at a named key or place has them', () => {
+    expect(everyItemMarks([marked(['a']), marked(), marked(['b'])], [marked(['b'])])).toEqual([[EVERY_ITEM, 'b', MAYBE]]);
   });
 
   it.each([

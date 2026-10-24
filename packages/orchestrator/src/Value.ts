@@ -210,24 +210,36 @@ function meets(marks: AttributePath[], lefts: Value[], right: Value): AttributeP
   return marks.flatMap((mark) => (right.sensitive ?? []).map((path) => meet(mark, path, [lefts, [right]])).filter((met): met is AttributePath => met !== undefined));
 }
 
-/** The marks every one of `values` has, so a value that is one of them, not known which, has them for certain, and those any has as ones it may have. */
-export function sharedMarks(values: Value[]): AttributePath[] {
+/** The marks every one of `values` has, for certain. */
+function certainShared(values: Value[]): AttributePath[] {
   const certain = values.map((value) =>
     withSensitive(
       value,
       (value.sensitive ?? []).filter((path) => !isMaybe(path))
     )
   );
-  const maybe = values.flatMap((value) => (value.sensitive ?? []).filter((path) => path.at(-1) !== SOMEWHERE).map((path) => maybeOf(path)));
   const [first, ...rest] = certain;
   if (first === undefined) return [];
 
-  return fewest([...rest.reduce((marks, value, index) => meets(marks, certain.slice(0, index + 1), value), [...(first.sensitive ?? [])]), ...maybe]);
+  return rest.reduce((marks, value, index) => meets(marks, certain.slice(0, index + 1), value), [...(first.sensitive ?? [])]);
 }
 
-/** The marks of each item of what is not known yet, where each may be any of `values`. */
-export function everyItemMarks(values: Value[]): AttributePath[] {
-  return sharedMarks(values).map((path) => [EVERY_ITEM, ...path]);
+/** The marks any of `values` has, each as one it may have. */
+export function maybeMarks(values: Value[]): AttributePath[] {
+  return values.flatMap((value) => (value.sensitive ?? []).filter((path) => path.at(-1) !== SOMEWHERE).map((path) => maybeOf(path)));
+}
+
+/** The marks every one of `values` has, so a value that is one of them, not known which, has them for certain, and those any has as ones it may have. */
+export function sharedMarks(values: Value[]): AttributePath[] {
+  return fewest([...certainShared(values), ...maybeMarks(values)]);
+}
+
+/**
+ * The marks of each item of what is not known yet, where each may be any of `values`.
+ * Only the `unnamed` ones may be at a key or place no mark names, so only theirs may be there.
+ */
+export function everyItemMarks(values: Value[], unnamed = values): AttributePath[] {
+  return fewest([...certainShared(values), ...maybeMarks(unnamed)]).map((path) => [EVERY_ITEM, ...path]);
 }
 
 /** Sensitive as a whole where `sensitive`, and as it was otherwise. */

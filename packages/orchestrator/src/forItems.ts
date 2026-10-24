@@ -10,6 +10,7 @@ import {
   hasText,
   isSensitive,
   marksOfWhole,
+  maybeMarks,
   mayBeSensitive,
   nullSource,
   objectOf,
@@ -64,11 +65,27 @@ export function unknownItem(type: Type): ForItem {
   return [valueOf(keyType(type), UNKNOWN), valueOf(value, UNKNOWN)];
 }
 
+/** An object type names each of its attributes and a tuple type each of its places, so it holds no item the plan cannot name. */
+export const namesEveryItem = (type: Type) => type.kind === 'object' || type.kind === 'tuple';
+
 /** The attributes of an object type in key order, an optional one too since a value is filled to its type, and the places of a tuple type. */
 function typeSteps(type: Type): (string | number)[] {
   if (type.kind === 'object') return Object.keys(type.attributes).sort();
 
   return type.kind === 'tuple' ? type.elements.map((_, index) => index) : [];
+}
+
+/** Whether a mark names a key or a place of the collection, which an item at any other one does not have. */
+export function namesAStep(collection: Value): boolean {
+  return (collection.sensitive ?? []).some(([first]) => first !== undefined && !isMarker(first));
+}
+
+/** The keys and places only a mark that the part may be sensitive names, so the collection may hold them; none of `certain`. */
+export function maybeSteps(collection: Value, certain: (string | number)[]): (string | number)[] {
+  const held = new Set(certain.map(String));
+  const named = (collection.sensitive ?? []).flatMap(([first]) => (first === undefined || isMarker(first) || held.has(String(first)) ? [] : [first]));
+
+  return [...new Map(named.map((step) => [String(step), step])).values()];
 }
 
 function markedSteps(collection: Value): (string | number)[] {
@@ -80,8 +97,7 @@ function markedSteps(collection: Value): (string | number)[] {
  * every one of an object or tuple type, which holds no other, or else every place up to the last that a mark names.
  */
 function leadingSteps(collection: Value): (string | number)[] {
-  const { kind } = collection.type;
-  if (kind === 'object' || kind === 'tuple') return typeSteps(collection.type);
+  if (namesEveryItem(collection.type)) return typeSteps(collection.type);
 
   const places = markedSteps(collection).filter((step): step is number => typeof step === 'number');
   return places.length === 0 ? [] : Array.from({ length: Math.max(...places) + 1 }, (_, index) => index);
@@ -94,7 +110,7 @@ export function certainSteps(collection: Value): { steps: (string | number)[]; l
   return { steps: [...new Map([...leading, ...markedSteps(collection)].map((step) => [String(step), step])).values()], leading: leading.length };
 }
 
-/** An item of a collection not known yet at a step it holds for certain: its key or index is known, its value is not. */
+/** An item of a collection not known yet at a step it holds, or may hold: its key or index is known, its value is not. */
 export function certainItem(collection: Value, step: string | number): ForItem {
   const key = typeof step === 'number' ? valueOf(types.number, ExactNumber.parse(String(step))) : valueOf(types.string, step);
 
@@ -130,6 +146,8 @@ export function refuseDuplicateKeys(keys: Value[], position: Position): void {
 
 export const under = (step: string | number, marks: readonly AttributePath[]) => marks.map((path) => [step, ...path]);
 
+const givesKey = ([key]: ForItem, text: string) => !isUnknown(key.data) && String(key.data) === text;
+
 /** The marks of the items a group holds for certain before any item that may join it, at their places in the group. */
 function groupPlaces(entries: ForItem[], kept: boolean[], text: string): AttributePath[] {
   const marks: AttributePath[] = [];
@@ -142,30 +160,49 @@ function groupPlaces(entries: ForItem[], kept: boolean[], text: string): Attribu
   return marks;
 }
 
+/** The one item kept for certain that gives the key, which no other may give; else any item that gives it, which may be dropped. */
+function forKeyMarks(entries: ForItem[], kept: boolean[], text: string): AttributePath[] {
+  const giving = entries.flatMap((entry, index) => (givesKey(entry, text) ? [{ value: entry[1], kept: kept[index] }] : []));
+  const sure = giving.filter((item) => item.kept).map((item) => item.value);
+
+  return sure.length > 0 ? sharedMarks(sure) : maybeMarks(giving.map((item) => item.value));
+}
+
+/** The marks every value that may join the group has, and those of the items it holds for certain first at their places; with none, it may not be there. */
+function groupMarks(entries: ForItem[], kept: boolean[], text: string): AttributePath[] {
+  const joining = entries.filter((entry) => isUnknown(entry[0].data) || givesKey(entry, text)).map(([, value]) => value);
+  if (!entries.some((entry, index) => kept[index] && givesKey(entry, text))) return under(EVERY_ITEM, maybeMarks(joining));
+
+  return [...under(EVERY_ITEM, sharedMarks(joining)), ...groupPlaces(entries, kept, text)];
+}
+
 /**
- * The marks of what a for gives as an object before its keys, or which items it keeps, are known: each key has the marks every value has.
- * A known key of an item kept for certain has that value's marks, or, grouped, the marks every value that may join it has,
- * and those of the items it holds for certain first at their places. `entries` come in the order the for goes over them.
+ * The marks of what a for gives as an object before its keys, or which items it keeps, are known: each key has the marks every value has,
+ * and those an item with a key not known yet may have. A known key has the marks of the items that give it, or, grouped, of the group.
+ * `entries` come in the order the for goes over them.
  */
 export function laterObjectMarks(entries: ForItem[], kept: boolean[], grouped: boolean): AttributePath[] {
   const values = entries.map(([, value]) => value);
-  const known = entries.flatMap(([key, value], index): [string, Value][] => (kept[index] && !isUnknown(key.data) ? [[String(key.data), value]] : []));
+  const every = everyItemMarks(
+    values,
+    entries.filter(([key]) => isUnknown(key.data)).map(([, value]) => value)
+  );
+  const texts = new Set(entries.flatMap(([key]) => (isUnknown(key.data) ? [] : [String(key.data)])));
+  const marks = [...texts].flatMap((text) => under(text, (grouped ? groupMarks : forKeyMarks)(entries, kept, text)));
 
-  const marks = known.flatMap(([text, value]) => {
-    if (!grouped) return under(text, value.sensitive ?? []);
-
-    const joining = entries.filter(([key]) => isUnknown(key.data) || String(key.data) === text).map(([, joined]) => joined);
-    return under(text, [...under(EVERY_ITEM, sharedMarks(joining)), ...groupPlaces(entries, kept, text)]);
-  });
-  return fewest([...(grouped ? under(EVERY_ITEM, everyItemMarks(values)) : everyItemMarks(values)), ...marks]);
+  return fewest([...(grouped ? under(EVERY_ITEM, every) : every), ...marks]);
 }
 
-/** As for an object; an item kept for certain before any the if may drop has its own place. `bodies` come in the order the for goes over them. */
-export function laterTupleMarks(bodies: Value[], kept: boolean[]): AttributePath[] {
+/**
+ * As for an object; an item kept for certain before any the if may drop has its own place, which no other item may take, and so has one `placed`.
+ * `bodies` come in the order the for goes over them.
+ */
+export function laterTupleMarks(bodies: Value[], kept: boolean[], placed: boolean[]): AttributePath[] {
   let leading = 0;
   while (kept[leading]) leading++;
+  const unnamed = bodies.filter((_, index) => index >= leading && placed[index] !== true);
 
-  return fewest([...everyItemMarks(bodies), ...bodies.slice(0, leading).flatMap((body, index) => under(index, body.sensitive ?? []))]);
+  return fewest([...everyItemMarks(bodies, unnamed), ...bodies.slice(0, leading).flatMap((body, index) => under(index, body.sensitive ?? []))]);
 }
 
 /**
