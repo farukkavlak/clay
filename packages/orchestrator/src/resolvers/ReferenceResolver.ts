@@ -694,13 +694,13 @@ export class ReferenceResolver {
     return read;
   }
 
-  /** Paths are known at load, and a local is read as written in its turn; anything else is unknown. */
+  /** Paths are known at load, and a local is read as written in its turn; anything else is unknown, with the marks its declaration gives every instance. */
   private writtenTarget(reference: ParsedReference, where: Context, position: Position): { value: Value; path: Step[] } {
     if (reference.kind === 'path') return this.resolveTarget(reference, emptyState(), where, position, READING);
     if (reference.kind === 'local') return { value: this.writtenLocal(reference, where), path: reference.path };
 
-    const { type, path } = this.written.typeOf(reference, where, position);
-    return { value: valueOf(type, UNKNOWN), path };
+    const { type, sensitive, path } = this.written.typeOf(reference, where, position);
+    return { value: withSensitive(valueOf(type, UNKNOWN), sensitive), path };
   }
 
   private each(reference: EachReference, where: Context, position: Position): Value {

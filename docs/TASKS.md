@@ -339,6 +339,16 @@ change each.
       `for_each = sensitive({ a = var.x })` pass the plan; with `count = 1` both are refused
       as sensitive. Read as written, a value with a part not known loses its marks, though a
       branch an instance may not take now gives only marks it may have
+- [x] A reference read as written has its type and no mark, so in a module called with
+      `count = 0`, `count = var.n` passes the plan with `variable "n" { sensitive = true }`,
+      and so does a count from an output written `sensitive = true` or an attribute the
+      schema marks; with `count = 1` each is refused as sensitive
+- [ ] A reference read as written has no mark its value gives every instance, so in a module
+      called with `count = 0`, `count = module.i.s` passes the plan where the output is
+      `value = sensitive(1)`, and so does `count = length(local_file.f.content)` with
+      `content = sensitive("abc")`; with `count = 1` both are refused. The marks of what a
+      call gives a variable, of an output's value, of what a block is given and of the
+      `for_each` behind `each.value` are each read as written too
 - [ ] A provider's `validate` runs only for an instance, so in a module called with
       `count = 0`, `local_file` with `path = ""` passes the plan; with `count = 1` it is
       refused: `local_file "path" must not be empty`

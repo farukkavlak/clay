@@ -28,9 +28,9 @@ describe('a module called with count = 0', () => {
     return engine;
   };
 
-  const module = async (content: string) => {
+  const module = async (content: string, inner = '') => {
     await fs.mkdir(path.join(dir, 'm', 'n'), { recursive: true });
-    await fs.writeFile(path.join(dir, 'm', 'n', 'main.clay'), '');
+    await fs.writeFile(path.join(dir, 'm', 'n', 'main.clay'), inner);
     await fs.writeFile(path.join(dir, 'm', 'main.clay'), content);
   };
 
@@ -82,6 +82,12 @@ describe('a module called with count = 0', () => {
       'sensitive({',
       'for_each is sensitive: a key shows in an address, so it cannot be hidden',
     ],
+    [
+      'a count from a variable written sensitive',
+      'variable "n" {\n  type      = number\n  default   = 1\n  sensitive = true\n}\nresource "random_string" "s" {\n  count  = var.n\n  length = 4\n}',
+      'var.n\n',
+      'count is sensitive: the number of instances shows what it is',
+    ],
     ["a rule's condition that is no boolean", rule('var.p + 1', '"x"'), 'var.p + 1', "A validation's condition takes a boolean, not a number"],
     ["a rule's message that is no string", rule('var.p > 0', '5'), '5\n', "A validation's error_message is a string, not a number"],
     ["a rule's message not known yet that is no string", rule('var.p > 0', 'var.p'), 'var.p\n', "A validation's error_message is a string, not a number"],
@@ -99,6 +105,16 @@ describe('a module called with count = 0', () => {
 
     expect(error.message).toBe(message);
     expect(error.position).toMatchObject({ file: path.join('m', 'main.clay'), ...placeOf(content, needle) });
+  });
+
+  it('refuses a count from an output its own module writes sensitive', async () => {
+    const content = 'module "n" {\n  source = "./n"\n}\nresource "random_string" "s" {\n  count  = module.n.size\n  length = 4\n}';
+    await module(content, 'output "size" {\n  value     = 1\n  sensitive = true\n}');
+
+    const error = await planError();
+
+    expect(error.message).toBe('count is sensitive: the number of instances shows what it is');
+    expect(error.position).toMatchObject({ file: path.join('m', 'main.clay'), ...placeOf(content, 'module.n.size') });
   });
 
   it.each([
