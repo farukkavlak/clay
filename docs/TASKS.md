@@ -335,10 +335,10 @@ change each.
       `issensitive` answers `true` at plan and `false` at apply, and the apply fails. A
       condition, `&&`, `||`, `lookup`, `merge`, an index and a `for` not known at plan now
       keep only the marks they have whichever way the apply goes
-- [ ] In a module called with `count = 0`, `count = sensitive(var.n)` and
+- [x] In a module called with `count = 0`, `count = sensitive(var.n)` and
       `for_each = sensitive({ a = var.x })` pass the plan; with `count = 1` both are refused
-      as sensitive. Read as written, a value with a part not known loses its marks, which
-      stays needed until no choice not known at plan marks from one side
+      as sensitive. Read as written, a value with a part not known loses its marks, though a
+      branch an instance may not take now gives only marks it may have
 - [ ] A provider's `validate` runs only for an instance, so in a module called with
       `count = 0`, `local_file` with `path = ""` passes the plan; with `count = 1` it is
       refused: `local_file "path" must not be empty`

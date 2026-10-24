@@ -1,4 +1,4 @@
-import { containsUnknown, ModuleAddress, Schema } from '@clay/contracts';
+import { ModuleAddress, Schema } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { AttributeValue, DataBlock, ModuleBlock, OutputBlock, spell, VariableBlock } from '@clay/parser';
 
@@ -12,7 +12,7 @@ import { tryAt } from '../place';
 import { ReferenceResolver } from '../resolvers/ReferenceResolver';
 import { ScopeManager } from '../scope/ScopeManager';
 import { checkWritten } from '../validations';
-import { Value, withSensitive } from '../Value';
+import { Value } from '../Value';
 import { GraphNode } from './DependencyGraphBuilder';
 import { LoadedModule, LoadedResource } from './ModuleLoader';
 
@@ -99,15 +99,12 @@ export class WrittenCheck {
     if (forEach) this.checkInstances(forEach, eachFrom, declaration, context);
   }
 
-  /**
-   * A value known as written is every instance's value, so it is checked whole.
-   * One with any part not known has its type, but its marks may come from a branch an instance does not take, so they are left out.
-   */
+  /** A mark from a branch an instance may not take is one it may have, and only a mark for certain refuses. */
   private checkInstances(value: AttributeValue, instancesFrom: (read: Value) => unknown, declaration: string, context: Context): void {
     const read = this.read(value, declaration, context);
     tryAt(value.position, declaration, context, () => {
       try {
-        instancesFrom(containsUnknown(read.data) ? withSensitive(read, []) : read);
+        instancesFrom(read);
       } catch (error) {
         if (!(error instanceof NotKnownYet)) throw error;
       }

@@ -70,6 +70,18 @@ describe('a module called with count = 0', () => {
       'sensitive(1)',
       'count is sensitive: the number of instances shows what it is',
     ],
+    [
+      'a sensitive count not known yet',
+      'variable "n" {\n  type    = number\n  default = 1\n}\nresource "random_string" "s" {\n  count  = sensitive(var.n)\n  length = 4\n}',
+      'sensitive(var.n)',
+      'count is sensitive: the number of instances shows what it is',
+    ],
+    [
+      'a sensitive for_each with a part not known yet',
+      'variable "x" {\n  type    = string\n  default = "a"\n}\nresource "random_string" "s" {\n  for_each = sensitive({ a = var.x })\n  length   = 4\n}',
+      'sensitive({',
+      'for_each is sensitive: a key shows in an address, so it cannot be hidden',
+    ],
     ["a rule's condition that is no boolean", rule('var.p + 1', '"x"'), 'var.p + 1', "A validation's condition takes a boolean, not a number"],
     ["a rule's message that is no string", rule('var.p > 0', '5'), '5\n', "A validation's error_message is a string, not a number"],
     ["a rule's message not known yet that is no string", rule('var.p > 0', 'var.p'), 'var.p\n', "A validation's error_message is a string, not a number"],
