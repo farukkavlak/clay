@@ -1,7 +1,8 @@
-import { Type, types } from '@clay/contracts';
+import { Type, types, UNKNOWN } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { unified, Unjoinable } from '../src/unify';
+import { unified, unifiedLater, Unjoinable } from '../src/unify';
+import { inferred, Value, valueOf } from '../src/Value';
 
 const { string, number, bool, dynamic } = types;
 
@@ -59,5 +60,30 @@ describe('unified', () => {
     ['a position of tuples, by its index', [types.tuple([bool]), types.tuple([number])], 'cannot join a number and a boolean into one type, at [0] in each item'],
   ])('refuses %s', (_, found, reason) => {
     expect(reasonOf(found)).toBe(reason);
+  });
+});
+
+describe('unifiedLater', () => {
+  const later = valueOf(dynamic, UNKNOWN);
+  const known = (data: unknown) => valueOf(inferred(data), data);
+
+  it.each<[string, Value[], Type]>([
+    ['a structure beside a value of no type still to come as no type', [later, known(['a', 'b'])], dynamic],
+    ['a structure with a part of no type still to come as no type there', [known(['a', UNKNOWN]), known(['a', ['b', 'c']])], types.tuple([string, dynamic])],
+    ['a primitive beside a value of no type still to come as that primitive', [later, known('a')], string],
+    ['a structure beside a null of no type as that structure', [known(null), known(['a', 'b'])], types.tuple([string, string])],
+  ])('joins %s', (_, values, type) => {
+    expect(unifiedLater(values)).toEqual(type);
+  });
+
+  it.each<[string, Value, Value, Type]>([
+    ['a list', valueOf(types.list(types.list(dynamic)), [[null], [UNKNOWN]]), known([[['a', 'b']]]), types.list(types.list(dynamic))],
+    ['an object', valueOf(types.list(types.object({ a: dynamic })), [{ a: null }, { a: UNKNOWN }]), known([{ a: ['a', 'b'] }]), types.list(types.object({ a: dynamic }))],
+  ])('gives no type where any item of a collection has a part still to come in %s, not only the first', (_, items, other, type) => {
+    expect(unifiedLater([items, other])).toEqual(type);
+  });
+
+  it('refuses what the values could never join into, though one is still to come', () => {
+    expect(() => unifiedLater([later, known(['a']), known([['a']])])).toThrow('cannot join a string and a tuple into one type');
   });
 });

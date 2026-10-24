@@ -6,7 +6,7 @@ import { CallNode, ConfigError } from '@clay/parser';
 import { charactersOf } from './characters';
 import { converted, sensitiveAs } from './conformValues';
 import { formatted, FormatError } from './format';
-import { isSequence, itemTypes, unified, unjoined, Unjoinable } from './unify';
+import { elementLater, isSequence, itemTypes, unified, unifiedLater, unjoined, Unjoinable } from './unify';
 import {
   allSensitive,
   article,
@@ -176,7 +176,7 @@ function lookupType(map: Value, element: Type, fallback: Value, refuse: Refuse):
 function fromMap(args: Value[], element: Type, key: string | typeof UNKNOWN, refuse: Refuse): Value {
   const [map, , fallback] = args;
   const type = lookupType(map, element, fallback, refuse);
-  if (key === UNKNOWN || isUnknown(map.data)) return laterLookup(args, key, type);
+  if (key === UNKNOWN || isUnknown(map.data)) return laterLookup(args, key, unifiedLater([fallback], [], [elementLater(map)]));
 
   const found = Object.hasOwn(map.data as Record<string, unknown>, key) ? child(map, key) : fallback;
   return converted('lookup', found, type, []);
