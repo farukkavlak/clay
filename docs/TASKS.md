@@ -415,10 +415,21 @@ change each.
       `o` a for that may drop `a`, whose value is sensitive at `k` and holds `c` exactly,
       `merge({ a = { c = sensitive("s") } }, cond ? o : o).a.c` passes the plan and is refused
       at apply. Now below a key some value may not hold exactly, only what may be there is kept
-- [ ] A mark under every item covers the places a `for` keeps for certain first, though they
+- [x] A mark under every item covers the places a `for` keeps for certain first, though they
       have their own, so what the items after them hold exactly is lost: `t[1].c` with
-      `t = [for i, v in ["x", m] : v if i == 0 || cond]` is refused as an output. A mark for
-      the places after the first ones would keep it
+      `t = [for i, v in ["x", m] : v if i == 0 || cond]` is refused as an output. Now, over a
+      known collection, where an item lands at its own place or before it, each place after
+      them has what the items from there on may have
+- [ ] The same holds for a `for` over a collection not known yet with an if not known yet:
+      every place after those it keeps for certain first takes what any item may have there,
+      so `t[1].c` with `t = [for i, v in (cond ? ["x", m] : ["x", m]) : v if i == 0 || cond2]`
+      is refused as an output. Its items that the collection may hold are read after the rest,
+      not in the order the `for` goes over them, so the place each may land at is not known
+- [ ] A mark for certain under every item of one value, met with one at a place of another,
+      stays certain at that place, though the first may not have it, and a place with a mark
+      for certain is read as there: with `o = { k = sensitive("s"), c = "0" }`,
+      `{ for v in l : "a" => v.c }` where `l = cond ? [for x in (cond ? [1] : [1, 2]) : o] : [o, o]`
+      is refused at plan, `Two items give the key "a"`, though the apply finds one item
 - [ ] A mark under every item of a list not known yet, cut to a set, counts as sensitive for
       certain, though the list may come out empty: `issensitive(toset(l))` with
       `l = [for x in (cond ? ["a"] : []) : sensitive(x)]` answers `true` at plan and `false`

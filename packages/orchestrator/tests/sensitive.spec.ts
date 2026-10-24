@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { converted, SchemaMismatch, sensitiveAs } from '../src/conformValues';
 import { declaredAs, givenTo } from '../src/declared';
-import { forObject, laterObjectMarks } from '../src/forItems';
+import { forObject, laterObjectMarks, pickedTupleMarks } from '../src/forItems';
 import { readPath } from '../src/resolvers/readPath';
 import { schemaMarked } from '../src/schemaMarks';
 import {
@@ -37,6 +37,9 @@ const secret = allSensitive(valueOf(types.string, 's3cret'));
 
 /** A map not known yet with these marks. */
 const laterMap = (...paths: (string | number)[][]) => withSensitive(valueOf(types.map(types.dynamic), UNKNOWN), paths);
+
+/** What the marks leave at `c` of the item at `place`. */
+const cAt = (marks: (string | number)[][], place: number) => sensitiveUnder(sensitiveUnder(marks, place), 'c');
 
 /** A map not known yet with these marks below its key `w`. */
 const below = (...paths: (string | number)[][]) => laterMap(...paths.map((path) => ['w', ...path]));
@@ -530,6 +533,31 @@ describe('the marks some values all have', () => {
     ];
 
     expect(laterObjectMarks(entries, [false, true], grouped)).toEqual(marks);
+  });
+
+  describe('of a place after those a for over a known collection keeps for certain', () => {
+    const exact = laterMap([EVERY_ITEM, MAYBE], ['c', EXACT]);
+    const other = laterMap([EVERY_ITEM, MAYBE]);
+
+    it('keep a key every item from there on holds exactly', () => {
+      expect(cAt(pickedTupleMarks([written('x'), exact], [true, false]), 1)).toEqual([]);
+    });
+
+    it('keep it where only an item before the place lacks it', () => {
+      expect(cAt(pickedTupleMarks([written('x'), other, exact], [true, false, false]), 2)).toEqual([]);
+    });
+
+    it('do not keep it where an item from there on lacks it', () => {
+      expect(cAt(pickedTupleMarks([written('x'), other, exact], [true, false, false]), 1)).toEqual([[MAYBE]]);
+    });
+
+    it('leave a place kept for certain only its own', () => {
+      expect(sensitiveUnder(pickedTupleMarks([marked(), marked(['b'])], [true, false]), 0)).toEqual([]);
+    });
+
+    it('give a place after them only what its items may have, since it may not be there', () => {
+      expect(sensitiveUnder(pickedTupleMarks([marked(), marked(['b'])], [true, false]), 1)).toEqual([['b', MAYBE]]);
+    });
   });
 
   it('are under every item as ones it may have only where a value not at a named key or place has them', () => {
