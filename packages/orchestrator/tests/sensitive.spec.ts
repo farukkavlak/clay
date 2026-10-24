@@ -1,4 +1,4 @@
-import { EVERY_ITEM, EXACT, ExactNumber, isMaybe, MAYBE, sensitiveUnder, SOMEWHERE, types, UNKNOWN } from '@clay/contracts';
+import { EVERY_ITEM, EXACT, ExactNumber, holdsFirst, isMaybe, MAYBE, sensitiveUnder, SOMEWHERE, types, UNKNOWN } from '@clay/contracts';
 import { ConfigError } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
@@ -334,6 +334,12 @@ describe('an exact key or place', () => {
       const marks = sharedMarks([below([EVERY_ITEM, MAYBE], ['c', EXACT]), written({ w: { c: 'x' } })]);
 
       expect(sensitiveUnder(sensitiveUnder(marks, 'w'), 'c')).toEqual([]);
+    });
+
+    it('says nothing below the key is so for certain, since the key may be missing', () => {
+      const value = laterMap([EVERY_ITEM, 'k'], ['w', EVERY_ITEM, MAYBE], ['w', 'c', EXACT]);
+
+      expect(sharedMarks([value, value]).filter((path) => holdsFirst(path))).toEqual([]);
     });
 
     it('is not kept where only one of the values has it there', () => {

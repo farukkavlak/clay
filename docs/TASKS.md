@@ -410,6 +410,11 @@ change each.
       `lookup(o, "a", { c = "1" }).c` with `o = { for k, v in { a = m } : k => v if cond }`.
       Now a key or place every value that may be there holds exactly, as a known value holds
       each of its own, stays so at any depth
+- [x] A mark for certain below a key, where a part below it is held exactly, is kept from a
+      value that may lack the key, and a key with a mark for certain is read as there: with
+      `o` a for that may drop `a`, whose value is sensitive at `k` and holds `c` exactly,
+      `merge({ a = { c = sensitive("s") } }, cond ? o : o).a.c` passes the plan and is refused
+      at apply. Now below a key some value may not hold exactly, only what may be there is kept
 - [ ] A mark under every item covers the places a `for` keeps for certain first, though they
       have their own, so what the items after them hold exactly is lost: `t[1].c` with
       `t = [for i, v in ["x", m] : v if i == 0 || cond]` is refused as an output. A mark for
