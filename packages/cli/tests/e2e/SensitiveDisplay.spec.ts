@@ -57,6 +57,16 @@ describe('a resource attribute given a sensitive value, as the CLI prints it', (
     expect(planned).not.toContain('topsecret');
   });
 
+  it('says a part may be marked sensitive, where only a key not known yet may be, beside one that is exact', async () => {
+    await written('resource "null_resource" "n" {\n  triggers = { c = "0" }\n}\n');
+    await clayIn('apply', '--yes');
+    await written(
+      'resource "random_string" "s" { length = 4 }\nresource "null_resource" "n" {\n  triggers = merge({ for k in [random_string.s.result] : k => sensitive("q") }, { c = "0" })\n}\n'
+    );
+
+    expect(await clayIn('plan')).toContain('      triggers: may be marked sensitive');
+  });
+
   it('says a part may no longer be marked sensitive, where only what the apply finds tells', async () => {
     await written('resource "null_resource" "n" {\n  triggers = { t = sensitive("plain") }\n}\n');
     await clayIn('apply', '--yes');

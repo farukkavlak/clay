@@ -138,9 +138,15 @@ export const SOMEWHERE = -2;
 /** The last step of a path to a part sensitive in some outcome, which the plan does not know to be so in every one. No list has an item -3. */
 export const MAYBE = -3;
 
-/** EVERY_ITEM, SOMEWHERE or MAYBE: no key or index, though a key may be spelled "-1", "-2" or "-3". */
+/**
+ * The last step of a path to a key or place held for certain that no item the plan cannot name may take, so a mark that the part may be
+ * sensitive under every item does not reach it. No list has an item -4.
+ */
+export const EXACT = -4;
+
+/** EVERY_ITEM, SOMEWHERE, MAYBE or EXACT: no key or index, though a key may be spelled "-1" to "-4". */
 export function isMarker(step: string | number): boolean {
-  return step === EVERY_ITEM || step === SOMEWHERE || step === MAYBE;
+  return step === EVERY_ITEM || step === SOMEWHERE || step === MAYBE || step === EXACT;
 }
 
 /** A path that says only that the part may be sensitive. */
@@ -148,8 +154,28 @@ export function isMaybe(path: AttributePath): boolean {
   return path.at(-1) === MAYBE;
 }
 
+/** A path that marks nothing itself, and only keeps from a key or place the marks that may be so under every item. */
+export function isExact(path: AttributePath): boolean {
+  return path.at(-1) === EXACT;
+}
+
+/** The marks themselves, without the paths that only say a key or place is exact. */
+export function marksOnly(paths: readonly AttributePath[]): AttributePath[] {
+  return paths.filter((path) => !isExact(path));
+}
+
 function sameStep(marked: string | number, step: string | number): boolean {
   return marked === EVERY_ITEM || (!isMarker(marked) && String(marked) === String(step));
+}
+
+/** Whether `paths` say the key or place at `step` is exact. */
+export function exactAt(paths: readonly AttributePath[], step: string | number): boolean {
+  return !isMarker(step) && paths.some((path) => path.length === 2 && isExact(path) && !isMarker(path[0]) && String(path[0]) === String(step));
+}
+
+/** Whether a mark at the first step of `path` reaches `step`: a mark that may be so under every item does not reach an exact one. */
+function reachesStep(path: AttributePath, step: string | number, exact: boolean): boolean {
+  return sameStep(path[0], step) && !(exact && path[0] === EVERY_ITEM && isMaybe(path));
 }
 
 /**
@@ -159,18 +185,18 @@ function sameStep(marked: string | number, step: string | number): boolean {
 export function sensitiveUnder(paths: readonly AttributePath[], step: string | number): AttributePath[] {
   if (paths.some((path) => path.length === 0)) return [[]];
 
-  const below = paths.filter(([first]) => sameStep(first, step)).map((path) => path.slice(1));
+  const exact = exactAt(paths, step);
+  const below = paths.filter((path) => reachesStep(path, step, exact) && !(path.length === 2 && isExact(path))).map((path) => path.slice(1));
   return paths.some((path) => path.length === 1 && path[0] === MAYBE) ? [...below, [MAYBE]] : below;
 }
 
 /** Whether the value at `at` is sensitive, or may be, in some part, or sits inside a part that is. */
 export function touchesSensitive(paths: readonly AttributePath[], at: AttributePath): boolean {
-  return paths.some((marked) => {
-    const path = isMaybe(marked) ? marked.slice(0, -1) : marked;
-    const shared = Math.min(path.length, at.length);
+  const [step, ...rest] = at;
+  if (step === undefined) return marksOnly(paths).length > 0;
+  if (paths.some((path) => path.length === 0 || (path.length === 1 && path[0] === MAYBE))) return true;
 
-    return path.slice(0, shared).every((step, i) => sameStep(step, at[i]));
-  });
+  return touchesSensitive(sensitiveUnder(paths, step), rest);
 }
 
 /** An index in a path read from a file is a plain number, where every other number read from one is exact. */

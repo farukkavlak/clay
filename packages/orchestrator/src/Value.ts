@@ -2,12 +2,16 @@ import {
   AttributePath,
   containsUnknown,
   EVERY_ITEM,
+  EXACT,
+  exactAt,
   ExactNumber,
+  isExact,
   isMarker,
   isMaybe,
   isRecord,
   isUnknown,
   MAYBE,
+  marksOnly,
   Output,
   own,
   sensitiveUnder,
@@ -53,7 +57,7 @@ function unknownAt(data: unknown, path: AttributePath): unknown {
  * A part that only may be sensitive is not known yet either, so nothing shows it or takes it as known before the apply says.
  */
 export function withSensitive({ type, data, nullFrom }: Value, paths: readonly AttributePath[]): Value {
-  if (paths.length === 0) return nullFrom === undefined ? { type, data } : { type, data, nullFrom };
+  if (marksOnly(paths).length === 0) return nullFrom === undefined ? { type, data } : { type, data, nullFrom };
 
   const marks = paths.some((path) => path.length === 0) ? [[]] : paths;
   const known = marks.filter((path) => isMaybe(path)).reduce((found, path) => unknownAt(found, path.slice(0, -1)), data);
@@ -106,7 +110,7 @@ function allHold(values: Value[], path: AttributePath, oneItem: boolean): boolea
 
 /** In any part, for certain: a mark under every item of a collection not known yet, which may come out empty, marks nothing for certain. */
 export function isSensitive(value: Value): boolean {
-  return value.sensitive?.some((path) => allHold([value], path, true)) === true;
+  return marksOnly(value.sensitive ?? []).some((path) => allHold([value], path, true));
 }
 
 /** Sensitive somewhere the plan cannot name, as a whole and not only in a part. */
@@ -147,9 +151,24 @@ function reaches(step: string | number, at: string | number): boolean {
   return isMarker(step) || isMarker(at) ? step === at : String(step) === String(at);
 }
 
+/** Whether the steps of `path` before the exact key or place at `exact` may lead to the same part as those of `exact`. */
+function along(exact: AttributePath, path: AttributePath): boolean {
+  return exact.slice(0, -2).every((step, index) => step === EVERY_ITEM || path[index] === EVERY_ITEM || reaches(path[index], step));
+}
+
+/** Whether `exacts` say the step at `index` of `within` is exact, which a mark that may be so under every item does not reach. */
+function exactStep(exacts: readonly AttributePath[], within: AttributePath, index: number): boolean {
+  const at = (exact: AttributePath) => exact.length === index + 2 && String(exact[index]) === String(within[index]) && along(exact, within);
+
+  return named(within[index]) && exacts.some((exact) => at(exact));
+}
+
 /** Whether a mark at `path`, of either kind, means every part at `within` may be sensitive. Under every item, the item may be. */
-function coversMaybe(path: AttributePath, within: AttributePath): boolean {
-  return path.length <= within.length && path.every((step, index) => step === EVERY_ITEM || reaches(step, within[index]));
+function coversMaybe(path: AttributePath, within: AttributePath, exacts: readonly AttributePath[]): boolean {
+  const marked = isMaybe(path) ? path.slice(0, -1) : path;
+  const everyItem = (index: number) => !(isMaybe(path) && exactStep(exacts, within, index));
+
+  return marked.length <= within.length && marked.every((step, index) => (step === EVERY_ITEM ? everyItem(index) : reaches(step, within[index])));
 }
 
 /**
@@ -157,8 +176,8 @@ function coversMaybe(path: AttributePath, within: AttributePath): boolean {
  * Where `at` is sensitive somewhere, a mark inside it covers it only if it is there for certain, so not one under every item.
  * Where `at` may be sensitive, any mark that may be so at or above it covers it, and none for certain is covered by one that may be.
  */
-function covers(paths: readonly AttributePath[], at: AttributePath): boolean {
-  if (isMaybe(at)) return paths.some((path) => coversMaybe(isMaybe(path) ? path.slice(0, -1) : path, at.slice(0, -1)));
+function covers(paths: readonly AttributePath[], at: AttributePath, exacts: readonly AttributePath[]): boolean {
+  if (isMaybe(at)) return paths.some((path) => coversMaybe(path, at.slice(0, -1), exacts));
 
   const somewhere = at.at(-1) === SOMEWHERE;
   const within = somewhere ? at.slice(0, -1) : at;
@@ -197,12 +216,18 @@ function meet(left: AttributePath, right: AttributePath, sides: Value[][]): Attr
   return steps;
 }
 
-/** Each once, and none that another already covers. */
+/** Whether a mark that may be so under every item beside the exact key or place at `exact` would reach it, if not for that. */
+function keepsOut(exact: AttributePath, paths: readonly AttributePath[]): boolean {
+  return paths.some((path) => isMaybe(path) && path[exact.length - 2] === EVERY_ITEM && along(exact, path));
+}
+
+/** Each once, none that another already covers, and no exact key or place that keeps nothing out. */
 export function fewest(paths: AttributePath[]): AttributePath[] {
   const keys = paths.map((path) => JSON.stringify(path.map((step) => (isMarker(step) ? step : String(step)))));
-  const once = paths.filter((_, index) => keys.indexOf(keys[index]) === index);
+  const once = paths.filter((path, index) => keys.indexOf(keys[index]) === index && (!isExact(path) || keepsOut(path, paths)));
 
-  return once.filter((path, index) => !covers([...once.slice(0, index), ...once.slice(index + 1)], path));
+  const exacts = once.filter((path) => isExact(path));
+  return once.filter((path, index) => !covers(marksOnly([...once.slice(0, index), ...once.slice(index + 1)]), path, exacts));
 }
 
 /** What both sets of marks mark: those of `lefts`, shared so far, and those of `right`. */
@@ -215,7 +240,7 @@ function certainShared(values: Value[]): AttributePath[] {
   const certain = values.map((value) =>
     withSensitive(
       value,
-      (value.sensitive ?? []).filter((path) => !isMaybe(path))
+      marksOnly(value.sensitive ?? []).filter((path) => !isMaybe(path))
     )
   );
   const [first, ...rest] = certain;
@@ -226,12 +251,34 @@ function certainShared(values: Value[]): AttributePath[] {
 
 /** The marks any of `values` has, each as one it may have. */
 export function maybeMarks(values: Value[]): AttributePath[] {
-  return values.flatMap((value) => (value.sensitive ?? []).filter((path) => path.at(-1) !== SOMEWHERE).map((path) => maybeOf(path)));
+  return values.flatMap((value) =>
+    marksOnly(value.sensitive ?? [])
+      .filter((path) => path.at(-1) !== SOMEWHERE)
+      .map((path) => maybeOf(path))
+  );
 }
 
-/** The marks every one of `values` has, so a value that is one of them, not known which, has them for certain, and those any has as ones it may have. */
+/** The keys and places every one of `values` holds exactly. */
+function sharedExact(values: Value[]): (string | number)[] {
+  const [first, ...rest] = values;
+  const exact = (first?.sensitive ?? []).filter((path) => path.length === 2 && isExact(path)).map(([step]) => step);
+
+  return exact.filter((step) => rest.every((value) => exactAt(value.sensitive ?? [], step)));
+}
+
+/** What is at `step` of a value not known yet. */
+function partLater(value: Value, step: string | number): Value {
+  return withSensitive(valueOf(typeAt(value.type, step), UNKNOWN), sensitiveUnder(value.sensitive ?? [], step));
+}
+
+/**
+ * The marks every one of `values` has, so a value that is one of them, not known which, has them for certain, and those any has as ones it may have.
+ * A key or place each holds exactly stays so, with the marks they have there, since no mark that may be so under every item reaches it.
+ */
 export function sharedMarks(values: Value[]): AttributePath[] {
-  return fewest([...certainShared(values), ...maybeMarks(values)]);
+  const exact = sharedExact(values).flatMap((step) => [[step, EXACT], ...sharedMarks(values.map((value) => partLater(value, step))).map((path) => [step, ...path])]);
+
+  return fewest([...certainShared(values), ...maybeMarks(values), ...exact]);
 }
 
 /**
@@ -330,7 +377,9 @@ export function child(value: Value, step: string | number): Value {
 
 /** The marks of an item the plan cannot name: those every item has, for certain, and those any one item has, as ones it may have. */
 export function anyItemMarks(marks: readonly AttributePath[]): AttributePath[] {
-  const named = marks.filter(([first]) => first !== undefined && !isMarker(first)).map((path) => maybeOf(path.slice(1)));
+  const named = marksOnly(marks)
+    .filter(([first]) => first !== undefined && !isMarker(first))
+    .map((path) => maybeOf(path.slice(1)));
 
   return fewest([...sensitiveUnder(marks, EVERY_ITEM), ...named]);
 }

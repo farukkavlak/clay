@@ -1,4 +1,4 @@
-import { AttributePath, ExactNumber, isMaybe, isRecord, isUnknown, MAYBE, NumberError, Schema, SENSITIVE, Type, typeAt, UNKNOWN } from '@clay/contracts';
+import { AttributePath, ExactNumber, isExact, isMaybe, isRecord, isUnknown, MAYBE, NumberError, Schema, SENSITIVE, Type, typeAt, UNKNOWN } from '@clay/contracts';
 import { DataBlock, Position, ResourceBlock } from '@clay/parser';
 
 import { setOf } from './setMembers';
@@ -193,22 +193,26 @@ function ordered(value: Value): unknown {
   return value.data;
 }
 
-/** A set is sorted and holds each member once, so a path into one ends at the set; one that may be sensitive still only may be. */
-function endedAtSet(type: Type, path: AttributePath): AttributePath {
+/**
+ * A set is sorted and holds each member once, so a path into one ends at the set; one that may be sensitive still only may be.
+ * A member has no key or place, so none is exact.
+ */
+function endedAtSet(type: Type, path: AttributePath): AttributePath[] {
   let current = type;
 
   for (const [index, step] of path.entries()) {
-    if (current.kind === 'set') return isMaybe(path) ? [...path.slice(0, index), MAYBE] : path.slice(0, index);
+    if (current.kind === 'set' && isExact(path)) return [];
+    if (current.kind === 'set') return [isMaybe(path) ? [...path.slice(0, index), MAYBE] : path.slice(0, index)];
     current = typeAt(current, step);
   }
-  return path;
+  return [path];
 }
 
 /** `result` with the sensitive parts of the value it was made from, which keeps its steps. */
 export function sensitiveAs(value: Value, result: Value): Value {
   return withSensitive(
     result,
-    (value.sensitive ?? []).map((path) => endedAtSet(result.type, path))
+    (value.sensitive ?? []).flatMap((path) => endedAtSet(result.type, path))
   );
 }
 

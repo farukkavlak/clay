@@ -1,4 +1,4 @@
-import { AttributePath, EVERY_ITEM, ExactNumber, isMarker, isMaybe, isUnknown, SENSITIVE, sensitiveUnder, Type, typeAt, types, UNKNOWN } from '@clay/contracts';
+import { AttributePath, EVERY_ITEM, EXACT, ExactNumber, isMarker, isMaybe, isUnknown, SENSITIVE, sensitiveUnder, Type, typeAt, types, UNKNOWN } from '@clay/contracts';
 import { ConfigError, Position } from '@clay/parser';
 
 import { UnresolvedReferenceError } from './resolvers/UnresolvedReferenceError';
@@ -188,7 +188,9 @@ export function laterObjectMarks(entries: ForItem[], kept: boolean[], grouped: b
     entries.filter(([key]) => isUnknown(key.data)).map(([, value]) => value)
   );
   const texts = new Set(entries.flatMap(([key]) => (isUnknown(key.data) ? [] : [String(key.data)])));
-  const marks = [...texts].flatMap((text) => under(text, (grouped ? groupMarks : forKeyMarks)(entries, kept, text)));
+  // With an item kept for certain that gives it, the key is there; an item with a key not known yet may only join its group, or fail as a duplicate.
+  const exact = (text: string) => (entries.some((entry, index) => kept[index] && givesKey(entry, text)) ? [[EXACT]] : []);
+  const marks = [...texts].flatMap((text) => under(text, [...(grouped ? groupMarks : forKeyMarks)(entries, kept, text), ...exact(text)]));
 
   return fewest([...(grouped ? under(EVERY_ITEM, every) : every), ...marks]);
 }
@@ -202,7 +204,8 @@ export function laterTupleMarks(bodies: Value[], kept: boolean[], placed: boolea
   while (kept[leading]) leading++;
   const unnamed = bodies.filter((_, index) => index >= leading && placed[index] !== true);
 
-  return fewest([...everyItemMarks(bodies, unnamed), ...bodies.slice(0, leading).flatMap((body, index) => under(index, body.sensitive ?? []))]);
+  const places = bodies.slice(0, leading).flatMap((body, index) => under(index, [...(body.sensitive ?? []), [EXACT]]));
+  return fewest([...everyItemMarks(bodies, unnamed), ...places]);
 }
 
 /**

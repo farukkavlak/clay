@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
 
-import { AttributePath, containsUnknown, EVERY_ITEM, ExactNumber, isMarker, isMaybe, isUnknown, sensitiveUnder, SOMEWHERE, Type, types, UNKNOWN } from '@clay/contracts';
+import { AttributePath, containsUnknown, EVERY_ITEM, EXACT, ExactNumber, isMarker, isMaybe, isUnknown, sensitiveUnder, SOMEWHERE, Type, types, UNKNOWN } from '@clay/contracts';
 import { CallNode, ConfigError } from '@clay/parser';
 
 import { charactersOf } from './characters';
@@ -228,13 +228,15 @@ function keysNamed(arg: Value): string[] {
 /**
  * A key comes from the last argument that gives it for certain, or from one not known yet after it, so it has the marks all of those share.
  * Where none gives it for certain, it may not be there, so it has only those any argument not known yet may give it.
+ * Where none comes after it, the key is exact: what any other key may hold does not reach it.
  */
 function keyMarks(given: Value[], key: string): AttributePath[] {
   const last = [...given].reverse().findIndex((arg) => keysGiven(arg).includes(key));
-  const later = (values: Value[]) => values.filter((arg, index) => index === 0 || keysLater(arg)).map((arg) => entryOf(arg, key));
-  const marks = last === -1 ? maybeMarks(given.filter((arg) => keysLater(arg)).map((arg) => entryOf(arg, key))) : sharedMarks(later(given.slice(given.length - 1 - last)));
+  const at = (marks: AttributePath[]) => marks.map((path) => [key, ...path]);
+  if (last === -1) return at(maybeMarks(given.filter((arg) => keysLater(arg)).map((arg) => entryOf(arg, key))));
 
-  return marks.map((path) => [key, ...path]);
+  const from = given.slice(given.length - 1 - last).filter((arg, index) => index === 0 || keysLater(arg));
+  return at([...sharedMarks(from.map((arg) => entryOf(arg, key))), ...(from.length === 1 ? [[EXACT]] : [])]);
 }
 
 /** What an argument not known yet holds at a key no mark of it names. */

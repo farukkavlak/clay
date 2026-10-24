@@ -1,4 +1,4 @@
-import { Address, AttributePath, isMaybe, isRecord, isUnknown, jsonText, Output, samePaths, Schema, SENSITIVE, sensitiveUnder } from '@clay/contracts';
+import { Address, AttributePath, isExact, isMaybe, isRecord, isUnknown, jsonText, Output, samePaths, Schema, SENSITIVE, sensitiveUnder } from '@clay/contracts';
 import { changedOutside, Changes, Drift, OutputChanges, Plan, PlanAction } from '@clay/planner';
 import { isDeepStrictEqual, styleText } from 'node:util';
 
@@ -108,7 +108,7 @@ function displayChanges(changes: Changes, schema: Schema, sensitive: readonly At
 function marksNote(before: AttributePath[], after: AttributePath[]): string | undefined {
   if (samePaths(before, after)) return undefined;
 
-  const certain = after.filter((path) => !isMaybe(path));
+  const certain = after.filter((path) => !isMaybe(path) && !isExact(path));
   if (before.length === 0) return certain.length > 0 ? 'will be marked sensitive' : 'may be marked sensitive';
   if (certain.length === 0) return after.length === 0 ? 'will no longer be marked sensitive' : 'may no longer be marked sensitive';
   return 'which parts are sensitive changes';
