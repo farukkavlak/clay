@@ -9,6 +9,7 @@ import {
   ModuleAddress,
   Schema,
   sensitiveUnder,
+  SOMEWHERE,
   State,
   Type,
   typeNestingOf,
@@ -231,6 +232,13 @@ function laterForMarks(node: ForNode, every: ReadItem, certain: (ReadItem & { st
 
   const places = node.condition ? [] : certain.flatMap((item) => (typeof item.step === 'number' ? under(item.step, item.body.sensitive ?? []) : []));
   return fewest([...everyItemMarks([every.body, ...certain.map((item) => item.body)]), ...places]);
+}
+
+/** A set with a member not known yet holds an item, though not which, so a body sensitive for certain it keeps for certain makes the for sensitive somewhere. */
+function heldSomewhere(collection: Value, condition: Value | undefined, body: Value): boolean {
+  const kept = condition === undefined || condition.data === true;
+
+  return Array.isArray(collection.data) && collection.data.length > 0 && kept && isSensitive(body);
 }
 
 /** Neither side decides `&&` or `||` yet. One not known may still decide alone, so a mark on the other is the answer's only where both have it. */
@@ -526,10 +534,11 @@ export class ReferenceResolver {
     const whole = [key, condition].some((part) => part !== undefined && isSensitive(part)) || isAllSensitive(collection) || decided;
     if (whole) return new UnresolvedReferenceError(message, types.dynamic, wholeIf(true));
 
-    // Read without a body outside the plan, where no mark is shown, so each item is marked where any of the collection is.
+    // Read without a body outside the plan, where no mark is shown, so each item is marked where any of the collection is for certain.
     if (body === undefined) return new UnresolvedReferenceError(message, types.dynamic, isSensitive(collection) ? [[EVERY_ITEM]] : []);
 
-    return new UnresolvedReferenceError(message, types.dynamic, laterForMarks(node, { key, body }, certain));
+    const marks = laterForMarks(node, { key, body }, certain);
+    return new UnresolvedReferenceError(message, types.dynamic, heldSomewhere(collection, condition, body) ? fewest([...marks, [SOMEWHERE]]) : marks);
   }
 
   /** The key, the body and the if with an unknown item, so an error or a sensitive value in them is found before the collection is known. */

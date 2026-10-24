@@ -1,4 +1,4 @@
-import { EVERY_ITEM, ExactNumber, types, UNKNOWN } from '@clay/contracts';
+import { EVERY_ITEM, ExactNumber, SOMEWHERE, types, UNKNOWN } from '@clay/contracts';
 import { ConfigError } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
@@ -6,7 +6,7 @@ import { converted, SchemaMismatch } from '../src/conformValues';
 import { declaredAs, givenTo } from '../src/declared';
 import { forObject } from '../src/forItems';
 import { readPath } from '../src/resolvers/readPath';
-import { allSensitive, child, everyItemMarks, inferred, itemsOf, objectOf, sharedMarks, tupleOf, Value, valueOf, withSensitive } from '../src/Value';
+import { allSensitive, child, everyItemMarks, fewest, inferred, isSensitive, itemsOf, objectOf, sharedMarks, tupleOf, Value, valueOf, withSensitive } from '../src/Value';
 import { steps } from './ast';
 
 const at = { file: 'main.clay', line: 1, column: 1 };
@@ -82,6 +82,22 @@ const conn = objectOf([
   ['password', secret],
 ]);
 
+describe('whether a value is sensitive for certain', () => {
+  const list = valueOf(types.list(types.string), UNKNOWN);
+
+  it.each([
+    ['a value not known yet sensitive as a whole', allSensitive(list), true],
+    ['a value not known yet marked at a key', withSensitive(valueOf(types.map(types.string), UNKNOWN), [['a']]), true],
+    ['a list not known yet marked under every item, which may come out empty', withSensitive(list, [[EVERY_ITEM]]), false],
+    ['a known list marked under every item', withSensitive(written(['x']), [[EVERY_ITEM]]), true],
+    ['an empty list marked under every item', withSensitive(written([]), [[EVERY_ITEM]]), false],
+    ['a known object holding a list not known yet marked under every item', withSensitive(written({ o: UNKNOWN }), [['o', EVERY_ITEM]]), false],
+    ['a known list whose second item has a part marked under every item of the first', withSensitive(written([[], ['x']]), [[EVERY_ITEM, EVERY_ITEM]]), true],
+  ])('of %s', (_, value, sensitive) => {
+    expect(isSensitive(value)).toBe(sensitive);
+  });
+});
+
 describe('the marks some values all have', () => {
   const marked = (...paths: (string | number)[][]) => withSensitive(written({ a: 'x', b: 'y' }), paths);
 
@@ -106,10 +122,67 @@ describe('the marks some values all have', () => {
       [[0, 'a']],
     ],
     ['one path for an index written as a number or as text', [withSensitive(written(['x']), [[0], ['0']]), withSensitive(written(['y']), [[0]])], [[0]]],
-    ['one path where it covers another both have', [withSensitive(written(['x']), [[EVERY_ITEM], [0]]), withSensitive(written(['y']), [[EVERY_ITEM]])], [[EVERY_ITEM]]],
+    [
+      'a mark at an item beside one under every item, since only the first says the item is there',
+      [withSensitive(written(['x']), [[EVERY_ITEM], [0]]), withSensitive(written(['y']), [[EVERY_ITEM]])],
+      [[EVERY_ITEM], [0]],
+    ],
+    [
+      'none at an item a list not known yet may lack, where it marks every item',
+      [withSensitive(valueOf(types.list(types.string), UNKNOWN), [[EVERY_ITEM]]), withSensitive(written(['y']), [[0]])],
+      [],
+    ],
+    ['none at a key a value sensitive as a whole may lack', [allSensitive(valueOf(types.map(types.string), UNKNOWN)), withSensitive(written({ a: 'x' }), [['a']])], []],
+    [
+      'the attribute an object not known yet holds, where it is sensitive as a whole',
+      [allSensitive(valueOf(types.object({ a: types.string }), UNKNOWN)), withSensitive(written({ a: 'x' }), [['a']])],
+      [['a']],
+    ],
+    [
+      'none at an item under every item that one item lacks',
+      [withSensitive(written([[], ['x']]), [[EVERY_ITEM, EVERY_ITEM]]), withSensitive(written([['y'], ['z']]), [[EVERY_ITEM, 0]])],
+      [],
+    ],
+    [
+      'the item a tuple not known yet holds, where it marks every item',
+      [withSensitive(valueOf(types.tuple([types.string]), UNKNOWN), [[EVERY_ITEM]]), withSensitive(written(['y']), [[0]])],
+      [[0]],
+    ],
+    ['somewhere where each value marks another part', [marked(['a']), marked(['b'])], [[SOMEWHERE]]],
+    [
+      'somewhere in the part both hold where each marks another part of it',
+      [withSensitive(written({ o: { a: 'x', b: 'y' } }), [['o', 'a']]), withSensitive(written({ o: { a: 'x', b: 'y' } }), [['o', 'b']])],
+      [['o', SOMEWHERE]],
+    ],
+    ['somewhere where one value is sensitive somewhere and another at a part', [marked([SOMEWHERE]), marked(['a'])], [[SOMEWHERE]]],
+    ['a part every value marks, with no somewhere it already tells', [marked(['a'], ['b']), marked(['a'])], [['a']]],
+    [
+      'a part every value marks at a key spelled as somewhere',
+      [withSensitive(written({ '-2': 'x' }), [[SOMEWHERE], ['-2']]), withSensitive(written({ '-2': 'x' }), [['-2']])],
+      [['-2']],
+    ],
+    ['none somewhere where one mark is under every item of what may come out empty', [withSensitive(written({ a: UNKNOWN, b: 'y' }), [['a', EVERY_ITEM]]), marked(['b'])], []],
+    [
+      'somewhere beside a mark under every item, which may mark nothing',
+      [withSensitive(written({ a: UNKNOWN, b: 'y' }), [['a', EVERY_ITEM], ['b']]), withSensitive(written({ a: ['x'], c: 'z' }), [['a', EVERY_ITEM], ['c']])],
+      [['a', EVERY_ITEM], [SOMEWHERE]],
+    ],
+    [
+      'none somewhere at an item one value marks only under every item, where that item lacks the part',
+      [withSensitive(valueOf(types.list(types.map(types.string)), [{}, { a: 'x' }]), [[EVERY_ITEM, 'a']]), withSensitive(written([{ b: 'y' }, {}]), [[0, 'b']])],
+      [],
+    ],
     ['none for no values', [], []],
   ])('are %s', (_, values, marks) => {
     expect(sharedMarks(values)).toEqual(marks);
+  });
+
+  it('are not at a part of a value sensitive somewhere, even at a key spelled as somewhere', () => {
+    expect(child(withSensitive(written({ '-2': 'x' }), [[SOMEWHERE]]), '-2').sensitive).toBeUndefined();
+  });
+
+  it('keep a mark under every item beside one at a key spelled as every item', () => {
+    expect(fewest([['-1'], [EVERY_ITEM, 'a']])).toEqual([['-1'], [EVERY_ITEM, 'a']]);
   });
 
   it('are under every item where each item may be any of them', () => {

@@ -151,11 +151,14 @@ condition, or a sensitive left side of `&&` or `||`, can still be learned from w
 the run fails: an error in the side it picks is shown like any other.
 
 Where the condition, or a side of `&&` or `||`, is not known until apply, the result is
-sensitive at plan only where it would be whichever way the apply goes: `cond ? sensitive(a)
-: b` is not, `cond ? sensitive(a) : sensitive(b)` is, and of two objects only the parts
-both mark are. A mark that depends on the way waits for the apply, which knows it and
-checks there, so `issensitive` gives the same answer at plan and apply. Terraform marks
-the result of such a condition where either side is marked.
+sensitive at plan only where it would be whichever way the apply goes: `cond ?
+sensitive(a) : b` is not, `cond ? sensitive(a) : sensitive(b)` is, and of two objects only
+the parts both mark are, where both hold them. Where each marks a different part, the
+result is still sensitive somewhere: `issensitive` of it is true, though neither part read
+alone is sensitive. A mark on every item of a collection not known yet says nothing for
+certain, since the collection may come out empty. A mark that depends on the way waits for
+the apply, which knows it and checks there, so `issensitive` gives the same answer at plan
+and apply. Terraform marks the result of such a condition where either side is marked.
 
 `+`, `-`, `*`, `/` and `%` work on numbers, and `-var.n` negates one:
 `count = var.zones * 2`. Numbers stay exact, so `0.1 + 0.2` is `0.3`; a result past a

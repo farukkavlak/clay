@@ -1,9 +1,26 @@
-import { AttributePath, containsUnknown, EVERY_ITEM, ExactNumber, isRecord, isUnknown, Output, own, sensitiveUnder, Type, typeAt, types, UNKNOWN } from '@clay/contracts';
+import {
+  AttributePath,
+  containsUnknown,
+  EVERY_ITEM,
+  ExactNumber,
+  isMarker,
+  isRecord,
+  isUnknown,
+  Output,
+  own,
+  sensitiveUnder,
+  SOMEWHERE,
+  Type,
+  typeAt,
+  types,
+  UNKNOWN,
+} from '@clay/contracts';
 
 /**
  * `data` is a string, an `ExactNumber`, a boolean, null, an array (list, set, tuple) or a record (map, object), with UNKNOWN at any depth.
  * A set's array holds each member once, in a fixed order. `type` is `dynamic` only for an unknown or a null of no type.
  * `sensitive` holds the steps to each sensitive part, and one empty path where the whole value is. A set is sensitive as a whole or not at all.
+ * A path that ends at SOMEWHERE says the part it reaches is sensitive somewhere the plan cannot name yet.
  */
 export interface Value {
   readonly type: Type;
@@ -29,9 +46,48 @@ export function allSensitive(value: Value): Value {
   return withSensitive(value, [[]]);
 }
 
-/** In any part. */
+const named = (step: string | number | undefined): step is string | number => step !== undefined && !isMarker(step);
+
+/** A step a value not known yet holds in every outcome: its type names it, or a mark does, since a mark names only a part every outcome has. */
+function laterHolds(type: Type, marks: readonly AttributePath[], step: string | number): boolean {
+  if (type.kind === 'object' && Object.hasOwn(type.attributes, String(step))) return true;
+  if (type.kind === 'tuple' && Number(step) < type.elements.length) return true;
+
+  return marks.some(([first]) => named(first) && String(first) === String(step));
+}
+
+/** The parts of known data at a step: every item for EVERY_ITEM, none where the step finds nothing. */
+function partsAt(data: unknown, step: string | number): unknown[] {
+  if (!Array.isArray(data) && !isRecord(data)) return [];
+  if (step === EVERY_ITEM) return Object.values(data);
+
+  const part = Array.isArray(data) ? data[Number(step)] : own(data, String(step));
+  return part === undefined ? [] : [part];
+}
+
+/**
+ * Whether every outcome of the value has the part at `path`; under EVERY_ITEM, every item has it. SOMEWHERE is a part there is.
+ * Where `oneItem`, EVERY_ITEM also needs an item to be there, which a collection not known yet may lack.
+ */
+function holds(data: unknown, type: Type, marks: readonly AttributePath[], path: AttributePath, oneItem: boolean): boolean {
+  const [step, ...rest] = path;
+  if (step === undefined || step === SOMEWHERE) return true;
+
+  const below = (part: unknown) => holds(part, typeAt(type, step), sensitiveUnder(marks, step), rest, oneItem);
+  if (isUnknown(data)) return (step === EVERY_ITEM ? !oneItem : laterHolds(type, marks, step)) && below(UNKNOWN);
+
+  const parts = partsAt(data, step);
+  return step === EVERY_ITEM && !oneItem ? parts.every((part) => below(part)) : parts.some((part) => below(part));
+}
+
+/** Whether each of `values` has the part at `path` in every outcome. */
+function allHold(values: Value[], path: AttributePath, oneItem: boolean): boolean {
+  return values.every((value) => holds(value.data, value.type, value.sensitive ?? [], path, oneItem));
+}
+
+/** In any part, for certain: a mark under every item of a collection not known yet, which may come out empty, marks nothing for certain. */
 export function isSensitive(value: Value): boolean {
-  return value.sensitive !== undefined;
+  return value.sensitive?.some((path) => allHold([value], path, true)) === true;
 }
 
 export function isAllSensitive(value: Value): boolean {
@@ -43,18 +99,48 @@ export function wholeIf(sensitive: boolean): AttributePath[] {
   return sensitive ? [[]] : [];
 }
 
-/** Whether `paths` mark all of what is at `at`: a path to it, or to what holds it. */
-function covers(paths: readonly AttributePath[], at: AttributePath): boolean {
-  return paths.some((path) => path.length <= at.length && path.every((step, index) => step === EVERY_ITEM || String(step) === String(at[index])));
+/** Whether a step of a mark reaches the step `at` names. Every item reaches no named one, which may not be there. */
+function reaches(step: string | number, at: string | number): boolean {
+  return isMarker(step) || isMarker(at) ? step === at : String(step) === String(at);
 }
 
-/** What both paths mark: the deeper of the two, with an item where the other says every item; none where they part. */
-function meet(left: AttributePath, right: AttributePath): AttributePath | undefined {
+/**
+ * Whether `paths` mark all of what is at `at`: a path to it, or to what holds it.
+ * Where `at` is sensitive somewhere, a mark inside it covers it only if it is there for certain, so not one under every item.
+ */
+function covers(paths: readonly AttributePath[], at: AttributePath): boolean {
+  const somewhere = at.at(-1) === SOMEWHERE;
+  const within = somewhere ? at.slice(0, -1) : at;
+  const fits = (path: AttributePath) => (somewhere ? !path.slice(within.length).includes(EVERY_ITEM) : path.length <= at.length);
+
+  return paths.some((path) => fits(path) && path.slice(0, within.length).every((step, index) => reaches(step, within[index])));
+}
+
+/** Where two marks part, the value is still sensitive somewhere in what both hold, if each mark is there for certain past the steps they share. */
+function parted(steps: AttributePath, [left, right]: AttributePath[], [lefts, rights]: Value[][]): AttributePath | undefined {
+  const certain = (path: AttributePath, values: Value[]) => allHold(values, [...steps, ...path.slice(steps.length)], true);
+
+  return certain(left, lefts) && certain(right, rights) ? [...steps, SOMEWHERE] : undefined;
+}
+
+/** A step only one side names is kept only where the other side's values hold it, so a mark names only a part every outcome has. */
+function taken(steps: AttributePath, [a, b]: (string | number | undefined)[], [lefts, rights]: Value[][]): string | number | undefined {
+  const step = named(a) ? a : (b ?? a);
+  if (named(step) && !(named(a) && named(b)) && !allHold(named(a) ? rights : lefts, [...steps, step], false)) return undefined;
+
+  return step;
+}
+
+/** What both paths mark: the deeper of the two, with an item where the other says every item. */
+function meet(left: AttributePath, right: AttributePath, sides: Value[][]): AttributePath | undefined {
   const steps: AttributePath = [];
   for (let index = 0; index < Math.max(left.length, right.length); index++) {
     const [a, b] = [left[index], right[index]];
-    if (a !== undefined && b !== undefined && a !== EVERY_ITEM && b !== EVERY_ITEM && String(a) !== String(b)) return undefined;
-    steps.push(a === undefined || a === EVERY_ITEM ? (b ?? a) : a);
+    if (a === SOMEWHERE || b === SOMEWHERE || (named(a) && named(b) && String(a) !== String(b))) return parted(steps, [left, right], sides);
+
+    const step = taken(steps, [a, b], sides);
+    if (step === undefined) return undefined;
+    steps.push(step);
   }
 
   return steps;
@@ -62,15 +148,15 @@ function meet(left: AttributePath, right: AttributePath): AttributePath | undefi
 
 /** Each once, and none that another already covers. */
 export function fewest(paths: AttributePath[]): AttributePath[] {
-  const keys = paths.map((path) => path.map(String).join('\0'));
+  const keys = paths.map((path) => JSON.stringify(path.map((step) => (isMarker(step) ? step : String(step)))));
   const once = paths.filter((_, index) => keys.indexOf(keys[index]) === index);
 
   return once.filter((path, index) => !covers([...once.slice(0, index), ...once.slice(index + 1)], path));
 }
 
-/** What both sets of marks mark. */
-function meets(marks: AttributePath[], paths: readonly AttributePath[]): AttributePath[] {
-  return marks.flatMap((mark) => paths.map((path) => meet(mark, path)).filter((met): met is AttributePath => met !== undefined));
+/** What both sets of marks mark: those of `lefts`, shared so far, and those of `right`. */
+function meets(marks: AttributePath[], lefts: Value[], right: Value): AttributePath[] {
+  return marks.flatMap((mark) => (right.sensitive ?? []).map((path) => meet(mark, path, [lefts, [right]])).filter((met): met is AttributePath => met !== undefined));
 }
 
 /** The marks every one of `values` has, so a value that is one of them, not known which, has them for certain. */
@@ -78,7 +164,7 @@ export function sharedMarks(values: Value[]): AttributePath[] {
   const [first, ...rest] = values;
   if (first === undefined) return [];
 
-  return fewest(rest.reduce((marks, value) => meets(marks, value.sensitive ?? []), [...(first.sensitive ?? [])]));
+  return fewest(rest.reduce((marks, value, index) => meets(marks, values.slice(0, index + 1), value), [...(first.sensitive ?? [])]));
 }
 
 /** The marks of each item of what is not known yet, where each may be any of `values`. */

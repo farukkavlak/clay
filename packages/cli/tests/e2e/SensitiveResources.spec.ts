@@ -231,16 +231,20 @@ describe('a resource given a sensitive value', () => {
     });
 
     it.each([
-      ['whose body ignores the item', '[for r in null_resource.n.triggers.rows : "x"]', true],
-      ['whose body reads a part of the item no item marks', '[for r in null_resource.n.triggers.rows : r.name]', true],
-      ['whose body reads a part of the item every item marks', '[for r in null_resource.n.triggers.rows : r.token]', false],
-    ])('marks each item of a for over what it marks every item of, %s', async (_, value, accepted) => {
-      const probe = `${config}\noutput "probe" { value = ${value} }`;
+      ['whose body ignores the item', '[for r in null_resource.n.triggers.rows : "x"]'],
+      ['whose body reads a part of the item no item marks', '[for r in null_resource.n.triggers.rows : r.name]'],
+      ['whose body reads a part of the item every item marks, though it may have none', '[for r in null_resource.n.triggers.rows : r.token]'],
+    ])('leaves to the apply a for over what it marks every item of, %s', async (_, value) => {
+      const { outputs } = await newOrchestrator().plan(`${config}\noutput "probe" { value = ${value} }`);
 
-      if (accepted) {
-        const { outputs } = await newOrchestrator().plan(probe);
-        expect(outputs.probe.new?.value).toBe(UNKNOWN);
-      } else await expect(newOrchestrator().plan(probe)).rejects.toThrow(REFUSED);
+      expect(outputs.probe.new?.value).toBe(UNKNOWN);
+    });
+
+    it('refuses at the apply a for that reads the part every item marks, once there are items', async () => {
+      const probe = `${config}\noutput "probe" { value = [for r in null_resource.n.triggers.rows : r.token] }`;
+      const engine = newOrchestrator();
+
+      await expect(drain(engine.runPlan(await engine.plan(probe), probe))).rejects.toThrow(REFUSED);
     });
 
     it('keeps the mark of every item through a plan saved to a file', async () => {

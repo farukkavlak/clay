@@ -236,8 +236,6 @@ describe('a sensitive value', () => {
     ['is a set a for goes over, with a member known only after apply', '[for v in module.db.made_set : "x"]'],
     ['is a list a for goes over, known only after apply', '[for v in tolist(module.db.made_set) : "x"]'],
     ['is what the body of a for gives, over a set with a member known only after apply', `[for v in ${MADE} : module.db.password]`],
-    ['is what the body of a for gives, over a list known only after apply', `[for v in tolist(${MADE}) : module.db.password]`],
-    ['is a value in the object a for makes, over a list known only after apply', `{ for v in tolist(${MADE}) : v => module.db.password }`],
     ['is a key of the object a for makes, over a set with a member known only after apply', `{ for v in ${MADE} : module.db.password => v }`],
     ['is a key of the object a for makes over a list known only after apply, whose size is read', `length({ for v in tolist(${MADE}) : module.db.password => v })`],
     ['is a list a for goes over, known only after apply, whose size is read', 'length([for v in tolist(module.db.made_set) : "x"])'],
@@ -261,6 +259,18 @@ describe('a sensitive value', () => {
     ['another part of an object that holds one known only after apply', 'local.made.name', 'app'],
     ['the size of what a for gives over a list known only after apply, where its body is sensitive', `length([for v in tolist(${MADE}) : module.db.password])`, UNKNOWN],
     ['the size of what a for gives over a set with a member known only after apply, where its body is sensitive', `length([for v in ${MADE} : module.db.password])`, UNKNOWN],
+    ['what a for gives over a list known only after apply, which may come out empty, where its body is sensitive', `[for v in tolist(${MADE}) : module.db.password]`, UNKNOWN],
+    [
+      'the object a for makes over a list known only after apply, which may come out empty, with a sensitive value',
+      `{ for v in tolist(${MADE}) : v => module.db.password }`,
+      UNKNOWN,
+    ],
+    ['what a for gives over a set with a member known only after apply, whose if is not known yet', `[for v in ${MADE} : module.db.password if v == "x"]`, UNKNOWN],
+    [
+      'what a for gives over a set with a member known only after apply, whose body is a list that may come out empty',
+      `[for v in ${MADE} : [for w in tolist(${MADE}) : module.db.password]]`,
+      UNKNOWN,
+    ],
   ])('leaves %s to be shown', async (_, value, data) => {
     const shown = await planned(value);
 

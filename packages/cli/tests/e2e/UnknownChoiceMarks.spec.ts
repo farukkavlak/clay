@@ -124,6 +124,14 @@ describe('a value a choice not known at plan makes', () => {
       true,
       `${LATER} ? { a = "x" } : { a = sensitive("y") }`,
     ],
+    ['issensitive of a for over a collection not known yet that comes out empty', `issensitive([for x in (${LATER} ? ["a"] : []) : sensitive(x)])`, false],
+    ['a for over a collection not known yet that comes out empty, with every item sensitive', `[for x in (${LATER} ? ["a"] : []) : sensitive(x)]`, []],
+    ['a value that holds a for over a collection not known yet that comes out empty', `{ o = [for x in (${LATER} ? ["a"] : []) : sensitive(x)] }`, { o: [] }],
+    [
+      'issensitive of a condition whose other side is a for over a collection not known yet that comes out empty',
+      `issensitive(${LATER} ? [sensitive("a")] : [for x in (${LATER} ? ["a"] : []) : sensitive(x)])`,
+      false,
+    ],
   ])('is sensitive only where the side the apply takes is, for %s', async (_, value, expected, list?: string, over?: string) => {
     await apply(output(value, list, over));
 
@@ -137,6 +145,23 @@ describe('a value a choice not known at plan makes', () => {
     await newOrchestrator().plan(output(value));
 
     await expect(apply(output(value))).rejects.toThrow(REFUSED);
+  });
+
+  it.each([
+    ['a condition', 'local.l', `${LATER} ? { a = sensitive("x"), b = "y" } : { a = "x", b = sensitive("y") }`],
+    ['an index not known yet', AT, '[{ a = sensitive("x"), b = "y" }, { a = "x", b = sensitive("y") }]'],
+  ])('knows at plan that what is sensitive somewhere in every outcome is sensitive, for %s', async (_, value, list) => {
+    const plan = await newOrchestrator().plan(output(`issensitive(${value})`, list));
+
+    expect(plan.outputs.o.new).toEqual({ value: true, type: types.bool });
+  });
+
+  it('goes over only the keys a value sensitive somewhere holds, for a for over it', async () => {
+    const plan = await newOrchestrator().plan(
+      output('{ for k, v in local.l : (k == "a" ? "x" : "y") => 1 }', `${LATER} ? { a = sensitive("x"), b = "y" } : { a = "x", b = sensitive("y") }`)
+    );
+
+    expect(plan.outputs.o.new?.value).toBe(UNKNOWN);
   });
 
   it('knows at plan what && gives where its right side decides and neither side is sensitive', async () => {
@@ -235,6 +260,18 @@ describe('a value a choice not known at plan makes', () => {
       `{ for x in ["a", "b"] : x => (x == "a" ? sensitive("s") : "p") if x == "a" || ${LATER} }`,
       '{ for k, v in local.l : v => 1 }',
     ],
+    ['what each result of a condition marks at another part', 'local.l', `${LATER} ? { a = sensitive("x"), b = "y" } : { a = "x", b = sensitive("y") }`],
+    [
+      'the part each result of a condition marks somewhere else in',
+      'local.l.o',
+      `${LATER} ? { o = { a = sensitive("x"), b = "y" }, p = "z" } : { o = { a = "x", b = sensitive("y") }, p = "z" }`,
+    ],
+    ['what each item an index not known yet reads marks at another part', AT, '[{ a = sensitive("x"), b = "y" }, { a = "x", b = sensitive("y") }]'],
+    [
+      'a comparison with what each result of a condition marks at another part',
+      'local.l == { a = "x", b = "y" }',
+      `${LATER} ? { a = sensitive("x"), b = "y" } : { a = "x", b = sensitive("y") }`,
+    ],
   ])('refuses at plan an output sensitive whichever side the apply takes, for %s', async (_, value, list?: string, over?: string) => {
     await expect(newOrchestrator().plan(output(value, list, over))).rejects.toThrow(REFUSED);
   });
@@ -252,6 +289,17 @@ describe('a value a choice not known at plan makes', () => {
       'an index not known yet past another, where the part it reads is marked in no item',
       `${AT}[length(random_string.s.result) - 4]`,
       '[["a", sensitive("x")], ["b", sensitive("y")]]',
+    ],
+    ['issensitive of a for over a collection not known yet, where every item is sensitive', `issensitive([for x in (${LATER} ? ["a"] : []) : sensitive(x)])`, '[]'],
+    [
+      'a part of what each result of a condition marks somewhere, where one result leaves it plain',
+      'local.l.p',
+      `${LATER} ? { o = { a = sensitive("x") }, p = "z" } : { o = { a = "x" }, p = sensitive("z") }`,
+    ],
+    [
+      'what each result of a condition marks at another part, where one mark is under every item of what may come out empty',
+      'local.l',
+      `${LATER} ? { a = [for x in (${LATER} ? ["a"] : []) : sensitive(x)], b = "y" } : { a = [], b = sensitive("y") }`,
     ],
   ])('leaves to the apply what no outcome marks at plan, for %s', async (_, value, list) => {
     const plan = await newOrchestrator().plan(output(value, list));

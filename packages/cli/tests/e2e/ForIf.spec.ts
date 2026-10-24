@@ -143,10 +143,11 @@ resource "local_file" "f" {
       await expect(newOrchestrator().plan(`${secret}${RANDOM}output "o" { value = length(${value}) }\n`)).rejects.toThrow(REFUSED);
     });
 
-    it('makes each item sensitive, and keeps how many it gives plain, where only a body is sensitive under an if not known yet', async () => {
+    it('leaves to the apply what it gives, which the if may leave empty, and keeps how many it gives plain, where only a body is sensitive under an if not known yet', async () => {
       const value = `[for x in ["a"] : var.secret if ${LATER}]`;
 
-      await expect(newOrchestrator().plan(`${secret}${RANDOM}output "o" { value = ${value} }\n`)).rejects.toThrow(REFUSED);
+      const given = await newOrchestrator().plan(`${secret}${RANDOM}output "o" { value = ${value} }\n`);
+      expect(given.outputs.o.new?.value).toBe(UNKNOWN);
       const plan = await newOrchestrator().plan(`${secret}${RANDOM}output "o" { value = length(${value}) }\n`);
       expect(plan.outputs.o.new).toEqual({ value: UNKNOWN, type: types.number });
     });

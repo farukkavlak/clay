@@ -132,8 +132,16 @@ export function samePaths(one: readonly AttributePath[], other: readonly Attribu
 /** The step to every item of a collection not known yet, which has no items to name. No list has an item -1. */
 export const EVERY_ITEM = -1;
 
+/** The last step of a path to a value sensitive in some part the plan cannot name yet. No list has an item -2. */
+export const SOMEWHERE = -2;
+
+/** EVERY_ITEM or SOMEWHERE: no key or index, though a key may be spelled "-1" or "-2". */
+export function isMarker(step: string | number): boolean {
+  return step === EVERY_ITEM || step === SOMEWHERE;
+}
+
 function sameStep(marked: string | number, step: string | number): boolean {
-  return marked === EVERY_ITEM || String(marked) === String(step);
+  return marked === EVERY_ITEM || (marked !== SOMEWHERE && String(marked) === String(step));
 }
 
 /** What is left of each path after `step`. A value sensitive as a whole is so in every part. */

@@ -429,7 +429,11 @@ describe('merge', () => {
     ['a key an argument not known yet marks, where every later value is sensitive', [later([['a']]), later([[EVERY_ITEM]])], [['a']]],
     ['no key an argument marks, where a later one may give it plain', [later([['a']]), later([])], []],
     ['a key a known argument gives after the last one not known yet', [later([]), withSensitive(map({ a: 'x' }), [['a']])], [['a']]],
-    ['a key a known argument gives before one not known yet, where that one marks every value', [withSensitive(map({ a: 'x' }), [['a']]), later([[EVERY_ITEM]])], [[EVERY_ITEM]]],
+    [
+      'a key a known argument gives before one not known yet, where that one marks every value',
+      [withSensitive(map({ a: 'x' }), [['a']]), later([[EVERY_ITEM]])],
+      [[EVERY_ITEM], ['a']],
+    ],
   ])('keeps, with an argument not known yet, %s', (_, values, marks) => {
     expect(called('merge', ...values).sensitive ?? []).toEqual(marks);
   });

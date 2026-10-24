@@ -1,4 +1,4 @@
-import { AttributePath, EVERY_ITEM, ExactNumber, isUnknown, SENSITIVE, sensitiveUnder, Type, typeAt, types, UNKNOWN } from '@clay/contracts';
+import { AttributePath, EVERY_ITEM, ExactNumber, isMarker, isUnknown, SENSITIVE, sensitiveUnder, Type, typeAt, types, UNKNOWN } from '@clay/contracts';
 import { ConfigError, Position } from '@clay/parser';
 
 import { UnresolvedReferenceError } from './resolvers/UnresolvedReferenceError';
@@ -55,7 +55,7 @@ function typeSteps(type: Type): (string | number)[] {
 
 /** The keys and places every value a collection not known yet may be holds: those its type names, and those it marks. */
 export function certainSteps(collection: Value): (string | number)[] {
-  const marked = (collection.sensitive ?? []).flatMap(([first]) => (first === undefined || first === EVERY_ITEM ? [] : [first]));
+  const marked = (collection.sensitive ?? []).flatMap(([first]) => (first === undefined || isMarker(first) ? [] : [first]));
 
   return [...new Map([...typeSteps(collection.type), ...marked].map((step) => [String(step), step])).values()];
 }
