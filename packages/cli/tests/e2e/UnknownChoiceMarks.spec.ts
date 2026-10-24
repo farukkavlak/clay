@@ -272,6 +272,72 @@ describe('a value a choice not known at plan makes', () => {
       'local.l == { a = "x", b = "y" }',
       `${LATER} ? { a = sensitive("x"), b = "y" } : { a = "x", b = sensitive("y") }`,
     ],
+    [
+      'the first place in a group a for over a tuple not known yet makes',
+      'local.m.g[0]',
+      `${LATER} ? [sensitive("a"), "b"] : [sensitive("c"), "d"]`,
+      '{ for v in local.l : "g" => v... }',
+    ],
+    [
+      'the first place in a group a for over an object not known yet makes',
+      'local.m.g[0]',
+      `${LATER} ? { a = sensitive("x"), b = "y" } : { a = sensitive("z"), b = "w" }`,
+      '{ for k, v in local.l : "g" => v... }',
+    ],
+    [
+      'the first place of a for over an object not known yet, in key order',
+      'local.m[0]',
+      `${LATER} ? { a = sensitive("x"), b = "y" } : { a = sensitive("z"), b = "w" }`,
+      '[for k, v in local.l : v]',
+    ],
+    [
+      'the first place of a for over a tuple not known yet, whose if keeps the first item for certain',
+      'local.m[0]',
+      `${LATER} ? [sensitive("a"), "b"] : [sensitive("c"), "d"]`,
+      `[for i, v in local.l : v if i == 0 || ${LATER}]`,
+    ],
+    [
+      'the first place in a group a for makes, whose if keeps the first item for certain',
+      'local.m.g[0]',
+      '[sensitive("a"), "b"]',
+      `{ for i, v in local.l : "g" => v... if i == 0 || ${LATER} }`,
+    ],
+    [
+      'the first place of a for over an object, whose if keeps the first key for certain',
+      'local.m[0]',
+      '{ a = sensitive("x"), b = "y" }',
+      `[for k, v in local.l : v if k == "a" || ${LATER}]`,
+    ],
+    [
+      'the first place of a for over an object not known yet written out of key order',
+      'local.m[0]',
+      `${LATER} ? { b = "y", a = sensitive("x") } : { b = "w", a = sensitive("z") }`,
+      '[for k, v in local.l : v]',
+    ],
+    [
+      'the first place of a for over a list not known yet that holds it for certain, whose if keeps it',
+      'local.m[0]',
+      `${LATER} ? tolist([sensitive("a"), "b"]) : tolist([sensitive("c")])`,
+      `[for i, v in local.l : v if i == 0 || ${LATER}]`,
+    ],
+    [
+      'the first place in a group after an item an if may keep under another key',
+      'local.m.g[0]',
+      '["x", sensitive("b"), "c"]',
+      `{ for i, v in local.l : (i == 0 ? "h" : "g") => v... if i != 0 || ${LATER} }`,
+    ],
+    [
+      'the third place in a group a for over a list not known yet makes, where marks name only the first and third',
+      'local.m.g[2]',
+      `${LATER} ? tolist([sensitive("a"), "b", sensitive("e")]) : tolist([sensitive("c"), "d", sensitive("f")])`,
+      '{ for v in local.l : "g" => v... }',
+    ],
+    [
+      'the third place of a for over a list not known yet whose if keeps it, where marks name only the first and third',
+      'local.m[2]',
+      `${LATER} ? tolist([sensitive("a"), "b", sensitive("e")]) : tolist([sensitive("c"), "d", sensitive("f")])`,
+      `[for i, v in local.l : v if i < 5 || ${LATER}]`,
+    ],
   ])('refuses at plan an output sensitive whichever side the apply takes, for %s', async (_, value, list?: string, over?: string) => {
     await expect(newOrchestrator().plan(output(value, list, over))).rejects.toThrow(REFUSED);
   });
@@ -301,8 +367,33 @@ describe('a value a choice not known at plan makes', () => {
       'local.l',
       `${LATER} ? { a = [for x in (${LATER} ? ["a"] : []) : sensitive(x)], b = "y" } : { a = [], b = sensitive("y") }`,
     ],
-  ])('leaves to the apply what no outcome marks at plan, for %s', async (_, value, list) => {
-    const plan = await newOrchestrator().plan(output(value, list));
+    ['the place in a group after an item that may join it', 'local.m.g[0]', '["a", sensitive("b")]', `{ for i, v in local.l : "g" => v... if i == 1 || ${LATER} }`],
+    [
+      'the place of an item after one an if may drop, over a tuple not known yet',
+      'local.m[0]',
+      `${LATER} ? ["a", sensitive("b")] : ["c", sensitive("d")]`,
+      `[for i, v in local.l : v if i == 1 || ${LATER}]`,
+    ],
+    [
+      'the second place of a for over an object not known yet written out of key order',
+      'local.m[1]',
+      `${LATER} ? { b = "y", a = sensitive("x") } : { b = "w", a = sensitive("z") }`,
+      '[for k, v in local.l : v]',
+    ],
+    [
+      'the place in a group after an item whose key is not known yet',
+      'local.m.g[0]',
+      '["a", sensitive("b")]',
+      '{ for i, v in local.l : (i == 0 ? random_string.s.result : "g") => v... }',
+    ],
+    [
+      'the place after the last a mark names in a group over a list not known yet',
+      'local.m.g[3]',
+      `${LATER} ? tolist([sensitive("a"), "b", sensitive("e")]) : tolist([sensitive("c"), "d", sensitive("f")])`,
+      '{ for v in local.l : "g" => v... }',
+    ],
+  ])('leaves to the apply what no outcome marks at plan, for %s', async (_, value, list, over?: string) => {
+    const plan = await newOrchestrator().plan(output(value, list, over));
 
     expect(plan.outputs.o.new?.value).toBe(UNKNOWN);
   });

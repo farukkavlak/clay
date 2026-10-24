@@ -368,10 +368,12 @@ change each.
       `cond ? { a = sensitive("x"), b = "y" } : { a = "x", b = sensitive("y") }`. Now it is
       marked sensitive somewhere, and so is a `for` with a sensitive body over a set with a
       member known only after apply
-- [ ] A `for` over a value not known yet forgets where an item it holds for certain lands,
+- [x] A `for` over a value not known yet forgets where an item it holds for certain lands,
       so an output reading that place passes the plan and is refused at apply. Grouped under
       one key, the first item is first in the group: `{ for v in l : "g" => v... }` and
-      `m.g[0]`. Over an object, the items come in key order: `[for k, v in obj : v][0]`
+      `m.g[0]`. Over an object, the items come in key order: `[for k, v in obj : v][0]`.
+      Now an item kept for certain before any that may be dropped or join its group keeps
+      its place, under an if too
 - [ ] A `for` or `merge` over a value sensitive somewhere forgets it, so an output of
       `[for v in l : v]` or `merge(l, {})` passes the plan and is refused at apply, where
       `l` is `cond ? [sensitive("a"), "b"] : ["c", sensitive("d")]`
