@@ -1,7 +1,8 @@
-import { isRecord, isUnknown, own, Type, typeAt, types } from '@clay/contracts';
+import { AttributePath, isRecord, isUnknown, own, Type, typeAt, types, UNKNOWN } from '@clay/contracts';
 import { spellSteps, Step } from '@clay/parser';
 
-import { article, Value } from './Value';
+import { converted } from './conformValues';
+import { article, child, objectOf, tupleOf, Value, valueOf, withSensitive } from './Value';
 
 export class Unjoinable extends Error {
   constructor(message: string) {
@@ -110,21 +111,28 @@ function mapping(found: readonly Type[], at: Step[], join: Join): Type {
   );
 }
 
-/** A part of a value not known yet that has no type: once known it may be of any type, so what is joined with it has none, as in HCL. */
+/** A part of a value not known yet that has no type: once known it may be of any type, so what is joined with it has none unless a string holds it. */
 const LATER: Type = { kind: 'dynamic' };
 
-/** Throws `Unjoinable`. `dynamic` (an unknown or a null) fits any type, and what is joined with a part still to come of no type has none. `at` locates the types for the message. */
-export function unified(found: readonly Type[], at: Step[] = []): Type {
+/** As `unified`, with `later` at each place a part still to come of no type reaches. */
+function joinedAs(found: readonly Type[], at: Step[], later: Type): Type {
   const named = found.filter((type) => type.kind !== 'dynamic');
-  if (named.length === 0) return types.dynamic;
+  if (named.length === 0) return found.includes(LATER) ? later : types.dynamic;
 
   const [first] = named;
   const other = named.find((type) => FAMILIES[type.kind] !== FAMILIES[first.kind]);
   if (other) throw unjoinable(`${article(first.kind)} and ${article(other.kind)}`, at);
-  if (found.includes(LATER)) return types.dynamic;
+  // A string holds any primitive as text, and a structure beside it is refused at apply either way.
+  if (found.includes(LATER)) return FAMILIES[first.kind] === 'primitive' && named.some((type) => type.kind === 'string') ? types.string : later;
 
+  const join: Join = (parts, within) => joinedAs(parts, within, later);
   if (FAMILIES[first.kind] === 'primitive') return primitive(named, at);
-  return FAMILIES[first.kind] === 'sequence' ? sequence(named, at, unified) : mapping(named, at, unified);
+  return FAMILIES[first.kind] === 'sequence' ? sequence(named, at, join) : mapping(named, at, join);
+}
+
+/** Throws `Unjoinable`. `dynamic` (an unknown or a null) fits any type, and what is joined with a part still to come of no type has none, unless a string holds it. `at` locates the types for the message. */
+export function unified(found: readonly Type[], at: Step[] = []): Type {
+  return joinedAs(found, at, types.dynamic);
 }
 
 /** The data at `step`, not known where the data is not. */
@@ -197,12 +205,61 @@ export function elementLater(map: Value): Type {
   return 'element' in type ? type.element : types.dynamic;
 }
 
+/** The type of `value`, with each part not known yet that has no type as one that may be of any type. */
+export function laterOf(value: Value): Type {
+  return laterType(value.type, value.data);
+}
+
+function hasLater(type: Type): boolean {
+  return type === LATER || itemTypes(type).some((item) => hasLater(item));
+}
+
+function cleaned(type: Type): Type {
+  if (type === LATER) return types.dynamic;
+  if (!hasLater(type)) return type;
+  if (type.kind === 'tuple') return types.tuple(type.elements.map((element) => cleaned(element)));
+  if (type.kind === 'object')
+    return types.object(Object.fromEntries(Object.entries(type.attributes).map(([name, attribute]) => [name, cleaned(attribute)])), type.optional && [...type.optional]);
+
+  return 'element' in type ? types[type.kind](cleaned(type.element)) : type;
+}
+
+/** As `unified`, for types from `laterOf`, keeping each place a part still to come of no type reaches for `convertedLater`. */
+export function joinedLater(found: readonly Type[], at: Step[] = []): Type {
+  // A part still to come ends the join at its place, so what could never join below it is found with the plain types.
+  unified(
+    found.map((type) => cleaned(type)),
+    at
+  );
+
+  return joinedAs(found, at, LATER);
+}
+
+/** `value` with each part at a place still to come of `to` not known yet: once known, it may join into another type. A null is null in any type. */
+function blankedParts(value: Value, to: Type): Value {
+  if (to === LATER && value.data !== null) return valueOf(types.dynamic, UNKNOWN);
+  if (!hasLater(to)) return value;
+
+  if (Array.isArray(value.data)) return tupleOf(value.data.map((_, index) => blankedParts(child(value, index), typeAt(to, index))));
+  if (isRecord(value.data)) return objectOf(Object.keys(value.data).map((name) => [name, blankedParts(child(value, name), typeAt(to, name))]));
+
+  return value;
+}
+
+/** Each place stays where it was, so the value keeps all its marks. */
+function blanked(value: Value, to: Type): Value {
+  return withSensitive(blankedParts(value, to), value.sensitive ?? []);
+}
+
+/** As `converted`, to a type from `joinedLater`: a part a value of no type still to come reaches is not known until apply, and has no type. */
+export function convertedLater(holder: string, value: Value, to: Type, path: AttributePath): Value {
+  return converted(holder, blanked(value, to), cleaned(to), path);
+}
+
 /**
  * As `unified`, for the types of values, beside `written` types: where a value not known yet has no type, it may be of any type once known,
- * so what is joined with it has none.
+ * so what is joined with it has none unless a string holds it.
  */
 export function unifiedLater(values: readonly Value[], at: Step[] = [], written: readonly Type[] = []): Type {
-  unified([...written, ...values.map((value) => value.type)], at);
-
-  return unified([...written, ...values.map((value) => laterType(value.type, value.data))], at);
+  return cleaned(joinedLater([...written, ...values.map((value) => laterOf(value))], at));
 }
