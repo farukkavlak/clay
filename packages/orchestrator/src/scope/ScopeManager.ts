@@ -22,7 +22,7 @@ export class ScopeManager {
   private outputs: Map<string, Map<string, Value>> = new Map();
   private declaredLocals: Map<string, Map<string, LocalBlock>> = new Map();
   private locals: Map<string, Map<string, Value>> = new Map();
-  private declaredOutputs: Map<string, ReadonlyMap<string, Type>> = new Map();
+  private declaredOutputs: Map<string, { types: ReadonlyMap<string, Type>; sensitive: ReadonlySet<string> }> = new Map();
   private directories: Map<string, string> = new Map();
 
   setVariable(scope: string, name: string, value: VariableValue): void {
@@ -63,13 +63,18 @@ export class ScopeManager {
   }
 
   /** Per module, not per instance: every instance declares the same outputs. */
-  declareOutputs(scope: string, outputs: ReadonlyMap<string, Type>): void {
-    this.declaredOutputs.set(scope, outputs);
+  declareOutputs(scope: string, outputs: ReadonlyMap<string, Type>, sensitive: ReadonlySet<string>): void {
+    this.declaredOutputs.set(scope, { types: outputs, sensitive });
+  }
+
+  /** The outputs written `sensitive = true`. */
+  sensitiveOutputsOf(scope: string): ReadonlySet<string> {
+    return this.declaredOutputs.get(scope)?.sensitive ?? new Set();
   }
 
   /** Each output's type, `dynamic` where it names none. */
   outputsOf(scope: string): ReadonlyMap<string, Type> {
-    return this.declaredOutputs.get(scope) ?? new Map();
+    return this.declaredOutputs.get(scope)?.types ?? new Map();
   }
 
   setDirectory(scope: string, directory: string): void {

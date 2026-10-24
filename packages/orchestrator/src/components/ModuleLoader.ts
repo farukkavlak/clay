@@ -32,6 +32,10 @@ export function outputsOf(program: Statement[]): Map<string, Type> {
   return new Map(program.flatMap((stmt) => (stmt.type === 'Output' ? [[stmt.name, stmt.valueType ? required(stmt.valueType) : types.dynamic]] : [])));
 }
 
+function sensitiveOutputsOf(program: Statement[]): Set<string> {
+  return new Set(program.flatMap((stmt) => (stmt.type === 'Output' && stmt.sensitive ? [stmt.name] : [])));
+}
+
 export class ModuleLoader {
   // One load sees one version of a file, however many blocks call its module.
   private contents = new Map<string, string | undefined>();
@@ -69,7 +73,7 @@ export class ModuleLoader {
 
     loaded.modules.push({ address: childAddress, program: moduleProgram });
     this.scopeManager.setDirectory(scopeOf(childAddress), moduleDir);
-    this.scopeManager.declareOutputs(scopeOf(childAddress), outputsOf(moduleProgram));
+    this.scopeManager.declareOutputs(scopeOf(childAddress), outputsOf(moduleProgram), sensitiveOutputsOf(moduleProgram));
     this.declareVariables(moduleProgram, childAddress);
     this.declareLocals(moduleProgram, childAddress);
 
