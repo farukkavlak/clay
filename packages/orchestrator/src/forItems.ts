@@ -204,17 +204,35 @@ export function laterObjectMarks(entries: ForItem[], kept: boolean[], grouped: b
   return fewest([...(grouped ? under(EVERY_ITEM, every) : every), ...marks]);
 }
 
+/** How many items come first that the if keeps for certain. */
+function leadingKept(kept: boolean[]): number {
+  let leading = 0;
+  while (kept[leading]) leading++;
+
+  return leading;
+}
+
 /**
  * As for an object; an item kept for certain before any the if may drop has its own place, which no other item may take, and so has one `placed`.
  * `bodies` come in the order the for goes over them.
  */
 export function laterTupleMarks(bodies: Value[], kept: boolean[], placed: boolean[]): AttributePath[] {
-  let leading = 0;
-  while (kept[leading]) leading++;
+  const leading = leadingKept(kept);
   const unnamed = bodies.filter((_, index) => index >= leading && placed[index] !== true);
 
   const places = bodies.slice(0, leading).flatMap((body, index) => under(index, [...(body.sensitive ?? []), [EXACT]]));
   return fewest([...everyItemMarks(bodies, unnamed), ...places]);
+}
+
+/**
+ * As for a tuple, over a known collection, where an item lands at its own place or before it:
+ * a place after those kept for certain may hold only an item from there on, so it has what those may have.
+ */
+export function pickedTupleMarks(bodies: Value[], kept: boolean[]): AttributePath[] {
+  const leading = leadingKept(kept);
+  const after = bodies.slice(leading).flatMap((_, offset) => under(leading + offset, maybeMarks(bodies.slice(leading + offset))));
+
+  return fewest([...laterTupleMarks(bodies, kept, []), ...after]);
 }
 
 /**

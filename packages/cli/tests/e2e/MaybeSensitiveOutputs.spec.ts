@@ -231,6 +231,12 @@ describe('a root output that may hold a sensitive value', () => {
       '{ for v in local.l : "a" => v.c }',
       {},
     ],
+    [
+      'a key for places a for may drop, on each side of a condition',
+      `{ for v in (${LATER} ? [for v in [${KEYED_EXACT}, ${KEYED_EXACT}] : v if ${LATER}] : [for v in [${KEYED_EXACT}, ${KEYED_EXACT}] : v if ${LATER}]) : "a" => v.c }`,
+      'local.l',
+      {},
+    ],
     ['such a key in every item of a for over a tuple not known yet', `[for x in ${SOME} : ${MERGED}]`, 'local.l[0].c', '0'],
     ['such a key in every item, through a for again', `[for v in [for x in ${SOME} : ${MERGED}] : v]`, 'local.l[0].c', '0'],
     ['such a key in every item of a group', `{ for x in ${SOME} : "g" => ${MERGED}... }`, 'local.l.g[0].c', '0'],
@@ -240,6 +246,8 @@ describe('a root output that may hold a sensitive value', () => {
     ['such a key in a list made of a condition', `tolist(${LATER} ? [${MERGED}] : [${MERGED}])`, 'local.l[0].c', '0'],
     ['such a key below an index not known yet', `[{ w = ${MERGED} }]`, 'local.l[length(random_string.s.result) - 4].w.c', '0'],
     ['lookup of such a key at a key a for may drop', `{ for k, v in { a = ${MERGED} } : k => v if ${LATER} }`, 'lookup(local.l, "a", { c = "1" }).c', '1'],
+    ['such a key at a place a for may drop', `[for i, v in ["x", ${MERGED}] : v if i == 0 || ${NOW}]`, 'local.l[1].c', '0'],
+    ['such a key at a place only items that hold it may take', `[for i, v in ["x", ${BEFORE}, ${MERGED}] : v if i == 0 || ${NOW}]`, 'local.l[2].c', '0'],
     ['lookup of such a key at a key merge may give', `merge({ for k, v in { a = ${MERGED} } : k => v if ${LATER} }, {})`, 'lookup(local.l, "a", { c = "1" }).c', '1'],
   ])('is not refused where no outcome is sensitive, for %s', async (_, local, value, expected) => {
     await apply(config(local, output(value)));
@@ -263,6 +271,7 @@ describe('a root output that may hold a sensitive value', () => {
     ],
     ['a place after one a for may drop', `[for i, v in ["0", sensitive("x"), "1"] : v if i != 1 || ${LATER}]`, 'local.l[1]'],
     ['such a key below another, on one side of a condition only', `${LATER} ? { w = ${MERGED} } : { w = ${BEFORE} }`, 'local.l.w.c'],
+    ['such a key at a place an item that does not hold it may take', `[for i, v in ["x", ${BEFORE}, ${MERGED}] : v if i == 0 || ${NOW}]`, 'local.l[1].c'],
     ['such a key in one item of a for over a tuple not known yet only', `[for x in ${SOME} : (x == 1 ? ${MERGED} : ${BEFORE})]`, 'local.l[0].c'],
     [
       'lookup of such a key in one value a for may keep only',

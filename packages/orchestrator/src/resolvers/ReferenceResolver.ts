@@ -59,6 +59,7 @@ import {
   maybeSteps,
   namesAStep,
   namesEveryItem,
+  pickedTupleMarks,
   refuseDuplicateKeys,
   under,
   unknownItem,
@@ -542,7 +543,7 @@ export class ReferenceResolver {
           kept,
           node.grouped === true
         )
-      : laterTupleMarks(bodies, kept, []);
+      : pickedTupleMarks(bodies, kept);
     return new UnresolvedReferenceError(message, types.dynamic, marksOfWhole(keyed, marks));
   }
 
