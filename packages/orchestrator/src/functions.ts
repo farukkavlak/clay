@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
 
-import { AttributePath, containsUnknown, ExactNumber, isMarker, isUnknown, SOMEWHERE, Type, types, UNKNOWN } from '@clay/contracts';
+import { AttributePath, containsUnknown, ExactNumber, isMarker, isMaybe, isUnknown, SOMEWHERE, Type, types, UNKNOWN } from '@clay/contracts';
 import { CallNode, ConfigError } from '@clay/parser';
 
 import { charactersOf } from './characters';
@@ -9,7 +9,6 @@ import { formatted, FormatError } from './format';
 import { isSequence, itemTypes, unified, unjoined, Unjoinable } from './unify';
 import {
   allSensitive,
-  allSensitiveIf,
   article,
   child,
   described,
@@ -19,6 +18,8 @@ import {
   isAllSensitive,
   isSensitive,
   itemsOf,
+  mayBeAllSensitive,
+  mayBeSensitive,
   nullSource,
   objectOf,
   sensitiveAmong,
@@ -27,7 +28,9 @@ import {
   unordered,
   Value,
   valueOf,
-  wholeIf,
+  wholeAs,
+  wholeOf,
+  wholeWhere,
   withSensitive,
 } from './Value';
 
@@ -67,14 +70,14 @@ function counted(value: Value, refuse: Refuse): Value {
 
 /** Sensitive where the whole argument is: how many items a list holds says nothing of a sensitive one among them. */
 function length(value: Value, refuse: Refuse): Value {
-  return allSensitiveIf(isAllSensitive(value), counted(value, refuse));
+  return wholeAs(value, counted(value, refuse));
 }
 
 function elementOf(name: string, value: Value, refuse: Refuse): Type {
   try {
     return unified(itemTypes(value.type));
   } catch (error) {
-    if (error instanceof Unjoinable) return refuse(`${name} ${unjoined(error, isSensitive(value))}`);
+    if (error instanceof Unjoinable) return refuse(`${name} ${unjoined(error, mayBeSensitive(value))}`);
     throw error;
   }
 }
@@ -103,7 +106,7 @@ function cased(name: string, change: (text: string) => string): ClayFunction {
   return one((value, refuse) => {
     const text = textOf(`${name} takes a string`, value, refuse);
 
-    return withSensitive(valueOf(types.string, text === UNKNOWN ? UNKNOWN : change(text)), wholeIf(isSensitive(value)));
+    return withSensitive(valueOf(types.string, text === UNKNOWN ? UNKNOWN : change(text)), wholeOf(value));
   });
 }
 
@@ -123,7 +126,7 @@ function join([separator, ...lists]: Value[], refuse: Refuse): Value {
   const between = textOf('join takes a string as the separator', separator, refuse);
   for (const [index, list] of lists.entries()) checkJoined(list, refuse, index + 1);
 
-  const sensitive = wholeIf([separator, ...lists].some((arg) => isSensitive(arg)));
+  const sensitive = wholeOf(separator, ...lists);
   if (between === UNKNOWN || lists.some((list) => containsUnknown(list.data))) return withSensitive(valueOf(types.string, UNKNOWN), sensitive);
 
   const items = lists.flatMap((list) => list.data as unknown[]);
@@ -148,7 +151,7 @@ function entriesOf(value: Value): Value[] {
 
 /** Marks below `key` say every value it may be holds the key, since a value not known yet is marked only where every value it may be is. */
 function marksKey(value: Value, key: string): boolean {
-  return (value.sensitive ?? []).some(([first]) => first !== undefined && !isMarker(first) && String(first) === key);
+  return (value.sensitive ?? []).some((path) => path[0] !== undefined && !isMarker(path[0]) && !isMaybe(path) && String(path[0]) === key);
 }
 
 /** Where the key or the map is not known yet, it gives an entry or the default, so only the marks all of them have. */
@@ -165,7 +168,7 @@ function lookupType(map: Value, element: Type, fallback: Value, refuse: Refuse):
     return unified([element, fallback.type]);
   } catch (error) {
     if (!(error instanceof Unjoinable)) throw error;
-    return refuse(`lookup ${unjoined(error, isSensitive(map) || isSensitive(fallback))}`, 2);
+    return refuse(`lookup ${unjoined(error, mayBeSensitive(map) || mayBeSensitive(fallback))}`, 2);
   }
 }
 
@@ -194,7 +197,7 @@ function lookup(args: Value[], refuse: Refuse): Value {
   const name = textOf('lookup takes a string as the key', key, refuse, 1);
   const found = map.type.kind === 'map' ? fromMap(args, map.type.element, name, refuse) : fromObject(args, name);
 
-  return allSensitiveIf(isSensitive(key) || isAllSensitive(map), found);
+  return wholeWhere(found, isSensitive(key) || isAllSensitive(map), mayBeSensitive(key) || mayBeAllSensitive(map));
 }
 
 /** Arguments of one type merge into that type; anything else into an object. */
@@ -211,7 +214,7 @@ const keysLater = (arg: Value) => arg.type.kind === 'dynamic' || (arg.type.kind 
 function keysGiven(arg: Value): string[] {
   if (!keysLater(arg)) return keysOf(arg);
 
-  return (arg.sensitive ?? []).flatMap(([first]) => (first === undefined || isMarker(first) ? [] : [String(first)]));
+  return (arg.sensitive ?? []).flatMap((path) => (path[0] === undefined || isMarker(path[0]) || isMaybe(path) ? [] : [String(path[0])]));
 }
 
 /** A key comes from the last argument that gives it for certain, or from one not known yet after it, so it has the marks all of those share. */
@@ -254,16 +257,17 @@ function merge(args: Value[], refuse: Refuse): Value {
 
   const given = args.filter((arg) => arg.data !== null);
   const result = merged(given);
-  return allSensitiveIf(
+  return wholeWhere(
+    somewhereKept(given) ? withSensitive(result, fewest([...(result.sensitive ?? []), [SOMEWHERE]])) : result,
     given.some((arg) => isAllSensitive(arg)),
-    somewhereKept(given) ? withSensitive(result, fewest([...(result.sensitive ?? []), [SOMEWHERE]])) : result
+    given.some((arg) => mayBeAllSensitive(arg))
   );
 }
 
 /** Sensitive as a whole where any part of any argument is, as `join` is. */
 function format([template, ...values]: Value[], refuse: Refuse): Value {
   const text = textOf('format takes a string first', template, refuse);
-  const sensitive = wholeIf([template, ...values].some((arg) => isSensitive(arg)));
+  const sensitive = wholeOf(template, ...values);
   if (text === UNKNOWN) return withSensitive(valueOf(types.string, UNKNOWN), sensitive);
 
   try {

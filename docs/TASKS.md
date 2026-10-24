@@ -379,15 +379,31 @@ change each.
       `l` is `cond ? [sensitive("a"), "b"] : ["c", sensitive("d")]`. Now a `for` whose body
       keeps the whole item, or makes it sensitive, keeps it, and so does a `merge` where no
       later argument may give a key the value holds
-- [ ] A mark on a value not known yet does not say which choice it waits on, so what is
+- [x] A mark on a value not known yet does not say which choice it waits on, so what is
       sensitive in every outcome passes the plan and is refused at apply where the parts
       are read apart. Here `l` is
       `cond ? { a = sensitive("x"), b = "y", c = "0" } : { a = "z", b = sensitive("w"), c = "0" }`:
       `{ p = l.a, q = l.b }` and `merge(l, { c = "1" })`. So is `[for v in t : v.a]` where
-      `t` holds an object with a sensitive `a` at one place or the other
-- [ ] `tolist` of a set with a member known only after apply forgets the set holds a
+      `t` holds an object with a sensitive `a` at one place or the other. Now a root
+      output that may hold a sensitive value, by what the apply finds, is refused at plan,
+      so the apply never fails on such an output after it made the resources
+- [x] `tolist` of a set with a member known only after apply forgets the set holds a
       member, so a `for` with a sensitive body over it passes the plan and is refused at
-      apply. The plan would need to know that a list not known yet is not empty
+      apply. The plan would need to know that a list not known yet is not empty. Now
+      the plan refuses it as an output that may hold a sensitive value
+- [ ] A `merge` or `for` over a value not known yet marks every key or place as one that
+      may be sensitive, known ones too, so a part plain in every outcome is refused as an
+      output: `merge(l, { for k in [r] : k => "q" }).c`, and `w.c` with
+      `w = { for k, v in l : k => v }` where `l` is
+      `cond ? { a = sensitive("x"), c = "0" } : { a = "y", c = "0" }`. An item whose key or
+      place is known should give its marks only there
+- [ ] A mark under every item of a list not known yet, cut to a set, counts as sensitive for
+      certain, though the list may come out empty: `issensitive(toset(l))` with
+      `l = [for x in (cond ? ["a"] : []) : sensitive(x)]` answers `true` at plan and `false`
+      at apply. A schema's `sensitiveWith` over a list attribute takes such a mark the same way
+- [ ] An object not known yet given to a variable whose type has an `optional` attribute is
+      refused for lacking it: `variable "v" requires "b" in v` with
+      `v = cond ? { a = "x" } : { a = "y" }` and `type = object({ a = string, b = optional(string, "d") })`
 
 ## 1. Language
 

@@ -158,9 +158,9 @@ result is still sensitive somewhere: `issensitive` of it is true, though neither
 alone is sensitive. A `for` over it is too where the body keeps the item's mark, and so is
 a `merge` where no later argument may give a key it holds. A mark on every item of a
 collection not known yet says nothing for certain, since the collection may come out
-empty. A mark that depends on the way waits for the apply, which knows it and checks
-there, so `issensitive` gives the same answer at plan and apply. Terraform marks the
-result of such a condition where either side is marked.
+empty. A mark that depends on the way waits for the apply, so `issensitive` gives the same
+answer at plan and apply, and a root output that may hold such a value is refused at plan.
+Terraform marks the result of such a condition where either side is marked.
 
 `+`, `-`, `*`, `/` and `%` work on numbers, and `-var.n` negates one:
 `count = var.zones * 2`. Numbers stay exact, so `0.1 + 0.2` is `0.3`; a result past a
@@ -226,13 +226,18 @@ known yet gives each key the marks every value has, and a key some argument give
 certain the marks shared by that argument and every later one not known yet.
 
 A root output that holds a sensitive value and does not say `sensitive = true` is refused,
-at `validate`, `plan` and `apply`. A `for_each` with a sensitive key is refused, since a
-key shows in an address, and so is a sensitive `count`, since a plan shows how many
-instances it makes. `for_each = { primary = module.db.password }` is taken: only
-`each.value` is sensitive. An error raised while a value is worked out does not quote a
-sensitive one: `enabled: (sensitive value) is not a boolean, which is "true" or "false"`.
-It names the value's type, a list or null, since the configuration sets that: `&& takes a
-boolean, not a string`. It does not name its keys, its size or what it holds.
+at `validate`, `plan` and `apply`. So is one that may hold one by what the apply finds,
+such as `cond ? sensitive(a) : b` with `cond` not known at plan: the plan refuses it, so
+the apply does not fail on it after it made the resources. `validate` reads no state, so
+it leaves such a value to the plan. A value whose sensitivity waits for the apply is not
+known at plan either, so `count = cond || sensitive(true) ? 1 : 2` is refused as not
+known. A `for_each` with a sensitive key is refused, since a key shows in
+an address, and so is a sensitive `count`, since a plan shows how many instances it makes.
+`for_each = { primary = module.db.password }` is taken: only `each.value` is sensitive. An
+error raised while a value is worked out does not quote a sensitive one: `enabled:
+(sensitive value) is not a boolean, which is "true" or "false"`. It names the value's
+type, a list or null, since the configuration sets that: `&& takes a boolean, not a
+string`. It does not name its keys, its size or what it holds.
 
 A resource attribute given a sensitive value is sensitive where it is read back, so
 `local_file.conf.content` in a root output needs `sensitive = true` too. The state keeps

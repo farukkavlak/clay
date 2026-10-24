@@ -1,4 +1,4 @@
-import { EVERY_ITEM, ExactNumber, SOMEWHERE, types, UNKNOWN } from '@clay/contracts';
+import { EVERY_ITEM, ExactNumber, isMaybe, MAYBE, SOMEWHERE, types, UNKNOWN } from '@clay/contracts';
 import { CallNode, ConfigError } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
@@ -297,10 +297,10 @@ describe('lookup', () => {
       withSensitive(valueOf(types.map(types.string), UNKNOWN), [['a'], [EVERY_ITEM]]),
       written('b'),
       written('x'),
-      text(UNKNOWN),
+      withSensitive(text(UNKNOWN), [[MAYBE]]),
     ],
-    ['a key not known yet with a sensitive default it may not give', sizes, valueOf(types.string, UNKNOWN), allSensitive(written('x')), text(UNKNOWN)],
-    ['a key not known yet in a map sensitive at one key', withSensitive(sizes, [['prod']]), valueOf(types.string, UNKNOWN), written('x'), text(UNKNOWN)],
+    ['a key not known yet with a sensitive default it may not give', sizes, valueOf(types.string, UNKNOWN), allSensitive(written('x')), withSensitive(text(UNKNOWN), [[MAYBE]])],
+    ['a key not known yet in a map sensitive at one key', withSensitive(sizes, [['prod']]), valueOf(types.string, UNKNOWN), written('x'), withSensitive(text(UNKNOWN), [[MAYBE]])],
   ])('does not know %s', (_, map, key, fallback, result) => {
     expect(called('lookup', map, key, fallback)).toEqual(result);
   });
@@ -437,7 +437,7 @@ describe('merge', () => {
     ['somewhere of an argument sensitive somewhere, where no later one gives a key', [later([[SOMEWHERE]]), map({})], [[SOMEWHERE]]],
     ['no somewhere of a map sensitive somewhere, where a later one gives a key the map may hold', [later([[SOMEWHERE]]), map({ c: 'x' })], []],
   ])('keeps, with an argument not known yet, %s', (_, values, marks) => {
-    expect(called('merge', ...values).sensitive ?? []).toEqual(marks);
+    expect((called('merge', ...values).sensitive ?? []).filter((path) => !isMaybe(path))).toEqual(marks);
   });
 });
 
@@ -599,5 +599,15 @@ describe('format', () => {
 
   it('refuses no string at the call', () => {
     expect(() => functionCalled(callOf('format', 0))).toThrow(new ConfigError('format takes at least 1 argument, not 0', at(1)));
+  });
+});
+
+describe('issensitive', () => {
+  it.each([
+    ['a value sensitive for certain', withSensitive(written({ a: 'x' }), [['a']]), true],
+    ['a value with a part that may be sensitive', withSensitive(written({ a: 'x' }), [['a', MAYBE]]), UNKNOWN],
+    ['a known plain value', written({ a: 'x' }), false],
+  ])('answers for %s', (_, value, answer) => {
+    expect(called('issensitive', value).data).toBe(answer);
   });
 });

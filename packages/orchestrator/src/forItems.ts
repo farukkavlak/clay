@@ -1,8 +1,26 @@
-import { AttributePath, EVERY_ITEM, ExactNumber, isMarker, isUnknown, SENSITIVE, sensitiveUnder, Type, typeAt, types, UNKNOWN } from '@clay/contracts';
+import { AttributePath, EVERY_ITEM, ExactNumber, isMarker, isMaybe, isUnknown, SENSITIVE, sensitiveUnder, Type, typeAt, types, UNKNOWN } from '@clay/contracts';
 import { ConfigError, Position } from '@clay/parser';
 
 import { UnresolvedReferenceError } from './resolvers/UnresolvedReferenceError';
-import { allSensitiveIf, child, described, everyItemMarks, fewest, hasText, isSensitive, nullSource, objectOf, sharedMarks, tupleOf, Value, valueOf, withSensitive } from './Value';
+import {
+  child,
+  described,
+  everyItemMarks,
+  fewest,
+  hasText,
+  isSensitive,
+  marksOfWhole,
+  mayBeSensitive,
+  nullSource,
+  objectOf,
+  sharedMarks,
+  tupleOf,
+  Value,
+  valueOf,
+  wholeWhere,
+  Whole,
+  withSensitive,
+} from './Value';
 
 export type ForItem = [key: Value, value: Value];
 
@@ -54,7 +72,7 @@ function typeSteps(type: Type): (string | number)[] {
 }
 
 function markedSteps(collection: Value): (string | number)[] {
-  return (collection.sensitive ?? []).flatMap(([first]) => (first === undefined || isMarker(first) ? [] : [first]));
+  return (collection.sensitive ?? []).flatMap((path) => (path[0] === undefined || isMarker(path[0]) || isMaybe(path) ? [] : [path[0]]));
 }
 
 /**
@@ -153,9 +171,9 @@ export function laterTupleMarks(bodies: Value[], kept: boolean[]): AttributePath
 /**
  * With `grouped`, each key holds its values in a tuple; without it, a duplicate key is refused.
  * Every known key is checked before an unknown key makes the whole result unknown.
- * A sensitive key makes the whole object sensitive, since its names are its shape. `sensitive` says the collection is, as a whole.
+ * A sensitive key makes the whole object sensitive, since its names are its shape. `whole` says whether the collection is, as a whole, or may be.
  */
-export function forObject(entries: ForItem[], grouped: boolean, sensitive: boolean, position: Position): Value {
+export function forObject(entries: ForItem[], grouped: boolean, whole: Whole, position: Position): Value {
   for (const [key] of entries) checkKey(key, position);
   if (!grouped)
     refuseDuplicateKeys(
@@ -164,16 +182,16 @@ export function forObject(entries: ForItem[], grouped: boolean, sensitive: boole
     );
 
   // One unknown key makes the object's shape unknown; every item is there, so a sensitive key makes the whole sensitive.
+  const keyed = { sensitive: whole.sensitive || entries.some(([key]) => isSensitive(key)), maybe: whole.maybe || entries.some(([key]) => mayBeSensitive(key)) };
   if (entries.some(([key]) => isUnknown(key.data))) {
-    const whole = sensitive || entries.some(([key]) => isSensitive(key));
-    const marks = whole
+    const marks = keyed.sensitive
       ? [[]]
       : laterObjectMarks(
           entries,
           entries.map(() => true),
           grouped
         );
-    throw new UnresolvedReferenceError('A key in a for is known only after apply, so what the for gives is not known yet', types.dynamic, marks);
+    throw new UnresolvedReferenceError('A key in a for is known only after apply, so what the for gives is not known yet', types.dynamic, marksOfWhole(keyed, marks));
   }
 
   const keys = new Map<string, Value[]>();
@@ -182,8 +200,6 @@ export function forObject(entries: ForItem[], grouped: boolean, sensitive: boole
     keys.set(text, [...(keys.get(text) ?? []), value]);
   }
 
-  return allSensitiveIf(
-    entries.some(([key]) => isSensitive(key)),
-    objectOf([...keys].map(([key, values]) => [key, grouped ? tupleOf(values) : values[0]]))
-  );
+  const made = objectOf([...keys].map(([key, values]) => [key, grouped ? tupleOf(values) : values[0]]));
+  return wholeWhere(made, keyed.sensitive, keyed.maybe);
 }

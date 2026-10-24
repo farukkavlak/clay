@@ -43,6 +43,30 @@ describe('a resource attribute given a sensitive value, as the CLI prints it', (
     await fs.rm(dir, { recursive: true, force: true });
   });
 
+  it('says a part may be marked sensitive, where only what the apply finds tells', async () => {
+    await written('resource "null_resource" "n" {\n  triggers = { t = "plain" }\n}\n');
+    await clayIn('apply', '--yes');
+    await written(
+      'resource "random_string" "s" { length = 4 }\nresource "null_resource" "n" {\n  triggers = { t = (length(random_string.s.result) == 5 || sensitive(true)) ? "topsecret" : "b" }\n}\n'
+    );
+
+    const planned = await clayIn('plan');
+
+    expect(planned).toContain('      triggers: {"t":(sensitive value)} -> {"t":(known after apply)}');
+    expect(planned).toContain('      triggers: may be marked sensitive');
+    expect(planned).not.toContain('topsecret');
+  });
+
+  it('says a part may no longer be marked sensitive, where only what the apply finds tells', async () => {
+    await written('resource "null_resource" "n" {\n  triggers = { t = sensitive("plain") }\n}\n');
+    await clayIn('apply', '--yes');
+    await written(
+      'resource "random_string" "s" { length = 4 }\nresource "null_resource" "n" {\n  triggers = { t = (length(random_string.s.result) == 5 || sensitive(true)) ? "topsecret" : "b" }\n}\n'
+    );
+
+    expect(await clayIn('plan')).toContain('      triggers: may no longer be marked sensitive');
+  });
+
   it('hides only the sensitive parts of a value in a change', async () => {
     await written(triggers('app'));
     await clayIn('apply', '--yes');

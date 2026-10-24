@@ -1,4 +1,4 @@
-import { Address, AttributePath, isRecord, isUnknown, jsonText, Output, samePaths, Schema, SENSITIVE, sensitiveUnder } from '@clay/contracts';
+import { Address, AttributePath, isMaybe, isRecord, isUnknown, jsonText, Output, samePaths, Schema, SENSITIVE, sensitiveUnder } from '@clay/contracts';
 import { changedOutside, Changes, Drift, OutputChanges, Plan, PlanAction } from '@clay/planner';
 import { isDeepStrictEqual, styleText } from 'node:util';
 
@@ -45,10 +45,11 @@ function pastTense(actionType: PlanAction['type']): string {
   return styleText('red', 'destroyed');
 }
 
-/** Built by hand, since no JSON text can stand for an unknown inside a value. That a part is sensitive tells more than that it is not known. */
+/** Built by hand, since no JSON text can stand for an unknown inside a value. That a part is sensitive, or may be, tells more than that it is not known. */
 export function show(value: unknown, sensitive: readonly AttributePath[] = []): string {
   if (sensitive.some((path) => path.length === 0)) return SENSITIVE;
   if (isUnknown(value)) return '(known after apply)';
+  if (sensitive.some((path) => path.length === 1 && isMaybe(path))) return SENSITIVE;
   if (Array.isArray(value)) return `[${value.map((item, index) => show(item, sensitiveUnder(sensitive, index))).join(',')}]`;
   // Numbers are ExactNumbers, which JSON text writes exactly.
   if (isRecord(value))
@@ -103,10 +104,13 @@ function displayChanges(changes: Changes, schema: Schema, sensitive: readonly At
   }
 }
 
+/** A part that may be sensitive is so only by what the apply finds, so the note says it may be. */
 function marksNote(before: AttributePath[], after: AttributePath[]): string | undefined {
   if (samePaths(before, after)) return undefined;
-  if (before.length === 0) return 'will be marked sensitive';
-  if (after.length === 0) return 'will no longer be marked sensitive';
+
+  const certain = after.filter((path) => !isMaybe(path));
+  if (before.length === 0) return certain.length > 0 ? 'will be marked sensitive' : 'may be marked sensitive';
+  if (certain.length === 0) return after.length === 0 ? 'will no longer be marked sensitive' : 'may no longer be marked sensitive';
   return 'which parts are sensitive changes';
 }
 

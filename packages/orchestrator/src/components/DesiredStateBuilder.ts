@@ -343,7 +343,9 @@ export class DesiredStateBuilder {
   private planOutput(node: OutputNode, instance: ModuleAddress, state: State, rootOutputs: Map<string, Output>): void {
     const read = (constant: AttributeValue) => this.resolveNode(node, constant, instance, state);
     const resolved = this.resolveNode(node, node.value, instance, state);
-    const value = tryAt(node.position, node.declaration, contextIn(node.context, instance), () => outputAs(node.name, resolved, node.declared, read, instance.isRoot()));
+    const value = tryAt(node.position, node.declaration, contextIn(node.context, instance), () =>
+      outputAs(node.name, resolved, node.declared, read, { root: instance.isRoot(), maybe: this.walk === 'plan' })
+    );
     this.scopeManager.setOutput(instance.toString(), node.name, value);
 
     if (instance.isRoot()) rootOutputs.set(node.name, outputOf(value, node.declared.sensitive));

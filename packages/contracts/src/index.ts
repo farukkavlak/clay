@@ -135,25 +135,38 @@ export const EVERY_ITEM = -1;
 /** The last step of a path to a value sensitive in some part the plan cannot name yet. No list has an item -2. */
 export const SOMEWHERE = -2;
 
-/** EVERY_ITEM or SOMEWHERE: no key or index, though a key may be spelled "-1" or "-2". */
+/** The last step of a path to a part sensitive in some outcome, which the plan does not know to be so in every one. No list has an item -3. */
+export const MAYBE = -3;
+
+/** EVERY_ITEM, SOMEWHERE or MAYBE: no key or index, though a key may be spelled "-1", "-2" or "-3". */
 export function isMarker(step: string | number): boolean {
-  return step === EVERY_ITEM || step === SOMEWHERE;
+  return step === EVERY_ITEM || step === SOMEWHERE || step === MAYBE;
+}
+
+/** A path that says only that the part may be sensitive. */
+export function isMaybe(path: AttributePath): boolean {
+  return path.at(-1) === MAYBE;
 }
 
 function sameStep(marked: string | number, step: string | number): boolean {
-  return marked === EVERY_ITEM || (marked !== SOMEWHERE && String(marked) === String(step));
+  return marked === EVERY_ITEM || (!isMarker(marked) && String(marked) === String(step));
 }
 
-/** What is left of each path after `step`. A value sensitive as a whole is so in every part. */
+/**
+ * What is left of each path after `step`. A value sensitive as a whole is so in every part.
+ * One that may be so as a whole may be in every part.
+ */
 export function sensitiveUnder(paths: readonly AttributePath[], step: string | number): AttributePath[] {
   if (paths.some((path) => path.length === 0)) return [[]];
 
-  return paths.filter(([first]) => sameStep(first, step)).map((path) => path.slice(1));
+  const below = paths.filter(([first]) => sameStep(first, step)).map((path) => path.slice(1));
+  return paths.some((path) => path.length === 1 && path[0] === MAYBE) ? [...below, [MAYBE]] : below;
 }
 
-/** Whether the value at `at` is sensitive in some part, or sits inside a sensitive one. */
+/** Whether the value at `at` is sensitive, or may be, in some part, or sits inside a part that is. */
 export function touchesSensitive(paths: readonly AttributePath[], at: AttributePath): boolean {
-  return paths.some((path) => {
+  return paths.some((marked) => {
+    const path = isMaybe(marked) ? marked.slice(0, -1) : marked;
     const shared = Math.min(path.length, at.length);
 
     return path.slice(0, shared).every((step, i) => sameStep(step, at[i]));

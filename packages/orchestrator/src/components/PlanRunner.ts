@@ -440,6 +440,6 @@ export class PlanRunner {
 
   private outputValue(name: string, value: AttributeValue, declared: OutputNode['declared'], state: State, context: Context): Value {
     const resolved = this.resolver.resolveValue(value, state, context);
-    return outputAs(name, resolved, declared, (node) => this.resolver.resolveValue(node, state, context), moduleOf(context).isRoot());
+    return outputAs(name, resolved, declared, (node) => this.resolver.resolveValue(node, state, context), { root: moduleOf(context).isRoot(), maybe: true });
   }
 }

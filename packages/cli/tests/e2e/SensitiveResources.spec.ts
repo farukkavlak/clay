@@ -21,6 +21,8 @@ const DB = `
 `;
 
 const REFUSED = 'output "probe" holds a sensitive value; write sensitive = true to export it';
+
+const MAYBE_REFUSED = 'output "probe" may hold a sensitive value, by what the apply finds; write sensitive = true to export it';
 const TRIGGERS = [
   ['triggers', 'token'],
   ['triggers', 'list', 1],
@@ -233,18 +235,16 @@ describe('a resource given a sensitive value', () => {
     it.each([
       ['whose body ignores the item', '[for r in null_resource.n.triggers.rows : "x"]'],
       ['whose body reads a part of the item no item marks', '[for r in null_resource.n.triggers.rows : r.name]'],
-      ['whose body reads a part of the item every item marks, though it may have none', '[for r in null_resource.n.triggers.rows : r.token]'],
     ])('leaves to the apply a for over what it marks every item of, %s', async (_, value) => {
       const { outputs } = await newOrchestrator().plan(`${config}\noutput "probe" { value = ${value} }`);
 
       expect(outputs.probe.new?.value).toBe(UNKNOWN);
     });
 
-    it('refuses at the apply a for that reads the part every item marks, once there are items', async () => {
+    it('refuses at plan a for that reads the part every item marks, which may hold a sensitive value though it may have no item', async () => {
       const probe = `${config}\noutput "probe" { value = [for r in null_resource.n.triggers.rows : r.token] }`;
-      const engine = newOrchestrator();
 
-      await expect(drain(engine.runPlan(await engine.plan(probe), probe))).rejects.toThrow(REFUSED);
+      await expect(newOrchestrator().plan(probe)).rejects.toThrow(MAYBE_REFUSED);
     });
 
     it('keeps the mark of every item through a plan saved to a file', async () => {

@@ -1,4 +1,4 @@
-import { Schema, types } from '@clay/contracts';
+import { MAYBE, Schema, types } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { marksOf, schemaRemarked } from '../src/schemaMarks';
@@ -54,5 +54,21 @@ describe('an attribute the schema marks sensitive with others', () => {
   it('is not sensitive where none of them is', () => {
     expect(marksOf(echoing, { command: text('echo hi') })).toEqual([]);
     expect(schemaRemarked(echoing, { stdout: text('hi') }, { command: text('echo hi') }).stdout).not.toHaveProperty('sensitive');
+  });
+
+  it('may be sensitive as a whole where one of them only may be sensitive', () => {
+    const command = withSensitive(valueOf(types.string, 'echo s'), [[MAYBE]]);
+
+    expect(marksOf(echoing, { command })).toEqual([
+      ['stdout', MAYBE],
+      ['command', MAYBE],
+    ]);
+    expect(schemaRemarked(echoing, { stdout: text('s') }, { command }).stdout.sensitive).toEqual([[MAYBE]]);
+  });
+
+  it('is sensitive as a whole where one of them is, though another only may be', () => {
+    const command = withSensitive(valueOf(types.string, 'echo s'), [[MAYBE]]);
+
+    expect(marksOf(echoing, { command, cwd: allSensitive(text('/s')) })).toEqual([['stdout'], ['command', MAYBE], ['cwd']]);
   });
 });

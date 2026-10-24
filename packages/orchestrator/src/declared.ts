@@ -4,7 +4,7 @@ import { AttributeValue, TypeDefaults } from '@clay/parser';
 import { converted, SchemaMismatch, toldWhole } from './conformValues';
 import { setOf } from './setMembers';
 import { itemTypes, unified, unjoined, Unjoinable } from './unify';
-import { allSensitiveIf, child, isAllSensitive, isSensitive, objectOf, tupleOf, unordered, Value, valueOf } from './Value';
+import { allSensitiveIf, child, isSensitive, mayBeSensitive, objectOf, tupleOf, unordered, Value, valueOf, wholeAs } from './Value';
 
 /** `read` evaluates a default, which is always a constant. */
 export interface Defaults {
@@ -111,7 +111,7 @@ function fillWith(holder: string, read: Defaults['read'] | undefined): Fill {
   const fill: Fill = {
     holder,
     read,
-    walk: (value, declared, defaults, path) => toldWhole(holder, value, path, () => allSensitiveIf(isAllSensitive(value), filled(value, declared, defaults, fill, path))),
+    walk: (value, declared, defaults, path) => toldWhole(holder, value, path, () => wholeAs(value, filled(value, declared, defaults, fill, path))),
   };
   return fill;
 }
@@ -122,7 +122,7 @@ function heldAs(value: Value, type: Type, defaults: TypeDefaults | undefined, fi
     const written = fill.walk(value, type, defaults, path);
     return converted(fill.holder, written, settled(required(type), written.type), path);
   } catch (error) {
-    if (error instanceof Unjoinable) throw new SchemaMismatch(`${fill.holder} ${unjoined(error, isSensitive(value))}`, String(path[0]));
+    if (error instanceof Unjoinable) throw new SchemaMismatch(`${fill.holder} ${unjoined(error, mayBeSensitive(value))}`, String(path[0]));
     throw error;
   }
 }
@@ -154,10 +154,16 @@ export function givenTo(holder: Holder, name: string, value: Value, { type, defa
   return type ? declaredAs(holder, name, given, type, defaults && { tree: defaults, read }) : given;
 }
 
-/** A root output is where a value leaves, so it holds a sensitive one only if marked. */
-export function outputAs(name: string, value: Value, declared: Declared, read: Defaults['read'], root: boolean): Value {
+/**
+ * A root output is where a value leaves, so it holds a sensitive one only if marked. One that may hold one is refused at plan,
+ * so the apply does not fail after it made the resources; `validate` reads no state, so it leaves that to the plan.
+ */
+export function outputAs(name: string, value: Value, declared: Declared, read: Defaults['read'], { root, maybe }: { root: boolean; maybe: boolean }): Value {
   const given = givenTo('output', name, value, declared, read);
-  if (root && !declared.sensitive && isSensitive(given)) throw new Error(`output "${name}" holds a sensitive value; write sensitive = true to export it`);
+  if (root && !declared.sensitive && (maybe ? mayBeSensitive(given) : isSensitive(given))) {
+    const holds = isSensitive(given) ? 'holds a sensitive value' : 'may hold a sensitive value, by what the apply finds';
+    throw new Error(`output "${name}" ${holds}; write sensitive = true to export it`);
+  }
 
   return given;
 }
