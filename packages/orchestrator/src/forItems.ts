@@ -1,4 +1,4 @@
-import { AttributePath, EVERY_ITEM, EXACT, ExactNumber, isMarker, isMaybe, isUnknown, SENSITIVE, sensitiveUnder, Type, typeAt, types, UNKNOWN } from '@clay/contracts';
+import { AttributePath, EVERY_ITEM, EXACT, ExactNumber, holdsFirst, isMarker, isUnknown, SENSITIVE, sensitiveUnder, Type, typeAt, types, UNKNOWN } from '@clay/contracts';
 import { ConfigError, Position } from '@clay/parser';
 
 import { UnresolvedReferenceError } from './resolvers/UnresolvedReferenceError';
@@ -89,7 +89,7 @@ export function maybeSteps(collection: Value, certain: (string | number)[]): (st
 }
 
 function markedSteps(collection: Value): (string | number)[] {
-  return (collection.sensitive ?? []).flatMap((path) => (path[0] === undefined || isMarker(path[0]) || isMaybe(path) ? [] : [path[0]]));
+  return (collection.sensitive ?? []).flatMap((path) => (holdsFirst(path) ? [path[0]] : []));
 }
 
 /**
@@ -160,12 +160,21 @@ function groupPlaces(entries: ForItem[], kept: boolean[], text: string): Attribu
   return marks;
 }
 
-/** The one item kept for certain that gives the key, which no other may give; else any item that gives it, which may be dropped. */
+/**
+ * The one item kept for certain that gives the key, which no other may give; else any item that gives it, which may be dropped,
+ * or one whose key is not known yet.
+ */
 function forKeyMarks(entries: ForItem[], kept: boolean[], text: string): AttributePath[] {
   const giving = entries.flatMap((entry, index) => (givesKey(entry, text) ? [{ value: entry[1], kept: kept[index] }] : []));
   const sure = giving.filter((item) => item.kept).map((item) => item.value);
+  const later = entries.filter(([key]) => isUnknown(key.data)).map(([, value]) => value);
 
-  return sure.length > 0 ? sharedMarks(sure) : maybeMarks(giving.map((item) => item.value));
+  return sure.length > 0
+    ? sharedMarks(sure)
+    : maybeMarks(
+        giving.map((item) => item.value),
+        later
+      );
 }
 
 /** The marks every value that may join the group has, and those of the items it holds for certain first at their places; with none, it may not be there. */

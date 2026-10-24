@@ -250,7 +250,7 @@ function certainShared(values: Value[]): AttributePath[] {
 }
 
 /** The marks any of `values` has, each as one it may have. */
-export function maybeMarks(values: Value[]): AttributePath[] {
+function maybeOfEach(values: Value[]): AttributePath[] {
   return values.flatMap((value) =>
     marksOnly(value.sensitive ?? [])
       .filter((path) => path.at(-1) !== SOMEWHERE)
@@ -258,12 +258,11 @@ export function maybeMarks(values: Value[]): AttributePath[] {
   );
 }
 
-/** The keys and places every one of `values` holds exactly. */
-function sharedExact(values: Value[]): (string | number)[] {
-  const [first, ...rest] = values;
-  const exact = (first?.sensitive ?? []).filter((path) => path.length === 2 && isExact(path)).map(([step]) => step);
+/** The first step of each path to an exact key or place, at any depth. */
+function exactSteps(values: Value[]): (string | number)[] {
+  const steps = values.flatMap((value) => (value.sensitive ?? []).filter((path) => path.length > 1 && isExact(path)).map(([step]) => step));
 
-  return exact.filter((step) => rest.every((value) => exactAt(value.sensitive ?? [], step)));
+  return [...new Set(steps)];
 }
 
 /** What is at `step` of a value not known yet. */
@@ -271,14 +270,67 @@ function partLater(value: Value, step: string | number): Value {
   return withSensitive(valueOf(typeAt(value.type, step), UNKNOWN), sensitiveUnder(value.sensitive ?? [], step));
 }
 
-/**
- * The marks every one of `values` has, so a value that is one of them, not known which, has them for certain, and those any has as ones it may have.
- * A key or place each holds exactly stays so, with the marks they have there, since no mark that may be so under every item reaches it.
- */
-export function sharedMarks(values: Value[]): AttributePath[] {
-  const exact = sharedExact(values).flatMap((step) => [[step, EXACT], ...sharedMarks(values.map((value) => partLater(value, step))).map((path) => [step, ...path])]);
+/** An array is a tuple and a record an object. */
+export function inferred(data: unknown): Type {
+  if (typeof data === 'string') return types.string;
+  if (data instanceof ExactNumber) return types.number;
+  if (typeof data === 'boolean') return types.bool;
+  if (Array.isArray(data)) return types.tuple(data.map((item) => inferred(item)));
+  if (isRecord(data)) return types.object(Object.fromEntries(Object.entries(data).map(([name, item]) => [name, inferred(item)])));
 
-  return fewest([...certainShared(values), ...maybeMarks(values), ...exact]);
+  return types.dynamic;
+}
+
+/** Undefined data where the step finds nothing. */
+export function child(value: Value, step: string | number): Value {
+  const data = Array.isArray(value.data) ? value.data[step as number] : own(value.data as Record<string, unknown>, String(step));
+  const type = typeAt(value.type, step);
+
+  return withSensitive(valueOf(type.kind === 'dynamic' ? inferred(data) : type, data), sensitiveUnder(value.sensitive ?? [], step));
+}
+
+/** A known collection holds its keys and places itself, so no item the plan cannot name may take one. */
+function heldKnown({ data }: Value, step: string | number): boolean {
+  return Array.isArray(data) ? typeof step === 'number' && step >= 0 && step < data.length : isRecord(data) && Object.hasOwn(data, String(step));
+}
+
+/** What is at `step`, read from a known collection where it holds it. */
+function partAt(value: Value, step: string | number): Value {
+  return heldKnown(value, step) ? child(value, step) : partLater(value, step);
+}
+
+/** What may be there: `values`, those of them to take the marks they may have from, and `others` that may be there too. */
+interface Among {
+  values: Value[];
+  maybeFrom: Value[];
+  others: Value[];
+}
+
+/**
+ * The marks every one of `values` has, where `certain`, and those any of `maybeFrom` has as ones it may have.
+ * A key or place every one of `values`, and of `others`, holds exactly stays so at any depth, with the marks the parts of `values` have there,
+ * since no mark that may be so under every item reaches it.
+ */
+function marksAmong(among: Among, certain: boolean): AttributePath[] {
+  const exact = exactSteps(among.values).flatMap((step) => {
+    const parts = (from: Value[]) => from.map((value) => partAt(value, step));
+    const inner: Among = { values: parts(among.values), maybeFrom: parts(among.maybeFrom), others: parts(among.others) };
+    const here = [...among.values, ...among.others].every((value) => exactAt(value.sensitive ?? [], step) || heldKnown(value, step));
+
+    return [...(here ? [[step, EXACT]] : []), ...marksAmong(inner, certain).map((path) => [step, ...path])];
+  });
+
+  return fewest([...(certain ? certainShared(among.values) : []), ...maybeOfEach(among.maybeFrom), ...exact]);
+}
+
+/** The marks any of `values` has, each as one it may have, and the keys and places all of them, and all of `others` that may be there instead, hold exactly. */
+export function maybeMarks(values: Value[], others: Value[] = []): AttributePath[] {
+  return marksAmong({ values, maybeFrom: values, others }, false);
+}
+
+/** The marks every one of `values` has, so a value that is one of them, not known which, has them for certain, and those any has as ones it may have. */
+export function sharedMarks(values: Value[]): AttributePath[] {
+  return marksAmong({ values, maybeFrom: values, others: [] }, true);
 }
 
 /**
@@ -286,7 +338,7 @@ export function sharedMarks(values: Value[]): AttributePath[] {
  * Only the `unnamed` ones may be at a key or place no mark names, so only theirs may be there.
  */
 export function everyItemMarks(values: Value[], unnamed = values): AttributePath[] {
-  return fewest([...certainShared(values), ...maybeMarks(unnamed)]).map((path) => [EVERY_ITEM, ...path]);
+  return marksAmong({ values, maybeFrom: unnamed, others: [] }, true).map((path) => [EVERY_ITEM, ...path]);
 }
 
 /** Sensitive as a whole where `sensitive`, and as it was otherwise. */
@@ -354,25 +406,6 @@ export function objectOf(entries: [name: string, value: Value][]): Value {
   );
 
   return withSensitive(object, sensitiveIn(entries));
-}
-
-/** An array is a tuple and a record an object. */
-export function inferred(data: unknown): Type {
-  if (typeof data === 'string') return types.string;
-  if (data instanceof ExactNumber) return types.number;
-  if (typeof data === 'boolean') return types.bool;
-  if (Array.isArray(data)) return types.tuple(data.map((item) => inferred(item)));
-  if (isRecord(data)) return types.object(Object.fromEntries(Object.entries(data).map(([name, item]) => [name, inferred(item)])));
-
-  return types.dynamic;
-}
-
-/** Undefined data where the step finds nothing. */
-export function child(value: Value, step: string | number): Value {
-  const data = Array.isArray(value.data) ? value.data[step as number] : own(value.data as Record<string, unknown>, String(step));
-  const type = typeAt(value.type, step);
-
-  return withSensitive(valueOf(type.kind === 'dynamic' ? inferred(data) : type, data), sensitiveUnder(value.sensitive ?? [], step));
 }
 
 /** The marks of an item the plan cannot name: those every item has, for certain, and those any one item has, as ones it may have. */

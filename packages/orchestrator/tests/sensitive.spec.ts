@@ -17,6 +17,7 @@ import {
   isSensitive,
   itemsOf,
   mayBeSensitive,
+  maybeMarks,
   objectOf,
   sharedMarks,
   tupleOf,
@@ -36,6 +37,9 @@ const secret = allSensitive(valueOf(types.string, 's3cret'));
 
 /** A map not known yet with these marks. */
 const laterMap = (...paths: (string | number)[][]) => withSensitive(valueOf(types.map(types.dynamic), UNKNOWN), paths);
+
+/** A map not known yet with these marks below its key `w`. */
+const below = (...paths: (string | number)[][]) => laterMap(...paths.map((path) => ['w', ...path]));
 
 describe('the sensitive parts of a value', () => {
   it('are left out where it has none, so it is the value it was', () => {
@@ -283,8 +287,15 @@ describe('an exact key or place', () => {
     ).toBe(false);
   });
 
-  it('stays out of what a value that is one of others may have', () => {
-    expect(sharedMarks([laterMap([EVERY_ITEM, 'p', MAYBE], ['c', EXACT]), written({ c: { p: 'x' } })])).toEqual([[EVERY_ITEM, 'p', MAYBE]]);
+  it('is kept beside a known value that holds the key, since no other item may be there', () => {
+    expect(sensitiveUnder(sharedMarks([laterMap([EVERY_ITEM, 'p', MAYBE], ['c', EXACT]), written({ c: { p: 'x' } })]), 'c')).toEqual([]);
+  });
+
+  it.each([
+    ['that lacks the key', written({ d: { p: 'x' } }), [['p', MAYBE]]],
+    ['whose every item may be sensitive', withSensitive(written({ c: { p: 'x' } }), [[EVERY_ITEM, MAYBE]]), [[MAYBE]]],
+  ])('is not kept beside a known value %s', (_, known, marks) => {
+    expect(sensitiveUnder(sharedMarks([laterMap([EVERY_ITEM, 'p', MAYBE], ['c', EXACT]), known]), 'c')).toEqual(marks);
   });
 
   it('is not kept where only one of the values has it, beside one that marks every item for certain', () => {
@@ -303,6 +314,63 @@ describe('an exact key or place', () => {
     const other = laterMap([EVERY_ITEM, 'y'], [EVERY_ITEM, 'z', MAYBE], ['c', EXACT]);
 
     expect(sensitiveUnder(sharedMarks([one, other]), 'c')).toContainEqual(['x', MAYBE]);
+  });
+
+  describe('below a key that is not exact', () => {
+    it('is kept where every value has it there', () => {
+      const one = below([EVERY_ITEM, MAYBE], ['c', EXACT]);
+
+      expect(sensitiveUnder(sensitiveUnder(sharedMarks([one, one]), 'w'), 'c')).toEqual([]);
+    });
+
+    it('is kept where one value has it below every item and the other at the key', () => {
+      const every = laterMap([EVERY_ITEM, EVERY_ITEM, MAYBE], [EVERY_ITEM, 'c', EXACT]);
+      const keyed = below([EVERY_ITEM, MAYBE], ['c', EXACT]);
+
+      expect(sensitiveUnder(sensitiveUnder(sharedMarks([every, keyed]), 'w'), 'c')).toEqual([]);
+    });
+
+    it('is kept where a known value holds the key below one it holds too', () => {
+      const marks = sharedMarks([below([EVERY_ITEM, MAYBE], ['c', EXACT]), written({ w: { c: 'x' } })]);
+
+      expect(sensitiveUnder(sensitiveUnder(marks, 'w'), 'c')).toEqual([]);
+    });
+
+    it('is not kept where only one of the values has it there', () => {
+      const marks = sharedMarks([below([EVERY_ITEM, MAYBE], ['c', EXACT]), below([EVERY_ITEM, MAYBE])]);
+
+      expect(sensitiveUnder(sensitiveUnder(marks, 'w'), 'c')).toEqual([[MAYBE]]);
+    });
+  });
+
+  it('is kept under every item where every item has it', () => {
+    const item = laterMap([EVERY_ITEM, MAYBE], ['c', EXACT]);
+
+    expect(sensitiveUnder(sensitiveUnder(everyItemMarks([item, item]), 0), 'c')).toEqual([]);
+  });
+
+  it('is not kept under every item where one item lacks it', () => {
+    const marks = everyItemMarks([laterMap([EVERY_ITEM, MAYBE], ['c', EXACT]), laterMap([EVERY_ITEM, MAYBE])]);
+
+    expect(sensitiveUnder(sensitiveUnder(marks, 0), 'c')).toEqual([[MAYBE]]);
+  });
+
+  it('keeps under every item, at the key, what each item has there for certain', () => {
+    const item = laterMap([EVERY_ITEM, MAYBE], ['c', EXACT], ['c', 'x']);
+
+    expect(sensitiveUnder(sensitiveUnder(everyItemMarks([item]), 0), 'c')).toEqual([['x']]);
+  });
+
+  it('is kept in a value that may be there, with what it may have at the key', () => {
+    const marks = maybeMarks([laterMap([EVERY_ITEM, MAYBE], ['c', EXACT], ['c', 'x'])]);
+
+    expect(sensitiveUnder(marks, 'c')).toEqual([['x', MAYBE]]);
+  });
+
+  it('is not kept in values that may be there where one lacks it', () => {
+    const marks = maybeMarks([laterMap([EVERY_ITEM, MAYBE], ['c', EXACT]), laterMap(['c', 'x'])]);
+
+    expect(sensitiveUnder(marks, 'c')).toEqual([[MAYBE]]);
   });
 
   it('stays out of what an item the plan cannot name may have', () => {
