@@ -1,7 +1,7 @@
 import { isUnknown, sensitiveUnder, Type, typeAt } from '@clay/contracts';
 import { ConfigError, Position, spellSteps, Step, stepKey } from '@clay/parser';
 
-import { article, child, isAllSensitive, Value } from '../Value';
+import { article, child, mayBeAllSensitive, Value } from '../Value';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 
 /** What no value of this kind answers to, whatever it holds. Undefined when the kind can take the step. */
@@ -20,7 +20,7 @@ function missingItem(value: Value, step: number): string | undefined {
   if (step < items) return undefined;
 
   // How many a list sensitive as a whole holds is sensitive too.
-  return isAllSensitive(value) ? `has no item [${step}]` : `has no item [${step}]: it holds ${items}`;
+  return mayBeAllSensitive(value) ? `has no item [${step}]` : `has no item [${step}]: it holds ${items}`;
 }
 
 /** Undefined when the step finds something. */

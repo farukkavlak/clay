@@ -1,4 +1,4 @@
-import { EVERY_ITEM, ExactNumber, SOMEWHERE, types, UNKNOWN } from '@clay/contracts';
+import { EVERY_ITEM, ExactNumber, isMaybe, MAYBE, sensitiveUnder, SOMEWHERE, types, UNKNOWN } from '@clay/contracts';
 import { ConfigError } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
@@ -6,7 +6,23 @@ import { converted, SchemaMismatch } from '../src/conformValues';
 import { declaredAs, givenTo } from '../src/declared';
 import { forObject } from '../src/forItems';
 import { readPath } from '../src/resolvers/readPath';
-import { allSensitive, child, everyItemMarks, fewest, inferred, isSensitive, itemsOf, objectOf, sharedMarks, tupleOf, Value, valueOf, withSensitive } from '../src/Value';
+import {
+  allSensitive,
+  child,
+  everyItemMarks,
+  fewest,
+  inferred,
+  isSensitive,
+  itemsOf,
+  mayBeSensitive,
+  objectOf,
+  sharedMarks,
+  tupleOf,
+  Value,
+  valueOf,
+  wholeOf,
+  withSensitive,
+} from '../src/Value';
 import { steps } from './ast';
 
 const at = { file: 'main.clay', line: 1, column: 1 };
@@ -98,6 +114,89 @@ describe('whether a value is sensitive for certain', () => {
   });
 });
 
+describe('the marks a value may have', () => {
+  const pair = written({ a: 'x', b: 'y' });
+  const list = valueOf(types.list(types.string), UNKNOWN);
+
+  it.each([
+    ['a part one value marks, where another has none', [withSensitive(pair, [['a']]), pair], [['a', MAYBE]]],
+    ['the whole, where one value is sensitive as a whole', [allSensitive(written('x')), written('y')], [[MAYBE]]],
+    ['none beside a part every value marks', [withSensitive(pair, [['a']]), withSensitive(pair, [['a']])], [['a']]],
+    [
+      'the parts it may be at, where one value is sensitive somewhere',
+      [withSensitive(pair, [[SOMEWHERE], ['a', MAYBE], ['b', MAYBE]]), pair],
+      [
+        ['a', MAYBE],
+        ['b', MAYBE],
+      ],
+    ],
+    ['every item, where one value marks every item', [withSensitive(list, [[EVERY_ITEM]]), written(['y'])], [[EVERY_ITEM, MAYBE]]],
+    ['none for certain, where one value only may be sensitive and another is at a part', [withSensitive(pair, [[MAYBE]]), withSensitive(pair, [['a']])], [[MAYBE]]],
+    ['a part that may be once, where one value already may have it', [withSensitive(pair, [['a', MAYBE]]), pair], [['a', MAYBE]]],
+  ])('are %s', (_, values, marks) => {
+    expect(sharedMarks(values)).toEqual(marks);
+  });
+
+  it.each([
+    [
+      'one that may be beside one for certain under it',
+      [
+        ['a', MAYBE],
+        ['a', 'b'],
+      ],
+      [
+        ['a', MAYBE],
+        ['a', 'b'],
+      ],
+    ],
+    [
+      'one that may be under another that may be',
+      [
+        ['a', 'b', MAYBE],
+        ['a', MAYBE],
+      ],
+      [['a', MAYBE]],
+    ],
+    [
+      'one that may be at an item, under every item that may be',
+      [
+        [0, MAYBE],
+        [EVERY_ITEM, MAYBE],
+      ],
+      [[EVERY_ITEM, MAYBE]],
+    ],
+    ['one that may be under one for certain', [['a', 'b', MAYBE], ['a']], [['a']]],
+  ])('keep, of the fewest, %s', (_, paths, kept) => {
+    expect(fewest(paths)).toEqual(kept);
+  });
+
+  it.each([
+    ['a part that may be, at it', [['a', MAYBE]], 'a', [[MAYBE]]],
+    ['a part that may be, at another', [['a', MAYBE]], 'b', []],
+    ['the whole that may be', [[MAYBE]], 'a', [[MAYBE]]],
+    ['a value sensitive somewhere, at a part it may be at', [[SOMEWHERE], ['a', MAYBE]], 'a', [[MAYBE]]],
+    ['a value sensitive somewhere, at a part it is not at', [[SOMEWHERE], ['a', MAYBE]], 'b', []],
+    ['the whole that may be, at a key spelled as maybe', [[MAYBE]], '-3', [[MAYBE]]],
+  ])('are below a step, for %s', (_, paths, step, below) => {
+    expect(sensitiveUnder(paths, step)).toEqual(below);
+  });
+
+  it.each([
+    ['at a part of a map not known yet', withSensitive(valueOf(types.map(types.string), UNKNOWN), [['a', MAYBE]])],
+    ['as a whole of a tuple not known yet', withSensitive(valueOf(types.tuple([types.string]), UNKNOWN), [[MAYBE]])],
+  ])('are not sensitive for certain, though they may be, %s', (_, value) => {
+    expect([isSensitive(value), mayBeSensitive(value)]).toEqual([false, true]);
+  });
+
+  it.each([
+    ['the whole, where one value is sensitive for certain', [withSensitive(pair, [['a']]), pair], [[]]],
+    ['the whole as one that may be, where one value may be', [withSensitive(pair, [['a', MAYBE]]), pair], [[MAYBE]]],
+    ['none, where no value has a mark', [pair, pair], []],
+  ])('of a value made from others are %s', (_, values, marks) => {
+    expect(wholeOf(...values)).toEqual(marks);
+  });
+});
+
 describe('the marks some values all have', () => {
   const marked = (...paths: (string | number)[][]) => withSensitive(written({ a: 'x', b: 'y' }), paths);
 
@@ -174,11 +273,31 @@ describe('the marks some values all have', () => {
     ],
     ['none for no values', [], []],
   ])('are %s', (_, values, marks) => {
-    expect(sharedMarks(values)).toEqual(marks);
+    expect(sharedMarks(values).filter((path) => !isMaybe(path))).toEqual(marks);
   });
 
-  it('are not at a part of a value sensitive somewhere, even at a key spelled as somewhere', () => {
-    expect(child(withSensitive(written({ '-2': 'x' }), [[SOMEWHERE]]), '-2').sensitive).toBeUndefined();
+  it('are none at a part not known yet of a known value sensitive somewhere, since that part has its own marks', () => {
+    expect(child(withSensitive(written({ '-2': UNKNOWN }), [[SOMEWHERE]]), '-2').sensitive).toBeUndefined();
+  });
+
+  it.each([
+    ['none, where it is sensitive somewhere', [[SOMEWHERE]], undefined],
+    ['only those for certain, where it is sensitive somewhere and at that part', [[SOMEWHERE], ['-2', 'q']], [['q']]],
+  ])('are, at a known part of a value, %s, since what is sensitive somewhere lies in a part not known yet', (_, marks, below) => {
+    expect(child(withSensitive(written({ a: UNKNOWN, '-2': { q: 'x' } }), marks), '-2').sensitive).toEqual(below);
+  });
+
+  it('are maybe at a part of a value that may be sensitive as a whole', () => {
+    expect(child(withSensitive(written({ a: UNKNOWN, b: 'x' }), [[SOMEWHERE], [MAYBE]]), 'b').sensitive).toEqual([[MAYBE]]);
+  });
+
+  it.each([
+    ['the part that may be', [['a', MAYBE]], { a: UNKNOWN, b: ['y', 'z'] }],
+    ['every item that may be', [['b', EVERY_ITEM, MAYBE]], { a: 'x', b: [UNKNOWN, UNKNOWN] }],
+    ['the whole that may be', [[MAYBE]], UNKNOWN],
+    ['nothing, where a part is sensitive for certain', [['a']], { a: 'x', b: ['y', 'z'] }],
+  ])('leave not known yet %s', (_, marks, data) => {
+    expect(withSensitive(written({ a: 'x', b: ['y', 'z'] }), marks).data).toEqual(data);
   });
 
   it('keep a mark under every item beside one at a key spelled as every item', () => {
@@ -239,7 +358,9 @@ describe('an error about a value with a sensitive part', () => {
       [second, one],
     ];
 
-    expect(() => forObject(entries, false, false, at)).toThrow(new ConfigError('Two items give the key (sensitive value); write "..." after the value to group them', at));
+    expect(() => forObject(entries, false, { sensitive: false, maybe: false }, at)).toThrow(
+      new ConfigError('Two items give the key (sensitive value); write "..." after the value to group them', at)
+    );
   });
 
   it('does not name the keys of items that share no type, where a part is sensitive', () => {

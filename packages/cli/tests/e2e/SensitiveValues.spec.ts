@@ -170,6 +170,8 @@ const refused = (error: Error) => error.message;
 
 const REFUSED = 'output "probe" holds a sensitive value; write sensitive = true to export it';
 
+const MAYBE_REFUSED = 'output "probe" may hold a sensitive value, by what the apply finds; write sensitive = true to export it';
+
 const n = (text: string) => ExactNumber.parse(text);
 
 describe('a sensitive value', () => {
@@ -248,6 +250,19 @@ describe('a sensitive value', () => {
   });
 
   it.each([
+    ['what a for gives over a list known only after apply, which may come out empty, where its body is sensitive', `[for v in tolist(${MADE}) : module.db.password]`],
+    ['the object a for makes over a list known only after apply, which may come out empty, with a sensitive value', `{ for v in tolist(${MADE}) : v => module.db.password }`],
+    ['what a for gives over a set with a member known only after apply, whose if is not known yet', `[for v in ${MADE} : module.db.password if v == "x"]`],
+    [
+      'what a for gives over a set with a member known only after apply, whose body is a list that may come out empty',
+      `[for v in ${MADE} : [for w in tolist(${MADE}) : module.db.password]]`,
+    ],
+  ])('is refused at plan in a root output that does not say so, and left to it at validate, where it may be %s', async (_, value) => {
+    await expect(newOrchestrator().plan(probe(value))).rejects.toThrow(MAYBE_REFUSED);
+    await expect(newOrchestrator().validate(probe(value))).resolves.toBeUndefined();
+  });
+
+  it.each([
     ['another part of the object that holds it', 'local.conn.name', 'app'],
     ['another output of the module that marks it', 'module.db.name', 'app'],
     ['the size of an object that holds it', 'length(local.conn)', n('2')],
@@ -259,18 +274,6 @@ describe('a sensitive value', () => {
     ['another part of an object that holds one known only after apply', 'local.made.name', 'app'],
     ['the size of what a for gives over a list known only after apply, where its body is sensitive', `length([for v in tolist(${MADE}) : module.db.password])`, UNKNOWN],
     ['the size of what a for gives over a set with a member known only after apply, where its body is sensitive', `length([for v in ${MADE} : module.db.password])`, UNKNOWN],
-    ['what a for gives over a list known only after apply, which may come out empty, where its body is sensitive', `[for v in tolist(${MADE}) : module.db.password]`, UNKNOWN],
-    [
-      'the object a for makes over a list known only after apply, which may come out empty, with a sensitive value',
-      `{ for v in tolist(${MADE}) : v => module.db.password }`,
-      UNKNOWN,
-    ],
-    ['what a for gives over a set with a member known only after apply, whose if is not known yet', `[for v in ${MADE} : module.db.password if v == "x"]`, UNKNOWN],
-    [
-      'what a for gives over a set with a member known only after apply, whose body is a list that may come out empty',
-      `[for v in ${MADE} : [for w in tolist(${MADE}) : module.db.password]]`,
-      UNKNOWN,
-    ],
   ])('leaves %s to be shown', async (_, value, data) => {
     const shown = await planned(value);
 

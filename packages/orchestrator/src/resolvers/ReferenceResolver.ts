@@ -69,6 +69,7 @@ import { ScopeManager } from '../scope/ScopeManager';
 import { unified, Unjoinable, unjoined } from '../unify';
 import {
   allSensitiveIf,
+  anyItemMarks,
   article,
   described,
   fewest,
@@ -76,6 +77,9 @@ import {
   isAllSensitive,
   isSensitive,
   itemsOf,
+  marksOfWhole,
+  mayBeAllSensitive,
+  mayBeSensitive,
   objectOf,
   sensitiveSomewhere,
   sharedMarks,
@@ -83,8 +87,11 @@ import {
   unordered,
   Value,
   valueOf,
-  withSensitive,
+  Whole,
   wholeIf,
+  wholeOf,
+  wholeWhere,
+  withSensitive,
 } from '../Value';
 import { DataSourceResolver } from './DataSourceResolver';
 import { checkUnknownIndex, keyOf } from './indexKey';
@@ -150,7 +157,7 @@ function isOperation(node: AttributeValue): node is Operation {
 }
 
 function unknownAs(value: Value): Value {
-  return withSensitive(valueOf(value.type, UNKNOWN), wholeIf(isSensitive(value)));
+  return withSensitive(valueOf(value.type, UNKNOWN), wholeOf(value));
 }
 
 /** In a read by type, a value read by its value is not known either. */
@@ -165,7 +172,8 @@ interface Picked {
   items: Reading[];
   /** For each item, whether the if keeps it whatever the apply finds. */
   kept: boolean[];
-  sensitive: boolean;
+  /** Whether an if is sensitive, and whether one may be. */
+  whole: Whole;
   later: boolean;
 }
 
@@ -197,7 +205,8 @@ type Reader = (steps: Step[]) => Value;
 /** `later` is the first index whose value is not known yet, and `steps` stop before it. */
 interface Keyed {
   steps: Step[];
-  sensitive: boolean;
+  /** Whether an index is sensitive, and whether one may be. */
+  whole: Whole;
   later?: Step;
   /** The key of each step after `later`; every item where another index is not known yet. */
   rest: (string | number)[];
@@ -263,11 +272,19 @@ function heldDecides(held: ReadItem | undefined): boolean {
 /** An item held for certain, not known which, makes the for sensitive somewhere where it is kept and its body is sensitive for certain. */
 const heldSensitive = (held: ReadItem | undefined) => held !== undefined && keptForCertain(held) && isSensitive(held.body);
 
-/** Neither side decides `&&` or `||` yet. One not known may still decide alone, so a mark on the other is the answer's only where both have it. */
+/** Neither side decides `&&` or `||` yet. One not known may still decide alone, so a mark on the other is the answer's only where both have it, and may be where either has one. */
 function undecidedMarks(left: Value, right: Value): AttributePath[] {
   const [leftMarked, rightMarked] = [isSensitive(left), isSensitive(right)];
+  const sensitive = (leftMarked && !isUnknown(right.data)) || (rightMarked && !isUnknown(left.data)) || (leftMarked && rightMarked);
 
-  return wholeIf((leftMarked && !isUnknown(right.data)) || (rightMarked && !isUnknown(left.data)) || (leftMarked && rightMarked));
+  return marksOfWhole({ sensitive, maybe: mayBeSensitive(left) || mayBeSensitive(right) }, []);
+}
+
+/** Either side may decide, so the answer is sensitive where both are, and may be where either may. */
+function eitherDecides(answer: boolean, left: Value, right: Value): Value {
+  const whole = { sensitive: isSensitive(left) && isSensitive(right), maybe: mayBeSensitive(left) || mayBeSensitive(right) };
+
+  return withSensitive(valueOf(types.bool, answer), marksOfWhole(whole, []));
 }
 
 /** The results in the order written: when true, then when false. */
@@ -276,7 +293,7 @@ function resultType(node: ConditionalNode, [whenTrue, whenFalse]: Value[]): Type
     return unified([whenTrue.type, whenFalse.type]);
   } catch (error) {
     if (!(error instanceof Unjoinable)) throw error;
-    throw new ConfigError(`The two results of a conditional ${unjoined(error, isSensitive(whenTrue) || isSensitive(whenFalse))}`, node.whenTrue.position);
+    throw new ConfigError(`The two results of a conditional ${unjoined(error, mayBeSensitive(whenTrue) || mayBeSensitive(whenFalse))}`, node.whenTrue.position);
   }
 }
 
@@ -286,7 +303,7 @@ function fitted(taken: AttributeValue, value: Value, written: Type): Value {
     return converted('A conditional', value, unified([written, value.type]), []);
   } catch (error) {
     if (!(error instanceof Unjoinable)) throw error;
-    throw new ConfigError(`The result a condition picks ${unjoined(error, isSensitive(value))}`, taken.position);
+    throw new ConfigError(`The result a condition picks ${unjoined(error, mayBeSensitive(value))}`, taken.position);
   }
 }
 
@@ -381,19 +398,21 @@ export class ReferenceResolver {
     const keyed = this.keyed(steps, site);
     if (keyed.later) return this.readLater(site.node, keyed, read);
 
-    return allSensitiveIf(
-      keyed.sensitive,
-      hidingIf(keyed.sensitive, atSensitiveIndex(site.node), site.node.position, () => read(keyed.steps))
+    const { sensitive, maybe } = keyed.whole;
+    return wholeWhere(
+      hidingIf(sensitive, atSensitiveIndex(site.node), site.node.position, () => read(keyed.steps)),
+      sensitive,
+      maybe
     );
   }
 
   /** The steps before the first index not known yet, with a key for each index read from a value, and the keys after it. */
   private keyed(steps: Step[], site: Site): Keyed {
-    const keyed: Keyed = { steps: [], sensitive: false, rest: [] };
+    const keyed: Keyed = { steps: [], whole: { sensitive: false, maybe: false }, rest: [] };
 
     for (const step of steps) {
-      const { key, sensitive } = this.keyOfStep(step, site);
-      keyed.sensitive = keyed.sensitive || sensitive;
+      const { key, index } = this.keyOfStep(step, site);
+      if (index) keyed.whole = { sensitive: keyed.whole.sensitive || isSensitive(index), maybe: keyed.whole.maybe || mayBeSensitive(index) };
       if (keyed.later) keyed.rest.push(key === undefined ? EVERY_ITEM : stepKey(key));
       else if (key === undefined) keyed.later = step;
       else keyed.steps.push(key);
@@ -402,15 +421,15 @@ export class ReferenceResolver {
     return keyed;
   }
 
-  /** A step as it reads, with the key an index comes to; none for an index not known yet. */
-  private keyOfStep(step: Step, site: Site): { key?: Step; sensitive: boolean } {
-    if (!('index' in step)) return { key: step, sensitive: false };
+  /** A step as it reads, with the key an index comes to and the index read; no key for an index not known yet. */
+  private keyOfStep(step: Step, site: Site): { key?: Step; index?: Value } {
+    if (!('index' in step)) return { key: step };
 
     const index = this.indexOf(step.index, site);
-    if (!isUnknown(index.data)) return { key: keyOf(index, step), sensitive: isSensitive(index) };
+    if (!isUnknown(index.data)) return { key: keyOf(index, step), index };
 
     checkUnknownIndex(index, step);
-    return { sensitive: isSensitive(index) };
+    return { index };
   }
 
   private indexOf(node: AttributeValue, { state, context, reading }: Site): Value {
@@ -423,17 +442,17 @@ export class ReferenceResolver {
   }
 
   /** The type the rest would find is not known without the index, so the unknown has none. Whichever item it reads, it has what every item has. */
-  private readLater(node: Named, { steps, sensitive: indexSensitive, rest }: Keyed, read: Reader): never {
+  private readLater(node: Named, { steps, whole, rest }: Keyed, read: Reader): never {
     let items: Value[];
 
     try {
-      items = itemsOf(hidingIf(indexSensitive, atSensitiveIndex(node), node.position, () => read(steps)));
+      items = itemsOf(hidingIf(whole.sensitive, atSensitiveIndex(node), node.position, () => read(steps)));
     } catch (error) {
       if (!(error instanceof UnresolvedReferenceError)) throw error;
       items = itemsOf(unknownOf(error));
     }
 
-    throw new UnresolvedReferenceError(`${spellNamed(node)} is known only after apply`, types.dynamic, indexSensitive ? [[]] : marksAlong(sharedMarks(items), rest));
+    throw new UnresolvedReferenceError(`${spellNamed(node)} is known only after apply`, types.dynamic, marksOfWhole(whole, marksAlong(sharedMarks(items), rest)));
   }
 
   /** Over a collection sensitive as a whole, or with a sensitive if, what it gives is too: how many items it keeps tells the if. */
@@ -441,20 +460,20 @@ export class ReferenceResolver {
     const collection = this.collectionOf(node, state, context, reading);
     const names = forItems(collection, node.collection.position).map((item) => withNames(reading, node, item));
     const picked = this.picked(node, names, state, context);
-    const sensitive = isAllSensitive(collection) || picked.sensitive;
-    if (picked.later) throw this.laterPicked(node, picked, sensitive, state, context);
+    const whole = { sensitive: isAllSensitive(collection) || picked.whole.sensitive, maybe: picked.whole.maybe };
+    if (picked.later) throw this.laterPicked(node, picked, whole, state, context);
 
     const made = node.key
-      ? this.resolveForObject(node, node.key, picked.items, sensitive, state, context)
+      ? this.resolveForObject(node, node.key, picked.items, whole, state, context)
       : tupleOf(picked.items.map((itemNames) => this.resolveItem(node.body, state, context, itemNames)));
 
-    return allSensitiveIf(sensitive, made);
+    return wholeWhere(made, whole.sensitive, whole.maybe);
   }
 
   /** The items the if may keep. One it leaves out is read by type only, so `x.name if x != null` reads `.name` only where there is an x. */
   private picked(node: ForNode, names: Reading[], state: State, context: Context | undefined): Picked {
     const { condition } = node;
-    if (!condition) return { items: names, kept: names.map(() => true), sensitive: false, later: false };
+    if (!condition) return { items: names, kept: names.map(() => true), whole: { sensitive: false, maybe: false }, later: false };
 
     const ifs = names.map((itemNames) => this.boolean(condition, FOR_IF, state, context, itemNames));
     for (const [index, itemNames] of names.entries()) if (ifs[index].data === false) this.readItemByType(node, itemNames, context);
@@ -463,7 +482,7 @@ export class ReferenceResolver {
     return {
       items: names.filter((_, index) => ifs[index].data !== false),
       kept: maybe.map((value) => value.data === true),
-      sensitive: ifs.some((value) => isSensitive(value)),
+      whole: { sensitive: ifs.some((value) => isSensitive(value)), maybe: ifs.some((value) => mayBeSensitive(value)) },
       later: ifs.some((value) => isUnknown(value.data)),
     };
   }
@@ -478,7 +497,7 @@ export class ReferenceResolver {
    * Every item it may keep is read now, so a mistake in any is found.
    * Only marks every outcome has are kept: a sensitive key of an item kept for certain makes it sensitive as a whole.
    */
-  private laterPicked(node: ForNode, { items, kept }: Picked, sensitive: boolean, state: State, context: Context | undefined): UnresolvedReferenceError {
+  private laterPicked(node: ForNode, { items, kept }: Picked, whole: Whole, state: State, context: Context | undefined): UnresolvedReferenceError {
     const { key } = node;
     const keys = key ? items.map((itemNames) => this.checkedKey(key, state, context, itemNames)) : [];
     const bodies = items.map((itemNames) => this.resolveItem(node.body, state, context, itemNames));
@@ -489,7 +508,11 @@ export class ReferenceResolver {
       );
 
     const message = 'The if of a for is known only after apply for an item, so what the for gives is not known yet';
-    if (sensitive || keys.some((found, index) => kept[index] && isSensitive(found))) return new UnresolvedReferenceError(message, types.dynamic, wholeIf(true));
+    const keyed = {
+      sensitive: whole.sensitive || keys.some((found, index) => kept[index] && isSensitive(found)),
+      maybe: whole.maybe || keys.some((found) => mayBeSensitive(found)),
+    };
+    if (keyed.sensitive) return new UnresolvedReferenceError(message, types.dynamic, wholeIf(true));
 
     const marks = key
       ? laterObjectMarks(
@@ -498,7 +521,7 @@ export class ReferenceResolver {
           node.grouped === true
         )
       : laterTupleMarks(bodies, kept);
-    return new UnresolvedReferenceError(message, types.dynamic, marks);
+    return new UnresolvedReferenceError(message, types.dynamic, marksOfWhole(keyed, marks));
   }
 
   private checkedKey(key: AttributeValue, state: State, context: Context | undefined, itemNames: Reading): Value {
@@ -508,10 +531,10 @@ export class ReferenceResolver {
   }
 
   /** Resolves every key and value first, so an error in any item is found even when another key is unknown. */
-  private resolveForObject(node: ForNode, key: AttributeValue, items: Reading[], sensitive: boolean, state: State, context: Context | undefined): Value {
+  private resolveForObject(node: ForNode, key: AttributeValue, items: Reading[], whole: Whole, state: State, context: Context | undefined): Value {
     const entries = items.map((itemNames): ForItem => [this.resolveItem(key, state, context, itemNames), this.resolveItem(node.body, state, context, itemNames)]);
 
-    return forObject(entries, node.grouped === true, sensitive, key.position);
+    return forObject(entries, node.grouped === true, whole, key.position);
   }
 
   /**
@@ -552,14 +575,17 @@ export class ReferenceResolver {
         node.key.position
       );
     const decided = [...certain, held].some((item) => heldDecides(item));
-    const whole = [key, condition].some((part) => part !== undefined && isSensitive(part)) || isAllSensitive(collection) || decided;
-    if (whole) return new UnresolvedReferenceError(message, types.dynamic, wholeIf(true));
+    const whole = {
+      sensitive: [key, condition].some((part) => part !== undefined && isSensitive(part)) || isAllSensitive(collection) || decided,
+      maybe: [key, condition].some((part) => part !== undefined && mayBeSensitive(part)) || mayBeAllSensitive(collection),
+    };
+    if (whole.sensitive) return new UnresolvedReferenceError(message, types.dynamic, wholeIf(true));
 
     // Read without a body outside the plan, where no mark is shown, so each item is marked where any of the collection is for certain.
     if (body === undefined) return new UnresolvedReferenceError(message, types.dynamic, isSensitive(collection) ? [[EVERY_ITEM]] : []);
 
     const marks = laterForMarks(node, { key, body }, certain, leading);
-    return new UnresolvedReferenceError(message, types.dynamic, heldSensitive(held) ? fewest([...marks, [SOMEWHERE]]) : marks);
+    return new UnresolvedReferenceError(message, types.dynamic, marksOfWhole(whole, heldSensitive(held) ? fewest([...marks, [SOMEWHERE]]) : marks));
   }
 
   /**
@@ -570,7 +596,7 @@ export class ReferenceResolver {
     if (!(reading.asWritten || this.planned.isPlanning())) return { certain: [], leading: 0 };
 
     const [itemKey, itemValue] = unknownItem(collection.type);
-    const every = sensitiveUnder(collection.sensitive ?? [], EVERY_ITEM);
+    const every = anyItemMarks(collection.sensitive ?? []);
     const once = this.readItem(node, [itemKey, withSensitive(itemValue, every)], state, context, reading);
     const { steps, leading } = certainSteps(collection);
     const certain = steps.map((step) => ({ step, ...this.readItem(node, certainItem(collection, step), state, context, reading) }));
@@ -741,7 +767,7 @@ export class ReferenceResolver {
   /** A known left side that decides the answer leaves the right read by type only, so `var.x != null && var.x.on` reads `.on` only when there is an x. */
   private resolveLogic(node: BinaryNode, operator: '&&' | '||', state: State, context: Context | undefined, reading: Reading): Value {
     const deciding = operator === '||';
-    const decided = (by: Value) => withSensitive(valueOf(types.bool, deciding), wholeIf(isSensitive(by)));
+    const decided = (by: Value) => withSensitive(valueOf(types.bool, deciding), wholeOf(by));
 
     const left = this.boolean(node.left, operator, state, context, reading);
     if (left.data === deciding) {
@@ -751,8 +777,8 @@ export class ReferenceResolver {
 
     const right = this.boolean(node.right, operator, state, context, reading);
     const later = isUnknown(left.data);
-    // With the left side not known yet, either side may decide, so a mark only one of them has waits for the apply.
-    if (right.data === deciding) return !later || isSensitive(left) === isSensitive(right) ? decided(right) : valueOf(types.bool, UNKNOWN);
+    // With the left side not known yet, either side may decide: sensitive where both are, and so it may be where either may.
+    if (right.data === deciding) return later ? eitherDecides(deciding, left, right) : decided(right);
 
     const data = later || isUnknown(right.data) ? UNKNOWN : !deciding;
     return withSensitive(valueOf(types.bool, data), undecidedMarks(left, right));
@@ -767,7 +793,10 @@ export class ReferenceResolver {
     if (isUnknown(condition.data)) {
       const results = [node.whenTrue, node.whenFalse].map((result) => this.resolveItem(result, state, context, reading));
       // Only one result is the value, so it has the condition's mark and the marks both results have.
-      return withSensitive(valueOf(resultType(node, results), UNKNOWN), isSensitive(condition) ? [[]] : sharedMarks(results));
+      return withSensitive(
+        valueOf(resultType(node, results), UNKNOWN),
+        marksOfWhole({ sensitive: isSensitive(condition), maybe: mayBeSensitive(condition) }, sharedMarks(results))
+      );
     }
 
     const written = resultType(node, [this.byType(node.whenTrue, context, reading), this.byType(node.whenFalse, context, reading)]);
@@ -810,7 +839,7 @@ export class ReferenceResolver {
     // Every part is resolved, so an error after an unknown part is still found.
     const unresolved: UnresolvedReferenceError[] = [];
     const texts = parts.map((part) => (typeof part === 'string' ? valueOf(types.string, part) : this.textOf(part, state, context, reading, unresolved)));
-    const sensitive = wholeIf(texts.some((text) => isSensitive(text)));
+    const sensitive = wholeOf(...texts);
     if (unresolved.length > 0) throw new UnresolvedReferenceError(unresolved[0].message, types.string, sensitive);
 
     return withSensitive(valueOf(types.string, texts.map((text) => String(text.data)).join('')), sensitive);

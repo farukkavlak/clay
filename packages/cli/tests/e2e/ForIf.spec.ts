@@ -17,6 +17,8 @@ const placeOf = (config: string, needle: string) => {
 
 const REFUSED = 'output "o" holds a sensitive value; write sensitive = true to export it';
 
+const MAYBE_REFUSED = 'output "o" may hold a sensitive value, by what the apply finds; write sensitive = true to export it';
+
 const RANDOM = 'resource "random_string" "r" { length = 8 }\n';
 
 /** Never true, since the result has 8 characters, and not known until apply. */
@@ -143,11 +145,10 @@ resource "local_file" "f" {
       await expect(newOrchestrator().plan(`${secret}${RANDOM}output "o" { value = length(${value}) }\n`)).rejects.toThrow(REFUSED);
     });
 
-    it('leaves to the apply what it gives, which the if may leave empty, and keeps how many it gives plain, where only a body is sensitive under an if not known yet', async () => {
+    it('refuses at plan what it gives, which may hold a sensitive item, and keeps how many it gives plain, where only a body is sensitive under an if not known yet', async () => {
       const value = `[for x in ["a"] : var.secret if ${LATER}]`;
 
-      const given = await newOrchestrator().plan(`${secret}${RANDOM}output "o" { value = ${value} }\n`);
-      expect(given.outputs.o.new?.value).toBe(UNKNOWN);
+      await expect(newOrchestrator().plan(`${secret}${RANDOM}output "o" { value = ${value} }\n`)).rejects.toThrow(MAYBE_REFUSED);
       const plan = await newOrchestrator().plan(`${secret}${RANDOM}output "o" { value = length(${value}) }\n`);
       expect(plan.outputs.o.new).toEqual({ value: UNKNOWN, type: types.number });
     });

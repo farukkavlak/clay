@@ -20,7 +20,9 @@ const AT = 'local.l[length(random_string.s.result) - 3]';
 
 const REFUSED = 'output "o" holds a sensitive value; write sensitive = true to export it';
 
-// A choice not known at plan gives a value not known either, so a mark on only one side waits for the apply.
+const MAYBE_REFUSED = 'output "o" may hold a sensitive value, by what the apply finds; write sensitive = true to export it';
+
+// A choice not known at plan gives a value not known either: a mark on only one side leaves `issensitive` to the apply, and a root output that may hold it is refused at plan.
 describe('a value a choice not known at plan makes', () => {
   let dir: string;
 
@@ -48,8 +50,6 @@ describe('a value a choice not known at plan makes', () => {
   });
 
   it.each([
-    ['a condition', `${LATER} ? sensitive("a") : "b"`, 'b'],
-    ['&&', `${LATER} && sensitive(true)`, false],
     ['issensitive of a condition', `issensitive(${LATER} ? sensitive("a") : "b")`, false],
     ['issensitive of && its sensitive right side decides', `issensitive(${LATER} && sensitive(false))`, false],
     ['issensitive of && its sensitive left side decides', `issensitive(sensitive(${LATER}) && false)`, true],
@@ -125,8 +125,6 @@ describe('a value a choice not known at plan makes', () => {
       `${LATER} ? { a = "x" } : { a = sensitive("y") }`,
     ],
     ['issensitive of a for over a collection not known yet that comes out empty', `issensitive([for x in (${LATER} ? ["a"] : []) : sensitive(x)])`, false],
-    ['a for over a collection not known yet that comes out empty, with every item sensitive', `[for x in (${LATER} ? ["a"] : []) : sensitive(x)]`, []],
-    ['a value that holds a for over a collection not known yet that comes out empty', `{ o = [for x in (${LATER} ? ["a"] : []) : sensitive(x)] }`, { o: [] }],
     [
       'issensitive of a condition whose other side is a for over a collection not known yet that comes out empty',
       `issensitive(${LATER} ? [sensitive("a")] : [for x in (${LATER} ? ["a"] : []) : sensitive(x)])`,
@@ -139,12 +137,14 @@ describe('a value a choice not known at plan makes', () => {
   });
 
   it.each([
-    ['a condition', `!(${LATER}) ? sensitive("a") : "b"`],
+    ['a condition', `${LATER} ? sensitive("a") : "b"`],
+    ['a condition the other way', `!(${LATER}) ? sensitive("a") : "b"`],
+    ['&&', `${LATER} && sensitive(true)`],
     ['||', `${LATER} || sensitive(false)`],
-  ])('refuses at the apply an output the side it takes makes sensitive, for %s', async (_, value) => {
-    await newOrchestrator().plan(output(value));
-
-    await expect(apply(output(value))).rejects.toThrow(REFUSED);
+    ['a for over a collection not known yet that may come out empty, with every item sensitive', `[for x in (${LATER} ? ["a"] : []) : sensitive(x)]`],
+    ['a value that holds such a for', `{ o = [for x in (${LATER} ? ["a"] : []) : sensitive(x)] }`],
+  ])('refuses at plan an output that may hold a sensitive value by what the apply finds, for %s', async (_, value) => {
+    await expect(newOrchestrator().plan(output(value))).rejects.toThrow(MAYBE_REFUSED);
   });
 
   it.each([
@@ -357,52 +357,56 @@ describe('a value a choice not known at plan makes', () => {
   });
 
   it.each([
-    ['a part only one result of a condition marks', 'local.l.b', `${LATER} ? { a = sensitive("x"), b = "y" } : { a = sensitive("z"), b = "w" }`],
+    ['a part only one result of a condition marks', 'issensitive(local.l.b)', `${LATER} ? { a = sensitive("x"), b = "y" } : { a = sensitive("z"), b = "w" }`],
     ['an index not known yet into an empty list', AT, '[]'],
     [
       'lookup of a key a value not known yet does not mark, with a sensitive default',
-      `lookup(${AT}, "b", sensitive("d"))`,
+      `issensitive(lookup(${AT}, "b", sensitive("d")))`,
       '[{ a = sensitive("x"), b = "1" }, { a = sensitive("y"), b = "2" }]',
     ],
-    ['merge where a later argument gives the key one not known yet marks', `merge(${AT}, { a = "z" })`, '[{ a = sensitive("x"), b = "1" }, { a = sensitive("y"), b = "2" }]'],
+    [
+      'merge where a later argument gives the key one not known yet marks',
+      `issensitive(merge(${AT}, { a = "z" }))`,
+      '[{ a = sensitive("x"), b = "1" }, { a = sensitive("y"), b = "2" }]',
+    ],
     [
       'an index not known yet past another, where the part it reads is marked in no item',
-      `${AT}[length(random_string.s.result) - 4]`,
+      `issensitive(${AT}[length(random_string.s.result) - 4])`,
       '[["a", sensitive("x")], ["b", sensitive("y")]]',
     ],
     ['issensitive of a for over a collection not known yet, where every item is sensitive', `issensitive([for x in (${LATER} ? ["a"] : []) : sensitive(x)])`, '[]'],
     [
       'a part of what each result of a condition marks somewhere, where one result leaves it plain',
-      'local.l.p',
+      'issensitive(local.l.p)',
       `${LATER} ? { o = { a = sensitive("x") }, p = "z" } : { o = { a = "x" }, p = sensitive("z") }`,
     ],
     [
       'what each result of a condition marks at another part, where one mark is under every item of what may come out empty',
-      'local.l',
+      'issensitive(local.l)',
       `${LATER} ? { a = [for x in (${LATER} ? ["a"] : []) : sensitive(x)], b = "y" } : { a = [], b = sensitive("y") }`,
     ],
-    ['the place in a group after an item that may join it', 'local.m.g[0]', '["a", sensitive("b")]', `{ for i, v in local.l : "g" => v... if i == 1 || ${LATER} }`],
+    ['the place in a group after an item that may join it', 'issensitive(local.m.g[0])', '["a", sensitive("b")]', `{ for i, v in local.l : "g" => v... if i == 1 || ${LATER} }`],
     [
       'the place of an item after one an if may drop, over a tuple not known yet',
-      'local.m[0]',
+      'issensitive(local.m[0])',
       `${LATER} ? ["a", sensitive("b")] : ["c", sensitive("d")]`,
       `[for i, v in local.l : v if i == 1 || ${LATER}]`,
     ],
     [
       'the second place of a for over an object not known yet written out of key order',
-      'local.m[1]',
+      'issensitive(local.m[1])',
       `${LATER} ? { b = "y", a = sensitive("x") } : { b = "w", a = sensitive("z") }`,
       '[for k, v in local.l : v]',
     ],
     [
       'the place in a group after an item whose key is not known yet',
-      'local.m.g[0]',
+      'issensitive(local.m.g[0])',
       '["a", sensitive("b")]',
       '{ for i, v in local.l : (i == 0 ? random_string.s.result : "g") => v... }',
     ],
     [
       'the place after the last a mark names in a group over a list not known yet',
-      'local.m.g[3]',
+      'issensitive(local.m.g[3])',
       `${LATER} ? tolist([sensitive("a"), "b", sensitive("e")]) : tolist([sensitive("c"), "d", sensitive("f")])`,
       '{ for v in local.l : "g" => v... }',
     ],
@@ -437,7 +441,7 @@ describe('a value a choice not known at plan makes', () => {
       `[for x in (${LATER} ? ["a"] : []) : (x == "q" ? { a = sensitive("x"), b = "y" } : { a = "z", b = sensitive("w") })]`,
       '[for x in local.l : x]',
     ],
-  ])('leaves to the apply what no outcome marks at plan, for %s', async (_, value, list, over?: string) => {
+  ])('leaves to the apply whether what no outcome marks at plan is sensitive, for %s', async (_, value, list, over?: string) => {
     const plan = await newOrchestrator().plan(output(value, list, over));
 
     expect(plan.outputs.o.new?.value).toBe(UNKNOWN);

@@ -1,9 +1,9 @@
-import { types, UNKNOWN } from '@clay/contracts';
+import { MAYBE, types, UNKNOWN } from '@clay/contracts';
 import { Plan } from '@clay/planner';
 import { stripVTControlCharacters } from 'node:util';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { displayPlan } from '../src/showPlan';
+import { displayPlan, show } from '../src/showPlan';
 
 const members = types.set(types.string);
 
@@ -105,5 +105,14 @@ describe('showing an attribute whose name a configuration cannot write bare', ()
     expect(printed).toContain(String.raw`      "b\u007f": "c" -> "d"`);
     expect(printed).toContain(String.raw`      "s\u007f":`);
     expect(printed).toContain(String.raw`      "m\u007f": will be marked sensitive`);
+  });
+});
+
+describe('a value that may be sensitive, as the plan shows it', () => {
+  it.each([
+    ['hides a known one', 'x', '(sensitive value)'],
+    ['says one not known yet is known after apply', UNKNOWN, '(known after apply)'],
+  ])('%s', (_, value, shown) => {
+    expect(show(value, [[MAYBE]])).toBe(shown);
   });
 });

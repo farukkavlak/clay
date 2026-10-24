@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { EVERY_ITEM, touchesSensitive } from '../src';
+import { EVERY_ITEM, MAYBE, touchesSensitive } from '../src';
 
 describe('touchesSensitive', () => {
   const marks = [
@@ -44,5 +44,12 @@ describe('touchesSensitive', () => {
 
   it('leaves out what is beside the items that are all marked', () => {
     expect(touchesSensitive([['items', EVERY_ITEM]], ['other', 0])).toBe(false);
+  });
+
+  it.each([
+    ['a part inside one that may be', [['token', MAYBE]], ['token', 'deeper']],
+    ['any part of a value that may be sensitive as a whole', [[MAYBE]], ['anything', 2]],
+  ])('takes %s', (_, marks, at) => {
+    expect(touchesSensitive(marks, at)).toBe(true);
   });
 });

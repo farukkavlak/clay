@@ -1,10 +1,10 @@
-import { AttributePath, ExactNumber, isRecord, isUnknown, NumberError, Schema, SENSITIVE, Type, typeAt, UNKNOWN } from '@clay/contracts';
+import { AttributePath, ExactNumber, isMaybe, isRecord, isUnknown, MAYBE, NumberError, Schema, SENSITIVE, Type, typeAt, UNKNOWN } from '@clay/contracts';
 import { DataBlock, Position, ResourceBlock } from '@clay/parser';
 
 import { setOf } from './setMembers';
 import { shown } from './shown';
 import { items, spelled } from './spelled';
-import { article, child, described, isAllSensitive, isSensitive, nullSource, plainOf, unordered, Value, valueOf, withSensitive } from './Value';
+import { article, child, described, isSensitive, mayBeAllSensitive, nullSource, plainOf, unordered, Value, valueOf, withSensitive } from './Value';
 import { ObjectType, withLeftOut } from './withLeftOut';
 
 /** Carries the attribute, so the caller can report its position; undefined for a missing attribute. */
@@ -193,12 +193,12 @@ function ordered(value: Value): unknown {
   return value.data;
 }
 
-/** A set is sorted and holds each member once, so a path into one ends at the set. */
+/** A set is sorted and holds each member once, so a path into one ends at the set; one that may be sensitive still only may be. */
 function endedAtSet(type: Type, path: AttributePath): AttributePath {
   let current = type;
 
   for (const [index, step] of path.entries()) {
-    if (current.kind === 'set') return path.slice(0, index);
+    if (current.kind === 'set') return isMaybe(path) ? [...path.slice(0, index), MAYBE] : path.slice(0, index);
     current = typeAt(current, step);
   }
   return path;
@@ -217,7 +217,7 @@ export function toldWhole<T>(resource: string, value: Value, path: AttributePath
   try {
     return convert();
   } catch (error) {
-    if (!(error instanceof SchemaMismatch) || !isAllSensitive(value)) throw error;
+    if (!(error instanceof SchemaMismatch) || !mayBeAllSensitive(value)) throw error;
     throw mismatchAt(path, `${spelled(path)} does not fit what ${resource} takes; it is sensitive, so its parts are not shown`);
   }
 }

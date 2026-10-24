@@ -4,7 +4,21 @@ import { AttributePath, containsUnknown, ExactNumber, isUnknown, NumberError, SE
 import { ConfigError, Position, spellSteps, Step } from '@clay/parser';
 
 import { itemTypes } from './unify';
-import { article, described, inferred, isAllSensitive, isSensitive, nullSource, Value, valueOf, wholeIf, withSensitive } from './Value';
+import {
+  article,
+  described,
+  inferred,
+  isAllSensitive,
+  isSensitive,
+  mayBeAllSensitive,
+  mayBeSensitive,
+  nullSource,
+  Value,
+  valueOf,
+  wholeOf,
+  wholeWhere,
+  withSensitive,
+} from './Value';
 
 /** A list and a tuple hold items alike, and so do a map and an object. A set has no order, so it equals only a set. */
 const COMPARED_AS: Record<Type['kind'], string> = {
@@ -57,7 +71,7 @@ function checkComparable(operator: string, left: Value, right: Value, position: 
 
   const compared = `${operator} compares ${article(left.type.kind)} with ${article(right.type.kind)}`;
   if (!inside) throw new ConfigError(`${compared}, which are never equal`, position);
-  if (isSensitive(left) || isSensitive(right)) throw new ConfigError(`${compared} whose items differ in type; one is sensitive, so no more is shown`, position);
+  if (mayBeSensitive(left) || mayBeSensitive(right)) throw new ConfigError(`${compared} whose items differ in type; one is sensitive, so no more is shown`, position);
 
   const [one, other, at] = inside;
   const where = at.length > 0 ? ` at ${spellSteps(at)}` : '';
@@ -82,11 +96,11 @@ export function equality(operator: '==' | '!=', left: Value, right: Value, posit
 
   const againstNull = left.data === null || right.data === null;
 
-  const sensitive = againstNull ? isAllSensitive(left) || isAllSensitive(right) : isSensitive(left) || isSensitive(right);
   const same = sameData(left.data, right.data);
-  const data = same === UNKNOWN ? UNKNOWN : same === (operator === '==');
+  const result = valueOf(types.bool, same === UNKNOWN ? UNKNOWN : same === (operator === '=='));
+  if (!againstNull) return withSensitive(result, wholeOf(left, right));
 
-  return withSensitive(valueOf(types.bool, data), wholeIf(sensitive));
+  return wholeWhere(result, isAllSensitive(left) || isAllSensitive(right), mayBeAllSensitive(left) || mayBeAllSensitive(right));
 }
 
 /** Null and any other type are refused. */
@@ -116,7 +130,8 @@ function checkNumber(who: string, value: Value, position: Position): void {
 export type NumberValue = Value & { data: ExactNumber | typeof UNKNOWN };
 
 function numberOf(data: ExactNumber | typeof UNKNOWN, sensitive: readonly AttributePath[]): NumberValue {
-  return { ...withSensitive(valueOf(types.number, data), sensitive), data };
+  const value = withSensitive(valueOf(types.number, data), sensitive);
+  return { ...value, data: value.data as ExactNumber | typeof UNKNOWN };
 }
 
 /** A string that spells a number is read as one, as where a schema wants a number. */
@@ -175,13 +190,13 @@ export function arithmetic(operator: Arithmetic, left: NumberValue, right: Numbe
 
   const data = computed(operator, left, right, position, ARITHMETIC[operator]);
 
-  return withSensitive(valueOf(types.number, data), wholeIf(isSensitive(left) || isSensitive(right)));
+  return withSensitive(valueOf(types.number, data), wholeOf(left, right));
 }
 
 export function ordering(operator: Ordering, left: NumberValue, right: NumberValue, position: Position): Value {
   const data = computed(operator, left, right, position, (one, other) => ORDERING[operator](one.compare(other)));
 
-  return withSensitive(valueOf(types.bool, data), wholeIf(isSensitive(left) || isSensitive(right)));
+  return withSensitive(valueOf(types.bool, data), wholeOf(left, right));
 }
 
 export function negative(value: NumberValue): Value {
