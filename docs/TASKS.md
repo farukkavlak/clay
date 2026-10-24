@@ -349,7 +349,7 @@ change each.
       `content = sensitive("abc")`; with `count = 1` both are refused. The marks of what a
       call gives a variable, of an output's value, of what a block is given and of the
       `for_each` behind `each.value` are each read as written too
-- [ ] A provider's `validate` runs only for an instance, so in a module called with
+- [x] A provider's `validate` runs only for an instance, so in a module called with
       `count = 0`, `local_file` with `path = ""` passes the plan; with `count = 1` it is
       refused: `local_file "path" must not be empty`
 - [x] Two items a `for` keeps for certain under an `if` not known yet that give the same

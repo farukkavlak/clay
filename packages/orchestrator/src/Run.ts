@@ -50,7 +50,7 @@ export function newRun(stateManager: StateManager, providers: ProviderRegistry, 
   return {
     loader: new ConfigLoader(new ModuleLoader(files, scopes), scopes, dataSources, schemas, dataSchemas, resolver, providers, instances, modules, planned),
     graphBuilder,
-    writtenCheck: new WrittenCheck(resolver, scopes, schemas, dataSchemas),
+    writtenCheck: new WrittenCheck(resolver, scopes, schemas, dataSchemas, providers),
     desiredStateBuilder: new DesiredStateBuilder(scopes, resolver, graphBuilder, instances, modules, planned, resourcePlanner, reader),
     runner: new PlanRunner(stateManager, new ActionExecutor(providers, resolver, resourcePlanner, new SameObjects(providers)), scopes, resolver, instances, modules, reader),
   };

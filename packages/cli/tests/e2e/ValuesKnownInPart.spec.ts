@@ -126,10 +126,12 @@ describe('a value known in part', () => {
 
     await engine.plan(withTriggers);
 
-    expect(validate.mock.calls).toEqual([
+    // Once as written, then once for the instance.
+    const calls = [
       ['random_string', { length: ExactNumber.parse('4') }],
       ['null_resource', { triggers: { a: UNKNOWN, b: 'fixed' } }],
-    ]);
+    ];
+    expect(validate.mock.calls).toEqual([...calls, ...calls]);
   });
 
   it('reads into what is not known yet as not known yet', async () => {
