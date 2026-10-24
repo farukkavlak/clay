@@ -15,6 +15,8 @@ commit or push. You report.
 2. Look at the change against `origin/main` (run `git fetch` first):
    `git log --oneline origin/main..HEAD`, `git diff origin/main` (includes uncommitted
    edits) and `git status --short`. Read every untracked file in full; no diff shows them.
+   Around a hunk, read only what judging it needs: the function it sits in, and the
+   callers when a signature changes. Search with `grep`; don't read tracked files whole.
 3. Of `npm run build`, `npm test`, `npm run type:check`, `npx prettier --check .` and
    `npx eslint` on the changed files, run each one the prompt does not say passes on this
    tree after its last edit. Report lint warnings on changed lines.
@@ -45,8 +47,9 @@ commit or push. You report.
 - Behavior that crosses packages has an end-to-end test with real files in a temp
   directory. Mocks alone are not enough.
 - Tests assert the behavior their name claims.
-- For each new or changed test that no break listed in the prompt covers, break a line
-  it should pin and confirm it fails. Report the edit you made and restore it.
+- A break listed in the prompt is done; don't repeat it. Of the new or changed tests no
+  listed break covers, break a line for at most three, the ones that look weakest, and
+  confirm each fails. Report the edit you made and restore it. Name the rest unchecked.
 - For each break, build only the changed package and run only the test files that
   should catch it, from the package:
 
