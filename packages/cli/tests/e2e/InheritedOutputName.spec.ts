@@ -7,8 +7,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createPlanCommand } from '../../src/commands/plan';
 
-// The tests compile to CommonJS, which has no import.meta.dirname.
-// eslint-disable-next-line unicorn/prefer-module
 const clay = path.resolve(__dirname, '../../bin/clay.js');
 
 const config = (value: string) => `output "plain" { value = "x" }\noutput "__proto__" { value = "${value}" }`;

@@ -6,8 +6,6 @@ import path from 'node:path';
 import { promisify, stripVTControlCharacters } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-// The tests compile to CommonJS, which has no import.meta.dirname.
-// eslint-disable-next-line unicorn/prefer-module
 const clay = path.resolve(__dirname, '../../bin/clay.js');
 
 const call = (count: number) => `module "m" {\n  source = "./m"\n  count  = ${count}\n}\n`;

@@ -8,8 +8,6 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { promisify, stripVTControlCharacters } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-// The tests compile to CommonJS, which has no import.meta.dirname.
-// eslint-disable-next-line unicorn/prefer-module
 const clay = path.resolve(__dirname, '../../bin/clay.js');
 
 // `after` reads `slow`, so it runs in the layer after it.

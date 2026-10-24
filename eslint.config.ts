@@ -40,6 +40,8 @@ export default [
       'unicorn/no-null': 'off',
       'unicorn/no-process-exit': 'off',
       'unicorn/no-array-reduce': 'off',
+      // The packages and their tests compile to CommonJS, which has no import.meta.
+      'unicorn/prefer-module': 'off',
       // A mock that takes one argument is given undefined on purpose.
       'unicorn/no-useless-undefined': ['error', { checkArguments: false }],
     },

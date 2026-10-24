@@ -10,8 +10,6 @@ import { createValidateCommand } from './commands/validate';
 import { printable } from './printable';
 
 // Read from package.json so the version lives in one place.
-// The packages compile to CommonJS, which has no import.meta.dirname.
-// eslint-disable-next-line unicorn/prefer-module
 const { version } = createRequire(__filename)('../package.json') as { version: string };
 
 const program = new Command();

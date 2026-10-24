@@ -6,8 +6,6 @@ import { promisify } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 const run = promisify(execFile);
-// The tests compile to CommonJS, which has no import.meta.dirname.
-// eslint-disable-next-line unicorn/prefer-module
 const clay = path.resolve(__dirname, '../../bin/clay.js');
 
 const failed = async (command: string[], cwd: string) => {
