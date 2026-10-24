@@ -210,8 +210,10 @@ sensitive as a whole when its collection, a key or an `if` is, and its `length` 
 Otherwise each item has the marks every possible body has, and its `length` is not
 sensitive. An item kept for certain has its own marks at its key, or at its place where no
 item before it may be dropped, and its sensitive key makes the whole sensitive; grouped,
-a key has the marks every value that may join it has. A `for` over such a value keeps the
-marks at the keys and places that value has for certain.
+a key has the marks every value that may join it has, and such an item has its place in
+the group where no item before it may join. A `for` over such a value keeps the marks at
+the keys and places that value has for certain, in the order it goes over them: the
+places of a tuple, an object's keys sorted.
 
 Other values chosen at apply keep, at plan, the marks every choice has. `lookup` with a
 key not known yet has the marks every value and the default share, and is sensitive as a

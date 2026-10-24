@@ -71,7 +71,6 @@ import {
   allSensitiveIf,
   article,
   described,
-  everyItemMarks,
   fewest,
   hasText,
   isAllSensitive,
@@ -178,6 +177,8 @@ interface ReadItem {
 /** Read with an item that stands for every one, and again with each item the collection holds for certain. */
 interface ReadOnce extends Partial<ReadItem> {
   certain: (ReadItem & { step: string | number })[];
+  /** How many of `certain` come first, in the order the for goes over them. */
+  leading: number;
 }
 
 /** The node being read, and what its indexes are read with. */
@@ -224,14 +225,27 @@ function marksAlong(paths: AttributePath[], keys: (string | number)[]): Attribut
 
 /**
  * Each item has what the body has for every item; one the collection holds for certain keeps its marks at its key, or, with no if, at its place.
+ * The first `leading` of `certain` come first in the order the for goes over them, so one kept for certain before any that may be dropped
+ * keeps its place, in a group too. Any other item comes after them.
  */
-function laterForMarks(node: ForNode, every: ReadItem, certain: (ReadItem & { step: string | number })[]): AttributePath[] {
-  const kept = certain.map((item) => item.condition === undefined || item.condition.data === true);
-  const entry = (item: ReadItem): ForItem => [item.key ?? valueOf(types.dynamic, UNKNOWN), item.body];
-  if (node.key) return laterObjectMarks([entry(every), ...certain.map((item) => entry(item))], [false, ...kept], node.grouped === true);
+function laterForMarks(node: ForNode, every: ReadItem, certain: (ReadItem & { step: string | number })[], leading: number): AttributePath[] {
+  const items = [...certain.slice(0, leading), every, ...certain.slice(leading)];
+  const kept = items.map((item) => item !== every && (item.condition === undefined || item.condition.data === true));
+  if (node.key)
+    return laterObjectMarks(
+      items.map((item): ForItem => [item.key ?? valueOf(types.dynamic, UNKNOWN), item.body]),
+      kept,
+      node.grouped === true
+    );
 
   const places = node.condition ? [] : certain.flatMap((item) => (typeof item.step === 'number' ? under(item.step, item.body.sensitive ?? []) : []));
-  return fewest([...everyItemMarks([every.body, ...certain.map((item) => item.body)]), ...places]);
+  return fewest([
+    ...laterTupleMarks(
+      items.map((item) => item.body),
+      kept
+    ),
+    ...places,
+  ]);
 }
 
 /** A set with a member not known yet holds an item, though not which, so a body sensitive for certain it keeps for certain makes the for sensitive somewhere. */
@@ -522,7 +536,7 @@ export class ReferenceResolver {
    * has a sensitive key. It has no type: a for makes a tuple or an object whatever it iterates.
    */
   private laterFor(node: ForNode, collection: Value, message: string, state: State, context: Context | undefined, reading: Reading): UnresolvedReferenceError {
-    const { key, body, condition, certain } = this.readOnce(node, collection, state, context, reading);
+    const { key, body, condition, certain, leading } = this.readOnce(node, collection, state, context, reading);
     const kept = certain.filter((item) => item.condition === undefined || item.condition.data === true);
     if (node.key && !node.grouped)
       refuseDuplicateKeys(
@@ -537,19 +551,20 @@ export class ReferenceResolver {
     // Read without a body outside the plan, where no mark is shown, so each item is marked where any of the collection is for certain.
     if (body === undefined) return new UnresolvedReferenceError(message, types.dynamic, isSensitive(collection) ? [[EVERY_ITEM]] : []);
 
-    const marks = laterForMarks(node, { key, body }, certain);
+    const marks = laterForMarks(node, { key, body }, certain, leading);
     return new UnresolvedReferenceError(message, types.dynamic, heldSomewhere(collection, condition, body) ? fewest([...marks, [SOMEWHERE]]) : marks);
   }
 
   /** The key, the body and the if with an unknown item, so an error or a sensitive value in them is found before the collection is known. */
   private readOnce(node: ForNode, collection: Value, state: State, context: Context | undefined, reading: Reading): ReadOnce {
-    if (!(reading.asWritten || this.planned.isPlanning())) return { certain: [] };
+    if (!(reading.asWritten || this.planned.isPlanning())) return { certain: [], leading: 0 };
 
     const [itemKey, itemValue] = unknownItem(collection.type);
     const once = this.readItem(node, [itemKey, withSensitive(itemValue, sensitiveUnder(collection.sensitive ?? [], EVERY_ITEM))], state, context, reading);
-    const certain = certainSteps(collection).map((step) => ({ step, ...this.readItem(node, certainItem(collection, step), state, context, reading) }));
+    const { steps, leading } = certainSteps(collection);
+    const certain = steps.map((step) => ({ step, ...this.readItem(node, certainItem(collection, step), state, context, reading) }));
 
-    return { ...once, certain };
+    return { ...once, certain, leading };
   }
 
   private readItem(node: ForNode, item: ForItem, state: State, context: Context | undefined, reading: Reading): ReadItem {
