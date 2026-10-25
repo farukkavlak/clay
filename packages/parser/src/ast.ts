@@ -136,6 +136,8 @@ export interface OutputBlock extends Node {
   defaults?: TypeDefaults;
   /** A root output's value is hidden wherever it would be printed. */
   sensitive?: true;
+  /** What the output waits for though it reads nothing of it. */
+  dependsOn?: ReferenceNode[];
 }
 
 export interface DataBlock extends Node {
@@ -158,6 +160,8 @@ export interface ModuleBlock extends Node {
   count?: AttributeValue;
   /** Read by the engine, never passed as an input. */
   forEach?: AttributeValue;
+  /** What every block in the module waits for. */
+  dependsOn?: ReferenceNode[];
   attributes: Record<string, AttributeValue>;
 }
 

@@ -76,10 +76,17 @@ string in one instance and a list in another, are refused at plan.
 
 ## depends_on
 
-`depends_on = [local_file.a]` makes a resource or a data source wait for `local_file.a`
-though it reads nothing of it. It may name a resource, a data source, a variable or a
-local, each as a whole: `local_file.a`, never `local_file.a[0]`, since the order is kept
-between blocks, not instances. A variable or a local waits for what it reads.
+`depends_on = [local_file.a]` makes a resource, a data source, a module call or an output
+wait for `local_file.a` though it reads nothing of it. It may name a resource, a data
+source, a variable, a local, a module or a module's output, each as a whole:
+`local_file.a`, never `local_file.a[0]`, since the order is kept between blocks, not
+instances. A variable, a local or an output waits for what it reads. `module.m` waits for
+every block in the module and in the modules it calls, even one no output reads.
+`module.m.out` waits only for what that output reads, and needs no index where the module
+has `count` or `for_each`.
+
+In a module call, `depends_on` makes every block in the module wait. In an output, it
+makes whatever reads the output wait too.
 
 A wait counts as a reference does. The apply makes `local_file.a` first and destroys it
 last, and the state keeps the order for a destroy after the block is gone. A data source

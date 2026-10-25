@@ -1,6 +1,6 @@
 import { ModuleAddress } from '@clay/contracts';
 import { Graph } from '@clay/graph';
-import { AttributeValue, callsIn, DataBlock, ModuleBlock, Position, spell, Statement } from '@clay/parser';
+import { AttributeValue, callsIn, DataBlock, ModuleBlock, Position, ReferenceNode, spell, Statement } from '@clay/parser';
 
 import { Instances, Repetition } from '../Instances';
 import { Declared, declaredOf } from '../declared';
@@ -27,7 +27,7 @@ export interface ValueNode extends InModule {
 }
 
 /** An output always has a value; a variable may not until a call gives it one. */
-export type OutputNode = ValueNode & { value: AttributeValue; declared: Declared };
+export type OutputNode = ValueNode & { value: AttributeValue; declared: Declared; dependsOn?: ReferenceNode[] };
 
 export type LocalNode = ValueNode & { value: AttributeValue };
 
@@ -83,6 +83,11 @@ type ReferencePlace = Omit<Dependent, 'key' | 'given'> & { position: Position };
 
 const edgeKey = (from: string, to: string) => `${from} -> ${to}`;
 
+const inside = (module: ModuleAddress, scope: string) => {
+  const at = scopeOf(module);
+  return at === scope || at.startsWith(`${scope}.`);
+};
+
 export class DependencyGraphBuilder {
   private references = new Map<string, ReferencePlace>();
   private outputs = new Map<string, string[]>();
@@ -125,6 +130,7 @@ export class DependencyGraphBuilder {
 
   private addNodeDependencies(key: string, node: GraphNode, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
     if (node.kind === 'variable' || node.kind === 'local' || node.kind === 'output') this.addValueDependencies(key, node, graph, moduleScopes);
+    if (node.kind === 'output') this.addWaits(node.dependsOn, graph, { key, declaration: node.declaration, context: node.context }, moduleScopes);
     if (node.kind === 'module') this.addCallDependencies(key, node.block, node.module, graph, moduleScopes);
     if (node.kind === 'data') this.addDataDependencies(key, node.block, node.module, graph, moduleScopes);
   }
@@ -139,12 +145,13 @@ export class DependencyGraphBuilder {
     tryAt(node.position, node.declaration, node.context, () => this.addDependencies(value, graph, dependent, moduleScopes, repetition));
   }
 
-  /** A call's count or for_each is read in the caller, before the module has instances. */
+  /** A call's count, for_each and depends_on are read in the caller, before the module has instances; every node in the module waits for the call. */
   private addCallDependencies(key: string, block: ModuleBlock, caller: ModuleAddress, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
     const dependent = { key, declaration: spell(block), context: caller };
 
     for (const value of [block.count, block.forEach])
       if (value) tryAt(value.position, dependent.declaration, caller, () => this.addDependencies(value, graph, dependent, moduleScopes));
+    this.addWaits(block.dependsOn, graph, dependent, moduleScopes);
   }
 
   /** As a resource's: its count, for_each and depends_on are read before any instance, so they have no key. */
@@ -152,8 +159,9 @@ export class DependencyGraphBuilder {
     const dependent = { key, declaration: spell(block), context: module };
     const repetition = this.instances.repetitionOf(key);
 
-    for (const value of [block.count, block.forEach, ...(block.dependsOn ?? [])])
+    for (const value of [block.count, block.forEach])
       if (value) tryAt(value.position, dependent.declaration, module, () => this.addDependencies(value, graph, dependent, moduleScopes));
+    this.addWaits(block.dependsOn, graph, dependent, moduleScopes);
     for (const value of Object.values(block.attributes))
       tryAt(value.position, dependent.declaration, module, () => this.addDependencies(value, graph, dependent, moduleScopes, repetition));
   }
@@ -175,8 +183,9 @@ export class DependencyGraphBuilder {
     const dependent = { key: address.toString(), declaration: spell(block), context: address };
     const repetition = this.instances.repetitionOf(dependent.key);
 
-    for (const value of [block.count, block.forEach, ...(block.dependsOn ?? [])])
+    for (const value of [block.count, block.forEach])
       if (value) tryAt(value.position, dependent.declaration, address, () => this.addDependencies(value, graph, dependent, moduleScopes));
+    this.addWaits(block.dependsOn, graph, dependent, moduleScopes);
     for (const value of Object.values(block.attributes))
       tryAt(value.position, dependent.declaration, address, () => this.addDependencies(value, graph, dependent, moduleScopes, repetition));
   }
@@ -219,6 +228,7 @@ export class DependencyGraphBuilder {
         name: stmt.name,
         value: stmt.value,
         declared: declaredOf(stmt),
+        ...(stmt.dependsOn && { dependsOn: stmt.dependsOn }),
         context: module,
         position: stmt.value.position,
         declaration,
@@ -296,6 +306,29 @@ export class DependencyGraphBuilder {
 
       for (const from of this.readFrom(reference)) this.addEdge(from, dependent, graph, reference.position);
     }
+  }
+
+  /** Each names a whole block, so no index is read, not even one a module with count would need. */
+  private addWaits(waits: ReferenceNode[] | undefined, graph: Graph<GraphNode>, dependent: Dependent, moduleScopes: Set<string>): void {
+    for (const wait of waits ?? []) tryAt(wait.position, dependent.declaration, dependent.context, () => this.addWait(wait, graph, dependent, moduleScopes));
+  }
+
+  private addWait(wait: ReferenceNode, graph: Graph<GraphNode>, dependent: Dependent, moduleScopes: Set<string>): void {
+    for (const reference of this.scanner.referencesIn(wait, dependent.context)) {
+      // Refused by the parser; this narrows the type.
+      if (reference.kind === 'count' || reference.kind === 'each') continue;
+      if (!graph.hasNode(reference.key)) throw placed(describeMissing(reference, moduleScopes), reference.position);
+
+      for (const from of this.waitedFrom(reference, graph)) this.addEdge(from, dependent, graph, reference.position);
+    }
+  }
+
+  /** A whole module is done once its call and every node in it, and in the modules it calls, are. */
+  private waitedFrom(reference: Exclude<Reference, { kind: 'count' | 'each' }>, graph: Graph<GraphNode>): string[] {
+    if (reference.kind !== 'output' || reference.name !== undefined) return [reference.key];
+
+    const within = [...graph.entries()].filter(([, node]) => inside(node.module, reference.scope)).map(([key]) => key);
+    return [reference.key, ...within];
   }
 
   private addEdge(from: string, dependent: Dependent, graph: Graph<GraphNode>, position?: Position): void {

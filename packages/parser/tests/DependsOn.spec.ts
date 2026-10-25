@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { CONFIG_FILE, ConfigError, DataBlock, Parser, ResourceBlock } from '../src';
+import { CONFIG_FILE, ConfigError, DataBlock, ModuleBlock, OutputBlock, Parser, ResourceBlock } from '../src';
 import { Lexer } from '../src/Lexer';
 
 const parse = (source: string) => new Parser(new Lexer(source, CONFIG_FILE).tokenize()).parse();
@@ -19,7 +19,7 @@ const errorOf = (source: string): ConfigError => {
 
 const at = (line: number, column: number) => ({ file: CONFIG_FILE, line, column });
 
-const WAITS_FOR = 'depends_on is a list of resources, data sources, variables and locals, as in [local_file.a]';
+const WAITS_FOR = 'depends_on is a list of resources, data sources, variables, locals, modules and their outputs, as in [local_file.a]';
 
 describe('Parser - depends_on', () => {
   it("reads a resource's list apart from the attributes, each item where it was written", () => {
@@ -41,6 +41,29 @@ describe('Parser - depends_on', () => {
     expect(Object.keys(block.attributes)).toEqual(['path']);
   });
 
+  it("reads a module call's list apart from its inputs", () => {
+    const [block] = parse('module "m" {\n  source = "./m"\n  depends_on = [t.b]\n}') as ModuleBlock[];
+
+    expect(block.dependsOn).toEqual([{ type: 'Reference', value: [{ name: 't' }, { name: 'b' }], position: at(3, 17) }]);
+    expect(Object.keys(block.attributes)).toEqual(['source']);
+  });
+
+  it("reads an output's list apart from its value", () => {
+    const [block] = parse('output "o" {\n  value = 1\n  depends_on = [t.b]\n}') as OutputBlock[];
+
+    expect(block.dependsOn).toEqual([{ type: 'Reference', value: [{ name: 't' }, { name: 'b' }], position: at(3, 17) }]);
+    expect(block.value).toMatchObject({ type: 'Number' });
+  });
+
+  it('takes a whole module and an output of one', () => {
+    const [block] = parse('resource "t" "a" { depends_on = [module.m, module.n.out] }') as ResourceBlock[];
+
+    expect(block.dependsOn).toEqual([
+      { type: 'Reference', value: [{ name: 'module' }, { name: 'm' }], position: at(1, 34) },
+      { type: 'Reference', value: [{ name: 'module' }, { name: 'n' }, { name: 'out' }], position: at(1, 44) },
+    ]);
+  });
+
   it('is an empty list, and left out where the block does not say it', () => {
     const [empty, without] = parse('resource "t" "a" { depends_on = [] }\nresource "t" "b" {}') as ResourceBlock[];
 
@@ -60,12 +83,26 @@ describe('Parser - depends_on', () => {
     ['count.index', '[count.index]', WAITS_FOR, at(1, 34)],
     ['each.key', '[each.key]', WAITS_FOR, at(1, 34)],
     ['path.module', '[path.module]', WAITS_FOR, at(1, 34)],
-    ['a module', '[module.m]', WAITS_FOR, at(1, 34)],
+    ['one instance of a module', '[module.m[0]]', 'depends_on waits for a whole object: write module.m, not module.m[0]', at(1, 34)],
+    ['a module by key', '[module.m["k"]]', 'depends_on waits for a whole object: write module.m, not module.m["k"]', at(1, 34)],
+    ['an output of one instance', '[module.m[0].out]', 'depends_on waits for a whole object: write module.m.out, not module.m[0].out', at(1, 34)],
+    ['a part of an output of one instance', '[module.m[0].out.x]', 'depends_on waits for a whole object: write module.m.out, not module.m[0].out.x', at(1, 34)],
+    ['a part of an output', '[module.m.out.x]', 'depends_on waits for a whole object: write module.m.out, not module.m.out.x', at(1, 34)],
   ])('refuses %s, where it is written', (_, list, message, position) => {
     const error = errorOf(`resource "t" "a" { depends_on = ${list} }`);
 
     expect(error.message).toBe(message);
     expect(error.position).toEqual(position);
+  });
+
+  it.each([
+    ['a module call', 'module "m" {\n  source = "./m"\n  depends_on = [t.b.id]\n}'],
+    ['an output', 'output "o" {\n  value = 1\n  depends_on = [t.b.id]\n}'],
+  ])("refuses an item of %s's list where it is written", (_, source) => {
+    const error = errorOf(source);
+
+    expect(error.message).toBe('depends_on waits for a whole object: write t.b, not t.b.id');
+    expect(error.position).toEqual(at(3, 17));
   });
 
   it("refuses an item of a data source's list where it is written", () => {

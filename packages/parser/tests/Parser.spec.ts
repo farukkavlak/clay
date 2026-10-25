@@ -279,10 +279,10 @@ describe('Clay Parser', () => {
       expect(program.map((statement) => statement.type)).toEqual(['Resource', 'Data']);
     });
 
-    it('takes only "value", "type", "sensitive" and "description" in an output block, not any name', () => {
+    it('takes only "value", "type", "sensitive", "description" and "depends_on" in an output block, not any name', () => {
       const error = errorOf('output "o" { data = 1 }');
 
-      expect(error.message).toBe('Output "o" takes only "value", "type", "sensitive" and "description", not "data".');
+      expect(error.message).toBe('Output "o" takes only "value", "type", "sensitive", "description" and "depends_on", not "data".');
       expect(error.position).toEqual(at(1, 21));
     });
 
@@ -1302,7 +1302,7 @@ describe('Clay Parser', () => {
       expect(error.position).toEqual(at(1, 10));
     });
 
-    it.each(['count', 'for_each'])('refuses a variable named "%s", which a module call keeps for itself', (name) => {
+    it.each(['count', 'for_each', 'depends_on'])('refuses a variable named "%s", which a module call keeps for itself', (name) => {
       const error = errorOf(`variable "${name}" { default = 2 }`);
 
       expect(error.message).toBe(`"${name}" cannot be a variable name: a module call keeps it for itself.`);

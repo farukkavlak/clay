@@ -90,7 +90,8 @@ A `type` and a `name` are written as strings, and each has to spell an `IDENTIFI
 an address joins them with `.` and a reference reads them back. A `type` cannot be `var`,
 `local`, `data`, `module`, `count`, `each` or `path`, the words a reference reads as
 something other than a type. A variable cannot be named `source`, since a module call reads that as
-the module's path, or `count` or `for_each`, which a module call keeps for itself.
+the module's path, or `count`, `for_each` or `depends_on`, which a module call keeps for
+itself.
 
 `attributes` is zero or more `name = value` pairs, in any order, without separators, and
 no name twice.
@@ -119,17 +120,18 @@ What the engine reads from each:
 | `data`     | `count` or `for_each`, and `depends_on`, read by the engine; every other attribute goes to the provider                                                               |
 | `variable` | `default`, a constant: no reference or function call; `type`, read below; `sensitive`; `description`, checked and dropped; another attribute is refused where written |
 | `locals`   | every attribute, as a value of any kind; it may read anything a resource's attribute may, another local among them                                                    |
-| `output`   | `value`; `type`, read below; `sensitive`, which hides the value of a root output wherever it is printed; `description`, checked and dropped                           |
-| `module`   | `source`, a literal string naming a directory relative to the file; `count` or `for_each`; every other attribute is an input                                          |
+| `output`   | `value`; `type`, read below; `sensitive`, which hides the value of a root output wherever it is printed; `description`, checked and dropped; `depends_on`             |
+| `module`   | `source`, a literal string naming a directory relative to the file; `count` or `for_each`, and `depends_on`; every other attribute is an input                        |
 
 A resource, a data source or a module with both `count` and `for_each` is refused where
 it is written.
 
-`depends_on` in a resource or a data source is a list of references, each written out:
-`[local_file.a, data.local_file.d, var.v, local.l]`. Each names a whole object, so
-`local_file.a[0]` and `local_file.a.content` are refused, and so is a value that is not a
-list, a string, a call, `[*]`, `count`, `each`, `path` and `module`, each where it is
-written. One the configuration does not declare is refused where it is written.
+`depends_on` in a resource, a data source, a module call or an output is a list of
+references, each written out: `[local_file.a, data.local_file.d, var.v, local.l, module.m,
+module.m.out]`. Each names a whole object, so `local_file.a[0]`, `local_file.a.content`,
+`module.m[0]` and `module.m.out.x` are refused, and so is a value that is not a list, a
+string, a call, `[*]`, `count`, `each` and `path`, each where it is written. One the
+configuration does not declare is refused where it is written.
 
 A resource may hold one `lifecycle` block, written without `=`. It takes `prevent_destroy`
 and `create_before_destroy`, each `true` or `false` as written and never a reference, and
@@ -771,7 +773,7 @@ throws the same for a character it does not know, a string not closed on its lin
 
 ## Not in the language
 
-- `depends_on` in a module call or an output, provisioners, and any `lifecycle` argument but `prevent_destroy`, `create_before_destroy` and `ignore_changes`
+- Provisioners, and any `lifecycle` argument but `prevent_destroy`, `create_before_destroy` and `ignore_changes`
 - Nested blocks inside a block, but `lifecycle` in a resource
 - Any file other than `main.clay`
 
