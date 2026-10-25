@@ -11,8 +11,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 const clay = path.resolve(__dirname, '../../bin/clay.js');
 
 // `after` reads `slow`, so it runs in the layer after it.
+// `slow` makes its mark from the shell: a child that exits 0 during an interrupt lets the shell go on.
 const config = `resource "command_exec" "slow" {
-  command = "touch started.txt; sleep 2; touch made.txt"
+  command = ": > started.txt; sleep 2; touch made.txt"
 }
 
 resource "command_exec" "after" {
@@ -52,9 +53,10 @@ describe('an interrupted apply', () => {
     while (!(await exists('started.txt'))) await sleep(20);
 
     for (let sent = 0; sent < times; sent++) {
+      // Signals sent close together merge into one, so the next waits for the handler.
+      if (sent > 0) while (!stderr.includes('Interrupt received')) await sleep(20);
       if (toGroup) process.kill(-child.pid!, 'SIGINT');
       else child.kill('SIGINT');
-      await sleep(100);
     }
 
     const [code] = (await exited) as [number | null];
