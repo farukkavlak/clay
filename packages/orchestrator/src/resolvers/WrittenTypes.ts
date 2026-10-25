@@ -1,21 +1,63 @@
-import { Address, AttributePath, EVERY_ITEM, Schema, Type, types } from '@clay/contracts';
-import { CountReference, DataReference, EachReference, ModuleOutputReference, Position, ResourceReference, Step, VariableReference } from '@clay/parser';
+import { Address, AttributePath, EVERY_ITEM, ModuleAddress, Schema, Type, types } from '@clay/contracts';
+import {
+  AttributeValue,
+  CountReference,
+  DataReference,
+  EachReference,
+  ModuleOutputReference,
+  OutputBlock,
+  Position,
+  ResourceReference,
+  spell,
+  Step,
+  VariableReference,
+} from '@clay/parser';
 
+import { converted } from '../conformValues';
+import { declaredOf, givenTo } from '../declared';
 import { Instances, Repetition } from '../Instances';
 import { blockKey, Context, dataSourceKey, moduleOf, scopeOf } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
 import { placed } from '../place';
 import { ScopeManager } from '../scope/ScopeManager';
+import { Value } from '../Value';
 import { everyOf, everyType, instanceType, noAttribute, outputsType, readCall, readInstance } from './instance';
 
 /** Paths are known at load and a local is read as written, so they are not here. */
 type Unread = VariableReference | DataReference | ModuleOutputReference | ResourceReference | CountReference | EachReference;
 
-/** What every instance gives a reference: its type, and the parts its declaration marks. */
+/** A value written once for every instance, whose marks a reference takes at `at` once it is held as an instance holds it. */
+export interface Source {
+  value: AttributeValue;
+  context: Context;
+  declaration: string;
+  held: (read: Value, readNode: (node: AttributeValue) => Value) => Value;
+  at: AttributePath;
+}
+
+/** What every instance gives a reference: its type, the parts its declaration marks, and the values whose marks it takes. */
 export interface Written {
   type: Type;
   sensitive: AttributePath[];
+  from: Source[];
   path: Step[];
+}
+
+type Values = ReadonlyMap<string, Omit<Source, 'at'>>;
+
+/** Held in the output's type, with its defaults, as an instance holds it. */
+function outputSource(block: OutputBlock, call: ModuleAddress): Omit<Source, 'at'> {
+  return { value: block.value, context: call, declaration: spell(block), held: (read, readNode) => givenTo('output', block.name, read, declaredOf(block), readNode) };
+}
+
+/** The value named, or each at its name, under every instance where the reference names none. */
+function sourcesOf(values: Values, every: Repetition | undefined, name: string | undefined): Source[] {
+  if (name !== undefined) {
+    const one = values.get(name);
+    return one ? [{ ...one, at: [] }] : [];
+  }
+
+  return [...values].map(([each, value]) => ({ ...value, at: every ? [EVERY_ITEM, each] : [each] }));
 }
 
 const WHOLE: AttributePath[] = [[]];
@@ -28,7 +70,7 @@ function marked(names: string[], every?: Repetition): AttributePath[] {
 const sensitiveIn = (schema: Schema) => Object.keys(schema).filter((name) => schema[name].sensitive === true);
 
 /** Every instance, the whole instance where the reference names no attribute, or the attribute. */
-function fromSchema(schema: Schema, every: Repetition | undefined, attribute: string | undefined): Omit<Written, 'path'> {
+function fromSchema(schema: Schema, every: Repetition | undefined, attribute: string | undefined): Pick<Written, 'type' | 'sensitive'> {
   if (every) return { type: everyType(every, schema), sensitive: marked(sensitiveIn(schema), every) };
   if (attribute === undefined) return { type: instanceType(schema), sensitive: marked(sensitiveIn(schema)) };
 
@@ -49,8 +91,8 @@ export class WrittenTypes {
     const module = moduleOf(where);
 
     if (reference.kind === 'variable') return this.variableType(reference, scopeOf(module.withoutKeys()));
-    if (reference.kind === 'count') return { type: types.number, sensitive: [], path: reference.path };
-    if (reference.kind === 'each') return { type: reference.name === 'key' ? types.string : types.dynamic, sensitive: [], path: reference.path };
+    if (reference.kind === 'count') return { type: types.number, sensitive: [], from: [], path: reference.path };
+    if (reference.kind === 'each') return { type: reference.name === 'key' ? types.string : types.dynamic, sensitive: [], from: [], path: reference.path };
     if (reference.kind === 'module') return this.callType(reference, where, position);
     if (reference.kind === 'data') return this.dataType(reference, where, position);
 
@@ -61,18 +103,18 @@ export class WrittenTypes {
   private variableType(reference: VariableReference, scope: string): Written {
     const { type = types.dynamic, sensitive } = this.scopeManager.getVariable(scope, reference.name)!;
 
-    return { type, sensitive: sensitive ? WHOLE : [], path: reference.path };
+    return { type, sensitive: sensitive ? WHOLE : [], from: [], path: reference.path };
   }
 
   /** The graph has already refused undeclared data sources, and every one has its schema. */
   private dataType(reference: DataReference, where: Context, position: Position): Written {
     const spelled = `data.${reference.type}.${reference.name}`;
-    const repetition = this.instances.repetitionOf(dataSourceKey(scopeOf(moduleOf(where).withoutKeys()), reference.type, reference.name));
-    const { every, attribute, path } = readInstance(spelled, reference.path, repetition, position);
+    const key = dataSourceKey(scopeOf(moduleOf(where).withoutKeys()), reference.type, reference.name);
+    const { every, attribute, path } = readInstance(spelled, reference.path, this.instances.repetitionOf(key), position);
     const schema = this.dataSchemas.get(reference.type)!;
     if (attribute !== undefined && !Object.hasOwn(schema, attribute)) throw placed(`Attribute "${attribute}" not found on data source "${spelled}"`, position);
 
-    return { ...fromSchema(schema, every, attribute), path };
+    return { ...fromSchema(schema, every, attribute), from: sourcesOf(this.valuesOf(key, schema), every, attribute), path };
   }
 
   /** An output that names no type is `dynamic`. */
@@ -80,12 +122,14 @@ export class WrittenTypes {
     const call = moduleOf(where).child(reference.module).withoutKeys();
     const { every, output, path } = readCall(reference, this.modules.repetitionOf(call), position);
     const outputs = this.scopeManager.outputsOf(scopeOf(call));
-    const sensitive = this.scopeManager.sensitiveOutputsOf(scopeOf(call));
-    if (every) return { type: everyOf(every, outputsType(outputs)), sensitive: marked([...sensitive], every), path };
-    if (output === undefined) return { type: outputsType(outputs), sensitive: marked([...sensitive]), path };
+    const blocks = [...this.scopeManager.outputBlocksOf(scopeOf(call)).values()];
+    const sensitive = blocks.filter((block) => block.sensitive).map((block) => block.name);
+    const from = sourcesOf(new Map(blocks.map((block) => [block.name, outputSource(block, call)])), every, output);
+    if (every) return { type: everyOf(every, outputsType(outputs)), sensitive: marked(sensitive, every), from, path };
+    if (output === undefined) return { type: outputsType(outputs), sensitive: marked(sensitive), from, path };
 
     // The graph has already refused undeclared outputs.
-    return { type: outputs.get(output)!, sensitive: sensitive.has(output) ? WHOLE : [], path };
+    return { type: outputs.get(output)!, sensitive: sensitive.includes(output) ? WHOLE : [], from, path };
   }
 
   /** The type of the attribute, of the whole instance where the reference names none, or of every instance where it names no instance. */
@@ -96,6 +140,17 @@ export class WrittenTypes {
     const schema = this.schemas.get(reference.type)!;
     if (attribute !== undefined && !Object.hasOwn(schema, attribute)) throw placed(noAttribute(reference.type, attribute), position);
 
-    return { ...fromSchema(schema, every, attribute), path };
+    return { ...fromSchema(schema, every, attribute), from: sourcesOf(this.valuesOf(block, schema), every, attribute), path };
+  }
+
+  /** Every block is declared at load, and each value is held in the type its schema gives it. */
+  private valuesOf(key: string, schema: Schema): Values {
+    const { block, context } = this.scopeManager.declaredBlock(key)!;
+    const type = block.type === 'Resource' ? block.resourceType : block.dataSourceType;
+    const declaration = spell(block);
+
+    return new Map(
+      Object.entries(block.attributes).map(([name, value]) => [name, { value, context, declaration, held: (read: Value) => converted(type, read, schema[name].type, [name]) }])
+    );
   }
 }

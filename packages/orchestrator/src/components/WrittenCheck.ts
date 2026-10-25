@@ -31,23 +31,25 @@ export class WrittenCheck {
 
   /** Runs after names are checked, so each has a type in its schema. */
   async check(loadedResources: LoadedResource[], loadedModules: LoadedModule[], graph: Graph<GraphNode>): Promise<void> {
-    this.checkLocals(graph);
-    for (const loaded of loadedResources) await this.checkResource(loaded);
+    await this.checkBlocks(loadedResources, graph);
 
     for (const { address, program } of loadedModules)
       for (const stmt of program) {
         if (stmt.type === 'Output') this.checkOutput(stmt, address);
-        if (stmt.type === 'Data') await this.checkData(stmt, address);
         if (stmt.type === 'Variable') this.checkVariable(stmt, address);
         if (stmt.type === 'Module') this.checkCall(stmt, address.child(stmt.name));
       }
   }
 
-  /** Each after the locals it reads, so no check reads down a chain of them, which can be longer than the call stack. */
-  private checkLocals(graph: Graph<GraphNode>): void {
+  /** Each after the locals and blocks it reads, so no check reads down a chain of them, which can be longer than the call stack. */
+  private async checkBlocks(loadedResources: LoadedResource[], graph: Graph<GraphNode>): Promise<void> {
+    const resources = new Map(loadedResources.map((loaded) => [loaded.uniqueId, loaded]));
+
     for (const key of graph.topologicalSort().flat()) {
       const node = graph.getNode(key)!;
       if (node.kind === 'local') this.read(node.value, node.declaration, node.module);
+      if (node.kind === 'resource') await this.checkResource(resources.get(key)!);
+      if (node.kind === 'data') await this.checkData(node.block, node.module);
     }
   }
 

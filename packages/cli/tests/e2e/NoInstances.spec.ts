@@ -1,3 +1,4 @@
+import { planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types } from '@clay/contracts';
 import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { ConfigError } from '@clay/parser';
 import { LocalProvider } from '@clay/provider-local';
@@ -6,6 +7,48 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const TAGGED: Schema = { tags: { type: types.set(types.string), required: true } };
+
+/** A resource that holds what it is given as a set; it is only planned. */
+class Tagger implements Provider {
+  readonly resources = ['tagged'];
+  readonly dataSources: string[] = [];
+
+  async getSchema(): Promise<Schema> {
+    return TAGGED;
+  }
+
+  async plan(_type: string, request: PlanRequest): Promise<PlannedChange> {
+    return planFromSchema(TAGGED, request);
+  }
+
+  async validate(): Promise<void> {}
+
+  async read(_type: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+    return prior;
+  }
+
+  async create(): Promise<Record<string, unknown>> {
+    return {};
+  }
+
+  async update(): Promise<Record<string, unknown>> {
+    return {};
+  }
+
+  async delete(): Promise<void> {}
+
+  async getDataSourceSchema(): Promise<Schema> {
+    return {};
+  }
+
+  async validateDataSource(): Promise<void> {}
+
+  async readDataSource(): Promise<Record<string, unknown>> {
+    return {};
+  }
+}
 
 /** Where an error would point at the first `needle`. */
 const placeOf = (config: string, needle: string) => {
@@ -25,6 +68,7 @@ describe('a module called with count = 0', () => {
   const newOrchestrator = () => {
     const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
     engine.registerProvider(new LocalProvider());
+    engine.registerProvider(new Tagger());
     return engine;
   };
 
@@ -115,14 +159,88 @@ describe('a module called with count = 0', () => {
     expect(error.position).toMatchObject({ file: path.join('m', 'main.clay'), ...placeOf(content, needle) });
   });
 
-  it('refuses a count from an output its own module writes sensitive', async () => {
-    const content = 'module "n" {\n  source = "./n"\n}\nresource "random_string" "s" {\n  count  = module.n.size\n  length = 4\n}';
-    await module(content, 'output "size" {\n  value     = 1\n  sensitive = true\n}');
+  const COUNTED = 'resource "random_string" "s" {\n  count  = %s\n  length = 4\n}';
+  const counted = (count: string, before: string) => `${before}\n${COUNTED.replace('%s', count)}`;
+  const CALLED = 'module "n" {\n  source = "./n"\n}';
+  const CALLED_ONCE = 'module "n" {\n  source = "./n"\n  count  = 1\n}';
+  const FILE = 'resource "local_file" "f" {\n  path    = "f"\n  content = sensitive("abc")\n}';
+  const FILES = 'resource "local_file" "f" {\n  count   = 1\n  path    = "f"\n  content = sensitive("abc")\n}';
+
+  it.each([
+    ['an output its own module writes sensitive', CALLED, 'output "size" {\n  value     = 1\n  sensitive = true\n}', 'module.n.size'],
+    ['the sensitive value of an output', CALLED, 'output "size" { value = sensitive(1) }', 'module.n.size'],
+    [
+      'an output whose value a set it is held in makes sensitive as a whole',
+      CALLED,
+      'output "size" {\n  type  = set(string)\n  value = [sensitive("a"), "b"]\n}',
+      'length(module.n.size)',
+    ],
+    ['the sensitive value of an output, read with every other', `${CALLED}\nlocals {\n  n = module.n\n}`, 'output "size" { value = sensitive(1) }', 'local.n.size'],
+    ['the sensitive value of an output, in an instance of the call', CALLED_ONCE, 'output "size" { value = sensitive(1) }', 'module.n[0].size'],
+    [
+      'the sensitive value of an output, read with every instance of the call',
+      `${CALLED_ONCE}\nlocals {\n  n = module.n\n}`,
+      'output "size" { value = sensitive(1) }',
+      'local.n[0].size',
+    ],
+    ['a sensitive value a resource is given', FILE, '', 'length(local_file.f.content)'],
+    ['a sensitive value a resource is given, read with every other', `${FILE}\nlocals {\n  f = local_file.f\n}`, '', 'length(local.f.content)'],
+    ['a sensitive value an instance of a resource is given', FILES, '', 'length(local_file.f[0].content)'],
+    ['a sensitive value a resource is given, read with every instance', `${FILES}\nlocals {\n  f = local_file.f\n}`, '', 'length(local.f[0].content)'],
+    [
+      'a value a resource holds as a set, which a sensitive item makes sensitive as a whole',
+      'resource "tagged" "t" {\n  tags = [sensitive("a"), "b"]\n}',
+      '',
+      'length(tagged.t.tags)',
+    ],
+    ['a sensitive value a data source is given', 'data "local_file" "f" {\n  path = sensitive("f")\n}', '', 'length(data.local_file.f.path)'],
+  ])('refuses a count from %s', async (_, before, inner, count) => {
+    const content = counted(count, before);
+    await module(content, inner);
 
     const error = await planError();
 
     expect(error.message).toBe('count is sensitive: the number of instances shows what it is');
-    expect(error.position).toMatchObject({ file: path.join('m', 'main.clay'), ...placeOf(content, 'module.n.size') });
+    expect(error.position).toMatchObject({ file: path.join('m', 'main.clay'), ...placeOf(content, count) });
+  });
+
+  it('refuses a mistake in the value of an output a count reads at the output', async () => {
+    const inner = 'output "size" { value = !"a" }';
+    await module(counted('module.n.size', CALLED), inner);
+
+    const error = await planError();
+
+    expect(error.message).toBe('! takes a boolean, not a string');
+    expect([error.block, error.module]).toEqual(['output "size"', 'module.m.module.n']);
+    expect(error.position).toMatchObject({ file: path.join('m', 'n', 'main.clay'), ...placeOf(inner, '"a"') });
+  });
+
+  it.each([
+    [
+      'the value of an output sensitive only on a branch an instance may not take',
+      CALLED,
+      'variable "b" {\n  default = false\n}\noutput "size" { value = var.b ? sensitive(1) : 2 }',
+      'module.n.size',
+    ],
+    [
+      'an output beside one whose value is sensitive',
+      `${CALLED}\nlocals {\n  n = module.n\n}`,
+      'output "size" { value = sensitive(1) }\noutput "name" { value = "n" }',
+      'length(local.n.name)',
+    ],
+    [
+      'an output beside one whose value is sensitive, in an instance of the call',
+      `${CALLED_ONCE}\nlocals {\n  n = module.n\n}`,
+      'output "size" { value = sensitive(1) }\noutput "name" { value = "n" }',
+      'length(local.n[0].name)',
+    ],
+    ['a value a resource is given beside a sensitive one', `${FILE}\nlocals {\n  f = local_file.f\n}`, '', 'length(local.f.path)'],
+  ])('takes a count from %s', async (_, before, inner, count) => {
+    await module(counted(count, before), inner);
+
+    const plan = await newOrchestrator().plan(CALL);
+
+    expect(plan.actions).toEqual([]);
   });
 
   it.each([
@@ -198,5 +316,29 @@ describe('a block with no instance at the root', () => {
     await engine.plan('resource "null_resource" "n" {\n  count    = 0\n  triggers = null\n}');
 
     expect(validate.mock.calls).toEqual([['null_resource', {}]]);
+  });
+});
+
+describe('a resource that reads another as written', () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-no-instances-'));
+  });
+
+  afterEach(async () => {
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  // Each is checked after the one it reads, so reading a value as written takes one step; the last of the chain comes first.
+  it('is checked through a chain longer than the call stack holds', async () => {
+    const links = Array.from({ length: 1500 }, (_, step) => `resource "local_file" "f${step + 1}" {\n  path    = "f${step + 1}"\n  content = local_file.f${step}.content\n}`);
+    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
+    engine.registerProvider(new LocalProvider());
+
+    const plan = await engine.plan([...links.reverse(), 'resource "local_file" "f0" {\n  path    = "f0"\n  content = "x"\n}'].join('\n'));
+
+    const names = Array.from({ length: 1501 }, (_, step) => `f${step}`);
+    expect(plan.actions.map((action) => [action.type, action.name]).sort()).toEqual(names.map((name) => ['CREATE', name]).sort());
   });
 });

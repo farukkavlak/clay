@@ -76,9 +76,9 @@ describe('ModuleOutputResolver', () => {
       ['url', types.dynamic],
       ['port', types.dynamic],
     ]);
-    scopes.declareOutputs('module.app', outputs, new Set());
-    scopes.declareOutputs('module.web', outputs, new Set());
-    scopes.declareOutputs('module.db', outputs, new Set());
+    scopes.declareOutputs('module.app', outputs, new Map());
+    scopes.declareOutputs('module.web', outputs, new Map());
+    scopes.declareOutputs('module.db', outputs, new Map());
     calls.declare(ModuleAddress.root.child('web'), 'count');
     calls.declare(ModuleAddress.root.child('db'), 'for_each');
     calls.expand(ModuleAddress.root, 'web', () => [0, 1]);
