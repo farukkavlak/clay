@@ -52,6 +52,7 @@ import {
   checkCollection,
   checkKey,
   forItems,
+  goer,
   ForItem,
   forObject,
   laterObjectMarks,
@@ -490,7 +491,7 @@ export class ReferenceResolver {
   /** Over a collection sensitive as a whole, or with a sensitive if, what it gives is too: how many items it keeps tells the if. */
   private resolveFor(node: ForNode, state: State, context: Context | undefined, reading: Reading): Value {
     const collection = this.collectionOf(node, state, context, reading);
-    const names = forItems(collection, node.collection.position).map((item) => withNames(reading, node, item));
+    const names = forItems(collection, node).map((item) => withNames(reading, node, item));
     const picked = this.picked(node, names, state, context);
     const whole = { sensitive: isAllSensitive(collection) || picked.whole.sensitive, maybe: picked.whole.maybe };
     if (picked.later) throw this.laterPicked(node, picked, whole, state, context);
@@ -580,17 +581,17 @@ export class ReferenceResolver {
     } catch (error) {
       if (!(error instanceof UnresolvedReferenceError)) throw error;
       const later = unknownOf(error);
-      checkCollection(later, node.collection.position);
+      checkCollection(later, node);
       throw this.laterFor(node, later, error.message, state, context, reading);
     }
 
     // A condition or an operator gives a value not known yet where a reference would throw.
     if (isUnknown(collection.data)) {
-      checkCollection(collection, node.collection.position);
-      throw this.laterFor(node, collection, 'What a for goes over is known only after apply', state, context, reading);
+      checkCollection(collection, node);
+      throw this.laterFor(node, collection, `What ${goer(node)} goes over is known only after apply`, state, context, reading);
     }
     if (unordered(collection))
-      throw this.laterFor(node, collection, 'The set a for goes over has a member known only after apply, so it has no order yet', state, context, reading);
+      throw this.laterFor(node, collection, `The set ${goer(node)} goes over has a member known only after apply, so it has no order yet`, state, context, reading);
     return collection;
   }
 

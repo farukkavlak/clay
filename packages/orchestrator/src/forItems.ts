@@ -1,5 +1,5 @@
 import { AttributePath, EVERY_ITEM, EXACT, ExactNumber, holdsFirst, isMarker, isUnknown, SENSITIVE, sensitiveUnder, Type, typeAt, types, UNKNOWN } from '@clay/contracts';
-import { ConfigError, Position } from '@clay/parser';
+import { ConfigError, ForNode, Position } from '@clay/parser';
 
 import { UnresolvedReferenceError } from './resolvers/UnresolvedReferenceError';
 import {
@@ -27,19 +27,27 @@ export type ForItem = [key: Value, value: Value];
 
 const TAKEN = new Set(['list', 'tuple', 'set', 'map', 'object']);
 
+const SPLATTED = new Set(['list', 'tuple', 'set']);
+
+/** How a message names what goes over the collection: `a for`, or `[*]` where that is how it was written. */
+export function goer(node: ForNode): string {
+  return node.splat ? '[*]' : 'a for';
+}
+
 const indexOf = (index: number) => valueOf(types.number, ExactNumber.parse(String(index)));
 
-/** An unknown collection is checked by its type, unless that is unknown too. */
-export function checkCollection(collection: Value, position: Position): void {
+/** An unknown collection is checked by its type, unless that is unknown too. `[*]` takes no map or object. */
+export function checkCollection(collection: Value, node: ForNode): void {
   const { kind } = collection.type;
+  const [taken, takes] = node.splat ? [SPLATTED, '[*] goes over a list, a tuple or a set'] : [TAKEN, 'A for goes over a list, a tuple, a set, a map or an object'];
   // `dynamic` means unknown or null.
-  if (collection.data === null || !(TAKEN.has(kind) || kind === 'dynamic'))
-    throw new ConfigError(`A for goes over a list, a tuple, a set, a map or an object, not ${described(collection)}${nullSource(collection)}`, position);
+  if (collection.data === null || !(taken.has(kind) || kind === 'dynamic'))
+    throw new ConfigError(`${takes}, not ${described(collection)}${nullSource(collection)}`, node.collection.position);
 }
 
 /** A set's members are their own keys; a map's or object's values come in key order. */
-export function forItems(collection: Value, position: Position): ForItem[] {
-  checkCollection(collection, position);
+export function forItems(collection: Value, node: ForNode): ForItem[] {
+  checkCollection(collection, node);
   const { kind } = collection.type;
 
   if (kind === 'map' || kind === 'object')

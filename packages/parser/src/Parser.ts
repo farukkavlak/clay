@@ -265,6 +265,7 @@ export class Parser {
       if ('index' in step) throw new ConfigError('ignore_changes names keys and indexes written out, not a value to read', first.position);
       path.push(stepKey(step));
     }
+    if (this.atSplat()) throw new ConfigError('ignore_changes names keys and indexes written out, not [*]', first.position);
 
     return { path, position: first.position };
   }
@@ -574,7 +575,22 @@ export class Parser {
     const value = this.parseTerm();
     const path = this.parseSteps();
 
-    return path.length === 0 ? value : { type: 'Index', value, path, position };
+    return this.splatted(path.length === 0 ? value : { type: 'Index', value, path, position });
+  }
+
+  /** `[*]` reads every step after it, a `[*]` among them, into each item; parentheses end it. */
+  private splatted(collection: AttributeValue): AttributeValue {
+    if (!this.atSplat()) return collection;
+    this.current += 3;
+
+    const { position } = collection;
+    const valueName = `${spellIndex(collection)}[*]`;
+    const body = this.splatted({ type: 'Bound', value: [{ name: valueName }, ...this.parseSteps()], position });
+    return { type: 'For', valueName, collection, body, splat: true, position };
+  }
+
+  private atSplat(): boolean {
+    return this.check(TokenType.LBracket) && this.tokens[this.current + 1].type === TokenType.Star && this.tokens[this.current + 2].type === TokenType.RBracket;
   }
 
   private parseTerm(): AttributeValue {
@@ -807,7 +823,7 @@ export class Parser {
   private parseSteps(): Step[] {
     const steps: Step[] = [];
 
-    while (this.matchToken(TokenType.Dot, TokenType.LBracket))
+    while (!this.atSplat() && this.matchToken(TokenType.Dot, TokenType.LBracket))
       steps.push(this.previous().type === TokenType.Dot ? { name: this.consume(TokenType.Identifier, 'Expect property name after dot.').value } : this.parseBracket());
 
     return steps;

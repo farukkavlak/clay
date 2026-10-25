@@ -997,6 +997,67 @@ describe('Clay Parser', () => {
       expect(found.map((node) => spellNamed(node))).toEqual(['var.x', 'length(...)', 'var.y']);
     });
 
+    it('reads [*] as a for over what is before it, each item named as it is written', () => {
+      expect(valueOf('var.servers[*].port')).toEqual({
+        type: 'For',
+        valueName: 'var.servers[*]',
+        collection: reference(['var', 'servers'], 24),
+        body: bound(['var.servers[*]', 'port'], 24),
+        splat: true,
+        position: at(1, 24),
+      });
+    });
+
+    it('reads [*] with nothing after it as a for that gives each item', () => {
+      expect(valueOf('var.l[*]')).toMatchObject({ type: 'For', body: bound(['var.l[*]'], 24) });
+    });
+
+    it('reads every step after [*] into each item, an index too', () => {
+      expect(valueOf('var.l[*].ports[0]')).toMatchObject({ body: bound(['var.l[*]', 'ports', 0], 24) });
+    });
+
+    it('reads a [*] after another as a for inside its body', () => {
+      expect(valueOf('var.l[*].disks[*].size')).toMatchObject({
+        valueName: 'var.l[*]',
+        body: {
+          type: 'For',
+          valueName: 'var.l[*].disks[*]',
+          collection: bound(['var.l[*]', 'disks'], 24),
+          body: bound(['var.l[*].disks[*]', 'size'], 24),
+          splat: true,
+        },
+      });
+    });
+
+    it('reads [*] after a value with no name, and after parentheses', () => {
+      expect(valueOf('[{ a = 1 }][*].a')).toMatchObject({ valueName: '...[*]', collection: { type: 'List' }, body: bound(['...[*]', 'a'], 24) });
+      expect(valueOf('(var.l)[*]')).toMatchObject({ type: 'For', collection: reference(['var', 'l'], 25) });
+    });
+
+    it('ends [*] at a closing parenthesis, so a step after it reads into what the for gives', () => {
+      expect(valueOf('(var.l[*].a)[0]')).toMatchObject({ type: 'Index', value: { type: 'For', body: bound(['var.l[*]', 'a'], 25) }, path: steps(0) });
+    });
+
+    it('reads [*] on a name a for gives', () => {
+      expect(valueOf('[for s in var.l : s.disks[*].size]')).toMatchObject({
+        body: { type: 'For', valueName: 's.disks[*]', collection: bound(['s', 'disks'], 42), body: bound(['s.disks[*]', 'size'], 42) },
+      });
+    });
+
+    it('finds the references in what [*] goes over and in the steps after it', () => {
+      expect(namedIn(valueOf('var.l[*].tags[var.k]')).map((node) => spellNamed(node))).toEqual(['var.l', 'var.k']);
+    });
+
+    it.each([
+      ['a [*] in ignore_changes', 'lifecycle { ignore_changes = [tags[*]] }', 'ignore_changes names keys and indexes written out, not [*]', at(1, 50)],
+      ['a star with more in the brackets', 'v = var.l[*2]', 'Unexpected value: *', at(1, 30)],
+    ])('refuses %s where it is written', (_, body, message, position) => {
+      const error = errorOf(`resource "t" "n" { ${body} }`);
+
+      expect(error.message).toBe(message);
+      expect(error.position).toEqual(position);
+    });
+
     it('spells a name the for gives as it is written', () => {
       expect(spellNamed(bound(['f', 'paths', { key: 'a.b' }, 0], 1) as BoundNode)).toBe('f.paths["a.b"][0]');
     });

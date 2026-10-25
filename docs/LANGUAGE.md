@@ -191,6 +191,12 @@ after the value groups them. An `if` after the value keeps only the items it is 
 only, like the result a condition does not pick. A sensitive `if` makes what the for gives
 sensitive, and like a sensitive condition it can be learned from whether the run fails.
 
+`[*]` is a shorter way to write a for over a list, a tuple or a set: `var.servers[*].port` is
+`[for s in var.servers : s.port]`, and `local_file.f[*].path` reads each instance a
+`count` makes. Every step after `[*]` reads into each item, so `var.servers[*].disks[0]`
+is the first disk of each; `(var.servers[*].port)[0]` is the first port. A map, an object
+or null is refused, where Terraform wraps a value that is not a list in one.
+
 ## Sensitive values
 
 An output with `sensitive = true` is hidden where it would be printed: `plan`, `apply` and

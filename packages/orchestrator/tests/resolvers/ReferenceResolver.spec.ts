@@ -295,6 +295,29 @@ describe('ReferenceResolver', () => {
     });
   });
 
+  describe('a [*]', () => {
+    it('names [*] where its set has a member not known yet', () => {
+      expect(() => readWith('data.src.s.v[*]', source(valueOf(types.set(types.string), ['a', UNKNOWN])), planning())).toThrow(
+        expect.objectContaining({ message: 'The set [*] goes over has a member known only after apply, so it has no order yet', type: types.dynamic })
+      );
+    });
+
+    it('names [*] where a condition gives what it goes over only at apply', () => {
+      expect(() => readWith('(data.src.s.v ? ["a"] : ["b"])[*]', source(valueOf(types.bool, UNKNOWN)), planning())).toThrow(
+        expect.objectContaining({ message: 'What [*] goes over is known only after apply', type: types.dynamic })
+      );
+    });
+
+    it.each([
+      ['a map', valueOf(types.map(types.string), { a: 'x' }), 'a map'],
+      ['an object', valueOf(types.object({ a: types.string }), { a: 'x' }), 'an object'],
+      ['a string not known yet', valueOf(types.string, UNKNOWN), 'a string'],
+      ['null', valueOf(types.list(types.string), null), 'null, and data.src.s.v, which it reads, is null'],
+    ])('refuses %s where it is written, as no list', (_, value, described) => {
+      expect(() => readWith('data.src.s.v[*]', source(value), planning())).toThrow(new ConfigError(`[*] goes over a list, a tuple or a set, not ${described}`, atColumn(22)));
+    });
+  });
+
   describe('a for expression that makes an object', () => {
     const keyNotKnown = expect.objectContaining({ message: 'A key in a for is known only after apply, so what the for gives is not known yet', type: types.dynamic });
 
