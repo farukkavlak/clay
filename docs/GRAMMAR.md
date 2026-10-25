@@ -115,8 +115,8 @@ What the engine reads from each:
 
 | Block      | Reads                                                                                                                                                                 |
 | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `resource` | `count` or `for_each`, read by the engine; every other attribute goes to the provider                                                                                 |
-| `data`     | `count` or `for_each`, read by the engine; every other attribute goes to the provider                                                                                 |
+| `resource` | `count` or `for_each`, and `depends_on`, read by the engine; every other attribute goes to the provider                                                               |
+| `data`     | `count` or `for_each`, and `depends_on`, read by the engine; every other attribute goes to the provider                                                               |
 | `variable` | `default`, a constant: no reference or function call; `type`, read below; `sensitive`; `description`, checked and dropped; another attribute is refused where written |
 | `locals`   | every attribute, as a value of any kind; it may read anything a resource's attribute may, another local among them                                                    |
 | `output`   | `value`; `type`, read below; `sensitive`, which hides the value of a root output wherever it is printed; `description`, checked and dropped                           |
@@ -124,6 +124,12 @@ What the engine reads from each:
 
 A resource, a data source or a module with both `count` and `for_each` is refused where
 it is written.
+
+`depends_on` in a resource or a data source is a list of references, each written out:
+`[local_file.a, data.local_file.d, var.v, local.l]`. Each names a whole object, so
+`local_file.a[0]` and `local_file.a.content` are refused, and so is a value that is not a
+list, a string, a call, `[*]`, `count`, `each`, `path` and `module`, each where it is
+written. One the configuration does not declare is refused where it is written.
 
 A resource may hold one `lifecycle` block, written without `=`. It takes `prevent_destroy`
 and `create_before_destroy`, each `true` or `false` as written and never a reference, and
@@ -679,6 +685,7 @@ interface ResourceBlock {
   name: string;
   count?: AttributeValue;
   forEach?: AttributeValue;
+  dependsOn?: Reference[];
   lifecycle?: { preventDestroy?: boolean; createBeforeDestroy?: boolean; ignoreChanges?: 'all' | { path: (string | number)[]; position: Position }[]; position: Position };
   attributes: Record<string, AttributeValue>;
   position: Position;
@@ -690,6 +697,7 @@ interface DataBlock {
   name: string;
   count?: AttributeValue;
   forEach?: AttributeValue;
+  dependsOn?: Reference[];
   attributes: Record<string, AttributeValue>;
   position: Position;
 }
@@ -763,7 +771,7 @@ throws the same for a character it does not know, a string not closed on its lin
 
 ## Not in the language
 
-- `depends_on`, provisioners, and any `lifecycle` argument but `prevent_destroy`, `create_before_destroy` and `ignore_changes`
+- `depends_on` in a module call or an output, provisioners, and any `lifecycle` argument but `prevent_destroy`, `create_before_destroy` and `ignore_changes`
 - Nested blocks inside a block, but `lifecycle` in a resource
 - Any file other than `main.clay`
 

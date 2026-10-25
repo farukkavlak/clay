@@ -147,12 +147,12 @@ export class DependencyGraphBuilder {
       if (value) tryAt(value.position, dependent.declaration, caller, () => this.addDependencies(value, graph, dependent, moduleScopes));
   }
 
-  /** As a resource's: its count or for_each is read before any instance, so it has no key. */
+  /** As a resource's: its count, for_each and depends_on are read before any instance, so they have no key. */
   private addDataDependencies(key: string, block: DataBlock, module: ModuleAddress, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
     const dependent = { key, declaration: spell(block), context: module };
     const repetition = this.instances.repetitionOf(key);
 
-    for (const value of [block.count, block.forEach])
+    for (const value of [block.count, block.forEach, ...(block.dependsOn ?? [])])
       if (value) tryAt(value.position, dependent.declaration, module, () => this.addDependencies(value, graph, dependent, moduleScopes));
     for (const value of Object.values(block.attributes))
       tryAt(value.position, dependent.declaration, module, () => this.addDependencies(value, graph, dependent, moduleScopes, repetition));
@@ -170,12 +170,12 @@ export class DependencyGraphBuilder {
     }
   }
 
-  /** One value at a time, so an error points at the value, not the block. count and for_each are read before any instance, so they have no key. */
+  /** One value at a time, so an error points at the value, not the block. count, for_each and depends_on are read before any instance, so they have no key. */
   private addResourceDependencies({ address, block }: LoadedResource, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
     const dependent = { key: address.toString(), declaration: spell(block), context: address };
     const repetition = this.instances.repetitionOf(dependent.key);
 
-    for (const value of [block.count, block.forEach])
+    for (const value of [block.count, block.forEach, ...(block.dependsOn ?? [])])
       if (value) tryAt(value.position, dependent.declaration, address, () => this.addDependencies(value, graph, dependent, moduleScopes));
     for (const value of Object.values(block.attributes))
       tryAt(value.position, dependent.declaration, address, () => this.addDependencies(value, graph, dependent, moduleScopes, repetition));

@@ -670,8 +670,10 @@ and every operator HCL has. A real configuration hits each of these early.
 - [x] `alltrue` and `anytrue`, which a rule over a list reaches for:
       `alltrue([for p in var.ports : p > 0])`
 - [x] The `[*]` splat: `var.servers[*].port`
-- [ ] `depends_on`, for an order no reference shows. Written today, it is refused as an
-      attribute the resource does not have
+- [x] `depends_on` in a resource and a data source, for an order no reference shows
+- [ ] `depends_on` in a module call and an output, and `module.m` as what to wait for.
+      Written today, a call refuses it as a variable the module does not have, and an
+      output as an argument it does not take
 - [ ] A `moved` block, so a rename in the configuration moves state instead of destroying
       and creating. `clay state mv` is the only way now
 - [ ] A module reads every `.clay` file in its directory, as Terraform reads every `.tf`;

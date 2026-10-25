@@ -18,7 +18,6 @@ class MockProvider implements Provider {
       message: { type: types.string },
       greeting: { type: types.string },
       ref: { type: types.string },
-      depends_on: { type: types.string },
       name: { type: types.string },
       id: { type: types.string, computed: true, kept: true },
     };
@@ -192,7 +191,7 @@ describe('Orchestrator: Advanced Features', () => {
         }
 
         resource "mock_resource" "second" {
-          depends_on = mock_resource.first.name
+          ref = mock_resource.first.name
         }
       `;
 
