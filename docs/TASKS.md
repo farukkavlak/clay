@@ -436,11 +436,13 @@ change each.
       at, so `t[1].c` is refused as an output, though only the second item may land there:
       `t = [for i, v in [{ c = sensitive("x") }, { c = "0" }] : v if i == 1 || cond]`. So is the
       same place in a group. Now each place takes only what the items that may land there have
-- [ ] The same holds for a `for` over a collection not known yet with an if not known yet:
+- [x] The same holds for a `for` over a collection not known yet with an if not known yet:
       every place after those it keeps for certain first takes what any item may have there,
       so `t[1].c` with `t = [for i, v in (cond ? ["x", m] : ["x", m]) : v if i == 0 || cond2]`
       is refused as an output. Its items that the collection may hold are read after the rest,
-      not in the order the `for` goes over them, so the place each may land at is not known
+      not in the order the `for` goes over them, so the place each may land at is not known.
+      Now each place among the items it holds for certain first, which come in that order,
+      takes only what the items from there on may have
 - [x] A value of no type yet, joined with a structure, takes the structure's shape, so the
       plan holds as there for certain what the apply may not have: with
       `o = { k = sensitive("s"), c = "0" }`, `{ for v in l : "a" => v.c }` where

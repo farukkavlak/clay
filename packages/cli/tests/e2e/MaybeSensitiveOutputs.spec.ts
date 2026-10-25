@@ -261,6 +261,30 @@ describe('a root output that may hold a sensitive value', () => {
       '0',
     ],
     [
+      'such a key at a place a for over a tuple not known yet may drop',
+      `[for i, v in (${LATER} ? ["x", ${MERGED}] : ["x", ${MERGED}]) : v if i == 0 || ${NOW}]`,
+      'local.l[1].c',
+      '0',
+    ],
+    [
+      'such a key at a place a for over an object not known yet may drop',
+      `[for k, v in (${LATER} ? { a = "x", b = ${MERGED} } : { a = "y", b = ${MERGED} }) : v if k == "a" || ${NOW}]`,
+      'local.l[1].c',
+      '0',
+    ],
+    [
+      'a part plain at a place no item before it may take, in a for over a list not known yet whose marks name each place',
+      `[for i, v in (${LATER} ? tolist([{ c = sensitive("x"), s = "a" }, { c = "0", s = sensitive("b") }]) : tolist([{ c = sensitive("y"), s = "c" }, { c = "0", s = sensitive("d") }])) : v if i == 1 || ${NOW}]`,
+      'local.l[1].c',
+      '0',
+    ],
+    [
+      'a part plain at a place in a group no item before it may take, over a tuple not known yet',
+      `{ for i, v in (${LATER} ? [{ c = sensitive("x") }, { c = "0" }] : [{ c = sensitive("y") }, { c = "0" }]) : "g" => v... if i == 1 || ${NOW} }`,
+      'local.l.g[1].c',
+      '0',
+    ],
+    [
       'a part plain at a place no item before it may take',
       `[for i, v in [{ c = sensitive("x"), s = "a" }, { c = "0", s = sensitive("b") }] : v if i == 1 || ${NOW}]`,
       'local.l[1].c',
@@ -288,6 +312,26 @@ describe('a root output that may hold a sensitive value', () => {
       'local.l.c[0]',
     ],
     ['a place after one a for may drop', `[for i, v in ["0", sensitive("x"), "1"] : v if i != 1 || ${LATER}]`, 'local.l[1]'],
+    [
+      'a place past the items a for over a list not known yet reads',
+      `[for i, v in [for x in (${LATER} ? [1] : [1, 2, 3]) : (x == 3 ? sensitive("s") : "p")] : v if i == 0 || ${LATER}]`,
+      'local.l[2]',
+    ],
+    [
+      'a place in a group past the items a for over a list not known yet reads',
+      `{ for i, v in (${LATER} ? tolist([sensitive("a"), "p", "p", sensitive("s")]) : tolist([sensitive("b")])) : "g" => v... if i == 0 || ${LATER} }`,
+      'local.l.g[3]',
+    ],
+    [
+      'a place after one a for over a tuple not known yet may drop',
+      `[for i, v in (${LATER} ? ["0", sensitive("x"), "1"] : ["0", sensitive("y"), "1"]) : v if i != 1 || ${LATER}]`,
+      'local.l[1]',
+    ],
+    [
+      'a place in a group over a tuple not known yet that an item the for may drop may take',
+      `{ for i, v in (${LATER} ? [{ c = sensitive("x") }, { c = "0" }] : [{ c = sensitive("y") }, { c = "0" }]) : "g" => v... if i == 1 || ${LATER} }`,
+      'local.l.g[0].c',
+    ],
     ['a place an item the for may drop may take', `[for i, v in [{ c = sensitive("x"), s = "a" }, { c = "0", s = sensitive("b") }] : v if i == 1 || ${LATER}]`, 'local.l[0].c'],
     [
       'a place in a group an item the for may drop may take',

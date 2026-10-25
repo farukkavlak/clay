@@ -264,11 +264,16 @@ function laterForMarks(node: ForNode, collection: Type, { other, certain, leadin
       items.map((item): ForItem => [item.key ?? valueOf(types.dynamic, UNKNOWN), item.body]),
       kept,
       node.grouped === true,
-      // Only the items of a known collection are taken to come in the order the for goes over them.
-      0
+      leading
+    );
+  if (node.condition)
+    return pickedTupleMarks(
+      items.map((item) => item.body),
+      kept,
+      leading
     );
 
-  const placed = items.map((item) => !node.condition && typeof item.step === 'number');
+  const placed = items.map((item) => typeof item.step === 'number');
   const places = items.flatMap(({ step, body }, index) => (placed[index] && step !== undefined ? under(step, kept[index] ? (body.sensitive ?? []) : maybeMarks([body])) : []));
   return fewest([
     ...laterTupleMarks(
