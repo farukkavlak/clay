@@ -1163,11 +1163,12 @@ Nothing here changes what Clay does. Each is a place the next change has to work
 - [x] A saved plan holds each action's parsed attributes and the configuration's text, and
       the apply resolves the first while it builds the graph from the second. Now it holds
       the text only, and the apply resolves each block from it
-- [ ] `planner/src/index.ts` holds the plan file, the diff, the plan and apply checks and
+- [x] `planner/src/index.ts` holds the plan file, the diff, the plan and apply checks and
       `plan()` in one file of 700 lines
 - [x] `contracts/src/index.ts` holds unknown values, attribute paths, sensitive marks, the
       state and its readers, the schema and the provider contract in one file
-- [ ] `planner` depends on `parser` only for `DesiredResource.block`, which it never reads
+- [ ] `planner` depends on `parser` only for `DesiredResource.block`, from which it reads
+      one flag, `lifecycle.preventDestroy`
 - [ ] `orchestrator/src` holds 39 files side by side. `components/` names nothing, and
       `applyGraph.ts` above it imports from it
 - [ ] Most of `Value.ts` is the arithmetic of sensitive marks, not the value itself
