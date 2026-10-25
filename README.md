@@ -69,11 +69,12 @@ On top of these:
   `<`, `<=`, `>`, `>=`.
 - Sensitive values, followed part by part and hidden wherever they would be printed.
 - `lifecycle` with `prevent_destroy`, `create_before_destroy` and `ignore_changes`.
+- `depends_on` in a resource or a data source, for an order no reference shows.
 
 `docs/LANGUAGE.md` says what each of these does, and `docs/GRAMMAR.md` how it is written.
 
-Not there yet: `depends_on`, `destroy`, values for root variables from the command line,
-and more than one file per module. `docs/TASKS.md` has the full list.
+Not there yet: `depends_on` in a module call or an output, `destroy`, values for root
+variables from the command line, and more than one file per module. `docs/TASKS.md` has the full list.
 
 ## Commands
 

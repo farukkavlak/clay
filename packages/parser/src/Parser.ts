@@ -28,7 +28,7 @@ import { ConfigError } from './ConfigError';
 import { readEscapes } from './escapes';
 import { flushed } from './heredoc';
 import { Position } from './Position';
-import { ParsedReference, parseReference, Step, stepKey } from './reference';
+import { ParsedReference, parseReference, spellReference, Step, stepKey } from './reference';
 import { Token, TokenType } from './tokens';
 
 /** Loosest first; within a level, operators group from the left. */
@@ -94,6 +94,30 @@ function defaultsFrom(found: { values?: Record<string, AttributeValue>; within?:
 }
 
 const readsVariable = (reference: ParsedReference, name: string) => reference.kind === 'variable' && reference.name === name;
+
+const WAITED_FOR = new Set<ParsedReference['kind']>(['resource', 'data', 'variable', 'local']);
+const WAITS_FOR = 'depends_on is a list of resources, data sources, variables and locals, as in [local_file.a]';
+
+/** The graph orders blocks, not instances, so an index could not mean what it says. */
+function waitedFor(item: AttributeValue): ReferenceNode {
+  if (item.type !== 'Reference') throw new ConfigError(WAITS_FOR, item.position);
+
+  const reference = parseReference(item.value, item.position);
+  if (!WAITED_FOR.has(reference.kind)) throw new ConfigError(WAITS_FOR, item.position);
+  if (reference.path.length > 0) {
+    const whole = spellReference(item.value.slice(0, item.value.length - reference.path.length));
+    throw new ConfigError(`depends_on waits for a whole object: write ${whole}, not ${spellReference(item.value)}`, item.position);
+  }
+
+  return item;
+}
+
+/** Read as written, so the order is known before any value is. */
+function dependsOnOf(value: AttributeValue): ReferenceNode[] {
+  if (value.type !== 'List') throw new ConfigError(WAITS_FOR, value.position);
+
+  return value.value.map((item) => waitedFor(item));
+}
 
 export class Parser {
   private tokens: Token[];
@@ -179,6 +203,7 @@ export class Parser {
     const {
       count,
       for_each: forEach,
+      depends_on: dependsOn,
       ...attributes
     } = this.parseAttributes('resource', {
       lifecycle: (key) => {
@@ -194,6 +219,7 @@ export class Parser {
       name: nameToken.value,
       ...(count && { count }),
       ...(forEach && { forEach }),
+      ...(dependsOn && { dependsOn: dependsOnOf(dependsOn) }),
       ...(lifecycle && { lifecycle }),
       attributes,
       position,
@@ -274,7 +300,7 @@ export class Parser {
     const typeToken = this.consumeType("Expect data source type string after 'data'.");
     const nameToken = this.consumeName('Expect data source name string after data source type.');
 
-    const { count, for_each: forEach, ...attributes } = this.parseAttributes('data source');
+    const { count, for_each: forEach, depends_on: dependsOn, ...attributes } = this.parseAttributes('data source');
     if (count && forEach) throw new ConfigError(`data "${typeToken.value}" "${nameToken.value}" has count or for_each, not both`, forEach.position);
 
     return {
@@ -283,6 +309,7 @@ export class Parser {
       name: nameToken.value,
       ...(count && { count }),
       ...(forEach && { forEach }),
+      ...(dependsOn && { dependsOn: dependsOnOf(dependsOn) }),
       attributes,
       position,
     };

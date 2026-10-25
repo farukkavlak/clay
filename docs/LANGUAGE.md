@@ -74,6 +74,18 @@ string in one instance and a list in another, are refused at plan.
 `path.module` is the directory of the module it is written in, relative to the root, so
 `"${path.module}/index.html"` names a file next to the module.
 
+## depends_on
+
+`depends_on = [local_file.a]` makes a resource or a data source wait for `local_file.a`
+though it reads nothing of it. It may name a resource, a data source, a variable or a
+local, each as a whole: `local_file.a`, never `local_file.a[0]`, since the order is kept
+between blocks, not instances. A variable or a local waits for what it reads.
+
+A wait counts as a reference does. The apply makes `local_file.a` first and destroys it
+last, and the state keeps the order for a destroy after the block is gone. A data source
+that waits for a resource the plan creates or changes is read during apply. A wait that
+closes a cycle is refused.
+
 ## Locals
 
 A local is a value with a name: `locals { name = "${var.prefix}-x" }` is read as

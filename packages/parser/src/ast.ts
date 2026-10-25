@@ -92,6 +92,8 @@ export interface ResourceBlock extends Node {
   count?: AttributeValue;
   /** Read by the engine, never sent to the provider. */
   forEach?: AttributeValue;
+  /** What the block waits for though it reads nothing of it. */
+  dependsOn?: ReferenceNode[];
   lifecycle?: Lifecycle;
   attributes: Record<string, AttributeValue>;
 }
@@ -144,6 +146,8 @@ export interface DataBlock extends Node {
   count?: AttributeValue;
   /** Read by the engine, never sent to the provider. */
   forEach?: AttributeValue;
+  /** What the block waits for though it reads nothing of it. */
+  dependsOn?: ReferenceNode[];
   attributes: Record<string, AttributeValue>;
 }
 
