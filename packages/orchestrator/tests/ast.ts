@@ -1,4 +1,4 @@
-import { AttributeValue, CONFIG_FILE, ModuleBlock, Position, ResourceBlock, Step, VariableBlock } from '@clay/parser';
+import { AttributeValue, CONFIG_FILE, DataBlock, ModuleBlock, OutputBlock, Position, ResourceBlock, Step, VariableBlock } from '@clay/parser';
 
 /** A node a test builds by hand was never written in a file, so one place stands in for all of them. */
 const position: Position = { file: CONFIG_FILE, line: 1, column: 1 };
@@ -17,6 +17,16 @@ export const resourceBlock = (resourceType: string, name: string, attributes: Re
   attributes,
   position,
 });
+
+export const dataBlock = (dataSourceType: string, name: string, attributes: Record<string, AttributeValue> = {}): DataBlock => ({
+  type: 'Data',
+  dataSourceType,
+  name,
+  attributes,
+  position,
+});
+
+export const outputBlock = (name: string, value: AttributeValue, sensitive?: true): OutputBlock => ({ type: 'Output', name, value, position, ...(sensitive && { sensitive }) });
 
 export const variableBlock = (name: string, attributes: Record<string, AttributeValue>): VariableBlock => ({ type: 'Variable', name, attributes, position });
 

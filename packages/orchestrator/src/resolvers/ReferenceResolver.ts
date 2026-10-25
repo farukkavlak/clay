@@ -109,7 +109,7 @@ import { unknownOf, UnresolvedReferenceError } from './UnresolvedReferenceError'
 import { readPath } from './readPath';
 import { ResourceResolver } from './ResourceResolver';
 import { VariableResolver } from './VariableResolver';
-import { WrittenTypes } from './WrittenTypes';
+import { Source, WrittenTypes } from './WrittenTypes';
 
 const LITERALS = { String: types.string, Number: types.number, Boolean: types.bool };
 
@@ -340,6 +340,8 @@ export class ReferenceResolver {
   private written: WrittenTypes;
   /** Read once however many read it, by its value as parsed, which one load makes and no other shares. */
   private writtenLocals = new WeakMap<AttributeValue, Value>();
+  /** As held by an instance, by its value as parsed, the same way. */
+  private writtenValues = new WeakMap<AttributeValue, Value>();
 
   constructor(
     scopeManager: ScopeManager,
@@ -699,8 +701,17 @@ export class ReferenceResolver {
     if (reference.kind === 'path') return this.resolveTarget(reference, emptyState(), where, position, READING);
     if (reference.kind === 'local') return { value: this.writtenLocal(reference, where), path: reference.path };
 
-    const { type, sensitive, path } = this.written.typeOf(reference, where, position);
-    return { value: withSensitive(valueOf(type, UNKNOWN), sensitive), path };
+    const { type, sensitive, from, path } = this.written.typeOf(reference, where, position);
+    return { value: withSensitive(valueOf(type, UNKNOWN), [...sensitive, ...from.flatMap((source) => this.marksFrom(source))]), path };
+  }
+
+  /** Placed at the value, as a local is. */
+  private marksFrom({ value, context, declaration, held, at }: Source): AttributePath[] {
+    const readNode = (node: AttributeValue) => this.readAsWritten(node, context);
+    const read = this.writtenValues.get(value) ?? tryAt(value.position, declaration, context, () => held(readNode(value), readNode));
+
+    this.writtenValues.set(value, read);
+    return (read.sensitive ?? []).map((path) => [...at, ...path]);
   }
 
   private each(reference: EachReference, where: Context, position: Position): Value {

@@ -1,10 +1,10 @@
 import { Address, ModuleAddress, Type, types } from '@clay/contracts';
-import { CONFIG_FILE, ConfigError, Lexer, ModuleBlock, Parser, ResourceBlock, Statement, spell, VariableBlock } from '@clay/parser';
+import { CONFIG_FILE, ConfigError, Lexer, ModuleBlock, OutputBlock, Parser, ResourceBlock, Statement, spell, VariableBlock } from '@clay/parser';
 import path from 'node:path';
 
 import { ConfigFiles } from '../ConfigFiles';
 import { required } from '../declared';
-import { ModuleCall, scopeOf } from '../keys';
+import { blockKey, dataSourceKey, ModuleCall, scopeOf } from '../keys';
 import { ScopeManager } from '../scope/ScopeManager';
 
 function validationsOf(variable: VariableBlock) {
@@ -32,8 +32,8 @@ export function outputsOf(program: Statement[]): Map<string, Type> {
   return new Map(program.flatMap((stmt) => (stmt.type === 'Output' ? [[stmt.name, stmt.valueType ? required(stmt.valueType) : types.dynamic]] : [])));
 }
 
-function sensitiveOutputsOf(program: Statement[]): Set<string> {
-  return new Set(program.flatMap((stmt) => (stmt.type === 'Output' && stmt.sensitive ? [stmt.name] : [])));
+function outputBlocksOf(program: Statement[]): Map<string, OutputBlock> {
+  return new Map(program.flatMap((stmt) => (stmt.type === 'Output' ? [[stmt.name, stmt]] : [])));
 }
 
 export class ModuleLoader {
@@ -54,6 +54,7 @@ export class ModuleLoader {
     this.scopeManager.setDirectory(scopeOf(parentAddress), '.');
     this.declareVariables(rootProgram, parentAddress);
     this.declareLocals(rootProgram, parentAddress);
+    this.declareBlocks(rootProgram, parentAddress);
 
     for (const stmt of rootProgram)
       if (stmt.type === 'Resource') {
@@ -73,9 +74,10 @@ export class ModuleLoader {
 
     loaded.modules.push({ address: childAddress, program: moduleProgram });
     this.scopeManager.setDirectory(scopeOf(childAddress), moduleDir);
-    this.scopeManager.declareOutputs(scopeOf(childAddress), outputsOf(moduleProgram), sensitiveOutputsOf(moduleProgram));
+    this.scopeManager.declareOutputs(scopeOf(childAddress), outputsOf(moduleProgram), outputBlocksOf(moduleProgram));
     this.declareVariables(moduleProgram, childAddress);
     this.declareLocals(moduleProgram, childAddress);
+    this.declareBlocks(moduleProgram, childAddress);
 
     for (const childStmt of moduleProgram)
       if (childStmt.type === 'Resource') {
@@ -137,6 +139,17 @@ export class ModuleLoader {
 
   private declareLocals(program: Statement[], address: ModuleAddress): void {
     for (const stmt of program) if (stmt.type === 'Local') this.scopeManager.declareLocal(scopeOf(address), stmt);
+  }
+
+  /** A resource's values are read at its address, as its instances read them; a data source's in its module. */
+  private declareBlocks(program: Statement[], address: ModuleAddress): void {
+    for (const stmt of program) {
+      if (stmt.type === 'Resource') {
+        const context = new Address(address, stmt.resourceType, stmt.name);
+        this.scopeManager.declareBlock(blockKey(context), { block: stmt, context });
+      }
+      if (stmt.type === 'Data') this.scopeManager.declareBlock(dataSourceKey(scopeOf(address), stmt.dataSourceType, stmt.name), { block: stmt, context: address });
+    }
   }
 
   private declareVariables(program: Statement[], address: ModuleAddress): void {

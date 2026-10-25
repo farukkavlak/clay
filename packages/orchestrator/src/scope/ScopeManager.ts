@@ -1,7 +1,7 @@
 import { ModuleAddress, Type } from '@clay/contracts';
-import { AttributeValue, LocalBlock, TypeDefaults, Validation } from '@clay/parser';
+import { AttributeValue, DataBlock, LocalBlock, OutputBlock, ResourceBlock, TypeDefaults, Validation } from '@clay/parser';
 
-import { ModuleCall } from '../keys';
+import { Context, ModuleCall } from '../keys';
 import { Value } from '../Value';
 
 /** Resolved where it is written: an input in the call, a default in its own module. */
@@ -16,13 +16,20 @@ export interface VariableValue {
   validations?: { rules: readonly Validation[]; declaration: string };
 }
 
+/** A resource or data source block, and where what it is given is read. */
+export interface DeclaredBlock {
+  block: ResourceBlock | DataBlock;
+  context: Context;
+}
+
 /** Variables per module, since each instance reads the same values; locals and outputs per instance, since each has its own. */
 export class ScopeManager {
   private variables: Map<string, Map<string, VariableValue>> = new Map();
   private outputs: Map<string, Map<string, Value>> = new Map();
   private declaredLocals: Map<string, Map<string, LocalBlock>> = new Map();
   private locals: Map<string, Map<string, Value>> = new Map();
-  private declaredOutputs: Map<string, { types: ReadonlyMap<string, Type>; sensitive: ReadonlySet<string> }> = new Map();
+  private declaredOutputs: Map<string, { types: ReadonlyMap<string, Type>; blocks: ReadonlyMap<string, OutputBlock> }> = new Map();
+  private declaredBlocks: Map<string, DeclaredBlock> = new Map();
   private directories: Map<string, string> = new Map();
 
   setVariable(scope: string, name: string, value: VariableValue): void {
@@ -63,13 +70,21 @@ export class ScopeManager {
   }
 
   /** Per module, not per instance: every instance declares the same outputs. */
-  declareOutputs(scope: string, outputs: ReadonlyMap<string, Type>, sensitive: ReadonlySet<string>): void {
-    this.declaredOutputs.set(scope, { types: outputs, sensitive });
+  declareOutputs(scope: string, outputs: ReadonlyMap<string, Type>, blocks: ReadonlyMap<string, OutputBlock>): void {
+    this.declaredOutputs.set(scope, { types: outputs, blocks });
   }
 
-  /** The outputs written `sensitive = true`. */
-  sensitiveOutputsOf(scope: string): ReadonlySet<string> {
-    return this.declaredOutputs.get(scope)?.sensitive ?? new Set();
+  outputBlocksOf(scope: string): ReadonlyMap<string, OutputBlock> {
+    return this.declaredOutputs.get(scope)?.blocks ?? new Map();
+  }
+
+  /** Per block, not per instance: every instance is given the same values. */
+  declareBlock(key: string, block: DeclaredBlock): void {
+    this.declaredBlocks.set(key, block);
+  }
+
+  declaredBlock(key: string): DeclaredBlock | undefined {
+    return this.declaredBlocks.get(key);
   }
 
   /** Each output's type, `dynamic` where it names none. */
