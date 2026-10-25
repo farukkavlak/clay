@@ -68,7 +68,7 @@ const PRIMITIVE_TYPES = new Map<string, Type>([
 const HOLDING_TYPES = new Set(['list', 'set', 'map', 'tuple', 'object']);
 
 /** Reserved by a module call, so no module input may use them. */
-const INSTANCE_ARGUMENTS = new Set(['count', 'for_each']);
+const CALL_ARGUMENTS = new Set(['count', 'for_each', 'depends_on']);
 
 interface TypedBody {
   attributes: Record<string, AttributeValue>;
@@ -95,8 +95,20 @@ function defaultsFrom(found: { values?: Record<string, AttributeValue>; within?:
 
 const readsVariable = (reference: ParsedReference, name: string) => reference.kind === 'variable' && reference.name === name;
 
-const WAITED_FOR = new Set<ParsedReference['kind']>(['resource', 'data', 'variable', 'local']);
-const WAITS_FOR = 'depends_on is a list of resources, data sources, variables and locals, as in [local_file.a]';
+const WAITED_FOR = new Set<ParsedReference['kind']>(['resource', 'data', 'variable', 'local', 'module']);
+const WAITS_FOR = 'depends_on is a list of resources, data sources, variables, locals, modules and their outputs, as in [local_file.a]';
+
+/** The one step a whole object may have: the output of a module. */
+const outputStep = (reference: ParsedReference) => (reference.kind === 'module' && reference.path.length > 0 && 'name' in reference.path[0] ? 1 : 0);
+
+/** The nearest whole object: `module.m.out` for `module.m[0].out`, since `module.m` would wait for more. */
+function wholeOf(parts: Step[], reference: ParsedReference): Step[] {
+  const head = parts.slice(0, parts.length - reference.path.length);
+  const [first, second] = reference.path;
+  if (reference.kind === 'module' && !('name' in first) && second && 'name' in second) return [...head, second];
+
+  return [...head, ...reference.path.slice(0, outputStep(reference))];
+}
 
 /** The graph orders blocks, not instances, so an index could not mean what it says. */
 function waitedFor(item: AttributeValue): ReferenceNode {
@@ -104,8 +116,8 @@ function waitedFor(item: AttributeValue): ReferenceNode {
 
   const reference = parseReference(item.value, item.position);
   if (!WAITED_FOR.has(reference.kind)) throw new ConfigError(WAITS_FOR, item.position);
-  if (reference.path.length > 0) {
-    const whole = spellReference(item.value.slice(0, item.value.length - reference.path.length));
+  if (reference.path.length > outputStep(reference)) {
+    const whole = spellReference(wholeOf(item.value, reference));
     throw new ConfigError(`depends_on waits for a whole object: write ${whole}, not ${spellReference(item.value)}`, item.position);
   }
 
@@ -318,10 +330,10 @@ export class Parser {
   private parseVariable(position: Position): VariableBlock {
     const nameToken = this.consumeName("Expect variable name string after 'variable'.");
     if (nameToken.value === 'source') throw new ConfigError('"source" cannot be a variable name: a module call reads it as the module\'s path.', nameToken.position);
-    if (INSTANCE_ARGUMENTS.has(nameToken.value)) throw new ConfigError(`"${nameToken.value}" cannot be a variable name: a module call keeps it for itself.`, nameToken.position);
+    if (CALL_ARGUMENTS.has(nameToken.value)) throw new ConfigError(`"${nameToken.value}" cannot be a variable name: a module call keeps it for itself.`, nameToken.position);
 
     this.consume(TokenType.LBrace, "Expect '{' after variable name.");
-    const { attributes, declared, flagged, validations } = this.parseTypedBody(`Variable "${nameToken.value}"`, 'default', 'sensitive', nameToken.value);
+    const { attributes, declared, flagged, validations } = this.parseTypedBody(`Variable "${nameToken.value}"`, 'default', { flag: 'sensitive', variable: nameToken.value });
 
     // A module input replaces the default, so a reference or a call in it might never be checked.
     if (attributes.default) this.checkConstant(attributes.default, "A variable's default");
@@ -345,11 +357,11 @@ export class Parser {
 
   /**
    * Only the one value, `type`, the flag where the block has one, and a description; any other name is refused, since nothing would read it.
-   * A variable's block, named by `variable`, takes `validation` blocks too.
+   * A variable's block, named by `variable`, takes `validation` blocks too, and a block that `waits` takes `depends_on`.
    */
-  private parseTypedBody(block: string, valueName: string, flag?: string, variable?: string): TypedBody {
+  private parseTypedBody(block: string, valueName: string, { flag, variable, waits }: { flag?: string; variable?: string; waits?: true } = {}): TypedBody {
     const body: TypedBody = { attributes: {}, validations: [] };
-    const names = [valueName, 'type', ...(flag ? [flag] : []), 'description'].map((name) => `"${name}"`);
+    const names = [valueName, 'type', ...(flag ? [flag] : []), 'description', ...(waits ? ['depends_on'] : [])].map((name) => `"${name}"`);
     const taken = `${block} takes only ${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
     const seen: Record<string, true> = {};
     while (!this.check(TokenType.RBrace) && !this.isAtEnd()) {
@@ -365,14 +377,14 @@ export class Parser {
       this.checkKey(seen, key);
       seen[key.value] = true;
       this.consume(TokenType.Assign, "Expect '=' after attribute name.");
-      this.parseTypedAttribute(key.value, body, { valueName, flag, taken });
+      this.parseTypedAttribute(key.value, body, { valueName, flag, waits, taken });
     }
 
     this.consume(TokenType.RBrace, "Expect '}' after block body.");
     return body;
   }
 
-  private parseTypedAttribute(name: string, body: TypedBody, { valueName, flag, taken }: { valueName: string; flag?: string; taken: string }): void {
+  private parseTypedAttribute(name: string, body: TypedBody, { valueName, flag, waits, taken }: { valueName: string; flag?: string; waits?: true; taken: string }): void {
     if (name === 'type') {
       body.declared = this.parseType();
       return;
@@ -385,7 +397,7 @@ export class Parser {
 
     const value = this.parseValue();
     if (name === 'description') this.checkDescription(value);
-    else if (name === valueName) body.attributes[valueName] = value;
+    else if (name === valueName || (waits && name === 'depends_on')) body.attributes[name] = value;
     else throw new ConfigError(`${taken}, not "${name}".`, value.position);
   }
 
@@ -499,7 +511,7 @@ export class Parser {
     const nameToken = this.consumeName("Expect output name string after 'output'.");
 
     this.consume(TokenType.LBrace, "Expect '{' after output name.");
-    const { attributes, declared, flagged } = this.parseTypedBody(`Output "${nameToken.value}"`, 'value', 'sensitive');
+    const { attributes, declared, flagged } = this.parseTypedBody(`Output "${nameToken.value}"`, 'value', { flag: 'sensitive', waits: true });
     if (!attributes.value) throw new ConfigError(`Output "${nameToken.value}" has no "value".`, position);
 
     return {
@@ -509,6 +521,7 @@ export class Parser {
       ...(declared && { valueType: declared.type }),
       ...(declared?.defaults && { defaults: declared.defaults }),
       ...(flagged && { sensitive: true }),
+      ...(attributes.depends_on && { dependsOn: dependsOnOf(attributes.depends_on) }),
       position,
     };
   }
@@ -516,7 +529,7 @@ export class Parser {
   private parseModule(position: Position): ModuleBlock {
     const nameToken = this.consumeName("Expect module name string after 'module'.");
 
-    const { count, for_each: forEach, ...attributes } = this.parseAttributes('module');
+    const { count, for_each: forEach, depends_on: dependsOn, ...attributes } = this.parseAttributes('module');
     if (count && forEach) throw new ConfigError(`module "${nameToken.value}" has count or for_each, not both`, forEach.position);
 
     return {
@@ -524,6 +537,7 @@ export class Parser {
       name: nameToken.value,
       ...(count && { count }),
       ...(forEach && { forEach }),
+      ...(dependsOn && { dependsOn: dependsOnOf(dependsOn) }),
       attributes,
       position,
     };
