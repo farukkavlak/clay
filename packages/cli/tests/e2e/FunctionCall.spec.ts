@@ -59,6 +59,9 @@ const placeOf = (config: string, needle: string) => {
 
 const names = 'variable "names" { default = ["a", "b"] }';
 
+const portRule = (ports: string) =>
+  `variable "ports" {\n  default = ${ports}\n  validation {\n    condition     = alltrue([for p in var.ports : p > 0]) && anytrue([for p in var.ports : p == 443])\n    error_message = "bad ports"\n  }\n}`;
+
 describe('a function call', () => {
   let dir: string;
 
@@ -403,6 +406,41 @@ ${file('f', '"${local.tags.team}-${local.tags.env}-${lookup(local.tags, "zone", 
     await expect(newOrchestrator().validate(config)).rejects.toMatchObject({
       message: 'join takes lists of strings, and this one holds a tuple',
       position: placeOf(config, '[[random'),
+    });
+  });
+
+  it('holds a variable to a rule over its list with alltrue and anytrue', async () => {
+    const counted = file('f', '"${length(var.ports)}"');
+
+    await apply(`${portRule('[80, 443]')}\n${counted}`);
+    await expect(apply(`${portRule('[80, 0]')}\n${counted}`)).rejects.toMatchObject({ message: expect.stringContaining('bad ports') });
+
+    expect(await read('f')).toBe('2');
+  });
+
+  it('decides alltrue at plan by a false item beside one only the apply makes', async () => {
+    const config = 'resource "random_string" "s" { length = 4 }\noutput "all" { value = alltrue([random_string.s.result == "x", false]) }';
+
+    const plan = await newOrchestrator().plan(config);
+
+    expect(plan.outputs.all.new).toEqual({ value: false, type: types.bool });
+  });
+
+  it('refuses at validate a list of numbers to alltrue before what it holds is known', async () => {
+    const config = 'resource "random_string" "s" { length = 4 }\noutput "a" {\n  value = alltrue([length(random_string.s.result)])\n}';
+
+    await expect(newOrchestrator().validate(config)).rejects.toMatchObject({
+      message: 'alltrue takes a list of booleans, and this one holds a number',
+      position: placeOf(config, '[length'),
+    });
+  });
+
+  it('refuses an object of no declared type to anytrue', async () => {
+    const config = 'variable "v" { default = { a = true } }\noutput "a" {\n  value = anytrue(var.v)\n}';
+
+    await expect(newOrchestrator().validate(config)).rejects.toMatchObject({
+      message: 'anytrue takes a list of booleans, not an object',
+      position: placeOf(config, 'var.v)'),
     });
   });
 

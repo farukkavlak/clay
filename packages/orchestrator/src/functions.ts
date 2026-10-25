@@ -134,6 +134,43 @@ function join([separator, ...lists]: Value[], refuse: Refuse): Value {
   return withSensitive(valueOf(types.string, items.map(String).join(between)), sensitive);
 }
 
+/** A string is a boolean where it is "true" or "false", as a boolean attribute takes it. */
+const TRUTHY = new Set<Type['kind']>(['bool', 'string', 'dynamic']);
+
+/** Checked by type, so `validate` finds a list of the wrong items before they are known. */
+function checkTruths(name: string, list: Value, refuse: Refuse): void {
+  if (list.type.kind === 'dynamic' && list.data !== null) return;
+  if (list.data === null || !isSequence(list.type.kind)) refuse(`${name} takes a list of booleans, not ${described(list)}${nullSource(list)}`);
+
+  const wrong = itemTypes(list.type).find((type) => !TRUTHY.has(type.kind));
+  if (wrong) refuse(`${name} takes a list of booleans, and this one holds ${article(wrong.kind)}`);
+}
+
+/** The text of a string is not told, since it may be sensitive. */
+function truthOf(name: string, item: unknown, refuse: Refuse): boolean | typeof UNKNOWN {
+  if (isUnknown(item)) return UNKNOWN;
+  if (typeof item === 'boolean') return item;
+  if (item === null) return refuse(`${name} takes a list of booleans, and this one holds null`);
+  if (item !== 'true' && item !== 'false') return refuse(`${name} takes a list of booleans, and this one holds a string that is not "true" or "false"`);
+
+  return item === 'true';
+}
+
+/**
+ * A known item of `decides` gives `decides`, whatever the unknown items are; otherwise an unknown item leaves it unknown.
+ * Sensitive as a whole where any part is, since a mark is known before the items are.
+ */
+function truths(name: string, decides: boolean): ClayFunction {
+  return one((list, refuse) => {
+    checkTruths(name, list, refuse);
+    if (isUnknown(list.data)) return withSensitive(valueOf(types.bool, UNKNOWN), wholeOf(list));
+
+    const read = new Set((list.data as unknown[]).map((item) => truthOf(name, item, refuse)));
+    const result = read.has(decides) ? decides : read.has(UNKNOWN) ? UNKNOWN : !decides;
+    return withSensitive(valueOf(types.bool, result), wholeOf(list));
+  });
+}
+
 const KEYED = new Set<Type['kind']>(['map', 'object', 'dynamic']);
 
 /** What a map or an object holds at `key`, not known where the whole is not. */
@@ -319,6 +356,8 @@ const FUNCTIONS = new Map<string, ClayFunction>([
   ['upper', cased('upper', (text) => text.toUpperCase())],
   ['lower', cased('lower', (text) => text.toLowerCase())],
   ['join', { takes: 2, more: true, call: join }],
+  ['alltrue', truths('alltrue', false)],
+  ['anytrue', truths('anytrue', true)],
   ['lookup', { takes: 3, fewer: 'without a default, read the key with map["key"]', call: lookup }],
   ['merge', { takes: 1, more: true, call: merge }],
   ['format', { takes: 1, more: true, call: format }],

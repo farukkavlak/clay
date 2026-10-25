@@ -119,6 +119,9 @@ of a string. `tolist` and `toset` turn a list, a tuple or a set into a list or a
 items take one type: a number or a boolean beside a string becomes its text, and a number
 beside a boolean, or objects with other names, are refused. `upper` and `lower` change the
 case of a string, and `join(", ", var.names)` makes one string of the items of a list.
+`alltrue([for p in var.ports : p > 0])` is true when every item of a list is, and
+`anytrue` when one is; a null item is refused. One false item decides `alltrue`, and one
+true item `anytrue`, before the rest are known.
 `merge(local.common, { env = "prod" })` gives every key of both, the later one winning,
 and `lookup(var.sizes, var.env, "small")` reads a key, with a default where it is not.
 `format("%s-%02d", var.name, count.index + 1)` writes `web-01`, `web-02` and so on.

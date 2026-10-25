@@ -261,6 +261,86 @@ describe('join', () => {
   });
 });
 
+const truth = (data: boolean | typeof UNKNOWN) => valueOf(types.bool, data);
+
+describe('alltrue and anytrue', () => {
+  it.each([
+    ['a tuple of true', written([true, true]), true, true],
+    ['a tuple with one false', written([true, false]), false, true],
+    ['a tuple of false', written([false, false]), false, false],
+    ['an empty tuple', written([]), true, false],
+    ['a list', valueOf(types.list(types.bool), [false, true]), false, true],
+    ['a set', valueOf(types.set(types.bool), [true]), true, true],
+    ['"true" and "false" as a boolean attribute takes them', written(['true', 'false']), false, true],
+  ])('read %s', (_, list, all, any) => {
+    expect(called('alltrue', list)).toEqual(truth(all));
+    expect(called('anytrue', list)).toEqual(truth(any));
+  });
+
+  it.each([
+    ['after it', written([true, false, UNKNOWN])],
+    ['before it', written([true, UNKNOWN, false])],
+    ['in a set', valueOf(types.set(types.bool), [UNKNOWN, false])],
+  ])('give false for alltrue with a false item and one not known yet %s', (_, list) => {
+    expect(called('alltrue', list)).toEqual(truth(false));
+  });
+
+  it.each([
+    ['after it', written([false, true, UNKNOWN])],
+    ['before it', written([false, UNKNOWN, true])],
+  ])('give true for anytrue with a true item and one not known yet %s', (_, list) => {
+    expect(called('anytrue', list)).toEqual(truth(true));
+  });
+
+  it.each([
+    ['an item not known yet beside the rest', written([true, UNKNOWN]), written([false, UNKNOWN])],
+    ['a list not known yet', valueOf(types.list(types.bool), UNKNOWN), valueOf(types.list(types.bool), UNKNOWN)],
+    ['a value not known yet whose type nothing names', valueOf(types.dynamic, UNKNOWN), valueOf(types.dynamic, UNKNOWN)],
+  ])('do not know with %s', (_, forAll, forAny) => {
+    expect(called('alltrue', forAll)).toEqual(truth(UNKNOWN));
+    expect(called('anytrue', forAny)).toEqual(truth(UNKNOWN));
+  });
+
+  it('are sensitive as a whole with a sensitive item, though another item decides', () => {
+    const list = withSensitive(written([false, true]), [[1]]);
+
+    expect(called('alltrue', list)).toEqual(allSensitive(truth(false)));
+    expect(called('anytrue', list)).toEqual(allSensitive(truth(true)));
+  });
+
+  it('may be sensitive as a whole with an item that may be', () => {
+    const list = withSensitive(written([true]), [[0, MAYBE]]);
+
+    expect(called('alltrue', list)).toEqual(withSensitive(truth(true), [[MAYBE]]));
+  });
+
+  it.each([
+    ['a string', [written('true')], 'alltrue takes a list of booleans, not a string'],
+    ['a map', [valueOf(types.map(types.bool), { a: true })], 'alltrue takes a list of booleans, not a map'],
+    ['null', [valueOf(types.dynamic, null)], 'alltrue takes a list of booleans, not null'],
+    ['a list that is null', [{ ...valueOf(types.list(types.bool), null), nullFrom: 'var.l' }], 'alltrue takes a list of booleans, not null, and var.l, which it reads, is null'],
+    ['a list of numbers', [written([ExactNumber.parse('1')])], 'alltrue takes a list of booleans, and this one holds a number'],
+    ['a list of lists not known yet', [valueOf(types.list(types.list(types.bool)), UNKNOWN)], 'alltrue takes a list of booleans, and this one holds a list'],
+    ['a null item', [written([true, null])], 'alltrue takes a list of booleans, and this one holds null'],
+    ['a string that is not a boolean', [written([false, 'yes'])], 'alltrue takes a list of booleans, and this one holds a string that is not "true" or "false"'],
+  ])('refuse %s where it is written', (_, values, message) => {
+    const error = errorOf('alltrue', ...values);
+
+    expect(error.message).toBe(message);
+    expect(error.position).toEqual(at(8));
+  });
+
+  it('refuse a sensitive string that is not a boolean without telling it', () => {
+    expect(errorOf('alltrue', withSensitive(written(['secret']), [[0]])).message).toBe(
+      'alltrue takes a list of booleans, and this one holds a string that is not "true" or "false"'
+    );
+  });
+
+  it('refuse a string that is not a boolean in anytrue, though another item decides', () => {
+    expect(errorOf('anytrue', written([true, 'yes'])).message).toBe('anytrue takes a list of booleans, and this one holds a string that is not "true" or "false"');
+  });
+});
+
 const sizes = valueOf(types.map(types.string), { dev: 'small', prod: 'large' });
 
 describe('lookup', () => {
