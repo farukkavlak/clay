@@ -243,3 +243,13 @@ export class Address {
     return this.module.isRoot() ? suffix : `${this.module}.${suffix}`;
   }
 }
+
+export function isAddress(text: string): boolean {
+  try {
+    return Address.parse(text).toString() === text;
+  } catch (error) {
+    if (error instanceof Error) return false;
+
+    throw error;
+  }
+}
