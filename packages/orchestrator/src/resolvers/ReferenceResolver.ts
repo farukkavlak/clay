@@ -263,7 +263,9 @@ function laterForMarks(node: ForNode, collection: Type, { other, certain, leadin
     return laterObjectMarks(
       items.map((item): ForItem => [item.key ?? valueOf(types.dynamic, UNKNOWN), item.body]),
       kept,
-      node.grouped === true
+      node.grouped === true,
+      // Only the items of a known collection are taken to come in the order the for goes over them.
+      0
     );
 
   const placed = items.map((item) => !node.condition && typeof item.step === 'number');

@@ -248,6 +248,24 @@ describe('a root output that may hold a sensitive value', () => {
     ['lookup of such a key at a key a for may drop', `{ for k, v in { a = ${MERGED} } : k => v if ${LATER} }`, 'lookup(local.l, "a", { c = "1" }).c', '1'],
     ['such a key at a place a for may drop', `[for i, v in ["x", ${MERGED}] : v if i == 0 || ${NOW}]`, 'local.l[1].c', '0'],
     ['such a key at a place only items that hold it may take', `[for i, v in ["x", ${BEFORE}, ${MERGED}] : v if i == 0 || ${NOW}]`, 'local.l[2].c', '0'],
+    [
+      'a part plain at a place in a group no item before it may take',
+      `{ for i, v in [{ c = sensitive("x"), s = "a" }, { c = "0", s = sensitive("b") }] : "g" => v... if i == 1 || ${NOW} }`,
+      'local.l.g[1].c',
+      '0',
+    ],
+    [
+      'a part plain at a place in a group over a tuple not known yet after one kept for certain',
+      `{ for i, v in (${LATER} ? [{ c = sensitive("x") }, { c = "0" }] : [{ c = sensitive("y") }, { c = "0" }]) : "g" => v... if i == 0 || ${NOW} }`,
+      'local.l.g[1].c',
+      '0',
+    ],
+    [
+      'a part plain at a place no item before it may take',
+      `[for i, v in [{ c = sensitive("x"), s = "a" }, { c = "0", s = sensitive("b") }] : v if i == 1 || ${NOW}]`,
+      'local.l[1].c',
+      '0',
+    ],
     ['lookup of such a key at a key merge may give', `merge({ for k, v in { a = ${MERGED} } : k => v if ${LATER} }, {})`, 'lookup(local.l, "a", { c = "1" }).c', '1'],
   ])('is not refused where no outcome is sensitive, for %s', async (_, local, value, expected) => {
     await apply(config(local, output(value)));
@@ -270,6 +288,12 @@ describe('a root output that may hold a sensitive value', () => {
       'local.l.c[0]',
     ],
     ['a place after one a for may drop', `[for i, v in ["0", sensitive("x"), "1"] : v if i != 1 || ${LATER}]`, 'local.l[1]'],
+    ['a place an item the for may drop may take', `[for i, v in [{ c = sensitive("x"), s = "a" }, { c = "0", s = sensitive("b") }] : v if i == 1 || ${LATER}]`, 'local.l[0].c'],
+    [
+      'a place in a group an item the for may drop may take',
+      `{ for i, v in [{ c = sensitive("x"), s = "a" }, { c = "0", s = sensitive("b") }] : "g" => v... if i == 1 || ${LATER} }`,
+      'local.l.g[0].c',
+    ],
     ['such a key below another, on one side of a condition only', `${LATER} ? { w = ${MERGED} } : { w = ${BEFORE} }`, 'local.l.w.c'],
     ['such a key at a place an item that does not hold it may take', `[for i, v in ["x", ${BEFORE}, ${MERGED}] : v if i == 0 || ${NOW}]`, 'local.l[1].c'],
     ['such a key in one item of a for over a tuple not known yet only', `[for x in ${SOME} : (x == 1 ? ${MERGED} : ${BEFORE})]`, 'local.l[0].c'],

@@ -432,6 +432,10 @@ change each.
       `t = [for i, v in ["x", m] : v if i == 0 || cond]` is refused as an output. Now, over a
       known collection, where an item lands at its own place or before it, each place after
       them has what the items from there on may have
+- [x] What an item a `for` may drop may have under every item covers places it cannot land
+      at, so `t[1].c` is refused as an output, though only the second item may land there:
+      `t = [for i, v in [{ c = sensitive("x") }, { c = "0" }] : v if i == 1 || cond]`. So is the
+      same place in a group. Now each place takes only what the items that may land there have
 - [ ] The same holds for a `for` over a collection not known yet with an if not known yet:
       every place after those it keeps for certain first takes what any item may have there,
       so `t[1].c` with `t = [for i, v in (cond ? ["x", m] : ["x", m]) : v if i == 0 || cond2]`

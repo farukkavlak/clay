@@ -148,62 +148,6 @@ export const under = (step: string | number, marks: readonly AttributePath[]) =>
 
 const givesKey = ([key]: ForItem, text: string) => !isUnknown(key.data) && String(key.data) === text;
 
-/** The marks of the items a group holds for certain before any item that may join it, at their places in the group. */
-function groupPlaces(entries: ForItem[], kept: boolean[], text: string): AttributePath[] {
-  const marks: AttributePath[] = [];
-  let place = 0;
-  for (const [index, [key, value]] of entries.entries()) {
-    if (!isUnknown(key.data) && String(key.data) !== text) continue;
-    if (isUnknown(key.data) || !kept[index]) break;
-    marks.push(...under(place++, value.sensitive ?? []));
-  }
-  return marks;
-}
-
-/**
- * The one item kept for certain that gives the key, which no other may give; else any item that gives it, which may be dropped,
- * or one whose key is not known yet.
- */
-function forKeyMarks(entries: ForItem[], kept: boolean[], text: string): AttributePath[] {
-  const giving = entries.flatMap((entry, index) => (givesKey(entry, text) ? [{ value: entry[1], kept: kept[index] }] : []));
-  const sure = giving.filter((item) => item.kept).map((item) => item.value);
-  const later = entries.filter(([key]) => isUnknown(key.data)).map(([, value]) => value);
-
-  return sure.length > 0
-    ? sharedMarks(sure)
-    : maybeMarks(
-        giving.map((item) => item.value),
-        later
-      );
-}
-
-/** The marks every value that may join the group has, and those of the items it holds for certain first at their places; with none, it may not be there. */
-function groupMarks(entries: ForItem[], kept: boolean[], text: string): AttributePath[] {
-  const joining = entries.filter((entry) => isUnknown(entry[0].data) || givesKey(entry, text)).map(([, value]) => value);
-  if (!entries.some((entry, index) => kept[index] && givesKey(entry, text))) return under(EVERY_ITEM, maybeMarks(joining));
-
-  return [...under(EVERY_ITEM, sharedMarks(joining)), ...groupPlaces(entries, kept, text)];
-}
-
-/**
- * The marks of what a for gives as an object before its keys, or which items it keeps, are known: each key has the marks every value has,
- * and those an item with a key not known yet may have. A known key has the marks of the items that give it, or, grouped, of the group.
- * `entries` come in the order the for goes over them.
- */
-export function laterObjectMarks(entries: ForItem[], kept: boolean[], grouped: boolean): AttributePath[] {
-  const values = entries.map(([, value]) => value);
-  const every = everyItemMarks(
-    values,
-    entries.filter(([key]) => isUnknown(key.data)).map(([, value]) => value)
-  );
-  const texts = new Set(entries.flatMap(([key]) => (isUnknown(key.data) ? [] : [String(key.data)])));
-  // With an item kept for certain that gives it, the key is there; an item with a key not known yet may only join its group, or fail as a duplicate.
-  const exact = (text: string) => (entries.some((entry, index) => kept[index] && givesKey(entry, text)) ? [[EXACT]] : []);
-  const marks = [...texts].flatMap((text) => under(text, [...(grouped ? groupMarks : forKeyMarks)(entries, kept, text), ...exact(text)]));
-
-  return fewest([...(grouped ? under(EVERY_ITEM, every) : every), ...marks]);
-}
-
 /** How many items come first that the if keeps for certain. */
 function leadingKept(kept: boolean[]): number {
   let leading = 0;
@@ -225,14 +169,74 @@ export function laterTupleMarks(bodies: Value[], kept: boolean[], placed: boolea
 }
 
 /**
- * As for a tuple, over a known collection, where an item lands at its own place or before it:
- * a place after those kept for certain may hold only an item from there on, so it has what those may have.
+ * As for a tuple, where an item lands at its own place or before it: a place after those kept for certain may hold only an item from there on,
+ * so it has what those may have. Only the first `inOrder` of `bodies` come in the order the for goes over them, and all of them by default.
+ * Each of those has a place with its own marks, so it gives none under every item.
  */
-export function pickedTupleMarks(bodies: Value[], kept: boolean[]): AttributePath[] {
+export function pickedTupleMarks(bodies: Value[], kept: boolean[], inOrder = bodies.length): AttributePath[] {
   const leading = leadingKept(kept);
-  const after = bodies.slice(leading).flatMap((_, offset) => under(leading + offset, maybeMarks(bodies.slice(leading + offset))));
+  const after = bodies.slice(leading, Math.max(leading, inOrder)).flatMap((_, offset) => under(leading + offset, maybeMarks(bodies.slice(leading + offset))));
 
-  return fewest([...laterTupleMarks(bodies, kept, []), ...after]);
+  return fewest([
+    ...laterTupleMarks(
+      bodies,
+      kept,
+      bodies.map((_, index) => index < inOrder)
+    ),
+    ...after,
+  ]);
+}
+
+/**
+ * The one item kept for certain that gives the key, which no other may give; else any item that gives it, which may be dropped,
+ * or one whose key is not known yet.
+ */
+function forKeyMarks(entries: ForItem[], kept: boolean[], text: string): AttributePath[] {
+  const giving = entries.flatMap((entry, index) => (givesKey(entry, text) ? [{ value: entry[1], kept: kept[index] }] : []));
+  const sure = giving.filter((item) => item.kept).map((item) => item.value);
+  const later = entries.filter(([key]) => isUnknown(key.data)).map(([, value]) => value);
+
+  return sure.length > 0
+    ? sharedMarks(sure)
+    : maybeMarks(
+        giving.map((item) => item.value),
+        later
+      );
+}
+
+/** The marks of a group as of a tuple of the values that may join it, the first `inOrder` of `entries` in its order; with no item sure to join, it may not be there. */
+function groupMarks(entries: ForItem[], kept: boolean[], text: string, inOrder: number): AttributePath[] {
+  const joining = entries.flatMap((entry, index) =>
+    isUnknown(entry[0].data) || givesKey(entry, text) ? [{ value: entry[1], sure: kept[index] && givesKey(entry, text), ordered: index < inOrder }] : []
+  );
+  const values = joining.map(({ value }) => value);
+  if (!joining.some(({ sure }) => sure)) return under(EVERY_ITEM, maybeMarks(values));
+
+  const ordered = joining.findIndex((join) => !join.ordered);
+  return pickedTupleMarks(
+    values,
+    joining.map(({ sure }) => sure),
+    ordered === -1 ? joining.length : ordered
+  );
+}
+
+/**
+ * The marks of what a for gives as an object before its keys, or which items it keeps, are known: each key has the marks every value has,
+ * and those an item with a key not known yet may have. A known key has the marks of the items that give it, or, grouped, of the group.
+ * Only the first `inOrder` of `entries` come in the order the for goes over them, and all of them by default.
+ */
+export function laterObjectMarks(entries: ForItem[], kept: boolean[], grouped: boolean, inOrder = entries.length): AttributePath[] {
+  const values = entries.map(([, value]) => value);
+  const every = everyItemMarks(
+    values,
+    entries.filter(([key]) => isUnknown(key.data)).map(([, value]) => value)
+  );
+  const texts = new Set(entries.flatMap(([key]) => (isUnknown(key.data) ? [] : [String(key.data)])));
+  // With an item kept for certain that gives it, the key is there; an item with a key not known yet may only join its group, or fail as a duplicate.
+  const exact = (text: string) => (entries.some((entry, index) => kept[index] && givesKey(entry, text)) ? [[EXACT]] : []);
+  const marks = [...texts].flatMap((text) => under(text, [...(grouped ? groupMarks(entries, kept, text, inOrder) : forKeyMarks(entries, kept, text)), ...exact(text)]));
+
+  return fewest([...(grouped ? under(EVERY_ITEM, every) : every), ...marks]);
 }
 
 /**
