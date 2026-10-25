@@ -1,5 +1,5 @@
 import { ModuleAddress, Type } from '@clay/contracts';
-import { AttributeValue, DataBlock, LocalBlock, OutputBlock, ResourceBlock, TypeDefaults, Validation } from '@clay/parser';
+import { AttributeValue, DataBlock, LocalBlock, ModuleBlock, OutputBlock, ResourceBlock, TypeDefaults, Validation } from '@clay/parser';
 
 import { Context, ModuleCall } from '../keys';
 import { Value } from '../Value';
@@ -16,9 +16,9 @@ export interface VariableValue {
   validations?: { rules: readonly Validation[]; declaration: string };
 }
 
-/** A resource or data source block, and where what it is given is read. */
-export interface DeclaredBlock {
-  block: ResourceBlock | DataBlock;
+/** A resource, data source or module call block, and where what it is given is read. */
+export interface DeclaredBlock<B = ResourceBlock | DataBlock> {
+  block: B;
   context: Context;
 }
 
@@ -30,6 +30,7 @@ export class ScopeManager {
   private locals: Map<string, Map<string, Value>> = new Map();
   private declaredOutputs: Map<string, { types: ReadonlyMap<string, Type>; blocks: ReadonlyMap<string, OutputBlock> }> = new Map();
   private declaredBlocks: Map<string, DeclaredBlock> = new Map();
+  private declaredCalls: Map<string, DeclaredBlock<ModuleBlock>> = new Map();
   private directories: Map<string, string> = new Map();
 
   setVariable(scope: string, name: string, value: VariableValue): void {
@@ -85,6 +86,15 @@ export class ScopeManager {
 
   declaredBlock(key: string): DeclaredBlock | undefined {
     return this.declaredBlocks.get(key);
+  }
+
+  /** Per call, not per instance of the module that makes it. */
+  declareCall(key: string, call: DeclaredBlock<ModuleBlock>): void {
+    this.declaredCalls.set(key, call);
+  }
+
+  declaredCall(key: string): DeclaredBlock<ModuleBlock> | undefined {
+    return this.declaredCalls.get(key);
   }
 
   /** Each output's type, `dynamic` where it names none. */
