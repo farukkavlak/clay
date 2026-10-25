@@ -58,6 +58,12 @@ const placeOf = (config: string, needle: string) => {
 
 const CALL = 'module "m" {\n  source = "./m"\n  count  = 0\n}';
 
+/** A file for each item of `forEach`, holding the item. */
+const each = (forEach: string) => `resource "local_file" "f" {\n  for_each = ${forEach}\n  path     = each.key\n  content  = each.value\n}`;
+
+/** A call of the module `n` with these attributes. */
+const input = (attributes: string) => `module "n" {\n  source = "./n"\n${attributes}\n}`;
+
 const rule = (condition: string, message: string) =>
   `variable "p" {\n  type    = number\n  default = 1\n  validation {\n    condition     = ${condition}\n    error_message = ${message}\n  }\n}`;
 
@@ -237,6 +243,51 @@ describe('a module called with count = 0', () => {
     ['a value a resource is given beside a sensitive one', `${FILE}\nlocals {\n  f = local_file.f\n}`, '', 'length(local.f.path)'],
   ])('takes a count from %s', async (_, before, inner, count) => {
     await module(counted(count, before), inner);
+
+    const plan = await newOrchestrator().plan(CALL);
+
+    expect(plan.actions).toEqual([]);
+  });
+
+  it.each([
+    ['a sensitive value the call gives a variable', input('  n = sensitive(1)'), 'variable "n" {}', 'var.n'],
+    ['a value the call gives a variable that holds it as a set', input('  n = [sensitive("a"), "b"]'), 'variable "n" {\n  type = set(string)\n}', 'length(var.n)'],
+    ['a sensitive item the for_each of a call gives each.value', input('  for_each = { a = sensitive(1) }\n  n        = each.value'), 'variable "n" {}', 'var.n'],
+  ])('refuses a count in the called module from %s', async (_, call, variable, count) => {
+    const inner = counted(count, variable);
+    await module(call, inner);
+
+    const error = await planError();
+
+    expect(error.message).toBe('count is sensitive: the number of instances shows what it is');
+    expect(error.position).toMatchObject({ file: path.join('m', 'n', 'main.clay'), ...placeOf(inner, count) });
+  });
+
+  it.each([
+    ['a sensitive item the for_each of a resource gives each.value', each('{ a = sensitive("abc") }'), 'length(local_file.f["a"].content)'],
+    ['items the for_each of a resource gives each.value that are all sensitive', each('{ a = sensitive("abc"), b = sensitive("d") }'), 'length(local_file.f["a"].content)'],
+    [
+      'items not known yet the for_each of a resource gives each.value, each sensitive',
+      `variable "ks" {\n  type    = set(string)\n  default = ["a"]\n}\n${each('{ for k in var.ks : k => sensitive(k) }')}`,
+      'length(local_file.f["a"].content)',
+    ],
+    [
+      'a sensitive item the for_each of a data source gives each.value',
+      'data "local_file" "f" {\n  for_each = { a = sensitive("f") }\n  path     = each.value\n}',
+      'length(data.local_file.f["a"].path)',
+    ],
+  ])('refuses a count from %s', async (_, before, count) => {
+    const content = counted(count, before);
+    await module(content);
+
+    const error = await planError();
+
+    expect(error.message).toBe('count is sensitive: the number of instances shows what it is');
+    expect(error.position).toMatchObject({ file: path.join('m', 'main.clay'), ...placeOf(content, count) });
+  });
+
+  it('takes a count from an item the for_each of a resource gives each.value beside a sensitive one', async () => {
+    await module(counted('length(local_file.f["b"].content)', each('{ a = sensitive("abc"), b = "d" }')));
 
     const plan = await newOrchestrator().plan(CALL);
 

@@ -6,7 +6,7 @@ import { converted } from '../conformValues';
 import { countFrom } from '../count';
 import { declaredOf, givenTo } from '../declared';
 import { eachFrom } from '../forEach';
-import { Context, ModuleCall, scopeOf } from '../keys';
+import { Context, DataInstance, ModuleCall, scopeOf } from '../keys';
 import { NotKnownYet } from '../NotKnownYet';
 import { tryAt, withPlace } from '../place';
 import { hidingReason } from '../providerResult';
@@ -69,7 +69,8 @@ export class WrittenCheck {
     const schema = this.dataSchemas.get(block.dataSourceType)!;
 
     this.checkRepetition(block, declaration, module);
-    const given = this.checkAttributes(block.dataSourceType, block.attributes, schema, declaration, module);
+    // In the block, so `each.value` finds its for_each.
+    const given = this.checkAttributes(block.dataSourceType, block.attributes, schema, declaration, new DataInstance(module, block.dataSourceType, block.name));
     await this.askProvider(block, block.dataSourceType, given, schema, module, (type, config) => this.providers.reader(type).validateDataSource(type, config));
   }
 

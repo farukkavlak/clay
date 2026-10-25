@@ -1,12 +1,15 @@
-import { Address, AttributePath, EVERY_ITEM, ModuleAddress, Schema, Type, types } from '@clay/contracts';
+import { Address, AttributePath, EVERY_ITEM, ModuleAddress, Schema, Type, types, UNKNOWN } from '@clay/contracts';
 import {
   AttributeValue,
   CountReference,
+  DataBlock,
   DataReference,
   EachReference,
+  ModuleBlock,
   ModuleOutputReference,
   OutputBlock,
   Position,
+  ResourceBlock,
   ResourceReference,
   spell,
   Step,
@@ -16,11 +19,11 @@ import {
 import { converted } from '../conformValues';
 import { declaredOf, givenTo } from '../declared';
 import { Instances, Repetition } from '../Instances';
-import { blockKey, Context, dataSourceKey, moduleOf, scopeOf } from '../keys';
+import { blockKey, callKey, Context, DataInstance, dataSourceKey, ModuleCall, moduleOf, scopeOf } from '../keys';
 import { ModuleInstances } from '../ModuleInstances';
 import { placed } from '../place';
-import { ScopeManager } from '../scope/ScopeManager';
-import { Value } from '../Value';
+import { DeclaredBlock, ScopeManager } from '../scope/ScopeManager';
+import { itemsOf, sharedMarks, Value, valueOf, withSensitive } from '../Value';
 import { everyOf, everyType, instanceType, noAttribute, outputsType, readCall, readInstance } from './instance';
 
 /** Paths are known at load and a local is read as written, so they are not here. */
@@ -92,7 +95,7 @@ export class WrittenTypes {
 
     if (reference.kind === 'variable') return this.variableType(reference, scopeOf(module.withoutKeys()));
     if (reference.kind === 'count') return { type: types.number, sensitive: [], from: [], path: reference.path };
-    if (reference.kind === 'each') return { type: reference.name === 'key' ? types.string : types.dynamic, sensitive: [], from: [], path: reference.path };
+    if (reference.kind === 'each') return this.eachType(reference, where);
     if (reference.kind === 'module') return this.callType(reference, where, position);
     if (reference.kind === 'data') return this.dataType(reference, where, position);
 
@@ -101,9 +104,29 @@ export class WrittenTypes {
 
   /** The graph has already refused undeclared variables; each is declared once for all instances of its module. */
   private variableType(reference: VariableReference, scope: string): Written {
-    const { type = types.dynamic, sensitive } = this.scopeManager.getVariable(scope, reference.name)!;
+    const variable = this.scopeManager.getVariable(scope, reference.name)!;
+    const { type = types.dynamic, sensitive, value, context, block } = variable;
+    const held: Source['held'] = (read, readNode) => givenTo('variable', reference.name, read, variable, readNode);
 
-    return { type, sensitive: sensitive ? WHOLE : [], from: [], path: reference.path };
+    return { type, sensitive: sensitive ? WHOLE : [], from: [{ value, context, declaration: block, held, at: [] }], path: reference.path };
+  }
+
+  /** `each.value` is one of the items of the for_each, not known which; the graph has already refused `each` outside a block with one. */
+  private eachType(reference: EachReference, where: Context): Written {
+    if (reference.name === 'key') return { type: types.string, sensitive: [], from: [], path: reference.path };
+
+    const { block, context } = this.repeated(where);
+    const held: Source['held'] = (read) => withSensitive(valueOf(types.dynamic, UNKNOWN), sharedMarks(itemsOf(read)));
+    return { type: types.dynamic, sensitive: [], from: [{ value: block.forEach!, context, declaration: spell(block), held, at: [] }], path: reference.path };
+  }
+
+  /** The block `where` is in, and where its for_each is read; the graph refuses `each` anywhere else first. */
+  private repeated(where: Context): DeclaredBlock<ResourceBlock | DataBlock | ModuleBlock> {
+    if (where instanceof ModuleCall) return this.scopeManager.declaredCall(callKey(where.call.withoutKeys()))!;
+    if (where instanceof DataInstance) return this.scopeManager.declaredBlock(dataSourceKey(scopeOf(where.module.withoutKeys()), where.type, where.name))!;
+    if (where instanceof Address) return this.scopeManager.declaredBlock(blockKey(where))!;
+
+    throw new Error('each.value was read outside a block');
   }
 
   /** The graph has already refused undeclared data sources, and every one has its schema. */

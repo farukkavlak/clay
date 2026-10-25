@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { ConfigFiles } from '../ConfigFiles';
 import { required } from '../declared';
-import { blockKey, dataSourceKey, ModuleCall, scopeOf } from '../keys';
+import { blockKey, callKey, DataInstance, dataSourceKey, ModuleCall, scopeOf } from '../keys';
 import { ScopeManager } from '../scope/ScopeManager';
 
 function validationsOf(variable: VariableBlock) {
@@ -141,14 +141,19 @@ export class ModuleLoader {
     for (const stmt of program) if (stmt.type === 'Local') this.scopeManager.declareLocal(scopeOf(address), stmt);
   }
 
-  /** A resource's values are read at its address, as its instances read them; a data source's in its module. */
+  /** A block's values are read in the block, as its instances read them; a call's for_each in the module that makes it. */
   private declareBlocks(program: Statement[], address: ModuleAddress): void {
     for (const stmt of program) {
       if (stmt.type === 'Resource') {
         const context = new Address(address, stmt.resourceType, stmt.name);
         this.scopeManager.declareBlock(blockKey(context), { block: stmt, context });
       }
-      if (stmt.type === 'Data') this.scopeManager.declareBlock(dataSourceKey(scopeOf(address), stmt.dataSourceType, stmt.name), { block: stmt, context: address });
+      if (stmt.type === 'Data')
+        this.scopeManager.declareBlock(dataSourceKey(scopeOf(address), stmt.dataSourceType, stmt.name), {
+          block: stmt,
+          context: new DataInstance(address, stmt.dataSourceType, stmt.name),
+        });
+      if (stmt.type === 'Module') this.scopeManager.declareCall(callKey(address.child(stmt.name)), { block: stmt, context: address });
     }
   }
 

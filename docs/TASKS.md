@@ -348,9 +348,9 @@ change each.
       `value = sensitive(1)`, and so does `count = length(local_file.f.content)` with
       `content = sensitive("abc")`; with `count = 1` both are refused. Now an output's value
       and what a resource or data source is given are read as written for their marks
-- [ ] The same holds for what a call gives a variable and for the `for_each` behind
+- [x] The same holds for what a call gives a variable and for the `for_each` behind
       `each.value`: in a module called with `count = 0`, `count = var.n` passes the plan where
-      the call gives `n = sensitive(1)`
+      the call gives `n = sensitive(1)`. Now both are read as written for their marks
 - [x] A provider's `validate` runs only for an instance, so in a module called with
       `count = 0`, `local_file` with `path = ""` passes the plan; with `count = 1` it is
       refused: `local_file "path" must not be empty`
