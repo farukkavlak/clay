@@ -88,6 +88,29 @@ describe('unifiedLater', () => {
   it('refuses what the values could never join into, though one is still to come', () => {
     expect(() => unifiedLater([later, known(['a']), known([['a']])])).toThrow('cannot join a string and a tuple into one type');
   });
+
+  // Once known, the value may be a string, which holds a number and a bool, or a map, which holds objects of any names.
+  it.each<[string, Value[], Type]>([
+    ['a number and a bool', [later, known(ExactNumber.parse('1')), known(true)], dynamic],
+    ['a number and a bool below it', [later, known([ExactNumber.parse('1')]), known([true])], dynamic],
+    ['a number and a bool at its place', [known([UNKNOWN]), known([ExactNumber.parse('1')]), known([true])], types.tuple([dynamic])],
+    ['objects with other names', [later, known({ b: 'x' }), known({ c: 'y' })], dynamic],
+    ['objects with other names below it', [later, known([{ b: 'x' }]), known([{ c: 'y' }])], dynamic],
+    ['objects with the same names and parts of other kinds', [later, known({ a: 'x', b: ['y'] }), known({ a: 'z', b: ['w'] })], dynamic],
+  ])('joins %s beside a value of no type still to come', (_, values, type) => {
+    expect(unifiedLater(values)).toEqual(type);
+  });
+
+  it.each<[string, Value[]]>([
+    ['beside it', [known({ a: UNKNOWN, b: ExactNumber.parse('1') }), known({ a: 'x', b: true })]],
+    ['beside it, a level down', [known({ x: { a: UNKNOWN, b: ExactNumber.parse('1') } }), known({ x: { a: 'x', b: true } })]],
+  ])('refuses a number and a bool at a place %s, not at a place still to come', (_, values) => {
+    expect(() => unifiedLater(values)).toThrow('cannot join a number and a boolean into one type');
+  });
+
+  it('refuses objects with other names below a place still to come, when the value there could never join them', () => {
+    expect(() => unifiedLater([later, known([{ b: 'x' }]), known([{ c: 'y' }]), known([['a']])])).toThrow('cannot join an object and a tuple into one type');
+  });
 });
 
 const listed = (value: Value) => convertedLater('tolist', value, types.list(joinedLater(itemTypes(laterOf(value)))), []);

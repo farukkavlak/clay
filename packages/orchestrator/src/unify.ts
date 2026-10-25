@@ -36,11 +36,11 @@ function unjoinable(reason: string, at: Step[]): Unjoinable {
   return new Unjoinable(`cannot join ${reason} into one type${at.length > 0 ? `, at ${spellSteps(at)} in each item` : ''}`);
 }
 
-/** A string can hold numbers and bools as text; a number with a bool and no string is most often a mistake, so it is refused. */
-function primitive(found: readonly Type[], at: Step[]): Type {
+/** A string can hold numbers and bools as text; a number with a bool and no string is most often a mistake, so it is refused unless `loose`. */
+function primitive(found: readonly Type[], at: Step[], loose: boolean): Type {
   const kinds = new Set(found.map((type) => type.kind));
   if (kinds.size === 1) return found[0];
-  if (kinds.has('string')) return types.string;
+  if (kinds.has('string') || loose) return types.string;
 
   throw unjoinable('a number and a boolean', at);
 }
@@ -79,14 +79,23 @@ function sequence(found: readonly Type[], at: Step[], join: Join): Type {
 
 type ObjectType = Extract<Type, { kind: 'object' }>;
 
-/** Objects with different names usually mean a typo, so they are refused rather than unified as a map. */
-function objects(found: readonly ObjectType[], at: Step[], join: Join): Type {
+/** A name one of `found` has and another lacks. */
+function otherName(found: readonly ObjectType[]): string | undefined {
   const names = Object.keys(found[0].attributes);
   for (const type of found) {
     const other = Object.keys(type.attributes).find((name) => !names.includes(name)) ?? names.find((name) => !Object.hasOwn(type.attributes, name));
-    if (other !== undefined) throw unjoinable(`an object with "${other}" and one without it`, at);
+    if (other !== undefined) return other;
   }
 
+  return undefined;
+}
+
+/** Objects with different names usually mean a typo, so they are refused rather than unified as a map. */
+function objects(found: readonly ObjectType[], at: Step[], join: Join): Type {
+  const other = otherName(found);
+  if (other !== undefined) throw unjoinable(`an object with "${other}" and one without it`, at);
+
+  const names = Object.keys(found[0].attributes);
   const attributes = Object.fromEntries(
     names.map((name) => [
       name,
@@ -100,8 +109,9 @@ function objects(found: readonly ObjectType[], at: Step[], join: Join): Type {
   return types.object(attributes, optional.length > 0 ? optional : undefined);
 }
 
-function mapping(found: readonly Type[], at: Step[], join: Join): Type {
-  if (found.every((type): type is ObjectType => type.kind === 'object')) return objects(found, at, join);
+function mapping(found: readonly Type[], at: Step[], join: Join, loose: boolean): Type {
+  // Beside a part still to come, which may be a map, objects of other names may still join as one.
+  if (found.every((type): type is ObjectType => type.kind === 'object') && (!loose || otherName(found) === undefined)) return objects(found, at, join);
 
   return types.map(
     join(
@@ -114,20 +124,26 @@ function mapping(found: readonly Type[], at: Step[], join: Join): Type {
 /** A part of a value not known yet that has no type: once known it may be of any type, so what is joined with it has none unless a string holds it. */
 const LATER: Type = { kind: 'dynamic' };
 
-/** As `unified`, with `later` at each place a part still to come of no type reaches. */
-function joinedAs(found: readonly Type[], at: Step[], later: Type): Type {
+/**
+ * As `unified`, with `later` at each place a part still to come of no type reaches. Below such a place the join is `loose`: once known,
+ * the part may be a string, which holds any primitive, or a map, which holds objects of any names, so only what still could never join is refused.
+ */
+function joinedAs(found: readonly Type[], at: Step[], later: Type, loose = false): Type {
   const named = found.filter((type) => type.kind !== 'dynamic');
   if (named.length === 0) return found.includes(LATER) ? later : types.dynamic;
 
   const [first] = named;
   const other = named.find((type) => FAMILIES[type.kind] !== FAMILIES[first.kind]);
   if (other) throw unjoinable(`${article(first.kind)} and ${article(other.kind)}`, at);
-  // A string holds any primitive as text, and a structure beside it is refused at apply either way.
-  if (found.includes(LATER)) return FAMILIES[first.kind] === 'primitive' && named.some((type) => type.kind === 'string') ? types.string : later;
+  if (found.includes(LATER)) {
+    joinedAs(named, at, later, true);
+    // A string holds any primitive as text, and a structure beside it is refused at apply either way.
+    return FAMILIES[first.kind] === 'primitive' && named.some((type) => type.kind === 'string') ? types.string : later;
+  }
 
-  const join: Join = (parts, within) => joinedAs(parts, within, later);
-  if (FAMILIES[first.kind] === 'primitive') return primitive(named, at);
-  return FAMILIES[first.kind] === 'sequence' ? sequence(named, at, join) : mapping(named, at, join);
+  const join: Join = (parts, within) => joinedAs(parts, within, later, loose);
+  if (FAMILIES[first.kind] === 'primitive') return primitive(named, at, loose);
+  return FAMILIES[first.kind] === 'sequence' ? sequence(named, at, join) : mapping(named, at, join, loose);
 }
 
 /** Throws `Unjoinable`. `dynamic` (an unknown or a null) fits any type, and what is joined with a part still to come of no type has none, unless a string holds it. `at` locates the types for the message. */
@@ -226,12 +242,6 @@ function cleaned(type: Type): Type {
 
 /** As `unified`, for types from `laterOf`, keeping each place a part still to come of no type reaches for `convertedLater`. */
 export function joinedLater(found: readonly Type[], at: Step[] = []): Type {
-  // A part still to come ends the join at its place, so what could never join below it is found with the plain types.
-  unified(
-    found.map((type) => cleaned(type)),
-    at
-  );
-
   return joinedAs(found, at, LATER);
 }
 

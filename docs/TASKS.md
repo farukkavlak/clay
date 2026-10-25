@@ -453,10 +453,11 @@ change each.
       apply, so the apply fails; so is `tolist([t, 1])[1]`. Now only the places such a value
       reaches are not known until apply, with their marks; the rest, and the length, stay
       known. cty leaves the whole join unknown
-- [ ] A join with a value of no type yet is refused at plan for what that value could still
+- [x] A join with a value of no type yet is refused at plan for what that value could still
       make join: `tolist([t, 1, true])`, with `t` of no type at plan, is refused as a number
       and a boolean, though `t` may come to a string, which holds both; objects with other
-      names beside it are refused too, though it may come to a map
+      names beside it are refused too, though it may come to a map. Now, where such a value
+      reaches and below it, the plan refuses only what could never join
 - [x] A mark under every item of a list not known yet, cut to a set, counts as sensitive for
       certain, though the list may come out empty: `issensitive(toset(l))` with
       `l = [for x in (cond ? ["a"] : []) : sensitive(x)]` answers `true` at plan and `false`

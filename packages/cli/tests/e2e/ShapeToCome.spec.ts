@@ -241,4 +241,47 @@ describe('a value of no type yet joined with others', () => {
     const state = await new LocalBackend(dir).read();
     expect(state.outputs?.o).toMatchObject({ value: '1' });
   });
+
+  // Once known, the value may be a string, which holds a number and a bool as text.
+  it.each([
+    ['in a list', `tolist([${TEXT}, 1, true])`, ['s', '1', 'true']],
+    ['below the items of a list', `tolist([[${TEXT}], [1], [true]])`, [['s'], ['1'], ['true']]],
+  ])('joins a number and a bool beside a value of no type yet, %s', async (_, value, joined) => {
+    await apply(output(value));
+
+    const state = await new LocalBackend(dir).read();
+    expect(state.outputs?.o).toMatchObject({ value: joined });
+  });
+
+  it('joins objects with other names beside a value of no type yet that comes to a map', async () => {
+    await module('n', 'variable "m" {\n  type = map(string)\n}\nvariable "c" {}\noutput "o" { value = [for x in (var.c ? [1] : [1, 2]) : var.m][0] }\n');
+    const call = `module "n" {\n  source = "./n"\n  m      = { a = "s" }\n  c      = ${NOW}\n}\n`;
+
+    await apply(output('tolist([module.n.o, { b = "1" }, { c = "2" }])', call));
+
+    const state = await new LocalBackend(dir).read();
+    expect(state.outputs?.o).toMatchObject({ value: [{ a: 's' }, { b: '1' }, { c: '2' }] });
+  });
+
+  it('joins objects with the same names beside a value of no type yet that comes to such an object', async () => {
+    const item = `[for x in (${NOW} ? [1] : [1, 2]) : { name = "z", tags = ["c"] }][0]`;
+
+    await apply(output(`tolist([${item}, { name = "x", tags = ["a"] }])`));
+
+    const state = await new LocalBackend(dir).read();
+    expect(state.outputs?.o).toMatchObject({
+      value: [
+        { name: 'z', tags: ['c'] },
+        { name: 'x', tags: ['a'] },
+      ],
+    });
+  });
+
+  it('refuses at plan a number and a bool beside a value of no type yet that does not reach them', async () => {
+    await expect(newOrchestrator().plan(output(`tolist([{ a = ${TEXT}, b = 1 }, { a = "x", b = true }])`))).rejects.toThrow('tolist cannot join a number and a boolean');
+  });
+
+  it('refuses at plan items that could never join below a value of no type yet', async () => {
+    await expect(newOrchestrator().plan(output(`tolist([[[1]], [{ a = 1 }], [${TEXT}]])`))).rejects.toThrow('tolist cannot join a tuple and an object');
+  });
 });
