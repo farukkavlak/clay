@@ -1,4 +1,4 @@
-import { AttributePath, isRecord, Type, typeAt, types } from '@clay/contracts';
+import { AttributePath, isRecord, isUnknown, Type, typeAt, types } from '@clay/contracts';
 import { AttributeValue, TypeDefaults } from '@clay/parser';
 
 import { converted, SchemaMismatch, toldWhole } from './conformValues';
@@ -48,6 +48,35 @@ export function required(type: Type): Type {
   return type.kind === 'list' || type.kind === 'set' || type.kind === 'map' ? types[type.kind](required(type.element)) : type;
 }
 
+/** A list or set taken as a tuple, or a map taken as an object, comes to the declared shape, each place filled in as it says. */
+function filledItemsType(type: Extract<Type, { element: Type }>, declared: Type, fill: (type: Type, declared: Type) => Type): Type {
+  if (declared.kind === 'tuple' && type.kind !== 'map') return types.tuple(declared.elements.map((element) => fill(type.element, element)));
+  if (declared.kind === 'object' && type.kind === 'map')
+    return types.object(Object.fromEntries(Object.entries(declared.attributes).map(([name, attribute]) => [name, fill(type.element, attribute)])));
+
+  return 'element' in declared ? types[type.kind](fill(type.element, declared.element)) : type;
+}
+
+/** The type a value not known yet will have once its defaults are filled in: each optional attribute it leaves out is added. */
+function filledType(type: Type, declared: Type): Type {
+  if (!namesOptional(declared)) return type;
+
+  if (type.kind === 'object' && declared.kind === 'object') {
+    const given = Object.entries(type.attributes).map(([name, attribute]) => [
+      name,
+      Object.hasOwn(declared.attributes, name) ? filledType(attribute, declared.attributes[name]) : attribute,
+    ]);
+    const left = (declared.optional ?? []).filter((name) => !Object.hasOwn(type.attributes, name)).map((name) => [name, declared.attributes[name]]);
+    return types.object(Object.fromEntries([...given, ...left]));
+  }
+  if (type.kind === 'object')
+    return types.object(Object.fromEntries(Object.entries(type.attributes).map(([name, attribute]) => [name, filledType(attribute, typeAt(declared, name))])));
+  if (type.kind === 'tuple') return types.tuple(type.elements.map((element, index) => filledType(element, typeAt(declared, index))));
+  if ('element' in type) return filledItemsType(type, declared, filledType);
+
+  return type;
+}
+
 /** `walk` is passed in because objects and their items recurse into each other. */
 interface Fill {
   holder: string;
@@ -95,6 +124,7 @@ function filledSequence(value: Value, declared: Type, defaults: TypeDefaults | u
 
 function filled(value: Value, declared: Type, defaults: TypeDefaults | undefined, fill: Fill, path: AttributePath): Value {
   if (!namesOptional(declared)) return value;
+  if (isUnknown(value.data)) return { ...value, type: filledType(value.type, declared) };
 
   const isMapping = declared.kind === 'object' || declared.kind === 'map';
   if (isMapping !== isRecord(value.data) || (!isMapping && !Array.isArray(value.data))) return value;

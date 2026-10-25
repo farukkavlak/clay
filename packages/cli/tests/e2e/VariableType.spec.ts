@@ -28,6 +28,13 @@ const errorOf = async (run: () => Promise<unknown>): Promise<ConfigError> => {
   throw new Error('Expected the configuration to be refused');
 };
 
+// Not known at plan.
+const LATER = 'random_string.r.result == "x"';
+const given = (declared: string, value: string) => [
+  `variable "site" { type = ${declared} }\noutput "site" { value = var.site }`,
+  `resource "random_string" "r" { length = 4 }\nmodule "m" {\n  source = "./m"\n  site   = ${value}\n}\noutput "site" { value = module.m.site }`,
+];
+
 describe('a variable that names its type', () => {
   let dir: string;
 
@@ -256,6 +263,41 @@ describe('a variable that names its type', () => {
     const plan = await newOrchestrator().plan(config);
 
     expect(plan.outputs.site.new).toEqual({ value: { name: UNKNOWN, port: ExactNumber.parse('80') }, type: types.object({ name: types.string, port: types.number }) });
+  });
+
+  it.each([
+    ['an object', 'object({ name = string, port = optional(number, 80) })', `${LATER} ? { name = "a" } : { name = "b" }`, types.object({ name: types.string, port: types.number })],
+    [
+      'an object in a list',
+      'list(object({ name = string, port = optional(number, 80) }))',
+      `[${LATER} ? { name = "a" } : { name = "b" }]`,
+      types.list(types.object({ name: types.string, port: types.number })),
+    ],
+    [
+      'an object in an object',
+      'object({ inner = object({ port = optional(number, 80) }) })',
+      `${LATER} ? { inner = {} } : { inner = {} }`,
+      types.object({ inner: types.object({ port: types.number }) }),
+    ],
+  ])('takes %s not known yet that leaves out an optional attribute, and fills it in at apply', async (_, declared, value, type) => {
+    const [module, config] = given(declared, value);
+    await writeModule(module);
+
+    const plan = await newOrchestrator().plan(config);
+    expect(plan.outputs.site.new?.type).toEqual(type);
+
+    await apply(config);
+    const state = await new LocalBackend(dir).read();
+    expect(JSON.stringify(state.outputs?.site.value)).toContain('"port":80');
+  });
+
+  it('refuses an object not known yet that leaves out a required attribute', async () => {
+    const [module, config] = given('object({ name = string, port = optional(number, 80) })', `${LATER} ? {} : {}`);
+    await writeModule(module);
+
+    const error = await errorOf(() => newOrchestrator().plan(config));
+
+    expect(error.message).toBe('variable "site" requires "name" in site');
   });
 
   it.each([

@@ -461,7 +461,7 @@ change each.
       certain, though the list may come out empty: `issensitive(toset(l))` with
       `l = [for x in (cond ? ["a"] : []) : sensitive(x)]` answers `true` at plan and `false`
       at apply. A schema's `sensitiveWith` over a list attribute takes such a mark the same way
-- [ ] An object not known yet given to a variable whose type has an `optional` attribute is
+- [x] An object not known yet given to a variable whose type has an `optional` attribute is
       refused for lacking it: `variable "v" requires "b" in v` with
       `v = cond ? { a = "x" } : { a = "y" }` and `type = object({ a = string, b = optional(string, "d") })`
 

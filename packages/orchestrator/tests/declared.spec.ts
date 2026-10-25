@@ -94,6 +94,23 @@ const filledAs = (value: Value, type: Type, tree: TypeDefaults = {}) => declared
 describe('the optional attributes of an object type', () => {
   const site = types.object({ name: types.string, port: types.number, tag: types.string }, ['port', 'tag']);
 
+  it.each([
+    ['an object', types.object({ name: types.string }), site],
+    ['an object in a tuple', types.tuple([types.object({ name: types.string })]), types.list(site)],
+    ['an object in a list', types.list(types.object({ name: types.string })), types.list(site)],
+    ['an object in an object given for a map', types.object({ a: types.object({ name: types.string }) }), types.map(site)],
+    ['an object in an object', types.object({ s: types.object({ name: types.string }) }), types.object({ s: site })],
+    ['an object in a list given for a tuple', types.list(types.object({ name: types.string })), types.tuple([site, site])],
+    ['an object in a set given for a tuple', types.set(types.object({ name: types.string })), types.tuple([site])],
+    ['an object in a map given for an object', types.map(types.object({ name: types.string })), types.object({ a: site, b: site })],
+  ])('takes %s not known yet that leaves out an optional attribute', (_, type, declared) => {
+    expect(declaredAs('variable', 'v', valueOf(type, UNKNOWN), declared).data).toBe(UNKNOWN);
+  });
+
+  it('refuses an object not known yet that leaves out a required attribute', () => {
+    expect(() => declaredAs('variable', 'v', valueOf(types.object({ port: types.number }), UNKNOWN), site)).toThrow('variable "v" requires "name" in v');
+  });
+
   it('gives one left out null where its type names no default', () => {
     expect(declaredAs('variable', 'v', written({ name: 'a' }), site)).toEqual(
       valueOf(types.object({ name: types.string, port: types.number, tag: types.string }), { name: 'a', port: null, tag: null })
