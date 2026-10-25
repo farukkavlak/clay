@@ -22,6 +22,7 @@ export type BoundNode = Node & { type: 'Bound'; value: Step[] };
 /**
  * `[for key, value in collection : body]`, or `{for … : key => body}` for an object.
  * With `grouped` (`body...`), the values of one key are collected into a tuple. With `condition` (`if …`), only the items it is true for.
+ * With `splat`, it was written `collection[*].steps`, and each item is named as it is written.
  */
 export type ForNode = Node & {
   type: 'For';
@@ -32,6 +33,7 @@ export type ForNode = Node & {
   body: AttributeValue;
   grouped?: true;
   condition?: AttributeValue;
+  splat?: true;
 };
 
 export type TemplatePart = string | AttributeValue;
