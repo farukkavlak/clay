@@ -382,7 +382,8 @@ describe('a resource that reads another as written', () => {
   });
 
   // Each is checked after the one it reads, so reading a value as written takes one step; the last of the chain comes first.
-  it('is checked through a chain longer than the call stack holds', async () => {
+  // Planning so many resources takes seconds, and longer while the whole suite runs.
+  it('is checked through a chain longer than the call stack holds', { timeout: 60_000 }, async () => {
     const links = Array.from({ length: 1500 }, (_, step) => `resource "local_file" "f${step + 1}" {\n  path    = "f${step + 1}"\n  content = local_file.f${step}.content\n}`);
     const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
     engine.registerProvider(new LocalProvider());
