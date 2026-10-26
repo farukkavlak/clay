@@ -1,4 +1,4 @@
-import { ModuleAddress, Resource, State, STATE_VERSION } from '@clay/contracts';
+import { Address, ModuleAddress, Resource, State, STATE_VERSION } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { ActionType, PlanAction } from '@clay/planner';
 import { describe, expect, it } from 'vitest';
@@ -29,6 +29,11 @@ function stateOf(resources: Resource[], deposed: Record<string, string[]> = {}):
     }),
   };
 }
+
+/** An object at `address` that read the blocks `reads` names. */
+const object = (address: string, ...reads: string[]): [string, Resource] => [address, { ...Address.parse(address).fields(), attributes: {}, dependencies: reads }];
+const holding = (...objects: [string, Resource][]): State => ({ version: STATE_VERSION, serial: 0, resources: Object.fromEntries(objects) });
+const going = (address: string): PlanAction => ({ type: 'DELETE', ...Address.parse(address).fields() });
 
 const layers = (graph: Graph<unknown>) => graph.topologicalSort().map((layer) => [...layer].sort());
 
@@ -216,5 +221,56 @@ describe('applyGraph', () => {
     );
 
     expect(layers(graph).map(([key]) => key)).toEqual(names.map((name) => `destroy:rec.${name}`).reverse());
+  });
+
+  describe('with a dependency on a block', () => {
+    it('destroys every instance of a reader before every instance of the block it read', () => {
+      const state = holding(object('rec.a[0]'), object('rec.a[1]'), object('rec.b[0]', 'rec.a'), object('rec.b[1]', 'rec.a'));
+
+      const graph = applyGraph(
+        new Graph<GraphNode>(),
+        ['rec.a[0]', 'rec.a[1]', 'rec.b[0]', 'rec.b[1]'].map((address) => going(address)),
+        state
+      );
+
+      expect(layers(graph)).toEqual([
+        ['destroy:rec.b[0]', 'destroy:rec.b[1]'],
+        ['destroy:rec.a[0]', 'destroy:rec.a[1]'],
+      ]);
+    });
+
+    it('waits only for the objects in the module instance it names', () => {
+      const read = 'module.p[0].module.q[0].rec.a';
+      const other = 'module.p[1].module.q[0].rec.a';
+      const state = holding(object(read), object(other), object('module.p[0].rec.r', 'module.p[0].module.q.rec.a'));
+
+      const graph = applyGraph(
+        new Graph<GraphNode>(),
+        [read, other, 'module.p[0].rec.r'].map((address) => going(address)),
+        state
+      );
+
+      expect(layers(graph)).toEqual([['destroy:module.p[0].rec.r', `destroy:${other}`], [`destroy:${read}`]]);
+    });
+
+    it('makes what stays wait only for the objects in the module instance it names', () => {
+      const graph = new Graph<GraphNode>();
+      graph.addNode('module.p.rec.r', { kind: 'resource', module: ModuleAddress.root.child('p') });
+      const other = 'module.p[1].module.q[0].rec.a';
+      const state = holding(object(other), object('module.p[0].rec.r', 'module.p[0].module.q.rec.a'));
+
+      const reader = { ...act('NO_OP', 'r'), ...Address.parse('module.p[0].rec.r').fields(), dependencies: ['module.p[0].module.q.rec.a'] };
+      const applied = applyGraph(graph, [going(other), reader], state);
+
+      expect(layers(applied)).toEqual([[`destroy:${other}`, 'module.p.rec.r']]);
+    });
+
+    it('updates what stays and reads the block before an instance of it is destroyed', () => {
+      const state = holding(object('rec.a[0]'), object('rec.a[1]'), object('rec.b', 'rec.a'));
+
+      const graph = applyGraph(config(['a', 'b'], [['a', 'b']]), [going('rec.a[1]'), act('NO_OP', 'b', { dependencies: ['rec.a'] })], state);
+
+      expect(layers(graph)).toEqual([['rec.a'], ['rec.b'], ['destroy:rec.a[1]']]);
+    });
   });
 });

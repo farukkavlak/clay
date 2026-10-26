@@ -425,6 +425,7 @@ describe('a plan saved to a file', () => {
   it.each([
     ['a resource type left out', (action: Record<string, unknown>) => delete action.resourceType],
     ['a dependency that is a number', (action: Record<string, unknown>) => (action.dependencies = [42])],
+    ['a dependency on one instance, where a dependency names a block', (action: Record<string, unknown>) => (action.dependencies = ['local_file.b[0]'])],
   ])('is refused with %s before anything runs', async (_, breaking) => {
     const plan = JSON.parse(await written(fileConfig('hello'))) as { actions: Record<string, unknown>[] };
     breaking(plan.actions[0]);

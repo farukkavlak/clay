@@ -939,10 +939,17 @@ Measured with the local provider; a remote provider makes the sequential calls c
       Each action now adds one line to a journal beside the state, which is written whole
       at the start and the end of a run and read with the journal's lines over it: 8000
       take 0.75 seconds, and a killed run loses nothing
-- [ ] Each instance records every instance of each block it reads as a dependency: with
+- [x] Each instance records every instance of each block it reads as a dependency: with
       `count = n` and `null_resource.a[count.index]`, `b[5]` lists all `n` of `a`. At 1000
       the state is 32 MB and the apply takes two minutes. Terraform keeps dependencies by
-      block
+      block. Clay now keeps one for each block read, keyed by the module instances the
+      reader shares with it, `module.p[0].module.q.null_resource.a`. A destroy waits for
+      what it waited for before, and also for an instance the configuration no longer
+      makes, gone with `count` or a module's `count`. At 1000 the state is 0.6 MB and the
+      apply takes 0.6 seconds
+- [ ] A destroy orders every object against every object it read, and checks each edge for
+      a loop by walking the graph: destroying 1000 pairs of `null_resource` where `b[i]`
+      reads `a[i]` takes 6 seconds, 500 take 1.5
 - [ ] The apply runs layer by layer, so one slow resource holds back every resource of the
       next layer, and one failure stops branches that do not read it. A `sleep 3` beside a
       chain of three `sleep 1` takes 5 seconds where 3 would do. Terraform walks the graph,

@@ -1,4 +1,4 @@
-import { Address, State } from '@clay/contracts';
+import { Address, covers, State } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { spell } from '@clay/parser';
 import { PlanAction } from '@clay/planner';
@@ -76,17 +76,29 @@ function reaches(stepsFrom: (at: string) => string[], from: string, to: string):
   return false;
 }
 
+/** The keys of the objects going away, by their block, so a dependency is held against its own block's objects only. */
+function goingByBlock(going: Map<string, Going>): Map<string, string[]> {
+  const byBlock = new Map<string, string[]>();
+  for (const [key, { action }] of going) {
+    const block = blockKey(Address.of(action));
+    byBlock.set(block, [...(byBlock.get(block) ?? []), key]);
+  }
+
+  return byBlock;
+}
+
 /**
- * Each object to the ones it reads, which are destroyed after it. A resource that depends on an address waits for its deposed objects too.
+ * Each object to the ones it reads, which are destroyed after it: every object a dependency covers, deposed ones too.
  * Objects left at different times can name each other, which no order holds, so a read that would close a loop is dropped.
  */
 function readsAmong(going: Map<string, Going>): Map<string, string[]> {
+  const byBlock = goingByBlock(going);
   const next = new Map<string, string[]>();
 
   for (const [key, { reads }] of going)
-    for (const dependency of reads)
-      for (const read of [dependency, deposedKey(dependency)]) {
-        if (!going.has(read) || reaches((at) => next.get(at) ?? [], read, key)) continue;
+    for (const dependency of reads.map((read) => Address.parse(read)))
+      for (const read of byBlock.get(blockKey(dependency)) ?? []) {
+        if (!covers(dependency, Address.of(going.get(read)!.action)) || reaches((at) => next.get(at) ?? [], read, key)) continue;
 
         next.set(key, [...(next.get(key) ?? []), read]);
       }
@@ -112,22 +124,37 @@ function beforeReplaces(going: Map<string, Going>, next: Map<string, string[]>):
   return found;
 }
 
+/** By the block a dependency names, then by the dependency, the blocks of what reads through it. */
+type Readers = Map<string, Map<string, Set<string>>>;
+
 /**
- * The blocks of what stays and reads each address, by the plan or by state.
+ * The blocks of what stays and reads, by the plan or by state.
  * A new object reads what is there when it is made, and a replace's old object is ordered among the objects going away.
  */
-function readersByAddress(actions: PlanAction[], state: State): Map<string, Set<string>> {
-  const readers = new Map<string, Set<string>>();
+function readersOfBlocks(actions: PlanAction[], state: State): Readers {
+  const readers: Readers = new Map();
 
   for (const action of actions) {
     if (action.type !== 'UPDATE' && action.type !== 'NO_OP') continue;
 
     const address = Address.of(action);
     const held = state.resources[address.toString()]?.dependencies ?? [];
-    for (const read of [...(action.dependencies ?? []), ...held]) readers.set(read, (readers.get(read) ?? new Set()).add(blockKey(address)));
+    for (const read of [...(action.dependencies ?? []), ...held]) {
+      const block = blockKey(Address.parse(read));
+      const byDependency = readers.get(block) ?? new Map<string, Set<string>>();
+      readers.set(block, byDependency.set(read, (byDependency.get(read) ?? new Set()).add(blockKey(address))));
+    }
   }
 
   return readers;
+}
+
+/** The blocks of what stays and reads the object at `address`. */
+function readersOf(readers: Readers, address: Address): string[] {
+  const found = new Set<string>();
+  for (const [dependency, blocks] of readers.get(blockKey(address)) ?? []) if (covers(Address.parse(dependency), address)) for (const block of blocks) found.add(block);
+
+  return [...found];
 }
 
 function addDestroy(graph: Graph<ApplyNode>, key: string, { action, madeBy }: Going): void {
@@ -140,8 +167,8 @@ function addDestroy(graph: Graph<ApplyNode>, key: string, { action, madeBy }: Go
  * What stays and reads an object is updated before the node that destroys it.
  * The old object of a create-first replace waits first, always. Any other wait that would close a loop is dropped: what stays reads the replace the object goes before.
  */
-function addWaits(graph: Graph<ApplyNode>, going: Map<string, Going>, nodeOf: (key: string) => string, readers: Map<string, Set<string>>): void {
-  const waits = [...going].flatMap(([key, { action, madeBy }]) => [...(readers.get(Address.of(action).toString()) ?? [])].map((reader) => ({ reader, node: nodeOf(key), madeBy })));
+function addWaits(graph: Graph<ApplyNode>, going: Map<string, Going>, nodeOf: (key: string) => string, readers: Readers): void {
+  const waits = [...going].flatMap(([key, { action, madeBy }]) => readersOf(readers, Address.of(action)).map((reader) => ({ reader, node: nodeOf(key), madeBy })));
 
   for (const { reader, node } of waits.filter(({ madeBy }) => madeBy)) graph.addEdge(reader, node);
   for (const { reader, node } of waits.filter(({ madeBy }) => !madeBy)) if (!reaches((at) => graph.dependentsOf(at), node, reader)) graph.addEdge(reader, node);
@@ -197,7 +224,7 @@ export function applyGraph(config: Graph<GraphNode>, actions: PlanAction[], stat
 
   for (const [key, object] of going) if (!byBlock(key)) addDestroy(graph, key, object);
   for (const [key, reads] of next) for (const read of reads) graph.addEdge(nodeOf(key), nodeOf(read));
-  addWaits(graph, going, nodeOf, readersByAddress(actions, state));
+  addWaits(graph, going, nodeOf, readersOfBlocks(actions, state));
   refuseLoop(graph, going);
 
   return graph;

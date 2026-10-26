@@ -127,6 +127,16 @@ describe('a state file that is not valid state', () => {
       '"local_file.5" is not the address of a resource, so it cannot hold deposed objects',
     ],
     [
+      'a resource with a dependency on one instance, where a dependency names a block',
+      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"dependencies":["local_file.b[0]"]}}}`,
+      '"local_file.a" is not a resource',
+    ],
+    [
+      'a deposed object with a dependency on one instance',
+      `{"version":${STATE_VERSION},"serial":0,"resources":{},"deposed":{"local_file.a":[{"attributes":{},"dependencies":["local_file.b[\\"x\\"]"]}]}}`,
+      'a deposed object of "local_file.a" has no attributes, or its sensitive or dependencies',
+    ],
+    [
       'a dependency no configuration can spell',
       `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"dependencies":["var.x"]}}}`,
       '"local_file.a" is not a resource',

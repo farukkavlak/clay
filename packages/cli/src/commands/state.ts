@@ -1,5 +1,5 @@
 import { Address, Resource, sensitiveUnder, State } from '@clay/contracts';
-import { mapDependencies, moveResource, StateManager } from '@clay/state';
+import { forgetDependencies, moveResource, StateManager } from '@clay/state';
 import { Command } from 'commander';
 import { styleText } from 'node:util';
 
@@ -159,7 +159,7 @@ export function createStateCommand(): Command {
             console.log(styleText('yellow', `Removing ${key}...`));
             delete state.resources[key];
             forgetDeposed(state, key);
-            mapDependencies(state, (dependency) => (dependency === key ? undefined : dependency));
+            forgetDependencies(state, Address.parse(key));
 
             await manager.write(state);
             console.log(styleText('green', 'Successfully removed resource.'));
