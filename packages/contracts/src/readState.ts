@@ -4,9 +4,9 @@ import { ExactNumber, NumberError } from './ExactNumber';
 import { isRecord } from './isRecord';
 import type { DeposedObject, Resource } from './State';
 
-/** The addresses of the resources an object was made after, which its delete must come before. */
+/** The blocks an object was made after, whose objects its delete must come before. A dependency names no instance of its block. */
 export function isDependencies(value: unknown): value is string[] | undefined {
-  return value === undefined || (Array.isArray(value) && value.every((address) => typeof address === 'string' && isAddress(address)));
+  return value === undefined || (Array.isArray(value) && value.every((address) => typeof address === 'string' && isAddress(address) && Address.parse(address).key === undefined));
 }
 
 /** What a resource keeps beside its values, each left out where there is none. */

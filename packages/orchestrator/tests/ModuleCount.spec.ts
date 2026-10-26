@@ -118,7 +118,7 @@ describe('a module called with count', () => {
     await apply(orchestrator(dir, modules()), root('top'));
 
     const { resources } = await stored();
-    expect(resources['module.m[1].rec.c'].dependencies).toEqual(['module.m[1].module.o.rec.r', 'module.m[1].rec.a[0]', 'module.m[1].rec.a[1]']);
+    expect(resources['module.m[1].rec.c'].dependencies).toEqual(['module.m[1].module.o.rec.r', 'module.m[1].rec.a']);
     expect(resources['module.m[0].rec.a[0]'].dependencies).toEqual(['rec.top']);
     // Sibling modules share their caller's instance.
     expect(resources['module.m[1].module.n.rec.s'].dependencies).toEqual(['module.m[1].module.o.rec.r']);

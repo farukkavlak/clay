@@ -1,5 +1,6 @@
 export { Address, isAddress, isInstanceKey, isModulePath, ModuleAddress, parseDataAddress, parseMovable, spellKey } from './Address';
 export type { InstanceKey, ModuleStep } from './Address';
+export { covers } from './dependency';
 export { isAttributePaths, own, readPaths, samePaths, valueAt } from './AttributePath';
 export type { AttributePath } from './AttributePath';
 export { ExactNumber, NumberError } from './ExactNumber';

@@ -69,6 +69,19 @@ function sharedModule(one: ModuleAddress, other: ModuleAddress): ModuleAddress {
 }
 
 /**
+ * One for each block read, so a delete can run after every object of it: keyed as far as the reader's module instance goes into the block's,
+ * every instance below that. `module.a[0]` reads from `module.a[0]`, never `module.a[1]`.
+ */
+function dependenciesOf(blocks: string[], reader: ModuleAddress): string[] {
+  return blocks.map((block) => {
+    const { module, resourceType, name } = Address.parse(block);
+    const shared = enclosing(reader, sharedModule(module, reader.withoutKeys())).path;
+
+    return new Address(new ModuleAddress([...shared, ...module.path.slice(shared.length)]), resourceType, name).toString();
+  });
+}
+
+/**
  * Resolves resources in dependency order, once per module instance, so a reader sees what the plan will make, not stale state.
  * Each created or changed instance is stored in `planned` as its provider planned it; a reader gets those values, UNKNOWN included.
  */
@@ -216,7 +229,7 @@ export class DesiredStateBuilder {
     const planned: ConfiguredResource[] = [];
 
     for (const module of this.modules.of(address.module)) {
-      const dependencies = this.instancesOf(blocks, module);
+      const dependencies = dependenciesOf(blocks, module);
       planned.push(...(await this.planBlock(new Address(module, address.resourceType, address.name), block, dependencies, state)));
     }
 
@@ -296,10 +309,7 @@ export class DesiredStateBuilder {
     if (source) this.moves.move(state, source, address);
   }
 
-  /**
-   * The graph links blocks, but state records instances, so a delete can run after every instance it read from.
-   * Only instances in the reader's own module instance: `module.a[0]` reads from `module.a[0]`, never `module.a[1]`.
-   */
+  /** Only instances in the reader's own module instance: `module.a[0]` reads from `module.a[0]`, never `module.a[1]`. */
   private instancesOf(blocks: string[], reader: ModuleAddress): string[] {
     return blocks.flatMap((block) => {
       const { module, resourceType, name } = Address.parse(block);

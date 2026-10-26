@@ -89,9 +89,10 @@ In a module call, `depends_on` makes every block in the module wait. In an outpu
 makes whatever reads the output wait too.
 
 A wait counts as a reference does. The apply makes `local_file.a` first and destroys it
-last, and the state keeps the order for a destroy after the block is gone. A data source
-that waits for a resource the plan creates or changes is read during apply. A wait that
-closes a cycle is refused.
+last, and the state keeps the order for a destroy after the block is gone, with one entry
+for each block an object read, not for each instance. A data source that waits for a
+resource the plan creates or changes is read during apply. A wait that closes a cycle is
+refused.
 
 ## Locals
 

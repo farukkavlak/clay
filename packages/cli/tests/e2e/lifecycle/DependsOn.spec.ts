@@ -74,7 +74,7 @@ describe('depends_on', () => {
     await clayIn('apply', '--yes');
 
     const { resources } = await state();
-    expect(resources['local_file.b'].dependencies).toEqual(['local_file.a[0]', 'local_file.a[1]']);
+    expect(resources['local_file.b'].dependencies).toEqual(['local_file.a']);
   });
 
   it('refuses one instance, where it is written', async () => {
@@ -147,9 +147,9 @@ describe('depends_on', () => {
   });
 
   it.each([
-    ['count', 'count  = 2\n  i      = count.index', ['module.m[0].local_file.inner', 'module.m[1].local_file.inner']],
-    ['for_each', 'for_each = toset(["p", "q"])\n  i        = each.key', ['module.m["p"].local_file.inner', 'module.m["q"].local_file.inner']],
-  ])('waits for an output of a module with %s, with no index, and not for what the output does not read', async (_, repetition, dependencies) => {
+    ['count', 'count  = 2\n  i      = count.index'],
+    ['for_each', 'for_each = toset(["p", "q"])\n  i        = each.key'],
+  ])('waits for an output of a module with %s, with no index, and not for what the output does not read', async (_, repetition) => {
     await writeModule(
       `variable "i" {}\nresource "local_file" "inner" {\n  path    = "${dir}/inner\${var.i}.txt"\n  content = "inner"\n}\nresource "local_file" "other" {\n  path    = "${dir}/other\${var.i}.txt"\n  content = "other"\n}\noutput "o" {\n  value = local_file.inner.path\n}\n`
     );
@@ -159,7 +159,7 @@ describe('depends_on', () => {
     await clayIn('apply', '--yes');
 
     const { resources } = await state();
-    expect(resources['local_file.c'].dependencies).toEqual(dependencies);
+    expect(resources['local_file.c'].dependencies).toEqual(['module.m.local_file.inner']);
   });
 
   it('makes what reads an output wait for what the output waits for', async () => {
