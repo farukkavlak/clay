@@ -1,19 +1,13 @@
 import { types, UNKNOWN } from '@clay/contracts';
-import { DiskFiles, Orchestrator } from '@clay/orchestrator';
-import { LocalProvider } from '@clay/provider-local';
-import { LocalBackend, StateManager } from '@clay/state';
+
+import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { orchestratorIn, placeOf } from '../helpers';
 import { start } from '../start';
-
-/** Where an error would point at the first `needle`. */
-const placeOf = (config: string, needle: string) => {
-  const before = config.slice(0, config.indexOf(needle)).split('\n');
-  return { line: before.length, column: before.at(-1)!.length + 1 };
-};
 
 const REFUSED = 'output "o" holds a sensitive value; write sensitive = true to export it';
 
@@ -27,11 +21,7 @@ const LATER = 'random_string.r.result == "q"';
 describe('an if in a for', () => {
   let dir: string;
 
-  const newOrchestrator = () => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
-    return engine;
-  };
+  const newOrchestrator = () => orchestratorIn(dir);
 
   const apply = async (config: string) => {
     for await (const event of start(newOrchestrator(), config)) if (event.type === 'failed') throw event.error;

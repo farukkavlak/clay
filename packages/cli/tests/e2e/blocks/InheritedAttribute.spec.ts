@@ -1,21 +1,15 @@
-import { DiskFiles, Orchestrator } from '@clay/orchestrator';
-import { LocalProvider } from '@clay/provider-local';
-import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { orchestratorIn } from '../helpers';
 import { start } from '../start';
 
 describe('a reference to a name every object has', () => {
   let dir: string;
 
-  const newOrchestrator = () => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
-    return engine;
-  };
+  const newOrchestrator = () => orchestratorIn(dir);
 
   const run = async (config: string) => {
     for await (const event of start(newOrchestrator(), config)) if (event.type === 'failed') throw event.error;

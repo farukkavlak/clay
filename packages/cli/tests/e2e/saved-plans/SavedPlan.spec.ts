@@ -1,8 +1,8 @@
 import { UNKNOWN } from '@clay/contracts';
-import { DiskFiles, Orchestrator } from '@clay/orchestrator';
+
 import { parsePlanFile, serializePlan } from '@clay/planner';
-import { LocalProvider } from '@clay/provider-local';
-import { LocalBackend, StateManager } from '@clay/state';
+
+import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createApplyCommand } from '../../../src/commands/apply';
 import { createPlanCommand } from '../../../src/commands/plan';
+import { orchestratorIn } from '../helpers';
 import { start } from '../start';
 
 const moduleConfig = (text: string) => `output "text" { value = "${text}" }`;
@@ -23,11 +24,7 @@ const drain = async (events: AsyncGenerator<{ type: string; error?: Error }>) =>
 describe('a plan saved to a file', () => {
   let dir: string;
 
-  const newOrchestrator = () => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
-    return engine;
-  };
+  const newOrchestrator = () => orchestratorIn(dir);
 
   const fileConfig = (content: string) => `
     resource "local_file" "a" {

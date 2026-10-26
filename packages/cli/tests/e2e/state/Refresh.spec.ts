@@ -1,6 +1,4 @@
-import { Orchestrator } from '@clay/orchestrator';
-import { DiskFiles } from '@clay/orchestrator';
-import { LocalProvider } from '@clay/provider-local';
+import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { changedOutside } from '@clay/planner';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
@@ -10,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createApplyCommand } from '../../../src/commands/apply';
 import { createPlanCommand } from '../../../src/commands/plan';
+import { orchestratorIn } from '../helpers';
 import { start } from '../start';
 
 describe('a plan that reads each resource back first', () => {
@@ -17,11 +16,7 @@ describe('a plan that reads each resource back first', () => {
   let file: string;
   let config: string;
 
-  const newOrchestrator = () => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
-    return engine;
-  };
+  const newOrchestrator = () => orchestratorIn(dir);
 
   const apply = async () => {
     for await (const event of start(newOrchestrator(), config)) if (event.type === 'failed') throw event.error;

@@ -1,12 +1,12 @@
 import { EVERY_ITEM, ExactNumber, State, UNKNOWN } from '@clay/contracts';
-import { DiskFiles, Orchestrator } from '@clay/orchestrator';
+import { Orchestrator } from '@clay/orchestrator';
 import { parsePlanFile, serializePlan } from '@clay/planner';
-import { LocalProvider } from '@clay/provider-local';
-import { LocalBackend, StateManager } from '@clay/state';
+
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { orchestratorIn } from '../helpers';
 
 const DB = `
   resource "random_string" "s" { length = 8 }
@@ -41,11 +41,7 @@ const sensitiveOf = (plan: Awaited<ReturnType<Orchestrator['plan']>>) => plan.ac
 describe('a resource given a sensitive value', () => {
   let dir: string;
 
-  const newOrchestrator = () => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
-    return engine;
-  };
+  const newOrchestrator = () => orchestratorIn(dir);
 
   const file = (name: string, content: string, repeat = '') => `
     resource "local_file" "${name}" {${repeat}

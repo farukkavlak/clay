@@ -1,23 +1,19 @@
 import { types } from '@clay/contracts';
-import { DiskFiles, Orchestrator } from '@clay/orchestrator';
+
 import { CONFIG_FILE } from '@clay/parser';
-import { LocalProvider } from '@clay/provider-local';
-import { LocalBackend, StateManager } from '@clay/state';
+
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { orchestratorIn } from '../helpers';
 
 const echoModule = `variable "text" {}\noutput "echo" { value = "\${var.text}" }`;
 
 describe('what plan refuses before anything runs', () => {
   let dir: string;
 
-  const newOrchestrator = () => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
-    return engine;
-  };
+  const newOrchestrator = () => orchestratorIn(dir);
 
   beforeEach(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-plan-checks-'));

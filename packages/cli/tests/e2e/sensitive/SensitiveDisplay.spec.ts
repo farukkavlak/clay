@@ -1,11 +1,9 @@
-import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { promisify, stripVTControlCharacters } from 'node:util';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-const clay = path.resolve(__dirname, '../../../bin/clay.js');
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { clayOutput } from '../helpers';
 
 const DB = 'output "password" {\n  value     = "hunter2"\n  sensitive = true\n}\n';
 const HIDDEN_BOTH = '(sensitive value) -> (sensitive value)';
@@ -20,10 +18,7 @@ const pair = (a: string, b: string) => `module "db" { source = "./db" }\nresourc
 describe('a resource attribute given a sensitive value, as the CLI prints it', () => {
   let dir: string;
 
-  const clayIn = async (...args: string[]) => {
-    const { stdout } = await promisify(execFile)('node', [clay, ...args], { cwd: dir });
-    return stripVTControlCharacters(stdout);
-  };
+  const clayIn = (...args: string[]) => clayOutput(dir, ...args);
 
   const written = async (config: string) => fs.writeFile(path.join(dir, 'main.clay'), config, 'utf8');
 

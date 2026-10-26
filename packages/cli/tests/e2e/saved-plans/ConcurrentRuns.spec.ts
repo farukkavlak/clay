@@ -1,10 +1,11 @@
 import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types } from '@clay/contracts';
-import { DiskFiles, Orchestrator, RunEvent } from '@clay/orchestrator';
-import { LocalBackend, StateManager } from '@clay/state';
+import { Orchestrator, RunEvent } from '@clay/orchestrator';
+import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { orchestratorIn } from '../helpers';
 
 const SCHEMA: Schema = {
   name: { type: types.string, required: true },
@@ -103,8 +104,7 @@ describe('a plan made while another run is half way', () => {
   beforeEach(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-concurrent-'));
     provider = new Gate();
-    engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(provider);
+    engine = orchestratorIn(dir, provider);
   });
 
   afterEach(async () => {

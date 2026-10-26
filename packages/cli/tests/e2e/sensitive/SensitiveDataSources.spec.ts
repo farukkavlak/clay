@@ -1,12 +1,13 @@
 import { CreateRequest, PlannedChange, PlanRequest, planFromSchema, Provider, Schema, State, types } from '@clay/contracts';
-import { DiskFiles, Orchestrator } from '@clay/orchestrator';
+
 import { parsePlanFile, serializePlan } from '@clay/planner';
 import { LocalProvider } from '@clay/provider-local';
-import { LocalBackend, StateManager } from '@clay/state';
+
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { orchestratorIn } from '../helpers';
 
 const REFUSED = (name: string) => `output "${name}" holds a sensitive value; write sensitive = true to export it`;
 
@@ -87,12 +88,7 @@ const tagged = (output = '') => `
 describe('a data source given a sensitive value', () => {
   let dir: string;
 
-  const newOrchestrator = () => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
-    engine.registerProvider(new Tagged());
-    return engine;
-  };
+  const newOrchestrator = () => orchestratorIn(dir, new LocalProvider(), new Tagged());
 
   const apply = async (config: string, engine = newOrchestrator()) => {
     await drain(engine.runPlan(await engine.plan(config), config));

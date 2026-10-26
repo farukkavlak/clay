@@ -1,9 +1,8 @@
 import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types, UNKNOWN } from '@clay/contracts';
-import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { ConfigError } from '@clay/parser';
 import { parsePlanFile, serializePlan } from '@clay/planner';
 import { LocalProvider } from '@clay/provider-local';
-import { LocalBackend, StateManager } from '@clay/state';
+import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -11,6 +10,7 @@ import { stripVTControlCharacters } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { displayPlan } from '../../../src/showPlan';
+import { orchestratorIn } from '../helpers';
 import { start } from '../start';
 
 const reversed = (value: unknown) => (Array.isArray(value) ? [...value].reverse() : value);
@@ -88,9 +88,7 @@ describe('a set attribute', () => {
   let dir: string;
 
   const newOrchestrator = (poolProvider: Provider = new PoolProvider()) => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
-    engine.registerProvider(poolProvider);
+    const engine = orchestratorIn(dir, new LocalProvider(), poolProvider);
     return engine;
   };
 

@@ -5,8 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-
-const clay = path.resolve(__dirname, '../../../bin/clay.js');
+import { clay } from '../helpers';
 
 const ESCAPE = '\u001B';
 const CLEAR = `${ESCAPE}[2J`;

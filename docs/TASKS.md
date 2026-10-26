@@ -1233,7 +1233,7 @@ Nothing here changes what Clay does. Each is a place the next change has to work
 - [ ] `toBeDefined()` alone pins nothing in `State.spec.ts`, `StateCommands.spec.ts`,
       `DataSources.spec.ts`, `ModuleDataFlow.spec.ts`, `Planner.spec.ts` and
       `LocalProvider.spec.ts`
-- [ ] 62 of the 99 e2e specs define `newOrchestrator` and register the local provider
+- [x] 62 of the 99 e2e specs define `newOrchestrator` and register the local provider
       themselves, in 14 forms; only `start.ts` is shared. `placeOf`, `clayIn` and
       `errorOf` are copied word for word into 19, 12 and 7 specs
 - [ ] Each package's coverage counts what its tests import from other packages, so

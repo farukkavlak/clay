@@ -1,12 +1,12 @@
-import { DiskFiles, Orchestrator, RunEvent } from '@clay/orchestrator';
+import { RunEvent } from '@clay/orchestrator';
 import { LocalProvider } from '@clay/provider-local';
-import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createApplyCommand } from '../../../src/commands/apply';
+import { orchestratorIn } from '../helpers';
 import { start } from '../start';
 
 describe('a state that cannot be saved after a failed action', () => {
@@ -40,8 +40,7 @@ describe('a state that cannot be saved after a failed action', () => {
   });
 
   it('is reported by the engine next to the action that failed', async () => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
+    const engine = orchestratorIn(dir, new LocalProvider());
 
     const events: RunEvent[] = [];
     for await (const event of start(engine, config())) events.push(event);

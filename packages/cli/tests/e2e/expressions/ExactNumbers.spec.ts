@@ -1,12 +1,11 @@
-import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { parsePlanFile, serializePlan } from '@clay/planner';
-import { LocalProvider } from '@clay/provider-local';
-import { LocalBackend, StateManager } from '@clay/state';
+
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { orchestratorIn } from '../helpers';
 import { start } from '../start';
 
 // 2^53 + 1, the first integer a JavaScript number cannot hold.
@@ -16,11 +15,7 @@ const LARGE = '12345678901234567890';
 describe('a number past what JavaScript holds exactly', () => {
   let dir: string;
 
-  const newOrchestrator = () => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
-    return engine;
-  };
+  const newOrchestrator = () => orchestratorIn(dir);
 
   const apply = async (config: string) => {
     for await (const event of start(newOrchestrator(), config)) if (event.type === 'failed') throw event.error;

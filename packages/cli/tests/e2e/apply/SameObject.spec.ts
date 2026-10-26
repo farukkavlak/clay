@@ -1,12 +1,11 @@
 import { State } from '@clay/contracts';
-import { execFile } from 'node:child_process';
+
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { promisify, stripVTControlCharacters } from 'node:util';
+import { stripVTControlCharacters } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-
-const clay = path.resolve(__dirname, '../../../bin/clay.js');
+import { clayOutput } from '../helpers';
 
 const fileBlock = (name: string, at: string, cbd = false) =>
   `resource "local_file" "${name}" {\n  path    = "${at}"\n  content = "x"\n${cbd ? '  lifecycle {\n    create_before_destroy = true\n  }\n' : ''}}\n`;
@@ -28,10 +27,7 @@ async function ignoresCase(dir: string): Promise<boolean> {
 describe('two objects that are one file', () => {
   let dir: string;
 
-  const clayIn = async (...args: string[]) => {
-    const { stdout } = await promisify(execFile)('node', [clay, ...args], { cwd: dir });
-    return stripVTControlCharacters(stdout);
-  };
+  const clayIn = (...args: string[]) => clayOutput(dir, ...args);
 
   const refusal = async (...args: string[]): Promise<string> => {
     try {

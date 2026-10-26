@@ -1,11 +1,12 @@
 import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, State, STATE_VERSION, types } from '@clay/contracts';
-import { DiskFiles, Orchestrator } from '@clay/orchestrator';
-import { LocalBackend, StateManager } from '@clay/state';
+import { Orchestrator } from '@clay/orchestrator';
+import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { orchestratorIn } from '../helpers';
 import { start } from '../start';
 
 const SCHEMA: Schema = { name: { type: types.string, required: true } };
@@ -69,8 +70,7 @@ describe('destroying a deposed object', () => {
   beforeEach(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-deposed-order-'));
     provider = new Noting();
-    engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(provider);
+    engine = orchestratorIn(dir, provider);
   });
 
   afterEach(async () => {

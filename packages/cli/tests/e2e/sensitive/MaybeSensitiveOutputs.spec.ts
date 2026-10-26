@@ -1,12 +1,12 @@
 import { UNKNOWN } from '@clay/contracts';
-import { DiskFiles, Orchestrator } from '@clay/orchestrator';
-import { LocalProvider } from '@clay/provider-local';
-import { LocalBackend, StateManager } from '@clay/state';
+
+import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { orchestratorIn } from '../helpers';
 import { start } from '../start';
 
 // Not known at plan, and false once the string is made; NOW is true then.
@@ -164,11 +164,7 @@ const merged = (length: number) =>
 describe('a root output that may hold a sensitive value', () => {
   let dir: string;
 
-  const newOrchestrator = () => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
-    return engine;
-  };
+  const newOrchestrator = () => orchestratorIn(dir);
 
   const apply = async (text: string) => {
     for await (const event of start(newOrchestrator(), text)) if (event.type === 'failed') throw event.error;

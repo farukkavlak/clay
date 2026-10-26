@@ -1,16 +1,15 @@
 import { UNKNOWN } from '@clay/contracts';
-import { DiskFiles, Orchestrator } from '@clay/orchestrator';
+
 import { parsePlanFile, Plan, serializePlan } from '@clay/planner';
-import { LocalProvider } from '@clay/provider-local';
-import { LocalBackend, StateManager } from '@clay/state';
-import { execFile } from 'node:child_process';
+
+import { LocalBackend } from '@clay/state';
+
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { promisify, stripVTControlCharacters } from 'node:util';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-const clay = path.resolve(__dirname, '../../../bin/clay.js');
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { clayOutput, orchestratorIn } from '../helpers';
 
 const counted = (count: number) => `
   module "site" {
@@ -28,11 +27,7 @@ describe('a data source in the graph', () => {
   let dir: string;
   let file: string;
 
-  const newOrchestrator = () => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
-    return engine;
-  };
+  const newOrchestrator = () => orchestratorIn(dir);
 
   const run = async (saved: Plan, config: string): Promise<Record<string, unknown>> => {
     let outputs: Record<string, unknown> = {};
@@ -46,10 +41,7 @@ describe('a data source in the graph', () => {
 
   const apply = async (config: string) => run(await newOrchestrator().plan(config), config);
 
-  const clayIn = async (...args: string[]) => {
-    const { stdout } = await promisify(execFile)('node', [clay, ...args], { cwd: dir });
-    return stripVTControlCharacters(stdout);
-  };
+  const clayIn = (...args: string[]) => clayOutput(dir, ...args);
 
   const writes = (content: string) => `
     resource "local_file" "a" {

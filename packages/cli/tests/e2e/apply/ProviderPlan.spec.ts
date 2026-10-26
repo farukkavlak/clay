@@ -1,12 +1,13 @@
 import { isUnknown, PlannedChange, PlanRequest, Provider, Schema, types } from '@clay/contracts';
-import { DiskFiles, Orchestrator } from '@clay/orchestrator';
+
 import { LocalProvider } from '@clay/provider-local';
-import { LocalBackend, StateManager } from '@clay/state';
+import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { orchestratorIn } from '../helpers';
 import { start } from '../start';
 
 const command = (text: string) => `resource "command_exec" "c" { command = "echo ${text}" }`;
@@ -54,12 +55,7 @@ class TidyProvider implements Provider {
 describe('a plan the provider takes part in', () => {
   let dir: string;
 
-  const newOrchestrator = () => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
-    engine.registerProvider(new TidyProvider());
-    return engine;
-  };
+  const newOrchestrator = () => orchestratorIn(dir, new LocalProvider(), new TidyProvider());
 
   const apply = async (config: string) => {
     for await (const event of start(newOrchestrator(), config)) if (event.type === 'failed') throw event.error;
