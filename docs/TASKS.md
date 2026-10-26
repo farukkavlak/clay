@@ -1116,7 +1116,7 @@ by resource type, and no `provider` block exists yet.
       `Invalid resource reference ...: Resource ... not found in state`
 - [ ] A parse error names no block: a bad attribute in a variable prints `on main.clay line 3:`
       where a resolve error adds `, in variable "region"`
-- [ ] `apply` says a missing file is missing the same way twice. A missing plan file and a
+- [x] `apply` says a missing file is missing the same way twice. A missing plan file and a
       missing configuration are reported with different prefixes today
 - [x] `Address.parse` says `got 1 parts` when it refuses an address
 - [ ] `clay graph`: the dependency graph in DOT

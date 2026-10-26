@@ -352,17 +352,12 @@ describe('Planner', () => {
   describe('Plan Serialization', () => {
     it('should serialize plan correctly', () => {
       const actions: PlanAction[] = [];
-      const config = 'resource "test" {}';
-      const serialized = JSON.parse(
-        serializePlan({ serial: 0, actions, outputs: {}, prevRun: {}, prior: {}, schemas: {}, dataSources: {}, readAtApply: [] }, config, {
-          'm/main.clay': 'output "x" { value = "y" }',
-        })
-      );
+      const files = { 'main.clay': 'resource "test" {}', 'm/main.clay': 'output "x" { value = "y" }' };
+      const serialized = JSON.parse(serializePlan({ serial: 0, actions, outputs: {}, prevRun: {}, prior: {}, schemas: {}, dataSources: {}, readAtApply: [] }, files));
 
       expect(serialized.version).toBe(PLAN_FILE_VERSION);
       expect(serialized.actions).toEqual(actions);
-      expect(serialized.config).toBe(config);
-      expect(serialized.modules).toEqual({ 'm/main.clay': 'output "x" { value = "y" }' });
+      expect(serialized.files).toEqual(files);
       expect(serialized.timestamp).toBeDefined();
     });
 
@@ -370,8 +365,7 @@ describe('Planner', () => {
       const planFile = {
         version: PLAN_FILE_VERSION,
         timestamp: new Date().toISOString(),
-        config: 'resource "test" {}',
-        modules: {},
+        files: { 'main.clay': 'resource "test" {}' },
         serial: 0,
         actions: [],
         outputs: {},
@@ -402,8 +396,7 @@ describe('Planner', () => {
       const planFile = {
         version: PLAN_FILE_VERSION,
         timestamp: new Date().toISOString(),
-        config: '',
-        modules: {},
+        files: { 'main.clay': '' },
         serial: 0,
         actions: [action],
         outputs: {},
@@ -418,7 +411,7 @@ describe('Planner', () => {
     });
 
     it('should reject a plan file without the state serial it was made from', () => {
-      const planFile = { version: PLAN_FILE_VERSION, timestamp: new Date().toISOString(), config: '', modules: {}, actions: [] };
+      const planFile = { version: PLAN_FILE_VERSION, timestamp: new Date().toISOString(), files: { 'main.clay': '' }, actions: [] };
 
       expect(validatePlanFile(planFile)).toBe(false);
     });

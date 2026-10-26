@@ -1,12 +1,11 @@
 import { CreateRequest, Identity, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, State, STATE_VERSION, types, UpdateRequest } from '@clay/contracts';
-import { Orchestrator } from '@clay/orchestrator';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { orchestratorIn } from '../helpers';
+import { orchestratorIn, TestEngine } from '../helpers';
 
 const DB = `
   output "secret" {
@@ -221,7 +220,7 @@ describe('an error about a resource, given a sensitive value', () => {
     for await (const event of engine.runPlan(await engine.plan(config), config)) if (event.type === 'failed') throw event.error;
   };
 
-  const planFails = async (run: (engine: Orchestrator) => Promise<unknown>) => {
+  const planFails = async (run: (engine: TestEngine) => Promise<unknown>) => {
     try {
       await run(newOrchestrator());
     } catch (error) {

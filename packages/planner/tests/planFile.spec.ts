@@ -8,7 +8,7 @@ const schemas = { null_resource: {}, x: {} };
 
 const emptyPlan: Plan = { serial: 0, actions: [], outputs: {}, prevRun: {}, prior: {}, schemas, dataSources: {}, readAtApply: [] };
 
-const aPlanFile = (plan: Plan = emptyPlan) => serializePlan(plan, 'resource "a" "b" {}', { 'm/main.clay': '' });
+const aPlanFile = (plan: Plan = emptyPlan) => serializePlan(plan, { 'main.clay': '', 'm/main.clay': '' });
 
 const fields = () => JSON.parse(aPlanFile()) as Record<string, unknown>;
 
@@ -500,8 +500,9 @@ describe('reading a plan file', () => {
     ['a timestamp in a form Clay does not write', { ...fields(), timestamp: '2024-01-01T00:00:00Z' }],
     ['a timestamp that is no time', { ...fields(), timestamp: 'now' }],
     ['an output no configuration can declare', { ...fields(), outputs: { 'a b': { old: undefined, new: { type: { kind: 'string' }, value: 'v' } } } }],
-    ['no config', { ...fields(), config: undefined }],
-    ['modules that are not files', { ...fields(), modules: { 'm/main.clay': 1 } }],
+    ['no files', { ...fields(), files: undefined }],
+    ['files that are not text', { ...fields(), files: { 'main.clay': '', 'm/main.clay': 1 } }],
+    ['no file at the root', { ...fields(), files: { 'm/main.clay': '' } }],
     ['actions that are not a list', { ...fields(), actions: 'oops' }],
     ['outputs that are not a record', { ...fields(), outputs: 'oops' }],
     ['an action that is not a record', { ...fields(), actions: [null] }],

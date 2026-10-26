@@ -277,7 +277,7 @@ describe('validate against real files', () => {
   it('says so when there is no configuration', async () => {
     await createValidateCommand().parseAsync(['node', 'clay']);
 
-    expect(printed.join('\n')).toContain('main.clay not found in current directory');
+    expect(printed.join('\n')).toContain('Validation failed: main.clay not found');
   });
 
   it('writes nothing, not even a state file', async () => {

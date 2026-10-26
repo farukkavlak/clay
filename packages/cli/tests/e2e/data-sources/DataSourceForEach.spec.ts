@@ -85,7 +85,7 @@ describe('a data source with for_each', () => {
   it('names each instance by its key in the plan, and runs from the plan file', async () => {
     const config = `${reads()}output "b" { value = data.local_file.f["b"].content }`;
 
-    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), config, {}), 'plan.json');
+    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), { 'main.clay': config }), 'plan.json');
 
     expect(Object.keys(saved.dataSources)).toEqual(['data.local_file.f["a"]', 'data.local_file.f["b"]']);
     expect(await run(saved, config)).toEqual({ b: 'one' });

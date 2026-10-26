@@ -1,12 +1,11 @@
 import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, State, STATE_VERSION, types } from '@clay/contracts';
-import { Orchestrator } from '@clay/orchestrator';
 import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { orchestratorIn } from '../helpers';
+import { orchestratorIn, TestEngine } from '../helpers';
 import { start } from '../start';
 
 const SCHEMA: Schema = { name: { type: types.string, required: true } };
@@ -65,7 +64,7 @@ class Noting implements Provider {
 describe('destroying a deposed object', () => {
   let dir: string;
   let provider: Noting;
-  let engine: Orchestrator;
+  let engine: TestEngine;
 
   beforeEach(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-deposed-order-'));

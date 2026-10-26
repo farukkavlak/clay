@@ -221,7 +221,7 @@ describe('a resource with for_each', () => {
 
   it('runs a saved plan, giving each instance its each.value', async () => {
     const config = files('{ web = "80", api = "8080" }');
-    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), config, {}), 'plan.json');
+    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), { 'main.clay': config }), 'plan.json');
 
     for await (const event of newOrchestrator().runPlan(saved, config)) if (event.type === 'failed') throw event.error;
 

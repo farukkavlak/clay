@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createApplyCommand } from '../../../src/commands/apply';
 import { createPlanCommand } from '../../../src/commands/plan';
-import { orchestratorIn } from '../helpers';
+import { engineIn, orchestratorIn } from '../helpers';
 import { start } from '../start';
 
 describe('a plan that reads each resource back first', () => {
@@ -90,7 +90,7 @@ describe('a plan that reads each resource back first', () => {
 
   // The plan carries each type's schema, so a resource in state needs its provider even without a refresh.
   it('refuses a resource in state that no provider handles, when told not to read', async () => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
+    const engine = engineIn(dir, Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir)));
 
     await expect(engine.plan('', { refresh: false })).rejects.toThrow('No provider handles "local_file"');
   });

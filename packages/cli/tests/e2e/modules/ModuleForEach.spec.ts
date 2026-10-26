@@ -160,7 +160,7 @@ describe('a module called with for_each', () => {
 
   // A saved plan runs against its own configuration, which gives each instance its value again.
   it('runs a saved plan, each instance given its value', async () => {
-    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(web('{ ali = "80" }')), web('{ ali = "80" }'), {}), 'plan.json');
+    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(web('{ ali = "80" }')), { 'main.clay': web('{ ali = "80" }') }), 'plan.json');
 
     for await (const event of newOrchestrator().runPlan(saved, web('{ ali = "80" }'))) if (event.type === 'failed') throw event.error;
 

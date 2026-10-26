@@ -122,7 +122,7 @@ describe('a set attribute', () => {
 
   /** Round-trips the plan through a file, as `apply plan.json` would, and returns what the CLI prints. */
   const shown = async (config: string, poolProvider?: Provider) => {
-    const saved = parsePlanFile(serializePlan(await newOrchestrator(poolProvider).plan(config), config, {}), 'plan.json');
+    const saved = parsePlanFile(serializePlan(await newOrchestrator(poolProvider).plan(config), { 'main.clay': config }), 'plan.json');
     const printed: string[] = [];
     vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => printed.push(stripVTControlCharacters(args.join(' '))));
     displayPlan(saved);
@@ -193,7 +193,7 @@ describe('a set attribute', () => {
   // pool.q's id sorts before "z", so members must be compared by value, not position.
   it('applies, from a saved plan, a member the plan did not know that sorts before one it knew', async () => {
     const config = `resource "pool" "q" { members = [] }\n${pool('["z", pool.q.id]')}`;
-    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), config, {}), 'plan.json');
+    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), { 'main.clay': config }), 'plan.json');
 
     for await (const event of newOrchestrator().runPlan(saved, config)) if (event.type === 'failed') throw event.error;
 
@@ -419,7 +419,7 @@ describe('a set attribute', () => {
 
   it('keeps the type of an output through a saved plan and into state', async () => {
     const config = withOutput('["b", "a"]');
-    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), config, {}), 'plan.json');
+    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), { 'main.clay': config }), 'plan.json');
 
     for await (const event of newOrchestrator().runPlan(saved, config)) if (event.type === 'failed') throw event.error;
 

@@ -45,7 +45,7 @@ describe('a plan saved to a file', () => {
   `;
 
   const withOutput = (content: string) => `${fileConfig(content)}\noutput "text" { value = local_file.a.content }`;
-  const written = async (config: string) => serializePlan(await newOrchestrator().plan(config), config, {});
+  const written = async (config: string) => serializePlan(await newOrchestrator().plan(config), { 'main.clay': config });
   const save = async (config: string) => parsePlanFile(await written(config), 'plan.json');
 
   const runs = (saved: Awaited<ReturnType<typeof save>>, config: string) => drain(newOrchestrator().runPlan(saved, config));
@@ -110,7 +110,7 @@ describe('a plan saved to a file', () => {
   });
 
   it('reads the line a broken configuration was written on out of the plan, not off the disk', async () => {
-    const saved = { ...JSON.parse(await written(fileConfig('planned'))), config: 'resource "local_file" {' };
+    const saved = { ...JSON.parse(await written(fileConfig('planned'))), files: { 'main.clay': 'resource "local_file" {' } };
     await fs.writeFile(path.join(dir, 'plan.json'), JSON.stringify(saved), 'utf8');
 
     const printed: string[] = [];
@@ -127,7 +127,7 @@ describe('a plan saved to a file', () => {
       process.chdir(cwd);
     }
 
-    expect(await fs.readdir(dir)).toEqual(['plan.json']);
+    expect(await fs.readdir(dir)).toEqual(['main.clay', 'plan.json']);
     expect(printed.join('\n')).toContain('\n  1: resource "local_file" {\n                           ^');
   });
 
@@ -211,8 +211,8 @@ describe('a plan saved to a file', () => {
   it('carries its modules, so a module edited or removed later changes nothing', async () => {
     await fs.mkdir(path.join(dir, 'm'));
     await fs.writeFile(path.join(dir, 'm', 'main.clay'), moduleConfig('planned'), 'utf8');
-    const fromModule = fileConfig(`\${module.m.text}`);
-    await fs.writeFile(path.join(dir, 'main.clay'), `module "m" { source = "./m" }\n${fromModule}`, 'utf8');
+    const root = `module "m" { source = "./m" }\n${fileConfig(`\${module.m.text}`)}`;
+    await fs.writeFile(path.join(dir, 'main.clay'), root, 'utf8');
 
     const cwd = process.cwd();
     process.chdir(dir);
@@ -229,7 +229,7 @@ describe('a plan saved to a file', () => {
     }
 
     const saved = JSON.parse(String(await fs.readFile(path.join(dir, 'plan.json'))));
-    expect(saved.modules).toEqual({ 'm/main.clay': moduleConfig('planned') });
+    expect(saved.files).toEqual({ 'main.clay': root, 'm/main.clay': moduleConfig('planned') });
     expect(await fs.readFile(path.join(dir, 'a.txt'), 'utf8')).toBe('planned');
   });
 
@@ -406,7 +406,7 @@ describe('a plan saved to a file', () => {
     const saved = await save(fileConfig('hello'));
     const misspelled = saved.actions.map((action) => ({ ...action, planned: { ...action.planned, contnet: 'hello' } }));
 
-    await expect(drain(newOrchestrator().runPlan({ ...saved, actions: misspelled }, saved.config))).rejects.toThrow(
+    await expect(drain(newOrchestrator().runPlan({ ...saved, actions: misspelled }, fileConfig('hello')))).rejects.toThrow(
       'the plan showed contnet = "hello", but it now comes to (none). Plan again.'
     );
     await expect(fs.access(path.join(dir, 'a.txt'))).rejects.toThrow();
@@ -437,7 +437,7 @@ describe('a plan saved to a file', () => {
 
     await drain(start(newOrchestrator(), fileConfig('changed')));
 
-    await expect(drain(newOrchestrator().runPlan(saved, saved.config))).rejects.toThrow('The state has changed since the plan was made');
+    await expect(drain(newOrchestrator().runPlan(saved, fileConfig('planned')))).rejects.toThrow('The state has changed since the plan was made');
     expect(await fs.readFile(path.join(dir, 'a.txt'), 'utf8')).toBe('changed');
   });
 });

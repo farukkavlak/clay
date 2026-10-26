@@ -45,9 +45,12 @@ export class ModuleLoader {
     private scopeManager: ScopeManager
   ) {}
 
-  async loadModuleTree(rootProgram: Statement[]): Promise<Loaded> {
+  async loadModuleTree(): Promise<Loaded & { root: Statement[] }> {
     const loaded: Loaded = { resources: [], modules: [] };
     this.contents.clear();
+
+    const rootProgram = this.parseConfig('.');
+    if (rootProgram === undefined) throw new Error(`${CONFIG_FILE} not found`);
 
     const parentAddress = ModuleAddress.root;
     loaded.modules.push({ address: parentAddress, program: rootProgram });
@@ -62,7 +65,7 @@ export class ModuleLoader {
         loaded.resources.push({ uniqueId: address.toString(), address, block: stmt });
       } else if (stmt.type === 'Module') await this.loadChildModule(stmt, '.', parentAddress, loaded, ['.']);
 
-    return loaded;
+    return { ...loaded, root: rootProgram };
   }
 
   private async loadChildModule(stmt: ModuleBlock, parentDir: string, parentAddress: ModuleAddress, loaded: Loaded, loadingDirs: string[]): Promise<void> {
@@ -100,19 +103,19 @@ export class ModuleLoader {
     const moduleDir = path.posix.join(parentDir, source.value, '.');
     if (loadingDirs.includes(moduleDir)) throw new ConfigError(`Module source cycle detected: ${[...loadingDirs, moduleDir].join(' -> ')}`, source.position, place);
 
-    const moduleProgram = this.parseModuleFile(moduleDir);
+    const moduleProgram = this.parseConfig(moduleDir);
     if (moduleProgram === undefined) throw new ConfigError(`Module source not found at: ${path.posix.join(moduleDir, CONFIG_FILE)}`, source.position, place);
 
     return { moduleDir, moduleProgram };
   }
 
-  private parseModuleFile(moduleDir: string): Statement[] | undefined {
-    const moduleFile = path.posix.join(moduleDir, CONFIG_FILE);
-    if (!this.contents.has(moduleFile)) this.contents.set(moduleFile, this.files.read(moduleFile));
-    const moduleContent = this.contents.get(moduleFile);
-    if (moduleContent === undefined) return undefined;
+  private parseConfig(dir: string): Statement[] | undefined {
+    const file = path.posix.join(dir, CONFIG_FILE);
+    if (!this.contents.has(file)) this.contents.set(file, this.files.read(file));
+    const content = this.contents.get(file);
+    if (content === undefined) return undefined;
 
-    return new Parser(new Lexer(moduleContent, moduleFile).tokenize()).parse();
+    return new Parser(new Lexer(content, file).tokenize()).parse();
   }
 
   private declareInputs(stmt: ModuleBlock, program: Statement[], childAddress: ModuleAddress, parentAddress: ModuleAddress): void {

@@ -84,7 +84,7 @@ describe('a number past what JavaScript holds exactly', () => {
   it('comes back from a saved plan as it was written', async () => {
     const config = `output "id" { value = ${LARGE} }`;
 
-    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), config, {}), 'plan.json');
+    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), { 'main.clay': config }), 'plan.json');
 
     expect(String(saved.outputs.id.new?.value)).toBe(LARGE);
   });

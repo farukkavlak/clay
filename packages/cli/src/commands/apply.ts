@@ -1,6 +1,5 @@
 import { Address, jsonText, Output, SENSITIVE } from '@clay/contracts';
 import { ConfigFiles, DiskFiles, InMemoryFiles, RecordingFiles, RunEvent } from '@clay/orchestrator';
-import { CONFIG_FILE } from '@clay/parser';
 import { changedOutside, parsePlanFile, Plan, PlanAction, PlanFile } from '@clay/planner';
 import { Command } from 'commander';
 import fs from 'node:fs/promises';
@@ -106,25 +105,20 @@ async function confirmApply(autoConfirm: boolean): Promise<boolean> {
   return autoConfirm || confirm('Do you want to perform these actions?');
 }
 
-function configFiles(config: string, modules: Record<string, string>): ConfigFiles {
-  return new InMemoryFiles({ ...modules, [CONFIG_FILE]: config });
-}
-
 interface PlannedApply {
   plan: Plan;
-  config: string;
   /** What the plan read, so the run does not read files changed while the question was open. */
   files: ConfigFiles;
 }
 
-async function planFromDisk(cwd: string, recording: RecordingFiles, config: string, refresh: boolean): Promise<PlannedApply> {
+async function planFromDisk(cwd: string, recording: RecordingFiles, refresh: boolean): Promise<PlannedApply> {
   console.log(styleText('blue', 'Calculating plan...'));
-  const plan = await newOrchestrator(cwd, recording).plan(config, { refresh });
+  const plan = await newOrchestrator(cwd, recording).plan({ refresh });
 
-  return { plan, config, files: configFiles(config, recording.snapshot()) };
+  return { plan, files: new InMemoryFiles(recording.snapshot()) };
 }
 
-async function executeApply(cwd: string, { plan, config, files }: PlannedApply, autoConfirm: boolean, parallelism?: number): Promise<void> {
+async function executeApply(cwd: string, { plan, files }: PlannedApply, autoConfirm: boolean, parallelism?: number): Promise<void> {
   displayPlan(plan);
   if (changesNothing(plan)) return;
 
@@ -134,7 +128,7 @@ async function executeApply(cwd: string, { plan, config, files }: PlannedApply, 
     process.exit(1);
   }
 
-  await runAndReport((signal) => newOrchestrator(cwd, files).runPlan(plan, config, { parallelism, signal }), forgotten(plan));
+  await runAndReport((signal) => newOrchestrator(cwd, files).runPlan(plan, { parallelism, signal }), forgotten(plan));
 }
 
 /** Errors name the user's file and say what to do. */
@@ -146,7 +140,7 @@ async function readPlanFile(planFileArg: string, files: ConfigFiles): Promise<Pl
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
 
-    throw new Error(`${planFileArg} not found.`, { cause: error });
+    throw new Error(`${planFileArg} not found`, { cause: error });
   }
 
   try {
@@ -165,7 +159,7 @@ async function executeApplyFromPlan(cwd: string, planFile: PlanFile, files: Conf
   displayPlan(planFile);
   if (changesNothing(planFile)) return;
 
-  await runAndReport((signal) => orchestrator.runPlan(planFile, planFile.config, { parallelism, signal }), forgotten(planFile));
+  await runAndReport((signal) => orchestrator.runPlan(planFile, { parallelism, signal }), forgotten(planFile));
 }
 
 export function createApplyCommand() {
@@ -186,16 +180,10 @@ export function createApplyCommand() {
           if (options.refresh !== undefined) throw new Error('--refresh is for a plan: a saved plan is applied as it was made');
           const planData = await readPlanFile(planFileArg, files);
 
-          files = configFiles(planData.config, planData.modules);
+          files = new InMemoryFiles(planData.files);
           await executeApplyFromPlan(cwd, planData, files, options.parallelism);
         } else {
-          const config = recording.read(CONFIG_FILE);
-          if (config === undefined) {
-            console.error(styleText('red', `Error: ${CONFIG_FILE} not found.`));
-            process.exit(1);
-          }
-
-          const planned = await planFromDisk(cwd, recording, config, options.refresh ?? true);
+          const planned = await planFromDisk(cwd, recording, options.refresh ?? true);
 
           files = planned.files;
           await executeApply(cwd, planned, options.yes, options.parallelism);

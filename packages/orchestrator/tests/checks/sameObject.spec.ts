@@ -5,8 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { InMemoryFiles, Orchestrator } from '../../src/index';
 import { apply } from '../apply';
+import { engineOn, TestEngine } from '../engine';
 
 /** A thing named by `place` in any case, which a change of `label` replaces. */
 class PlacedProvider implements Provider {
@@ -66,12 +66,12 @@ const placed = (label: string, cbd: boolean) =>
 
 describe('a replace whose new object is its old one', () => {
   let dir: string;
-  let orchestrator: Orchestrator;
+  let orchestrator: TestEngine;
   let provider: PlacedProvider;
 
   beforeEach(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'same-object-'));
-    orchestrator = Orchestrator.create(new StateManager(new LocalBackend(dir)), new InMemoryFiles({}));
+    orchestrator = engineOn(new StateManager(new LocalBackend(dir)));
     provider = new PlacedProvider();
     orchestrator.registerProvider(provider);
   });

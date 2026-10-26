@@ -189,9 +189,9 @@ describe('a reference that reads into a list or a map', () => {
   // Every number in a saved plan reads back as an ExactNumber; an index must come back as a plain number.
   it('runs an index out of a saved plan', async () => {
     const config = `variable "names" { default = ["ana", "bo"] }\n${file('f', 'var.names[1]')}`;
-    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), config, {}), 'plan.json');
+    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), { 'main.clay': config }), 'plan.json');
 
-    await drain(newOrchestrator().runPlan(saved, saved.config));
+    await drain(newOrchestrator().runPlan(saved, config));
 
     expect(await written('f.txt')).toBe('bo');
   });

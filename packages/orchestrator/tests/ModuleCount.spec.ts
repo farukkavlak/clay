@@ -5,8 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { InMemoryFiles, Orchestrator } from '../src/index';
 import { apply } from './apply';
+import { engineOn, TestEngine } from './engine';
 
 const schema: Schema = { value: { type: types.string } };
 
@@ -25,8 +25,8 @@ const recorder: Provider = {
   delete: async () => {},
 };
 
-function orchestrator(dir: string, files: Record<string, string>): Orchestrator {
-  const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new InMemoryFiles(files));
+function orchestrator(dir: string, files: Record<string, string>): TestEngine {
+  const engine = engineOn(new StateManager(new LocalBackend(dir)), files);
   engine.registerProvider(recorder);
   return engine;
 }
