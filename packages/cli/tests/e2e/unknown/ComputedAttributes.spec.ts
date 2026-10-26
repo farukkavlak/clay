@@ -1,0 +1,372 @@
+import { CreateRequest, isUnknown, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types, UNKNOWN, UpdateRequest } from '@clay/contracts';
+import { DiskFiles, Orchestrator } from '@clay/orchestrator';
+import { LocalProvider } from '@clay/provider-local';
+import { LocalBackend, StateManager } from '@clay/state';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import { start } from '../start';
+
+/** Computes `made` on create and update, unless the configuration sets it. */
+class StampProvider implements Provider {
+  readonly resources = ['stamp'];
+  readonly dataSources: string[] = [];
+
+  async getSchema(): Promise<Schema> {
+    return {
+      id: { type: types.string, computed: true, kept: true },
+      label: { type: types.string, required: true },
+      note: { type: types.string },
+      made: { type: types.string, computed: true, optional: true },
+    };
+  }
+
+  async plan(type: string, request: PlanRequest): Promise<PlannedChange> {
+    return planFromSchema(await this.getSchema(), request);
+  }
+
+  async validate(): Promise<void> {}
+
+  async read(_type: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+    return prior;
+  }
+
+  async create(_type: string, { config }: CreateRequest): Promise<Record<string, unknown>> {
+    return { ...config, id: 'stamp-id', made: `made ${String(config.label)}` };
+  }
+
+  async update(_type: string, { prior, config }: UpdateRequest): Promise<Record<string, unknown>> {
+    return { ...config, id: prior.id, made: `remade ${String(config.label)}` };
+  }
+
+  async delete(): Promise<void> {}
+
+  async getDataSourceSchema(): Promise<Schema> {
+    return {};
+  }
+
+  async validateDataSource(): Promise<void> {}
+
+  async readDataSource(): Promise<Record<string, unknown>> {
+    return {};
+  }
+}
+
+/** Computes `tags`, a map of strings. */
+class TaggedStampProvider extends StampProvider {
+  override async getSchema(): Promise<Schema> {
+    return { ...(await super.getSchema()), tags: { type: types.map(types.string), computed: true } };
+  }
+
+  override async create(type: string, request: CreateRequest): Promise<Record<string, unknown>> {
+    return { ...(await super.create(type, request)), tags: { a: 'one' } };
+  }
+}
+
+/** Declares `made` computed, then does not return it. */
+class ForgetfulStampProvider extends StampProvider {
+  override async create(_type: string, { config }: CreateRequest): Promise<Record<string, unknown>> {
+    return { ...config, id: 'stamp-id' };
+  }
+}
+
+/** Computes a `kept` `serial`; a change to `size` replaces the resource. */
+class SerialStampProvider extends StampProvider {
+  override async getSchema(): Promise<Schema> {
+    return { ...(await super.getSchema()), size: { type: types.string, forceNew: true }, serial: { type: types.string, computed: true, kept: true } };
+  }
+
+  override async create(type: string, request: CreateRequest): Promise<Record<string, unknown>> {
+    return { ...(await super.create(type, request)), serial: `serial ${String(request.config.size)}` };
+  }
+
+  override async update(type: string, request: UpdateRequest): Promise<Record<string, unknown>> {
+    return { ...(await super.update(type, request)), serial: `serial ${String(request.config.size)}` };
+  }
+}
+
+/** Plans `made` itself, creates from that plan, and records each create request. */
+class PlannedStampProvider extends StampProvider {
+  readonly creates: CreateRequest[] = [];
+  readonly updates: UpdateRequest[] = [];
+
+  override async plan(type: string, request: PlanRequest): Promise<PlannedChange> {
+    const change = await super.plan(type, request);
+    return { ...change, after: { ...change.after, made: `planned ${String(request.config.label)}` } };
+  }
+
+  override async create(_type: string, request: CreateRequest): Promise<Record<string, unknown>> {
+    this.creates.push(request);
+    return { ...request.planned, id: 'stamp-id' };
+  }
+
+  override async update(_type: string, request: UpdateRequest): Promise<Record<string, unknown>> {
+    this.updates.push(request);
+    return request.planned;
+  }
+}
+
+const named = (source: string) => `local_file requires "content", and ${source}, which it reads, is null`;
+
+describe('a value only the provider knows', () => {
+  let dir: string;
+  let file: string;
+
+  const newOrchestrator = (stamp: Provider = new StampProvider()) => {
+    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
+    engine.registerProvider(new LocalProvider());
+    engine.registerProvider(stamp);
+    return engine;
+  };
+
+  const apply = async (config: string, stamp?: Provider) => {
+    for await (const event of start(newOrchestrator(stamp), config)) if (event.type === 'failed') throw event.error;
+  };
+
+  const serialCopy = (label: string, size = '1') =>
+    `resource "stamp" "a" {\n  label = "${label}"\n  size = "${size}"\n}\nresource "local_file" "copy" {\n  path = "${file}"\n  content = stamp.a.serial\n}`;
+
+  const copy = (content: string, extra = '') => `resource "stamp" "a" { label = "x" }\n${extra}resource "local_file" "copy" {\n  path = "${file}"\n  content = ${content}\n}`;
+
+  const withCopy = (stamp: string) => `${stamp}\nresource "local_file" "copy" {\n  path = "${file}"\n  content = stamp.a.made\n}`;
+
+  beforeEach(async () => {
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-computed-'));
+    file = path.join(dir, 'copy.txt');
+  });
+
+  afterEach(async () => {
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it('reads what random_string made and what command_exec printed', async () => {
+    const config = `
+      resource "random_string" "r" { length = 5 }
+      resource "command_exec" "c" { command = "echo printed" }
+      resource "local_file" "copy" {
+        path = "${file}"
+        content = "\${random_string.r.result} \${command_exec.c.stdout}"
+      }
+    `;
+
+    await apply(config);
+
+    const state = await new LocalBackend(dir).read();
+    expect(await fs.readFile(file, 'utf8')).toBe(`${String(state.resources['random_string.r'].attributes.result)} printed\n`);
+    expect(state.resources['random_string.r'].attributes.result).toHaveLength(5);
+  });
+
+  // The map is unknown at plan, but a value read from it is a string, not a map.
+  it.each([
+    ['from the resource', 'stamp.a.tags.a'],
+    ['from the resource, by a key in brackets', 'stamp.a.tags["a"]'],
+  ])('reads into a value the provider makes, %s', async (_, read) => {
+    await apply(`resource "stamp" "a" { label = "x" }\nresource "local_file" "copy" {\n  path = "${file}"\n  content = ${read}\n}`, new TaggedStampProvider());
+
+    expect(await fs.readFile(file, 'utf8')).toBe('one');
+  });
+
+  // An unknown output still has its type, so the mismatch is refused at plan.
+  it('refuses, at plan, a module output not known yet of a type the attribute does not take', async () => {
+    await fs.mkdir(path.join(dir, 'm'));
+    await fs.writeFile(path.join(dir, 'm', 'main.clay'), 'resource "stamp" "a" { label = "x" }\noutput "t" { value = stamp.a.tags }', 'utf8');
+    const config = `module "m" { source = "./m" }\nresource "local_file" "copy" {\n  path = "${file}"\n  content = module.m.t\n}`;
+
+    await expect(newOrchestrator(new TaggedStampProvider()).plan(config)).rejects.toMatchObject({
+      message: 'content is a map, where local_file takes a string',
+      position: { line: 4 },
+    });
+  });
+
+  // A name outside the schema is refused; one in it that nothing sets reads as null.
+  it('refuses a reference to a name the resource does not have, where it is written', async () => {
+    const config = 'resource "stamp" "a" { label = "x" }\noutput "o" { value = stamp.a.nope }';
+
+    await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
+      message: 'stamp has no attribute "nope"',
+      position: { file: 'main.clay', line: 2, column: 22 },
+    });
+  });
+
+  // The provider may omit a computed value, and an omitted name is null.
+  it('reads as null an item the plan left for the apply, when the provider does not return it', async () => {
+    await apply('resource "stamp" "a" { label = "x" }\nresource "null_resource" "n" {\n  triggers = { a = stamp.a.made }\n}', new ForgetfulStampProvider());
+
+    const { resources } = await new LocalBackend(dir).read();
+    expect(resources['null_resource.n'].attributes.triggers).toEqual({ a: null });
+  });
+
+  describe('when the provider does not return a value that what reads it requires', () => {
+    it.each([
+      ['a reference', () => copy('stamp.a.made'), 'stamp.a.made'],
+      ['a local', () => copy('local.made', 'locals {\n  made = stamp.a.made\n}\n'), 'local.made'],
+      ['a call', () => copy('nonsensitive(stamp.a.made)'), 'stamp.a.made'],
+      ['a reference with an index', () => copy('stamp.b[0].made', 'resource "stamp" "b" {\n  count = 1\n  label = "y"\n}\n'), 'stamp.b[0].made'],
+      [
+        'an index that is a sensitive key',
+        () => copy('stamp.b[local.k].made', 'locals {\n  k = sensitive(0)\n}\nresource "stamp" "b" {\n  count = 1\n  label = "y"\n}\n'),
+        'stamp.b[local.k].made',
+      ],
+    ])('says where the null came from, for %s', async (_, config, source) => {
+      await expect(apply(config(), new ForgetfulStampProvider())).rejects.toThrow(named(source));
+    });
+
+    it('says it at the next plan too, where state holds the null', async () => {
+      const config = copy('stamp.a.made');
+      await expect(apply(config, new ForgetfulStampProvider())).rejects.toThrow(named('stamp.a.made'));
+
+      await expect(newOrchestrator(new ForgetfulStampProvider()).plan(config)).rejects.toThrow(named('stamp.a.made'));
+    });
+
+    it('says it for a data source that requires it', async () => {
+      const config = 'resource "stamp" "a" { label = "x" }\ndata "local_file" "d" {\n  path = stamp.a.made\n}';
+      await apply('resource "stamp" "a" { label = "x" }', new ForgetfulStampProvider());
+
+      await expect(newOrchestrator(new ForgetfulStampProvider()).plan(config)).rejects.toThrow('local_file requires "path", and stamp.a.made, which it reads, is null');
+    });
+
+    it('names nothing for a null written in the configuration', async () => {
+      await expect(apply(copy('null'), new ForgetfulStampProvider())).rejects.toThrow(/^local_file requires "content"$/);
+    });
+  });
+
+  it('refuses a reference to a name a resource that does not change has not got, where it is written', async () => {
+    await apply('resource "stamp" "a" { label = "x" }');
+
+    await expect(newOrchestrator().plan('resource "stamp" "a" { label = "x" }\noutput "o" { value = stamp.a.nope }')).rejects.toMatchObject({
+      message: 'stamp has no attribute "nope"',
+      position: { file: 'main.clay', line: 2, column: 22 },
+    });
+  });
+
+  // Computed-only, so a configured value would show in the plan and never be applied.
+  it.each([
+    ['random_string', 'result', 'length = 4'],
+    ['command_exec', 'stdout', 'command = "echo x"'],
+  ])('refuses %s %s set by the configuration, where it is written', async (type, name, set) => {
+    const config = `resource "${type}" "a" {\n  ${set}\n  ${name} = "mine"\n}`;
+
+    await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
+      message: `${name} is computed by ${type} and cannot be set`,
+      position: { file: 'main.clay', line: 3, column: name.length + 6 },
+      block: `resource "${type}" "a"`,
+    });
+  });
+
+  it('reads the id of a resource still to be made as known after apply', async () => {
+    const { outputs } = await newOrchestrator().plan('resource "stamp" "a" { label = "x" }\noutput "o" { value = stamp.a.id }');
+
+    expect(isUnknown(outputs.o.new?.value)).toBe(true);
+  });
+
+  it('keeps what the provider returns in state', async () => {
+    await apply('resource "stamp" "a" { label = "x" }');
+
+    const state = await new LocalBackend(dir).read();
+    expect(state.resources['stamp.a'].attributes).toEqual({ id: 'stamp-id', label: 'x', made: 'made x' });
+  });
+
+  // A computed value absent from the configuration is not a change.
+  it('plans nothing for a value only the provider knows', async () => {
+    await apply('resource "stamp" "a" { label = "x" }');
+
+    const { actions } = await newOrchestrator().plan('resource "stamp" "a" { label = "x" }');
+
+    expect(actions.map(({ type }) => type)).toEqual(['NO_OP']);
+  });
+
+  it('plans a value only the provider knows as a change when the configuration sets it', async () => {
+    await apply('resource "stamp" "a" { label = "x" }');
+
+    const { actions } = await newOrchestrator().plan('resource "stamp" "a" {\n  label = "x"\n  made = "mine"\n}');
+
+    expect(actions.map(({ type, changes }) => ({ type, changes }))).toEqual([{ type: 'UPDATE', changes: { made: { old: 'made x', new: 'mine' } } }]);
+  });
+
+  // Any change recomputes the provider's values, so they are unknown until apply.
+  it('still plans a value the configuration stops setting as removed', async () => {
+    await apply('resource "stamp" "a" {\n  label = "x"\n  note = "n"\n}');
+
+    const { actions } = await newOrchestrator().plan('resource "stamp" "a" { label = "x" }');
+
+    expect(actions.map(({ type, changes }) => ({ type, changes }))).toEqual([
+      { type: 'UPDATE', changes: { note: { old: 'n', new: undefined }, made: { old: 'made x', new: UNKNOWN } } },
+    ]);
+  });
+
+  it('plans a value a resource to be made will have as known after apply, and the apply reads it', async () => {
+    const config = withCopy('resource "stamp" "a" { label = "x" }');
+
+    const { actions } = await newOrchestrator().plan(config);
+    await apply(config);
+
+    expect(isUnknown(actions.find((action) => action.name === 'copy')!.planned!.content)).toBe(true);
+    expect(await fs.readFile(file, 'utf8')).toBe('made x');
+  });
+
+  it('reads the value from state for a resource that does not change', async () => {
+    await apply('resource "stamp" "a" { label = "x" }');
+
+    const { actions } = await newOrchestrator().plan(withCopy('resource "stamp" "a" { label = "x" }'));
+
+    expect(actions.find((action) => action.name === 'copy')!.planned).toMatchObject({ content: 'made x' });
+  });
+
+  it('leaves what reads a kept value unchanged when the resource changes in place, and the apply keeps it', async () => {
+    await apply(serialCopy('x'), new SerialStampProvider());
+
+    const { actions } = await newOrchestrator(new SerialStampProvider()).plan(serialCopy('y'));
+    await apply(serialCopy('y'), new SerialStampProvider());
+
+    expect(actions.map(({ name, type }) => [name, type])).toEqual([
+      ['a', 'UPDATE'],
+      ['copy', 'NO_OP'],
+    ]);
+    const state = await new LocalBackend(dir).read();
+    expect(state.resources['stamp.a'].attributes).toMatchObject({ label: 'y', serial: 'serial 1' });
+    expect(await fs.readFile(file, 'utf8')).toBe('serial 1');
+  });
+
+  it('plans a kept value as known after apply when the resource is replaced, and what reads it changes', async () => {
+    await apply(serialCopy('x'), new SerialStampProvider());
+
+    const { actions } = await newOrchestrator(new SerialStampProvider()).plan(serialCopy('x', '2'));
+    await apply(serialCopy('x', '2'), new SerialStampProvider());
+
+    expect(actions.map(({ name, type }) => [name, type])).toEqual([
+      ['a', 'REPLACE'],
+      ['copy', 'UPDATE'],
+    ]);
+    expect(isUnknown(actions.find((action) => action.name === 'copy')!.planned!.content)).toBe(true);
+    expect(await fs.readFile(file, 'utf8')).toBe('serial 2');
+  });
+
+  // The provider may recompute it on a change, so the plan cannot know it.
+  it('plans the value as known after apply for a resource that changes, and keeps what the provider returns', async () => {
+    await apply(withCopy('resource "stamp" "a" { label = "x" }'));
+    const config = withCopy('resource "stamp" "a" { label = "y" }');
+
+    const { actions } = await newOrchestrator().plan(config);
+    await apply(config);
+
+    expect(isUnknown(actions.find((action) => action.name === 'copy')!.planned!.content)).toBe(true);
+    expect(await fs.readFile(file, 'utf8')).toBe('remade y');
+    const state = await new LocalBackend(dir).read();
+    expect(state.resources['stamp.a'].attributes).toEqual({ id: 'stamp-id', label: 'y', made: 'remade y' });
+  });
+  it('gives create and update the configuration, what the plan says it will hold, and update what it held', async () => {
+    const stamp = new PlannedStampProvider();
+
+    await apply('resource "stamp" "a" { label = "x" }', stamp);
+    await apply('resource "stamp" "a" { label = "y" }', stamp);
+
+    expect(stamp.creates).toEqual([{ config: { label: 'x' }, planned: { label: 'x', id: UNKNOWN, made: 'planned x' } }]);
+    expect(stamp.updates).toEqual([
+      { prior: { id: 'stamp-id', label: 'x', made: 'planned x' }, config: { label: 'y' }, planned: { id: 'stamp-id', label: 'y', made: 'planned y' } },
+    ]);
+    const state = await new LocalBackend(dir).read();
+    expect(state.resources['stamp.a'].attributes).toEqual({ id: 'stamp-id', label: 'y', made: 'planned y' });
+  });
+});

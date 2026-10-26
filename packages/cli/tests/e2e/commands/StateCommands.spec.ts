@@ -1,0 +1,316 @@
+import { types } from '@clay/contracts';
+import { DiskFiles, Orchestrator } from '@clay/orchestrator';
+import { LocalProvider } from '@clay/provider-local';
+import { LocalBackend, StateManager } from '@clay/state';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { createOutputCommand } from '../../../src/commands/output';
+import { createStateCommand } from '../../../src/commands/state';
+import { start } from '../start';
+
+// The commands read the current directory, so they run from a temp one.
+describe('state and output against a real state file', () => {
+  let dir: string;
+  let cwd: string;
+  let printed: string[];
+
+  const config = () => `
+    variable "greeting" { default = "hi" }
+    resource "local_file" "a" {
+      path = "${path.join(dir, 'a.txt')}"
+      content = "hello"
+    }
+    output "file" { value = "\${local_file.a.id}" }
+  `;
+
+  const newOrchestrator = () => {
+    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
+    engine.registerProvider(new LocalProvider());
+    return engine;
+  };
+
+  const run = async (configContent: string) => {
+    for await (const event of start(newOrchestrator(), configContent)) if (event.type === 'failed') throw event.error;
+  };
+
+  const applyConfig = () => run(config());
+
+  const stored = () => new LocalBackend(dir).read();
+
+  const chained = () => `
+    resource "local_file" "a" {
+      path = "${path.join(dir, 'a.txt')}"
+      content = "hello"
+    }
+    resource "local_file" "b" {
+      path = "${path.join(dir, 'b.txt')}"
+      content = "\${local_file.a.content}"
+    }
+  `;
+
+  beforeEach(async () => {
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-state-cmd-'));
+    cwd = process.cwd();
+    process.chdir(dir);
+    printed = [];
+    const record = (...args: unknown[]) => printed.push(args.join(' '));
+    vi.spyOn(console, 'log').mockImplementation(record);
+    vi.spyOn(console, 'error').mockImplementation(record);
+    // The commands exit the process when they fail, which would take the test runner with it.
+    vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
+  });
+
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    process.chdir(cwd);
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it('lists the resources an apply wrote', async () => {
+    await applyConfig();
+
+    await createStateCommand().parseAsync(['node', 'clay', 'list']);
+
+    expect(printed).toContain('local_file.a');
+  });
+
+  it('shows a resource an apply wrote', async () => {
+    await applyConfig();
+
+    await createStateCommand().parseAsync(['node', 'clay', 'show', 'local_file.a']);
+
+    expect(printed.join('\n')).toContain('# local_file.a:');
+    expect(printed.join('\n')).toContain('resource "local_file" "a" {');
+    expect(printed.join('\n')).toContain('content = "hello"');
+  });
+
+  it('says the state has no resources once rm takes the last one out', async () => {
+    await applyConfig();
+
+    await createStateCommand().parseAsync(['node', 'clay', 'rm', 'local_file.a']);
+    printed.length = 0;
+    await createStateCommand().parseAsync(['node', 'clay', 'list']);
+
+    expect(printed.join('\n')).toContain(`No resources in ${path.join(process.cwd(), 'clay.state.json')}`);
+  });
+
+  it('says where state list looked when there is no state file', async () => {
+    await createStateCommand().parseAsync(['node', 'clay', 'list']);
+
+    expect(printed.join('\n')).toContain(`No state file found at ${path.join(process.cwd(), 'clay.state.json')}`);
+  });
+
+  it('exits 1 and unlocks when rm names a resource the state does not hold', async () => {
+    await applyConfig();
+    const before = await fs.readFile(path.join(dir, 'clay.state.json'), 'utf8');
+
+    await createStateCommand().parseAsync(['node', 'clay', 'rm', 'local_file.missing']);
+
+    expect(process.exit).toHaveBeenCalledWith(1);
+    expect(printed.join('\n')).toContain('Resource not found in state: local_file.missing');
+    expect(await fs.readFile(path.join(dir, 'clay.state.json'), 'utf8')).toBe(before);
+    await expect(fs.access(path.join(dir, 'clay.state.json.lock'))).rejects.toThrow();
+  });
+
+  it('keeps the outputs when rm takes a resource out', async () => {
+    await applyConfig();
+
+    await createStateCommand().parseAsync(['node', 'clay', 'rm', 'local_file.a']);
+
+    const state = await new LocalBackend(dir).read();
+    expect(state.outputs).toEqual({ file: { value: path.join(dir, 'a.txt'), type: types.string } });
+  });
+
+  it('keeps the outputs when mv renames a resource', async () => {
+    await applyConfig();
+
+    await createStateCommand().parseAsync(['node', 'clay', 'mv', 'local_file.a', 'local_file.b']);
+
+    const state = await new LocalBackend(dir).read();
+    expect(state.outputs).toEqual({ file: { value: path.join(dir, 'a.txt'), type: types.string } });
+  });
+
+  it('moves the whole entry with mv, so a later delete finds it', async () => {
+    await applyConfig();
+
+    await createStateCommand().parseAsync(['node', 'clay', 'mv', 'local_file.a', 'local_file.renamed']);
+
+    const moved = await stored();
+    expect(moved.resources['local_file.renamed']).toMatchObject({ resourceType: 'local_file', name: 'renamed', modulePath: [] });
+
+    // The configuration drops the resource; the delete must find the moved entry.
+    await run('');
+    const emptied = await stored();
+    expect(emptied.resources).toEqual({});
+    await expect(fs.access(path.join(dir, 'a.txt'))).rejects.toThrow();
+  });
+
+  it('moves a resource to an instance key with mv, so show and a later delete find it by that key', async () => {
+    await applyConfig();
+
+    await createStateCommand().parseAsync(['node', 'clay', 'mv', 'local_file.a', 'local_file.a["x.y"]']);
+    await createStateCommand().parseAsync(['node', 'clay', 'show', 'local_file.a["x.y"]']);
+
+    const moved = await stored();
+    expect(moved.resources['local_file.a["x.y"]']).toMatchObject({ name: 'a', key: 'x.y' });
+    expect(printed.join('\n')).toContain('# local_file.a["x.y"]:');
+
+    await run('');
+    const emptied = await stored();
+    expect(emptied.resources).toEqual({});
+    await expect(fs.access(path.join(dir, 'a.txt'))).rejects.toThrow();
+  });
+
+  it('takes the instance key off with mv', async () => {
+    await applyConfig();
+
+    await createStateCommand().parseAsync(['node', 'clay', 'mv', 'local_file.a', 'local_file.a[0]']);
+    await createStateCommand().parseAsync(['node', 'clay', 'mv', 'local_file.a[0]', 'local_file.a']);
+
+    const state = await stored();
+    expect(state.resources).toEqual({ 'local_file.a': expect.not.objectContaining({ key: expect.anything() }) });
+  });
+
+  it('moves a resource into a module with mv', async () => {
+    await applyConfig();
+
+    await createStateCommand().parseAsync(['node', 'clay', 'mv', 'local_file.a', 'module.m.local_file.a']);
+
+    const state = await stored();
+    expect(state.resources['module.m.local_file.a']).toMatchObject({ name: 'a', modulePath: [{ name: 'm' }] });
+  });
+
+  // The key is read back from the file, where it must become a plain number again.
+  it('moves a resource into an instance of a module with mv, so show and a later delete find it by that key', async () => {
+    await applyConfig();
+
+    await createStateCommand().parseAsync(['node', 'clay', 'mv', 'local_file.a', 'module.m[0].local_file.a']);
+    await createStateCommand().parseAsync(['node', 'clay', 'show', 'module.m[0].local_file.a']);
+
+    const moved = await stored();
+    expect(moved.resources['module.m[0].local_file.a']).toMatchObject({ name: 'a', modulePath: [{ name: 'm', key: 0 }] });
+    expect(printed.join('\n')).toContain('# module.m[0].local_file.a:');
+
+    await run('');
+    const emptied = await stored();
+    expect(emptied.resources).toEqual({});
+    await expect(fs.access(path.join(dir, 'a.txt'))).rejects.toThrow();
+  });
+
+  it('renames what other resources read from when mv moves one', async () => {
+    await run(chained());
+
+    await createStateCommand().parseAsync(['node', 'clay', 'mv', 'local_file.a', 'local_file.first']);
+
+    const state = await stored();
+    expect(state.resources['local_file.b'].dependencies).toEqual(['local_file.first']);
+  });
+
+  it('forgets what other resources read from it when rm takes one out', async () => {
+    await run(chained());
+
+    await createStateCommand().parseAsync(['node', 'clay', 'rm', 'local_file.a']);
+
+    const state = await stored();
+    expect(state.resources['local_file.b'].dependencies).toEqual([]);
+  });
+
+  it.each([
+    ['renames', 'mv', ['local_file.a', 'local_file.first'], ['local_file.first']],
+    ['forgets', 'rm', ['local_file.a'], []],
+  ])('%s what a deposed object reads from with %s', async (_, command, addresses, dependencies) => {
+    await run(chained());
+    const state = await stored();
+    state.deposed = { 'local_file.b': [{ attributes: state.resources['local_file.b'].attributes, dependencies: ['local_file.a'] }] };
+    await new LocalBackend(dir).write(state);
+
+    await createStateCommand().parseAsync(['node', 'clay', command, ...addresses]);
+
+    const after = await stored();
+    expect(after.deposed?.['local_file.b'][0].dependencies).toEqual(dependencies);
+  });
+
+  it.each(['show', 'rm'])('refuses an address with an empty part, for %s', async (command) => {
+    await applyConfig();
+
+    await createStateCommand().parseAsync(['node', 'clay', command, 'local_file.']);
+
+    const state = await stored();
+
+    expect(printed.join('\n')).toContain('Invalid address "local_file.": a part of it is empty');
+    expect(Object.keys(state.resources)).toEqual(['local_file.a']);
+  });
+
+  it.each(['show', 'rm'])('refuses a name every object has, rather than reading one off the prototype, for %s', async (command) => {
+    await applyConfig();
+
+    await createStateCommand().parseAsync(['node', 'clay', command, 'constructor']);
+
+    const state = await stored();
+    expect(printed.join('\n')).toContain('Invalid address "constructor": an address ends with a type and a name');
+    expect(printed.join('\n')).not.toContain('resource "undefined"');
+    expect(state.resources['local_file.a']).toBeDefined();
+  });
+
+  it.each([
+    ['a source', ['constructor', 'local_file.z'], 'Invalid address "constructor": an address ends with a type and a name'],
+    ['a destination', ['local_file.a', 'constructor'], 'Invalid address "constructor": an address ends with a type and a name'],
+  ])('refuses %s that is a name every object has, for mv', async (_, addresses, message) => {
+    await applyConfig();
+
+    await createStateCommand().parseAsync(['node', 'clay', 'mv', ...addresses]);
+
+    const state = await stored();
+    expect(printed.join('\n')).toContain(message);
+    expect(Object.keys(state.resources)).toEqual(['local_file.a']);
+  });
+
+  it('refuses an mv to a name no configuration can spell, and leaves the state as it was', async () => {
+    await applyConfig();
+    const before = await fs.readFile(path.join(dir, 'clay.state.json'), 'utf8');
+
+    await createStateCommand().parseAsync(['node', 'clay', 'mv', 'local_file.a', 'local_file.has space']);
+
+    expect(process.exit).toHaveBeenCalledWith(1);
+    expect(printed.join('\n')).toContain('Invalid address "local_file.has space": "has space" is not a name');
+    expect(await fs.readFile(path.join(dir, 'clay.state.json'), 'utf8')).toBe(before);
+  });
+
+  it('refuses an mv that changes the type', async () => {
+    await applyConfig();
+
+    await createStateCommand().parseAsync(['node', 'clay', 'mv', 'local_file.a', 'random_string.a']);
+
+    expect(printed.join('\n')).toContain('Cannot move local_file.a to random_string.a: the type changes');
+    const state = await stored();
+    expect(state.resources['local_file.a']).toBeDefined();
+  });
+
+  it('reads what the engine wrote for output', async () => {
+    await applyConfig();
+
+    await createOutputCommand().parseAsync(['node', 'clay', '--json']);
+
+    expect(JSON.parse(printed.join('\n'))).toEqual({ file: { value: path.join(dir, 'a.txt'), type: { kind: 'string' } } });
+  });
+
+  it('does not take a variable for an output', async () => {
+    const onlyAVariable = 'variable "greeting" { default = "hi" }';
+    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
+    engine.registerProvider(new LocalProvider());
+    for await (const event of start(engine, onlyAVariable)) if (event.type === 'failed') throw event.error;
+
+    await createOutputCommand().parseAsync(['node', 'clay']);
+
+    expect(printed.join('\n')).toContain('No outputs found');
+  });
+
+  it('says where output looked when there is no state file', async () => {
+    await createOutputCommand().parseAsync(['node', 'clay']);
+
+    expect(printed.join('\n')).toContain(`No state file found at ${path.join(process.cwd(), 'clay.state.json')}`);
+  });
+});

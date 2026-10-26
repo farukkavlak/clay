@@ -1,0 +1,553 @@
+import { Output, types } from '@clay/contracts';
+import { DiskFiles, Orchestrator } from '@clay/orchestrator';
+import { LocalProvider } from '@clay/provider-local';
+import { LocalBackend, StateManager } from '@clay/state';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import { start } from '../start';
+
+// The CLI reads process.cwd() and parses on import, so these tests drive the orchestrator.
+describe('apply and plan against real files', () => {
+  let dir: string;
+  let orchestrator: Orchestrator;
+
+  const newOrchestrator = () => {
+    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
+    engine.registerProvider(new LocalProvider());
+    return engine;
+  };
+
+  const fileConfig = (content: string) => `
+    resource "local_file" "a" {
+      path = "${path.join(dir, 'a.txt')}"
+      content = "${content}"
+    }
+  `;
+
+  const chained = (content: string) => `
+    resource "local_file" "a" {
+      path = "${path.join(dir, 'a.txt')}"
+      content = "${content}"
+    }
+    resource "local_file" "b" {
+      path = "${path.join(dir, 'b.txt')}"
+      content = "\${local_file.a.content}"
+    }
+  `;
+
+  const apply = async (engine: Orchestrator, config: string) => {
+    let outputs: Record<string, Output> = {};
+    for await (const event of start(engine, config)) {
+      if (event.type === 'failed') throw event.error;
+      if (event.type === 'done') outputs = event.outputs;
+    }
+    return outputs;
+  };
+
+  const changes = async (config: string) => {
+    const { actions } = await newOrchestrator().plan(config);
+    return actions.filter((action) => action.type !== 'NO_OP');
+  };
+
+  beforeEach(async () => {
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-e2e-'));
+    orchestrator = newOrchestrator();
+  });
+
+  afterEach(async () => {
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it('creates the file and records it in state', async () => {
+    await apply(orchestrator, fileConfig('hello'));
+
+    expect(await fs.readFile(path.join(dir, 'a.txt'), 'utf8')).toBe('hello');
+    const state = await new LocalBackend(dir).read();
+    expect(Object.keys(state.resources)).toEqual(['local_file.a']);
+  });
+
+  it('plans a create before the first apply', async () => {
+    const actions = await changes(fileConfig('hello'));
+
+    expect(actions.map((action) => action.type)).toEqual(['CREATE']);
+  });
+
+  it('plans no changes right after an apply', async () => {
+    await apply(orchestrator, fileConfig('hello'));
+
+    expect(await changes(fileConfig('hello'))).toEqual([]);
+  });
+
+  it('plans no changes when the config uses a variable', async () => {
+    const config = `
+      variable "greeting" { default = "Hello" }
+      resource "local_file" "a" {
+        path = "${path.join(dir, 'a.txt')}"
+        content = "\${var.greeting} Clay!"
+      }
+    `;
+    await apply(orchestrator, config);
+
+    expect(await changes(config)).toEqual([]);
+  });
+
+  it('plans a create when one resource reads a value the other has not produced yet', async () => {
+    const config = `
+      resource "local_file" "a" {
+        path = "${path.join(dir, 'a.txt')}"
+        content = "hello"
+      }
+      resource "local_file" "b" {
+        path = "${path.join(dir, 'b.txt')}"
+        content = "\${local_file.a.id}"
+      }
+    `;
+
+    const actions = await changes(config);
+
+    expect(actions.map((action) => action.type)).toEqual(['CREATE', 'CREATE']);
+  });
+
+  it('plans, instead of failing, when a reference reads an attribute the state does not have yet', async () => {
+    const withTriggers = `
+      resource "null_resource" "a" { triggers = { v = "1" } }
+      resource "null_resource" "b" { triggers = null_resource.a.triggers }
+    `;
+    await apply(orchestrator, 'resource "null_resource" "a" {}');
+
+    const actions = await changes(withTriggers);
+
+    expect(actions.map((action) => action.type)).toEqual(['UPDATE', 'CREATE']);
+  });
+
+  it('plans an update, not a replacement, when only the content changes', async () => {
+    await apply(orchestrator, fileConfig('hello'));
+
+    const actions = await changes(fileConfig('bye'));
+
+    expect(actions.map((action) => action.type)).toEqual(['UPDATE']);
+    expect(actions[0].changes).toEqual({ content: { old: 'hello', new: 'bye' } });
+  });
+
+  // The plan reads `a`'s new value from the configuration, not from state.
+  it('plans an update for a resource that reads a value changing in the same run, to the value it changes to', async () => {
+    await apply(orchestrator, chained('one'));
+
+    const actions = await changes(chained('two'));
+
+    expect(actions.map((action) => [action.name, action.type])).toEqual([
+      ['a', 'UPDATE'],
+      ['b', 'UPDATE'],
+    ]);
+    expect(actions[1].changes!.content.new).toBe('two');
+  });
+
+  it('writes the new value through to the resource that reads it', async () => {
+    await apply(orchestrator, chained('one'));
+
+    await apply(newOrchestrator(), chained('two'));
+
+    expect(await fs.readFile(path.join(dir, 'b.txt'), 'utf8')).toBe('two');
+  });
+
+  it('rejects a reference to a resource the config does not declare', async () => {
+    const config = `
+      resource "local_file" "a" {
+        path = "${path.join(dir, 'a.txt')}"
+        content = "\${local_file.typo.content}"
+      }
+    `;
+
+    await expect(newOrchestrator().plan(config)).rejects.toThrow('"local_file.typo" is not declared in the configuration');
+  });
+
+  it('names the resources in a dependency cycle, and points at the reference that starts it', async () => {
+    const config = `
+      resource "local_file" "a" {
+        path = "${path.join(dir, 'a.txt')}"
+        content = "\${local_file.b.content}"
+      }
+      resource "local_file" "b" {
+        path = "${path.join(dir, 'b.txt')}"
+        content = "\${local_file.a.content}"
+      }
+    `;
+
+    await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
+      message: 'Dependency cycle detected: local_file.a -> local_file.b -> local_file.a',
+      block: 'resource "local_file" "a"',
+      position: { file: 'main.clay', line: 4, column: 22 },
+    });
+  });
+
+  it('points at the first reference when a block reads the same node twice', async () => {
+    const config = `resource "null_resource" "a" {\n  triggers = {\n    x = null_resource.b.id\n    y = null_resource.b.id\n  }\n}\nresource "null_resource" "b" { triggers = { x = null_resource.a.id } }`;
+
+    await expect(newOrchestrator().plan(config)).rejects.toMatchObject({ position: { file: 'main.clay', line: 3, column: 9 } });
+  });
+
+  // Each run builds its own graph, so a position from an earlier run must not leak in.
+  it('points at a reference in this run, not one an earlier run on the same engine read', async () => {
+    const engine = newOrchestrator();
+    await engine.plan(`resource "null_resource" "b" {}\nresource "null_resource" "a" { triggers = { x = null_resource.b.id } }`);
+
+    await expect(
+      engine.plan(`resource "null_resource" "a" {\n  triggers = { x = null_resource.b.id }\n}\nresource "null_resource" "b" { triggers = { x = null_resource.a.id } }`)
+    ).rejects.toMatchObject({
+      position: { file: 'main.clay', line: 2, column: 20 },
+    });
+  });
+
+  it('points at a resource that reads itself', async () => {
+    const config = `resource "local_file" "a" {\n  path = "a"\n  content = local_file.a.path\n}`;
+
+    await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
+      message: 'Dependency cycle detected: local_file.a -> local_file.a',
+      block: 'resource "local_file" "a"',
+      position: { file: 'main.clay', line: 3, column: 13 },
+    });
+  });
+
+  // The call's input reads an output of the module it calls, and the output reads that input.
+  it('points at a reference in a cycle that runs through a module', async () => {
+    await fs.mkdir(path.join(dir, 'm'));
+    await fs.writeFile(path.join(dir, 'm', 'main.clay'), 'variable "x" {}\noutput "y" { value = var.x }', 'utf8');
+    const config = 'module "m" {\n  source = "./m"\n  x = module.m.y\n}';
+
+    await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
+      message: 'Dependency cycle detected: module.m.var.x -> module.m.output.y -> module.m.var.x',
+      block: 'module "m"',
+      position: { file: 'main.clay', line: 3, column: 7 },
+    });
+  });
+
+  it.each([
+    [
+      'a module call and its output',
+      { 'm/main.clay': 'output "y" { value = 1 }' },
+      'module "m" {\n  source = "./m"\n  count = module.m[0].y\n}',
+      'module.m -> module.m.output.y -> module.m',
+    ],
+    [
+      'a call inside a module',
+      { 'a/main.clay': 'module "b" {\n  source = "../b"\n  count = module.b[0].y\n}', 'b/main.clay': 'output "y" { value = 1 }' },
+      'module "a" { source = "./a" }',
+      'module.a.module.b -> module.a.module.b.output.y -> module.a.module.b',
+    ],
+  ])('spells %s in a cycle as the configuration writes them', async (_, files, config, cycle) => {
+    for (const [file, content] of Object.entries(files)) {
+      await fs.mkdir(path.join(dir, path.dirname(file)), { recursive: true });
+      await fs.writeFile(path.join(dir, file), content, 'utf8');
+    }
+
+    await expect(newOrchestrator().plan(config)).rejects.toThrow(`Dependency cycle detected: ${cycle}`);
+  });
+
+  it('plans an update through a module output when the resource behind it changes', async () => {
+    const moduleConfig = `
+      variable "text" {}
+      resource "local_file" "inner" {
+        path = "${path.join(dir, 'inner.txt')}"
+        content = "\${var.text}"
+      }
+      output "text" { value = "\${local_file.inner.content}" }
+    `;
+    const rootConfig = (text: string) => `
+      module "m" {
+        source = "./m"
+        text = "${text}"
+      }
+      resource "local_file" "c" {
+        path = "${path.join(dir, 'c.txt')}"
+        content = "\${module.m.text}"
+      }
+    `;
+    await fs.mkdir(path.join(dir, 'm'));
+    await fs.writeFile(path.join(dir, 'm', 'main.clay'), moduleConfig);
+    await apply(orchestrator, rootConfig('one'));
+
+    const actions = await changes(rootConfig('two'));
+    expect(actions.map((action) => action.name)).toEqual(['inner', 'c']);
+    expect(actions[1].changes!.content.new).toBe('two');
+
+    await apply(newOrchestrator(), rootConfig('two'));
+
+    expect(await fs.readFile(path.join(dir, 'c.txt'), 'utf8')).toBe('two');
+    expect(await changes(rootConfig('two'))).toEqual([]);
+  });
+
+  it('plans no changes when a resource reads a module output', async () => {
+    await fs.mkdir(path.join(dir, 'm'));
+    await fs.writeFile(path.join(dir, 'm', 'main.clay'), 'output "name" { value = "produced" }');
+    const config = `
+      module "m" { source = "./m" }
+      resource "local_file" "c" {
+        path = "${path.join(dir, 'c.txt')}"
+        content = "\${module.m.name}"
+      }
+    `;
+    await apply(orchestrator, config);
+
+    expect(await changes(config)).toEqual([]);
+  });
+
+  const throughModule = (content: string) => `
+    resource "local_file" "a" {
+      path = "${path.join(dir, 'a.txt')}"
+      content = "${content}"
+    }
+    module "m" {
+      source = "./m"
+      text = "\${local_file.a.content}"
+    }
+  `;
+
+  const writeModule = async () =>
+    fs.writeFile(path.join(dir, 'm', 'main.clay'), `variable "text" {} resource "local_file" "inner" { path = "${path.join(dir, 'inner.txt')}" content = "\${var.text}" }`);
+
+  it('applies a module that reads a resource through its input', async () => {
+    await fs.mkdir(path.join(dir, 'm'));
+    await writeModule();
+
+    await apply(orchestrator, throughModule('one'));
+
+    expect(await fs.readFile(path.join(dir, 'inner.txt'), 'utf8')).toBe('one');
+  });
+
+  it('plans and applies a change that reaches a module through its input', async () => {
+    await fs.mkdir(path.join(dir, 'm'));
+    await writeModule();
+    await apply(orchestrator, throughModule('one'));
+
+    const actions = await changes(throughModule('two'));
+    expect(actions.map((action) => action.name)).toEqual(['a', 'inner']);
+
+    await apply(newOrchestrator(), throughModule('two'));
+
+    expect(await fs.readFile(path.join(dir, 'inner.txt'), 'utf8')).toBe('two');
+    expect(await changes(throughModule('two'))).toEqual([]);
+  });
+
+  it('names the variable that is not defined', async () => {
+    const config = `
+      resource "local_file" "a" {
+        path = "${path.join(dir, 'a.txt')}"
+        content = "\${var.missing}"
+      }
+    `;
+
+    await expect(newOrchestrator().plan(config)).rejects.toThrow('variable "missing" is not defined');
+  });
+
+  it('plans no changes for a module named after a graph node kind', async () => {
+    await fs.mkdir(path.join(dir, 'vars'));
+    await fs.writeFile(path.join(dir, 'vars', 'main.clay'), 'output "o" { value = "inner" }');
+    const config = `
+      module "vars" { source = "./vars" }
+      resource "local_file" "b" {
+        path = "${path.join(dir, 'b.txt')}"
+        content = "\${module.vars.o}"
+      }
+    `;
+    await apply(orchestrator, config);
+
+    expect(await changes(config)).toEqual([]);
+  });
+
+  it('writes resolved values, not syntax, into the state outputs', async () => {
+    const config = `
+      variable "greeting" { default = "hello" }
+      module "m" {
+        source = "./m"
+        text = "\${var.greeting}"
+      }
+      output "echo" { value = "\${module.m.echo}" }
+    `;
+    await fs.mkdir(path.join(dir, 'm'));
+    await fs.writeFile(path.join(dir, 'm', 'main.clay'), `variable "text" {} output "echo" { value = "\${var.text}" }`);
+
+    await apply(orchestrator, config);
+
+    const state = await new LocalBackend(dir).read();
+    expect(state.outputs).toEqual({ echo: { value: 'hello', type: types.string } });
+  });
+
+  it('refuses a reference that reaches into a module, as an output the module does not have', async () => {
+    await fs.mkdir(path.join(dir, 'm'));
+    await fs.writeFile(path.join(dir, 'm', 'main.clay'), `resource "local_file" "inner" { path = "${path.join(dir, 'inner.txt')}" content = "x" }`);
+    const config = `
+      module "m" { source = "./m" }
+      resource "local_file" "c" {
+        path = "${path.join(dir, 'c.txt')}"
+        content = "\${module.m.local_file.inner.content}"
+      }
+    `;
+
+    await expect(newOrchestrator().plan(config)).rejects.toThrow('module "m" has no output "local_file"');
+  });
+
+  it('plans one replacement when a forceNew attribute changes', async () => {
+    await apply(orchestrator, fileConfig('hello'));
+    const moved = fileConfig('hello').replace('a.txt', 'moved.txt');
+
+    const actions = await changes(moved);
+
+    expect(actions.map((action) => action.type)).toEqual(['REPLACE']);
+  });
+
+  it('keeps a replaced resource in state and settles on the next plan', async () => {
+    await apply(orchestrator, fileConfig('hello'));
+    const moved = fileConfig('hello').replace('a.txt', 'moved.txt');
+
+    await apply(newOrchestrator(), moved);
+
+    const files = await fs.readdir(dir);
+    expect(files.filter((name) => name.endsWith('.txt'))).toEqual(['moved.txt']);
+    const state = await new LocalBackend(dir).read();
+    expect(state.resources['local_file.a'].attributes.id).toBe(path.join(dir, 'moved.txt'));
+    expect(await changes(moved)).toEqual([]);
+  });
+
+  it('drops an attribute from state when the config drops it', async () => {
+    const bare = 'resource "null_resource" "a" {}';
+    await apply(orchestrator, 'resource "null_resource" "a" { triggers = { v = "1" } }');
+
+    const actions = await changes(bare);
+    expect(actions[0].changes).toEqual({ triggers: { old: { v: '1' }, new: undefined } });
+
+    await apply(newOrchestrator(), bare);
+
+    const state = await new LocalBackend(dir).read();
+    expect(state.resources['null_resource.a'].attributes).not.toHaveProperty('triggers');
+    expect(await changes(bare)).toEqual([]);
+  });
+
+  const destroyedNames = async (config: string) => {
+    const names: string[] = [];
+    for await (const event of start(newOrchestrator(), config)) {
+      if (event.type === 'failed') throw event.error;
+      if (event.type === 'applied' && event.action.type === 'DELETE') names.push(event.action.name);
+    }
+    return names;
+  };
+
+  it('writes down what each resource reads from', async () => {
+    await apply(orchestrator, chained('hello'));
+
+    const state = await new LocalBackend(dir).read();
+    expect(state.resources['local_file.b'].dependencies).toEqual(['local_file.a']);
+    expect(state.resources['local_file.a'].dependencies).toEqual([]);
+  });
+
+  it('deletes a removed resource before the one it read from', async () => {
+    await apply(orchestrator, chained('hello'));
+
+    expect(await destroyedNames('')).toEqual(['b', 'a']);
+  });
+
+  it('deletes the resources of a removed module in reverse dependency order', async () => {
+    const moduleConfig = `
+      resource "local_file" "inner_a" {
+        path = "${path.join(dir, 'inner-a.txt')}"
+        content = "hello"
+      }
+      resource "local_file" "inner_b" {
+        path = "${path.join(dir, 'inner-b.txt')}"
+        content = "\${local_file.inner_a.content}"
+      }
+    `;
+    await fs.mkdir(path.join(dir, 'm'));
+    await fs.writeFile(path.join(dir, 'm', 'main.clay'), moduleConfig);
+    await apply(orchestrator, 'module "m" { source = "./m" }');
+
+    expect(await destroyedNames('')).toEqual(['inner_b', 'inner_a']);
+  });
+
+  it('writes down a new dependency even when no value changes', async () => {
+    const viaVariable = chained('hello').replace(`"\${local_file.a.content}"`, `"\${var.text}"`) + `\nvariable "text" { default = "hello" }`;
+    await apply(orchestrator, viaVariable);
+    const before = await new LocalBackend(dir).read();
+    expect(before.resources['local_file.b'].dependencies).toEqual([]);
+
+    await apply(newOrchestrator(), chained('hello'));
+
+    const state = await new LocalBackend(dir).read();
+    expect(state.resources['local_file.b'].dependencies).toEqual(['local_file.a']);
+  });
+
+  it('deletes a resource whose state predates dependencies', async () => {
+    await apply(orchestrator, chained('hello'));
+    const backend = new LocalBackend(dir);
+    const state = await backend.read();
+    for (const resource of Object.values(state.resources)) delete resource.dependencies;
+    await backend.write(state);
+
+    // With no dependencies recorded both are deleted together, so either may finish first.
+    expect([...(await destroyedNames(''))].sort()).toEqual(['a', 'b']);
+  });
+
+  // b's path is under a file, so its create fails after a's succeeds; it reads a, so it runs after it.
+  const secondFails = () => `
+    resource "local_file" "a" {
+      path = "${path.join(dir, 'a.txt')}"
+      content = "hello"
+    }
+    resource "local_file" "b" {
+      path = "${path.join(dir, 'a.txt', 'b.txt')}"
+      content = local_file.a.content
+    }
+  `;
+
+  it('keeps what a failed run managed to do', async () => {
+    await expect(apply(orchestrator, secondFails())).rejects.toThrow();
+
+    const state = await new LocalBackend(dir).read();
+    expect(Object.keys(state.resources)).toEqual(['local_file.a']);
+    const actions = await changes(secondFails());
+    expect(actions.map((action) => action.name)).toEqual(['b']);
+  });
+
+  it('reports each step as it goes and stops at the one that fails', async () => {
+    const events: string[] = [];
+    for await (const event of start(orchestrator, secondFails()))
+      events.push(event.type === 'planned' || event.type === 'done' || event.type === 'read' ? event.type : `${event.type} ${event.action.name}`);
+
+    expect(events).toEqual(['planned', 'started a', 'applied a', 'started b', 'failed b']);
+  });
+
+  const lockFile = () => path.join(dir, 'clay.state.json.lock');
+
+  it('refuses a second run while one holds the state', async () => {
+    const first = start(orchestrator, fileConfig('hello'));
+    await first.next();
+
+    await expect(apply(newOrchestrator(), fileConfig('hello'))).rejects.toThrow('locked by another run');
+
+    await first.return(undefined);
+  });
+
+  it('releases the lock when a run finishes', async () => {
+    await apply(orchestrator, fileConfig('hello'));
+
+    await expect(fs.access(lockFile())).rejects.toThrow();
+  });
+
+  it('releases the lock when a run fails', async () => {
+    await expect(apply(orchestrator, secondFails())).rejects.toThrow();
+
+    await expect(fs.access(lockFile())).rejects.toThrow();
+  });
+
+  it('holds the lock while running and releases it when the caller stops reading', async () => {
+    const run = start(orchestrator, fileConfig('hello'));
+    await run.next();
+    await expect(fs.access(lockFile())).resolves.toBeUndefined();
+
+    await run.return(undefined);
+
+    await expect(fs.access(lockFile())).rejects.toThrow();
+  });
+});

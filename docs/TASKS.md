@@ -1172,7 +1172,7 @@ Nothing here changes what Clay does. Each is a place the next change has to work
 - [x] `orchestrator/src` holds 39 files side by side. `components/` names nothing, and
       `applyGraph.ts` above it imports from it
 - [x] Most of `Value.ts` is the arithmetic of sensitive marks, not the value itself
-- [ ] `cli/tests/e2e` holds 99 files in one folder
+- [x] `cli/tests/e2e` holds 99 files in one folder
 - [ ] `Parser.ts` parses blocks, values and types in one class of about 70 methods
 - [ ] `ReferenceResolver.ts` reads references, `for` expressions, operators and templates
       in one class of 900 lines
@@ -1198,7 +1198,7 @@ Nothing here changes what Clay does. Each is a place the next change has to work
       rather than state reasons
 - [ ] `describe` titles say "Phase 4" and "Phase 5", which mean nothing in the repo
 - [ ] `ApplyPlan.spec.ts` says the CLI parses on import, so its tests drive the
-      orchestrator, and ten other specs in the same folder run the CLI
+      orchestrator, while ten other e2e specs run the CLI
 - [ ] `Graph.spec.ts` asserts the flattened list of a simple sort, `sorted.flat()`, where
       the layers are deterministic and should be asserted
 - [ ] Regression tests explain what used to happen; a comment says what the test pins
@@ -1233,8 +1233,9 @@ Nothing here changes what Clay does. Each is a place the next change has to work
 - [ ] `toBeDefined()` alone pins nothing in `State.spec.ts`, `StateCommands.spec.ts`,
       `DataSources.spec.ts`, `ModuleDataFlow.spec.ts`, `Planner.spec.ts` and
       `LocalProvider.spec.ts`
-- [ ] 52 of the 82 e2e specs define the same `newOrchestrator` and register the local
-      provider themselves; only `start.ts` is shared
+- [ ] 62 of the 99 e2e specs define `newOrchestrator` and register the local provider
+      themselves, in 14 forms; only `start.ts` is shared. `placeOf`, `clayIn` and
+      `errorOf` are copied word for word into 19, 12 and 7 specs
 - [ ] Each package's coverage counts what its tests import from other packages, so
       `contracts` shows 64% with code the e2e tests cover. CI holds no threshold
 - [ ] Old test titles read `should ...` beside the plain sentences of the rest
