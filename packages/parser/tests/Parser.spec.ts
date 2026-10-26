@@ -1564,6 +1564,25 @@ describe('Clay Parser', () => {
       });
     });
 
+    it.each([
+      ['a collection', 'list(string,)', types.list(types.string)],
+      ['an optional attribute', 'object({ a = optional(number, 1,) })', types.object({ a: types.number }, ['a'])],
+    ])('takes a comma after the last argument of %s, as a call does', (_, written, type) => {
+      const [variable] = makeParser(`variable "v" { type = ${written} }`).parse() as VariableBlock[];
+
+      expect(variable.valueType).toEqual(type);
+    });
+
+    it('refuses a quoted attribute at its turn, after a wrong word before it', () => {
+      expect(errorOf('variable "v" { type = object({ a = strin, "b" = string }) }').message).toContain('"strin" is not a type');
+    });
+
+    it('takes a type in parentheses, as it takes any value', () => {
+      const [variable] = makeParser('variable "v" { type = (list((string))) }').parse() as VariableBlock[];
+
+      expect(variable.valueType).toEqual(types.list(types.string));
+    });
+
     it('keeps no defaults where an optional attribute names none', () => {
       const [variable] = makeParser('variable "v" { type = object({ a = optional(string) }) }').parse() as VariableBlock[];
 
@@ -1579,19 +1598,30 @@ describe('Clay Parser', () => {
     it.each([
       ['a quoted type', '"string"', 'A type is written without quotes: string, not "string"', at(1, 23)],
       ['a misspelled type', 'list(strin)', '"strin" is not a type', at(1, 28)],
-      ['a type that holds none given one', 'string(number)', "string holds no other type, so it takes no '('", at(1, 29)],
-      ['a collection without its element', 'list', "Expect '(' after list.", at(2, 1)],
-      ['an unclosed collection', 'map(string', "Expect ')' after the type map holds.", at(2, 1)],
+      ['a type that holds none given one', 'string(number)', "string holds no other type, so it takes no '('", at(1, 23)],
+      ['a collection without its element', 'list', "Expect '(' after list.", at(1, 23)],
+      ['an unclosed collection', 'map(string', "Expect ')' after the arguments.", at(2, 1)],
       ['a tuple without brackets', 'tuple(string)', "Expect '[' after 'tuple('.", at(1, 29)],
-      ['tuple types without a comma between', 'tuple([string number])', "Expect ']' after the types in a tuple.", at(1, 37)],
+      ['tuple types without a comma between', 'tuple([string number])', "Expect ']' after list.", at(1, 37)],
       ['an object without braces', 'object(string)', "Expect '{' after 'object('.", at(1, 30)],
       ['an object attribute named twice', 'object({ a = string, a = number })', 'a is set twice', at(1, 44)],
       ['an object attribute named __proto__', 'object({ __proto__ = string })', '__proto__ cannot be a name', at(1, 32)],
       ['a value where a type goes', '1', 'Expect a type: string, number, bool, any', at(1, 23)],
+      ['a collection given no type', 'list()', 'Expect a type: string, number, bool, any', at(1, 23)],
+      ['a collection given two types', 'list(string, number)', "Expect ')' after the type list holds.", at(1, 36)],
+      ['an interpolation where a type goes', '"${x}"', 'A type is written without quotes: string, not "string"', at(1, 23)],
+      ['an operator in a type', 'string + 1', 'A type takes no operator', at(1, 30)],
+      ['a conditional where a type goes', 'string ? number : bool', 'A type is written out, not chosen by a conditional', at(1, 23)],
+      ['a step after a type', 'string.foo', 'A type is a name or a call written alone, with no "." or "[" after it', at(1, 23)],
+      ['an index after a type', 'list(string)[0]', 'A type is a name or a call written alone, with no "." or "[" after it', at(1, 23)],
+      ['a for where a tuple lists its types', 'tuple([for x in [1] : string])', 'A type is written out, not made by a for', at(1, 29)],
+      ['a for where an object names its attributes', 'object({ for k, v in {} : k => v })', 'A type is written out, not made by a for', at(1, 30)],
+      ['an object attribute named in quotes', 'object({ a = number, "b" = string })', 'An object type names its attributes without quotes', at(1, 44)],
       ["optional as a variable's type", 'optional(string)', "optional(...) is written only as the type of an object's attribute", at(1, 23)],
       ['optional as what a list holds', 'list(optional(string))', "optional(...) is written only as the type of an object's attribute", at(1, 28)],
-      ['optional without its type', 'object({ a = optional })', "Expect '(' after optional.", at(1, 45)],
-      ['optional given three arguments', 'object({ a = optional(number, 1, 2) })', "Expect ')' after the type of optional, or its default.", at(1, 54)],
+      ['optional without its type', 'object({ a = optional })', "Expect '(' after optional.", at(1, 36)],
+      ['optional given no type', 'object({ a = optional() })', 'Expect a type: string, number, bool, any', at(1, 36)],
+      ['optional given three arguments', 'object({ a = optional(number, 1, 2) })', "Expect ')' after the type of optional, or its default.", at(1, 56)],
       [
         "a reference in an optional attribute's default",
         'object({ a = optional(number, var.z) })',
@@ -1695,6 +1725,7 @@ describe('Clay Parser', () => {
       ['types', TYPE, deep('list(', 'string', ')'), TYPE.length + 5 * 100 + 1],
       ['function calls given a list', LOCAL, deep('f([', '1', '])'), LOCAL.length + 3 * 100 + 1],
       ['function calls given a map', LOCAL, deep('f({a=', '1', '})'), LOCAL.length + 5 * 100 + 1],
+      ['object types', TYPE, deep('object({a=', 'string', '})'), TYPE.length + 10 * 100 + 1],
       ['lists and maps in turn', LOCAL, inTurn, LOCAL.length + 50 + 3 * 50 + 1],
       ['parentheses', LOCAL, deep('(', '1', ')'), LOCAL.length + 100 + 1],
       ['interpolations', LOCAL, deep('"${', '1', '}"'), LOCAL.length + 3 * 100 + 2],

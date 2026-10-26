@@ -282,16 +282,19 @@ export class ExpressionParser {
     if (this.stream.checkWord('for') && this.stream.ahead(1).type !== TokenType.Assign) return this.parseFor(position, TokenType.RBrace);
 
     const map: Record<string, AttributeValue> = {};
+    const quoted: Record<string, Position> = {};
     while (!this.stream.check(TokenType.RBrace) && !this.stream.isAtEnd()) {
-      const key = this.stream.matchToken(TokenType.OQuote) ? this.stringKey(this.stream.previous()) : this.stream.consume(TokenType.Identifier, 'Expect key in map.');
+      const inQuotes = this.stream.matchToken(TokenType.OQuote);
+      const key = inQuotes ? this.stringKey(this.stream.previous()) : this.stream.consume(TokenType.Identifier, 'Expect key in map.');
       checkKey(map, key);
+      if (inQuotes) quoted[key.value] = key.position;
 
       this.stream.consume(TokenType.Assign, "Expect '=' after key in map.");
       map[key.value] = this.parseValue();
       this.stream.matchToken(TokenType.Comma);
     }
     this.stream.consume(TokenType.RBrace, "Expect '}' after map.");
-    return { type: 'Map', value: map, position };
+    return { type: 'Map', value: map, ...(Object.keys(quoted).length > 0 && { quoted }), position };
   }
 
   /** Escapes are decoded, so one key spelled two ways is still one key. */

@@ -66,7 +66,8 @@ export type AttributeValue =
   | NegateNode
   | ConditionalNode
   | (Node & { type: 'List'; value: AttributeValue[] })
-  | (Node & { type: 'Map'; value: Record<string, AttributeValue> });
+  /** `quoted` holds the keys written in quotes, at their quote, and is left out where none is. */
+  | (Node & { type: 'Map'; value: Record<string, AttributeValue>; quoted?: Record<string, Position> });
 
 /** An attribute, then the keys and indexes below it, as written in `ignore_changes`. */
 export interface IgnoredPath {
