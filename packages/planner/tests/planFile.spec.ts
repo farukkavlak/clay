@@ -219,10 +219,8 @@ describe('reading a plan file', () => {
   it.each([
     ['a number', 5],
     ['text that is no address', 'nowhere'],
-    ['another resource', 'local_file.x'],
-    ['an index other than the first', 'module.m[0].null_resource.a[1]'],
-    ['another instance of its module', 'module.m[1].null_resource.a'],
-    ['the resource outside its module', 'null_resource.a'],
+    ['another type', 'local_file.x'],
+    ['its own address', 'module.m[0].null_resource.a[0]'],
   ])('refuses a move from %s', (_, movedFrom) => {
     const content = { ...fields(), actions: [{ type: 'NO_OP', resourceType: 'null_resource', name: 'a', modulePath: [{ name: 'm', key: 0 }], key: 0, movedFrom }] };
 
@@ -240,7 +238,7 @@ describe('reading a plan file', () => {
     expect(read(content)).toThrow(/^tfplan\.json is not a plan file$/);
   });
 
-  it('reads a move each way back as it was written', () => {
+  it('reads a move from any other address of its type back as it was written', () => {
     const plan: Plan = {
       serial: 0,
       prevRun: {},
@@ -254,6 +252,7 @@ describe('reading a plan file', () => {
         { type: 'NO_OP', resourceType: 'null_resource', name: 'c', modulePath: [{ name: 'm', key: 1 }], key: 0, movedFrom: 'module.m[1].null_resource.c' },
         { type: 'NO_OP', resourceType: 'null_resource', name: 'd', modulePath: [{ name: 'm', key: 0 }], movedFrom: 'module.m.null_resource.d' },
         { type: 'NO_OP', resourceType: 'null_resource', name: 'e', modulePath: [{ name: 'm' }], movedFrom: 'module.m[0].null_resource.e[0]' },
+        { type: 'DELETE', resourceType: 'null_resource', name: 'f', key: 'x', movedFrom: 'module.n.null_resource.g[1]' },
       ],
       outputs: {},
     };
@@ -264,6 +263,7 @@ describe('reading a plan file', () => {
       'module.m[1].null_resource.c',
       'module.m.null_resource.d',
       'module.m[0].null_resource.e[0]',
+      'module.n.null_resource.g[1]',
     ]);
   });
 

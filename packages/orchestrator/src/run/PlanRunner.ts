@@ -24,6 +24,7 @@ import { outputOf, Value } from '../values/Value';
 import { ActionExecutor, Running } from './ActionExecutor';
 import { LoadedConfig } from './ConfigLoader';
 import { DataSourceReader } from '../plan/DataSourceReader';
+import { checkMovedFrom, movesIn } from '../plan/moves';
 import { GraphNode, LocalNode, OutputNode, ValueNode } from '../graph/DependencyGraphBuilder';
 
 function undeclared(address: Address | string): Error {
@@ -89,6 +90,7 @@ export class PlanRunner {
     const outputs = this.plannedOutputs(saved, state);
     this.checkOutputsMatch(outputs, config.mainProgram);
     const checked = { outputs, named: this.dataNamed(saved, graph) };
+    checkMovedFrom(actions, movesIn(config.loadedModules), state);
     // Every move first, as the plan made them, so each entry and every dependency on it is at its new address.
     for (const action of actions) if (action.movedFrom) moveResource(state, Address.parse(action.movedFrom), Address.of(action));
     this.executor.expect(actions, state);

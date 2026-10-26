@@ -66,13 +66,12 @@ function addressOf(action: Record<string, unknown>): Address {
   return Address.of(action as Pick<Resource, 'modulePath' | 'resourceType' | 'name' | 'key'>);
 }
 
-/** A move may only come from the action's own resource under its count counterpart. */
+/** A move comes from another address of the same type; which moves the configuration makes is checked when it is applied. */
 function isMovedFrom(action: Record<string, unknown>): boolean {
-  if (action.movedFrom === undefined) return true;
+  const { movedFrom } = action;
+  if (movedFrom === undefined) return true;
 
-  return addressOf(action)
-    .countCounterparts()
-    .some((kept) => kept.toString() === action.movedFrom);
+  return typeof movedFrom === 'string' && isAddress(movedFrom) && Address.parse(movedFrom).resourceType === action.resourceType && movedFrom !== addressOf(action).toString();
 }
 
 const SENDS_VALUES = new Set<ActionType>(['CREATE', 'UPDATE', 'REPLACE']);

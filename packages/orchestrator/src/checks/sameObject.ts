@@ -70,7 +70,7 @@ function destroysWhatStays(staying: Staying, thing: string, going: Going): Error
   const { address } = staying;
   const holder = going.deposed ? `a deposed object of ${going.address}` : going.address;
   const renamed = !going.deposed && going.action.type === 'DELETE' && staying.created;
-  const move = renamed ? ` If ${going.address} was renamed to ${address}, move it in the state first: clay state mv ${going.address} ${address}` : '';
+  const move = renamed ? ` If ${going.address} was renamed to ${address}, say so in the root module: moved { from = ${going.address} to = ${address} }` : '';
 
   return staying.refuse(`${address} is ${thing}, which ${holder} holds and this plan destroys, so the destroy would remove it.${move}`);
 }

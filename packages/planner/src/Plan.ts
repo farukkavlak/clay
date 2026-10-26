@@ -17,8 +17,6 @@ export interface DesiredResource {
   preventDestroy?: true;
   /** Its block says so, or a block that reads it does: a replace makes the new object first. */
   createBeforeDestroy?: true;
-  /** Its state address before count was added or removed; the state it was planned against already has the move. */
-  movedFrom?: string;
 }
 
 /** An undefined `old` means added, an undefined `new` means removed. */
@@ -32,7 +30,7 @@ export interface PlanAction {
   name: string;
   modulePath?: readonly ModuleStep[];
   key?: InstanceKey;
-  /** Its state address before count was added or removed; the move runs before the action. */
+  /** Its state address before a moved block, or a count that came or went, moved it; the move runs before the action. */
   movedFrom?: string;
   /** Apply resolves the attributes again and checks each known value against these. */
   planned?: Record<string, unknown>;

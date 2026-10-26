@@ -1,4 +1,4 @@
-import { ExactNumber, Type } from '@clay/contracts';
+import { Address, ExactNumber, Type } from '@clay/contracts';
 import { Position } from './Position';
 import { spellReference, spellSteps, Step } from './reference';
 
@@ -173,13 +173,22 @@ export interface LocalBlock extends Node {
   value: AttributeValue;
 }
 
-export type Statement = ResourceBlock | VariableBlock | OutputBlock | DataBlock | ModuleBlock | LocalBlock;
+/** The state of `from` is now that of `to`, both in the module that declares it. */
+export interface MovedBlock extends Node {
+  type: 'Moved';
+  /** With no key on either side, every instance of the resource moves, each to the same key. */
+  from: Address;
+  to: Address;
+}
+
+export type Statement = ResourceBlock | VariableBlock | OutputBlock | DataBlock | ModuleBlock | LocalBlock | MovedBlock;
 export type Program = Statement[];
 
-/** `resource "local_file" "a"`, `module "m"`. */
+/** `resource "local_file" "a"`, `module "m"`, `moved from local_file.a`. */
 export function spell(statement: Statement): string {
   if (statement.type === 'Resource') return `resource "${statement.resourceType}" "${statement.name}"`;
   if (statement.type === 'Data') return `data "${statement.dataSourceType}" "${statement.name}"`;
+  if (statement.type === 'Moved') return `moved from ${statement.from}`;
   return `${statement.type.toLowerCase()} "${statement.name}"`;
 }
 

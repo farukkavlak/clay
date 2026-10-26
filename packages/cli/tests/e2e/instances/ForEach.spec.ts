@@ -197,7 +197,7 @@ describe('a resource with for_each', () => {
     expect(deleted).toEqual(['reader', 'f', 'f']);
   });
 
-  // No key matches the bare resource as count's [0] does, so nothing moves; `clay state mv` can.
+  // No key matches the bare resource as count's [0] does, so nothing moves; a moved block can.
   it.each([
     ['one with neither', '', undefined],
     ['one with count', 'count = 1', 0],
