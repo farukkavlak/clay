@@ -1,0 +1,205 @@
+import { Address, Schema, State, STATE_VERSION, types, UNKNOWN } from '@clay/contracts';
+import { parseReference, ResourceReference } from '@clay/parser';
+import { describe, expect, it } from 'vitest';
+
+import { Instances } from '../../../src/instances/Instances';
+import { Planned } from '../../../src/values/Planned';
+import { ResourceResolver } from '../../../src/expressions/references/ResourceResolver';
+import { UnresolvedReferenceError } from '../../../src/expressions/UnresolvedReferenceError';
+import { valueOf } from '../../../src/values/Value';
+import { steps } from '../../ast';
+
+const ref = (spelled: string) => parseReference(steps(...spelled.split('.'))) as ResourceReference;
+
+const held = (id: string, tags: Record<string, unknown>) => ({ resourceType: 'item', name: 'a', attributes: { id, tags } });
+
+describe('ResourceResolver', () => {
+  const resolver = new ResourceResolver(new Instances(), new Planned(), new Map());
+  const context = Address.root('resource', 'main');
+
+  const mockState: State = {
+    version: STATE_VERSION,
+    serial: 0,
+    resources: {
+      'resource.test': {
+        resourceType: 'resource',
+        name: 'test',
+        attributes: {
+          id: 'res-123',
+          simple: 'value',
+          settings: { type: 'a', value: 'b' },
+        },
+      },
+    },
+  };
+
+  it('should resolve simple attribute', () => {
+    const { value: result } = resolver.resolve(ref('resource.test.simple'), context, mockState);
+    expect(result).toEqual(valueOf(types.string, 'value'));
+  });
+
+  // No schema names its type, so it is inferred from the data.
+  it('should return a map from state as it is, keys named type and value included, as an object', () => {
+    const { value: result } = resolver.resolve(ref('resource.test.settings'), context, mockState);
+    expect(result).toEqual(valueOf(types.object({ type: types.string, value: types.string }), { type: 'a', value: 'b' }));
+  });
+
+  it('reads a value as the type its schema names', () => {
+    const schemas = new Map<string, Schema>([['resource', { settings: { type: types.map(types.string) } }]]);
+    const { value: result } = new ResourceResolver(new Instances(), new Planned(), schemas).resolve(ref('resource.test.settings'), context, mockState);
+
+    expect(result).toEqual(valueOf(types.map(types.string), { type: 'a', value: 'b' }));
+  });
+
+  it('reads the id as it reads any value the resource holds', () => {
+    const { value: result } = resolver.resolve(ref('resource.test.id'), context, mockState);
+    expect(result.data).toBe('res-123');
+  });
+
+  it('should throw if resource not found', () => {
+    expect(() => resolver.resolve(ref('resource.missing.id'), context, mockState)).toThrow(/Resource "resource.missing" not found/);
+  });
+
+  // State holds every attribute, so an unknown name is refused at plan, where it is written.
+  it.each(['missing', 'toString', 'constructor', 'hasOwnProperty'])('refuses %s, which state does not hold', (name) => {
+    const position = { file: 'main.clay', line: 3, column: 7 };
+    const read = () => resolver.resolve(ref(`resource.test.${name}`), context, mockState, position);
+
+    expect(read).toThrow(expect.objectContaining({ message: `resource has no attribute "${name}"`, position }));
+    expect(read).not.toThrow(UnresolvedReferenceError);
+  });
+
+  // A schema attribute missing from state was left out.
+  it('reads a name its schema has and state does not hold as null, of the type the schema names', () => {
+    const named = new ResourceResolver(new Instances(), new Planned(), new Map([['resource', { note: { type: types.string } }]]));
+
+    expect(named.resolve(ref('resource.test.note'), context, mockState).value).toEqual(valueOf(types.string, null));
+  });
+
+  it('reads each attribute with the parts of it the state says are sensitive', () => {
+    const state = { ...mockState, resources: { 'resource.test': { ...mockState.resources['resource.test'], sensitive: [['simple'], ['settings', 'value']] } } };
+    const read = (spelled: string) => resolver.resolve(ref(spelled), context, state).value.sensitive;
+
+    expect(read('resource.test.simple')).toEqual([[]]);
+    expect(read('resource.test.settings')).toEqual([['value']]);
+    expect(read('resource.test.id')).toBeUndefined();
+  });
+
+  // A resource the plan creates or changes is read from the plan, not state.
+  describe('an instance the plan will create or change', () => {
+    const planned = new Planned();
+    planned.set('resource.test', { simple: 'new', later: UNKNOWN, made: UNKNOWN }, [], true);
+    const planning = new ResourceResolver(new Instances(), planned, new Map([['resource', { made: { type: types.list(types.string), computed: true } }]]));
+
+    it('reads what its configuration sets, not what state holds', () => {
+      expect(planning.resolve(ref('resource.test.simple'), context, mockState).value.data).toBe('new');
+    });
+
+    it('reads each attribute with the parts of it the plan says are sensitive, whatever the state says', () => {
+      const marked = new Planned();
+      marked.set('resource.test', { simple: 'new', settings: { type: 'a', value: UNKNOWN } }, [['simple'], ['settings', 'value']], true);
+      const state = { ...mockState, resources: { 'resource.test': { ...mockState.resources['resource.test'], sensitive: [['id']] } } };
+      const read = (spelled: string) => new ResourceResolver(new Instances(), marked, new Map([['resource', {}]])).resolve(ref(spelled), context, state).value.sensitive;
+
+      expect(read('resource.test.simple')).toEqual([[]]);
+      expect(read('resource.test.settings')).toEqual([['value']]);
+      expect(read('resource.test.id')).toBeUndefined();
+    });
+
+    // It comes back unknown, so the caller can take the remaining steps.
+    it.each([
+      ['a value its configuration does not know yet', 'resource.test.later', types.dynamic],
+      ['a value its provider computes', 'resource.test.made', types.list(types.string)],
+    ])('reads %s as not known yet, with the type its schema names', (_, spelled, type) => {
+      expect(planning.resolve(ref(spelled), context, mockState).value).toEqual(valueOf(type, UNKNOWN));
+    });
+
+    // Nothing sets it, so it reads as null.
+    it('reads a name its schema has and nothing sets as null, of the type the schema names', () => {
+      const named = new ResourceResolver(new Instances(), planned, new Map([['resource', { note: { type: types.string } }]]));
+
+      expect(named.resolve(ref('resource.test.note'), context, mockState).value).toEqual(valueOf(types.string, null));
+    });
+  });
+
+  describe('every instance of a block with count or for_each', () => {
+    const schemas = new Map<string, Schema>([['item', { id: { type: types.string, computed: true }, tags: { type: types.map(types.dynamic) } }]]);
+    const item = types.object({ id: types.string, tags: types.map(types.dynamic) });
+    const state: State = {
+      version: STATE_VERSION,
+      serial: 0,
+      resources: {
+        'item.a[0]': held('zero', { n: 'text' }),
+        'item.a[1]': held('one', { n: true }),
+        'item.a["x"]': held('ex', {}),
+      },
+    };
+
+    const read = (instances: Instances, planned = new Planned()) => new ResourceResolver(instances, planned, schemas).resolve(ref('item.a'), context, state);
+
+    const counted = (count: number) => {
+      const instances = new Instances();
+      instances.declare('item.a', 'count');
+      instances.setCount('item.a', count);
+      return instances;
+    };
+
+    // Each instance keeps what its own tags hold; the list's type is the schema's.
+    it('reads a list in index order under count, one object of the schema for each instance', () => {
+      expect(read(counted(2))).toEqual({
+        value: valueOf(types.list(item), [
+          { id: 'zero', tags: { n: 'text' } },
+          { id: 'one', tags: { n: true } },
+        ]),
+        path: [],
+      });
+    });
+
+    it('reads a map by key under for_each', () => {
+      const instances = new Instances();
+      instances.declare('item.a', 'for_each');
+      instances.setEach('item.a', new Map([['x', valueOf(types.string, 'x')]]));
+
+      expect(read(instances).value).toEqual(valueOf(types.map(item), { x: { id: 'ex', tags: {} } }));
+    });
+
+    it('reads every instance with the sensitive parts of each, under its index or its key', () => {
+      const marked = {
+        ...state,
+        resources: { ...state.resources, 'item.a[1]': { ...held('one', { n: true }), sensitive: [['tags', 'n']] }, 'item.a["x"]': { ...held('ex', {}), sensitive: [['id']] } },
+      };
+      const each = new Instances();
+      each.declare('item.a', 'for_each');
+      each.setEach('item.a', new Map([['x', valueOf(types.string, 'x')]]));
+      const all = (instances: Instances) => new ResourceResolver(instances, new Planned(), schemas).resolve(ref('item.a'), context, marked).value.sensitive;
+
+      expect(all(counted(2))).toEqual([[1, 'tags', 'n']]);
+      expect(all(each)).toEqual([['x', 'id']]);
+      expect(read(counted(2)).value.sensitive).toBeUndefined();
+    });
+
+    it('reads an empty list where count is 0', () => {
+      expect(read(counted(0)).value).toEqual(valueOf(types.list(item), []));
+    });
+
+    it('reads an instance the plan creates from the plan, with what only the apply makes as unknown', () => {
+      const planned = new Planned();
+      planned.set('item.a[1]', { id: UNKNOWN, tags: { n: 'new' } }, [], true);
+
+      expect(read(counted(2), planned).value.data).toEqual([
+        { id: 'zero', tags: { n: 'text' } },
+        { id: UNKNOWN, tags: { n: 'new' } },
+      ]);
+    });
+
+    // Its type is known, so what reads it is still checked.
+    it.each([
+      ['its count is not read yet', new Instances()],
+      ['one instance is in neither the plan nor state', counted(3)],
+    ])('is not known yet where %s, and keeps its type', (_, instances) => {
+      instances.declare('item.a', 'count');
+
+      expect(() => read(instances)).toThrow(expect.objectContaining({ constructor: UnresolvedReferenceError, type: types.list(item) }));
+    });
+  });
+});

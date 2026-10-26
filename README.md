@@ -178,6 +178,21 @@ the same value.
 | `cli`            | The `clay` command                                             |
 | `provider-local` | `local_file`, `random_string`, `null_resource`, `command_exec` |
 
+Inside `orchestrator/src`, a folder imports only from the folders above it. `index.ts` is
+the way in; the other files beside the folders are shared by all:
+
+| Folder        | Does                                                         |
+| ------------- | ------------------------------------------------------------ |
+| `values`      | Holds a value with its type and sensitive marks, converts it |
+| `config`      | Reads the files, loads the module tree, holds each scope     |
+| `instances`   | Expands `count` and `for_each` into instances                |
+| `providers`   | Calls a provider and checks what it returns                  |
+| `expressions` | Evaluates expressions, functions and operators               |
+| `graph`       | Builds the dependency graph from the blocks                  |
+| `plan`        | Plans each resource and orders the apply                     |
+| `checks`      | Refuses a configuration or a plan before anything runs       |
+| `run`         | Wires one run together, loads it and applies the plan        |
+
 ## Develop
 
 ```sh

@@ -3,25 +3,25 @@ import { Graph } from '@clay/graph';
 import { outputChanges, plan, Plan } from '@clay/planner';
 import { StateManager } from '@clay/state';
 
-import { checkApplyOrder } from './applyGraph';
+import { checkApplyOrder } from './plan/applyGraph';
 import { asError } from './asError';
-import { GraphNode } from './components/DependencyGraphBuilder';
-import { DesiredState, Walk } from './components/DesiredStateBuilder';
-import { checkRead, heldBy, hidingReason } from './providerResult';
-import { checkAttributes } from './checkAttributes';
-import { checkPreventDestroy } from './preventDestroy';
-import { checkSameObjects } from './sameObject';
-import { ConfigFiles } from './ConfigFiles';
-import { ProviderRegistry } from './ProviderRegistry';
-import { newRun, Run } from './Run';
-import { RunEvent } from './RunEvent';
-import { checkParallelism, DEFAULT_PARALLELISM } from './parallelism';
-import { plainOf } from './Value';
+import { GraphNode } from './graph/DependencyGraphBuilder';
+import { DesiredState, Walk } from './plan/DesiredStateBuilder';
+import { checkRead, heldBy, hidingReason } from './providers/providerResult';
+import { checkAttributes } from './checks/checkAttributes';
+import { checkPreventDestroy } from './checks/preventDestroy';
+import { checkSameObjects } from './checks/sameObject';
+import { ConfigFiles } from './config/ConfigFiles';
+import { ProviderRegistry } from './providers/ProviderRegistry';
+import { newRun, Run } from './run/Run';
+import { RunEvent } from './run/RunEvent';
+import { checkParallelism, DEFAULT_PARALLELISM } from './run/parallelism';
+import { plainOf } from './values/Value';
 
-export type { RunEvent } from './RunEvent';
-export { DiskFiles, InMemoryFiles, RecordingFiles } from './ConfigFiles';
-export type { ConfigFiles } from './ConfigFiles';
-export { DEFAULT_PARALLELISM } from './parallelism';
+export type { RunEvent } from './run/RunEvent';
+export { DiskFiles, InMemoryFiles, RecordingFiles } from './config/ConfigFiles';
+export type { ConfigFiles } from './config/ConfigFiles';
+export { DEFAULT_PARALLELISM } from './run/parallelism';
 
 export interface RunOptions {
   /** How many actions of a layer run at once. */

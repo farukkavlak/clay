@@ -1169,7 +1169,7 @@ Nothing here changes what Clay does. Each is a place the next change has to work
       state and its readers, the schema and the provider contract in one file
 - [x] `planner` depends on `parser` only for `DesiredResource.block`, from which it reads
       one flag, `lifecycle.preventDestroy`
-- [ ] `orchestrator/src` holds 39 files side by side. `components/` names nothing, and
+- [x] `orchestrator/src` holds 39 files side by side. `components/` names nothing, and
       `applyGraph.ts` above it imports from it
 - [ ] Most of `Value.ts` is the arithmetic of sensitive marks, not the value itself
 - [ ] `cli/tests/e2e` holds 99 files in one folder
@@ -1177,6 +1177,8 @@ Nothing here changes what Clay does. Each is a place the next change has to work
 - [ ] `ReferenceResolver.ts` reads references, `for` expressions, operators and templates
       in one class of 900 lines
 - [ ] No lint rule caps the length of a file, so the files above grew unnoticed
+- [ ] No lint rule keeps the order of the `orchestrator` folders the README gives, so an
+      import the wrong way goes unnoticed
 - [ ] Workspace packages are not `"private": true`, so `npm publish -ws` would publish them;
       four of eight have a `lint` script
 - [ ] CI runs Node 22.13 only, the lowest `engines` allows, and not the newest
