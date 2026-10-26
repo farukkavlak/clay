@@ -1,6 +1,6 @@
 import { ExactNumber } from '@clay/contracts';
 
-import { ConfigError, CONFIG_FILE } from '@clay/parser';
+import { ConfigError } from '@clay/parser';
 
 import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';
@@ -103,7 +103,7 @@ describe('a string with an interpolation', () => {
     await expect(planned).rejects.toMatchObject({
       message: 'var.tags is a tuple and cannot be joined into a string',
       block: declaration,
-      position: { file: CONFIG_FILE, line: 2, column },
+      position: { file: 'main.clay', line: 2, column },
     });
   });
 
@@ -121,14 +121,14 @@ describe('a string with an interpolation', () => {
     const planned = newOrchestrator().plan(`variable "tags" { default = ["a", "b"] }\n${block}`);
 
     await expect(planned).rejects.toBeInstanceOf(ConfigError);
-    await expect(planned).rejects.toMatchObject({ message: expect.stringContaining(message) as string, position: { file: CONFIG_FILE, line: 2, column } });
+    await expect(planned).rejects.toMatchObject({ message: expect.stringContaining(message) as string, position: { file: 'main.clay', line: 2, column } });
   });
 
   // An interpolation makes the source a template, not a string, so the source check refuses it.
   it('refuses a module source with an interpolation', async () => {
     await expect(newOrchestrator().plan('variable "v" { default = "m" }\nmodule "m" { source = "./${var.v}" }')).rejects.toMatchObject({
       message: 'Module "m" is missing a valid "source" attribute.',
-      position: { file: CONFIG_FILE, line: 2, column: 23 },
+      position: { file: 'main.clay', line: 2, column: 23 },
       block: 'module "m"',
     });
   });

@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
-import { AttributeValue, CONFIG_FILE, namedIn, ResourceBlock } from '../src/ast';
+import { AttributeValue, namedIn, ResourceBlock } from '../src/ast';
 import { ConfigError } from '../src/ConfigError';
 import { Lexer } from '../src/Lexer';
 import { Parser } from '../src/Parser';
 import { TokenType } from '../src/tokens';
 
-const at = (column: number) => ({ file: CONFIG_FILE, line: 1, column });
+const at = (column: number) => ({ file: 'main.clay', line: 1, column });
 
 const PREFIX = 'resource "t" "n" { v = ';
 
 /** The value of `v`, with positions counted from the start of what is written. */
-const valueOf = (written: string): AttributeValue => (new Parser(new Lexer(`${PREFIX}${written} }`, CONFIG_FILE).tokenize()).parse()[0] as ResourceBlock).attributes.v;
+const valueOf = (written: string): AttributeValue => (new Parser(new Lexer(`${PREFIX}${written} }`, 'main.clay').tokenize()).parse()[0] as ResourceBlock).attributes.v;
 
 const column = (written: string, needle: string, from = 0) => PREFIX.length + written.indexOf(needle, from) + 1;
 
@@ -75,9 +75,9 @@ describe('operators', () => {
     ['=>', TokenType.FatArrow],
     ['=', TokenType.Assign],
   ])('reads %s as one token', (written, type) => {
-    const [token] = new Lexer(written, CONFIG_FILE).tokenize();
+    const [token] = new Lexer(written, 'main.clay').tokenize();
 
-    expect(token).toEqual({ type, value: written, position: { file: CONFIG_FILE, line: 1, column: 1 } });
+    expect(token).toEqual({ type, value: written, position: { file: 'main.clay', line: 1, column: 1 } });
   });
 
   it.each([

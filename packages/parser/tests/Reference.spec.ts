@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { ExactNumber } from '@clay/contracts';
 
-import { CONFIG_FILE } from '../src/ast';
 import { ConfigError } from '../src/ConfigError';
 import { parseReference, spellReference, Step, stepKey } from '../src/reference';
 import { steps } from './steps';
 
-const position = { file: CONFIG_FILE, line: 1, column: 1 };
+const position = { file: 'main.clay', line: 1, column: 1 };
 
 const parse = (spelled: string) => parseReference(steps(...spelled.split('.')), position);
 
@@ -89,7 +88,7 @@ describe('a reference read into a value', () => {
     [steps('local_file', { key: 'x.y' }, 'id'), 'Reference "local_file["x.y"].id" has "x.y" where it needs a name'],
     [steps('var', 0), 'Reference "var[0]" has an index where it needs a name'],
     [
-      steps('var', { index: { type: 'Number', value: ExactNumber.parse('1'), position: { file: CONFIG_FILE, line: 1, column: 1 } }, spelled: '...' }),
+      steps('var', { index: { type: 'Number', value: ExactNumber.parse('1'), position: { file: 'main.clay', line: 1, column: 1 } }, spelled: '...' }),
       'Reference "var[...]" has an index where it needs a name',
     ],
     [steps('data', 'local_file', 0, 'content'), 'Reference "data.local_file[0].content" has an index where it needs a name'],

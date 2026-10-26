@@ -1,7 +1,9 @@
 # Grammar
 
-What the parser in `packages/parser` accepts. A configuration is one file, `main.clay`,
-in a directory; a module is another directory with its own `main.clay`.
+What the parser in `packages/parser` accepts. A configuration is every `.clay` file in a
+directory, read as one in the order of their names. A file whose name starts with `.` is
+left out, and so is a subdirectory. A module is another directory with its own `.clay`
+files. A name is declared once across a module's files.
 
 ## Tokens
 
@@ -816,6 +818,6 @@ throws the same for a character it does not know, a string not closed on its lin
 
 - Provisioners, and any `lifecycle` argument but `prevent_destroy`, `create_before_destroy` and `ignore_changes`
 - Nested blocks inside a block, but `lifecycle` in a resource and `validation` in a variable
-- Any file other than `main.clay`
+- Override files, whose blocks would change those of another file
 
 `TASKS.md` lists what is planned.

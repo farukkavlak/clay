@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { CONFIG_FILE, ConfigError, MovedBlock, Parser } from '../src';
+import { ConfigError, MovedBlock, Parser } from '../src';
 import { Lexer } from '../src/Lexer';
 
-const parse = (source: string) => new Parser(new Lexer(source, CONFIG_FILE).tokenize()).parse();
+const parse = (source: string) => new Parser(new Lexer(source, 'main.clay').tokenize()).parse();
 
 const errorOf = (source: string): ConfigError => {
   try {

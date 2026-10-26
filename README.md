@@ -1,8 +1,8 @@
 # Clay
 
-An infrastructure-as-code engine in TypeScript. You describe resources in a `main.clay`
-file; Clay compares it with what it created last time, shows what would change, and
-applies it. Terraform is the reference for the problems it has solved well, not a
+An infrastructure-as-code engine in TypeScript. You describe resources in `.clay` files;
+Clay compares them with what it created last time, shows what would change, and applies
+it. Terraform is the reference for the problems it has solved well, not a
 specification to copy.
 
 It ships with one provider, `local`, whose resources live on the machine that runs it.
@@ -49,14 +49,14 @@ in place.
 A file is a list of blocks. Values are strings, numbers, booleans, lists, maps and `null`,
 each with a type. A string reads other values with `${...}`.
 
-| Block                            | Does                                                           |
-| -------------------------------- | -------------------------------------------------------------- |
-| `resource "type" "name" { ... }` | Something the provider creates, updates and destroys           |
-| `data "type" "name" { ... }`     | Something that already exists, read by the provider            |
-| `variable "name" { default = }`  | A value the file takes; a module gets it from its caller       |
-| `locals { name = }`              | Values the file works out once and reads by name               |
-| `output "name" { value = }`      | A value the file gives back; a module's caller reads it        |
-| `module "name" { source = }`     | Another directory with its own `main.clay`, called with inputs |
+| Block                            | Does                                                             |
+| -------------------------------- | ---------------------------------------------------------------- |
+| `resource "type" "name" { ... }` | Something the provider creates, updates and destroys             |
+| `data "type" "name" { ... }`     | Something that already exists, read by the provider              |
+| `variable "name" { default = }`  | A value the file takes; a module gets it from its caller         |
+| `locals { name = }`              | Values the file works out once and reads by name                 |
+| `output "name" { value = }`      | A value the file gives back; a module's caller reads it          |
+| `module "name" { source = }`     | Another directory with its own `.clay` files, called with inputs |
 
 On top of these:
 
@@ -119,8 +119,8 @@ from a sensitive one is sensitive too: `local_file.id` where `path` is, `stdout`
    applied as it was made, so `apply <plan>` reads nothing and refuses the flag. A read
    that returns a value not known, or a name the schema does not have, stops the run as
    a bug in the provider.
-2. The parser turns `main.clay` and every module it names into a tree, with the file,
-   line and column on every node.
+2. The parser turns the `.clay` files of the directory and of every module they name
+   into a tree, with the file, line and column on every node.
 3. The graph builder links each resource, variable, local and output to what it reads,
    and sorts them so nothing runs before what it needs. A cycle or a reference to
    nothing stops here.

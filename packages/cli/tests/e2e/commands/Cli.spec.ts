@@ -41,9 +41,9 @@ describe('the clay command', () => {
   };
 
   it.each([
-    ['plan', 'Planning failed: main.clay not found'],
-    ['validate', 'Validation failed: main.clay not found'],
-    ['apply --yes', 'Apply failed: main.clay not found'],
+    ['plan', 'Planning failed: no .clay file in the directory'],
+    ['validate', 'Validation failed: no .clay file in the directory'],
+    ['apply --yes', 'Apply failed: no .clay file in the directory'],
   ])('exits 1 from %s in a directory with no configuration, and writes nothing', async (command, message) => {
     await fs.rm(path.join(dir, 'main.clay'));
 

@@ -7,6 +7,7 @@ import { describeError } from '../src/describeError';
 const error = new ConfigError('Invalid name "a.b"', { file: 'main.clay', line: 1, column: 5 });
 
 const failingWith = (thrown: Error): ConfigFiles => ({
+  list: () => [],
   read: () => {
     throw thrown;
   },
@@ -71,7 +72,7 @@ describe('describeError', () => {
     const atEscape = new ConfigError('Unexpected character: "\u001B"', { file: 'main.clay', line: 1, column: 1 });
 
     expect(describeError(atEscape, files)).toBe('Unexpected character: "\u241B"\n\n  on main.clay line 1:\n\n  1: \u241B\n     ^');
-    expect(describeError(new Error('Module source not found at: \u001B[31mx'), files)).toBe('Module source not found at: \u241B[31mx');
+    expect(describeError(new Error('\u001B[31mx.clay is listed but not found'), files)).toBe('\u241B[31mx.clay is listed but not found');
   });
 
   it('lets a failure that is no file error through, rather than hide it behind the one being shown', () => {

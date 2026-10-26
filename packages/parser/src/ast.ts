@@ -2,9 +2,6 @@ import { Address, ExactNumber, ModuleAddress, Type } from '@clay/contracts';
 import { Position } from './Position';
 import { spellReference, spellSteps, Step } from './reference';
 
-/** The config file name, for the root and every module. */
-export const CONFIG_FILE = 'main.clay';
-
 interface Node {
   position: Position;
 }

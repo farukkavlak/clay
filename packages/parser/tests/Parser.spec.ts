@@ -1,39 +1,25 @@
 import { ExactNumber, types } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
-import {
-  BoundNode,
-  CallNode,
-  callsIn,
-  CONFIG_FILE,
-  DataBlock,
-  ModuleBlock,
-  namedIn,
-  OutputBlock,
-  ReferenceNode,
-  ResourceBlock,
-  spellIndex,
-  spellNamed,
-  VariableBlock,
-} from '../src/ast';
+import { BoundNode, CallNode, callsIn, DataBlock, ModuleBlock, namedIn, OutputBlock, ReferenceNode, ResourceBlock, spellIndex, spellNamed, VariableBlock } from '../src/ast';
 import { ConfigError } from '../src/ConfigError';
 import { Lexer } from '../src/Lexer';
-import { Parser } from '../src/Parser';
+import { parseModule, Parser } from '../src/Parser';
 import { Step } from '../src/reference';
 import { steps } from './steps';
 
-function makeParser(input: string, file: string = CONFIG_FILE): Parser {
+function makeParser(input: string, file: string = 'main.clay'): Parser {
   return new Parser(new Lexer(input, file).tokenize());
 }
 
-const at = (line: number, column: number) => ({ file: CONFIG_FILE, line, column });
+const at = (line: number, column: number) => ({ file: 'main.clay', line, column });
 const STRING_IN_OPEN = "This '${' is never closed with '}', or a string inside it is not closed on its line";
 const LINE_ENDED = String.raw`This string is never closed on its line; write \n for a line break inside it, or use a heredoc`;
 
 /** Returns the error, so a test can check both message and position. */
-function errorOf(input: string, file: string = CONFIG_FILE): ConfigError {
+function errorOf(input: string, file: string = 'main.clay'): ConfigError {
   try {
-    makeParser(input, file).parse();
+    parseModule([{ file, content: input }]);
   } catch (error) {
     if (error instanceof ConfigError) return error;
 
@@ -97,7 +83,7 @@ describe('Clay Parser', () => {
       const result = makeParser('resource "mock_resource" "test" {\n  a = null\n  b = [null, 1]\n}').parse();
       const { attributes } = result[0] as ResourceBlock;
 
-      expect(attributes.a).toEqual({ type: 'Null', position: { file: CONFIG_FILE, line: 2, column: 7 } });
+      expect(attributes.a).toEqual({ type: 'Null', position: { file: 'main.clay', line: 2, column: 7 } });
       expect(attributes.b).toMatchObject({ type: 'List', value: [{ type: 'Null' }, { type: 'Number' }] });
     });
 
@@ -1176,7 +1162,7 @@ describe('Clay Parser', () => {
       for (const [label, input] of Object.entries(twice)) {
         const error = errorOf(input);
 
-        expect(error.message).toBe(`${label} is declared twice`);
+        expect(error.message).toBe(`${label} is declared twice, first on main.clay line 1`);
         expect(error.position).toEqual(at(2, 1));
       }
     });

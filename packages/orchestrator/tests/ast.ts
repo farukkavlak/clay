@@ -1,7 +1,7 @@
-import { AttributeValue, CONFIG_FILE, DataBlock, ModuleBlock, OutputBlock, Position, ResourceBlock, Step, VariableBlock } from '@clay/parser';
+import { AttributeValue, DataBlock, ModuleBlock, OutputBlock, Position, ResourceBlock, Step, VariableBlock } from '@clay/parser';
 
 /** A node a test builds by hand was never written in a file, so one place stands in for all of them. */
-const position: Position = { file: CONFIG_FILE, line: 1, column: 1 };
+const position: Position = { file: 'main.clay', line: 1, column: 1 };
 
 export const str = (value: string): AttributeValue => ({ type: 'String', value, position });
 /** A string is a step after a dot, a number an index; a string key in brackets is passed as { key }. */

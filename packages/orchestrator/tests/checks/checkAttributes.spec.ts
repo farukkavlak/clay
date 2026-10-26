@@ -1,5 +1,5 @@
 import { ModuleAddress, Schema, types } from '@clay/contracts';
-import { CONFIG_FILE, Lexer, Parser, ResourceBlock } from '@clay/parser';
+import { Lexer, Parser, ResourceBlock } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
 import { checkNames } from '../../src/checks/checkAttributes';
@@ -13,7 +13,7 @@ const schema: Schema = {
 
 const block = (ignore: string): ResourceBlock => {
   const source = `resource "t" "a" {\n  name = "x"\n  lifecycle {\n    ignore_changes = ${ignore}\n  }\n}`;
-  return new Parser(new Lexer(source, CONFIG_FILE).tokenize()).parse()[0] as ResourceBlock;
+  return new Parser(new Lexer(source, 'main.clay').tokenize()).parse()[0] as ResourceBlock;
 };
 
 describe('ignore_changes names', () => {

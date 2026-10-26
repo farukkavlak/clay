@@ -1,7 +1,7 @@
 import { ExactNumber } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { CONFIG_FILE, DataBlock } from '../src/ast';
+import { DataBlock } from '../src/ast';
 import { Lexer } from '../src/Lexer';
 import { Parser } from '../src/Parser';
 
@@ -13,7 +13,7 @@ describe('Parser - Data Blocks', () => {
         owner = "099720109477"
       }
     `;
-    const tokens = new Lexer(input, CONFIG_FILE).tokenize();
+    const tokens = new Lexer(input, 'main.clay').tokenize();
     const parser = new Parser(tokens);
     const ast = parser.parse();
 
@@ -34,7 +34,7 @@ describe('Parser - Data Blocks', () => {
         id = 123
       }
     `;
-    const tokens = new Lexer(input, CONFIG_FILE).tokenize();
+    const tokens = new Lexer(input, 'main.clay').tokenize();
     const parser = new Parser(tokens);
     const ast = parser.parse();
 
@@ -53,7 +53,7 @@ describe('Parser - Data Blocks', () => {
       data "type1" "name1" {}
       data "type2" "name2" {}
     `;
-    const tokens = new Lexer(input, CONFIG_FILE).tokenize();
+    const tokens = new Lexer(input, 'main.clay').tokenize();
     const parser = new Parser(tokens);
     const ast = parser.parse();
 
@@ -64,7 +64,7 @@ describe('Parser - Data Blocks', () => {
 
   it('should throw error for incomplete data block', () => {
     const input = `data "type"`;
-    const tokens = new Lexer(input, CONFIG_FILE).tokenize();
+    const tokens = new Lexer(input, 'main.clay').tokenize();
     const parser = new Parser(tokens);
 
     expect(() => parser.parse()).to.throw('Expect data source name string');
@@ -72,7 +72,7 @@ describe('Parser - Data Blocks', () => {
 
   it('should throw error for missing type', () => {
     const input = `data { }`;
-    const tokens = new Lexer(input, CONFIG_FILE).tokenize();
+    const tokens = new Lexer(input, 'main.clay').tokenize();
     const parser = new Parser(tokens);
 
     expect(() => parser.parse()).to.throw('Expect data source type string');
