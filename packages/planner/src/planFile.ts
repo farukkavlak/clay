@@ -55,12 +55,11 @@ function readChanges<T>(saved: Record<string, { old?: T; new?: T; unknown?: Attr
   );
 }
 
-export function serializePlan(plan: Plan, configContent: string, modules: Record<string, string>): string {
+export function serializePlan(plan: Plan, files: Record<string, string>): string {
   const file = {
     version: PLAN_FILE_VERSION,
     timestamp: new Date().toISOString(),
-    config: configContent,
-    modules,
+    files,
     serial: plan.serial,
     actions: plan.actions.map((action) => saveAction(action)),
     outputs: saveChanges(plan.outputs),

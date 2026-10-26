@@ -5,9 +5,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
-import { InMemoryFiles, Orchestrator } from '../src/index';
 import { apply } from './apply';
 import { steps } from './ast';
+import { engineOn, TestEngine } from './engine';
 
 /** Fresh per test: apply writes into what this returns, so a shared object would leak resources between tests. */
 const readMock = vi.fn();
@@ -44,7 +44,7 @@ const schema: Schema = { loc: { type: types.string }, name: { type: types.string
 describe('Orchestrator - Phase 4: Data Flow', () => {
   let tmpDir: string;
   let files: Record<string, string>;
-  let orchestrator: Orchestrator;
+  let orchestrator: TestEngine;
   let mockProvider: {
     resources: string[];
     dataSources: string[];
@@ -84,7 +84,7 @@ describe('Orchestrator - Phase 4: Data Flow', () => {
     const backend = new LocalBackend(tmpDir);
     const stateManager = new StateManager(backend);
     files = {};
-    orchestrator = Orchestrator.create(stateManager, new InMemoryFiles(files));
+    orchestrator = engineOn(stateManager, files);
     orchestrator.registerProvider(mockProvider);
 
     (plan as Mock).mockReturnValue([]);

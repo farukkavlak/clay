@@ -198,7 +198,7 @@ describe('a configuration held to the schema', () => {
 
   it('holds an object and a tuple to the type each place in them names, through a saved plan', async () => {
     const config = 'resource "tally" "t" {\n  rule = { mode = 1, port = "80" }\n  pair = [2, "3"]\n}';
-    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), config, {}), 'plan.json');
+    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), { 'main.clay': config }), 'plan.json');
 
     for await (const event of newOrchestrator().runPlan(saved, config)) if (event.type === 'failed') throw event.error;
 

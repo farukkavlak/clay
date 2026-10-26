@@ -1,12 +1,12 @@
 import { Address, CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, State, STATE_VERSION, types, UpdateRequest } from '@clay/contracts';
-import { Orchestrator, RunEvent } from '@clay/orchestrator';
+import { RunEvent } from '@clay/orchestrator';
 import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { orchestratorIn } from '../helpers';
+import { orchestratorIn, TestEngine } from '../helpers';
 import { start } from '../start';
 
 const SCHEMA: Schema = {
@@ -91,7 +91,7 @@ const rec = (name: string, label: string, ...body: string[]) => `resource "rec" 
 describe('replacing a resource that something reads', () => {
   let dir: string;
   let provider: Using;
-  let engine: Orchestrator;
+  let engine: TestEngine;
 
   const applied = async (config: string) => {
     for await (const event of start(engine, config)) if (event.type === 'failed') throw event.error;

@@ -5,8 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { InMemoryFiles, Orchestrator } from '../src/index';
 import { apply } from './apply';
+import { engineOn, TestEngine } from './engine';
 
 /** `constructor` is a name every plain object already answers to, and a provider is free to use it for a resource type. */
 class InheritedNameProvider implements Provider {
@@ -52,11 +52,11 @@ const config = (attributePath: string) => `resource "constructor" "a" { path = "
 
 describe('a resource type named after something every object has', () => {
   let dir: string;
-  let orchestrator: Orchestrator;
+  let orchestrator: TestEngine;
 
   beforeEach(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-schema-lookup-'));
-    orchestrator = Orchestrator.create(new StateManager(new LocalBackend(dir)), new InMemoryFiles({}));
+    orchestrator = engineOn(new StateManager(new LocalBackend(dir)));
     orchestrator.registerProvider(new InheritedNameProvider());
   });
 

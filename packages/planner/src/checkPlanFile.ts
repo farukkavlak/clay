@@ -57,8 +57,11 @@ function isOutputChanges(changes: unknown): boolean {
   return isChanges(changes) && Object.entries(changes as Record<string, unknown>).every(([name, change]) => isName(name) && isOutputChange(change));
 }
 
-function isModuleFiles(modules: unknown): modules is Record<string, string> {
-  return isRecord(modules) && Object.values(modules).every((content) => typeof content === 'string');
+/** With a file at the root, since without one a run would report the configuration missing from the disk. */
+function isConfigFiles(files: unknown): files is Record<string, string> {
+  if (!isRecord(files) || !Object.values(files).every((content) => typeof content === 'string')) return false;
+
+  return Object.keys(files).some((file) => !file.includes('/') && file.endsWith('.clay'));
 }
 
 /** Only once `isActionAt` has checked each field it reads. */
@@ -184,7 +187,7 @@ export function validatePlanFile(planFile: unknown): planFile is PlanFile {
   if (!planFile || typeof planFile !== 'object') return false;
 
   const pf = planFile as Partial<PlanFile>;
-  return pf.version === PLAN_FILE_VERSION && isTimestamp(pf.timestamp) && typeof pf.config === 'string' && isModuleFiles(pf.modules) && isPlan(pf);
+  return pf.version === PLAN_FILE_VERSION && isTimestamp(pf.timestamp) && isConfigFiles(pf.files) && isPlan(pf);
 }
 
 /** Without its type's schema, a resource's sets could not be shown as sets. */

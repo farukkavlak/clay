@@ -1,12 +1,11 @@
 import { EVERY_ITEM, ExactNumber, State, UNKNOWN } from '@clay/contracts';
-import { Orchestrator } from '@clay/orchestrator';
 import { parsePlanFile, serializePlan } from '@clay/planner';
 
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { orchestratorIn } from '../helpers';
+import { orchestratorIn, TestEngine } from '../helpers';
 
 const DB = `
   resource "random_string" "s" { length = 8 }
@@ -36,7 +35,7 @@ const drain = async (events: AsyncGenerator<{ type: string; error?: Error }>) =>
   for await (const event of events) if (event.type === 'failed') throw event.error;
 };
 
-const sensitiveOf = (plan: Awaited<ReturnType<Orchestrator['plan']>>) => plan.actions.find((action) => action.resourceType === 'null_resource')?.sensitive;
+const sensitiveOf = (plan: Awaited<ReturnType<TestEngine['plan']>>) => plan.actions.find((action) => action.resourceType === 'null_resource')?.sensitive;
 
 describe('a resource given a sensitive value', () => {
   let dir: string;
@@ -244,7 +243,7 @@ describe('a resource given a sensitive value', () => {
     });
 
     it('keeps the mark of every item through a plan saved to a file', async () => {
-      const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), config, {}), 'plan.json');
+      const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), { 'main.clay': config }), 'plan.json');
       await drain(newOrchestrator().runPlan(saved, config));
 
       expect(sensitiveOf(saved)).toEqual(itemsOnly);
@@ -264,7 +263,7 @@ describe('a resource given a sensitive value', () => {
 
   it('keeps which parts are sensitive through a plan saved to a file', async () => {
     const config = resources();
-    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), config, {}), 'plan.json');
+    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), { 'main.clay': config }), 'plan.json');
     await drain(newOrchestrator().runPlan(saved, config));
 
     expect(await marks('local_file.conf')).toEqual([['content']]);
@@ -274,7 +273,7 @@ describe('a resource given a sensitive value', () => {
   it('keeps a plan saved after an apply, with what the state marks', async () => {
     const config = resources();
     await apply(config);
-    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), config, {}), 'plan.json');
+    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), { 'main.clay': config }), 'plan.json');
     await drain(newOrchestrator().runPlan(saved, config));
 
     expect(await marks('null_resource.n')).toEqual(TRIGGERS);

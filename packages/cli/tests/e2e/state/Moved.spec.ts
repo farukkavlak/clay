@@ -306,7 +306,7 @@ describe('a moved block', () => {
     it('runs a saved plan that moves a call', async () => {
       await apply(call('a'));
       const config = call('b', 'a') + moved('module.a', 'module.b');
-      const saved = parsePlanFile(serializePlan(await orchestratorIn(dir).plan(config), config, {}), 'plan.json');
+      const saved = parsePlanFile(serializePlan(await orchestratorIn(dir).plan(config), { 'main.clay': config }), 'plan.json');
 
       for await (const event of orchestratorIn(dir).runPlan(saved, config)) if (event.type === 'failed') throw event.error;
       expect(await stateKeys()).toEqual(['module.b.local_file.a', 'module.b.module.c.local_file.a']);
@@ -384,7 +384,7 @@ describe('a moved block', () => {
   it('runs a saved plan read back from its file', async () => {
     await apply(file('a'));
     const config = file('b') + moved('local_file.a', 'local_file.b');
-    const saved = parsePlanFile(serializePlan(await orchestratorIn(dir).plan(config), config, {}), 'plan.json');
+    const saved = parsePlanFile(serializePlan(await orchestratorIn(dir).plan(config), { 'main.clay': config }), 'plan.json');
 
     for await (const event of orchestratorIn(dir).runPlan(saved, config)) if (event.type === 'failed') throw event.error;
     expect(await stateKeys()).toEqual(['local_file.b']);

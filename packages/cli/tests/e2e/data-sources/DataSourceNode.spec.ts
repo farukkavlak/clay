@@ -127,7 +127,7 @@ describe('a data source in the graph', () => {
 
   it('is read at apply from a plan saved to a file', async () => {
     const config = writesAndReads('new');
-    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), config, {}), 'plan.json');
+    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), { 'main.clay': config }), 'plan.json');
 
     const outputs = await run(saved, config);
 
@@ -315,7 +315,7 @@ describe('a data source in the graph', () => {
 
     it('gives each instance its own value from a plan saved to a file', async () => {
       await apply(counted(1));
-      const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(counted(2)), counted(2), {}), 'plan.json');
+      const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(counted(2)), { 'main.clay': counted(2) }), 'plan.json');
 
       const outputs = await run(saved, counted(2));
 

@@ -1,19 +1,17 @@
 import { Output, types } from '@clay/contracts';
-import { Orchestrator } from '@clay/orchestrator';
-
 import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { orchestratorIn } from '../helpers';
+import { orchestratorIn, TestEngine } from '../helpers';
 import { start } from '../start';
 
 // The CLI reads process.cwd() and parses on import, so these tests drive the orchestrator.
 describe('apply and plan against real files', () => {
   let dir: string;
-  let orchestrator: Orchestrator;
+  let orchestrator: TestEngine;
 
   const newOrchestrator = () => orchestratorIn(dir);
 
@@ -35,7 +33,7 @@ describe('apply and plan against real files', () => {
     }
   `;
 
-  const apply = async (engine: Orchestrator, config: string) => {
+  const apply = async (engine: TestEngine, config: string) => {
     let outputs: Record<string, Output> = {};
     for await (const event of start(engine, config)) {
       if (event.type === 'failed') throw event.error;

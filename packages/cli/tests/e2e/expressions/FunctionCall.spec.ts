@@ -436,7 +436,7 @@ ${file('f', '"${local.tags.team}-${local.tags.env}-${lookup(local.tags, "zone", 
 
   it('runs a saved plan that reads into what a function gives', async () => {
     const config = `variable "v" { default = ["b", "a", "b"] }\n${file('f', 'tolist(toset(var.v))[0]')}`;
-    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), config, {}), 'plan.json');
+    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), { 'main.clay': config }), 'plan.json');
 
     for await (const event of newOrchestrator().runPlan(saved, config)) if (event.type === 'failed') throw event.error;
 
@@ -445,7 +445,7 @@ ${file('f', '"${local.tags.team}-${local.tags.env}-${lookup(local.tags, "zone", 
 
   it('runs a saved plan whose values call a function', async () => {
     const config = `variable "lists" { default = [["a"], ["b", "c", "d"]] }\n${file('f', '"${length(var.lists[1])} items"')}`;
-    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), config, {}), 'plan.json');
+    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), { 'main.clay': config }), 'plan.json');
 
     for await (const event of newOrchestrator().runPlan(saved, config)) if (event.type === 'failed') throw event.error;
 

@@ -1,11 +1,11 @@
 import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, State, types, UpdateRequest } from '@clay/contracts';
-import { Orchestrator, RunEvent } from '@clay/orchestrator';
+import { RunEvent } from '@clay/orchestrator';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { orchestratorIn } from '../helpers';
+import { orchestratorIn, TestEngine } from '../helpers';
 import { start } from '../start';
 
 const SCHEMA: Schema = {
@@ -82,7 +82,7 @@ const through = (label: string) => `${rec('a', label)}\n${rec('b', 'b', 'note = 
 describe('create_before_destroy', () => {
   let dir: string;
   let provider: Rec;
-  let engine: Orchestrator;
+  let engine: TestEngine;
 
   beforeEach(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-first-'));

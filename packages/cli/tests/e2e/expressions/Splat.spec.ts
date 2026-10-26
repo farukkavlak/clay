@@ -149,7 +149,7 @@ describe('a [*]', () => {
 
   it('runs a saved plan whose values it gives', async () => {
     const config = `${files(2)}\noutput "paths" { value = length(local_file.f[*].path) }`;
-    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), config, {}), 'plan.json');
+    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), { 'main.clay': config }), 'plan.json');
 
     for await (const event of newOrchestrator().runPlan(saved, config)) if (event.type === 'failed') throw event.error;
 

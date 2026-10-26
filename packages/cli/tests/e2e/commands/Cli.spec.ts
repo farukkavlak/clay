@@ -40,6 +40,20 @@ describe('the clay command', () => {
     throw new Error(`${command} exited 0`);
   };
 
+  it.each([
+    ['plan', 'Planning failed: main.clay not found'],
+    ['validate', 'Validation failed: main.clay not found'],
+    ['apply --yes', 'Apply failed: main.clay not found'],
+  ])('exits 1 from %s in a directory with no configuration, and writes nothing', async (command, message) => {
+    await fs.rm(path.join(dir, 'main.clay'));
+
+    const { code, stderr } = await failed(`node ${clay} ${command}`);
+
+    expect(code).toBe(1);
+    expect(stderr.split('\n')).toContain(message);
+    expect(await fs.readdir(dir)).toEqual([]);
+  });
+
   it('exits 1 and applies nothing when the answer is not yes', async () => {
     const { code, stderr } = await failed(`echo no | node ${clay} apply`);
 

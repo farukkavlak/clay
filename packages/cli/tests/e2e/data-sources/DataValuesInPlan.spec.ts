@@ -41,7 +41,7 @@ describe('data source values in the plan', () => {
     return events;
   };
 
-  const savedToFile = async (config: string) => parsePlanFile(serializePlan(await newOrchestrator().plan(config), config, {}), 'plan.json');
+  const savedToFile = async (config: string) => parsePlanFile(serializePlan(await newOrchestrator().plan(config), { 'main.clay': config }), 'plan.json');
 
   const read = () => `data "local_file" "size" { path = "${size}" }\noutput "read" { value = data.local_file.size.content }\n`;
 

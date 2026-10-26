@@ -5,8 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { DiskFiles, InMemoryFiles, Orchestrator } from '../src/index';
 import { apply } from './apply';
+import { engineIn, engineOn, TestEngine } from './engine';
 
 class MockProvider implements Provider {
   readonly resources = ['mock_resource'];
@@ -74,14 +74,14 @@ const reader = () => Object.assign(new MockProvider(), { resources: [], dataSour
 
 describe('Orchestrator', () => {
   let tmpDir: string;
-  let orchestrator: Orchestrator;
+  let orchestrator: TestEngine;
   let mockProvider: MockProvider;
 
   beforeEach(async () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'orchestrator-test-'));
     const backend = new LocalBackend(tmpDir);
     const stateManager = new StateManager(backend);
-    orchestrator = Orchestrator.create(stateManager, new InMemoryFiles({}));
+    orchestrator = engineOn(stateManager);
     mockProvider = new MockProvider();
     orchestrator.registerProvider(mockProvider);
   });
@@ -94,7 +94,7 @@ describe('Orchestrator', () => {
     it('should register a provider', () => {
       const backend = new LocalBackend(tmpDir);
       const stateManager = new StateManager(backend);
-      const newOrchestrator = Orchestrator.create(stateManager, new InMemoryFiles({}));
+      const newOrchestrator = engineOn(stateManager);
       expect(() => newOrchestrator.registerProvider(mockProvider)).not.toThrow();
     });
 
@@ -453,7 +453,7 @@ describe('Orchestrator', () => {
         }
       `;
 
-      const engine = Orchestrator.create(new StateManager(new LocalBackend(tmpDir)), new DiskFiles(tmpDir));
+      const engine = engineIn(new StateManager(new LocalBackend(tmpDir)), tmpDir);
       engine.registerProvider(mockProvider);
       const result = await apply(engine, rootConfig);
 

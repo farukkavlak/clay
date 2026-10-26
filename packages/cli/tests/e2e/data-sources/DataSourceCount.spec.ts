@@ -80,7 +80,7 @@ describe('a data source with count', () => {
   it('names each instance by its index in the plan, and runs from the plan file', async () => {
     const config = `${reads(2)}output "second" { value = data.local_file.f[1].content }`;
 
-    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), config, {}), 'plan.json');
+    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), { 'main.clay': config }), 'plan.json');
 
     expect(Object.keys(saved.dataSources)).toEqual(['data.local_file.f[0]', 'data.local_file.f[1]']);
     expect(await run(saved, config)).toEqual({ second: 'one' });

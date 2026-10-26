@@ -1,4 +1,5 @@
-import { Orchestrator } from '@clay/orchestrator';
+import { DiskFiles } from '@clay/orchestrator';
+import { writeFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -16,18 +17,12 @@ describe('the source line of an error', () => {
   let cwd: string;
   let printed: string[];
 
-  const prepend = () => fs.writeFile(path.join(dir, 'main.clay'), `resource "null_resource" "m" {}\n${config}`, 'utf8');
-
-  // Planning and validating begin once main.clay is read, so the file changes after that read.
-  const changeOnDiskWhenRunStarts = () => {
-    const { plan, validate } = Orchestrator.prototype;
-    vi.spyOn(Orchestrator.prototype, 'plan').mockImplementation(async function (this: Orchestrator, ...args) {
-      await prepend();
-      return plan.apply(this, args);
-    });
-    vi.spyOn(Orchestrator.prototype, 'validate').mockImplementation(async function (this: Orchestrator, ...args) {
-      await prepend();
-      return validate.apply(this, args);
+  const changeOnDiskOnceRead = () => {
+    const { read } = DiskFiles.prototype;
+    vi.spyOn(DiskFiles.prototype, 'read').mockImplementation(function (this: DiskFiles, file) {
+      const content = read.call(this, file);
+      if (file === 'main.clay') writeFileSync(path.join(dir, 'main.clay'), `resource "null_resource" "m" {}\n${config}`, 'utf8');
+      return content;
     });
   };
 
@@ -55,7 +50,7 @@ describe('the source line of an error', () => {
     ['validate', createValidateCommand],
     ['a plain apply', createApplyCommand],
   ])('is quoted from what %s read when the file changes on disk', async (_, command) => {
-    changeOnDiskWhenRunStarts();
+    changeOnDiskOnceRead();
 
     await command().parseAsync(['node', 'clay']);
 

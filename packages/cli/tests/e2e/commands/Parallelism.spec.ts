@@ -40,20 +40,20 @@ describe('apply --parallelism', () => {
   it('hands the number to the run', async () => {
     expect(await run(createApplyCommand, ['-y', '--parallelism', '3'])).toContain('Apply complete!');
 
-    expect(runPlan).toHaveBeenCalledWith(expect.anything(), expect.anything(), { parallelism: 3, signal: expect.any(AbortSignal) });
+    expect(runPlan).toHaveBeenCalledWith(expect.anything(), { parallelism: 3, signal: expect.any(AbortSignal) });
   });
 
   it('leaves the engine its own number when none is given', async () => {
     await run(createApplyCommand, ['-y']);
 
-    expect(runPlan).toHaveBeenCalledWith(expect.anything(), expect.anything(), { parallelism: undefined, signal: expect.any(AbortSignal) });
+    expect(runPlan).toHaveBeenCalledWith(expect.anything(), { parallelism: undefined, signal: expect.any(AbortSignal) });
   });
 
   it('applies a saved plan with it, since a plan does not hold how many run at once', async () => {
     await run(createPlanCommand, ['--out', 'plan.json']);
 
     expect(await run(createApplyCommand, ['plan.json', '--parallelism', '2'])).toContain('Apply complete!');
-    expect(runPlan).toHaveBeenCalledWith(expect.anything(), expect.anything(), { parallelism: 2, signal: expect.any(AbortSignal) });
+    expect(runPlan).toHaveBeenCalledWith(expect.anything(), { parallelism: 2, signal: expect.any(AbortSignal) });
   });
 
   it.each(['0', '-1', '2.5', 'many', '', '01', '1e3'])('refuses %j', async (value) => {

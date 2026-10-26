@@ -5,8 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { InMemoryFiles, Orchestrator } from '../src/index';
 import { apply } from './apply';
+import { engineOn, TestEngine } from './engine';
 
 class MockDataProvider implements Provider {
   readonly resources = ['mock_resource'];
@@ -61,14 +61,14 @@ class MockDataProvider implements Provider {
 
 describe('Orchestrator - Data Sources', () => {
   let tmpDir: string;
-  let orchestrator: Orchestrator;
+  let orchestrator: TestEngine;
   let mockProvider: MockDataProvider;
 
   beforeEach(async () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'orchestrator-data-test-'));
     const backend = new LocalBackend(tmpDir);
     const stateManager = new StateManager(backend);
-    orchestrator = Orchestrator.create(stateManager, new InMemoryFiles({}));
+    orchestrator = engineOn(stateManager);
     mockProvider = new MockDataProvider();
     orchestrator.registerProvider(mockProvider);
   });

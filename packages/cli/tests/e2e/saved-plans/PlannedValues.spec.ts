@@ -1,11 +1,10 @@
-import { Orchestrator } from '@clay/orchestrator';
 import { parsePlanFile, serializePlan } from '@clay/planner';
 
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { orchestratorIn } from '../helpers';
+import { orchestratorIn, TestEngine } from '../helpers';
 
 describe('an apply that does what the plan showed', () => {
   let dir: string;
@@ -13,7 +12,7 @@ describe('an apply that does what the plan showed', () => {
 
   const newOrchestrator = () => orchestratorIn(dir);
 
-  const run = async (engine: Orchestrator, planned: Awaited<ReturnType<Orchestrator['plan']>>) => {
+  const run = async (engine: TestEngine, planned: Awaited<ReturnType<TestEngine['plan']>>) => {
     for await (const event of engine.runPlan(planned, config)) if (event.type === 'failed') throw event.error;
   };
 
@@ -45,7 +44,7 @@ describe('an apply that does what the plan showed', () => {
 
   it('stops a saved plan the same way', async () => {
     const engine = newOrchestrator();
-    const saved = parsePlanFile(serializePlan(await engine.plan(copyOf('one')), copyOf('one'), {}), 'plan.json');
+    const saved = parsePlanFile(serializePlan(await engine.plan(copyOf('one')), { 'main.clay': copyOf('one') }), 'plan.json');
     config = copyOf('two');
 
     await expect(run(engine, saved)).rejects.toThrow('the plan showed content = "one", but it now comes to "two". Plan again.');

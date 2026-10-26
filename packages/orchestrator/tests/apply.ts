@@ -1,9 +1,9 @@
 import { Output } from '@clay/contracts';
 
-import { Orchestrator } from '../src/index';
+import { TestEngine } from './engine';
 
 /** Runs to the end and returns the outputs; a failed action becomes the thrown error. */
-export async function apply(orchestrator: Orchestrator, configContent: string): Promise<Record<string, Output>> {
+export async function apply(orchestrator: TestEngine, configContent: string): Promise<Record<string, Output>> {
   let outputs: Record<string, Output> = {};
 
   const planned = await orchestrator.plan(configContent);

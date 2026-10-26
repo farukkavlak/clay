@@ -284,7 +284,7 @@ describe('a module called with count', () => {
     // A saved plan's move is checked again when read back from the file.
     it('runs a saved plan that moves what is in the module', async () => {
       await apply(once());
-      const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(once('1')), once('1'), {}), 'plan.json');
+      const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(once('1')), { 'main.clay': once('1') }), 'plan.json');
 
       for await (const event of newOrchestrator().runPlan(saved, once('1'))) if (event.type === 'failed') throw event.error;
 

@@ -5,7 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { InMemoryFiles, Orchestrator, RunEvent } from '../src/index';
+import { RunEvent } from '../src/index';
+import { engineOn, TestEngine } from './engine';
 
 const SCHEMA: Schema = { id: { type: types.string, computed: true, kept: true }, name: { type: types.string } };
 const DATA_SCHEMA: Schema = { id: { type: types.string, computed: true }, name: { type: types.string } };
@@ -62,7 +63,7 @@ class Interrupting implements Provider {
 
 describe('a run whose signal aborts', () => {
   let dir: string;
-  let engine: Orchestrator;
+  let engine: TestEngine;
   let provider: Interrupting;
   let controller: AbortController;
 
@@ -77,7 +78,7 @@ describe('a run whose signal aborts', () => {
     controller = new AbortController();
     provider = new Interrupting();
     provider.aborting = controller;
-    engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new InMemoryFiles({}));
+    engine = engineOn(new StateManager(new LocalBackend(dir)));
     engine.registerProvider(provider);
   });
 

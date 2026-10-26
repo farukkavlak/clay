@@ -1,5 +1,5 @@
 import { ModuleAddress, Schema } from '@clay/contracts';
-import { AttributeValue, CONFIG_FILE, DataBlock, Lexer, Parser, spell, Statement } from '@clay/parser';
+import { AttributeValue, DataBlock, spell, Statement } from '@clay/parser';
 
 import { checkNames } from '../checks/checkAttributes';
 import { checkDefaults } from '../values/declared';
@@ -36,10 +36,8 @@ export class ConfigLoader {
     private planned: Planned
   ) {}
 
-  async load(configContent: string): Promise<LoadedConfig> {
-    const mainProgram = new Parser(new Lexer(configContent, CONFIG_FILE).tokenize()).parse();
-
-    const { resources: loadedResources, modules: loadedModules } = await this.moduleLoader.loadModuleTree(mainProgram);
+  async load(): Promise<LoadedConfig> {
+    const { resources: loadedResources, modules: loadedModules, root: mainProgram } = await this.moduleLoader.loadModuleTree();
     this.checkDefaults(loadedModules);
 
     for (const { uniqueId, block } of loadedResources) {

@@ -48,13 +48,13 @@ export class Orchestrator {
   }
 
   /** A plan never writes state, even what the refresh read. */
-  async plan(configContent: string, { refresh = true }: { refresh?: boolean } = {}): Promise<Plan> {
+  async plan({ refresh = true }: { refresh?: boolean } = {}): Promise<Plan> {
     const prevRun = await this.stateManager.read();
     const prior = refresh ? await this.refresh(prevRun) : prevRun;
     // Planning applies the moves to a copy; the plan keeps the resources at their old addresses.
     const currentState = copyForMoves(prior);
     const moves = new Moves();
-    const { resources: desiredResources, outputs, dataSources, dataSensitive, readAtApply, graph } = await this.resolveAndCheck(configContent, currentState, 'plan', moves);
+    const { resources: desiredResources, outputs, dataSources, dataSensitive, readAtApply, graph } = await this.resolveAndCheck(currentState, 'plan', moves);
 
     const actions = plan(desiredResources, currentState, (address) => moves.originOf(address));
     checkPreventDestroy(actions, desiredResources, currentState.resources);
@@ -82,12 +82,12 @@ export class Orchestrator {
   }
 
   /** Plans against an empty state and reads no data source, so what a resource or a data source gives is unknown and everything else is checked. */
-  async validate(configContent: string): Promise<void> {
-    await this.resolveAndCheck(configContent, emptyState(), 'check', new Moves());
+  async validate(): Promise<void> {
+    await this.resolveAndCheck(emptyState(), 'check', new Moves());
   }
 
   /** Holds the state lock. A state written since the plan was made is refused, since the approved plan no longer matches it. */
-  async *runPlan(saved: Plan, configContent: string, { parallelism = DEFAULT_PARALLELISM, signal }: RunOptions = {}): AsyncGenerator<RunEvent> {
+  async *runPlan(saved: Plan, { parallelism = DEFAULT_PARALLELISM, signal }: RunOptions = {}): AsyncGenerator<RunEvent> {
     checkParallelism(parallelism);
     await this.stateManager.lock();
 
@@ -99,7 +99,7 @@ export class Orchestrator {
       state.resources = copyResources(saved.prior);
 
       const { loader, graphBuilder, runner } = this.newRun();
-      const config = await loader.load(configContent);
+      const config = await loader.load();
       const graph = graphBuilder.buildExecutionGraph(config.loadedResources, config.loadedModules);
       yield* runner.run(saved, config, graph, state, { parallelism, signal });
     } finally {
@@ -135,9 +135,9 @@ export class Orchestrator {
   }
 
   /** Applies every move to `state` before anything reads it, and records each in `moves`. */
-  private async resolveAndCheck(configContent: string, state: State, walk: Walk, moves: Moves): Promise<DesiredState & { graph: Graph<GraphNode> }> {
+  private async resolveAndCheck(state: State, walk: Walk, moves: Moves): Promise<DesiredState & { graph: Graph<GraphNode> }> {
     const { loader, graphBuilder, writtenCheck, desiredStateBuilder, modules } = this.newRun();
-    const { loadedResources, loadedModules, schemas } = await loader.load(configContent);
+    const { loadedResources, loadedModules, schemas } = await loader.load();
 
     const graph = graphBuilder.buildExecutionGraph(loadedResources, loadedModules);
     checkAttributes(loadedResources, schemas);

@@ -136,7 +136,7 @@ describe('a data source given a sensitive value', () => {
 
     it('keeps it through a plan saved to a file, into what a resource is given', async () => {
       const config = reading(copy(dir, 'data.local_file.f.path'));
-      const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), config, {}), 'plan.json');
+      const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), { 'main.clay': config }), 'plan.json');
       await drain(newOrchestrator().runPlan(saved, config));
 
       expect(await marks('local_file.copy')).toEqual([['content']]);
@@ -144,7 +144,7 @@ describe('a data source given a sensitive value', () => {
 
     it('marks no more than the plan file says', async () => {
       const config = reading(copy(dir, 'data.local_file.f.content'));
-      const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), config, {}), 'plan.json');
+      const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), { 'main.clay': config }), 'plan.json');
       await drain(newOrchestrator().runPlan(saved, config));
 
       expect(await marks('local_file.copy')).toBeUndefined();
@@ -198,13 +198,13 @@ describe('a data source given a sensitive value', () => {
 
     it('keeps the key sensitive through a plan saved to a file, and only that key', async () => {
       const config = tagged(copy(dir, 'data.tagged.t.tags.token'));
-      const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), config, {}), 'plan.json');
+      const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), { 'main.clay': config }), 'plan.json');
       expect(saved.dataSensitive).toEqual({ 'data.tagged.t': [['tags', 'token']] });
       await drain(newOrchestrator().runPlan(saved, config));
       expect(await marks('local_file.copy')).toEqual([['content']]);
 
       const other = tagged(copy(dir, 'data.tagged.t.tags.name'));
-      await drain(newOrchestrator().runPlan(parsePlanFile(serializePlan(await newOrchestrator().plan(other), other, {}), 'plan.json'), other));
+      await drain(newOrchestrator().runPlan(parsePlanFile(serializePlan(await newOrchestrator().plan(other), { 'main.clay': other }), 'plan.json'), other));
       expect(await marks('local_file.copy')).toBeUndefined();
     });
   });
@@ -241,7 +241,7 @@ describe('a data source given a sensitive value', () => {
 
     it('keeps it through a plan saved to a file', async () => {
       const config = repeated(copy(dir, `data.local_file.f[${key}].path`));
-      const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), config, {}), 'plan.json');
+      const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), { 'main.clay': config }), 'plan.json');
       await drain(newOrchestrator().runPlan(saved, config));
 
       expect(await marks('local_file.copy')).toEqual([['content']]);

@@ -8,8 +8,6 @@ import { createApplyCommand } from '../src/commands/apply';
 import { confirm } from '../src/confirm';
 
 vi.mock('node:fs/promises');
-// What the command reads through its files, main.clay among them.
-const readFiles = vi.hoisted(() => vi.fn<(file: string) => string | undefined>());
 // Address is a plain value type the commands print with, so it stays real.
 vi.mock('@clay/orchestrator', async () => {
   const actual = await vi.importActual<typeof import('@clay/orchestrator')>('@clay/orchestrator');
@@ -19,7 +17,7 @@ vi.mock('@clay/orchestrator', async () => {
     DiskFiles: vi.fn(),
     InMemoryFiles: vi.fn(),
     RecordingFiles: vi.fn(function () {
-      return { read: readFiles, snapshot: () => ({}) };
+      return { read: vi.fn(), snapshot: () => ({}) };
     }),
   };
 });
@@ -38,24 +36,7 @@ describe('CLI: apply command', () => {
   });
 
   describe('Config-based apply', () => {
-    it('should abort if main.clay not found', async () => {
-      readFiles.mockReturnValue(undefined);
-
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-      await createApplyCommand().parseAsync(['node', 'clay']);
-
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('main.clay not found'));
-      expect(exitSpy).toHaveBeenCalledWith(1);
-
-      exitSpy.mockRestore();
-      consoleSpy.mockRestore();
-    });
-
     it('should apply changes when confirmed', async () => {
-      readFiles.mockReturnValue('content');
-
       const planned = {
         serial: 0,
         actions: [
@@ -88,12 +69,10 @@ describe('CLI: apply command', () => {
 
       expect(planMock).toHaveBeenCalled();
       expect(confirm).toHaveBeenCalled();
-      expect(runMock).toHaveBeenCalledWith(planned, 'content', { parallelism: undefined, signal: expect.any(AbortSignal) });
+      expect(runMock).toHaveBeenCalledWith(planned, { parallelism: undefined, signal: expect.any(AbortSignal) });
     });
 
     it('should print each resource as it is applied', async () => {
-      readFiles.mockReturnValue('content');
-
       const planMock = vi.fn().mockResolvedValue({
         serial: 0,
         actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }],
@@ -131,8 +110,6 @@ describe('CLI: apply command', () => {
     });
 
     it('should skip confirmation with --yes flag', async () => {
-      readFiles.mockReturnValue('content');
-
       const planMock = vi.fn().mockResolvedValue({
         serial: 0,
         actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }],
@@ -160,8 +137,6 @@ describe('CLI: apply command', () => {
     });
 
     it('exits 1 when the confirmation is declined', async () => {
-      readFiles.mockReturnValue('content');
-
       const planMock = vi.fn().mockResolvedValue({
         serial: 0,
         actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }],
@@ -199,8 +174,6 @@ describe('CLI: apply command', () => {
     });
 
     it('should skip apply when all actions are NO_OP', async () => {
-      readFiles.mockReturnValue('content');
-
       const planMock = vi.fn().mockResolvedValue({
         serial: 0,
         actions: [{ type: 'NO_OP', resourceType: 'test', name: 't' }],
@@ -230,8 +203,6 @@ describe('CLI: apply command', () => {
     });
 
     it('should run when only an output changes', async () => {
-      readFiles.mockReturnValue('content');
-
       const planMock = vi.fn().mockResolvedValue({
         serial: 0,
         actions: [{ type: 'NO_OP', resourceType: 'test', name: 't' }],
@@ -263,8 +234,6 @@ describe('CLI: apply command', () => {
     });
 
     it('should display outputs when returned from apply', async () => {
-      readFiles.mockReturnValue('content');
-
       const planMock = vi.fn().mockResolvedValue({
         serial: 0,
         actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }],
@@ -299,8 +268,6 @@ describe('CLI: apply command', () => {
     });
 
     it('should handle unknown action types gracefully', async () => {
-      readFiles.mockReturnValue('content');
-
       const planMock = vi.fn().mockResolvedValue({
         serial: 0,
         actions: [{ type: 'UNKNOWN', resourceType: 'test', name: 't' }],
@@ -339,8 +306,7 @@ describe('CLI: apply command', () => {
       const planFileContent = JSON.stringify({
         version: PLAN_FILE_VERSION,
         timestamp: '2024-01-01T00:00:00.000Z',
-        config: 'saved config',
-        modules: { 'm/main.clay': 'saved module' },
+        files: { 'main.clay': 'saved config', 'm/main.clay': 'saved module' },
         serial: 2,
         actions: [{ type: 'CREATE', resourceType: 'test', name: 't', planned: {}, after: {} }],
         outputs: {},
@@ -369,54 +335,13 @@ describe('CLI: apply command', () => {
 
       await createApplyCommand().parseAsync(['node', 'clay', 'plan.json']);
 
-      expect(runPlanMock).toHaveBeenCalledWith(
-        expect.objectContaining({ serial: 2, actions: [{ type: 'CREATE', resourceType: 'test', name: 't', planned: {}, after: {} }] }),
-        'saved config',
-        { parallelism: undefined, signal: expect.any(AbortSignal) }
-      );
-      expect(InMemoryFiles).toHaveBeenCalledWith({ 'm/main.clay': 'saved module', 'main.clay': 'saved config' });
+      expect(runPlanMock).toHaveBeenCalledWith(expect.objectContaining({ serial: 2, actions: [{ type: 'CREATE', resourceType: 'test', name: 't', planned: {}, after: {} }] }), {
+        parallelism: undefined,
+        signal: expect.any(AbortSignal),
+      });
+      expect(InMemoryFiles).toHaveBeenCalledWith({ 'main.clay': 'saved config', 'm/main.clay': 'saved module' });
       expect(confirm).not.toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Applying from saved plan'));
-
-      consoleSpy.mockRestore();
-    });
-
-    it('should not read the configuration on disk', async () => {
-      const planFileContent = JSON.stringify({
-        version: PLAN_FILE_VERSION,
-        timestamp: '2024-01-01T00:00:00.000Z',
-        config: 'saved config',
-        modules: { 'm/main.clay': 'saved module' },
-        serial: 2,
-        actions: [{ type: 'CREATE', resourceType: 'test', name: 't', planned: {}, after: {} }],
-        outputs: {},
-        prevRun: {},
-        prior: {},
-        schemas: { test: {} },
-        dataSources: {},
-        readAtApply: [],
-      });
-
-      vi.mocked(fs.readFile).mockImplementation(async (path) => {
-        if (String(path).includes('plan.json')) return planFileContent;
-        return 'config content';
-      });
-
-      const runPlanMock = vi.fn(doneWith({}));
-
-      vi.mocked(Orchestrator.create).mockImplementation(function () {
-        return {
-          registerProvider: vi.fn(),
-          runPlan: runPlanMock,
-        } as Partial<Orchestrator> as Orchestrator;
-      });
-
-      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-
-      await createApplyCommand().parseAsync(['node', 'clay', 'plan.json']);
-
-      expect(runPlanMock).toHaveBeenCalled();
-      expect(readFiles).not.toHaveBeenCalledWith('main.clay');
 
       consoleSpy.mockRestore();
     });
@@ -425,8 +350,7 @@ describe('CLI: apply command', () => {
       const planFileContent = JSON.stringify({
         version: PLAN_FILE_VERSION,
         timestamp: '2024-01-01T00:00:00.000Z',
-        config: 'saved config',
-        modules: { 'm/main.clay': 'saved module' },
+        files: { 'main.clay': 'saved config', 'm/main.clay': 'saved module' },
         serial: 2,
         actions: [{ type: 'CREATE', resourceType: 'test', name: 't', planned: {}, after: {} }],
         outputs: {},
@@ -484,7 +408,6 @@ describe('CLI: apply command', () => {
 
     /** Ctrl-C arrives after the action, before the run gives `done` or ends without it. */
     const interruptedRun = async (finishes: boolean) => {
-      readFiles.mockReturnValue('content');
       const planned = { serial: 0, actions: [created], outputs: {}, prevRun: {}, prior: {}, schemas: { test: {} }, dataSources: {}, readAtApply: [] };
       const runMock = vi.fn(async function* () {
         yield { type: 'applied', action: created };
@@ -524,8 +447,6 @@ describe('CLI: apply command', () => {
 
   describe('Error handling', () => {
     it('should handle apply errors gracefully', async () => {
-      readFiles.mockReturnValue('content');
-
       const planMock = vi.fn().mockResolvedValue({
         serial: 0,
         actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }],
@@ -564,7 +485,6 @@ describe('CLI: apply command', () => {
   });
 
   it('names the failures it held when the run then crashes', async () => {
-    readFiles.mockReturnValue('content');
     const runMock = vi.fn(async function* () {
       yield { type: 'failed', action: { type: 'CREATE', resourceType: 'test', name: 't' }, error: new Error('disk full') };
       throw new Error('provider crashed');
@@ -601,7 +521,6 @@ describe('CLI: apply command', () => {
   });
 
   it('should handle non-Error exceptions gracefully', async () => {
-    readFiles.mockReturnValue('content');
     vi.mocked(Orchestrator.create).mockImplementation(function () {
       return {
         registerProvider: vi.fn(),
