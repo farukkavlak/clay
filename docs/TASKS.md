@@ -674,7 +674,7 @@ and every operator HCL has. A real configuration hits each of these early.
 - [x] `depends_on` in a module call and an output, and `module.m` as what to wait for
 - [x] A `moved` block, so a rename in the configuration moves state instead of destroying
       and creating: a resource or an instance, in any module
-- [ ] A `moved` block that moves a module call or a module instance, `module.a` to
+- [x] A `moved` block that moves a module call or a module instance, `module.a` to
       `module.b`, and every resource in it
 - [ ] A module reads every `.clay` file in its directory, as Terraform reads every `.tf`;
       today only `main.clay`

@@ -136,7 +136,7 @@ export class Orchestrator {
 
   /** Applies every move to `state` before anything reads it, and records each in `moves`. */
   private async resolveAndCheck(configContent: string, state: State, walk: Walk, moves: Moves): Promise<DesiredState & { graph: Graph<GraphNode> }> {
-    const { loader, graphBuilder, writtenCheck, desiredStateBuilder } = this.newRun();
+    const { loader, graphBuilder, writtenCheck, desiredStateBuilder, modules } = this.newRun();
     const { loadedResources, loadedModules, schemas } = await loader.load(configContent);
 
     const graph = graphBuilder.buildExecutionGraph(loadedResources, loadedModules);
@@ -145,7 +145,8 @@ export class Orchestrator {
     const moved = movesIn(loadedModules);
     applyMoves(moved, state, moves);
     const desired = await desiredStateBuilder.build(loadedResources, graph, state, schemas, walk, moves);
-    checkMovedAway(moved, desired.resources);
+    const declared = loadedModules.flatMap(({ address }) => (address.isRoot() ? [] : modules.of(address)));
+    checkMovedAway(moved, desired.resources, declared);
     return { ...desired, graph };
   }
 }

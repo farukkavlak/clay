@@ -138,7 +138,7 @@ What the engine reads from each:
 | `locals`   | every attribute, as a value of any kind; it may read anything a resource's attribute may, another local among them                                                    |
 | `output`   | `value`; `type`, read below; `sensitive`, which hides the value of a root output wherever it is printed; `description`, checked and dropped; `depends_on`             |
 | `module`   | `source`, a literal string naming a directory relative to the file; `count` or `for_each`, and `depends_on`; every other attribute is an input                        |
-| `moved`    | `from` and `to`, each a resource address written out                                                                                                                  |
+| `moved`    | `from` and `to`, each a resource or module address written out                                                                                                        |
 
 A resource, a data source or a module with both `count` and `for_each` is refused where
 it is written.
@@ -162,12 +162,14 @@ no place to name. `lifecycle = ...` with an equals sign is an attribute like any
 A module's `source` starts with `./` or `../`. Anything else, a registry address or an
 absolute path, is refused where it is written.
 
-`moved` takes `from` and `to`, both, and nothing else. Each is a resource address written
-out, read from the module the block is in: `local_file.a`, `local_file.a[0]`,
-`local_file.a["web"]` or `module.m.local_file.a`. A key is a whole number or a quoted
-string as written, never a reference or a call. A data source, a module alone, a value
-that is not a reference and a path into an attribute are refused where they are written.
-`from` and `to` the same address is refused at the block, and a `to` of another type at `to`.
+`moved` takes `from` and `to`, both, and nothing else. Each is an address written out,
+read from the module the block is in: a resource, `local_file.a`, `local_file.a[0]`,
+`local_file.a["web"]` or `module.m.local_file.a`, or a module, `module.m`, `module.m[0]` or
+`module.m.module.n`. A key is a whole number or a quoted string as written, never a
+reference or a call. A data source, a value that is not a reference and a path into an
+attribute are refused where they are written. `from` and `to` the same address is refused
+at the block; a `to` of another type, or a module on one side and a resource on the other,
+at `to`.
 
 ## Values
 
@@ -630,7 +632,7 @@ refused where they are written, and so are an index and a key `for_each` does no
 is read once for each instance, as it is under count.
 
 Adding `for_each` to a module that exists, or taking it off, moves nothing, as for a
-resource; a `moved` block for each resource in it keeps the resource.
+resource; a `moved` block from `module.m` to `module.m["key"]` keeps what is in it.
 
 ### Interpolation
 
@@ -779,12 +781,9 @@ interface LocalBlock {
   position: Position;
 }
 
-interface MovedBlock {
-  type: 'Moved';
-  from: Address;
-  to: Address;
-  position: Position;
-}
+type MovedBlock =
+  | { type: 'Moved'; kind: 'resource'; from: Address; to: Address; position: Position }
+  | { type: 'Moved'; kind: 'module'; from: ModuleAddress; to: ModuleAddress; position: Position };
 
 type Statement = ResourceBlock | DataBlock | VariableBlock | OutputBlock | ModuleBlock | LocalBlock | MovedBlock;
 type Program = Statement[];
@@ -803,7 +802,8 @@ default)` attributes give in `defaults`: `values` by attribute name at one level
 `element` for the items of a list, a set or a map, and `within` for a tuple's items by
 position or an object's attributes by name. A `locals` block is a `LocalBlock` for each
 of its names, `{ type: 'Local', name, value }`, placed at the name. A `MovedBlock` holds
-its two addresses as the `Address` the state is keyed by.
+its two addresses as the `Address` the state is keyed by, or as the `ModuleAddress` of a
+module, with `kind` saying which.
 
 ## Errors
 

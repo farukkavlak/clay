@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { Address, isModulePath, ModuleAddress, parseDataAddress } from '../src/index';
+import { Address, isModulePath, ModuleAddress, parseDataAddress, parseMovable } from '../src/index';
 
 describe('Address', () => {
   describe('toString', () => {
@@ -214,6 +214,28 @@ describe('Address', () => {
       ['module.a-b c.data.local_file.f', '"a-b c" is not a name: a name starts with a letter or underscore, then letters, digits, underscores and dashes'],
     ])('refuses %s, which no configuration can spell', (input, reason) => {
       expect(() => parseDataAddress(input)).toThrow(`Invalid address "${input}": ${reason}`);
+    });
+  });
+
+  describe('parseMovable', () => {
+    it.each([
+      ['a module call', 'module.app', ModuleAddress.root.child('app')],
+      ['a module instance', 'module.app["x.y"]', ModuleAddress.root.child('app', 'x.y')],
+      ['a module in a module instance', 'module.app[0].module.db', ModuleAddress.root.child('app', 0).child('db')],
+    ])('reads %s as a module', (_, input, module) => {
+      expect(parseMovable(input)).toEqual(module);
+    });
+
+    it.each(['local_file.a', 'module.app[0].local_file.a[1]'])('reads %s as a resource', (input) => {
+      expect(parseMovable(input)).toEqual(Address.parse(input));
+    });
+
+    it.each([
+      ['module.my app', '"my app" is not a name: a name starts with a letter or underscore, then letters, digits, underscores and dashes'],
+      ['module.app.module', 'a module needs a name after "module"'],
+      ['module.app.local_file', 'an address ends with a type and a name'],
+    ])('refuses %s and says what is wrong', (input, reason) => {
+      expect(() => parseMovable(input)).toThrow(`Invalid address "${input}": ${reason}`);
     });
   });
 

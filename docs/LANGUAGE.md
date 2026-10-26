@@ -392,6 +392,22 @@ Refused, at the block:
 
 A `to` of another type is refused at `to`, since its provider could not take the object.
 
+A block may move a module call or a module instance instead, with every resource in it and
+every module under it:
+
+```
+moved {
+  from = module.old
+  to   = module.new
+}
+```
+
+The keys work as for a resource: `module.old` to `module.new` moves each instance to the
+same key, and `module.web` to `module.web["eu"]` keeps a module that gains `for_each`. A
+module moves only where the state holds nothing in its new module, or for a whole call in
+any instance of it. A module `from` still declared is refused even with nothing in it. A
+change of a module's keys and a move inside that module both apply.
+
 An implicit move, from adding or removing `count`, follows a `moved` block: the block
 moves first, then the count moves what it moved.
 

@@ -61,16 +61,16 @@ const KEY_FORM = 'a key is a whole number or a quoted string, as in [0] or ["nam
 
 type Refuse = (reason: string) => never;
 
+function checkName(name: string, refuse: Refuse): void {
+  if (!isName(name)) refuse(`"${name}" is not a name: a name ${NAME_RULE}`);
+}
+
 /** A configuration spells each part as a name, so an address with any other could never be planned. */
 function checkNames(module: ModuleAddress, type: string, name: string, refuse: Refuse): void {
-  const checkName = (step: string) => {
-    if (!isName(step)) refuse(`"${step}" is not a name: a name ${NAME_RULE}`);
-  };
-
-  for (const step of module.path) checkName(step.name);
+  for (const step of module.path) checkName(step.name, refuse);
   if (!isName(type)) refuse(`"${type}" is not a type: a type ${NAME_RULE}`);
   if (RESERVED_TYPES.has(type)) refuse(`"${type}" cannot be a type: a reference reads "${type}." as something else`);
-  checkName(name);
+  checkName(name, refuse);
 }
 
 function invalid(input: string): Refuse {
@@ -242,6 +242,15 @@ export class Address {
     const suffix = `${this.resourceType}.${this.name}${spellKey(this.key)}`;
     return this.module.isRoot() ? suffix : `${this.module}.${suffix}`;
   }
+}
+
+/** A resource or an instance, or a module call or a module instance, as a `moved` block names what moves. */
+export function parseMovable(input: string, refuse: Refuse = invalid(input)): Address | ModuleAddress {
+  const { module, rest } = readModules(readSegments(input, refuse), refuse);
+  if (rest.length > 0) return Address.parse(input, refuse);
+
+  for (const step of module.path) checkName(step.name, refuse);
+  return module;
 }
 
 export function isAddress(text: string): boolean {
