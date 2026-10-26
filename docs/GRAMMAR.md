@@ -185,11 +185,12 @@ conditional last.
 Within one level they group from the left, so `a - b + c` is `(a - b) + c`; a conditional
 in a result groups from the right.
 
-Lists, maps, a call's arguments, an index read from a value, a type's `(...)`, parentheses,
-`!`, a `-` that negates, a conditional, a `${...}` and each operator in a chain nest at
-most 100 levels deep, together. A list or a map that opens a call's argument shares the
-call's level, so `tolist([1])` is one level. One more is refused where it starts: at its
-`[`, `{`, `(`, `!`, `-`, `?`, `${` or operator, or at the name of the call or the type.
+Lists, maps, a call's arguments, an index read from a value, parentheses, `!`, a `-` that
+negates, a conditional, a `${...}` and each operator in a chain nest at most 100 levels
+deep, together. A list or a map that opens a call's argument shares the call's level, so
+`tolist([1])` and the type `object({ a = string })` are one level. One more is refused
+where it starts: at its `[`, `{`, `(`, `!`, `-`, `?`, `${` or operator, or at the name of the
+call.
 
 ### Types
 
@@ -213,14 +214,21 @@ taken as a list, it is not known as a whole until apply, since it has no order y
 
 ```
 type = "string" | "number" | "bool" | "any"
-     | ( "list" | "set" | "map" ) "(" type ")"
-     | "tuple" "(" "[" [ type { "," type } [ "," ] ] "]" ")"
-     | "object" "(" "{" { IDENTIFIER "=" attribute [ "," ] } "}" ")"
-attribute = type | "optional" "(" type [ "," value ] ")"
+     | ( "list" | "set" | "map" ) "(" type [ "," ] ")"
+     | "tuple" "(" "[" [ type { "," type } [ "," ] ] "]" [ "," ] ")"
+     | "object" "(" "{" { IDENTIFIER "=" attribute [ "," ] } "}" [ "," ] ")"
+     | "(" type ")"
+attribute = type | "optional" "(" type [ "," value ] [ "," ] ")" | "(" attribute ")"
 ```
 
-The words are bare: `type = string`, not `type = "string"`. A word that names no type, or
-`(` after one that holds none, is refused where it is written.
+A type is written as a value and read as a type: `string` is a name, `list(string)` a
+call, and `object({ ... })` a call given a map. So a type that is not well formed as a
+value is refused as a value would be, `Expect ']' after list.`, and one that is well formed
+but names no type is refused at the part that is wrong.
+
+The words are bare: `type = string`, not `type = "string"`, and so are the names of an
+object's attributes, since a reference reads them that way. A word that names no type, and
+one that holds none written with `(`, are refused at the word.
 
 A variable with a type takes every value it is given as that type, converted as a schema
 converts it: `["b", "a", "a"]` given to `set(string)` is `["a", "b"]`. A value it cannot
