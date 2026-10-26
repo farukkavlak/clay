@@ -8,6 +8,21 @@ import unicorn from 'eslint-plugin-unicorn';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
+/** The orchestrator's folders, lowest first: each imports only from those before it, so a layer never reaches up. */
+const FOLDERS = ['values', 'config', 'instances', 'providers', 'expressions', 'graph', 'plan', 'checks', 'run'];
+const ORCHESTRATOR = 'packages/orchestrator/src';
+
+function importsOnly(files: string[], forbidden: string[]): Linter.Config {
+  const message = 'An orchestrator folder imports only from the folders above it in the README.';
+  return { files, rules: { 'no-restricted-imports': ['error', { patterns: [{ group: forbidden.map((folder) => `**/${folder}/*`), message }] }] } };
+}
+
+/** The files beside the folders are shared by all, so they import none; `index.ts` is the way in. */
+const folderOrder: Linter.Config[] = [
+  ...FOLDERS.slice(0, -1).map((folder, index) => importsOnly([`${ORCHESTRATOR}/${folder}/**/*.ts`], FOLDERS.slice(index + 1))),
+  { ...importsOnly([`${ORCHESTRATOR}/*.ts`], FOLDERS), ignores: [`${ORCHESTRATOR}/index.ts`] },
+];
+
 export default [
   { ignores: ['**/node_modules/**', '**/dist/**', '**/coverage/**'] },
   js.configs.recommended,
@@ -46,6 +61,7 @@ export default [
       'unicorn/no-useless-undefined': ['error', { checkArguments: false }],
     },
   },
+  ...folderOrder,
   eslintConfigPrettier,
   // Prettier's config turns curly off as a formatting rule, so it is set after it.
   { rules: { curly: ['error', 'multi'] } },
