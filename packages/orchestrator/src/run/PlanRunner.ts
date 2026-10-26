@@ -72,7 +72,7 @@ interface Layers extends Checked {
   byBlock: Map<string, PlanAction[]>;
 }
 
-/** State is written after every action, so a failed run loses nothing done before it. */
+/** State is written whole before the first action and after the last; each action in between records its own address, so a killed run loses nothing done before it. */
 export class PlanRunner {
   constructor(
     private stateManager: StateManager,
@@ -96,15 +96,43 @@ export class PlanRunner {
     this.executor.expect(actions, state);
 
     const order = applyGraph(graph, actions, state);
-
-    yield { type: 'planned', actions };
-
-    if (!(yield* this.applyInOrder(saved, checked, config, order, state, pace))) return;
-
-    // Resolved after the last action, so outputs never reflect a half-applied run.
-    state.outputs = this.resolveOutputs(config.mainProgram, state, ModuleAddress.root);
+    // The refreshed resources and the moves, which no action records.
     await this.stateManager.write(state);
-    yield { type: 'done', outputs: state.outputs };
+
+    // Set before the last whole write, so one that fails is not tried again.
+    let settled = false;
+    try {
+      yield { type: 'planned', actions };
+
+      if (!(yield* this.applyInOrder(saved, checked, config, order, state, pace))) {
+        settled = true;
+        yield* this.writeWhole(state);
+        return;
+      }
+
+      // Resolved after the last action, so outputs never reflect a half-applied run.
+      state.outputs = this.resolveOutputs(config.mainProgram, state, ModuleAddress.root);
+      settled = true;
+      await this.stateManager.write(state);
+      yield { type: 'done', outputs: state.outputs };
+    } catch (error) {
+      if (settled) throw error;
+      settled = true;
+      yield* this.writeWhole(state);
+      throw error;
+    } finally {
+      // A run its caller stopped reading.
+      if (!settled) await this.stateManager.write(state);
+    }
+  }
+
+  /** Reported apart from what stopped the run, which stays the error; the journal still holds what the run did. */
+  private async *writeWhole(state: State): AsyncGenerator<RunEvent> {
+    try {
+      await this.stateManager.write(state);
+    } catch (error) {
+      yield { type: 'unsaved', error: asError(error) };
+    }
   }
 
   /** A saved plan may hold an action with no block, which would be silently skipped, or a key unlike its block's, which would run another instance. */
@@ -328,7 +356,7 @@ export class PlanRunner {
   private async *step(action: PlanAction, state: State, signal?: AbortSignal, running: Running = {}): AsyncGenerator<RunEvent, boolean> {
     if (signal?.aborted) return false;
 
-    // A no-op is not reported; the final write saves its dependencies. A move, or a change in which parts are sensitive or in what a destroy is prevented, is reported and saved.
+    // A no-op is not reported, but its dependencies are saved. A move, or a change in which parts are sensitive or in what a destroy is prevented, is reported.
     const quiet = action.type === 'NO_OP' && !action.movedFrom && !action.marksChange && !action.protectionChange;
     if (!quiet) yield { type: 'started', action };
 
@@ -336,9 +364,10 @@ export class PlanRunner {
     const held = Object.hasOwn(state.resources, key);
     const lost = () => held && !Object.hasOwn(state.resources, key);
     if (!(yield* this.attempt(action, state, () => this.executor.execute(action, state, running), lost))) return false;
+
+    await this.stateManager.record(state, key);
     if (quiet) return true;
 
-    await this.stateManager.write(state);
     yield { type: 'applied', action };
     return true;
   }
@@ -348,7 +377,7 @@ export class PlanRunner {
     if (signal?.aborted) return false;
     if (!(yield* this.attempt(action, state, () => this.executor.destroy(action, state)))) return false;
 
-    await this.stateManager.write(state);
+    await this.stateManager.record(state, Address.of(action).toString());
     yield { type: 'destroyed', action };
     return true;
   }
@@ -359,7 +388,7 @@ export class PlanRunner {
       await change();
       return true;
     } catch (error) {
-      const stateError = await this.saveAfterFailure(state);
+      const stateError = await this.saveAfterFailure(state, Address.of(action).toString());
       if (lost()) yield { type: 'destroyed', action };
       yield { type: 'failed', action, error: asError(error), stateError };
       return false;
@@ -367,9 +396,9 @@ export class PlanRunner {
   }
 
   /** State is saved whatever the failure left. */
-  private async saveAfterFailure(state: State): Promise<Error | undefined> {
+  private async saveAfterFailure(state: State, key: string): Promise<Error | undefined> {
     try {
-      await this.stateManager.write(state);
+      await this.stateManager.record(state, key);
       return undefined;
     } catch (error) {
       return asError(error);

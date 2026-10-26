@@ -18,6 +18,7 @@ vi.mock('@clay/state', () => {
     return {
       read: readMock,
       write: writeMock,
+      record: writeMock,
       lock: vi.fn(),
       unlock: vi.fn(),
       backend,

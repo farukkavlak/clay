@@ -67,12 +67,13 @@ describe('a control character in what the CLI prints', () => {
     expect(printed).not.toContain(ESCAPE);
   });
 
-  it('shows an escape in the path of a state that cannot be saved as a character of its own', async () => {
-    await written(`resource "command_exec" "c" { command = "mkdir '${path.join(dir, 'clay.state.json.tmp')}'; exit 1" }\n`);
+  it.skipIf(process.getuid?.() === 0)('shows an escape in the path of a state that cannot be saved as a character of its own', async () => {
+    const journal = path.join(dir, 'clay.state.json.journal');
+    await written(`resource "command_exec" "c" { command = "touch '${journal}' && chmod 444 '${journal}'; exit 1" }\n`);
 
     const printed = await failing('apply', '--yes');
 
-    expect(printed).toContain('The state could not be saved: EISDIR');
+    expect(printed).toContain('The state could not be saved: EACCES');
     expect(printed).toContain('\u241B');
     expect(printed).not.toContain(ESCAPE);
   });
