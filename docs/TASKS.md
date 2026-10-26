@@ -1167,7 +1167,7 @@ Nothing here changes what Clay does. Each is a place the next change has to work
       `plan()` in one file of 700 lines
 - [x] `contracts/src/index.ts` holds unknown values, attribute paths, sensitive marks, the
       state and its readers, the schema and the provider contract in one file
-- [ ] `planner` depends on `parser` only for `DesiredResource.block`, from which it reads
+- [x] `planner` depends on `parser` only for `DesiredResource.block`, from which it reads
       one flag, `lifecycle.preventDestroy`
 - [ ] `orchestrator/src` holds 39 files side by side. `components/` names nothing, and
       `applyGraph.ts` above it imports from it

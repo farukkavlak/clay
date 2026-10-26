@@ -1,8 +1,9 @@
 import { Address, AttributePath, Identity, State } from '@clay/contracts';
 import { spell } from '@clay/parser';
-import { DesiredResource, PlanAction } from '@clay/planner';
+import { PlanAction } from '@clay/planner';
 
 import { asError } from './asError';
+import { ConfiguredResource } from './components/DesiredStateBuilder';
 import { withPlace } from './place';
 import { hidingReason } from './providerResult';
 import { ProviderRegistry } from './ProviderRegistry';
@@ -81,7 +82,7 @@ function checkGoing(going: Going, thing: string, staying: Staying): void {
     throw staying.refuse(`${going.address} makes its new object before it destroys the old one, but both are ${thing}, so the destroy would remove the new one.`);
 }
 
-function planned(resource: DesiredResource, actions: PlanAction[]): Staying {
+function planned(resource: ConfiguredResource, actions: PlanAction[]): Staying {
   const address = resource.address.toString();
 
   return {
@@ -92,7 +93,7 @@ function planned(resource: DesiredResource, actions: PlanAction[]): Staying {
 }
 
 /** Two objects that are one real thing, as two files at one path, would overwrite or destroy each other. Only the provider can tell. */
-export async function checkSameObjects(actions: PlanAction[], desired: DesiredResource[], state: State, providers: ProviderRegistry): Promise<void> {
+export async function checkSameObjects(actions: PlanAction[], desired: ConfiguredResource[], state: State, providers: ProviderRegistry): Promise<void> {
   const identify = identifyWith(providers);
   const staying = new Map<string, Staying>();
 

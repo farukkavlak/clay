@@ -11,8 +11,8 @@ function ignoring({ ignored }: DesiredResource): Pick<PlanAction, 'ignored'> {
   return ignored && ignored.length > 0 ? { ignored } : {};
 }
 
-function prevents({ block }: DesiredResource): boolean {
-  return block.lifecycle?.preventDestroy === true;
+function prevents({ preventDestroy }: DesiredResource): boolean {
+  return preventDestroy === true;
 }
 
 function protectedBy(desired: DesiredResource): Pick<PlanAction, 'preventDestroy'> {

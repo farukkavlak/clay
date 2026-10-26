@@ -25,8 +25,13 @@ import { DependencyGraphBuilder, GraphNode, LocalNode, OutputNode, ValueNode } f
 import { LoadedResource } from './ModuleLoader';
 import { Ignoring, ResourcePlan, ResourcePlanner } from './ResourcePlanner';
 
+/** With the block it was planned from, so a refusal can point at it. */
+export interface ConfiguredResource extends DesiredResource {
+  block: ResourceBlock;
+}
+
 export interface DesiredState {
-  resources: DesiredResource[];
+  resources: ConfiguredResource[];
   outputs: Record<string, Output>;
   /** What each data source read at plan gave, by address. */
   dataSources: Record<string, Record<string, Output>>;
@@ -105,7 +110,7 @@ export class DesiredStateBuilder {
     this.walk = walk;
     this.createsFirst = this.createFirst(loadedResources, graph);
     const byKey = new Map(loadedResources.map((r) => [r.address.toString(), r]));
-    const resources: DesiredResource[] = [];
+    const resources: ConfiguredResource[] = [];
     const desired: DesiredState = { resources, outputs: {}, dataSources: {}, dataSensitive: {}, readAtApply: [] };
     // A map, so an output named `__proto__` is a key like any other.
     const rootOutputs = new Map<string, Output>();
@@ -202,11 +207,11 @@ export class DesiredStateBuilder {
     this.modules.expandCall(module, block, (value, parse, caller) => this.readAt(value, block, caller, state, parse));
   }
 
-  private async planResource(key: string, loaded: LoadedResource, graph: Graph<GraphNode>, state: State): Promise<DesiredResource[]> {
+  private async planResource(key: string, loaded: LoadedResource, graph: Graph<GraphNode>, state: State): Promise<ConfiguredResource[]> {
     const { address, block } = loaded;
     const blocks = this.graphBuilder.resourceDependencies(graph, key);
 
-    const planned: DesiredResource[] = [];
+    const planned: ConfiguredResource[] = [];
 
     for (const module of this.modules.of(address.module)) {
       const dependencies = this.instancesOf(blocks, module);
@@ -216,13 +221,13 @@ export class DesiredStateBuilder {
     return planned;
   }
 
-  private async planBlock(address: Address, block: ResourceBlock, dependencies: string[], state: State): Promise<DesiredResource[]> {
+  private async planBlock(address: Address, block: ResourceBlock, dependencies: string[], state: State): Promise<ConfiguredResource[]> {
     const key = address.toString();
     if (!block.count && !block.forEach) return [await this.planInstance(address, block, dependencies, state)];
 
     this.setKeys(key, block, address, state);
 
-    const planned: DesiredResource[] = [];
+    const planned: ConfiguredResource[] = [];
     for (const instance of this.instances.keysOf(key) ?? [])
       planned.push(await this.planInstance(new Address(address.module, address.resourceType, address.name, instance), block, dependencies, state));
 
@@ -236,7 +241,7 @@ export class DesiredStateBuilder {
     return tryAt(value.position, spell(block), context, () => parse(this.resolveOrUnknown(value, state, context)));
   }
 
-  private async planInstance(address: Address, block: ResourceBlock, dependencies: string[], state: State): Promise<DesiredResource> {
+  private async planInstance(address: Address, block: ResourceBlock, dependencies: string[], state: State): Promise<ConfiguredResource> {
     const movedFrom = tryAt(block.position, spell(block), address, () => this.moveIn(address, state));
     const current = state.resources[address.toString()];
     const ignoring = this.ignoringIn(block, current);
@@ -253,6 +258,7 @@ export class DesiredStateBuilder {
       sensitive: change.sensitive,
       replace: change.replace,
       dependencies,
+      ...(block.lifecycle?.preventDestroy === true && { preventDestroy: true as const }),
       ...(ignoring && { ignored: ignoring.paths }),
       ...(this.createsFirst.has(block) && { createBeforeDestroy: true as const }),
       ...(movedFrom && { movedFrom }),

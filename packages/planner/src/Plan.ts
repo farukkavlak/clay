@@ -1,11 +1,9 @@
 import { Address, AttributePath, InstanceKey, ModuleStep, Output, Resource, Schema } from '@clay/contracts';
-import { ResourceBlock } from '@clay/parser';
 
 export type ActionType = 'CREATE' | 'UPDATE' | 'REPLACE' | 'DELETE' | 'NO_OP';
 
 export interface DesiredResource {
   address: Address;
-  block: ResourceBlock;
   attributes: Record<string, unknown>;
   /** As the provider plans it after apply; UNKNOWN where only the apply knows a value. */
   after: Record<string, unknown>;
@@ -15,6 +13,8 @@ export interface DesiredResource {
   dependencies: string[];
   /** The paths of the existing resource the configuration does not change; left out where it does not exist yet. */
   ignored?: AttributePath[];
+  /** A destroy or a replace of it is refused. */
+  preventDestroy?: true;
   /** Its block says so, or a block that reads it does: a replace makes the new object first. */
   createBeforeDestroy?: true;
   /** Its state address before count was added or removed; the state it was planned against already has the move. */

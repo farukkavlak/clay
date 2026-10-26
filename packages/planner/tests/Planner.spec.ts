@@ -1,11 +1,8 @@
 import { Address, isUnknown, ModuleAddress, Output, State, STATE_VERSION, types, UNKNOWN } from '@clay/contracts';
-import { AttributeValue, CONFIG_FILE } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
 import { DesiredResource, hasChanges, outputChanges, plan, PLAN_FILE_VERSION, PlanAction, serializePlan, validatePlanFile } from '../src/index';
 
-const position = { file: CONFIG_FILE, line: 1, column: 1 };
-const str = (value: string): AttributeValue => ({ type: 'String', value, position });
 const text = (value: string): Output => ({ value, type: types.string });
 
 function desiredResource(name: string, attributes: Record<string, string>, modulePath: string[] = []): DesiredResource {
@@ -15,13 +12,6 @@ function desiredResource(name: string, attributes: Record<string, string>, modul
       'mock_resource',
       name
     ),
-    block: {
-      type: 'Resource',
-      resourceType: 'mock_resource',
-      name,
-      attributes: Object.fromEntries(Object.entries(attributes).map(([key, value]) => [key, str(value)])),
-      position,
-    },
     attributes,
     after: attributes,
     sensitive: [],
@@ -43,8 +33,7 @@ function withDeposed(state: State, ...addresses: string[]): State {
 }
 
 function preventing(name: string, attributes: Record<string, string>): DesiredResource {
-  const resource = desiredResource(name, attributes);
-  return { ...resource, block: { ...resource.block, lifecycle: { preventDestroy: true, position } } };
+  return { ...desiredResource(name, attributes), preventDestroy: true };
 }
 
 function stateWith(name: string, attributes: Record<string, unknown>): State {

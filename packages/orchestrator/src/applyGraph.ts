@@ -1,9 +1,10 @@
 import { Address, State } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { spell } from '@clay/parser';
-import { DesiredResource, PlanAction } from '@clay/planner';
+import { PlanAction } from '@clay/planner';
 
 import { GraphNode, spellNode } from './components/DependencyGraphBuilder';
+import { ConfiguredResource } from './components/DesiredStateBuilder';
 import { blockKey } from './keys';
 import { withPlace } from './place';
 
@@ -203,7 +204,7 @@ export function applyGraph(config: Graph<GraphNode>, actions: PlanAction[], stat
 }
 
 /** Run at plan too, so a loop is refused before the plan is approved, at the block to change. */
-export function checkApplyOrder(config: Graph<GraphNode>, actions: PlanAction[], state: State, desired: DesiredResource[]): void {
+export function checkApplyOrder(config: Graph<GraphNode>, actions: PlanAction[], state: State, desired: ConfiguredResource[]): void {
   try {
     applyGraph(config, actions, state);
   } catch (error) {
