@@ -2,7 +2,6 @@ import { Address, AttributePath, ModuleAddress, Output, Resource, samePaths, Sch
 import { Graph } from '@clay/graph';
 import { AttributeValue, DataBlock, ResourceBlock, spell, Statement } from '@clay/parser';
 import { DesiredResource, hasChanges } from '@clay/planner';
-import { moveResource } from '@clay/state';
 
 import { writtenAt } from '../values/conformValues';
 import { countFrom } from '../instances/count';
@@ -23,6 +22,7 @@ import { carried, outputOf, sensitiveAmong, Value } from '../values/Value';
 import { DataSourceReader } from './DataSourceReader';
 import { DependencyGraphBuilder, GraphNode, LocalNode, OutputNode, ValueNode } from '../graph/DependencyGraphBuilder';
 import { LoadedResource } from '../config/ModuleLoader';
+import { Moves } from './moves';
 import { Ignoring, ResourcePlan, ResourcePlanner } from './ResourcePlanner';
 
 /** With the block it was planned from, so a refusal can point at it. */
@@ -76,6 +76,7 @@ export class DesiredStateBuilder {
   private schemas = new Map<string, Schema>();
   private createsFirst = new Set<ResourceBlock>();
   private walk: Walk = 'plan';
+  private moves = new Moves();
 
   constructor(
     private scopeManager: ScopeManager,
@@ -103,10 +104,11 @@ export class DesiredStateBuilder {
     return new Set(loadedResources.filter(({ uniqueId }) => found.has(uniqueId)).map(({ block }) => block));
   }
 
-  /** Applies count moves to `state`, a copy the plan never writes, and plans the actions against it. */
-  async build(loadedResources: LoadedResource[], graph: Graph<GraphNode>, state: State, schemas: Map<string, Schema>, walk: Walk): Promise<DesiredState> {
+  /** Applies count moves to `state`, a copy the plan never writes, records each in `moves`, and plans the actions against it. */
+  async build(loadedResources: LoadedResource[], graph: Graph<GraphNode>, state: State, schemas: Map<string, Schema>, walk: Walk, moves: Moves): Promise<DesiredState> {
     this.planned.begin();
     this.schemas = schemas;
+    this.moves = moves;
     this.walk = walk;
     this.createsFirst = this.createFirst(loadedResources, graph);
     const byKey = new Map(loadedResources.map((r) => [r.address.toString(), r]));
@@ -242,7 +244,7 @@ export class DesiredStateBuilder {
   }
 
   private async planInstance(address: Address, block: ResourceBlock, dependencies: string[], state: State): Promise<ConfiguredResource> {
-    const movedFrom = tryAt(block.position, spell(block), address, () => this.moveIn(address, state));
+    tryAt(block.position, spell(block), address, () => this.moveIn(address, state));
     const current = state.resources[address.toString()];
     const ignoring = this.ignoringIn(block, current);
     const change = await this.askProvider(address, block, current, this.resolveForPlan(block, state, address), ignoring);
@@ -261,7 +263,6 @@ export class DesiredStateBuilder {
       ...(block.lifecycle?.preventDestroy === true && { preventDestroy: true as const }),
       ...(ignoring && { ignored: ignoring.paths }),
       ...(this.createsFirst.has(block) && { createBeforeDestroy: true as const }),
-      ...(movedFrom && { movedFrom }),
     };
   }
 
@@ -284,18 +285,15 @@ export class DesiredStateBuilder {
    * Moves the instance before anything reads it, so readers find it at its new address.
    * Two possible old addresses would be a guess, so that is refused.
    */
-  private moveIn(address: Address, state: State): string | undefined {
-    if (Object.hasOwn(state.resources, address.toString())) return undefined;
+  private moveIn(address: Address, state: State): void {
+    if (Object.hasOwn(state.resources, address.toString())) return;
 
     const found = address.countCounterparts().filter((kept) => Object.hasOwn(state.resources, kept.toString()));
     if (found.length > 1)
-      throw new Error(`"${address}" may be ${found.map((kept) => `"${kept}"`).join(' or ')} in state, from before count came or went; say which with clay state mv`);
+      throw new Error(`"${address}" may be ${found.map((kept) => `"${kept}"`).join(' or ')} in state, from before count came or went; say which with a moved block`);
 
     const [source] = found;
-    if (!source) return undefined;
-
-    moveResource(state, source, address);
-    return source.toString();
+    if (source) this.moves.move(state, source, address);
   }
 
   /**

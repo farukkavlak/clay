@@ -115,9 +115,7 @@ describe('Clay Parser', () => {
     `;
       const parser = makeParser(input);
       const ast = parser.parse();
-      expect(ast).toHaveLength(2);
-      expect(ast[0].name).toBe('one');
-      expect(ast[1].name).toBe('two');
+      expect(ast.map((statement) => statement.type === 'Resource' && statement.name)).toEqual(['one', 'two']);
     });
 
     it('should handle empty attributes', () => {

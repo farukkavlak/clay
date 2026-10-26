@@ -23,9 +23,9 @@ export class Parser {
 
     for (const block of this.body.blocks())
       for (const statement of decodeBlock(block)) {
-        // A duplicate would silently replace the first.
+        // A duplicate would silently replace the first. Moves are told apart where every module's are read together.
         const label = spell(statement);
-        if (declared.has(label)) throw new ConfigError(`${label} is declared twice`, statement.position);
+        if (statement.type !== 'Moved' && declared.has(label)) throw new ConfigError(`${label} is declared twice`, statement.position);
         declared.add(label);
 
         program.push(statement);

@@ -7,6 +7,7 @@ import { checkApplyOrder } from './plan/applyGraph';
 import { asError } from './asError';
 import { GraphNode } from './graph/DependencyGraphBuilder';
 import { DesiredState, Walk } from './plan/DesiredStateBuilder';
+import { applyMoves, checkMovedAway, copyForMoves, copyResources, Moves, movesIn } from './plan/moves';
 import { checkRead, heldBy, hidingReason } from './providers/providerResult';
 import { checkAttributes } from './checks/checkAttributes';
 import { checkPreventDestroy } from './checks/preventDestroy';
@@ -30,16 +31,6 @@ export interface RunOptions {
   signal?: AbortSignal;
 }
 
-/** A move changes the map, never a list in it, so a copy of the map is its own. */
-function copyDeposed(deposed: State['deposed']): Pick<State, 'deposed'> {
-  return deposed ? { deposed: { ...deposed } } : {};
-}
-
-/** Plan and apply move entries and rewrite dependencies, so each works on its own copy. */
-function copyResources(resources: Record<string, Resource>): Record<string, Resource> {
-  return Object.fromEntries(Object.entries(resources).map(([key, resource]) => [key, { ...resource }]));
-}
-
 export class Orchestrator {
   constructor(
     private stateManager: StateManager,
@@ -60,11 +51,12 @@ export class Orchestrator {
   async plan(configContent: string, { refresh = true }: { refresh?: boolean } = {}): Promise<Plan> {
     const prevRun = await this.stateManager.read();
     const prior = refresh ? await this.refresh(prevRun) : prevRun;
-    // Planning applies count moves to a copy; the plan keeps the resources at their old addresses.
-    const currentState = { ...prior, resources: copyResources(prior.resources), ...copyDeposed(prior.deposed) };
-    const { resources: desiredResources, outputs, dataSources, dataSensitive, readAtApply, graph } = await this.resolveAndCheck(configContent, currentState, 'plan');
+    // Planning applies the moves to a copy; the plan keeps the resources at their old addresses.
+    const currentState = copyForMoves(prior);
+    const moves = new Moves();
+    const { resources: desiredResources, outputs, dataSources, dataSensitive, readAtApply, graph } = await this.resolveAndCheck(configContent, currentState, 'plan', moves);
 
-    const actions = plan(desiredResources, currentState);
+    const actions = plan(desiredResources, currentState, (address) => moves.originOf(address));
     checkPreventDestroy(actions, desiredResources, currentState.resources);
     await checkSameObjects(actions, desiredResources, currentState, this.providers);
     checkApplyOrder(graph, actions, currentState, desiredResources);
@@ -91,7 +83,7 @@ export class Orchestrator {
 
   /** Plans against an empty state and reads no data source, so what a resource or a data source gives is unknown and everything else is checked. */
   async validate(configContent: string): Promise<void> {
-    await this.resolveAndCheck(configContent, emptyState(), 'check');
+    await this.resolveAndCheck(configContent, emptyState(), 'check', new Moves());
   }
 
   /** Holds the state lock. A state written since the plan was made is refused, since the approved plan no longer matches it. */
@@ -142,13 +134,18 @@ export class Orchestrator {
     }
   }
 
-  private async resolveAndCheck(configContent: string, state: State, walk: Walk): Promise<DesiredState & { graph: Graph<GraphNode> }> {
+  /** Applies every move to `state` before anything reads it, and records each in `moves`. */
+  private async resolveAndCheck(configContent: string, state: State, walk: Walk, moves: Moves): Promise<DesiredState & { graph: Graph<GraphNode> }> {
     const { loader, graphBuilder, writtenCheck, desiredStateBuilder } = this.newRun();
     const { loadedResources, loadedModules, schemas } = await loader.load(configContent);
 
     const graph = graphBuilder.buildExecutionGraph(loadedResources, loadedModules);
     checkAttributes(loadedResources, schemas);
     await writtenCheck.check(loadedResources, loadedModules, graph);
-    return { ...(await desiredStateBuilder.build(loadedResources, graph, state, schemas, walk)), graph };
+    const moved = movesIn(loadedModules);
+    applyMoves(moved, state, moves);
+    const desired = await desiredStateBuilder.build(loadedResources, graph, state, schemas, walk, moves);
+    checkMovedAway(moved, desired.resources);
+    return { ...desired, graph };
   }
 }

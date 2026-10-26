@@ -5,6 +5,7 @@ import { ConfigError } from '../ConfigError';
 import { attributesOnly, refuseBlock } from './attributes';
 import { decodeData } from './decodeData';
 import { decodeModule } from './decodeModule';
+import { checkMovedArgument, decodeMoved } from './decodeMoved';
 import { decodeOutput, outputRules } from './decodeOutput';
 import { decodeResource, lifecycleArgument } from './decodeResource';
 import { checkValidationArgument, decodeValidation } from './decodeValidation';
@@ -48,6 +49,7 @@ const KINDS = new Map<string, Kind>([
   ['output', { labels: named('output'), opening: "Expect '{' after output name.", decode: (block, labels) => [decodeOutput(block, labels)] }],
   ['module', { labels: named('module'), opening: "Expect '{' after module name.", decode: (block, labels) => [decodeModule(block, labels)] }],
   ['locals', { labels: [], opening: "Expect '{' after 'locals'.", decode: decodeLocals }],
+  ['moved', { labels: [], opening: "Expect '{' after 'moved'.", decode: (block) => [decodeMoved(block)] }],
 ]);
 
 function kindOf(header: Header): Kind {
@@ -108,9 +110,23 @@ export const SCHEMA: Schema = {
 
     const { name } = inside.block;
     const rules = typedRules(inside.block);
-    if (name === 'lifecycle') lifecycleArgument(attribute);
-    else if (name === 'validation') checkValidationArgument(attribute.name, attribute.value);
-    else if (rules) typedAttribute(attribute.name, attribute.value, rules);
+    switch (name) {
+      case 'lifecycle': {
+        lifecycleArgument(attribute);
+        break;
+      }
+      case 'moved': {
+        checkMovedArgument(attribute);
+        break;
+      }
+      case 'validation': {
+        checkValidationArgument(attribute.name, attribute.value);
+        break;
+      }
+      default: {
+        if (rules) typedAttribute(attribute.name, attribute.value, rules);
+      }
+    }
   },
 
   closed(block, { block: within }) {

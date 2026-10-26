@@ -65,8 +65,8 @@ opens a map, so the `}` that closes the map does not close the `${`. A heredoc i
 same way, a line at a time, until its closing line; one still open at the end is refused
 where it opens.
 
-There are no keywords. `resource`, `data`, `variable`, `locals`, `output` and `module`
-start a block only at the top level; anywhere else they are ordinary identifiers, so
+There are no keywords. `resource`, `data`, `variable`, `locals`, `output`, `module` and
+`moved` start a block only at the top level; anywhere else they are ordinary identifiers, so
 `data = "x"` inside a block is an attribute. `for` right after `[` or `{`, and `in` after
 its names, start a for expression; `[for.a.id]` is still a list holding a reference, and
 `{ for = 1 }` a map with a key named `for`.
@@ -89,7 +89,8 @@ the file.
 
 A file is a sequence of blocks. Two blocks of the same kind and name in one file are an
 error. A resource is named by its type and name together, so `resource "a" "x"` and
-`resource "b" "x"` are different resources.
+`resource "b" "x"` are different resources. A `moved` block has no name, and a file may
+hold any number of them.
 
 ```
 resource "type" "name" { attributes }
@@ -98,6 +99,7 @@ variable "name" { attributes }
 locals { attributes }
 output "name" { value = value }
 module "name" { attributes }
+moved { from = address to = address }
 ```
 
 A `type` and a `name` are written as strings, and each has to spell an `IDENTIFIER`, since
@@ -136,6 +138,7 @@ What the engine reads from each:
 | `locals`   | every attribute, as a value of any kind; it may read anything a resource's attribute may, another local among them                                                    |
 | `output`   | `value`; `type`, read below; `sensitive`, which hides the value of a root output wherever it is printed; `description`, checked and dropped; `depends_on`             |
 | `module`   | `source`, a literal string naming a directory relative to the file; `count` or `for_each`, and `depends_on`; every other attribute is an input                        |
+| `moved`    | `from` and `to`, each a resource address written out                                                                                                                  |
 
 A resource, a data source or a module with both `count` and `for_each` is refused where
 it is written.
@@ -158,6 +161,13 @@ no place to name. `lifecycle = ...` with an equals sign is an attribute like any
 
 A module's `source` starts with `./` or `../`. Anything else, a registry address or an
 absolute path, is refused where it is written.
+
+`moved` takes `from` and `to`, both, and nothing else. Each is a resource address written
+out, read from the module the block is in: `local_file.a`, `local_file.a[0]`,
+`local_file.a["web"]` or `module.m.local_file.a`. A key is a whole number or a quoted
+string as written, never a reference or a call. A data source, a module alone, a value
+that is not a reference and a path into an attribute are refused where they are written.
+`from` and `to` the same address is refused at the block, and a `to` of another type at `to`.
 
 ## Values
 
@@ -574,7 +584,7 @@ resource. Each resource the configuration still has is moved on its own; one it 
 has is destroyed where state keeps it. A resource that gains count with its module moves
 in one step, `module.web.local_file.a` to `module.web[0].local_file.a[0]`. When state
 keeps it in two places it may have been, the plan is refused where the resource is
-written, since taking either would destroy the other; `clay state mv` says which.
+written, since taking either would destroy the other; a `moved` block says which.
 
 ### For each
 
@@ -600,7 +610,7 @@ A name after a dot there is never a key, so `local_file.site.web.content` and
 `for_each` does not give, are refused where they are written.
 
 Adding `for_each` to a resource, or taking it off, moves nothing: no key stands for the
-resource the way `[0]` does for a count. `clay state mv 'type.name' 'type.name["key"]'`
+resource the way `[0]` does for a count. `moved { from = type.name to = type.name["key"] }`
 keeps it.
 
 ### For each on a module
@@ -620,7 +630,7 @@ refused where they are written, and so are an index and a key `for_each` does no
 is read once for each instance, as it is under count.
 
 Adding `for_each` to a module that exists, or taking it off, moves nothing, as for a
-resource; `clay state mv` keeps each resource.
+resource; a `moved` block for each resource in it keeps the resource.
 
 ### Interpolation
 
@@ -769,7 +779,14 @@ interface LocalBlock {
   position: Position;
 }
 
-type Statement = ResourceBlock | DataBlock | VariableBlock | OutputBlock | ModuleBlock | LocalBlock;
+interface MovedBlock {
+  type: 'Moved';
+  from: Address;
+  to: Address;
+  position: Position;
+}
+
+type Statement = ResourceBlock | DataBlock | VariableBlock | OutputBlock | ModuleBlock | LocalBlock | MovedBlock;
 type Program = Statement[];
 ```
 
@@ -785,7 +802,8 @@ as the `Type` a schema names, `any` as `dynamic`, and the defaults their `option
 default)` attributes give in `defaults`: `values` by attribute name at one level,
 `element` for the items of a list, a set or a map, and `within` for a tuple's items by
 position or an object's attributes by name. A `locals` block is a `LocalBlock` for each
-of its names, `{ type: 'Local', name, value }`, placed at the name.
+of its names, `{ type: 'Local', name, value }`, placed at the name. A `MovedBlock` holds
+its two addresses as the `Address` the state is keyed by.
 
 ## Errors
 

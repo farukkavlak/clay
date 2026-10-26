@@ -324,7 +324,7 @@ describe('a module called with count', () => {
       const error = await planError(once('1'));
 
       expect(error.message).toBe(
-        '"module.web[0].local_file.page[0]" may be "module.web[0].local_file.page" or "module.web.local_file.page" in state, from before count came or went; say which with clay state mv'
+        '"module.web[0].local_file.page[0]" may be "module.web[0].local_file.page" or "module.web.local_file.page" in state, from before count came or went; say which with a moved block'
       );
       expect(error.position).toMatchObject({ file: 'web/main.clay', ...placeOf(countedPage(), 'resource "local_file" "page"') });
     });

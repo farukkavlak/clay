@@ -66,7 +66,7 @@ describe('two objects that are one file', () => {
     const refused = await refusal('apply', '--yes', '--parallelism', '1');
 
     expect(refused).toContain(`local_file.d is the file ${file('f.txt')}, which local_file.c holds and this plan destroys`);
-    expect(refused).toContain('clay state mv local_file.c local_file.d');
+    expect(refused).toContain('moved { from = local_file.c to = local_file.d }');
     expect(await exists('f.txt')).toBe(true);
     expect(await addresses()).toEqual(['local_file.c']);
   });
@@ -115,7 +115,7 @@ describe('two objects that are one file', () => {
     const refused = await refusal('plan');
 
     expect(refused).toContain(`local_file.b is the file ${file('x.txt')}, which local_file.a holds and this plan destroys`);
-    expect(refused).not.toContain('clay state mv');
+    expect(refused).not.toContain('moved {');
   });
 
   it('refuses a replace onto the file a deleted block holds, with no move to suggest', async () => {
@@ -126,7 +126,7 @@ describe('two objects that are one file', () => {
     const refused = await refusal('plan');
 
     expect(refused).toContain(`local_file.a is the file ${file('x.txt')}, which local_file.c holds and this plan destroys`);
-    expect(refused).not.toContain('clay state mv');
+    expect(refused).not.toContain('moved {');
   });
 
   // An update writes the file it already is; a replace would unlink it and write another.
@@ -190,7 +190,7 @@ describe('two objects that are one file', () => {
       const refused = await refusal('apply', '--yes');
 
       expect(refused).toContain(`local_file.d is the file ${file('f.txt')}, which local_file.c holds and this plan destroys`);
-      expect(refused).toContain('clay state mv local_file.c local_file.d');
+      expect(refused).toContain('moved { from = local_file.c to = local_file.d }');
       expect(await fs.readFile(file('f.txt'), 'utf8')).toBe('x');
       expect(await addresses()).toContain('local_file.c');
     });

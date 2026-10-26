@@ -32,7 +32,7 @@ describe('a locals block', () => {
   it('merges with another, in the order they are written', () => {
     const program = parse('locals { a = 1 }\nresource "t" "n" {}\nlocals { b = 2 }');
 
-    expect(program.map((statement) => `${statement.type} ${statement.name}`)).toEqual(['Local a', 'Resource n', 'Local b']);
+    expect(program.map((statement) => `${statement.type} ${'name' in statement ? statement.name : ''}`)).toEqual(['Local a', 'Resource n', 'Local b']);
   });
 
   it('may hold no name', () => {

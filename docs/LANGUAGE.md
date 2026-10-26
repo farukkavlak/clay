@@ -349,7 +349,51 @@ delete of their own, `- local_file.db (deposed object) will be destroyed`, wheth
 the resource is still in the configuration, and `prevent_destroy` does not hold it back,
 since the current object is not touched. They go one at a time, oldest first, each gone
 from state once its provider has destroyed it, so a failure leaves the rest for the next
-run. `clay state mv` and `rm` take them along.
+run. A move, by a `moved` block or `clay state mv`, takes them along, and `clay state rm`
+removes them with the resource.
+
+## Moved
+
+A `moved` block says a resource was renamed, so the plan moves its state to the new
+address instead of destroying it and creating it again:
+
+```
+moved {
+  from = local_file.old
+  to   = local_file.new
+}
+```
+
+With no key on either side, every instance moves, each to the same key. With a key on
+one side, one instance moves, and a side with no key is the instance with none:
+`from = local_file.a` and `to = local_file.a["web"]` keeps a resource that gains
+`for_each`. The plan shows each move, `> local_file.new will be moved from local_file.old`,
+or beside the change it makes, and the apply moves the state before any action. A `to`
+the configuration does not declare is destroyed there.
+
+The addresses are read in the module the block is in, and the block moves in each
+instance of that module. A block in the root may name what is inside a module,
+`module.web.local_file.a`, and so move a resource into a module or out of one. Such a
+block and one inside the module are read together: `module.web[0].local_file.a` in the
+root names the same object as `local_file.a` in `web`, so the two may chain or clash.
+
+Keep the block after the apply: a state that does not hold `from` moves nothing, so the
+block can stay for whoever applies the configuration later. Blocks chain, `a` to `b` and
+`b` to `c`, and the plan moves `a` to `c` in one step. A move of one instance runs before a
+move of its whole resource.
+
+Refused, at the block:
+
+- `from` still declared: the block would move the state away from it
+- the state already holding `to`, or for a whole resource any instance of it, since one
+  of the two objects would be lost; remove the one to forget with `clay state rm`
+- one address moved to two places, or two addresses to one
+- blocks that move in a circle
+
+A `to` of another type is refused at `to`, since its provider could not take the object.
+
+An implicit move, from adding or removing `count`, follows a `moved` block: the block
+moves first, then the count moves what it moved.
 
 ## Data sources
 

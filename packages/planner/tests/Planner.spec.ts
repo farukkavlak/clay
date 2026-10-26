@@ -36,6 +36,8 @@ function preventing(name: string, attributes: Record<string, string>): DesiredRe
   return { ...desiredResource(name, attributes), preventDestroy: true };
 }
 
+const moved = (address: string) => (address === 'mock_resource.r' ? 'mock_resource.old' : undefined);
+
 function stateWith(name: string, attributes: Record<string, unknown>): State {
   return {
     version: STATE_VERSION,
@@ -121,6 +123,29 @@ describe('Planner', () => {
 
       expect(action.type).toBe('DELETE');
       expect(action).not.toHaveProperty('deposed');
+    });
+  });
+
+  describe('moves', () => {
+    it('mark the action of each moved resource, kept, changed or destroyed, with where the state held it', () => {
+      const kept = plan([desiredResource('r', { path: 'x' })], stateWith('r', { path: 'x' }), moved);
+      const changed = plan([desiredResource('r', { path: 'y' })], stateWith('r', { path: 'x' }), moved);
+      const destroyed = plan([], stateWith('r', {}), moved);
+
+      expect([kept, changed, destroyed].map(([action]) => [action.type, action.movedFrom])).toEqual([
+        ['NO_OP', 'mock_resource.old'],
+        ['UPDATE', 'mock_resource.old'],
+        ['DELETE', 'mock_resource.old'],
+      ]);
+    });
+
+    it('leave deposed objects unmarked, since the move of their resource takes them along', () => {
+      const actions = plan([], withDeposed(stateWith('r', {}), 'mock_resource.r'), moved);
+
+      expect(actions.map((action) => [action.deposed, action.movedFrom])).toEqual([
+        [undefined, 'mock_resource.old'],
+        [true, undefined],
+      ]);
     });
   });
 

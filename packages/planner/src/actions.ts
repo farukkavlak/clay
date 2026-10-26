@@ -24,8 +24,10 @@ function carriedOver(desired: DesiredResource): Pick<PlanAction, 'sensitive' | '
   return { ...marked(desired), ...protectedBy(desired), ...ignoring(desired), ...(desired.replace && desired.createBeforeDestroy && { createBeforeDestroy: true as const }) };
 }
 
-function processExistingResource(actions: PlanAction[], desired: DesiredResource, currentResource: Resource) {
-  const moved = desired.movedFrom;
+/** Where the state held what is now at an address, if a move took it there. */
+export type MovedFrom = (address: string) => string | undefined;
+
+function processExistingResource(actions: PlanAction[], desired: DesiredResource, currentResource: Resource, moved?: string) {
   const changes = calculateDiff(currentResource.attributes, desired.after);
 
   if (!changes && !desired.replace) {
@@ -54,8 +56,12 @@ function processExistingResource(actions: PlanAction[], desired: DesiredResource
   });
 }
 
-/** `currentState` already has every move applied. */
-export function plan(desiredResources: DesiredResource[], currentState: State): PlanAction[] {
+function deleteOf(resource: Resource, moved: string | undefined): PlanAction {
+  return { type: 'DELETE', ...Address.of(resource).fields(), ...(moved && { movedFrom: moved }) };
+}
+
+/** `currentState` already has every move applied, each of which `movedFrom` knows. */
+export function plan(desiredResources: DesiredResource[], currentState: State, movedFrom?: MovedFrom): PlanAction[] {
   const actions: PlanAction[] = [];
   const currentMap = new Map<string, Resource>(Object.entries(currentState.resources));
   const desiredMap = new Map<string, DesiredResource>();
@@ -64,7 +70,7 @@ export function plan(desiredResources: DesiredResource[], currentState: State): 
 
   for (const [key, desired] of desiredMap.entries()) {
     const currentResource = currentMap.get(key);
-    if (currentResource) processExistingResource(actions, desired, currentResource);
+    if (currentResource) processExistingResource(actions, desired, currentResource, movedFrom?.(key));
     else
       actions.push({
         type: 'CREATE',
@@ -77,16 +83,9 @@ export function plan(desiredResources: DesiredResource[], currentState: State): 
       });
   }
 
-  for (const [key, resource] of currentMap.entries()) {
-    if (desiredMap.has(key)) continue;
+  for (const [key, resource] of currentMap.entries()) if (!desiredMap.has(key)) actions.push(deleteOf(resource, movedFrom?.(key)));
 
-    actions.push({
-      type: 'DELETE',
-      ...Address.of(resource).fields(),
-    });
-  }
-
-  // Whether or not the resource they were left by is still there.
+  // Whether or not the resource they were left by is still there. The move of that resource takes them with it.
   for (const address of Object.keys(currentState.deposed ?? {})) actions.push({ type: 'DELETE', deposed: true, ...Address.parse(address).fields() });
 
   return actions;
