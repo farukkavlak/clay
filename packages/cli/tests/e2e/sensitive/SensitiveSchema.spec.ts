@@ -1,12 +1,11 @@
 import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, State, types } from '@clay/contracts';
-import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { LocalProvider } from '@clay/provider-local';
-import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { orchestratorIn } from '../helpers';
 import { start } from '../start';
 
 const SCHEMA: Schema = {
@@ -81,9 +80,7 @@ describe('an attribute a provider marks sensitive', () => {
   let dir: string;
 
   const newOrchestrator = (vault: Provider = new Vault()) => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
-    engine.registerProvider(vault);
+    const engine = orchestratorIn(dir, new LocalProvider(), vault);
     return engine;
   };
 

@@ -1,14 +1,9 @@
-import { DiskFiles, Orchestrator } from '@clay/orchestrator';
-import { LocalProvider } from '@clay/provider-local';
-import { LocalBackend, StateManager } from '@clay/state';
-import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { promisify, stripVTControlCharacters } from 'node:util';
+import { stripVTControlCharacters } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-
-const clay = path.resolve(__dirname, '../../../bin/clay.js');
+import { clayOutput, orchestratorIn } from '../helpers';
 
 const secret = (value: string, flag = '\n  sensitive = true') => `output "password" {\n  value = "${value}"${flag}\n}\noutput "plain" { value = "seen" }`;
 
@@ -24,21 +19,14 @@ const FIT = 'password does not fit what output "password" takes; it is sensitive
 describe('a sensitive output', () => {
   let dir: string;
 
-  const clayIn = async (...args: string[]) => {
-    const { stdout } = await promisify(execFile)('node', [clay, ...args], { cwd: dir });
-    return stripVTControlCharacters(stdout);
-  };
+  const clayIn = (...args: string[]) => clayOutput(dir, ...args);
 
   const written = async (config: string, ...args: string[]) => {
     await fs.writeFile(path.join(dir, 'main.clay'), config, 'utf8');
     return clayIn(...args);
   };
 
-  const newOrchestrator = () => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
-    return engine;
-  };
+  const newOrchestrator = () => orchestratorIn(dir);
 
   beforeEach(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-sensitive-'));

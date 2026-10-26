@@ -1,7 +1,6 @@
 import { Address, ExactNumber, isUnknown, UNKNOWN } from '@clay/contracts';
-import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { LocalProvider } from '@clay/provider-local';
-import { LocalBackend, StateManager } from '@clay/state';
+import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createApplyCommand } from '../../../src/commands/apply';
 import { createPlanCommand } from '../../../src/commands/plan';
+import { orchestratorIn } from '../helpers';
 import { start } from '../start';
 
 /** A map with one unknown value and one known, passed to a module and read whole and in parts. */
@@ -34,11 +34,7 @@ const module = `
 describe('a value known in part', () => {
   let dir: string;
 
-  const newOrchestrator = () => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
-    return engine;
-  };
+  const newOrchestrator = () => orchestratorIn(dir);
 
   const cli = async (run: () => Promise<unknown>): Promise<string> => {
     const printed: string[] = [];
@@ -121,8 +117,7 @@ describe('a value known in part', () => {
 
     const provider = new LocalProvider();
     const validate = vi.spyOn(provider, 'validate');
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(provider);
+    const engine = orchestratorIn(dir, provider);
 
     await engine.plan(withTriggers);
 

@@ -1,11 +1,11 @@
-import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { LocalProvider } from '@clay/provider-local';
-import { LocalBackend, StateManager } from '@clay/state';
+import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { orchestratorIn } from '../helpers';
 import { start } from '../start';
 
 describe('a name with a dash in it', () => {
@@ -21,8 +21,7 @@ describe('a name with a dash in it', () => {
 
   // The name goes through a reference, a state key and a command's address.
   it('is applied, read by another resource and addressed in state', async () => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
+    const engine = orchestratorIn(dir, new LocalProvider());
     const config = `
       resource "local_file" "a-b" { path = "${path.join(dir, 'a-b.txt')}" content = "first" }
       resource "local_file" "c" { path = "${path.join(dir, 'c.txt')}" content = local_file.a-b.content }

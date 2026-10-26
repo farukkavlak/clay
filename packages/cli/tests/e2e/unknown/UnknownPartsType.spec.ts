@@ -1,23 +1,8 @@
-import { DiskFiles, Orchestrator } from '@clay/orchestrator';
-import { ConfigError } from '@clay/parser';
-import { LocalProvider } from '@clay/provider-local';
-import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-
-const errorOf = async (run: () => Promise<unknown>): Promise<ConfigError> => {
-  try {
-    await run();
-  } catch (error) {
-    if (error instanceof ConfigError) return error;
-
-    throw error;
-  }
-
-  throw new Error('Expected the configuration to be refused');
-};
+import { errorOf, orchestratorIn } from '../helpers';
 
 const RANDOM = 'resource "random_string" "r" { length = 4 }';
 
@@ -27,11 +12,7 @@ const NUMBERS = 'tolist(toset([length(random_string.r.result)]))';
 describe('a value not known yet given to a variable', () => {
   let dir: string;
 
-  const newOrchestrator = () => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
-    return engine;
-  };
+  const newOrchestrator = () => orchestratorIn(dir);
 
   const withModule = async (variable: string, given: string) => {
     await fs.mkdir(path.join(dir, 'm'));

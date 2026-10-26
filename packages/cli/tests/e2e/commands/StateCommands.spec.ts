@@ -1,7 +1,6 @@
 import { types } from '@clay/contracts';
-import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { LocalProvider } from '@clay/provider-local';
-import { LocalBackend, StateManager } from '@clay/state';
+import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createOutputCommand } from '../../../src/commands/output';
 import { createStateCommand } from '../../../src/commands/state';
+import { orchestratorIn } from '../helpers';
 import { start } from '../start';
 
 // The commands read the current directory, so they run from a temp one.
@@ -26,11 +26,7 @@ describe('state and output against a real state file', () => {
     output "file" { value = "\${local_file.a.id}" }
   `;
 
-  const newOrchestrator = () => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
-    return engine;
-  };
+  const newOrchestrator = () => orchestratorIn(dir);
 
   const run = async (configContent: string) => {
     for await (const event of start(newOrchestrator(), configContent)) if (event.type === 'failed') throw event.error;
@@ -299,8 +295,7 @@ describe('state and output against a real state file', () => {
 
   it('does not take a variable for an output', async () => {
     const onlyAVariable = 'variable "greeting" { default = "hi" }';
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
+    const engine = orchestratorIn(dir, new LocalProvider());
     for await (const event of start(engine, onlyAVariable)) if (event.type === 'failed') throw event.error;
 
     await createOutputCommand().parseAsync(['node', 'clay']);

@@ -1,13 +1,12 @@
-import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { ConfigError } from '@clay/parser';
 import { parsePlanFile, serializePlan } from '@clay/planner';
-import { LocalProvider } from '@clay/provider-local';
-import { LocalBackend, StateManager } from '@clay/state';
+
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { orchestratorIn } from '../helpers';
 import { start } from '../start';
 
 const drain = async (events: AsyncGenerator<{ type: string; error?: Error }>) => {
@@ -17,11 +16,7 @@ const drain = async (events: AsyncGenerator<{ type: string; error?: Error }>) =>
 describe('a reference that reads into a list or a map', () => {
   let dir: string;
 
-  const newOrchestrator = () => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
-    return engine;
-  };
+  const newOrchestrator = () => orchestratorIn(dir);
 
   const apply = (config: string) => drain(start(newOrchestrator(), config));
   const written = (name: string) => fs.readFile(path.join(dir, name), 'utf8');

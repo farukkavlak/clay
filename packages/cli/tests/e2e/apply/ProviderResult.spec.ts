@@ -1,12 +1,12 @@
 import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, Type, types, UNKNOWN, UpdateRequest } from '@clay/contracts';
-import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { LocalProvider } from '@clay/provider-local';
-import { LocalBackend, StateManager } from '@clay/state';
+import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { orchestratorIn } from '../helpers';
 import { start } from '../start';
 
 /** Plans the label as configured, then upper-cases it and adds a value it never planned. */
@@ -222,12 +222,7 @@ describe('what an apply returns, held to the plan', () => {
     }
   `;
 
-  const newOrchestrator = () => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
-    engine.registerProvider(new LoudProvider());
-    return engine;
-  };
+  const newOrchestrator = () => orchestratorIn(dir, new LocalProvider(), new LoudProvider());
 
   beforeEach(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-apply-result-'));
@@ -252,8 +247,7 @@ describe('what an apply returns, held to the plan', () => {
   });
 
   it('stops the run at a resource made with an id other than the plan showed', async () => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new MisnamingProvider());
+    const engine = orchestratorIn(dir, new MisnamingProvider());
 
     const failures: Error[] = [];
     for await (const event of start(engine, 'resource "named" "a" { name = "logs" }')) if (event.type === 'failed') failures.push(event.error);
@@ -268,8 +262,7 @@ describe('the plan made again at apply', () => {
   let dir: string;
 
   const failuresOf = async (config: string, ...providers: Provider[]) => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
+    const engine = orchestratorIn(dir, new LocalProvider());
     for (const provider of providers) engine.registerProvider(provider);
 
     const failures: string[] = [];
@@ -329,11 +322,7 @@ describe('the plan made again at apply', () => {
 describe('what a refresh reads, held to what a resource can hold', () => {
   let dir: string;
 
-  const newOrchestrator = (echo: EchoProvider) => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(echo);
-    return engine;
-  };
+  const newOrchestrator = (echo: EchoProvider) => orchestratorIn(dir, echo);
 
   const apply = async (config: string) => {
     for await (const event of start(newOrchestrator(new EchoProvider()), config)) if (event.type === 'failed') throw event.error;
@@ -384,11 +373,7 @@ const noteless = (label: string) => `resource "noteless" "a" { label = "${label}
 describe('a name an apply returns with no value', () => {
   let dir: string;
 
-  const newOrchestrator = () => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new NotelessProvider());
-    return engine;
-  };
+  const newOrchestrator = () => orchestratorIn(dir, new NotelessProvider());
 
   beforeEach(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-valueless-'));
@@ -425,8 +410,7 @@ describe('what a provider plans, held to its schema', () => {
   });
 
   it('refuses a value of another type than its schema names, at the resource', async () => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new MistypingProvider());
+    const engine = orchestratorIn(dir, new MistypingProvider());
 
     await expect(engine.plan('\nresource "loud" "a" { label = "a" }')).rejects.toMatchObject({
       message: 'loud planned what its schema does not hold, which is a bug in the provider: label is a list, where its type is a string',
@@ -439,8 +423,7 @@ describe('what a data source reads', () => {
   let dir: string;
 
   const plan = (reader: DataReader) => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(reader);
+    const engine = orchestratorIn(dir, reader);
     return engine.plan('\ndata "vague" "v" {}');
   };
 
@@ -472,8 +455,7 @@ describe('what a data source reads', () => {
     ['gives no value', { content: undefined }],
     ['gives null', { content: null }],
   ])('reads as null a name its schema has that the read %s', async (_, returned) => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new DataReader(returned));
+    const engine = orchestratorIn(dir, new DataReader(returned));
 
     const { outputs } = await engine.plan('data "vague" "v" {}\noutput "content" { value = data.vague.v.content }');
 
@@ -481,8 +463,7 @@ describe('what a data source reads', () => {
   });
 
   it('refuses a name its schema does not have, where it is read', async () => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new DataReader({ content: 'x' }));
+    const engine = orchestratorIn(dir, new DataReader({ content: 'x' }));
 
     await expect(engine.plan('data "vague" "v" {}\noutput "size" { value = data.vague.v.size }')).rejects.toThrow('Attribute "size" not found on data source "data.vague.v"');
   });
@@ -508,11 +489,7 @@ describe('what a data source reads', () => {
 describe('a schema a provider gives', () => {
   let dir: string;
 
-  const newOrchestrator = (echo: EchoProvider) => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(echo);
-    return engine;
-  };
+  const newOrchestrator = (echo: EchoProvider) => orchestratorIn(dir, echo);
 
   beforeEach(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-schema-'));
@@ -545,11 +522,7 @@ const tooDeep = (type: string, did: string, name: string) => `${type} ${did} wha
 describe('a value a provider gives nested too deep', () => {
   let dir: string;
 
-  const newOrchestrator = (provider: Provider) => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(provider);
-    return engine;
-  };
+  const newOrchestrator = (provider: Provider) => orchestratorIn(dir, provider);
 
   const apply = async (provider: Provider, config: string) => {
     const failures: Error[] = [];

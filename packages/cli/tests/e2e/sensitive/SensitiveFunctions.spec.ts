@@ -1,11 +1,10 @@
 import { UNKNOWN } from '@clay/contracts';
-import { DiskFiles, Orchestrator } from '@clay/orchestrator';
-import { LocalProvider } from '@clay/provider-local';
-import { LocalBackend, StateManager } from '@clay/state';
+
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { orchestratorIn } from '../helpers';
 
 const DB = `
   resource "random_string" "s" { length = 8 }
@@ -37,11 +36,7 @@ const probe = (value: string, flag = '') => `
 describe('the functions sensitive, nonsensitive and issensitive', () => {
   let dir: string;
 
-  const newOrchestrator = () => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
-    return engine;
-  };
+  const newOrchestrator = () => orchestratorIn(dir);
 
   const planned = async (value: string, flag = '') => {
     const { outputs } = await newOrchestrator().plan(probe(value, flag));
@@ -107,11 +102,7 @@ describe('the functions sensitive, nonsensitive and issensitive', () => {
 describe('a sensitive variable', () => {
   let dir: string;
 
-  const newOrchestrator = () => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
-    return engine;
-  };
+  const newOrchestrator = () => orchestratorIn(dir);
 
   const probed = async (config: string) => {
     const { outputs } = await newOrchestrator().plan(config);

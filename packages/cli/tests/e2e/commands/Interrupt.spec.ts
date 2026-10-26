@@ -7,8 +7,7 @@ import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { promisify, stripVTControlCharacters } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-
-const clay = path.resolve(__dirname, '../../../bin/clay.js');
+import { clay } from '../helpers';
 
 // `after` reads `slow`, so it runs in the layer after it.
 // `slow` makes its mark from the shell: a child that exits 0 during an interrupt lets the shell go on.

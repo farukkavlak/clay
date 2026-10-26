@@ -4,9 +4,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { clay } from '../helpers';
 
 const run = promisify(execFile);
-const clay = path.resolve(__dirname, '../../../bin/clay.js');
 
 const failed = async (command: string[], cwd: string) => {
   try {

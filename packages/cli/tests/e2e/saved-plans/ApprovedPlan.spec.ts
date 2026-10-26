@@ -1,6 +1,4 @@
-import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { LocalProvider } from '@clay/provider-local';
-import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -8,6 +6,7 @@ import readline from 'node:readline/promises';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createApplyCommand } from '../../../src/commands/apply';
+import { orchestratorIn } from '../helpers';
 import { start } from '../start';
 
 vi.mock('node:readline/promises');
@@ -35,8 +34,7 @@ describe('the plan apply showed', () => {
   `;
 
   const applyElsewhere = async (config: string) => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
+    const engine = orchestratorIn(dir, new LocalProvider());
     for await (const event of start(engine, config)) if (event.type === 'failed') throw event.error;
   };
 

@@ -1,12 +1,11 @@
 import { State } from '@clay/contracts';
-import { execFile } from 'node:child_process';
+
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { promisify, stripVTControlCharacters } from 'node:util';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-const clay = path.resolve(__dirname, '../../../bin/clay.js');
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { clayOutput } from '../helpers';
 
 const DB = 'output "password" {\n  value     = "hunter2"\n  sensitive = true\n}\n';
 const MARKED = '"password=${module.db.password}"';
@@ -21,10 +20,7 @@ const triggers = (first: string, second: string) =>
 describe('a change only in which parts of a resource are sensitive', () => {
   let dir: string;
 
-  const clayIn = async (...args: string[]) => {
-    const { stdout } = await promisify(execFile)('node', [clay, ...args], { cwd: dir });
-    return stripVTControlCharacters(stdout);
-  };
+  const clayIn = (...args: string[]) => clayOutput(dir, ...args);
 
   const written = async (content: string) => {
     const config = `module "db" { source = "./db" }\nresource "local_file" "conf" {\n  path    = "${path.join(dir, 'conf.txt')}"\n  content = ${content}\n}\n`;

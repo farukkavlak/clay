@@ -1,12 +1,13 @@
 import { Output, types } from '@clay/contracts';
-import { DiskFiles, Orchestrator } from '@clay/orchestrator';
-import { LocalProvider } from '@clay/provider-local';
-import { LocalBackend, StateManager } from '@clay/state';
+import { Orchestrator } from '@clay/orchestrator';
+
+import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { orchestratorIn } from '../helpers';
 import { start } from '../start';
 
 // The CLI reads process.cwd() and parses on import, so these tests drive the orchestrator.
@@ -14,11 +15,7 @@ describe('apply and plan against real files', () => {
   let dir: string;
   let orchestrator: Orchestrator;
 
-  const newOrchestrator = () => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
-    return engine;
-  };
+  const newOrchestrator = () => orchestratorIn(dir);
 
   const fileConfig = (content: string) => `
     resource "local_file" "a" {

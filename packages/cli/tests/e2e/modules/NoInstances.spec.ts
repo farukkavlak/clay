@@ -1,12 +1,11 @@
 import { planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types } from '@clay/contracts';
-import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { ConfigError } from '@clay/parser';
 import { LocalProvider } from '@clay/provider-local';
-import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { orchestratorIn, placeOf } from '../helpers';
 
 const TAGGED: Schema = { tags: { type: types.set(types.string), required: true } };
 
@@ -50,12 +49,6 @@ class Tagger implements Provider {
   }
 }
 
-/** Where an error would point at the first `needle`. */
-const placeOf = (config: string, needle: string) => {
-  const before = config.slice(0, config.indexOf(needle)).split('\n');
-  return { line: before.length, column: before.at(-1)!.length + 1 };
-};
-
 const CALL = 'module "m" {\n  source = "./m"\n  count  = 0\n}';
 
 /** A file for each item of `forEach`, holding the item. */
@@ -71,12 +64,7 @@ const rule = (condition: string, message: string) =>
 describe('a module called with count = 0', () => {
   let dir: string;
 
-  const newOrchestrator = () => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
-    engine.registerProvider(new Tagger());
-    return engine;
-  };
+  const newOrchestrator = () => orchestratorIn(dir, new LocalProvider(), new Tagger());
 
   const module = async (content: string, inner = '') => {
     await fs.mkdir(path.join(dir, 'm', 'n'), { recursive: true });
@@ -333,8 +321,7 @@ describe('a block with no instance at the root', () => {
   });
 
   async function planError(config: string): Promise<ConfigError> {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
+    const engine = orchestratorIn(dir, new LocalProvider());
 
     try {
       await engine.plan(config);
@@ -361,8 +348,7 @@ describe('a block with no instance at the root', () => {
   it('gives the provider no attribute set to null', async () => {
     const provider = new LocalProvider();
     const validate = vi.spyOn(provider, 'validate');
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(provider);
+    const engine = orchestratorIn(dir, provider);
 
     await engine.plan('resource "null_resource" "n" {\n  count    = 0\n  triggers = null\n}');
 
@@ -385,8 +371,7 @@ describe('a resource that reads another as written', () => {
   // Planning so many resources takes seconds, and longer while the whole suite runs.
   it('is checked through a chain longer than the call stack holds', { timeout: 60_000 }, async () => {
     const links = Array.from({ length: 1500 }, (_, step) => `resource "local_file" "f${step + 1}" {\n  path    = "f${step + 1}"\n  content = local_file.f${step}.content\n}`);
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
+    const engine = orchestratorIn(dir, new LocalProvider());
 
     const plan = await engine.plan([...links.reverse(), 'resource "local_file" "f0" {\n  path    = "f0"\n  content = "x"\n}'].join('\n'));
 

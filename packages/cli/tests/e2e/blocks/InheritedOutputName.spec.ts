@@ -1,13 +1,11 @@
-import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { promisify, stripVTControlCharacters } from 'node:util';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createPlanCommand } from '../../../src/commands/plan';
-
-const clay = path.resolve(__dirname, '../../../bin/clay.js');
+import { clayOutput } from '../helpers';
 
 const config = (value: string) => `output "plain" { value = "x" }\noutput "__proto__" { value = "${value}" }`;
 
@@ -16,10 +14,7 @@ describe('an output named after something every object has', () => {
   let cwd: string;
   let printed: string[];
 
-  const clayIn = async (...args: string[]) => {
-    const { stdout } = await promisify(execFile)('node', [clay, ...args], { cwd: dir });
-    return stripVTControlCharacters(stdout);
-  };
+  const clayIn = (...args: string[]) => clayOutput(dir, ...args);
 
   beforeEach(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-inherited-output-'));

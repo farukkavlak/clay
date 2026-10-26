@@ -1,12 +1,13 @@
-import { DiskFiles, Orchestrator, RunEvent } from '@clay/orchestrator';
+import { RunEvent } from '@clay/orchestrator';
 import { ConfigError } from '@clay/parser';
 import { parsePlanFile, Plan, serializePlan } from '@clay/planner';
 import { LocalProvider } from '@clay/provider-local';
-import { LocalBackend, StateManager } from '@clay/state';
+import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { orchestratorIn } from '../helpers';
 
 class CountingProvider extends LocalProvider {
   reads = 0;
@@ -27,8 +28,7 @@ describe('data source values in the plan', () => {
   let size: string;
 
   const newOrchestrator = (provider = new LocalProvider()) => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(provider);
+    const engine = orchestratorIn(dir, provider);
     return engine;
   };
 

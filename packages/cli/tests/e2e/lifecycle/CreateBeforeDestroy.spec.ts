@@ -1,11 +1,11 @@
 import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, State, types, UpdateRequest } from '@clay/contracts';
-import { DiskFiles, Orchestrator, RunEvent } from '@clay/orchestrator';
-import { LocalBackend, StateManager } from '@clay/state';
+import { Orchestrator, RunEvent } from '@clay/orchestrator';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { orchestratorIn } from '../helpers';
 import { start } from '../start';
 
 const SCHEMA: Schema = {
@@ -87,8 +87,7 @@ describe('create_before_destroy', () => {
   beforeEach(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-first-'));
     provider = new Rec();
-    engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(provider);
+    engine = orchestratorIn(dir, provider);
   });
 
   afterEach(async () => {

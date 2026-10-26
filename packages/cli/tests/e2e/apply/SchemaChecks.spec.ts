@@ -1,13 +1,13 @@
 import { CreateRequest, ExactNumber, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types, UNKNOWN } from '@clay/contracts';
-import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { parsePlanFile, serializePlan } from '@clay/planner';
 import { LocalProvider } from '@clay/provider-local';
-import { LocalBackend, StateManager } from '@clay/state';
+import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { orchestratorIn } from '../helpers';
 import { start } from '../start';
 
 const RULE = types.object({ mode: types.string, port: types.number }, ['port']);
@@ -88,9 +88,7 @@ describe('a configuration held to the schema', () => {
   let file: string;
 
   const newOrchestrator = (tally = new TallyProvider()) => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
-    engine.registerProvider(tally);
+    const engine = orchestratorIn(dir, new LocalProvider(), tally);
     return engine;
   };
 
@@ -270,9 +268,7 @@ describe('a data block held to the schema', () => {
   let file: string;
 
   const plan = (config: string, tally = new TallyProvider()) => {
-    const engine = Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir));
-    engine.registerProvider(new LocalProvider());
-    engine.registerProvider(tally);
+    const engine = orchestratorIn(dir, new LocalProvider(), tally);
     return engine.plan(config);
   };
 
