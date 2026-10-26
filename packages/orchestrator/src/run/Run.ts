@@ -29,6 +29,7 @@ export interface Run {
   writtenCheck: WrittenCheck;
   desiredStateBuilder: DesiredStateBuilder;
   runner: PlanRunner;
+  modules: ModuleInstances;
 }
 
 /** Each run gets its own scopes, instances and data source values, so runs at the same time never read each other's. */
@@ -53,5 +54,6 @@ export function newRun(stateManager: StateManager, providers: ProviderRegistry, 
     writtenCheck: new WrittenCheck(resolver, scopes, schemas, dataSchemas, providers),
     desiredStateBuilder: new DesiredStateBuilder(scopes, resolver, graphBuilder, instances, modules, planned, resourcePlanner, reader),
     runner: new PlanRunner(stateManager, new ActionExecutor(providers, resolver, resourcePlanner, new SameObjects(providers)), scopes, resolver, instances, modules, reader),
+    modules,
   };
 }

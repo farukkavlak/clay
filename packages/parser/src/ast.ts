@@ -1,4 +1,4 @@
-import { Address, ExactNumber, Type } from '@clay/contracts';
+import { Address, ExactNumber, ModuleAddress, Type } from '@clay/contracts';
 import { Position } from './Position';
 import { spellReference, spellSteps, Step } from './reference';
 
@@ -173,13 +173,11 @@ export interface LocalBlock extends Node {
   value: AttributeValue;
 }
 
-/** The state of `from` is now that of `to`, both in the module that declares it. */
-export interface MovedBlock extends Node {
-  type: 'Moved';
-  /** With no key on either side, every instance of the resource moves, each to the same key. */
-  from: Address;
-  to: Address;
-}
+/**
+ * The state of `from` is now that of `to`, both in the module that declares it.
+ * With no key on either side, every instance of the resource or the module call moves, each to the same key.
+ */
+export type MovedBlock = Node & { type: 'Moved' } & ({ kind: 'resource'; from: Address; to: Address } | { kind: 'module'; from: ModuleAddress; to: ModuleAddress });
 
 export type Statement = ResourceBlock | VariableBlock | OutputBlock | DataBlock | ModuleBlock | LocalBlock | MovedBlock;
 export type Program = Statement[];
