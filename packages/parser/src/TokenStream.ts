@@ -63,7 +63,11 @@ export class TokenStream {
   }
 
   error(message: string): never {
-    throw new ConfigError(message, this.peek().position);
+    return this.errorAt(message, this.peek());
+  }
+
+  errorAt(message: string, token: Token): never {
+    throw new ConfigError(message, token.position);
   }
 
   plainText(quote: Token, what: string): Token {

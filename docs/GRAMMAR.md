@@ -73,6 +73,20 @@ its names, start a for expression; `[for.a.id]` is still a list holding a refere
 
 ## Blocks
 
+Every block is written the same way, whatever its kind:
+
+```
+file  = { block }
+block = IDENTIFIER { label } "{" { item } "}"
+item  = IDENTIFIER "=" value | block
+label = OQUOTE [ QUOTED_LIT ] CQUOTE
+```
+
+The parser reads that shape and knows no kind of block. What each kind takes, its labels,
+its attributes and the blocks inside it, is checked as each part is read, and what a block
+means as soon as it closes, so a mistake is refused where it is written, before the rest of
+the file.
+
 A file is a sequence of blocks. Two blocks of the same kind and name in one file are an
 error. A resource is named by its type and name together, so `resource "a" "x"` and
 `resource "b" "x"` are different resources.
@@ -783,7 +797,7 @@ throws the same for a character it does not know, a string not closed on its lin
 ## Not in the language
 
 - Provisioners, and any `lifecycle` argument but `prevent_destroy`, `create_before_destroy` and `ignore_changes`
-- Nested blocks inside a block, but `lifecycle` in a resource
+- Nested blocks inside a block, but `lifecycle` in a resource and `validation` in a variable
 - Any file other than `main.clay`
 
 `TASKS.md` lists what is planned.

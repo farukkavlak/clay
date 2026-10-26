@@ -1328,6 +1328,7 @@ describe('Clay Parser', () => {
       ['a resource with no name', 'resource "type" { key = "val" }', 'Expect resource name string', at(1, 17)],
       ['a block body that never opens', 'resource "type" "name" key = "val"', "Expect '{'", at(1, 24)],
       ['a block body that never closes', 'resource "type" "name" { key = "val"', "Expect '}'", at(1, 37)],
+      ['a lifecycle body that never closes', 'resource "t" "a" { lifecycle { prevent_destroy = true', "Expect '}' after lifecycle body.", at(1, 54)],
       ['an attribute with no "="', 'resource "type" "name" { key "val" }', "Expect '='", at(1, 30)],
       ['an attribute named by a string', 'resource "type" "name" { "key" = "val" }', 'Expect attribute name', at(1, 26)],
       ['a value that is not one', 'resource "type" "name" { key = = }', 'Unexpected value: =', at(1, 32)],
@@ -1338,6 +1339,36 @@ describe('Clay Parser', () => {
       const error = errorOf(input);
 
       expect(error.message).toContain(message);
+      expect(error.position).toEqual(position);
+    });
+
+    // A missing `}` makes the next block look nested, so each part is checked as it is read, not once the file is.
+    it.each([
+      ['a wrong label', 'resource "t" {\n  a = 1\n', 'Expect resource name string after resource type.', at(1, 14)],
+      ['a block its kind does not take', 'resource "t" "a" {\n  tags {}\nresource "t" "b" {}', "Expect '=' after attribute name.", at(2, 8)],
+      ['a block a missing } let in', 'resource "t" "a" {\n  a = 1\nresource "t" "b" {}', "Expect '=' after attribute name.", at(3, 10)],
+      ['a value an attribute cannot be', 'variable "v" {\n  sensitive = maybe\n', 'sensitive is true or false.', at(2, 15)],
+      ['an attribute its block does not take', 'variable "v" {\n  foo = 1\n', 'Variable "v" takes only "default", "type", "sensitive" and "description", not "foo".', at(2, 9)],
+      ['a lifecycle argument it cannot be', 'resource "t" "a" {\n  lifecycle {\n    prevent_destroy = maybe\n', 'prevent_destroy is true or false.', at(3, 23)],
+      ['a validation given a label', 'variable "v" {\n  validation "x" {}\n', "Expect '{' after validation.", at(2, 14)],
+      ['a block whose meaning is wrong', 'output "o" {}\nresource "t" "a" {\n', 'Output "o" has no "value".', at(1, 1)],
+      ['an attribute set twice', 'resource "t" "a" {\n  a = 1\n  a = 2\n', 'a is set twice', at(3, 3)],
+      ['a flag set twice', 'variable "v" {\n  sensitive = true\n  sensitive = maybe\n', 'sensitive is set twice', at(3, 3)],
+      ['a lifecycle argument set twice', 'resource "t" "a" {\n  lifecycle {\n    prevent_destroy = true\n    prevent_destroy = false\n', 'prevent_destroy is set twice', at(4, 5)],
+      ['a second lifecycle', 'resource "t" "a" {\n  lifecycle {}\n  lifecycle {\n', 'resource "t" "a" has two lifecycle blocks', at(3, 3)],
+      ['a validation with nothing in it', 'variable "v" {\n  validation {}\n', 'validation needs a condition', at(2, 3)],
+      ['a block with a label where an attribute goes', 'variable "v" {\n  foo "x" {}\n', "Expect '=' after attribute name.", at(2, 7)],
+      ['an attribute named __proto__', 'variable "v" {\n  __proto__ = 1\n', '__proto__ cannot be a name', at(2, 3)],
+      [
+        'a validation that checks nothing',
+        'variable "v" {\n  validation {\n    condition     = true\n    error_message = "x"\n  }\n',
+        "A validation's condition reads var.v, or it checks nothing",
+        at(3, 21),
+      ],
+    ])('refuses %s where it is written, before a body left open after it', (_, input, message, position) => {
+      const error = errorOf(input);
+
+      expect(error.message).toBe(message);
       expect(error.position).toEqual(position);
     });
 

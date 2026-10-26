@@ -57,8 +57,8 @@ describe('a locals block', () => {
 
   it.each([
     ['a label', 'locals "a" {}', "Expect '{' after 'locals'.", at(1, 8)],
-    ['a name with no value', 'locals { a }', "Expect '=' after the name of a local.", at(1, 12)],
-    ['a keyword as a name', 'locals { null = 1 }', 'Expect the name of a local.', at(1, 10)],
+    ['a name with no value', 'locals { a }', "Expect '=' after attribute name.", at(1, 12)],
+    ['a keyword as a name', 'locals { null = 1 }', 'Expect attribute name.', at(1, 10)],
     ['no closing brace', 'locals { a = 1', "Expect '}' after block body.", at(1, 15)],
   ])('refuses %s', (_, input, message, position) => {
     const error = errorOf(input);
