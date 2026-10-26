@@ -1,5 +1,4 @@
 import { Provider } from '@clay/contracts';
-import { CONFIG_FILE } from '@clay/parser';
 import { Plan } from '@clay/planner';
 import { StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
@@ -37,11 +36,11 @@ export class TestEngine {
 /** An engine reading `files`, which main.clay is put into. */
 export function engineOn(stateManager: StateManager, files: Record<string, string> = {}): TestEngine {
   return new TestEngine(Orchestrator.create(stateManager, new InMemoryFiles(files)), async (config) => {
-    files[CONFIG_FILE] = config;
+    files['main.clay'] = config;
   });
 }
 
 /** An engine reading the files in `dir`. */
 export function engineIn(stateManager: StateManager, dir: string): TestEngine {
-  return new TestEngine(Orchestrator.create(stateManager, new DiskFiles(dir)), (config) => fs.writeFile(path.join(dir, CONFIG_FILE), config, 'utf8'));
+  return new TestEngine(Orchestrator.create(stateManager, new DiskFiles(dir)), (config) => fs.writeFile(path.join(dir, 'main.clay'), config, 'utf8'));
 }

@@ -66,7 +66,7 @@ describe('validate against real files', () => {
   it('refuses a module that is not there, and points at its source', async () => {
     const output = await validate('module "m" { source = "./missing" }');
 
-    expect(output).toContain('Module source not found at: missing/main.clay');
+    expect(output).toContain('module "m" has no .clay file in directory "missing"');
     expect(output).toContain('on main.clay line 1, in module "m":');
   });
 
@@ -277,7 +277,7 @@ describe('validate against real files', () => {
   it('says so when there is no configuration', async () => {
     await createValidateCommand().parseAsync(['node', 'clay']);
 
-    expect(printed.join('\n')).toContain('Validation failed: main.clay not found');
+    expect(printed.join('\n')).toContain('Validation failed: no .clay file in the directory');
   });
 
   it('writes nothing, not even a state file', async () => {

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { CONFIG_FILE, ConfigError, Parser, ResourceBlock } from '../src';
+import { ConfigError, Parser, ResourceBlock } from '../src';
 import { Lexer } from '../src/Lexer';
 
-const parse = (source: string) => new Parser(new Lexer(source, CONFIG_FILE).tokenize()).parse();
+const parse = (source: string) => new Parser(new Lexer(source, 'main.clay').tokenize()).parse();
 const resource = (source: string) => parse(source)[0] as ResourceBlock;
 
 const errorOf = (source: string): ConfigError => {
@@ -46,9 +46,9 @@ describe('Parser - lifecycle block', () => {
 
     it('is a list of paths: an attribute, then keys and indexes, each where it was written', () => {
       expect(ignored('[content, tags["Name"], items[0].size]')).toEqual([
-        { path: ['content'], position: { file: CONFIG_FILE, line: 1, column: 50 } },
-        { path: ['tags', 'Name'], position: { file: CONFIG_FILE, line: 1, column: 59 } },
-        { path: ['items', 0, 'size'], position: { file: CONFIG_FILE, line: 1, column: 73 } },
+        { path: ['content'], position: { file: 'main.clay', line: 1, column: 50 } },
+        { path: ['tags', 'Name'], position: { file: 'main.clay', line: 1, column: 59 } },
+        { path: ['items', 0, 'size'], position: { file: 'main.clay', line: 1, column: 73 } },
       ]);
     });
 

@@ -1,7 +1,7 @@
 import { ExactNumber } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { CONFIG_FILE, ResourceBlock } from '../src/ast';
+import { ResourceBlock } from '../src/ast';
 import { Lexer } from '../src/Lexer';
 import { Parser } from '../src/Parser';
 
@@ -12,7 +12,7 @@ describe('Complex Types Parsing', () => {
         items = ["a", "b", "c"]
       }
     `;
-    const lexer = new Lexer(input, CONFIG_FILE);
+    const lexer = new Lexer(input, 'main.clay');
     const tokens = lexer.tokenize();
     const parser = new Parser(tokens);
     const ast = parser.parse();
@@ -36,7 +36,7 @@ describe('Complex Types Parsing', () => {
         items = ["a", 1, true]
       }
     `;
-    const lexer = new Lexer(input, CONFIG_FILE);
+    const lexer = new Lexer(input, 'main.clay');
     const tokens = lexer.tokenize();
     const parser = new Parser(tokens);
     const ast = parser.parse();
@@ -61,7 +61,7 @@ describe('Complex Types Parsing', () => {
         }
       }
     `;
-    const lexer = new Lexer(input, CONFIG_FILE);
+    const lexer = new Lexer(input, 'main.clay');
     const tokens = lexer.tokenize();
     const parser = new Parser(tokens);
     const ast = parser.parse();
@@ -92,7 +92,7 @@ describe('Complex Types Parsing', () => {
         }
       }
     `;
-    const lexer = new Lexer(input, CONFIG_FILE);
+    const lexer = new Lexer(input, 'main.clay');
     const tokens = lexer.tokenize();
     const parser = new Parser(tokens);
     const ast = parser.parse();

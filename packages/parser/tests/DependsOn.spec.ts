@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { CONFIG_FILE, ConfigError, DataBlock, ModuleBlock, OutputBlock, Parser, ResourceBlock } from '../src';
+import { ConfigError, DataBlock, ModuleBlock, OutputBlock, Parser, ResourceBlock } from '../src';
 import { Lexer } from '../src/Lexer';
 
-const parse = (source: string) => new Parser(new Lexer(source, CONFIG_FILE).tokenize()).parse();
+const parse = (source: string) => new Parser(new Lexer(source, 'main.clay').tokenize()).parse();
 
 const errorOf = (source: string): ConfigError => {
   try {
@@ -17,7 +17,7 @@ const errorOf = (source: string): ConfigError => {
   throw new Error('Expected the source to be refused');
 };
 
-const at = (line: number, column: number) => ({ file: CONFIG_FILE, line, column });
+const at = (line: number, column: number) => ({ file: 'main.clay', line, column });
 
 const WAITS_FOR = 'depends_on is a list of resources, data sources, variables, locals, modules and their outputs, as in [local_file.a]';
 

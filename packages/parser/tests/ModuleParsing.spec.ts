@@ -1,13 +1,13 @@
 import { ExactNumber } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { CONFIG_FILE, ModuleBlock } from '../src/ast';
+import { ModuleBlock } from '../src/ast';
 import { Lexer } from '../src/Lexer';
 import { Parser } from '../src/Parser';
 import { steps } from './steps';
 
 function makeParser(input: string): Parser {
-  const lexer = new Lexer(input, CONFIG_FILE);
+  const lexer = new Lexer(input, 'main.clay');
   return new Parser(lexer.tokenize());
 }
 

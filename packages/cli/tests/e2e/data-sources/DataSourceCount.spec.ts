@@ -1,6 +1,5 @@
 import { types } from '@clay/contracts';
 
-import { CONFIG_FILE } from '@clay/parser';
 import { parsePlanFile, Plan, serializePlan } from '@clay/planner';
 
 import fs from 'node:fs/promises';
@@ -64,7 +63,7 @@ describe('a data source with count', () => {
 
     await expect(newOrchestrator().validate(config)).rejects.toMatchObject({
       message: 'content is a list, where local_file takes a string',
-      position: { file: CONFIG_FILE, line: 8, column: 13 },
+      position: { file: 'main.clay', line: 8, column: 13 },
     });
   });
 
@@ -122,7 +121,7 @@ describe('a data source with count', () => {
   ])('refuses %s', async (_, read, message) => {
     const config = `${reads(2)}output "o" { value = ${read} }`;
 
-    await expect(newOrchestrator().plan(config)).rejects.toMatchObject({ message, position: { file: CONFIG_FILE, line: 5, column: 22 } });
+    await expect(newOrchestrator().plan(config)).rejects.toMatchObject({ message, position: { file: 'main.clay', line: 5, column: 22 } });
   });
 
   it('refuses count.index in a data source with no count', async () => {
@@ -131,7 +130,7 @@ describe('a data source with count', () => {
     await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
       message: 'count.index is only known inside a resource, a data source or a module call that has count',
       block: 'data "local_file" "f"',
-      position: { file: CONFIG_FILE, line: 1, column: 35 },
+      position: { file: 'main.clay', line: 1, column: 35 },
     });
   });
 
@@ -152,7 +151,7 @@ describe('a data source with count', () => {
     await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
       message: 'count must be known when planning: it reads a value only an apply makes',
       block: 'data "local_file" "f"',
-      position: { file: CONFIG_FILE, line: 7, column: 11 },
+      position: { file: 'main.clay', line: 7, column: 11 },
     });
   });
 

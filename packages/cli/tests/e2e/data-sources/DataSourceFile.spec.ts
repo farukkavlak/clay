@@ -1,7 +1,5 @@
 import { types } from '@clay/contracts';
 
-import { CONFIG_FILE } from '@clay/parser';
-
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -64,7 +62,7 @@ describe('a local_file data source', () => {
 
     await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
       message: 'data.local_file.d has no count, so it takes no index',
-      position: { file: CONFIG_FILE, line: 2, column: 22 },
+      position: { file: 'main.clay', line: 2, column: 22 },
     });
   });
 
@@ -74,7 +72,7 @@ describe('a local_file data source', () => {
     await expect(newOrchestrator().plan(`data "local_file" "f" { path = "${missing}" }`)).rejects.toMatchObject({
       message: `local_file cannot read "${missing}": there is no such file`,
       block: 'data "local_file" "f"',
-      position: { file: CONFIG_FILE, line: 1, column: 1 },
+      position: { file: 'main.clay', line: 1, column: 1 },
     });
   });
 
@@ -96,7 +94,7 @@ describe('a local_file data source', () => {
 
     await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
       message: 'Attribute "nope" not found on data source "data.local_file.d"',
-      position: { file: CONFIG_FILE, line: 2, column: 22 },
+      position: { file: 'main.clay', line: 2, column: 22 },
     });
   });
 
@@ -104,7 +102,7 @@ describe('a local_file data source', () => {
     await expect(newOrchestrator().plan('data "random_string" "r" { length = 4 }')).rejects.toMatchObject({
       message: 'No provider reads data source "random_string"',
       block: 'data "random_string" "r"',
-      position: { file: CONFIG_FILE, line: 1, column: 1 },
+      position: { file: 'main.clay', line: 1, column: 1 },
     });
   });
 });

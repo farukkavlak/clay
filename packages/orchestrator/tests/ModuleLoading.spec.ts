@@ -209,7 +209,7 @@ describe('Orchestrator - Module Loading', () => {
 
   it('refuses a module source with no configuration in it, pointing at the source', async () => {
     await expect(apply(orchestrator, `module "missing" { source = "./missing" }`)).rejects.toMatchObject({
-      message: 'Module source not found at: missing/main.clay',
+      message: 'module "missing" has no .clay file in directory "missing"',
       position: { file: 'main.clay', line: 1, column: 29 },
       block: 'module "missing"',
     });

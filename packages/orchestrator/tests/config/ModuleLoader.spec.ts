@@ -1,3 +1,4 @@
+import { ConfigError } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
 import { InMemoryFiles } from '../../src/config/ConfigFiles';
@@ -23,10 +24,53 @@ describe('ModuleLoader', () => {
     ]);
   });
 
-  it('refuses a root with no main.clay', async () => {
-    const files = new InMemoryFiles({ 'a/main.clay': 'resource "null_resource" "x" {}' });
+  it('reads every .clay file of a directory, in the order of their names', async () => {
+    const files = new InMemoryFiles({
+      'main.clay': 'module "a" { source = "./a" }',
+      'b.clay': 'resource "null_resource" "b" {}',
+      'a/z.clay': 'resource "null_resource" "z" {}',
+      'a/y.clay': 'resource "null_resource" "y" {}',
+    });
 
-    await expect(new ModuleLoader(files, new ScopeManager()).loadModuleTree()).rejects.toThrow(/^main\.clay not found$/);
+    const { resources } = await new ModuleLoader(files, new ScopeManager()).loadModuleTree();
+
+    expect(resources.map((resource) => resource.uniqueId)).toEqual(['null_resource.b', 'module.a.null_resource.y', 'module.a.null_resource.z']);
+  });
+
+  it('skips a hidden file and a file that is not .clay', async () => {
+    const files = new InMemoryFiles({
+      'main.clay': 'resource "null_resource" "a" {}',
+      '.draft.clay': 'resource "null_resource" "hidden" {}',
+      'notes.txt': 'not a configuration',
+    });
+
+    const { resources } = await new ModuleLoader(files, new ScopeManager()).loadModuleTree();
+
+    expect(resources.map((resource) => resource.uniqueId)).toEqual(['null_resource.a']);
+  });
+
+  it.each([
+    ['none', {}],
+    ['only a hidden one', { '.main.clay': 'resource "null_resource" "x" {}' }],
+    ['only one in a directory below', { 'a/main.clay': 'resource "null_resource" "x" {}' }],
+  ])('refuses a root with no .clay file, %s', async (_, held) => {
+    await expect(new ModuleLoader(new InMemoryFiles(held), new ScopeManager()).loadModuleTree()).rejects.toThrow(/^no \.clay file in the directory$/);
+  });
+
+  it('refuses a module whose directory has no .clay file, at its source', async () => {
+    const files = new InMemoryFiles({ 'main.clay': 'module "a" {\n  source = "./a"\n}', 'a/notes.txt': '' });
+
+    const error = await new ModuleLoader(files, new ScopeManager()).loadModuleTree().catch((error_: unknown) => error_);
+
+    expect(error).toBeInstanceOf(ConfigError);
+    expect(error).toMatchObject({ message: 'module "a" has no .clay file in directory "a"', position: { file: 'main.clay', line: 2, column: 12 } });
+  });
+
+  it('refuses a listed file it cannot find', async () => {
+    const none = new InMemoryFiles({});
+    const files = { list: () => ['main.clay'], read: (file: string) => none.read(file) };
+
+    await expect(new ModuleLoader(files, new ScopeManager()).loadModuleTree()).rejects.toThrow(/^main\.clay is listed but not found$/);
   });
 
   // Spreading every resource into one call would overflow the stack on a large module.
@@ -46,6 +90,7 @@ describe('ModuleLoader', () => {
   it('reads a module two blocks call once per load, so a file changed between them is loaded as it was first read', async () => {
     let reads = 0;
     const changing = {
+      list: (dir: string) => (dir === '.' ? ['main.clay'] : ['m.clay']),
       read: (file: string) => (file === 'main.clay' ? 'module "a" { source = "./m" }\nmodule "b" { source = "./m" }' : `resource "null_resource" "v${++reads}" {}`),
     };
     const loader = new ModuleLoader(changing, new ScopeManager());

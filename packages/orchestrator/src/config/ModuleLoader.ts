@@ -1,5 +1,5 @@
 import { Address, ModuleAddress, Type, types } from '@clay/contracts';
-import { CONFIG_FILE, ConfigError, Lexer, ModuleBlock, OutputBlock, Parser, ResourceBlock, Statement, spell, VariableBlock } from '@clay/parser';
+import { ConfigError, ModuleBlock, ModuleFile, OutputBlock, parseModule, ResourceBlock, Statement, spell, VariableBlock } from '@clay/parser';
 import path from 'node:path';
 
 import { ConfigFiles } from './ConfigFiles';
@@ -37,8 +37,8 @@ function outputBlocksOf(program: Statement[]): Map<string, OutputBlock> {
 }
 
 export class ModuleLoader {
-  // One load sees one version of a file, however many blocks call its module.
-  private contents = new Map<string, string | undefined>();
+  // One load sees one version of a directory, however many blocks call its module.
+  private contents = new Map<string, ModuleFile[]>();
 
   constructor(
     private files: ConfigFiles,
@@ -50,7 +50,7 @@ export class ModuleLoader {
     this.contents.clear();
 
     const rootProgram = this.parseConfig('.');
-    if (rootProgram === undefined) throw new Error(`${CONFIG_FILE} not found`);
+    if (rootProgram === undefined) throw new Error('no .clay file in the directory');
 
     const parentAddress = ModuleAddress.root;
     loaded.modules.push({ address: parentAddress, program: rootProgram });
@@ -104,18 +104,33 @@ export class ModuleLoader {
     if (loadingDirs.includes(moduleDir)) throw new ConfigError(`Module source cycle detected: ${[...loadingDirs, moduleDir].join(' -> ')}`, source.position, place);
 
     const moduleProgram = this.parseConfig(moduleDir);
-    if (moduleProgram === undefined) throw new ConfigError(`Module source not found at: ${path.posix.join(moduleDir, CONFIG_FILE)}`, source.position, place);
+    if (moduleProgram === undefined) throw new ConfigError(`module "${stmt.name}" has no .clay file in directory "${moduleDir}"`, source.position, place);
 
     return { moduleDir, moduleProgram };
   }
 
   private parseConfig(dir: string): Statement[] | undefined {
-    const file = path.posix.join(dir, CONFIG_FILE);
-    if (!this.contents.has(file)) this.contents.set(file, this.files.read(file));
-    const content = this.contents.get(file);
-    if (content === undefined) return undefined;
+    if (!this.contents.has(dir)) this.contents.set(dir, this.readDir(dir));
+    const files = this.contents.get(dir) ?? [];
+    if (files.length === 0) return undefined;
 
-    return new Parser(new Lexer(content, file).tokenize()).parse();
+    return parseModule(files);
+  }
+
+  private readDir(dir: string): ModuleFile[] {
+    // A hidden file is an editor's or a tool's, not the configuration.
+    const names = this.files
+      .list(dir)
+      .filter((name) => name.endsWith('.clay') && !name.startsWith('.'))
+      .sort();
+
+    return names.map((name) => {
+      const file = path.posix.join(dir, name);
+      const content = this.files.read(file);
+      if (content === undefined) throw new Error(`${file} is listed but not found`);
+
+      return { file, content };
+    });
   }
 
   private declareInputs(stmt: ModuleBlock, program: Statement[], childAddress: ModuleAddress, parentAddress: ModuleAddress): void {

@@ -50,7 +50,7 @@ export class ExpressionParser {
 
   constructor(private readonly stream: TokenStream) {}
 
-  /** Every name a for in the file gave an item, checked against resource types once every block is read. */
+  /** Every name a for in the file gave an item, checked against resource types once every file of the module is read. */
   get forNames(): readonly Token[] {
     return this.named;
   }

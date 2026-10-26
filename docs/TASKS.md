@@ -676,8 +676,7 @@ and every operator HCL has. A real configuration hits each of these early.
       and creating: a resource or an instance, in any module
 - [x] A `moved` block that moves a module call or a module instance, `module.a` to
       `module.b`, and every resource in it
-- [ ] A module reads every `.clay` file in its directory, as Terraform reads every `.tf`;
-      today only `main.clay`
+- [x] A module reads every `.clay` file in its directory, as Terraform reads every `.tf`
 
 ## 2. Engine
 
@@ -1031,7 +1030,7 @@ Terraform has it since backends replaced `-state`.
 - [ ] `clay state pull`: print the state as JSON, for a script or a backup
 - [ ] Workspaces: `clay workspace new | select | list`, one state per workspace
 - [ ] `clay destroy`, and `plan -destroy`: today the only way to remove everything is to
-      empty `main.clay`
+      empty every `.clay` file
 - [ ] A root variable takes a value from outside the configuration: `-var`, a variables
       file and the environment. Today one with no default is refused even by `validate`
 - [ ] `plan -detailed-exitcode`, so a script can tell no changes from changes; `plan` exits

@@ -1,6 +1,5 @@
 import { types } from '@clay/contracts';
 
-import { CONFIG_FILE } from '@clay/parser';
 import { parsePlanFile, Plan, serializePlan } from '@clay/planner';
 
 import fs from 'node:fs/promises';
@@ -78,7 +77,7 @@ describe('a data source with for_each', () => {
 
     await expect(newOrchestrator().validate(config)).rejects.toMatchObject({
       message: 'content is a map, where local_file takes a string',
-      position: { file: CONFIG_FILE, line: 8, column: 13 },
+      position: { file: 'main.clay', line: 8, column: 13 },
     });
   });
 
@@ -137,7 +136,7 @@ describe('a data source with for_each', () => {
     await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
       message,
       block: 'data "local_file" "f"',
-      position: { file: CONFIG_FILE, line: 2, column: 14 + forEach.indexOf(refused) },
+      position: { file: 'main.clay', line: 2, column: 14 + forEach.indexOf(refused) },
     });
   });
 
@@ -146,7 +145,7 @@ describe('a data source with for_each', () => {
 
     await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
       message: 'count.index is only known inside a resource, a data source or a module call that has count',
-      position: { file: CONFIG_FILE, line: 3, column: 17 },
+      position: { file: 'main.clay', line: 3, column: 17 },
     });
   });
 
@@ -168,7 +167,7 @@ describe('a data source with for_each', () => {
   ])('refuses %s', async (_, read, message) => {
     const config = `${reads()}output "o" { value = ${read} }`;
 
-    await expect(newOrchestrator().plan(config)).rejects.toMatchObject({ message, position: { file: CONFIG_FILE, line: 5, column: 22 } });
+    await expect(newOrchestrator().plan(config)).rejects.toMatchObject({ message, position: { file: 'main.clay', line: 5, column: 22 } });
   });
 
   it.each(['key', 'value'])('refuses each.%s in a data source with no for_each', async (name) => {
@@ -177,7 +176,7 @@ describe('a data source with for_each', () => {
     await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
       message: `each.${name} is only known inside a resource, a data source or a module call that has for_each`,
       block: 'data "local_file" "f"',
-      position: { file: CONFIG_FILE, line: 1, column: 35 },
+      position: { file: 'main.clay', line: 1, column: 35 },
     });
   });
 
@@ -188,7 +187,7 @@ describe('a data source with for_each', () => {
     await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
       message: 'for_each must be known when planning: a member reads a value only an apply makes, and a set names its instances by its members',
       block: 'data "local_file" "f"',
-      position: { file: CONFIG_FILE, line: 7, column: 14 },
+      position: { file: 'main.clay', line: 7, column: 14 },
     });
   });
 

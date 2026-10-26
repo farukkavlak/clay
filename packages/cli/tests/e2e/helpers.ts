@@ -1,6 +1,6 @@
 import { DiskFiles, Orchestrator, RunEvent, RunOptions } from '@clay/orchestrator';
 import { Provider } from '@clay/contracts';
-import { CONFIG_FILE, ConfigError } from '@clay/parser';
+import { ConfigError } from '@clay/parser';
 import { Plan } from '@clay/planner';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
@@ -41,7 +41,7 @@ export class TestEngine {
 
 /** `engine`, driven with each configuration written to main.clay in `dir`. */
 export function engineIn(dir: string, engine: Orchestrator): TestEngine {
-  return new TestEngine(engine, (config) => fs.writeFile(path.join(dir, CONFIG_FILE), config, 'utf8'));
+  return new TestEngine(engine, (config) => fs.writeFile(path.join(dir, 'main.clay'), config, 'utf8'));
 }
 
 /** An engine on the state and the files in `dir`, with the providers given, or the local one where none is. */

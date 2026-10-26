@@ -1,7 +1,5 @@
 import { types } from '@clay/contracts';
 
-import { CONFIG_FILE } from '@clay/parser';
-
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -30,7 +28,7 @@ describe('what plan refuses before anything runs', () => {
     await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
       message: refused,
       block: 'resource "random_string" "pw"',
-      position: { file: CONFIG_FILE, line: 1, column: 1 },
+      position: { file: 'main.clay', line: 1, column: 1 },
       cause: { message: refused },
     });
   });
@@ -42,7 +40,7 @@ describe('what plan refuses before anything runs', () => {
     await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
       message,
       block,
-      position: { file: CONFIG_FILE, line: 1, column: 1 },
+      position: { file: 'main.clay', line: 1, column: 1 },
     });
   });
 
@@ -59,7 +57,7 @@ describe('what plan refuses before anything runs', () => {
     await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
       message: 'local_file "path" must not be empty',
       block: 'data "local_file" "f"',
-      position: { file: CONFIG_FILE, line: 1, column: 1 },
+      position: { file: 'main.clay', line: 1, column: 1 },
     });
   });
 

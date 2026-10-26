@@ -1,5 +1,5 @@
 import { Address, ExactNumber, ModuleAddress, Schema, State, STATE_VERSION, types, UNKNOWN } from '@clay/contracts';
-import { AttributeValue, CONFIG_FILE, ConfigError, Lexer, OutputBlock, Parser, TemplatePart } from '@clay/parser';
+import { AttributeValue, ConfigError, Lexer, OutputBlock, Parser, TemplatePart } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
 import { Instances } from '../../src/instances/Instances';
@@ -41,8 +41,8 @@ const resolverWith = (scopes = new ScopeManager(), planned = new Planned(), data
 const readLater = () => resolverWith().resolveValue(template('id: ', reference('resource', 'later', 'id')), state, context);
 
 /** Parsed as an output's value, starting at column 22. */
-const written = (value: string) => (new Parser(new Lexer(`output "o" { value = ${value} }`, CONFIG_FILE).tokenize()).parse()[0] as OutputBlock).value;
-const atColumn = (column: number) => ({ file: CONFIG_FILE, line: 1, column });
+const written = (value: string) => (new Parser(new Lexer(`output "o" { value = ${value} }`, 'main.clay').tokenize()).parse()[0] as OutputBlock).value;
+const atColumn = (column: number) => ({ file: 'main.clay', line: 1, column });
 const planning = () => {
   const planned = new Planned();
   planned.begin();
