@@ -1701,6 +1701,7 @@ describe('Clay Parser', () => {
       ['arithmetic in a chain', LOCAL, (levels: number) => '1' + ' + 1'.repeat(levels), LOCAL.length + 1 + 4 * 100 + 2],
       ['conditionals', LOCAL, deep('true ? 1 : ', '1', ''), LOCAL.length + 11 * 100 + 6],
       ['operators in a chain', LOCAL, (levels: number) => 'true' + ' && true'.repeat(levels), LOCAL.length + 4 + 8 * 100 + 2],
+      ['tighter operators each ended by a looser one', LOCAL, (levels: number) => '1 * 1' + ' + 1 * 1'.repeat(levels - 1), LOCAL.length + 5 + 8 * 99 + 6],
     ])('takes %s nested 100 levels, and refuses one more at its opening', (_, start, nested, column) => {
       expect(() => makeParser(`${start}${nested(100)} }`).parse()).not.toThrow();
 

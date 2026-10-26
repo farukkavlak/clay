@@ -35,6 +35,9 @@ const BINARY_LEVELS: ReadonlyMap<TokenType, BinaryOperator>[] = [
   ]),
 ];
 
+/** Each operator token with the level it binds at. */
+const OPERATORS = new Map(BINARY_LEVELS.flatMap((operators, level) => [...operators].map(([type, operator]) => [type, { level, operator }] as const)));
+
 const CLOSING = { [TokenType.RBracket]: ']', [TokenType.RBrace]: '}' };
 
 /** Reads a value: a literal, a reference, a call, an operation, a string, a list, a map or a for. */
@@ -63,27 +66,26 @@ export class ExpressionParser {
     });
   }
 
-  /** A chain is as deep as it is long, so each operator in it counts toward the nesting limit. */
-  private parseBinary(level: number): AttributeValue {
-    if (level === BINARY_LEVELS.length) return this.parseUnary();
+  /** One call climbs every operator level, since the stack a nesting level takes is what the limit guards. Each operator counts toward it. */
+  private parseBinary(loosest: number): AttributeValue {
+    const start = this.stream.nesting;
+    try {
+      let left = this.parseUnary();
+      let chain: number | undefined;
+      for (let next = OPERATORS.get(this.stream.peek().type); next && next.level >= loosest; next = OPERATORS.get(this.stream.peek().type)) {
+        // A looser operator ends the tighter chain before it.
+        if (chain !== undefined && next.level < chain) this.stream.backTo(start);
+        chain = next.level;
 
-    return this.stream.keepingDepth(() => {
-      let left = this.parseBinary(level + 1);
-      for (let operator = this.matchOperator(level); operator; operator = this.matchOperator(level)) {
-        const operatorPosition = this.stream.previous().position;
+        const operatorPosition = this.stream.advance().position;
         this.stream.enter(operatorPosition);
-        left = { type: 'Binary', operator, operatorPosition, left, right: this.parseBinary(level + 1), position: left.position };
+        left = { type: 'Binary', operator: next.operator, operatorPosition, left, right: this.parseBinary(next.level + 1), position: left.position };
       }
 
       return left;
-    });
-  }
-
-  private matchOperator(level: number): BinaryOperator | undefined {
-    const operator = BINARY_LEVELS[level].get(this.stream.peek().type);
-    if (operator) this.stream.advance();
-
-    return operator;
+    } finally {
+      this.stream.backTo(start);
+    }
   }
 
   private parseUnary(): AttributeValue {

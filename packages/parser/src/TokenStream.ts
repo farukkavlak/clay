@@ -80,21 +80,23 @@ export class TokenStream {
     this.depth++;
   }
 
-  /** Counts the opening toward the nesting limit while `read` reads what it opens. */
+  /** Counts the opening toward the nesting limit while `read` reads what it opens, and undoes it after, even when `read` throws. */
   nested<T>(opening: Position, read: () => T): T {
-    return this.keepingDepth(() => {
-      this.enter(opening);
-      return read();
-    });
-  }
-
-  /** Undoes every `enter` made inside `read`, even when it throws. */
-  keepingDepth<T>(read: () => T): T {
     const outer = this.depth;
+    this.enter(opening);
     try {
       return read();
     } finally {
       this.depth = outer;
     }
+  }
+
+  /** How many openings are around what is being read, to go back to with `backTo`. */
+  get nesting(): number {
+    return this.depth;
+  }
+
+  backTo(nesting: number): void {
+    this.depth = nesting;
   }
 }

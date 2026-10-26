@@ -69,6 +69,13 @@ describe('a value nested as deep as the parser takes', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
+  // A value too deep must be refused, not overflow the stack, so the deepest one taken has to leave stack to spare.
+  it('is planned with 350 KB of stack, about a third of what Node gives', async () => {
+    const { stdout } = await run('node', ['--stack-size=350', clay, 'plan'], { cwd: dir });
+
+    expect(stdout).toContain('Plan: 1 to add');
+  });
+
   it('is planned to a file, applied from it, kept in state, and planned again as no change', async () => {
     await run('node', [clay, 'plan', '--out', 'plan.json'], { cwd: dir });
     await run('node', [clay, 'apply', 'plan.json'], { cwd: dir });
