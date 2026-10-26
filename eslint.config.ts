@@ -62,6 +62,11 @@ export default [
     },
   },
   ...folderOrder,
+  {
+    // Tests are tables of cases and grow with what they cover.
+    files: ['packages/*/src/**/*.ts', 'providers/*/src/**/*.ts'],
+    rules: { 'max-lines': ['error', { max: 350, skipBlankLines: true, skipComments: true }] },
+  },
   eslintConfigPrettier,
   // Prettier's config turns curly off as a formatting rule, so it is set after it.
   { rules: { curly: ['error', 'multi'] } },

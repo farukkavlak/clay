@@ -1176,7 +1176,7 @@ Nothing here changes what Clay does. Each is a place the next change has to work
 - [x] `Parser.ts` parses blocks, values and types in one class of about 70 methods
 - [x] `ReferenceResolver.ts` reads references, `for` expressions, operators and templates
       in one class of 900 lines
-- [ ] No lint rule caps the length of a file, so the files above grew unnoticed
+- [x] No lint rule caps the length of a file, so the files above grew unnoticed
 - [x] No lint rule keeps the order of the `orchestrator` folders the README gives, so an
       import the wrong way goes unnoticed
 - [ ] Workspace packages are not `"private": true`, so `npm publish -ws` would publish them;
