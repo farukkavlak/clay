@@ -45,6 +45,8 @@ export class ExpressionParser {
   /** Names bound by enclosing for expressions, innermost last. */
   private bound: string[] = [];
   private readonly named: Token[] = [];
+  /** The first token of the call argument being read. */
+  private argumentStart: Token | undefined;
 
   constructor(private readonly stream: TokenStream) {}
 
@@ -120,13 +122,14 @@ export class ExpressionParser {
   }
 
   private parseTerm(): AttributeValue {
-    const position = this.stream.peek().position;
+    const opening = this.stream.peek();
+    const { position } = opening;
 
     if (this.stream.matchToken(TokenType.OQuote)) return this.parseString(position);
     if (this.stream.matchToken(TokenType.OHeredoc)) return this.parseHeredoc(position);
 
-    if (this.stream.matchToken(TokenType.LBracket)) return this.stream.nested(position, () => this.parseList(position));
-    if (this.stream.matchToken(TokenType.LBrace)) return this.stream.nested(position, () => this.parseMap(position));
+    if (this.stream.matchToken(TokenType.LBracket)) return this.collection(opening, () => this.parseList(position));
+    if (this.stream.matchToken(TokenType.LBrace)) return this.collection(opening, () => this.parseMap(position));
     if (this.stream.matchToken(TokenType.LParen)) return this.stream.nested(position, () => this.parseParenthesized());
 
     if (this.stream.check(TokenType.Identifier)) return this.parseNamed(position);
@@ -306,9 +309,15 @@ export class ExpressionParser {
     return { type: 'Reference', value: [{ name }, ...this.parseSteps()], position };
   }
 
+  /** A list or a map that opens a call's argument shares the call's level, so `tolist([...])` counts once. */
+  private collection(opening: Token, read: () => AttributeValue): AttributeValue {
+    return opening === this.argumentStart ? read() : this.stream.nested(opening.position, read);
+  }
+
   private parseArguments(): AttributeValue[] {
     const args: AttributeValue[] = [];
     while (!this.stream.check(TokenType.RParen) && !this.stream.isAtEnd()) {
+      this.argumentStart = this.stream.peek();
       args.push(this.parseValue());
       if (!this.stream.matchToken(TokenType.Comma)) break;
     }

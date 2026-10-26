@@ -1693,6 +1693,8 @@ describe('Clay Parser', () => {
       ['function calls', LOCAL, deep('f(', '1', ')'), LOCAL.length + 2 * 100 + 1],
       ['indexes read from a value', LOCAL, (levels: number) => 'a' + deep('[a', '', ']')(levels), LOCAL.length + 1 + 2 * 100 + 1],
       ['types', TYPE, deep('list(', 'string', ')'), TYPE.length + 5 * 100 + 1],
+      ['function calls given a list', LOCAL, deep('f([', '1', '])'), LOCAL.length + 3 * 100 + 1],
+      ['function calls given a map', LOCAL, deep('f({a=', '1', '})'), LOCAL.length + 5 * 100 + 1],
       ['lists and maps in turn', LOCAL, inTurn, LOCAL.length + 50 + 3 * 50 + 1],
       ['parentheses', LOCAL, deep('(', '1', ')'), LOCAL.length + 100 + 1],
       ['interpolations', LOCAL, deep('"${', '1', '}"'), LOCAL.length + 3 * 100 + 2],
@@ -1714,6 +1716,19 @@ describe('Clay Parser', () => {
       const items = Array.from({ length: 101 }, () => 'a.x == 1').join(', ');
 
       expect(makeParser(`locals { x = [${items}] }`).parse()).toHaveLength(1);
+    });
+
+    // Each unit is three levels: the call, what comes before the list, and the list. 33 take 99; the 34th is refused `offset` characters in.
+    it.each([
+      ['a minus', 'f(-[', '])', 2],
+      ['parentheses', 'f(([', ']))', 2],
+      ['an operator', 'f(1 + [', '])', 4],
+    ])('counts a list in a call argument that %s comes before', (_, open, close, offset) => {
+      expect(() => makeParser(`${LOCAL}${deep(open, '1', close)(33)} }`).parse()).not.toThrow();
+
+      const error = errorOf(`${LOCAL}${deep(open, '1', close)(34)} }`);
+      expect(error.message).toBe('Nested more than 100 levels deep');
+      expect(error.position).toEqual(at(1, LOCAL.length + open.length * 33 + offset + 1));
     });
 
     it('counts only the openings around a value, not those closed before it', () => {

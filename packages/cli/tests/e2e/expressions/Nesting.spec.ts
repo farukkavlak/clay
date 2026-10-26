@@ -51,7 +51,7 @@ describe('a value nested as deep as the parser takes', () => {
       }
       locals {
         maps  = ${deep('{a=', '1', '}', 100)}
-        calls = ${deep('tolist(', '[1]', ')', 99)}
+        calls = ${deep('tolist(', '[1]', ')', 100)}
       }
       resource "local_file" "f" {
         path    = "${path.join(dir, 'f.txt')}"

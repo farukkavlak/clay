@@ -187,8 +187,9 @@ in a result groups from the right.
 
 Lists, maps, a call's arguments, an index read from a value, a type's `(...)`, parentheses,
 `!`, a `-` that negates, a conditional, a `${...}` and each operator in a chain nest at
-most 100 levels deep, together. One more is refused where it starts: at its `[`, `{`, `(`,
-`!`, `-`, `?`, `${` or operator, or at the name of the call or the type.
+most 100 levels deep, together. A list or a map that opens a call's argument shares the
+call's level, so `tolist([1])` is one level. One more is refused where it starts: at its
+`[`, `{`, `(`, `!`, `-`, `?`, `${` or operator, or at the name of the call or the type.
 
 ### Types
 
