@@ -507,8 +507,7 @@ describe('apply and plan against real files', () => {
 
   it('reports each step as it goes and stops at the one that fails', async () => {
     const events: string[] = [];
-    for await (const event of start(orchestrator, secondFails()))
-      events.push(event.type === 'planned' || event.type === 'done' || event.type === 'read' ? event.type : `${event.type} ${event.action.name}`);
+    for await (const event of start(orchestrator, secondFails())) events.push('action' in event ? `${event.type} ${event.action.name}` : event.type);
 
     expect(events).toEqual(['planned', 'started a', 'applied a', 'started b', 'failed b']);
   });

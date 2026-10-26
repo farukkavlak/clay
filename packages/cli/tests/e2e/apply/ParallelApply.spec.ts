@@ -92,8 +92,7 @@ describe('a layer of resources', () => {
 
   const run = async (config: string): Promise<string[]> => {
     const events: string[] = [];
-    for await (const event of start(engine, config))
-      events.push(event.type === 'planned' || event.type === 'done' || event.type === 'read' ? event.type : `${event.type} ${event.action.name}`);
+    for await (const event of start(engine, config)) events.push('action' in event ? `${event.type} ${event.action.name}` : event.type);
 
     return events;
   };

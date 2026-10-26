@@ -4,16 +4,18 @@ import path from 'node:path';
 import { emptyState, State } from '@clay/contracts';
 
 import { StateBackend } from '../StateBackend';
-import { parseState, serializeState } from '../stateFile';
+import { Journal, parseState, serializeState } from '../stateFile';
 
 export class LocalBackend implements StateBackend {
   private filePath: string;
   private lockFilePath: string;
+  private journalPath: string;
   private backedUp = false;
 
   constructor(workingDir: string, filename: string = 'clay.state.json') {
     this.filePath = path.join(workingDir, filename);
     this.lockFilePath = `${this.filePath}.lock`;
+    this.journalPath = `${this.filePath}.journal`;
   }
 
   get path(): string {
@@ -23,7 +25,7 @@ export class LocalBackend implements StateBackend {
   async read(): Promise<State> {
     try {
       const content = await fs.readFile(this.filePath);
-      return parseState(content.toString('utf8'), this.filePath);
+      return parseState(content.toString('utf8'), this.filePath, await this.readJournal());
     } catch (error) {
       const err = error as { code?: string };
       if (err.code === 'ENOENT') return emptyState();
@@ -39,12 +41,40 @@ export class LocalBackend implements StateBackend {
     const tmpPath = `${this.filePath}.tmp`;
     await fs.writeFile(tmpPath, serializeState(state), 'utf8');
     await fs.rename(tmpPath, this.filePath);
+    // Its lines are in the state now; a run stopped before this point leaves lines of an older serial, which are skipped.
+    await fs.rm(this.journalPath, { force: true });
+  }
+
+  /** As it is read, so what a stopped run left in the journal is in the backup too. */
+  private async copyBefore(): Promise<void> {
+    const journal = await this.readJournal();
+    if (!journal) {
+      await fs.copyFile(this.filePath, `${this.filePath}.bak`);
+      return;
+    }
+
+    const content = await fs.readFile(this.filePath, 'utf8');
+    await fs.writeFile(`${this.filePath}.bak`, serializeState(parseState(content, this.filePath, journal)), 'utf8');
+  }
+
+  async append(line: string): Promise<void> {
+    await fs.appendFile(this.journalPath, line, 'utf8');
+  }
+
+  private async readJournal(): Promise<Journal | undefined> {
+    try {
+      return { content: await fs.readFile(this.journalPath, 'utf8'), source: this.journalPath };
+    } catch (error) {
+      if ((error as { code?: string }).code === 'ENOENT') return undefined;
+
+      throw error;
+    }
   }
 
   /** Once per lock, so the backup is the state from before the run. */
   private async backUp(): Promise<void> {
     try {
-      await fs.copyFile(this.filePath, `${this.filePath}.bak`);
+      await this.copyBefore();
     } catch (error) {
       // No state file yet means nothing to back up; any other failure would leave no backup.
       const { code, message } = error as NodeJS.ErrnoException;

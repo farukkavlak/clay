@@ -932,10 +932,13 @@ in it together.
 
 Measured with the local provider; a remote provider makes the sequential calls cost more.
 
-- [ ] An apply writes the whole state after every action, so its cost grows with the
+- [x] An apply writes the whole state after every action, so its cost grows with the
       square of the resources: 1000 independent resources take 0.9 seconds, 4000 take 10
       and 8000 take 66. Terraform's local backend does the same; a remote one holds the
-      state in memory and writes it every 20 seconds, so a crash loses what was made since
+      state in memory and writes it every 20 seconds, so a crash loses what was made since.
+      Each action now adds one line to a journal beside the state, which is written whole
+      at the start and the end of a run and read with the journal's lines over it: 8000
+      take 0.75 seconds, and a killed run loses nothing
 - [ ] Each instance records every instance of each block it reads as a dependency: with
       `count = n` and `null_resource.a[count.index]`, `b[5]` lists all `n` of `a`. At 1000
       the state is 32 MB and the apply takes two minutes. Terraform keeps dependencies by
@@ -1012,8 +1015,8 @@ Terraform has it since backends replaced `-state`.
       a second apply asks its question and then fails on the lock. A plan never looks at the
       lock. The lock file holds a time and no process or host, so a stale one cannot be told
       from a live one
-- [ ] The state is renamed into place without an fsync, so a power loss may leave it
-      empty on a file system that reorders writes
+- [ ] The state is renamed into place, and the journal appended to, without an fsync, so
+      a power loss may leave either empty on a file system that reorders writes
 
 ### Format
 

@@ -152,7 +152,7 @@ describe('StateManager', () => {
       expect(Object.keys(stored.resources)).toEqual(['mock_resource.late']);
     });
 
-    it('reach the backend after one before them failed', async () => {
+    it('reach the backend after one before them failed, at the serial it did not reach', async () => {
       const log: string[] = [];
       const manager = new StateManager(slow(log, [1]));
       const state = emptyState();
@@ -161,7 +161,8 @@ describe('StateManager', () => {
 
       expect(first).toMatchObject({ status: 'rejected', reason: { message: 'write 1 failed' } });
       expect(second.status).toBe('fulfilled');
-      expect(log).toEqual(['start 1', 'end 1', 'start 2', 'end 2']);
+      expect(log).toEqual(['start 1', 'end 1', 'start 1', 'end 1']);
+      expect(state.serial).toBe(1);
     });
   });
 

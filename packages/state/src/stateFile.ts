@@ -1,6 +1,10 @@
 import { ExactNumber, isName, isOutput, isRecord, NestingError, NumberError, readDeposed, readResources, State, STATE_VERSION } from '@clay/contracts';
 
-function checkOutputs(outputs: unknown, say: (problem: string) => never): void {
+import { replay } from './journal';
+
+type Say = (problem: string) => never;
+
+function checkOutputs(outputs: unknown, say: Say): void {
   if (!isRecord(outputs)) say('its outputs are not a record');
 
   for (const [name, output] of Object.entries(outputs)) {
@@ -9,19 +13,22 @@ function checkOutputs(outputs: unknown, say: (problem: string) => never): void {
   }
 }
 
-/** Checks what the engine relies on; a wrong shape would plan wrong actions. */
-function check(state: unknown, source: string): asserts state is State {
-  const say: (problem: string) => never = (problem) => {
-    throw new Error(`${source} is not valid state: ${problem}`);
-  };
-
+/** First, since a state of another version, and its journal, may hold what this one cannot read. */
+function checkVersion(state: unknown, source: string, say: Say): asserts state is Record<string, unknown> {
   if (!isRecord(state)) say('it is not an object');
 
-  const { version, serial, outputs, resources, deposed } = state;
-
+  const { version } = state;
   if (typeof version !== 'number') say('its version is not a number');
   if (version > STATE_VERSION) throw new Error(`${source} was written by a newer Clay, version ${version}`);
   if (version < STATE_VERSION) throw new Error(`${source} was written by an older Clay, version ${version}`);
+}
+
+/** Checks what the engine relies on; a wrong shape would plan wrong actions. */
+function check(state: unknown, say: Say): asserts state is State {
+  if (!isRecord(state)) say('it is not an object');
+
+  const { serial, outputs, resources, deposed } = state;
+
   if (typeof serial !== 'number') say('its serial is not a number');
   if (outputs !== undefined) checkOutputs(outputs, say);
   readResources(resources, 'its resources', say);
@@ -43,7 +50,13 @@ function readState(content: string): unknown {
   return read;
 }
 
-export function parseState(content: string, source: string): State {
+/** What the last run recorded after the state was written whole. */
+export interface Journal {
+  content: string;
+  source: string;
+}
+
+export function parseState(content: string, source: string, journal?: Journal): State {
   let parsed: unknown;
 
   try {
@@ -56,7 +69,12 @@ export function parseState(content: string, source: string): State {
     throw error;
   }
 
-  check(parsed, source);
+  const say: Say = (problem) => {
+    throw new Error(`${source} is not valid state: ${problem}`);
+  };
+  checkVersion(parsed, source, say);
+  if (journal) replay(parsed, journal.content, journal.source);
+  check(parsed, say);
 
   return parsed;
 }
