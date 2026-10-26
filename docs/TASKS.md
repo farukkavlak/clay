@@ -1173,7 +1173,7 @@ Nothing here changes what Clay does. Each is a place the next change has to work
       `applyGraph.ts` above it imports from it
 - [x] Most of `Value.ts` is the arithmetic of sensitive marks, not the value itself
 - [x] `cli/tests/e2e` holds 99 files in one folder
-- [ ] `Parser.ts` parses blocks, values and types in one class of about 70 methods
+- [x] `Parser.ts` parses blocks, values and types in one class of about 70 methods
 - [ ] `ReferenceResolver.ts` reads references, `for` expressions, operators and templates
       in one class of 900 lines
 - [ ] No lint rule caps the length of a file, so the files above grew unnoticed
