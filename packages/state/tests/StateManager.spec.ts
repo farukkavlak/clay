@@ -34,9 +34,21 @@ const slow = (log: string[], failing: number[] = []): StateBackend => {
   };
 };
 
+const holding = (name: string): State => ({ version: STATE_VERSION, serial: 0, resources: { [`rt.${name}`]: { resourceType: 'rt', name, attributes: {} } } });
+
 describe('StateManager', () => {
   let tmpDir: string;
   let stateManager: StateManager;
+
+  const statePath = () => path.join(tmpDir, 'test.state.json');
+  const backup = async () => JSON.parse(await fs.readFile(`${statePath()}.bak`, 'utf8')) as State;
+
+  /** A run as apply and the state commands make it: every write under one lock. */
+  const run = async (...states: State[]) => {
+    await stateManager.lock();
+    for (const state of states) await stateManager.write(state);
+    await stateManager.unlock();
+  };
 
   beforeEach(async () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-state-test-'));
@@ -236,42 +248,59 @@ describe('StateManager', () => {
   });
 
   describe('Backup', () => {
-    it('should create a backup file before writing if state exists', async () => {
-      const state1 = { version: STATE_VERSION, serial: 0, resources: { a: { resourceType: 'rt', name: 'n', attributes: {} } } };
-      const state2 = { version: STATE_VERSION, serial: 0, resources: {} };
+    it('has nothing to back up before the first state', async () => {
+      await run(holding('a'));
 
-      // The first write has nothing to back up.
-      await stateManager.write(state1);
-      const bakPath = path.join(tmpDir, 'test.state.json.bak');
-      await expect(fs.stat(bakPath)).rejects.toThrow(/ENOENT/);
+      await expect(fs.stat(`${statePath()}.bak`)).rejects.toThrow(/ENOENT/);
+    });
 
-      await stateManager.write(state2);
+    it('holds the state from before the run, however many times the run writes', async () => {
+      const before = holding('a');
+      await run(before);
 
-      const bakContent = await fs.readFile(bakPath);
-      expect(JSON.parse(bakContent.toString('utf8'))).toEqual(state1);
+      const last = holding('d');
+      await run(holding('b'), holding('c'), last);
 
-      const currentContent = await fs.readFile(path.join(tmpDir, 'test.state.json'));
-      expect(JSON.parse(currentContent.toString('utf8'))).toEqual(state2);
+      expect(await backup()).toEqual(before);
+      expect(await stateManager.read()).toEqual(last);
+    });
+
+    it('holds the state the last run left, once the next one writes', async () => {
+      await run(holding('a'));
+      const last = holding('b');
+      await run(last);
+
+      await run(holding('c'));
+
+      expect(await backup()).toEqual(last);
     });
   });
 
   describe('a backup that cannot be written', () => {
+    let before: State;
+
+    // A directory at the backup path makes the copy fail with something other than ENOENT.
+    beforeEach(async () => {
+      before = holding('a');
+      await run(before);
+      await stateManager.lock();
+      await fs.mkdir(`${statePath()}.bak`);
+    });
+
     it('stops the write and leaves the state as it was', async () => {
-      const first: State = { version: STATE_VERSION, serial: 1, resources: {} };
-      const second: State = { version: STATE_VERSION, serial: 2, resources: {} };
-      await stateManager.write(first);
-      await stateManager.write(second);
-
-      // A directory at the backup path makes the copy fail with something other than ENOENT.
-      const bakPath = path.join(tmpDir, 'test.state.json.bak');
-      await fs.rm(bakPath);
-      await fs.mkdir(bakPath);
-
-      const statePath = path.join(tmpDir, 'test.state.json');
       await expect(stateManager.write({ version: STATE_VERSION, serial: 3, resources: {} })).rejects.toThrow(
-        `Could not back up ${statePath} to ${statePath}.bak (EISDIR); the state was not written`
+        `Could not back up ${statePath()} to ${statePath()}.bak (EISDIR); the state was not written`
       );
-      expect(await stateManager.read()).toEqual(second);
+      expect(await stateManager.read()).toEqual(before);
+    });
+
+    it('is tried again by the next write of the run', async () => {
+      await expect(stateManager.write({ version: STATE_VERSION, serial: 3, resources: {} })).rejects.toThrow(/Could not back up/);
+      await fs.rmdir(`${statePath()}.bak`);
+
+      await stateManager.write({ version: STATE_VERSION, serial: 4, resources: {} });
+
+      expect(await backup()).toEqual(before);
     });
   });
 

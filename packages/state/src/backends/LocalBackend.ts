@@ -9,6 +9,7 @@ import { parseState, serializeState } from '../stateFile';
 export class LocalBackend implements StateBackend {
   private filePath: string;
   private lockFilePath: string;
+  private backedUp = false;
 
   constructor(workingDir: string, filename: string = 'clay.state.json') {
     this.filePath = path.join(workingDir, filename);
@@ -32,6 +33,16 @@ export class LocalBackend implements StateBackend {
   }
 
   async write(state: State): Promise<void> {
+    if (!this.backedUp) await this.backUp();
+
+    // Rename is atomic, so a run killed mid-write leaves the old state whole.
+    const tmpPath = `${this.filePath}.tmp`;
+    await fs.writeFile(tmpPath, serializeState(state), 'utf8');
+    await fs.rename(tmpPath, this.filePath);
+  }
+
+  /** Once per lock, so the backup is the state from before the run. */
+  private async backUp(): Promise<void> {
     try {
       await fs.copyFile(this.filePath, `${this.filePath}.bak`);
     } catch (error) {
@@ -40,10 +51,7 @@ export class LocalBackend implements StateBackend {
       if (code !== 'ENOENT') throw new Error(`Could not back up ${this.filePath} to ${this.filePath}.bak (${code ?? message}); the state was not written`, { cause: error });
     }
 
-    // Rename is atomic, so a run killed mid-write leaves the old state whole.
-    const tmpPath = `${this.filePath}.tmp`;
-    await fs.writeFile(tmpPath, serializeState(state), 'utf8');
-    await fs.rename(tmpPath, this.filePath);
+    this.backedUp = true;
   }
 
   /** The `wx` flag makes check and write one step, so nothing can slip in between. */
@@ -61,6 +69,7 @@ export class LocalBackend implements StateBackend {
   async lock(): Promise<void> {
     try {
       await fs.writeFile(this.lockFilePath, String(Date.now()), { flag: 'wx' });
+      this.backedUp = false;
     } catch (error) {
       if ((error as { code: string }).code === 'EEXIST') throw new Error(`State is locked by another run. If that run is gone, remove ${this.lockFilePath}`);
 

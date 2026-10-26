@@ -932,10 +932,10 @@ in it together.
 
 Measured with the local provider; a remote provider makes the sequential calls cost more.
 
-- [ ] An apply writes the whole state, and copies the last one to `.bak`, after every
-      action, so its cost grows with the square of the resources: 1000 independent
-      resources take 2 seconds, 4000 take 16 to 31. Terraform updates the state in memory
-      after each resource and persists it at intervals
+- [ ] An apply writes the whole state after every action, so its cost grows with the
+      square of the resources: 1000 independent resources take 0.9 seconds, 4000 take 10
+      and 8000 take 66. Terraform's local backend does the same; a remote one holds the
+      state in memory and writes it every 20 seconds, so a crash loses what was made since
 - [ ] Each instance records every instance of each block it reads as a dependency: with
       `count = n` and `null_resource.a[count.index]`, `b[5]` lists all `n` of `a`. At 1000
       the state is 32 MB and the apply takes two minutes. Terraform keeps dependencies by
@@ -1004,9 +1004,10 @@ Terraform has it since backends replaced `-state`.
 
 ### Safety
 
-- [ ] `.bak` is the write before the last one, not the state before the run: after an apply
+- [x] `.bak` is the write before the last one, not the state before the run: after an apply
       of three resources the state is serial 4 and `.bak` serial 3, with all three in it, so
-      it cannot undo the run. Terraform writes its backup once a run
+      it cannot undo the run. The backup is now taken once a lock, at the run's first write,
+      as Terraform writes its backup once a run
 - [ ] An apply takes the lock after it has refreshed, planned and been answered `yes`, so
       a second apply asks its question and then fails on the lock. A plan never looks at the
       lock. The lock file holds a time and no process or host, so a stale one cannot be told
