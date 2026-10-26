@@ -7,25 +7,8 @@ import { declaredAs, givenTo } from '../../src/values/declared';
 import { forObject, laterObjectMarks, pickedTupleMarks } from '../../src/expressions/forItems';
 import { readPath } from '../../src/expressions/readPath';
 import { schemaMarked } from '../../src/values/schemaMarks';
-import {
-  allSensitive,
-  anyItemMarks,
-  child,
-  everyItemMarks,
-  fewest,
-  inferred,
-  isSensitive,
-  itemsOf,
-  mayBeSensitive,
-  maybeMarks,
-  objectOf,
-  sharedMarks,
-  tupleOf,
-  Value,
-  valueOf,
-  wholeOf,
-  withSensitive,
-} from '../../src/values/Value';
+import { allSensitive, child, inferred, mayBeSensitive, objectOf, tupleOf, Value, valueOf, withSensitive } from '../../src/values/Value';
+import { anyItemMarks, everyItemMarks, fewest, isSensitive, itemsOf, maybeMarks, sharedMarks, wholeOf } from '../../src/values/sensitive';
 import { steps } from '../ast';
 
 const at = { file: 'main.clay', line: 1, column: 1 };

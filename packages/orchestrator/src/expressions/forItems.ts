@@ -2,26 +2,8 @@ import { AttributePath, EVERY_ITEM, EXACT, ExactNumber, holdsFirst, isMarker, is
 import { ConfigError, ForNode, Position } from '@clay/parser';
 
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
-import {
-  child,
-  described,
-  everyItemMarks,
-  fewest,
-  hasText,
-  isSensitive,
-  marksOfWhole,
-  maybeMarks,
-  mayBeSensitive,
-  nullSource,
-  objectOf,
-  sharedMarks,
-  tupleOf,
-  Value,
-  valueOf,
-  wholeWhere,
-  Whole,
-  withSensitive,
-} from '../values/Value';
+import { child, described, hasText, mayBeSensitive, nullSource, objectOf, tupleOf, Value, valueOf, withSensitive } from '../values/Value';
+import { everyItemMarks, fewest, isSensitive, marksOfWhole, maybeMarks, sharedMarks, wholeWhere, Whole } from '../values/sensitive';
 
 export type ForItem = [key: Value, value: Value];
 

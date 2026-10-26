@@ -1,7 +1,8 @@
 import { isUnknown } from '@clay/contracts';
 
 import { NotKnownYet } from './NotKnownYet';
-import { child, described, isAllSensitive, isSensitive, nullSource, Value } from '../values/Value';
+import { child, described, isAllSensitive, nullSource, Value } from '../values/Value';
+import { isSensitive } from '../values/sensitive';
 
 /** For messages: a set's members have no index. */
 const LIST = { kind: 'list', item: (index: number) => `item [${index}]`, holds: (index: number) => `item [${index}] is`, items: 'items' };

@@ -2,7 +2,8 @@ import { containsUnknown, ExactNumber, isRecord, isUnknown, jsonText, NumberErro
 
 import { charactersOf } from './characters';
 import { shown } from '../shown';
-import { article, inferred, isSensitive, nullSource, Value } from '../values/Value';
+import { article, inferred, nullSource, Value } from '../values/Value';
+import { isSensitive } from '../values/sensitive';
 
 /** A problem with the string, at 0, or with the argument `at` after it. */
 export class FormatError extends Error {

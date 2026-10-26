@@ -23,7 +23,8 @@ import { blockKey, callKey, Context, DataInstance, dataSourceKey, ModuleCall, mo
 import { ModuleInstances } from '../../instances/ModuleInstances';
 import { placed } from '../../place';
 import { DeclaredBlock, ScopeManager } from '../../config/ScopeManager';
-import { itemsOf, sharedMarks, Value, valueOf, withSensitive } from '../../values/Value';
+import { Value, valueOf, withSensitive } from '../../values/Value';
+import { itemsOf, sharedMarks } from '../../values/sensitive';
 import { everyOf, everyType, instanceType, noAttribute, outputsType, readCall, readInstance } from './instance';
 
 /** Paths are known at load and a local is read as written, so they are not here. */

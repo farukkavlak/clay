@@ -5,7 +5,8 @@ import { checkBoolean } from './operators';
 import { tryAt } from '../place';
 import { unknownOf, UnresolvedReferenceError } from './UnresolvedReferenceError';
 import { VariableValue } from '../config/ScopeManager';
-import { described, isSensitive, Value } from '../values/Value';
+import { described, Value } from '../values/Value';
+import { isSensitive } from '../values/sensitive';
 
 export interface RuleReader {
   resolveWithVariable: (value: AttributeValue, state: State, context: ModuleAddress, name: string, given: Value) => Value;

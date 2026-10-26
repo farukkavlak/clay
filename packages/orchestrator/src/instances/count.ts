@@ -1,7 +1,8 @@
 import { ExactNumber, isUnknown } from '@clay/contracts';
 
 import { NotKnownYet } from './NotKnownYet';
-import { described, isSensitive, nullSource, Value } from '../values/Value';
+import { described, nullSource, Value } from '../values/Value';
+import { isSensitive } from '../values/sensitive';
 
 function notANumber(value: Value): Error {
   return new Error(`count is a whole number from 0, not ${described(value)}${nullSource(value)}`);

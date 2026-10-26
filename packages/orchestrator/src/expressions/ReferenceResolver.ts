@@ -76,31 +76,21 @@ import { ScopeManager } from '../config/ScopeManager';
 import { unified, unifiedLater, Unjoinable, unjoined } from '../values/unify';
 import {
   allSensitiveIf,
-  anyItemMarks,
   article,
   described,
-  fewest,
   hasText,
   isAllSensitive,
-  isSensitive,
-  itemsOf,
-  marksOfWhole,
-  maybeMarks,
-  mayBeAllSensitive,
   mayBeSensitive,
   objectOf,
   sensitiveSomewhere,
-  sharedMarks,
   tupleOf,
   unordered,
   Value,
   valueOf,
-  Whole,
   wholeIf,
-  wholeOf,
-  wholeWhere,
   withSensitive,
 } from '../values/Value';
+import { anyItemMarks, fewest, isSensitive, itemsOf, marksOfWhole, maybeMarks, mayBeAllSensitive, sharedMarks, Whole, wholeOf, wholeWhere } from '../values/sensitive';
 import { DataSourceResolver } from './references/DataSourceResolver';
 import { checkUnknownIndex, keyOf } from './indexKey';
 import { COUNT_INDEX_OUTSIDE, eachOutside } from './references/instance';

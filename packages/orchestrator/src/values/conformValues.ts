@@ -4,7 +4,8 @@ import { DataBlock, Position, ResourceBlock } from '@clay/parser';
 import { setOf } from './setMembers';
 import { shown } from '../shown';
 import { items, spelled } from '../spelled';
-import { article, child, described, isSensitive, mayBeAllSensitive, nullSource, plainOf, unordered, Value, valueOf, withSensitive } from './Value';
+import { article, child, described, nullSource, plainOf, unordered, Value, valueOf, withSensitive } from './Value';
+import { isSensitive, mayBeAllSensitive } from './sensitive';
 import { ObjectType, withLeftOut } from './withLeftOut';
 
 /** Carries the attribute, so the caller can report its position; undefined for a missing attribute. */

@@ -4,7 +4,8 @@ import { AttributeValue, TypeDefaults } from '@clay/parser';
 import { converted, SchemaMismatch, toldWhole } from './conformValues';
 import { setOf } from './setMembers';
 import { convertedLater, itemTypes, joinedLater, laterOf, unified, unjoined, Unjoinable } from './unify';
-import { allSensitiveIf, child, isSensitive, mayBeSensitive, objectOf, tupleOf, unordered, Value, valueOf, wholeAs } from './Value';
+import { allSensitiveIf, child, mayBeSensitive, objectOf, tupleOf, unordered, Value, valueOf } from './Value';
+import { isSensitive, wholeAs } from './sensitive';
 
 /** `read` evaluates a default, which is always a constant. */
 export interface Defaults {

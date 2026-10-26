@@ -1,6 +1,7 @@
 import { AttributePath, MAYBE, Schema } from '@clay/contracts';
 
-import { isSensitive, mayBeSensitive, sensitiveAmong, Value, withSensitive } from './Value';
+import { mayBeSensitive, sensitiveAmong, Value, withSensitive } from './Value';
+import { isSensitive } from './sensitive';
 
 /** The attributes the schema marks, for certain or only as ones that may be, by what the values given hold. */
 interface Marked {

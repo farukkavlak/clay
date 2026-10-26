@@ -1,7 +1,8 @@
 import { ExactNumber, NumberError } from '@clay/contracts';
 import { AttributeValue, ConfigError, nameOf, Position, Step } from '@clay/parser';
 
-import { article, described, hasText, isSensitive, nullSource, Value } from '../values/Value';
+import { article, described, hasText, nullSource, Value } from '../values/Value';
+import { isSensitive } from '../values/sensitive';
 
 /** The text of an index is never quoted, since a value it was read from may be sensitive. */
 function wholeIndex(number: ExactNumber, position: Position): number {

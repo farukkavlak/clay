@@ -4,21 +4,8 @@ import { AttributePath, containsUnknown, ExactNumber, isUnknown, NumberError, SE
 import { ConfigError, Position, spellSteps, Step } from '@clay/parser';
 
 import { itemTypes } from '../values/unify';
-import {
-  article,
-  described,
-  inferred,
-  isAllSensitive,
-  isSensitive,
-  mayBeAllSensitive,
-  mayBeSensitive,
-  nullSource,
-  Value,
-  valueOf,
-  wholeOf,
-  wholeWhere,
-  withSensitive,
-} from '../values/Value';
+import { article, described, inferred, isAllSensitive, mayBeSensitive, nullSource, Value, valueOf, withSensitive } from '../values/Value';
+import { isSensitive, mayBeAllSensitive, wholeOf, wholeWhere } from '../values/sensitive';
 
 /** A list and a tuple hold items alike, and so do a map and an object. A set has no order, so it equals only a set. */
 const COMPARED_AS: Record<Type['kind'], string> = {

@@ -1,7 +1,8 @@
 import { isUnknown, sensitiveUnder, Type, typeAt } from '@clay/contracts';
 import { ConfigError, Position, spellSteps, Step, stepKey } from '@clay/parser';
 
-import { article, child, mayBeAllSensitive, Value } from '../values/Value';
+import { article, child, Value } from '../values/Value';
+import { mayBeAllSensitive } from '../values/sensitive';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 
 /** What no value of this kind answers to, whatever it holds. Undefined when the kind can take the step. */

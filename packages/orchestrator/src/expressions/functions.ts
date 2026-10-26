@@ -12,28 +12,19 @@ import {
   article,
   child,
   described,
-  everyItemMarks,
-  fewest,
   hasText,
   isAllSensitive,
-  isSensitive,
-  itemsOf,
-  mayBeAllSensitive,
-  maybeMarks,
   mayBeSensitive,
   nullSource,
   objectOf,
   sensitiveAmong,
   sensitiveSomewhere,
-  sharedMarks,
   unordered,
   Value,
   valueOf,
-  wholeAs,
-  wholeOf,
-  wholeWhere,
   withSensitive,
 } from '../values/Value';
+import { everyItemMarks, fewest, isSensitive, itemsOf, mayBeAllSensitive, maybeMarks, sharedMarks, wholeAs, wholeOf, wholeWhere } from '../values/sensitive';
 
 /** Refuses at the argument `at`, the first where it is left out. */
 type Refuse = (message: string, at?: number) => never;
