@@ -954,9 +954,12 @@ Measured with the local provider; a remote provider makes the sequential calls c
       known yet. 10000 data source instances took 11 seconds, 8000 objects a provider
       identifies 21, 100000 items grouped by one key 47, and a move of 4000 module
       instances 27 seconds. Each now looks up or appends, and takes under a second
-- [ ] A destroy orders every object against every object it read, and checks each edge for
+- [x] A destroy orders every object against every object it read, and checks each edge for
       a loop by walking the graph: destroying 1000 pairs of `null_resource` where `b[i]`
-      reads `a[i]` takes 6 seconds, 500 take 1.5
+      reads `a[i]` takes 2.3 seconds, 2000 take 9.5, and 4000 run out of memory. Terraform
+      joins every pair too. The readers of a block now go through one node before its
+      objects, unless the two blocks read each other, and what reaches each reader is
+      found once: 8000 pairs take 1.9 seconds
 - [ ] The marks of a sensitive value are kept fewest by holding each against every other
       (`fewest`), so a `for` object with one key not known yet over 16000 items plans in 4
       seconds, 8000 in 1.3. The plan shows a set's change by comparing every member with

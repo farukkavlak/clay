@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import { Graph } from '../src/Graph';
 
+/** The nodes of each component, sorted. */
+function groups(graph: Graph<string>): string[][] {
+  const byRoot = new Map<string, string[]>();
+  for (const [node, root] of graph.components()) byRoot.set(root, [...(byRoot.get(root) ?? []), node]);
+  return [...byRoot.values()].map((nodes) => nodes.sort()).sort((a, b) => a[0].localeCompare(b[0]));
+}
+
 describe('Graph', () => {
   it('should add nodes', () => {
     const graph = new Graph<string>();
@@ -127,6 +134,41 @@ describe('Graph', () => {
     expect([cycle[0], cycle[1], cycle.at(-2), cycle.at(-1)]).toEqual(['n0', `n${length - 1}`, 'n1', 'n0']);
   });
 
+  describe('components', () => {
+    it('groups the nodes that reach each other, apart from what leads in and out', () => {
+      const graph = new Graph<string>();
+      for (const node of ['X', 'A', 'B', 'C', 'Y']) graph.addNode(node, 'val');
+      graph.addEdge('X', 'A');
+      graph.addEdge('A', 'B');
+      graph.addEdge('B', 'C');
+      graph.addEdge('C', 'A');
+      graph.addEdge('C', 'Y');
+
+      expect(groups(graph)).toEqual([['A', 'B', 'C'], ['X'], ['Y']]);
+    });
+
+    it('keeps two nodes that one reaches the other apart', () => {
+      const graph = new Graph<string>();
+      for (const node of ['A', 'B']) graph.addNode(node, 'val');
+      graph.addEdge('B', 'A');
+
+      expect(groups(graph)).toEqual([['A'], ['B']]);
+    });
+
+    it('walks a chain longer than the call stack holds', () => {
+      const length = 20_000;
+      const graph = new Graph<string>();
+      for (let i = 0; i < length; i++) graph.addNode(`n${i}`, 'val');
+      for (let i = 1; i < length; i++) graph.addEdge(`n${i - 1}`, `n${i}`);
+
+      expect(new Set(graph.components().values()).size).toBe(length);
+
+      graph.addEdge(`n${length - 1}`, 'n0');
+
+      expect(new Set(graph.components().values()).size).toBe(1);
+    });
+  });
+
   it('should list every node with its data', () => {
     const graph = new Graph<string>();
     graph.addNode('A', 'first');
@@ -235,6 +277,22 @@ describe('Graph', () => {
     expect(batches[0]).toContain('D');
 
     expect(batches[1]).toEqual(['C']);
+  });
+
+  it('puts a node that takes no layer in the layer of what follows it', () => {
+    // A and B go before W, which goes before C; D goes after A alone.
+    const graph = new Graph<string>();
+    for (const node of ['A', 'B', 'W', 'C', 'D']) graph.addNode(node, 'val');
+    graph.addEdge('A', 'W');
+    graph.addEdge('B', 'W');
+    graph.addEdge('W', 'C');
+    graph.addEdge('A', 'D');
+
+    expect(graph.topologicalSort((node) => node === 'W')).toEqual([
+      ['A', 'B'],
+      ['D', 'W', 'C'],
+    ]);
+    expect(graph.topologicalSort()).toEqual([['A', 'B'], ['D', 'W'], ['C']]);
   });
 
   it('should throw when adding edge from non-existent node', () => {

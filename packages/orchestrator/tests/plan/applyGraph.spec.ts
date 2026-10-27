@@ -3,7 +3,7 @@ import { Graph } from '@clay/graph';
 import { ActionType, PlanAction } from '@clay/planner';
 import { describe, expect, it } from 'vitest';
 
-import { applyGraph } from '../../src/plan/applyGraph';
+import { ApplyNode, applyGraph, applyLayers } from '../../src/plan/applyGraph';
 import { GraphNode } from '../../src/graph/DependencyGraphBuilder';
 
 /** Resource blocks `rec.<name>`, each edge from what is read to what reads it. */
@@ -35,7 +35,11 @@ const object = (address: string, ...reads: string[]): [string, Resource] => [add
 const holding = (...objects: [string, Resource][]): State => ({ version: STATE_VERSION, serial: 0, resources: Object.fromEntries(objects) });
 const going = (address: string): PlanAction => ({ type: 'DELETE', ...Address.parse(address).fields() });
 
-const layers = (graph: Graph<unknown>) => graph.topologicalSort().map((layer) => [...layer].sort());
+/** As the run takes them, without the wait nodes, which run nothing. */
+const layers = (graph: Graph<ApplyNode>) =>
+  applyLayers(graph)
+    .map((layer) => layer.filter((key) => graph.getNode(key)!.kind !== 'wait').sort())
+    .filter((layer) => layer.length > 0);
 
 describe('applyGraph', () => {
   it('leaves a replace that reads nothing going away to its block', () => {
@@ -210,6 +214,12 @@ describe('applyGraph', () => {
     expect(layers(graph)).toEqual([['destroy:rec.a (deposed)'], ['destroy:rec.b (deposed)']]);
   });
 
+  it('drops a read of an object of its own block', () => {
+    const graph = applyGraph(config([]), [act('DELETE', 'a', { deposed: true }), act('DELETE', 'a')], stateOf([held('a', 'a')], { a: ['a'] }));
+
+    expect(layers(graph)).toEqual([['destroy:rec.a (deposed)'], ['destroy:rec.a']]);
+  });
+
   it('orders a ladder of 200 deletes that each read the two before', () => {
     const names = Array.from({ length: 200 }, (_, index) => `r${index}`);
     const resources = names.map((name, index) => held(name, ...names.slice(Math.max(0, index - 2), index)));
@@ -237,6 +247,19 @@ describe('applyGraph', () => {
         ['destroy:rec.b[0]', 'destroy:rec.b[1]'],
         ['destroy:rec.a[0]', 'destroy:rec.a[1]'],
       ]);
+    });
+
+    it('passes every reader of a block through one wait node', () => {
+      const state = holding(object('rec.a[0]'), object('rec.a[1]'), object('rec.b[0]', 'rec.a'), object('rec.b[1]', 'rec.a'));
+
+      const graph = applyGraph(
+        new Graph<GraphNode>(),
+        ['rec.a[0]', 'rec.a[1]', 'rec.b[0]', 'rec.b[1]'].map((address) => going(address)),
+        state
+      );
+
+      expect([graph.dependentsOf('destroy:rec.b[0]'), graph.dependentsOf('destroy:rec.b[1]')]).toEqual([['wait:rec.a'], ['wait:rec.a']]);
+      expect(graph.dependentsOf('wait:rec.a').sort()).toEqual(['destroy:rec.a[0]', 'destroy:rec.a[1]']);
     });
 
     it('waits only for the objects in the module instance it names', () => {

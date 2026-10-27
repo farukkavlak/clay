@@ -70,6 +70,10 @@ const apply = async (at: string, config: string, ...providers: Provider[]) => {
   return applied;
 };
 
+/** `size` instances of `b`, each reading its own instance of `a`. */
+const chain = (size: number) =>
+  `resource "null_resource" "a" {\n  count = ${size}\n}\nresource "null_resource" "b" {\n  count    = ${size}\n  triggers = { a = null_resource.a[count.index].id }\n}\n`;
+
 /**
  * How much longer a run takes on four times the instances: about four where it grows with them, sixteen where each walked every other.
  * A ratio, so a loaded machine slows both runs alike. Each case grew by 3 to 4.5 here, and by 13 to 18 when it walked every instance.
@@ -146,6 +150,26 @@ describe('a run over many instances', () => {
       await apply(at, `module "m" {\n  source = "./m"\n  count  = ${size}\n}\n`);
 
       return timed(async () => expect(await apply(at, `moved {\n  from = module.m\n  to   = module.n\n}\nmodule "n" {\n  source = "./m"\n  count  = ${size}\n}\n`)).toBe(size));
+    };
+
+    expect(await growth(1000, run)).toBeLessThan(LINEAR);
+  });
+
+  it('destroys instances that each read a block in time that grows with them', GENEROUS, async () => {
+    const run = async (at: string, size: number) => {
+      await apply(at, chain(size));
+
+      return timed(async () => expect(await apply(at, '')).toBe(size * 2));
+    };
+
+    expect(await growth(500, run)).toBeLessThan(LINEAR);
+  });
+
+  it('destroys a chain that what stays read in state in time that grows with it', GENEROUS, async () => {
+    const run = async (at: string, size: number) => {
+      await apply(at, `${chain(size)}resource "null_resource" "c" {\n  count    = ${size}\n  triggers = { b = null_resource.b[count.index].id }\n}\n`);
+
+      return timed(async () => expect(await apply(at, `resource "null_resource" "c" {\n  count = ${size}\n}\n`)).toBe(size * 3));
     };
 
     expect(await growth(1000, run)).toBeLessThan(LINEAR);
