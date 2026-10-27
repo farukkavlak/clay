@@ -139,6 +139,10 @@ const showSensitiveKeysChanged = async (at: string, size: number) => {
 /** A resource whose `triggers` look up each of `size` keys in a map of `size` sensitive keys. */
 const lookedUp = (size: number) => `${keyed(size, 'lookup(local.m, k, "")')}locals {\n  m = { for k in var.ks : k => ${SENSITIVE_KEYS} }\n}\n`;
 
+/** A resource `s` whose `triggers` hold `size` keys, each given the value `value` says, and a resource whose `triggers` read each of them from `s`. */
+const readEach = (size: number, value: string) =>
+  `${keyed(size, 'null_resource.s.triggers[k]')}resource "null_resource" "s" {\n  triggers = { for k in var.ks : k => ${value} }\n}\n`;
+
 /** Plans, shows and applies through a plan file a pool of `size` members changed to `size` others, and returns how long that took. */
 const changeEveryMember = async (at: string, size: number) => {
   await apply(at, pool(size, 'a'), new Pool());
@@ -314,5 +318,36 @@ describe('a run over many instances', () => {
 
     expect(await growth(4000, run)).toBeLessThan(LINEAR);
     expect(shown).toContain('{"k0":(sensitive value),"k1":(sensitive value)');
+  });
+
+  it('plans a read of each key of a resource with many sensitive keys in time that grows with them', GENEROUS, async () => {
+    let sensitive: unknown;
+    const run = (at: string, size: number) =>
+      timed(async () => {
+        const { actions } = await orchestratorIn(at).plan(readEach(size, SENSITIVE_KEYS));
+        ({ sensitive } = actions.find(({ name }) => name === 'r') ?? {});
+      });
+
+    expect(await growth(1000, run)).toBeLessThan(LINEAR);
+    expect(sensitive).toEqual(
+      expect.arrayContaining([
+        ['triggers', 'k0'],
+        ['triggers', 'k3999'],
+      ])
+    );
+  });
+
+  it('plans from state a read of each key of a resource in time that grows with them', GENEROUS, async () => {
+    let types: string[] = [];
+    const run = async (at: string, size: number) => {
+      await apply(at, readEach(size, 'k'));
+      return timed(async () => {
+        const { actions } = await orchestratorIn(at).plan(readEach(size, 'k'));
+        types = actions.map(({ type }) => type);
+      });
+    };
+
+    expect(await growth(1000, run)).toBeLessThan(LINEAR);
+    expect(types).toEqual(['NO_OP', 'NO_OP']);
   });
 });

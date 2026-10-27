@@ -20,7 +20,15 @@ function plannedAttribute(instance: PlannedInstance, name: string): unknown {
 /** An instance as the plan or the state holds it, with the steps to each sensitive part. */
 interface Held {
   attribute: (name: string) => unknown;
-  sensitive: readonly AttributePath[];
+  sensitive: readonly AttributePath[] | undefined;
+  /** Replaced as a whole, never changed inside, when the instance comes to other values. */
+  values: object;
+}
+
+/** Attributes read from one instance's values while it has the same sensitive parts. */
+interface InstanceRead {
+  sensitive: readonly AttributePath[] | undefined;
+  attributes: Map<string, Value>;
 }
 
 function notFound(spelled: string, address: Address): string {
@@ -28,6 +36,9 @@ function notFound(spelled: string, address: Address): string {
 }
 
 export class ResourceResolver {
+  /** A read types the whole attribute, so a value read for each of its keys would be typed again for each. */
+  private reads = new WeakMap<object, InstanceRead>();
+
   constructor(
     private instances: Instances,
     private planned: Planned,
@@ -73,13 +84,35 @@ export class ResourceResolver {
   /** An instance the plan creates or changes is read from the plan, not state. Undefined where neither has it. */
   private heldAt(address: Address, type: string, schema: Schema, state: State, position?: Position): Held | undefined {
     const planned = this.planned.get(address.toString());
-    if (planned) return { attribute: (name) => plannedAttribute(planned, name), sensitive: planned.sensitive };
+    if (planned) return { attribute: (name) => plannedAttribute(planned, name), sensitive: planned.sensitive, values: planned };
 
     const resource = state.resources[address.toString()];
-    return resource && { attribute: (name) => this.getResolvedAttribute(resource, type, schema, name, position), sensitive: resource.sensitive ?? [] };
+    return resource && { attribute: (name) => this.getResolvedAttribute(resource, type, schema, name, position), sensitive: resource.sensitive, values: resource.attributes };
   }
 
-  private typedRead(reference: ResourceReference, names: string[], { attribute, sensitive }: Held, schema: Schema, position?: Position): Record<string, Value> {
+  private typedRead(reference: ResourceReference, names: string[], held: Held, schema: Schema, position?: Position): Record<string, Value> {
+    const { attributes } = this.readOf(held);
+    const unread = names.filter((name) => !attributes.has(name));
+    if (unread.length > 0) for (const [name, value] of Object.entries(this.typed(reference, unread, held, schema, position))) attributes.set(name, value);
+
+    return Object.fromEntries(
+      names.flatMap((name): [string, Value][] => {
+        const value = attributes.get(name);
+        return value ? [[name, value]] : [];
+      })
+    );
+  }
+
+  private readOf({ sensitive, values }: Held): InstanceRead {
+    const read = this.reads.get(values);
+    if (read && read.sensitive === sensitive) return read;
+
+    const fresh = { sensitive, attributes: new Map<string, Value>() };
+    this.reads.set(values, fresh);
+    return fresh;
+  }
+
+  private typed(reference: ResourceReference, names: string[], { attribute, sensitive = [] }: Held, schema: Schema, position?: Position): Record<string, Value> {
     try {
       const values = typedValues(schema, Object.fromEntries(names.map((name) => [name, attribute(name)])));
 

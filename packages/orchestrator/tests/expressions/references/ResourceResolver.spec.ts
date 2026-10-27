@@ -85,6 +85,18 @@ describe('ResourceResolver', () => {
     expect(read('resource.test.id')).toBeUndefined();
   });
 
+  // An update gives the resource in state a new attributes object, the resource itself staying.
+  it('reads what an update leaves in state, not what it read before', () => {
+    const resource = { ...mockState.resources['resource.test'] };
+    const state = { ...mockState, resources: { 'resource.test': resource } };
+    const reading = new ResourceResolver(new Instances(), new Planned(), new Map());
+    reading.resolve(ref('resource.test.simple'), context, state);
+
+    resource.attributes = { ...resource.attributes, simple: 'updated' };
+
+    expect(reading.resolve(ref('resource.test.simple'), context, state).value.data).toBe('updated');
+  });
+
   // A resource the plan creates or changes is read from the plan, not state.
   describe('an instance the plan will create or change', () => {
     const planned = new Planned();
@@ -104,6 +116,18 @@ describe('ResourceResolver', () => {
       expect(read('resource.test.simple')).toEqual([[]]);
       expect(read('resource.test.settings')).toEqual([['value']]);
       expect(read('resource.test.id')).toBeUndefined();
+    });
+
+    it('reads what the plan holds once it plans the instance again', () => {
+      const again = new Planned();
+      const sensitive = [['settings']];
+      again.set('resource.test', { simple: 'first' }, sensitive, true);
+      const reading = new ResourceResolver(new Instances(), again, new Map());
+      reading.resolve(ref('resource.test.simple'), context, mockState);
+
+      again.set('resource.test', { simple: 'second' }, sensitive, true);
+
+      expect(reading.resolve(ref('resource.test.simple'), context, mockState).value.data).toBe('second');
     });
 
     // It comes back unknown, so the caller can take the remaining steps.
