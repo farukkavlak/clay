@@ -960,10 +960,15 @@ Measured with the local provider; a remote provider makes the sequential calls c
       joins every pair too. The readers of a block now go through one node before its
       objects, unless the two blocks read each other, and what reaches each reader is
       found once: 8000 pairs take 1.9 seconds
-- [ ] The marks of a sensitive value are kept fewest by holding each against every other
-      (`fewest`), so a `for` object with one key not known yet over 16000 items plans in 4
-      seconds, 8000 in 1.3. The plan shows a set's change by comparing every member with
-      every other, and a plan file's unknown paths are checked pairwise
+- [x] The marks of a sensitive value were kept fewest by holding each against every other,
+      so a `for` object with one key not known yet over 16000 items planned in 5.4 seconds.
+      The marks are now looked up by their steps: 0.6 seconds
+- [ ] The plan shows a set's change by comparing every member with every other, the apply
+      checks a set it got back the same way, and a plan file's unknown paths are checked
+      pairwise
+- [ ] `sensitiveUnder` goes over every mark for each key it is asked about, and the plan
+      asks it for each key of a value, so `triggers` with 8000 sensitive keys plans in 3.3
+      seconds, 2000 in 0.7
 - [ ] `local_file` reads the whole directory of each file to check how its name is
       cased, so 8000 files in one directory take 8 seconds to plan
 - [ ] The apply runs layer by layer, so one slow resource holds back every resource of the

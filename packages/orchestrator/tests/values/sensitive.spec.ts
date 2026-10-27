@@ -161,8 +161,20 @@ describe('the marks a value may have', () => {
       [[EVERY_ITEM, MAYBE]],
     ],
     ['one that may be under one for certain', [['a', 'b', MAYBE], ['a']], [['a']]],
+    ['one for certain under one for certain', [['a'], ['a', 'b']], [['a']]],
   ])('keep, of the fewest, %s', (_, paths, kept) => {
     expect(fewest(paths)).toEqual(kept);
+  });
+
+  it('keep the fewest of a mark with a step every item, or a key spelled as one, at every depth in time that grows with its depth', () => {
+    const deep = [...Array.from({ length: 24 }, () => EVERY_ITEM), MAYBE];
+    const spelledAlike = [...Array.from({ length: 24 }, () => '-1'), MAYBE];
+    const started = performance.now();
+
+    expect(fewest([deep, ['x', MAYBE]])).toEqual([deep, ['x', MAYBE]]);
+    expect(fewest([spelledAlike, [EVERY_ITEM, MAYBE]])).toEqual([[EVERY_ITEM, MAYBE]]);
+    // Well under a millisecond where it grows with the depth, and seconds where each step every item doubles what is looked at.
+    expect(performance.now() - started).toBeLessThan(1000);
   });
 
   it.each([
@@ -191,6 +203,24 @@ describe('the marks a value may have', () => {
     expect(wholeOf(...values)).toEqual(marks);
   });
 });
+
+/** Exact keys under as many keys, beside marks that may be so under every item and at each of those keys. */
+function manyMarks(size: number) {
+  const keys = Array.from({ length: size }, (_, index) => `k${index}`);
+  return [
+    [EVERY_ITEM, EVERY_ITEM, MAYBE],
+    ...keys.map((key) => [EVERY_ITEM, key, MAYBE]),
+    ...keys.map((key) => [`m${key}`, key, EXACT]),
+    ...keys.map((key) => [`m${key}`, EVERY_ITEM, MAYBE]),
+  ];
+}
+
+/** Milliseconds `fewest` takes over `manyMarks(size)`. */
+function keptFewestIn(size: number): number {
+  const started = performance.now();
+  fewest(manyMarks(size));
+  return performance.now() - started;
+}
 
 describe('an exact key or place', () => {
   it.each([
@@ -252,8 +282,72 @@ describe('an exact key or place', () => {
       ],
     ],
     ['none that may be at it, under every item for certain', [[EVERY_ITEM], [EVERY_ITEM, 'z', MAYBE], ['c', MAYBE], ['c', EXACT]], [[EVERY_ITEM], ['c', EXACT]]],
+    ['none for the whole', [[EVERY_ITEM, MAYBE], [EXACT]], [[EVERY_ITEM, MAYBE]]],
+    [
+      'none under a marker, beside what may be so under every item under a key spelled as it',
+      [
+        ['-2', EVERY_ITEM, MAYBE],
+        [SOMEWHERE, 'c', EXACT],
+      ],
+      [['-2', EVERY_ITEM, MAYBE]],
+    ],
+    [
+      'it, beside what may be so under every item under every item',
+      [
+        [EVERY_ITEM, EVERY_ITEM, MAYBE],
+        ['x', 'c', EXACT],
+      ],
+      [
+        [EVERY_ITEM, EVERY_ITEM, MAYBE],
+        ['x', 'c', EXACT],
+      ],
+    ],
+    [
+      'it under every item, beside what may be so under every item under a key',
+      [
+        ['x', EVERY_ITEM, MAYBE],
+        [EVERY_ITEM, 'c', EXACT],
+      ],
+      [
+        ['x', EVERY_ITEM, MAYBE],
+        [EVERY_ITEM, 'c', EXACT],
+      ],
+    ],
+    [
+      'one that may be at it under every item, beside it under a key',
+      [
+        [EVERY_ITEM, EVERY_ITEM, MAYBE],
+        [EVERY_ITEM, 'c', MAYBE],
+        ['x', 'c', EXACT],
+      ],
+      [
+        [EVERY_ITEM, EVERY_ITEM, MAYBE],
+        [EVERY_ITEM, 'c', MAYBE],
+        ['x', 'c', EXACT],
+      ],
+    ],
+    [
+      'one that may be at it under a key, beside it under every item',
+      [
+        ['x', EVERY_ITEM, MAYBE],
+        ['x', 'c', MAYBE],
+        [EVERY_ITEM, 'c', EXACT],
+      ],
+      [
+        ['x', EVERY_ITEM, MAYBE],
+        ['x', 'c', MAYBE],
+        [EVERY_ITEM, 'c', EXACT],
+      ],
+    ],
   ])('keeps, of the fewest, %s', (_, paths, kept) => {
     expect(fewest(paths)).toEqual(kept);
+  });
+
+  it('and the marks beside it are kept fewest in time that grows with them', () => {
+    keptFewestIn(1000);
+
+    // About four where it grows with them, and sixteen where each mark is held against every other.
+    expect(keptFewestIn(16_000) / keptFewestIn(4000)).toBeLessThan(8);
   });
 
   it('is no mark of a value alone', () => {

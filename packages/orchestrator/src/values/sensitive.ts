@@ -19,6 +19,8 @@ import {
   UNKNOWN,
 } from '@clay/contracts';
 
+import { PathTree } from './PathTree';
+import { everyItemPlaces, Pattern, Patterns } from './Patterns';
 import { Value, valueOf, withSensitive, allSensitive, isAllSensitive, mayBeSensitive, child } from './Value';
 
 const named = (step: string | number | undefined): step is string | number => step !== undefined && !isMarker(step);
@@ -85,20 +87,13 @@ function reaches(step: string | number, at: string | number): boolean {
   return isMarker(step) || isMarker(at) ? step === at : String(step) === String(at);
 }
 
-/** Whether the steps of `path` before the exact key or place at `exact` may lead to the same part as those of `exact`. */
-function along(exact: AttributePath, path: AttributePath): boolean {
-  return exact.slice(0, -2).every((step, index) => step === EVERY_ITEM || path[index] === EVERY_ITEM || reaches(path[index], step));
-}
-
 /** Whether `exacts` say the step at `index` of `within` is exact, which a mark that may be so under every item does not reach. */
-function exactStep(exacts: readonly AttributePath[], within: AttributePath, index: number): boolean {
-  const at = (exact: AttributePath) => exact.length === index + 2 && String(exact[index]) === String(within[index]) && along(exact, within);
-
-  return named(within[index]) && exacts.some((exact) => at(exact));
+function exactStep(exacts: Patterns, within: AttributePath, index: number): boolean {
+  return named(within[index]) && exacts.has(within.slice(0, index), String(within[index]));
 }
 
 /** Whether a mark at `path`, of either kind, means every part at `within` may be sensitive. Under every item, the item may be. */
-function coversMaybe(path: AttributePath, within: AttributePath, exacts: readonly AttributePath[]): boolean {
+function coversMaybe(path: AttributePath, within: AttributePath, exacts: Patterns): boolean {
   const marked = isMaybe(path) ? path.slice(0, -1) : path;
   const everyItem = (index: number) => !(isMaybe(path) && exactStep(exacts, within, index));
 
@@ -106,11 +101,29 @@ function coversMaybe(path: AttributePath, within: AttributePath, exacts: readonl
 }
 
 /**
- * Whether `paths` mark all of what is at `at`: a path to it, or to what holds it.
+ * The marks that may cover `at`: those along its steps, and, where it may be sensitive, those that may be so along them or under every item.
+ * Where it is sensitive somewhere, those inside it too.
+ */
+function coverers(marks: PathTree, at: AttributePath): AttributePath[] {
+  if (isMaybe(at))
+    return marks
+      .levels(at.slice(0, -1), true)
+      .flat()
+      .flatMap((node) => [...node.paths, ...(node.child(MAYBE)?.paths ?? [])]);
+
+  const somewhere = at.at(-1) === SOMEWHERE;
+  const levels = marks.levels(somewhere ? at.slice(0, -1) : at, false);
+  const inside = somewhere ? (levels.at(-1) ?? []).flatMap((node) => [...node.all()]) : [];
+  return [...levels.flat().flatMap((node) => node.paths), ...inside];
+}
+
+/**
+ * Whether `marks` mark all of what is at `at`: a path to it, or to what holds it.
  * Where `at` is sensitive somewhere, a mark inside it covers it only if it is there for certain, so not one under every item.
  * Where `at` may be sensitive, any mark that may be so at or above it covers it, and none for certain is covered by one that may be.
  */
-function covers(paths: readonly AttributePath[], at: AttributePath, exacts: readonly AttributePath[]): boolean {
+function covers(marks: PathTree, at: AttributePath, exacts: Patterns): boolean {
+  const paths = coverers(marks, at).filter((path) => path !== at);
   if (isMaybe(at)) return paths.some((path) => coversMaybe(path, at.slice(0, -1), exacts));
 
   const somewhere = at.at(-1) === SOMEWHERE;
@@ -150,18 +163,29 @@ function meet(left: AttributePath, right: AttributePath, sides: Value[][]): Attr
   return steps;
 }
 
+/** The steps before each step every item of a mark that may be so, which may reach an exact key or place after as many steps. */
+function beforeEveryItem(path: AttributePath): Pattern[] {
+  return everyItemPlaces(path).map((at) => [path.slice(0, at), '']);
+}
+
 /** Whether a mark that may be so under every item beside the exact key or place at `exact` would reach it, if not for that. */
-function keepsOut(exact: AttributePath, paths: readonly AttributePath[]): boolean {
-  return paths.some((path) => isMaybe(path) && path[exact.length - 2] === EVERY_ITEM && along(exact, path));
+function keepsOut(exact: AttributePath, maybes: Patterns): boolean {
+  return exact.length >= 2 && maybes.has(exact.slice(0, -2), '');
 }
 
 /** Each once, none that another already covers, and no exact key or place that keeps nothing out. */
 export function fewest(paths: AttributePath[]): AttributePath[] {
-  const keys = paths.map((path) => JSON.stringify(path.map((step) => (isMarker(step) ? step : String(step)))));
-  const once = paths.filter((path, index) => keys.indexOf(keys[index]) === index && (!isExact(path) || keepsOut(path, paths)));
+  const unique = new Map<string, AttributePath>();
+  for (const path of paths) {
+    const key = JSON.stringify(path.map((step) => (isMarker(step) ? step : String(step))));
+    if (!unique.has(key)) unique.set(key, path);
+  }
+  const maybes = new Patterns([...unique.values()].filter((path) => isMaybe(path)).flatMap((path) => beforeEveryItem(path)));
+  const once = [...unique.values()].filter((path) => !isExact(path) || keepsOut(path, maybes));
 
-  const exacts = once.filter((path) => isExact(path));
-  return once.filter((path, index) => !covers(marksOnly([...once.slice(0, index), ...once.slice(index + 1)]), path, exacts));
+  const exacts = new Patterns(once.filter((path) => isExact(path) && path.length >= 2).map((path): Pattern => [path.slice(0, -2), String(path.at(-2))]));
+  const marks = new PathTree(marksOnly(once));
+  return once.filter((path) => !covers(marks, path, exacts));
 }
 
 /** What both sets of marks mark: those of `lefts`, shared so far, and those of `right`. */
