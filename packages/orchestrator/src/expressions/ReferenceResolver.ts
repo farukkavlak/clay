@@ -172,7 +172,7 @@ export class ReferenceResolver {
     this.modules = modules;
     this.variables = new VariableResolver(scopeManager, this);
     this.dataSources = new DataSourceResolver(dataSources, dataSchemas, instances, versions);
-    this.moduleOutputs = new ModuleOutputResolver(scopeManager, modules);
+    this.moduleOutputs = new ModuleOutputResolver(scopeManager, modules, versions);
     this.resources = new ResourceResolver(instances, planned, schemas, versions);
     this.written = new WrittenTypes(scopeManager, schemas, dataSchemas, instances, modules);
     // Bound, not wrapped, so a nested read costs no extra stack frame.

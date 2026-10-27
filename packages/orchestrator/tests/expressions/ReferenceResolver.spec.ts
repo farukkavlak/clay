@@ -37,7 +37,7 @@ const resolverOver = (scopes: ScopeManager, dataSources: Map<string, Record<stri
   return new ReferenceResolver(scopes, dataSources, schemas, new Map(), instances, modules, planned, new InstanceKeys(instances, modules), versions);
 };
 
-const resolverWith = (scopes = new ScopeManager(), planned = new Planned(versions), dataSources = new Map<string, Record<string, Value>>()) =>
+const resolverWith = (scopes = new ScopeManager(versions), planned = new Planned(versions), dataSources = new Map<string, Record<string, Value>>()) =>
   resolverOver(scopes, dataSources, new Map(), new Instances(), planned);
 
 /** A template reading a resource not in state, so only the apply knows it. */
@@ -52,7 +52,7 @@ const planning = () => {
   return planned;
 };
 const readWith = (value: string, sources = new Map<string, Record<string, Value>>(), planned = new Planned(versions)) =>
-  resolverWith(new ScopeManager(), planned, sources).resolveValue(written(value), state, context);
+  resolverWith(new ScopeManager(versions), planned, sources).resolveValue(written(value), state, context);
 const read = (value: string) => readWith(value);
 const source = (value: Value) => new Map([['data.src.s', { v: value }]]);
 const n = (text: string) => ExactNumber.parse(text);
@@ -81,7 +81,7 @@ describe('ReferenceResolver', () => {
   });
 
   it('joins a template into text', () => {
-    const scopes = new ScopeManager();
+    const scopes = new ScopeManager(versions);
     scopes.setVariable('', 'my_var', { value: str('var_value'), context: ModuleAddress.root, block: 'variable "my_var"' });
 
     expect(resolverWith(scopes).resolveValue(template('Var: ', reference('var', 'my_var'), ', Res: ', reference('resource', 'test', 'val')), state, context)).toEqual(
@@ -90,7 +90,7 @@ describe('ReferenceResolver', () => {
   });
 
   it('gives a template of one reference as the value itself, type and all', () => {
-    const scopes = new ScopeManager();
+    const scopes = new ScopeManager(versions);
     scopes.setVariable('', 'n', { value: num('8'), context: ModuleAddress.root, block: 'variable "n"' });
 
     expect(resolverWith(scopes).resolveValue(template(reference('var', 'n')), state, context)).toEqual(valueOf(types.number, ExactNumber.parse('8')));
@@ -106,7 +106,7 @@ describe('ReferenceResolver', () => {
     ['an object', map({ a: str('x') }), 'var.x is an object and cannot be joined into a string'],
     ['null', { type: 'Null', position } as AttributeValue, 'var.x is null and cannot be joined into a string'],
   ])('refuses to join %s into text', (_, value, message) => {
-    const scopes = new ScopeManager();
+    const scopes = new ScopeManager(versions);
     scopes.setVariable('', 'x', { value, context: ModuleAddress.root, block: 'variable "x"' });
 
     expect(() => resolverWith(scopes).resolveValue(template('a ', reference('var', 'x')), state, context)).toThrow(new ConfigError(message, position));
@@ -135,7 +135,7 @@ describe('ReferenceResolver', () => {
   // State may hold data outside the schema, so the error names the resource.
   it('refuses a value in state that its schema does not hold, naming the resource', () => {
     const schemas = new Map([['resource', { val: { type: types.number } }]]);
-    const resolver = resolverOver(new ScopeManager(), new Map(), schemas, new Instances(), new Planned(versions));
+    const resolver = resolverOver(new ScopeManager(versions), new Map(), schemas, new Instances(), new Planned(versions));
 
     expect(() => resolver.resolveValue(reference('resource', 'test', 'val'), state, context)).toThrow(
       new ConfigError('resource.test holds what its schema does not: val is a string, where its type is a number', position)
@@ -152,7 +152,7 @@ describe('ReferenceResolver', () => {
   // A provider may return null where its schema names a string, which has no text to join.
   it('refuses to join a null of a type that joins into text', () => {
     const sources = new Map([['data.src.s', { v: valueOf(types.string, null) }]]);
-    const read = () => resolverWith(new ScopeManager(), new Planned(versions), sources).resolveValue(template('a ', reference('data', 'src', 's', 'v')), state, context);
+    const read = () => resolverWith(new ScopeManager(versions), new Planned(versions), sources).resolveValue(template('a ', reference('data', 'src', 's', 'v')), state, context);
 
     expect(read).toThrow(new ConfigError('data.src.s.v is null and cannot be joined into a string', position));
   });
@@ -186,7 +186,7 @@ describe('ReferenceResolver', () => {
     const planned = new Planned(versions);
     planned.begin();
 
-    expect(resolverWith(new ScopeManager(), planned).resolveValue(list(str('a'), template('x', reference('resource', 'later', 'id'))), state, context)).toEqual(
+    expect(resolverWith(new ScopeManager(versions), planned).resolveValue(list(str('a'), template('x', reference('resource', 'later', 'id'))), state, context)).toEqual(
       valueOf(types.tuple([types.string, types.string]), ['a', UNKNOWN])
     );
   });
@@ -427,7 +427,7 @@ describe('ReferenceResolver', () => {
         resources: { 'module.app[0].resource.dep[1]': { resourceType: 'resource', name: 'dep', attributes: { id: 'one' } } },
       };
 
-      const read = resolverOver(new ScopeManager(), new Map(), new Map(), instances, new Planned(versions)).resolveValue(
+      const read = resolverOver(new ScopeManager(versions), new Map(), new Map(), instances, new Planned(versions)).resolveValue(
         reference('resource', 'dep', 1, 'id'),
         held,
         inInstance(ModuleAddress.root.child('app', 0))
@@ -437,10 +437,10 @@ describe('ReferenceResolver', () => {
     });
 
     it('reads an input in the instance of the calling module it sits in', () => {
-      const scopes = new ScopeManager();
+      const scopes = new ScopeManager(versions);
       scopes.setVariable('module.a.module.b', 'x', { value: reference('module', 'c', 'out'), context: ModuleAddress.root.child('a'), block: 'variable "x"' });
-      scopes.setOutput('module.a[1].module.c', 'out', valueOf(types.string, 'from a[1]'));
-      scopes.setOutput('module.a.module.c', 'out', valueOf(types.string, 'from a'));
+      scopes.setOutput(ModuleAddress.root.child('a', 1).child('c'), 'out', valueOf(types.string, 'from a[1]'));
+      scopes.setOutput(ModuleAddress.root.child('a').child('c'), 'out', valueOf(types.string, 'from a'));
 
       const read = resolverWith(scopes).resolveValue(reference('var', 'x'), state, inInstance(ModuleAddress.root.child('a', 1).child('b', 0)));
 
@@ -453,7 +453,7 @@ describe('ReferenceResolver', () => {
         ['module.app[1].data.src.s', { v: valueOf(types.string, 'from app[1]') }],
       ]);
 
-      const read = resolverWith(new ScopeManager(), new Planned(versions), sources).resolveValue(
+      const read = resolverWith(new ScopeManager(versions), new Planned(versions), sources).resolveValue(
         reference('data', 'src', 's', 'v'),
         state,
         inInstance(ModuleAddress.root.child('app', 1))

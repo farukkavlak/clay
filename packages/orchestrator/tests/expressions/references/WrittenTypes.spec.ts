@@ -6,6 +6,7 @@ import { Instances } from '../../../src/instances/Instances';
 import { ModuleInstances } from '../../../src/instances/ModuleInstances';
 import { WrittenTypes } from '../../../src/expressions/references/WrittenTypes';
 import { ScopeManager } from '../../../src/config/ScopeManager';
+import { Versions } from '../../../src/values/Versions';
 import { dataBlock, outputBlock, resourceBlock, steps, str } from '../../ast';
 
 const position = { file: 'main.clay', line: 1, column: 1 };
@@ -14,7 +15,7 @@ const schemas = new Map<string, Schema>([['random_string', { id: { type: types.s
 
 /** Every block is declared at load, with what it is given. */
 const declaring = (type: string, name: string, attributes = {}) => {
-  const scopes = new ScopeManager();
+  const scopes = new ScopeManager(new Versions());
   const context = Address.root(type, name);
   scopes.declareBlock(context.toString(), { block: resourceBlock(type, name, attributes), context });
   return scopes;
@@ -85,7 +86,7 @@ describe('the marks a resource reference will have, read before any instance exi
 describe('the marks a data source reference will have, read before any instance exists', () => {
   const marked = new Map<string, Schema>([['secret_file', { value: { type: types.string, computed: true, sensitive: true }, path: { type: types.string, required: true } }]]);
 
-  const scopes = new ScopeManager();
+  const scopes = new ScopeManager(new Versions());
   scopes.declareBlock('data:secret_file.f', { block: dataBlock('secret_file', 'f'), context: ModuleAddress.root });
 
   const marksOf = (instances: Instances, ...path: (string | number)[]) =>
@@ -116,7 +117,7 @@ const SIZE = outputBlock('size', str('1'), true);
 const NAME = outputBlock('name', str('n'));
 
 const outputOf = (repetition: 'count' | 'for_each' | undefined, ...path: (string | number)[]) => {
-  const scopes = new ScopeManager();
+  const scopes = new ScopeManager(new Versions());
   scopes.declareOutputs(
     'module.n',
     new Map<string, Type>([

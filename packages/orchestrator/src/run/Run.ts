@@ -35,13 +35,13 @@ export interface Run {
 
 /** Each run gets its own scopes, instances and data source values, so runs at the same time never read each other's. */
 export function newRun(stateManager: StateManager, providers: ProviderRegistry, files: ConfigFiles): Run {
-  const scopes = new ScopeManager();
+  const versions = new Versions();
+  const scopes = new ScopeManager(versions);
   const dataSources = new Map<string, Record<string, Value>>();
   const schemas = new Map<string, Schema>();
   const dataSchemas = new Map<string, Schema>();
   const instances = new Instances();
   const modules = new ModuleInstances();
-  const versions = new Versions();
   const planned = new Planned(versions);
   const keys = new InstanceKeys(instances, modules);
   const resolver = new ReferenceResolver(scopes, dataSources, schemas, dataSchemas, instances, modules, planned, keys, versions);

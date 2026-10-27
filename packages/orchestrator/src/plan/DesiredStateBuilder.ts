@@ -366,7 +366,7 @@ export class DesiredStateBuilder {
     const value = tryAt(node.position, node.declaration, contextIn(node.context, instance), () =>
       outputAs(node.name, resolved, node.declared, read, { root: instance.isRoot(), maybe: this.walk === 'plan' })
     );
-    this.scopeManager.setOutput(instance.toString(), node.name, value);
+    this.scopeManager.setOutput(instance, node.name, value);
 
     if (instance.isRoot()) rootOutputs.set(node.name, outputOf(value, node.declared.sensitive));
   }

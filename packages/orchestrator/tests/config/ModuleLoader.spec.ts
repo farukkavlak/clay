@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { InMemoryFiles } from '../../src/config/ConfigFiles';
 import { ModuleLoader } from '../../src/config/ModuleLoader';
 import { ScopeManager } from '../../src/config/ScopeManager';
+import { Versions } from '../../src/values/Versions';
 
 describe('ModuleLoader', () => {
   it('lists resources in the order they are written, those of a module where it is called', async () => {
@@ -13,7 +14,7 @@ describe('ModuleLoader', () => {
       'a/b/main.clay': 'resource "null_resource" "y" {}',
     });
 
-    const { resources } = await new ModuleLoader(files, new ScopeManager()).loadModuleTree();
+    const { resources } = await new ModuleLoader(files, new ScopeManager(new Versions())).loadModuleTree();
 
     expect(resources.map((resource) => resource.uniqueId)).toEqual([
       'null_resource.first',
@@ -32,7 +33,7 @@ describe('ModuleLoader', () => {
       'a/y.clay': 'resource "null_resource" "y" {}',
     });
 
-    const { resources } = await new ModuleLoader(files, new ScopeManager()).loadModuleTree();
+    const { resources } = await new ModuleLoader(files, new ScopeManager(new Versions())).loadModuleTree();
 
     expect(resources.map((resource) => resource.uniqueId)).toEqual(['null_resource.b', 'module.a.null_resource.y', 'module.a.null_resource.z']);
   });
@@ -44,7 +45,7 @@ describe('ModuleLoader', () => {
       'notes.txt': 'not a configuration',
     });
 
-    const { resources } = await new ModuleLoader(files, new ScopeManager()).loadModuleTree();
+    const { resources } = await new ModuleLoader(files, new ScopeManager(new Versions())).loadModuleTree();
 
     expect(resources.map((resource) => resource.uniqueId)).toEqual(['null_resource.a']);
   });
@@ -54,13 +55,13 @@ describe('ModuleLoader', () => {
     ['only a hidden one', { '.main.clay': 'resource "null_resource" "x" {}' }],
     ['only one in a directory below', { 'a/main.clay': 'resource "null_resource" "x" {}' }],
   ])('refuses a root with no .clay file, %s', async (_, held) => {
-    await expect(new ModuleLoader(new InMemoryFiles(held), new ScopeManager()).loadModuleTree()).rejects.toThrow(/^no \.clay file in the directory$/);
+    await expect(new ModuleLoader(new InMemoryFiles(held), new ScopeManager(new Versions())).loadModuleTree()).rejects.toThrow(/^no \.clay file in the directory$/);
   });
 
   it('refuses a module whose directory has no .clay file, at its source', async () => {
     const files = new InMemoryFiles({ 'main.clay': 'module "a" {\n  source = "./a"\n}', 'a/notes.txt': '' });
 
-    const error = await new ModuleLoader(files, new ScopeManager()).loadModuleTree().catch((error_: unknown) => error_);
+    const error = await new ModuleLoader(files, new ScopeManager(new Versions())).loadModuleTree().catch((error_: unknown) => error_);
 
     expect(error).toBeInstanceOf(ConfigError);
     expect(error).toMatchObject({ message: 'module "a" has no .clay file in directory "a"', position: { file: 'main.clay', line: 2, column: 12 } });
@@ -70,7 +71,7 @@ describe('ModuleLoader', () => {
     const none = new InMemoryFiles({});
     const files = { list: () => ['main.clay'], read: (file: string) => none.read(file) };
 
-    await expect(new ModuleLoader(files, new ScopeManager()).loadModuleTree()).rejects.toThrow(/^main\.clay is listed but not found$/);
+    await expect(new ModuleLoader(files, new ScopeManager(new Versions())).loadModuleTree()).rejects.toThrow(/^main\.clay is listed but not found$/);
   });
 
   // Spreading every resource into one call would overflow the stack on a large module.
@@ -80,7 +81,7 @@ describe('ModuleLoader', () => {
     const big = Array.from({ length: count }, (_, i) => `resource "null_resource" "r${i}" {}`).join('\n');
     const files = new InMemoryFiles({ 'main.clay': 'module "a" { source = "./a" }', 'a/main.clay': 'module "big" { source = "./big" }', 'a/big/main.clay': big });
 
-    const { resources } = await new ModuleLoader(files, new ScopeManager()).loadModuleTree();
+    const { resources } = await new ModuleLoader(files, new ScopeManager(new Versions())).loadModuleTree();
 
     expect(resources).toHaveLength(count);
     expect(resources[0].uniqueId).toBe('module.a.module.big.null_resource.r0');
@@ -93,7 +94,7 @@ describe('ModuleLoader', () => {
       list: (dir: string) => (dir === '.' ? ['main.clay'] : ['m.clay']),
       read: (file: string) => (file === 'main.clay' ? 'module "a" { source = "./m" }\nmodule "b" { source = "./m" }' : `resource "null_resource" "v${++reads}" {}`),
     };
-    const loader = new ModuleLoader(changing, new ScopeManager());
+    const loader = new ModuleLoader(changing, new ScopeManager(new Versions()));
 
     const first = await loader.loadModuleTree();
     const second = await loader.loadModuleTree();

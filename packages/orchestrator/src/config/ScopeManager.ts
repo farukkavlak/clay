@@ -1,8 +1,9 @@
 import { ModuleAddress, Type } from '@clay/contracts';
 import { AttributeValue, DataBlock, LocalBlock, ModuleBlock, OutputBlock, ResourceBlock, TypeDefaults, Validation } from '@clay/parser';
 
-import { Context, ModuleCall } from '../keys';
+import { callKey, Context, ModuleCall } from '../keys';
 import { Value } from '../values/Value';
+import { Versions } from '../values/Versions';
 
 /** Resolved where it is written: an input in the call, a default in its own module. */
 export interface VariableValue {
@@ -33,6 +34,8 @@ export class ScopeManager {
   private declaredCalls: Map<string, DeclaredBlock<ModuleBlock>> = new Map();
   private directories: Map<string, string> = new Map();
 
+  constructor(private versions: Versions) {}
+
   setVariable(scope: string, name: string, value: VariableValue): void {
     if (!this.variables.has(scope)) this.variables.set(scope, new Map());
     this.variables.get(scope)!.set(name, value);
@@ -61,9 +64,12 @@ export class ScopeManager {
     return this.locals.get(scope)?.get(name);
   }
 
-  setOutput(scope: string, name: string, value: Value): void {
+  setOutput(instance: ModuleAddress, name: string, value: Value): void {
+    const scope = instance.toString();
     if (!this.outputs.has(scope)) this.outputs.set(scope, new Map());
     this.outputs.get(scope)!.set(name, value);
+    // Nothing reads every instance of the root module.
+    if (!instance.isRoot()) this.versions.changed(callKey(instance));
   }
 
   getOutput(scope: string, name: string): Value | undefined {

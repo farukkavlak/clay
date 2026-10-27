@@ -150,6 +150,9 @@ const readAll = (size: number) =>
 const readAllData = (file: string, size: number) =>
   `data "local_file" "f" {\n  count = ${size}\n  path  = "${file}"\n}\nresource "null_resource" "r" {\n  count    = ${size}\n  triggers = { n = length(data.local_file.f) }\n}\n`;
 
+const readAllModule = (size: number) =>
+  `module "m" {\n  source = "./m"\n  count  = ${size}\n}\nresource "null_resource" "r" {\n  count    = ${size}\n  triggers = { n = length(module.m) }\n}\n`;
+
 /** Plans, shows and applies through a plan file a pool of `size` members changed to `size` others, and returns how long that took. */
 const changeEveryMember = async (at: string, size: number) => {
   await apply(at, pool(size, 'a'), new Pool());
@@ -377,6 +380,20 @@ describe('a run over many instances', () => {
       await fs.writeFile(file, 'x', 'utf8');
       return timed(async () => {
         const { actions } = await orchestratorIn(at).plan(readAllData(file, size));
+        ({ triggers } = actions.find(({ name, key }) => name === 'r' && key === size - 1)?.after ?? {});
+      });
+    };
+
+    expect(await growth(1000, run)).toBeLessThan(LINEAR);
+    expect(JSON.stringify(triggers)).toBe('{"n":4000}');
+  });
+
+  it('plans instances that each read every instance of a module in time that grows with them', GENEROUS, async () => {
+    let triggers: unknown;
+    const run = async (at: string, size: number) => {
+      await fs.writeFile(path.join(at, 'm', 'main.clay'), 'output "o" {\n  value = "x"\n}\n', 'utf8');
+      return timed(async () => {
+        const { actions } = await orchestratorIn(at).plan(readAllModule(size));
         ({ triggers } = actions.find(({ name, key }) => name === 'r' && key === size - 1)?.after ?? {});
       });
     };

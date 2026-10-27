@@ -96,7 +96,7 @@ describe('ActionExecutor', () => {
     const modules = new ModuleInstances();
     versions = new Versions();
     const resolver = new ReferenceResolver(
-      new ScopeManager(),
+      new ScopeManager(versions),
       new Map(),
       new Map(),
       new Map(),
