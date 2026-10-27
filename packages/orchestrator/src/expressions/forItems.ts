@@ -3,7 +3,7 @@ import { ConfigError, ForNode, Position } from '@clay/parser';
 
 import { append } from '../append';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
-import { child, described, hasText, mayBeSensitive, nullSource, objectOf, tupleOf, Value, valueOf, withSensitive } from '../values/Value';
+import { child, described, hasText, mayBeSensitive, nullSource, objectOf, sensitiveOf, tupleOf, Value, valueOf, withSensitive } from '../values/Value';
 import { everyItemMarks, fewest, isSensitive, marksOfWhole, maybeMarks, sharedMarks, wholeWhere, Whole } from '../values/sensitive';
 
 export type ForItem = [key: Value, value: Value];
@@ -68,19 +68,19 @@ function typeSteps(type: Type): (string | number)[] {
 
 /** Whether a mark names a key or a place of the collection, which an item at any other one does not have. */
 export function namesAStep(collection: Value): boolean {
-  return (collection.sensitive ?? []).some(([first]) => first !== undefined && !isMarker(first));
+  return sensitiveOf(collection).some(([first]) => first !== undefined && !isMarker(first));
 }
 
 /** The keys and places only a mark that the part may be sensitive names, so the collection may hold them; none of `certain`. */
 export function maybeSteps(collection: Value, certain: (string | number)[]): (string | number)[] {
   const held = new Set(certain.map(String));
-  const named = (collection.sensitive ?? []).flatMap(([first]) => (first === undefined || isMarker(first) || held.has(String(first)) ? [] : [first]));
+  const named = sensitiveOf(collection).flatMap(([first]) => (first === undefined || isMarker(first) || held.has(String(first)) ? [] : [first]));
 
   return [...new Map(named.map((step) => [String(step), step])).values()];
 }
 
 function markedSteps(collection: Value): (string | number)[] {
-  return (collection.sensitive ?? []).flatMap((path) => (holdsFirst(path) ? [path[0]] : []));
+  return sensitiveOf(collection).flatMap((path) => (holdsFirst(path) ? [path[0]] : []));
 }
 
 /**
@@ -105,7 +105,7 @@ export function certainSteps(collection: Value): { steps: (string | number)[]; l
 export function certainItem(collection: Value, step: string | number): ForItem {
   const key = typeof step === 'number' ? valueOf(types.number, ExactNumber.parse(String(step))) : valueOf(types.string, step);
 
-  return [key, withSensitive(valueOf(typeAt(collection.type, step), UNKNOWN), sensitiveUnder(collection.sensitive ?? [], step))];
+  return [key, withSensitive(valueOf(typeAt(collection.type, step), UNKNOWN), sensitiveUnder(sensitiveOf(collection), step))];
 }
 
 /** A key must be text, so a key of another type is refused even while unknown. */
@@ -153,7 +153,7 @@ export function laterTupleMarks(bodies: Value[], kept: boolean[], placed: boolea
   const leading = leadingKept(kept);
   const unnamed = bodies.filter((_, index) => index >= leading && placed[index] !== true);
 
-  const places = bodies.slice(0, leading).flatMap((body, index) => under(index, [...(body.sensitive ?? []), [EXACT]]));
+  const places = bodies.slice(0, leading).flatMap((body, index) => under(index, [...sensitiveOf(body), [EXACT]]));
   return fewest([...everyItemMarks(bodies, unnamed), ...places]);
 }
 

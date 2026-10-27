@@ -4,7 +4,7 @@ import { AttributePath, containsUnknown, ExactNumber, isUnknown, NumberError, SE
 import { ConfigError, Position, spellSteps, Step } from '@clay/parser';
 
 import { itemTypes } from '../values/unify';
-import { article, described, inferred, isAllSensitive, mayBeSensitive, nullSource, Value, valueOf, withSensitive } from '../values/Value';
+import { article, described, inferred, isAllSensitive, mayBeSensitive, nullSource, sensitiveOf, Value, valueOf, withSensitive } from '../values/Value';
 import { isSensitive, mayBeAllSensitive, wholeOf, wholeWhere } from '../values/sensitive';
 
 /** A list and a tuple hold items alike, and so do a map and an object. A set has no order, so it equals only a set. */
@@ -98,7 +98,7 @@ export function checkBoolean(who: string, value: Value, position: Position): voi
 }
 
 export function negated(value: Value): Value {
-  return withSensitive(valueOf(types.bool, isUnknown(value.data) ? UNKNOWN : !value.data), value.sensitive ?? []);
+  return withSensitive(valueOf(types.bool, isUnknown(value.data) ? UNKNOWN : !value.data), sensitiveOf(value));
 }
 
 export type Arithmetic = '+' | '-' | '*' | '/' | '%';
@@ -124,12 +124,12 @@ function numberOf(data: ExactNumber | typeof UNKNOWN, sensitive: readonly Attrib
 /** A string that spells a number is read as one, as where a schema wants a number. */
 export function asNumber(who: string, value: Value, position: Position): NumberValue {
   checkNumber(who, value, position);
-  if (value.data === UNKNOWN || value.data instanceof ExactNumber) return numberOf(value.data, value.sensitive ?? []);
+  if (value.data === UNKNOWN || value.data instanceof ExactNumber) return numberOf(value.data, sensitiveOf(value));
   // A value of no type is told by what it holds.
   if (typeof value.data !== 'string') throw notANumber(who, { ...value, type: inferred(value.data) }, position);
 
   try {
-    return numberOf(ExactNumber.parse(value.data), value.sensitive ?? []);
+    return numberOf(ExactNumber.parse(value.data), sensitiveOf(value));
   } catch (error) {
     if (error instanceof NumberError) throw new ConfigError(`${who} takes a number, and ${isSensitive(value) ? `${SENSITIVE} ${error.problem}` : error.message}`, position);
     throw error;
@@ -187,5 +187,5 @@ export function ordering(operator: Ordering, left: NumberValue, right: NumberVal
 }
 
 export function negative(value: NumberValue): Value {
-  return withSensitive(valueOf(types.number, value.data === UNKNOWN ? UNKNOWN : value.data.negated()), value.sensitive ?? []);
+  return withSensitive(valueOf(types.number, value.data === UNKNOWN ? UNKNOWN : value.data.negated()), sensitiveOf(value));
 }

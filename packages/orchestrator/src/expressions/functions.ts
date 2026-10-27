@@ -18,6 +18,7 @@ import {
   nullSource,
   objectOf,
   sensitiveAmong,
+  sensitiveOf,
   sensitiveSomewhere,
   unordered,
   Value,
@@ -180,12 +181,12 @@ function entriesOf(value: Value): Value[] {
 
 /** Marks below `key` say every value it may be holds the key, since a value not known yet is marked only where every value it may be is. */
 function marksKey(value: Value, key: string): boolean {
-  return (value.sensitive ?? []).some((path) => holdsFirst(path) && String(path[0]) === key);
+  return sensitiveOf(value).some((path) => holdsFirst(path) && String(path[0]) === key);
 }
 
 /** Where the key or the map is not known yet, it gives an entry or the default, so only the marks all of them have. */
 function laterLookup([map, , fallback]: Value[], key: string | typeof UNKNOWN, type: Type): Value {
-  if (key !== UNKNOWN && marksKey(map, key)) return withSensitive(valueOf(type, UNKNOWN), entryOf(map, key).sensitive ?? []);
+  if (key !== UNKNOWN && marksKey(map, key)) return withSensitive(valueOf(type, UNKNOWN), sensitiveOf(entryOf(map, key)));
 
   const entries = key === UNKNOWN ? entriesOf(map) : [entryOf(map, key)];
   return withSensitive(valueOf(type, UNKNOWN), sharedMarks([...entries, fallback]));
@@ -243,14 +244,14 @@ const keysLater = (arg: Value) => arg.type.kind === 'dynamic' || (arg.type.kind 
 function keysGiven(arg: Value): string[] {
   if (!keysLater(arg)) return keysOf(arg);
 
-  return (arg.sensitive ?? []).flatMap((path) => (holdsFirst(path) ? [String(path[0])] : []));
+  return sensitiveOf(arg).flatMap((path) => (holdsFirst(path) ? [String(path[0])] : []));
 }
 
 /** The keys a mark of an argument not known yet names, so it may give them, and all of a known one's. */
 function keysNamed(arg: Value): string[] {
   if (!keysLater(arg)) return keysOf(arg);
 
-  return (arg.sensitive ?? []).flatMap(([first]) => (first === undefined || isMarker(first) ? [] : [String(first)]));
+  return sensitiveOf(arg).flatMap(([first]) => (first === undefined || isMarker(first) ? [] : [String(first)]));
 }
 
 /**
@@ -269,7 +270,7 @@ function keyMarks(given: Value[], key: string): AttributePath[] {
 
 /** What an argument not known yet holds at a key no mark of it names. */
 function otherEntry(arg: Value): Value {
-  return withSensitive(valueOf(types.dynamic, UNKNOWN), sensitiveUnder(arg.sensitive ?? [], EVERY_ITEM));
+  return withSensitive(valueOf(types.dynamic, UNKNOWN), sensitiveUnder(sensitiveOf(arg), EVERY_ITEM));
 }
 
 /** Which keys it holds waits for the apply. Each has the marks every value has, and those an argument whose keys are not known may give; a key given for certain has its own. */
@@ -310,7 +311,7 @@ function merge(args: Value[], refuse: Refuse): Value {
   const given = args.filter((arg) => arg.data !== null);
   const result = merged(given);
   return wholeWhere(
-    somewhereKept(given) ? withSensitive(result, fewest([...(result.sensitive ?? []), [SOMEWHERE]])) : result,
+    somewhereKept(given) ? withSensitive(result, fewest([...sensitiveOf(result), [SOMEWHERE]])) : result,
     given.some((arg) => isAllSensitive(arg)),
     given.some((arg) => mayBeAllSensitive(arg))
   );

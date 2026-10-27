@@ -4,7 +4,7 @@ import { DataBlock, Position, ResourceBlock } from '@clay/parser';
 import { setOf } from './setMembers';
 import { shown } from '../shown';
 import { items, spelled } from '../spelled';
-import { article, child, described, nullSource, plainOf, unordered, Value, valueOf, withSensitive } from './Value';
+import { article, child, described, nullSource, plainOf, sensitiveOf, unordered, Value, valueOf, withSensitive } from './Value';
 import { isSensitive, mayBeAllSensitive } from './sensitive';
 import { ObjectType, withLeftOut } from './withLeftOut';
 
@@ -213,7 +213,7 @@ function endedAtSet(type: Type, path: AttributePath, certain: () => boolean): At
 export function sensitiveAs(value: Value, result: Value): Value {
   return withSensitive(
     result,
-    (value.sensitive ?? []).flatMap((path) => endedAtSet(result.type, path, () => isSensitive(withSensitive(value, [path]))))
+    sensitiveOf(value).flatMap((path) => endedAtSet(result.type, path, () => isSensitive(withSensitive(value, [path]))))
   );
 }
 

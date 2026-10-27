@@ -3,7 +3,7 @@ import { DataReference, Position, Step } from '@clay/parser';
 
 import { Instances, Repetition } from '../../instances/Instances';
 import { Context, dataSourceAddress, dataSourceKey, moduleOf, scopeOf } from '../../keys';
-import { objectOf, Value, valueOf, withSensitive } from '../../values/Value';
+import { objectOf, sensitiveOf, Value, valueOf, withSensitive } from '../../values/Value';
 import { everyType, readInstance } from './instance';
 import { UnresolvedReferenceError } from '../UnresolvedReferenceError';
 
@@ -45,7 +45,7 @@ export class DataSourceResolver {
 
     const instances = keys.map((key) => objectOf(Object.entries(this.read(reference, scope, key, spelled))));
     const data = instances.map((instance) => instance.data);
-    const sensitive = instances.flatMap((instance, index) => (instance.sensitive ?? []).map((path) => [keys[index], ...path]));
+    const sensitive = instances.flatMap((instance, index) => sensitiveOf(instance).map((path) => [keys[index], ...path]));
 
     return withSensitive(valueOf(type, repetition === 'count' ? data : Object.fromEntries(keys.map((key, index) => [key, data[index]]))), sensitive);
   }

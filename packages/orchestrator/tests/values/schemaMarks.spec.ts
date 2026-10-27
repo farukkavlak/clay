@@ -32,7 +32,7 @@ describe('the marks a schema gives', () => {
   it('marks as a whole the values of the attributes the schema marks, and no other', () => {
     const marked = schemaRemarked(schema, { token: text('t'), name: text('n') }, {});
 
-    expect(marked.token.sensitive).toEqual([[]]);
+    expect(marked.token.marks?.paths()).toEqual([[]]);
     expect(marked.name).not.toHaveProperty('sensitive');
   });
 });
@@ -48,7 +48,7 @@ describe('an attribute the schema marks sensitive with others', () => {
     const command = withSensitive(valueOf(types.string, 'echo s'), [[]]);
 
     expect(marksOf(echoing, { command })).toEqual([['stdout'], ['command']]);
-    expect(schemaRemarked(echoing, { stdout: text('s') }, { cwd: allSensitive(text('/s')) }).stdout.sensitive).toEqual([[]]);
+    expect(schemaRemarked(echoing, { stdout: text('s') }, { cwd: allSensitive(text('/s')) }).stdout.marks?.paths()).toEqual([[]]);
   });
 
   it('is not sensitive where none of them is', () => {
@@ -63,7 +63,7 @@ describe('an attribute the schema marks sensitive with others', () => {
       ['stdout', MAYBE],
       ['command', MAYBE],
     ]);
-    expect(schemaRemarked(echoing, { stdout: text('s') }, { command }).stdout.sensitive).toEqual([[MAYBE]]);
+    expect(schemaRemarked(echoing, { stdout: text('s') }, { command }).stdout.marks?.paths()).toEqual([[MAYBE]]);
   });
 
   it('is sensitive as a whole where one of them is, though another only may be', () => {

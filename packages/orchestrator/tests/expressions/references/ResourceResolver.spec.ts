@@ -78,7 +78,7 @@ describe('ResourceResolver', () => {
 
   it('reads each attribute with the parts of it the state says are sensitive', () => {
     const state = { ...mockState, resources: { 'resource.test': { ...mockState.resources['resource.test'], sensitive: [['simple'], ['settings', 'value']] } } };
-    const read = (spelled: string) => resolver.resolve(ref(spelled), context, state).value.sensitive;
+    const read = (spelled: string) => resolver.resolve(ref(spelled), context, state).value.marks?.paths();
 
     expect(read('resource.test.simple')).toEqual([[]]);
     expect(read('resource.test.settings')).toEqual([['value']]);
@@ -99,7 +99,7 @@ describe('ResourceResolver', () => {
       const marked = new Planned();
       marked.set('resource.test', { simple: 'new', settings: { type: 'a', value: UNKNOWN } }, [['simple'], ['settings', 'value']], true);
       const state = { ...mockState, resources: { 'resource.test': { ...mockState.resources['resource.test'], sensitive: [['id']] } } };
-      const read = (spelled: string) => new ResourceResolver(new Instances(), marked, new Map([['resource', {}]])).resolve(ref(spelled), context, state).value.sensitive;
+      const read = (spelled: string) => new ResourceResolver(new Instances(), marked, new Map([['resource', {}]])).resolve(ref(spelled), context, state).value.marks?.paths();
 
       expect(read('resource.test.simple')).toEqual([[]]);
       expect(read('resource.test.settings')).toEqual([['value']]);
@@ -171,11 +171,11 @@ describe('ResourceResolver', () => {
       const each = new Instances();
       each.declare('item.a', 'for_each');
       each.setEach('item.a', new Map([['x', valueOf(types.string, 'x')]]));
-      const all = (instances: Instances) => new ResourceResolver(instances, new Planned(), schemas).resolve(ref('item.a'), context, marked).value.sensitive;
+      const all = (instances: Instances) => new ResourceResolver(instances, new Planned(), schemas).resolve(ref('item.a'), context, marked).value.marks?.paths();
 
       expect(all(counted(2))).toEqual([[1, 'tags', 'n']]);
       expect(all(each)).toEqual([['x', 'id']]);
-      expect(read(counted(2)).value.sensitive).toBeUndefined();
+      expect(read(counted(2)).value.marks).toBeUndefined();
     });
 
     it('reads an empty list where count is 0', () => {

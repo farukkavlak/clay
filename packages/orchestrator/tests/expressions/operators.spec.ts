@@ -1,4 +1,4 @@
-import { ExactNumber, types, UNKNOWN } from '@clay/contracts';
+import { ExactNumber, Marks, types, UNKNOWN } from '@clay/contracts';
 import { ConfigError } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
@@ -152,7 +152,7 @@ describe('!', () => {
 
 const numeric = (text: string | typeof UNKNOWN): NumberValue => ({ ...valueOf(types.number, null), data: text === UNKNOWN ? UNKNOWN : number(text) });
 
-const secretNumber = (text: string): NumberValue => ({ ...numeric(text), sensitive: [[]] });
+const secretNumber = (text: string): NumberValue => ({ ...numeric(text), marks: Marks.of([[]]) });
 
 describe('a number operand', () => {
   it.each([

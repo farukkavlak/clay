@@ -5,10 +5,10 @@ import {
   ExactNumber,
   isMaybe,
   isRecord,
+  Marks,
   marksOnly,
   Output,
   own,
-  sensitiveUnder,
   SOMEWHERE,
   Type,
   typeAt,
@@ -19,14 +19,14 @@ import {
 /**
  * `data` is a string, an `ExactNumber`, a boolean, null, an array (list, set, tuple) or a record (map, object), with UNKNOWN at any depth.
  * A set's array holds each member once, in a fixed order. `type` is `dynamic` only for an unknown or a null of no type.
- * `sensitive` holds the steps to each sensitive part, and one empty path where the whole value is. A set is sensitive as a whole or not at all.
+ * `marks` holds, by their steps, the paths to each sensitive part, and one empty path where the whole value is. A set is sensitive as a whole or not at all.
  * A path that ends at SOMEWHERE says the part it reaches is sensitive somewhere the plan cannot name yet;
  * one that ends at MAYBE says the part, or any part in it, is sensitive in some outcome, so a root output must say it is.
  */
 export interface Value {
   readonly type: Type;
   readonly data: unknown;
-  readonly sensitive?: readonly AttributePath[];
+  readonly marks?: Marks;
   /** The reference a null was read through, so a refusal of it can say where it came from. */
   readonly nullFrom?: string;
 }
@@ -46,16 +46,26 @@ function unknownAt(data: unknown, path: AttributePath): unknown {
   return Object.fromEntries(Object.entries(data).map(([key, item]) => [key, at(key) ? unknownAt(item, rest) : item]));
 }
 
+function withMarks({ type, data, nullFrom }: Value, given: Marks): Value {
+  const paths = given.paths();
+  if (marksOnly(paths).length === 0) return nullFrom === undefined ? { type, data } : { type, data, nullFrom };
+
+  const marks = paths.some((path) => path.length === 0) ? Marks.of([[]]) : given;
+  const known = paths.filter((path) => isMaybe(path)).reduce((found, path) => unknownAt(found, path.slice(0, -1)), data);
+  return { ...(nullFrom === undefined ? { type, data: known } : { type, data: known, nullFrom }), marks };
+}
+
 /**
  * Left out where there are none, so a value with no sensitive part is the value it was.
  * A part that only may be sensitive is not known yet either, so nothing shows it or takes it as known before the apply says.
  */
-export function withSensitive({ type, data, nullFrom }: Value, paths: readonly AttributePath[]): Value {
-  if (marksOnly(paths).length === 0) return nullFrom === undefined ? { type, data } : { type, data, nullFrom };
+export function withSensitive(value: Value, paths: readonly AttributePath[]): Value {
+  return withMarks(value, Marks.of(paths));
+}
 
-  const marks = paths.some((path) => path.length === 0) ? [[]] : paths;
-  const known = marks.filter((path) => isMaybe(path)).reduce((found, path) => unknownAt(found, path.slice(0, -1)), data);
-  return { ...(nullFrom === undefined ? { type, data: known } : { type, data: known, nullFrom }), sensitive: marks };
+/** The steps to each sensitive part of the value. */
+export function sensitiveOf(value: Value): readonly AttributePath[] {
+  return value.marks?.paths() ?? [];
 }
 
 export function allSensitive(value: Value): Value {
@@ -64,16 +74,16 @@ export function allSensitive(value: Value): Value {
 
 /** Sensitive somewhere the plan cannot name, as a whole and not only in a part. */
 export function sensitiveSomewhere(value: Value): boolean {
-  return value.sensitive?.some((path) => path.length === 1 && path[0] === SOMEWHERE) === true;
+  return sensitiveOf(value).some((path) => path.length === 1 && path[0] === SOMEWHERE);
 }
 
 export function isAllSensitive(value: Value): boolean {
-  return value.sensitive?.some((path) => path.length === 0) === true;
+  return sensitiveOf(value).some((path) => path.length === 0);
 }
 
 /** In any part, in some outcome: a mark of any kind, for certain or not. */
 export function mayBeSensitive(value: Value): boolean {
-  return value.sensitive !== undefined;
+  return value.marks !== undefined;
 }
 
 /** The whole value where `sensitive`, and no part of it otherwise. */
@@ -97,7 +107,9 @@ export function child(value: Value, step: string | number): Value {
   const data = Array.isArray(value.data) ? value.data[step as number] : own(value.data as Record<string, unknown>, String(step));
   const type = typeAt(value.type, step);
 
-  return withSensitive(valueOf(type.kind === 'dynamic' ? inferred(data) : type, data), sensitiveUnder(value.sensitive ?? [], step));
+  const found = valueOf(type.kind === 'dynamic' ? inferred(data) : type, data);
+
+  return value.marks ? withMarks(found, value.marks.under(step)) : found;
 }
 
 /** Sensitive as a whole where `sensitive`, and as it was otherwise. */
@@ -106,7 +118,7 @@ export function allSensitiveIf(sensitive: boolean, result: Value): Value {
 }
 
 function sensitiveIn(parts: [step: string | number, value: Value][]): AttributePath[] {
-  return parts.flatMap(([step, value]) => (value.sensitive ?? []).map((path) => [step, ...path]));
+  return parts.flatMap(([step, value]) => sensitiveOf(value).map((path) => [step, ...path]));
 }
 
 /** The steps to each sensitive part of the values, from their names on. */

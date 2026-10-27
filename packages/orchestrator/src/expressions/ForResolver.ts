@@ -22,7 +22,7 @@ import {
 } from './forItems';
 import { Context } from '../keys';
 import { Planned } from '../values/Planned';
-import { isAllSensitive, mayBeSensitive, sensitiveSomewhere, tupleOf, unordered, Value, valueOf, wholeIf, withSensitive } from '../values/Value';
+import { isAllSensitive, mayBeSensitive, sensitiveOf, sensitiveSomewhere, tupleOf, unordered, Value, valueOf, wholeIf, withSensitive } from '../values/Value';
 import { anyItemMarks, fewest, isSensitive, marksOfWhole, maybeMarks, mayBeAllSensitive, Whole, wholeWhere } from '../values/sensitive';
 import { unknownOf, UnresolvedReferenceError } from './UnresolvedReferenceError';
 import { Evaluator, Reading } from './Evaluator';
@@ -92,7 +92,7 @@ function laterForMarks(node: ForNode, collection: Type, { other, certain, leadin
     );
 
   const placed = items.map((item) => typeof item.step === 'number');
-  const places = items.flatMap(({ step, body }, index) => (placed[index] && step !== undefined ? under(step, kept[index] ? (body.sensitive ?? []) : maybeMarks([body])) : []));
+  const places = items.flatMap(({ step, body }, index) => (placed[index] && step !== undefined ? under(step, kept[index] ? sensitiveOf(body) : maybeMarks([body])) : []));
   return fewest([
     ...laterTupleMarks(
       items.map((item) => item.body),
@@ -262,12 +262,12 @@ export class ForResolver {
     if (!(reading.asWritten || this.planned.isPlanning())) return { certain: [], leading: 0, maybe: [] };
 
     const [itemKey, itemValue] = unknownItem(collection.type);
-    const every = anyItemMarks(collection.sensitive ?? []);
+    const every = anyItemMarks(sensitiveOf(collection));
     const once = this.readItem(node, [itemKey, withSensitive(itemValue, every)], state, context, reading);
     const { steps, leading } = certainSteps(collection);
     const read = (step: string | number) => ({ step, ...this.readItem(node, certainItem(collection, step), state, context, reading) });
     const maybe = maybeSteps(collection, steps);
-    const others = sensitiveUnder(collection.sensitive ?? [], EVERY_ITEM);
+    const others = sensitiveUnder(sensitiveOf(collection), EVERY_ITEM);
     const other = namesAStep(collection) ? this.readItem(node, [itemKey, withSensitive(itemValue, others)], state, context, reading) : once;
 
     return {
@@ -284,7 +284,7 @@ export class ForResolver {
   private heldItem(node: ForNode, collection: Value, once: ReadItem, state: State, context: Context | undefined, reading: Reading): ReadItem | undefined {
     if (sensitiveSomewhere(collection)) {
       const [itemKey, itemValue] = unknownItem(collection.type);
-      const marks = [...sensitiveUnder(collection.sensitive ?? [], EVERY_ITEM), [SOMEWHERE]];
+      const marks = [...sensitiveUnder(sensitiveOf(collection), EVERY_ITEM), [SOMEWHERE]];
       return this.readItem(node, [itemKey, withSensitive(itemValue, marks)], state, context, reading);
     }
 

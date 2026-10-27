@@ -21,7 +21,7 @@ import {
 
 import { PathTree } from './PathTree';
 import { everyItemPlaces, Pattern, Patterns } from './Patterns';
-import { Value, valueOf, withSensitive, allSensitive, isAllSensitive, mayBeSensitive, child } from './Value';
+import { Value, valueOf, withSensitive, allSensitive, isAllSensitive, mayBeSensitive, child, sensitiveOf } from './Value';
 
 const named = (step: string | number | undefined): step is string | number => step !== undefined && !isMarker(step);
 
@@ -60,12 +60,12 @@ function holds(data: unknown, type: Type, marks: readonly AttributePath[], path:
 
 /** Whether each of `values` has the part at `path` in every outcome. */
 function allHold(values: Value[], path: AttributePath, oneItem: boolean): boolean {
-  return values.every((value) => holds(value.data, value.type, value.sensitive ?? [], path, oneItem));
+  return values.every((value) => holds(value.data, value.type, sensitiveOf(value), path, oneItem));
 }
 
 /** In any part, for certain: a mark under every item of a collection not known yet, which may come out empty, marks nothing for certain. */
 export function isSensitive(value: Value): boolean {
-  return marksOnly(value.sensitive ?? []).some((path) => allHold([value], path, true));
+  return marksOnly(sensitiveOf(value)).some((path) => allHold([value], path, true));
 }
 
 /** Sensitive as a whole where one of `values` is in any part for certain; else it may be as a whole where one may be in any part. */
@@ -190,7 +190,11 @@ export function fewest(paths: AttributePath[]): AttributePath[] {
 
 /** What both sets of marks mark: those of `lefts`, shared so far, and those of `right`. */
 function meets(marks: AttributePath[], lefts: Value[], right: Value): AttributePath[] {
-  return marks.flatMap((mark) => (right.sensitive ?? []).map((path) => meet(mark, path, [lefts, [right]])).filter((met): met is AttributePath => met !== undefined));
+  return marks.flatMap((mark) =>
+    sensitiveOf(right)
+      .map((path) => meet(mark, path, [lefts, [right]]))
+      .filter((met): met is AttributePath => met !== undefined)
+  );
 }
 
 /** The marks every one of `values` has, for certain. */
@@ -198,19 +202,19 @@ function certainShared(values: Value[]): AttributePath[] {
   const certain = values.map((value) =>
     withSensitive(
       value,
-      marksOnly(value.sensitive ?? []).filter((path) => !isMaybe(path))
+      marksOnly(sensitiveOf(value)).filter((path) => !isMaybe(path))
     )
   );
   const [first, ...rest] = certain;
   if (first === undefined) return [];
 
-  return rest.reduce((marks, value, index) => meets(marks, certain.slice(0, index + 1), value), [...(first.sensitive ?? [])]);
+  return rest.reduce((marks, value, index) => meets(marks, certain.slice(0, index + 1), value), [...sensitiveOf(first)]);
 }
 
 /** The marks any of `values` has, each as one it may have. */
 function maybeOfEach(values: Value[]): AttributePath[] {
   return values.flatMap((value) =>
-    marksOnly(value.sensitive ?? [])
+    marksOnly(sensitiveOf(value))
       .filter((path) => path.at(-1) !== SOMEWHERE)
       .map((path) => maybeOf(path))
   );
@@ -218,14 +222,18 @@ function maybeOfEach(values: Value[]): AttributePath[] {
 
 /** The first step of each path to an exact key or place, at any depth. */
 function exactSteps(values: Value[]): (string | number)[] {
-  const steps = values.flatMap((value) => (value.sensitive ?? []).filter((path) => path.length > 1 && isExact(path)).map(([step]) => step));
+  const steps = values.flatMap((value) =>
+    sensitiveOf(value)
+      .filter((path) => path.length > 1 && isExact(path))
+      .map(([step]) => step)
+  );
 
   return [...new Set(steps)];
 }
 
 /** What is at `step` of a value not known yet. */
 function partLater(value: Value, step: string | number): Value {
-  return withSensitive(valueOf(typeAt(value.type, step), UNKNOWN), sensitiveUnder(value.sensitive ?? [], step));
+  return withSensitive(valueOf(typeAt(value.type, step), UNKNOWN), sensitiveUnder(sensitiveOf(value), step));
 }
 
 /** A known collection holds its keys and places itself, so no item the plan cannot name may take one. */
@@ -254,7 +262,7 @@ function marksAmong(among: Among, certain: boolean): AttributePath[] {
   const exact = exactSteps(among.values).flatMap((step) => {
     const parts = (from: Value[]) => from.map((value) => partAt(value, step));
     const inner: Among = { values: parts(among.values), maybeFrom: parts(among.maybeFrom), others: parts(among.others) };
-    const here = [...among.values, ...among.others].every((value) => exactAt(value.sensitive ?? [], step) || heldKnown(value, step));
+    const here = [...among.values, ...among.others].every((value) => exactAt(sensitiveOf(value), step) || heldKnown(value, step));
 
     return [...(here ? [[step, EXACT]] : []), ...marksAmong(inner, certain && here).map((path) => [step, ...path])];
   });
@@ -282,14 +290,14 @@ export function everyItemMarks(values: Value[], unnamed = values): AttributePath
 
 /** As a whole, in some outcome. */
 export function mayBeAllSensitive(value: Value): boolean {
-  return isAllSensitive(value) || value.sensitive?.some((path) => path.length === 1 && path[0] === MAYBE) === true;
+  return isAllSensitive(value) || sensitiveOf(value).some((path) => path.length === 1 && path[0] === MAYBE);
 }
 
 /** Sensitive as a whole where `sensitive`; else, where `maybe`, it may be as a whole beside the marks it has. */
 export function wholeWhere(result: Value, sensitive: boolean, maybe: boolean): Value {
   if (sensitive) return allSensitive(result);
 
-  return maybe ? withSensitive(result, fewest([...(result.sensitive ?? []), [MAYBE]])) : result;
+  return maybe ? withSensitive(result, fewest([...sensitiveOf(result), [MAYBE]])) : result;
 }
 
 /** Whether a value is sensitive as a whole, and whether it may be. */
@@ -322,7 +330,7 @@ export function anyItemMarks(marks: readonly AttributePath[]): AttributePath[] {
 /** The items of `collection`; one not known yet stands for all of its items, with the marks any of them may have. */
 export function itemsOf(collection: Value): Value[] {
   if (collection.data === null) return [];
-  if (isUnknown(collection.data)) return [withSensitive(valueOf(types.dynamic, UNKNOWN), anyItemMarks(collection.sensitive ?? []))];
+  if (isUnknown(collection.data)) return [withSensitive(valueOf(types.dynamic, UNKNOWN), anyItemMarks(sensitiveOf(collection)))];
 
   const steps = Array.isArray(collection.data) ? collection.data.map((_, index) => index) : Object.keys(collection.data as Record<string, unknown>);
   return steps.map((step) => child(collection, step));

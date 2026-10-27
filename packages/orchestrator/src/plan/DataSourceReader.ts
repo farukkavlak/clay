@@ -8,11 +8,11 @@ import { ProviderRegistry } from '../providers/ProviderRegistry';
 import { withPlace } from '../place';
 import { marksOf, schemaRemarked } from '../values/schemaMarks';
 import { typedValues } from '../values/typed';
-import { plainOf, Value, valueOf, withSensitive } from '../values/Value';
+import { plainOf, sensitiveOf, Value, valueOf, withSensitive } from '../values/Value';
 
 /** A data source gives back, at an attribute it was given, the marks it was given with. */
 function remarked(values: Record<string, Value>, given: Record<string, Value>): Record<string, Value> {
-  return Object.fromEntries(Object.entries(values).map(([name, value]) => [name, withSensitive(value, Object.hasOwn(given, name) ? (given[name].sensitive ?? []) : [])]));
+  return Object.fromEntries(Object.entries(values).map(([name, value]) => [name, withSensitive(value, Object.hasOwn(given, name) ? sensitiveOf(given[name]) : [])]));
 }
 
 /** Asks a data source's provider for what it reads, and keeps it where references find it. */

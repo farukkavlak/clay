@@ -1,7 +1,7 @@
 import { isUnknown, sensitiveUnder, Type, typeAt } from '@clay/contracts';
 import { ConfigError, Position, spellSteps, Step, stepKey } from '@clay/parser';
 
-import { article, child, Value } from '../values/Value';
+import { article, child, sensitiveOf, Value } from '../values/Value';
 import { mayBeAllSensitive } from '../values/sensitive';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 
@@ -55,7 +55,7 @@ export function typeInto(type: Type, steps: Step[]): Type {
 
 /** An unknown of the type the remaining steps find, so the reader can still check it, and as sensitive as the part they reach. */
 export function laterAt(value: Value, message: string, rest: Step[]): UnresolvedReferenceError {
-  const sensitive = rest.reduce((paths, step) => sensitiveUnder(paths, stepKey(step)), [...(value.sensitive ?? [])]);
+  const sensitive = rest.reduce((paths, step) => sensitiveUnder(paths, stepKey(step)), [...sensitiveOf(value)]);
 
   return new UnresolvedReferenceError(message, typeInto(value.type, rest), sensitive);
 }

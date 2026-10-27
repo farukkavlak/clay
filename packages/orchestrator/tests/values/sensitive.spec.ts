@@ -34,7 +34,7 @@ describe('the sensitive parts of a value', () => {
   });
 
   it('are the whole value where the whole is among them', () => {
-    expect(withSensitive(written({ a: 'x' }), [['a'], []]).sensitive).toEqual([[]]);
+    expect(withSensitive(written({ a: 'x' }), [['a'], []]).marks?.paths()).toEqual([[]]);
   });
 
   it('are kept by the step to each, in a tuple and an object made of values', () => {
@@ -43,37 +43,37 @@ describe('the sensitive parts of a value', () => {
       ['password', secret],
     ]);
 
-    expect(conn.sensitive).toEqual([['password']]);
-    expect(tupleOf([written('a'), conn]).sensitive).toEqual([[1, 'password']]);
+    expect(conn.marks?.paths()).toEqual([['password']]);
+    expect(tupleOf([written('a'), conn]).marks?.paths()).toEqual([[1, 'password']]);
   });
 
   it('follow a step into the value: the part reached is sensitive, another is not', () => {
     const list = tupleOf([written('a'), objectOf([['password', secret]])]);
 
     expect(child(list, 0)).not.toHaveProperty('sensitive');
-    expect(child(list, 1).sensitive).toEqual([['password']]);
-    expect(child(child(list, 1), 'password').sensitive).toEqual([[]]);
+    expect(child(list, 1).marks?.paths()).toEqual([['password']]);
+    expect(child(child(list, 1), 'password').marks?.paths()).toEqual([[]]);
   });
 
   it('are every part of a value that is sensitive as a whole', () => {
-    expect(child(allSensitive(written(['a'])), 0).sensitive).toEqual([[]]);
+    expect(child(allSensitive(written(['a'])), 0).marks?.paths()).toEqual([[]]);
   });
 
   it('stay where they were in a list or a map the value is given as', () => {
     const list = tupleOf([written('a'), secret]);
     const conn = objectOf([['password', secret]]);
 
-    expect(converted('v', list, types.list(types.string), ['v']).sensitive).toEqual([[1]]);
-    expect(converted('v', conn, types.map(types.string), ['v']).sensitive).toEqual([['password']]);
-    expect(converted('v', conn, types.dynamic, ['v']).sensitive).toEqual([['password']]);
+    expect(converted('v', list, types.list(types.string), ['v']).marks?.paths()).toEqual([[1]]);
+    expect(converted('v', conn, types.map(types.string), ['v']).marks?.paths()).toEqual([['password']]);
+    expect(converted('v', conn, types.dynamic, ['v']).marks?.paths()).toEqual([['password']]);
   });
 
   // A set is sorted and holds each member once, so where a member sits and how many there are give it away.
   it('are the whole set where a member is one, however deep the set is', () => {
     const members = tupleOf([written('b'), secret]);
 
-    expect(converted('v', members, types.set(types.string), ['v']).sensitive).toEqual([[]]);
-    expect(converted('v', objectOf([['ids', members]]), types.object({ ids: types.set(types.string) }), ['v']).sensitive).toEqual([['ids']]);
+    expect(converted('v', members, types.set(types.string), ['v']).marks?.paths()).toEqual([[]]);
+    expect(converted('v', objectOf([['ids', members]]), types.object({ ids: types.set(types.string) }), ['v']).marks?.paths()).toEqual([['ids']]);
   });
 
   it('travel with a value not known yet, to the part a reference reads', () => {
@@ -474,19 +474,19 @@ describe('an exact key or place', () => {
       [0, EXACT],
     ]);
 
-    expect(sensitiveAs(tuple, valueOf(types.set(types.string), UNKNOWN)).sensitive).toEqual([[MAYBE]]);
+    expect(sensitiveAs(tuple, valueOf(types.set(types.string), UNKNOWN)).marks?.paths()).toEqual([[MAYBE]]);
   });
 
   it('marks a set only as one that may be sensitive, where every item of a list not known yet is', () => {
     const list = withSensitive(valueOf(types.list(types.string), UNKNOWN), [[EVERY_ITEM]]);
 
-    expect(sensitiveAs(list, valueOf(types.set(types.string), UNKNOWN)).sensitive).toEqual([[MAYBE]]);
+    expect(sensitiveAs(list, valueOf(types.set(types.string), UNKNOWN)).marks?.paths()).toEqual([[MAYBE]]);
   });
 
   it('marks a set as a whole, where every item of a list that holds one is', () => {
     const list = withSensitive(valueOf(types.list(types.string), ['a']), [[EVERY_ITEM]]);
 
-    expect(sensitiveAs(list, valueOf(types.set(types.string), ['a'])).sensitive).toEqual([[]]);
+    expect(sensitiveAs(list, valueOf(types.set(types.string), ['a'])).marks?.paths()).toEqual([[]]);
   });
 
   it('makes no attribute sensitive that the schema marks with the one it is at', () => {
@@ -583,18 +583,18 @@ describe('the marks some values all have', () => {
   });
 
   it('are none at a part not known yet of a known value sensitive somewhere, since that part has its own marks', () => {
-    expect(child(withSensitive(written({ '-2': UNKNOWN }), [[SOMEWHERE]]), '-2').sensitive).toBeUndefined();
+    expect(child(withSensitive(written({ '-2': UNKNOWN }), [[SOMEWHERE]]), '-2').marks).toBeUndefined();
   });
 
   it.each([
     ['none, where it is sensitive somewhere', [[SOMEWHERE]], undefined],
     ['only those for certain, where it is sensitive somewhere and at that part', [[SOMEWHERE], ['-2', 'q']], [['q']]],
   ])('are, at a known part of a value, %s, since what is sensitive somewhere lies in a part not known yet', (_, marks, below) => {
-    expect(child(withSensitive(written({ a: UNKNOWN, '-2': { q: 'x' } }), marks), '-2').sensitive).toEqual(below);
+    expect(child(withSensitive(written({ a: UNKNOWN, '-2': { q: 'x' } }), marks), '-2').marks?.paths()).toEqual(below);
   });
 
   it('are maybe at a part of a value that may be sensitive as a whole', () => {
-    expect(child(withSensitive(written({ a: UNKNOWN, b: 'x' }), [[SOMEWHERE], [MAYBE]]), 'b').sensitive).toEqual([[MAYBE]]);
+    expect(child(withSensitive(written({ a: UNKNOWN, b: 'x' }), [[SOMEWHERE], [MAYBE]]), 'b').marks?.paths()).toEqual([[MAYBE]]);
   });
 
   it.each([

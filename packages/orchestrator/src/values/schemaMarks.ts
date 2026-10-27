@@ -1,6 +1,6 @@
 import { AttributePath, MAYBE, Schema } from '@clay/contracts';
 
-import { mayBeSensitive, sensitiveAmong, Value, withSensitive } from './Value';
+import { mayBeSensitive, sensitiveAmong, sensitiveOf, Value, withSensitive } from './Value';
 import { isSensitive } from './sensitive';
 
 /** The attributes the schema marks, for certain or only as ones that may be, by what the values given hold. */
@@ -39,7 +39,7 @@ export function schemaRemarked(schema: Schema, values: Record<string, Value>, gi
   const remarked = (name: string, value: Value) => {
     if (certain.includes(name)) return withSensitive(value, [[]]);
 
-    return maybe.includes(name) ? withSensitive(value, [...(value.sensitive ?? []), [MAYBE]]) : value;
+    return maybe.includes(name) ? withSensitive(value, [...sensitiveOf(value), [MAYBE]]) : value;
   };
 
   return Object.fromEntries(Object.entries(values).map(([name, value]) => [name, remarked(name, value)]));

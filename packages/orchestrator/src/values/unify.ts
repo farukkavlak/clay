@@ -2,7 +2,7 @@ import { AttributePath, isRecord, isUnknown, own, Type, typeAt, types, UNKNOWN }
 import { spellSteps, Step } from '@clay/parser';
 
 import { converted } from './conformValues';
-import { article, child, objectOf, tupleOf, Value, valueOf, withSensitive } from './Value';
+import { article, child, objectOf, sensitiveOf, tupleOf, Value, valueOf, withSensitive } from './Value';
 
 export class Unjoinable extends Error {
   constructor(message: string) {
@@ -258,7 +258,7 @@ function blankedParts(value: Value, to: Type): Value {
 
 /** Each place stays where it was, so the value keeps all its marks. */
 function blanked(value: Value, to: Type): Value {
-  return withSensitive(blankedParts(value, to), value.sensitive ?? []);
+  return withSensitive(blankedParts(value, to), sensitiveOf(value));
 }
 
 /** As `converted`, to a type from `joinedLater`: a part a value of no type still to come reaches is not known until apply, and has no type. */

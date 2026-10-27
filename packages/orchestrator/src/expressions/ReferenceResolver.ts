@@ -44,7 +44,7 @@ import { ModuleInstances } from '../instances/ModuleInstances';
 import { checkBoolean } from './operators';
 import { Planned } from '../values/Planned';
 import { ScopeManager } from '../config/ScopeManager';
-import { mayBeSensitive, objectOf, tupleOf, Value, valueOf, wholeIf, withSensitive } from '../values/Value';
+import { mayBeSensitive, objectOf, sensitiveOf, tupleOf, Value, valueOf, wholeIf, withSensitive } from '../values/Value';
 import { isSensitive, itemsOf, marksOfWhole, sharedMarks, Whole, wholeOf, wholeWhere } from '../values/sensitive';
 import { DataSourceResolver } from './references/DataSourceResolver';
 import { checkUnknownIndex, keyOf } from './indexKey';
@@ -351,7 +351,7 @@ export class ReferenceResolver {
     const read = this.writtenValues.get(value) ?? tryAt(value.position, declaration, context, () => held(readNode(value), readNode));
 
     this.writtenValues.set(value, read);
-    return (read.sensitive ?? []).map((path) => [...at, ...path]);
+    return sensitiveOf(read).map((path) => [...at, ...path]);
   }
 
   private each(reference: EachReference, where: Context, position: Position): Value {

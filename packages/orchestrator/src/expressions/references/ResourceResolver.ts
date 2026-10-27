@@ -6,7 +6,7 @@ import { blockKey, Context, moduleOf } from '../../keys';
 import { placed } from '../../place';
 import { Planned, PlannedInstance } from '../../values/Planned';
 import { TypeMismatch, typedValues } from '../../values/typed';
-import { objectOf, Value, valueOf, withSensitive } from '../../values/Value';
+import { objectOf, sensitiveOf, Value, valueOf, withSensitive } from '../../values/Value';
 import { everyType, noAttribute, readInstance } from './instance';
 import { UnresolvedReferenceError } from '../UnresolvedReferenceError';
 
@@ -65,7 +65,7 @@ export class ResourceResolver {
       return [key, objectOf(Object.entries(this.typedRead(reference, Object.keys(schema), held, schema, position)))];
     });
     const data = instances.map(([, instance]) => instance.data);
-    const sensitive = instances.flatMap(([key, instance]) => (instance.sensitive ?? []).map((path) => [key, ...path]));
+    const sensitive = instances.flatMap(([key, instance]) => sensitiveOf(instance).map((path) => [key, ...path]));
 
     return withSensitive(valueOf(type, repetition === 'count' ? data : Object.fromEntries(keys.map((key, index) => [key, data[index]]))), sensitive);
   }
