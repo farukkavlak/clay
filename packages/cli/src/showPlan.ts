@@ -47,10 +47,9 @@ function pastTense(actionType: PlanAction['type']): string {
 
 /** Built by hand, since no JSON text can stand for an unknown inside a value. That a part is sensitive, or may be, tells more than that it is not known. */
 export function show(value: unknown, marks = Marks.of([])): string {
-  const sensitive = marks.paths();
-  if (sensitive.some((path) => path.length === 0)) return SENSITIVE;
+  if (marks.whole()) return SENSITIVE;
   if (isUnknown(value)) return '(known after apply)';
-  if (sensitive.some((path) => path.length === 1 && isMaybe(path))) return SENSITIVE;
+  if (marks.maybeWhole()) return SENSITIVE;
   if (Array.isArray(value)) return `[${value.map((item, index) => show(item, marks.under(index))).join(',')}]`;
   // Numbers are ExactNumbers, which JSON text writes exactly.
   if (isRecord(value))

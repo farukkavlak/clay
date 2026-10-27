@@ -136,6 +136,9 @@ const showSensitiveKeysChanged = async (at: string, size: number) => {
   return timed(async () => displayPlan(await engine.plan(keyed(size, `k == "k0" ? "plain" : ${SENSITIVE_KEYS}`))));
 };
 
+/** A resource whose `triggers` look up each of `size` keys in a map of `size` sensitive keys. */
+const lookedUp = (size: number) => `${keyed(size, 'lookup(local.m, k, "")')}locals {\n  m = { for k in var.ks : k => ${SENSITIVE_KEYS} }\n}\n`;
+
 /** Plans, shows and applies through a plan file a pool of `size` members changed to `size` others, and returns how long that took. */
 const changeEveryMember = async (at: string, size: number) => {
   await apply(at, pool(size, 'a'), new Pool());
@@ -283,6 +286,23 @@ describe('a run over many instances', () => {
     expect(await growth(2000, showSensitiveKeysChanged)).toBeLessThan(LINEAR);
     expect(log).toHaveBeenCalledWith(expect.stringContaining('triggers: {"k0":(sensitive value),"k1":(sensitive value)'));
     expect(log).toHaveBeenCalledWith('      triggers: which parts are sensitive changes');
+  });
+
+  it('plans a lookup of each key of a map with many sensitive keys in time that grows with them', GENEROUS, async () => {
+    let sensitive: unknown;
+    const run = (at: string, size: number) =>
+      timed(async () => {
+        const { actions } = await orchestratorIn(at).plan(lookedUp(size));
+        ({ sensitive } = actions[0]);
+      });
+
+    expect(await growth(4000, run)).toBeLessThan(LINEAR);
+    expect(sensitive).toEqual(
+      expect.arrayContaining([
+        ['triggers', 'k0'],
+        ['triggers', 'k15999'],
+      ])
+    );
   });
 
   it('shows in state a value with many sensitive keys in time that grows with them', GENEROUS, async () => {

@@ -35,6 +35,9 @@ function underEach(size: number): number {
   return Math.min(...times);
 }
 
+/** Whether `paths` hold `path` itself. */
+const holds = (paths: AttributePath[], path: AttributePath) => paths.some((each) => each.length === path.length && each.every((step, index) => step === path[index]));
+
 describe('marks held by their steps', () => {
   it('leave under each step what the paths did, in their order, however deep', () => {
     const random = seeded(7);
@@ -47,6 +50,35 @@ describe('marks held by their steps', () => {
 
       expect({ paths, steps, held }).toEqual({ paths, steps, held: asWas });
     }
+  });
+
+  it('say whether the whole is sensitive, may be, or is somewhere, as their paths do, however deep', () => {
+    const random = seeded(11);
+    for (let run = 0; run < 5000; run++) {
+      const paths = Array.from({ length: 1 + Math.floor(random() * 8) }, () => randomPath(random));
+      const steps = Array.from({ length: Math.floor(random() * 4) }, () => pick(random, [...STEPS, 'c', 2, '-4']));
+
+      const marks = steps.reduce((held, step) => held.under(step), Marks.of(paths));
+      const said = { whole: marks.whole(), maybe: marks.maybeWhole(), somewhere: marks.somewhere() };
+      const read = marks.paths();
+
+      expect({ paths, steps, said }).toEqual({ paths, steps, said: { whole: holds(read, []), maybe: holds(read, [MAYBE]), somewhere: holds(read, [SOMEWHERE]) } });
+    }
+  });
+
+  it('say the whole is sensitive where the mark of every item is, under a key spelled as a marker', () => {
+    const paths: AttributePath[] = [['-1', 'x'], [EVERY_ITEM]];
+
+    expect(Marks.of(paths).under('-1').whole()).toBe(true);
+  });
+
+  it('say the whole may not be sensitive under a key held exactly', () => {
+    const paths: AttributePath[] = [
+      [EVERY_ITEM, MAYBE],
+      ['k', EXACT],
+    ];
+
+    expect(Marks.of(paths).under('k').maybeWhole()).toBe(false);
   });
 
   it('read as the paths they were given, twice and in their order', () => {

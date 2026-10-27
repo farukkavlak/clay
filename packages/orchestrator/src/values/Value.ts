@@ -1,20 +1,4 @@
-import {
-  AttributePath,
-  containsUnknown,
-  EVERY_ITEM,
-  ExactNumber,
-  isMaybe,
-  isRecord,
-  Marks,
-  marksOnly,
-  Output,
-  own,
-  SOMEWHERE,
-  Type,
-  typeAt,
-  types,
-  UNKNOWN,
-} from '@clay/contracts';
+import { AttributePath, containsUnknown, EVERY_ITEM, ExactNumber, isMaybe, isRecord, Marks, marksOnly, Output, own, Type, typeAt, types, UNKNOWN } from '@clay/contracts';
 
 /**
  * `data` is a string, an `ExactNumber`, a boolean, null, an array (list, set, tuple) or a record (map, object), with UNKNOWN at any depth.
@@ -50,7 +34,7 @@ function withMarks({ type, data, nullFrom }: Value, given: Marks): Value {
   const paths = given.paths();
   if (marksOnly(paths).length === 0) return nullFrom === undefined ? { type, data } : { type, data, nullFrom };
 
-  const marks = paths.some((path) => path.length === 0) ? Marks.of([[]]) : given;
+  const marks = given.whole() ? Marks.of([[]]) : given;
   const known = paths.filter((path) => isMaybe(path)).reduce((found, path) => unknownAt(found, path.slice(0, -1)), data);
   return { ...(nullFrom === undefined ? { type, data: known } : { type, data: known, nullFrom }), marks };
 }
@@ -74,11 +58,11 @@ export function allSensitive(value: Value): Value {
 
 /** Sensitive somewhere the plan cannot name, as a whole and not only in a part. */
 export function sensitiveSomewhere(value: Value): boolean {
-  return sensitiveOf(value).some((path) => path.length === 1 && path[0] === SOMEWHERE);
+  return value.marks?.somewhere() ?? false;
 }
 
 export function isAllSensitive(value: Value): boolean {
-  return sensitiveOf(value).some((path) => path.length === 0);
+  return value.marks?.whole() ?? false;
 }
 
 /** In any part, in some outcome: a mark of any kind, for certain or not. */

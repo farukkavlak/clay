@@ -1,5 +1,5 @@
 import type { AttributePath } from './AttributePath';
-import { EVERY_ITEM, EXACT, isMarker, isMaybe, MAYBE } from './markers';
+import { EVERY_ITEM, EXACT, isMarker, isMaybe, MAYBE, SOMEWHERE } from './markers';
 
 /** A path as it was given, and where it stood among them, so what is left of the paths keeps their order. */
 interface Entry {
@@ -54,7 +54,7 @@ export class Marks {
     /** Gone under a step, so a path that said that step is exact has nothing left to say. */
     private readonly derived: boolean,
     /** The whole may be sensitive, as the value it is in may be. */
-    private readonly maybeWhole: boolean
+    private readonly wholeMaybe: boolean
   ) {}
 
   static of(paths: readonly AttributePath[]): Marks {
@@ -78,7 +78,7 @@ export class Marks {
    * One that may be so as a whole may be in every part.
    */
   under(step: string | number): Marks {
-    if (this.sources.some(({ node }) => node.ends.length > 0)) return Marks.of([[]]);
+    if (this.whole()) return Marks.of([[]]);
 
     const exact = !isMarker(step) && this.sources.some(({ node }) => node.named(step)?.endsAt(EXACT) === true);
     const next = this.sources.flatMap(({ node, noMaybe }): Source[] => {
@@ -86,9 +86,23 @@ export class Marks {
       const everyItem = node.child(EVERY_ITEM);
       return [...(named ? [{ node: named, noMaybe }] : []), ...(everyItem ? [{ node: everyItem, noMaybe: noMaybe || exact }] : [])];
     });
-    const maybeWhole = this.maybeWhole || this.sources.some(({ node, noMaybe }) => !noMaybe && node.endsAt(MAYBE));
 
-    return new Marks(next, this.depth + 1, true, maybeWhole);
+    return new Marks(next, this.depth + 1, true, this.maybeWhole());
+  }
+
+  /** Sensitive as a whole: the paths hold an empty one. */
+  whole(): boolean {
+    return this.sources.some(({ node }) => node.ends.length > 0);
+  }
+
+  /** May be sensitive as a whole: the paths hold `[MAYBE]`. */
+  maybeWhole(): boolean {
+    return this.wholeMaybe || this.sources.some(({ node, noMaybe }) => !noMaybe && node.endsAt(MAYBE));
+  }
+
+  /** Sensitive somewhere the plan cannot name: the paths hold `[SOMEWHERE]`. */
+  somewhere(): boolean {
+    return this.sources.some(({ node }) => node.endsAt(SOMEWHERE));
   }
 
   paths(): AttributePath[] {
@@ -103,6 +117,6 @@ export class Marks {
       .map(({ path }) => path.slice(this.depth))
       .filter((path) => !(this.derived && path.length === 1 && path[0] === EXACT));
 
-    return this.maybeWhole ? [...left, [MAYBE]] : left;
+    return this.wholeMaybe ? [...left, [MAYBE]] : left;
   }
 }

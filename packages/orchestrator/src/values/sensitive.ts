@@ -290,7 +290,7 @@ export function everyItemMarks(values: Value[], unnamed = values): AttributePath
 
 /** As a whole, in some outcome. */
 export function mayBeAllSensitive(value: Value): boolean {
-  return isAllSensitive(value) || sensitiveOf(value).some((path) => path.length === 1 && path[0] === MAYBE);
+  return isAllSensitive(value) || (value.marks?.maybeWhole() ?? false);
 }
 
 /** Sensitive as a whole where `sensitive`; else, where `maybe`, it may be as a whole beside the marks it has. */
