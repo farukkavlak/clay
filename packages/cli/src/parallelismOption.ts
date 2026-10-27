@@ -8,5 +8,5 @@ function parseParallelism(value: string): number {
 }
 
 export function parallelismOption(): Option {
-  return new Option('--parallelism <n>', `How many actions run at once (default: ${DEFAULT_PARALLELISM})`).argParser(parseParallelism);
+  return new Option('--parallelism <n>', `How many actions or provider calls run at once (default: ${DEFAULT_PARALLELISM})`).argParser(parseParallelism);
 }

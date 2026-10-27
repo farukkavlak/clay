@@ -43,7 +43,8 @@ a configuration means or how the state file is written.
 - `lifecycle` with `prevent_destroy`, `create_before_destroy` and `ignore_changes`, and
   deposed objects that a later plan destroys
 - `apply --parallelism`: the resources of one layer run together, ten by default, and
-  every failure of a run is reported
+  every failure of a run is reported. `plan` takes it too, and a refresh reads that many
+  resources at once
 
 ### Fixed
 

@@ -112,10 +112,10 @@ from a sensitive one is sensitive too: `local_file.id` where `path` is, `stdout`
 
 ## How a run goes
 
-1. Each resource in state is read back from its provider, so a change made by hand shows
-   up. A resource found gone is made again, or forgotten if the configuration dropped
-   it. `plan` and `apply` take `--refresh=false` to skip this and plan against the state
-   alone. An apply writes what was read, even when nothing else changes. A saved plan is
+1. Each resource in state is read back from its provider, ten at once or as many as
+   `--parallelism` says, so a change made by hand shows up. A resource found gone is
+   made again, or forgotten if the configuration dropped it. `plan` and `apply` take
+   `--refresh=false` to skip this and plan against the state alone. An apply writes what was read, even when nothing else changes. A saved plan is
    applied as it was made, so `apply <plan>` reads nothing and refuses the flag. A read
    that returns a value not known, or a name the schema does not have, stops the run as
    a bug in the provider.

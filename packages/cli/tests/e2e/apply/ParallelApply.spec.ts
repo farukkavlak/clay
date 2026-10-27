@@ -1,4 +1,3 @@
-import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types } from '@clay/contracts';
 import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -6,72 +5,8 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { orchestratorIn, TestEngine } from '../helpers';
+import { Slow } from '../slow';
 import { start } from '../start';
-
-const SCHEMA: Schema = {
-  name: { type: types.string, required: true },
-  note: { type: types.string, optional: true },
-  mode: { type: types.string, optional: true },
-};
-
-const pause = (ms: number) =>
-  new Promise<void>((resolve) => {
-    setTimeout(resolve, ms);
-  });
-
-/** Takes a moment to create and delete, and counts how many it has going at once. */
-class Slow implements Provider {
-  readonly resources = ['slow'];
-  readonly dataSources = [];
-  running = 0;
-  most = 0;
-
-  private async working(): Promise<void> {
-    this.running += 1;
-    this.most = Math.max(this.most, this.running);
-    await pause(30);
-    this.running -= 1;
-  }
-
-  async getSchema(): Promise<Schema> {
-    return SCHEMA;
-  }
-
-  async plan(_type: string, request: PlanRequest): Promise<PlannedChange> {
-    return planFromSchema(SCHEMA, request);
-  }
-
-  async validate(): Promise<void> {}
-
-  async read(_type: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
-    return prior;
-  }
-
-  async create(_type: string, { config }: CreateRequest): Promise<Record<string, unknown>> {
-    if (config.mode === 'fails') throw new Error(`${String(config.name)} cannot be made`);
-
-    await this.working();
-    return { ...config };
-  }
-
-  async update(_type: string, { config }: CreateRequest): Promise<Record<string, unknown>> {
-    return { ...config };
-  }
-
-  async delete(): Promise<void> {
-    await this.working();
-  }
-
-  async getDataSourceSchema(): Promise<Schema> {
-    return {};
-  }
-
-  async validateDataSource(): Promise<void> {}
-
-  async readDataSource(): Promise<Record<string, unknown>> {
-    return {};
-  }
-}
 
 const blocks = (...names: string[]) => names.map((name) => `resource "slow" "${name}" {\n  name = "${name}"\n}`).join('\n');
 

@@ -1,4 +1,4 @@
-import { DiskFiles, Orchestrator, RunEvent, RunOptions } from '@clay/orchestrator';
+import { DiskFiles, Orchestrator, PlanOptions, RunEvent, RunOptions } from '@clay/orchestrator';
 import { Provider } from '@clay/contracts';
 import { ConfigError } from '@clay/parser';
 import { Plan } from '@clay/planner';
@@ -23,7 +23,7 @@ export class TestEngine {
     this.engine.registerProvider(provider);
   }
 
-  async plan(config: string, options?: { refresh?: boolean }): Promise<Plan> {
+  async plan(config: string, options?: PlanOptions): Promise<Plan> {
     await this.write(config);
     return this.engine.plan(options);
   }

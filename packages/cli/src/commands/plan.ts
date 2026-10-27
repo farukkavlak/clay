@@ -1,4 +1,4 @@
-import { DiskFiles, RecordingFiles } from '@clay/orchestrator';
+import { DiskFiles, PlanOptions, RecordingFiles } from '@clay/orchestrator';
 import { serializePlan } from '@clay/planner';
 import { Command } from 'commander';
 import fs from 'node:fs/promises';
@@ -8,14 +8,15 @@ import { newOrchestrator } from '../engine';
 import { describeError } from '../describeError';
 import { printable } from '../printable';
 import { displayPlan } from '../showPlan';
+import { parallelismOption } from '../parallelismOption';
 import { refreshOption } from '../refreshOption';
 
-async function executePlan(cwd: string, files: RecordingFiles, refresh: boolean, outFile?: string): Promise<void> {
+async function executePlan(cwd: string, files: RecordingFiles, options: PlanOptions, outFile?: string): Promise<void> {
   const orchestrator = newOrchestrator(cwd, files);
 
   console.log(styleText('blue', 'Planning...'));
 
-  const planned = await orchestrator.plan({ refresh });
+  const planned = await orchestrator.plan(options);
   displayPlan(planned);
 
   if (outFile) {
@@ -29,12 +30,13 @@ export function createPlanCommand() {
     .description('Show changes required by the current configuration')
     .option('--out <file>', 'Save plan to file')
     .addOption(refreshOption())
+    .addOption(parallelismOption())
     .action(async (options) => {
       const cwd = process.cwd();
       const files = new RecordingFiles(new DiskFiles(cwd));
 
       try {
-        await executePlan(cwd, files, options.refresh ?? true, options.out);
+        await executePlan(cwd, files, { refresh: options.refresh ?? true, parallelism: options.parallelism }, options.out);
       } catch (error: unknown) {
         console.error(styleText('red', 'Planning failed:'), describeError(error, files));
         process.exit(1);

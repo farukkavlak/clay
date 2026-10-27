@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApplyCommand } from '../../../src/commands/apply';
 import { createPlanCommand } from '../../../src/commands/plan';
 
-describe('apply --parallelism', () => {
+describe('--parallelism', () => {
   let dir: string;
   let cwd: string;
   let printed: string[];
@@ -41,6 +41,15 @@ describe('apply --parallelism', () => {
     expect(await run(createApplyCommand, ['-y', '--parallelism', '3'])).toContain('Apply complete!');
 
     expect(runPlan).toHaveBeenCalledWith(expect.anything(), { parallelism: 3, signal: expect.any(AbortSignal) });
+  });
+
+  it('hands the number to a plan, and to the plan an apply makes', async () => {
+    const plan = vi.spyOn(Orchestrator.prototype, 'plan');
+
+    await run(createPlanCommand, ['--parallelism', '4']);
+    await run(createApplyCommand, ['-y', '--parallelism', '3']);
+
+    expect(plan.mock.calls).toEqual([[{ refresh: true, parallelism: 4 }], [{ refresh: true, parallelism: 3 }]]);
   });
 
   it('leaves the engine its own number when none is given', async () => {

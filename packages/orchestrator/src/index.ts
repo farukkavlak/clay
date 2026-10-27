@@ -16,13 +16,20 @@ import { ConfigFiles } from './config/ConfigFiles';
 import { ProviderRegistry } from './providers/ProviderRegistry';
 import { newRun, Run } from './run/Run';
 import { RunEvent } from './run/RunEvent';
-import { checkParallelism, DEFAULT_PARALLELISM } from './run/parallelism';
+import { checkParallelism, DEFAULT_PARALLELISM, inOrder, Limit } from './run/parallelism';
 import { plainOf } from './values/Value';
 
 export type { RunEvent } from './run/RunEvent';
 export { DiskFiles, InMemoryFiles, RecordingFiles } from './config/ConfigFiles';
 export type { ConfigFiles } from './config/ConfigFiles';
 export { DEFAULT_PARALLELISM } from './run/parallelism';
+
+export interface PlanOptions {
+  /** Whether each resource is read from its provider first. */
+  refresh?: boolean;
+  /** How many calls to providers run at once. */
+  parallelism?: number;
+}
 
 export interface RunOptions {
   /** How many actions of a layer run at once. */
@@ -48,9 +55,10 @@ export class Orchestrator {
   }
 
   /** A plan never writes state, even what the refresh read. */
-  async plan({ refresh = true }: { refresh?: boolean } = {}): Promise<Plan> {
+  async plan({ refresh = true, parallelism = DEFAULT_PARALLELISM }: PlanOptions = {}): Promise<Plan> {
+    checkParallelism(parallelism);
     const prevRun = await this.stateManager.read();
-    const prior = refresh ? await this.refresh(prevRun) : prevRun;
+    const prior = refresh ? await this.refresh(prevRun, new Limit(parallelism)) : prevRun;
     // Planning applies the moves to a copy; the plan keeps the resources at their old addresses.
     const currentState = copyForMoves(prior);
     const moves = new Moves();
@@ -108,11 +116,13 @@ export class Orchestrator {
   }
 
   /** A resource the provider no longer finds is dropped; the plan recreates it if the configuration still has it. */
-  private async refresh(state: State): Promise<State> {
+  private async refresh(state: State, limit: Limit): Promise<State> {
+    const held = Object.entries(state.resources);
+    const read = await inOrder(held.map(([key, resource]) => limit.run(() => this.readBack(key, resource))));
     const resources: State['resources'] = {};
 
-    for (const [key, resource] of Object.entries(state.resources)) {
-      const attributes = await this.readBack(key, resource);
+    for (const [index, [key, resource]] of held.entries()) {
+      const attributes = read[index];
       if (attributes !== null) resources[key] = { ...resource, attributes };
     }
 

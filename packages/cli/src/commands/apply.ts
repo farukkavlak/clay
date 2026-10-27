@@ -1,5 +1,5 @@
 import { Address, jsonText, Output, SENSITIVE } from '@clay/contracts';
-import { ConfigFiles, DiskFiles, InMemoryFiles, RecordingFiles, RunEvent } from '@clay/orchestrator';
+import { ConfigFiles, DiskFiles, InMemoryFiles, PlanOptions, RecordingFiles, RunEvent } from '@clay/orchestrator';
 import { changedOutside, parsePlanFile, Plan, PlanAction, PlanFile } from '@clay/planner';
 import { Command } from 'commander';
 import fs from 'node:fs/promises';
@@ -112,9 +112,9 @@ interface PlannedApply {
   files: ConfigFiles;
 }
 
-async function planFromDisk(cwd: string, recording: RecordingFiles, refresh: boolean): Promise<PlannedApply> {
+async function planFromDisk(cwd: string, recording: RecordingFiles, options: PlanOptions): Promise<PlannedApply> {
   console.log(styleText('blue', 'Calculating plan...'));
-  const plan = await newOrchestrator(cwd, recording).plan({ refresh });
+  const plan = await newOrchestrator(cwd, recording).plan(options);
 
   return { plan, files: new InMemoryFiles(recording.snapshot()) };
 }
@@ -184,7 +184,7 @@ export function createApplyCommand() {
           files = new InMemoryFiles(planData.files);
           await executeApplyFromPlan(cwd, planData, files, options.parallelism);
         } else {
-          const planned = await planFromDisk(cwd, recording, options.refresh ?? true);
+          const planned = await planFromDisk(cwd, recording, { refresh: options.refresh ?? true, parallelism: options.parallelism });
 
           files = planned.files;
           await executeApply(cwd, planned, options.yes, options.parallelism);
