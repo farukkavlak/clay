@@ -2,7 +2,7 @@ import { ExactNumber, types, UNKNOWN } from '@clay/contracts';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocalProvider } from '../src/index';
 
@@ -25,6 +25,7 @@ describe('LocalProvider', () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
 
@@ -509,6 +510,36 @@ describe('LocalProvider', () => {
         await create('local_file', { path: file, content: 'x' });
 
         expect(await keyed({ path: file })).toBe(before);
+      });
+
+      it('asks each directory once whether it ignores case, however many files it names', async () => {
+        const files = Array.from({ length: 20 }, (_, index) => path.join(real, 'dir', `f${index}.txt`));
+        await Promise.all(files.map((file) => fs.writeFile(file, 'x', 'utf8')));
+        const opened = vi.spyOn(fs, 'opendir');
+
+        await Promise.all(files.map((file) => keyed({ path: file })));
+
+        expect(opened).toHaveBeenCalledTimes(path.join(real, 'dir').split(path.sep).length);
+      });
+
+      // A name with case put in it later gives the directory an answer of its own.
+      it('asks again a directory that had no answer of its own', async () => {
+        const dir = path.join(real, 'dir');
+        const opened = vi.spyOn(fs, 'opendir');
+
+        await keyed({ path: path.join(dir, 'a.txt') });
+        await keyed({ path: path.join(dir, 'b.txt') });
+
+        expect(opened.mock.calls.filter(([asked]) => asked === dir)).toHaveLength(2);
+      });
+
+      it('asks again a directory that failed to answer', async () => {
+        const failed = Object.assign(new Error('EMFILE: too many open files'), { code: 'EMFILE' });
+        vi.spyOn(fs, 'opendir').mockRejectedValueOnce(failed);
+        const file = path.join(real, 'dir', 'a.txt');
+
+        await expect(keyed({ path: file })).rejects.toThrow('EMFILE');
+        expect(await keyed({ path: file })).toMatch(/^file /);
       });
 
       it('folds parts not made yet as a file system that ignores case does', async (context) => {

@@ -44,19 +44,46 @@ async function foundInAnyCase(dir: string, name: string): Promise<boolean> {
 /** A name that turns into another case and back, which `ı` to `I` does not. */
 const hasCase = (name: string) => flipped(name) !== name && flipped(flipped(name)) === name;
 
+/** Whether a directory ignores case. */
+type CaseOf = (dir: string) => Promise<boolean>;
+
 /**
- * Whether a directory, or the nearest one that exists above it, ignores case. Asked of an entry whose name has case; with none,
- * or a directory that cannot be listed, the directory above is asked, and with none up to the root, case counts.
+ * Whether a directory ignores case, asked of an entry whose name has case. With none, or a directory that is not there or cannot
+ * be listed, it has no answer of its own.
  */
-async function ignoresCase(dir: string): Promise<boolean> {
+async function ownCase(dir: string): Promise<boolean | undefined> {
   try {
     for await (const { name } of await fs.opendir(dir)) if (hasCase(name)) return await foundInAnyCase(dir, name);
   } catch (error) {
     if (!missing(error) && !['EACCES', 'EPERM'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error;
   }
-  const parent = path.dirname(dir);
 
-  return parent !== dir && (await ignoresCase(parent));
+  return undefined;
+}
+
+/**
+ * Whether a directory, or the nearest one above it with an answer of its own, ignores case; with none up to the root, case counts.
+ * Only a directory's own answer is kept, since one made, filled or opened later may answer apart from the one above.
+ */
+function askedOnce(): CaseOf {
+  const asked = new Map<string, Promise<boolean | undefined>>();
+  const ownOf = (dir: string) => {
+    const known = asked.get(dir);
+    if (known) return known;
+    const answer = ownCase(dir);
+    asked.set(dir, answer);
+    answer.then((own) => own === undefined && asked.delete(dir)).catch(() => asked.delete(dir));
+    return answer;
+  };
+  const caseOf: CaseOf = async (dir) => {
+    const own = await ownOf(dir);
+    if (own !== undefined) return own;
+    const parent = path.dirname(dir);
+
+    return parent !== dir && (await caseOf(parent));
+  };
+
+  return caseOf;
 }
 
 /**
@@ -81,25 +108,27 @@ async function onDisk(file: string, end = true): Promise<string> {
 }
 
 /** A path as the disk names it, each part in one case where its directory ignores case, so making the file leaves it the same. */
-async function inOneCase(file: string): Promise<string> {
+async function inOneCase(file: string, caseOf: CaseOf): Promise<string> {
   const parent = path.dirname(file);
   if (parent === file) return file;
   const name = path.basename(file);
 
-  return path.join(await inOneCase(parent), (await ignoresCase(parent)) ? folded(name) : name);
+  return path.join(await inOneCase(parent, caseOf), (await caseOf(parent)) ? folded(name) : name);
 }
 
-const keyOf = async (file: string) => await inOneCase(await onDisk(file));
+const keyOf = async (file: string, caseOf: CaseOf) => await inOneCase(await onDisk(file), caseOf);
 
 /** A path that names the file the id already is, as `./a.txt` for `a.txt` or a link to it, is written in place. */
-async function keepingTheFile(change: PlannedChange, prior: Record<string, unknown> | null): Promise<PlannedChange> {
+async function keepingTheFile(change: PlannedChange, prior: Record<string, unknown> | null, caseOf: CaseOf): Promise<PlannedChange> {
   const file = change.after.path;
-  if (typeof file !== 'string' || typeof prior?.id !== 'string' || (await keyOf(file)) !== (await keyOf(prior.id))) return change;
+  if (typeof file !== 'string' || typeof prior?.id !== 'string' || (await keyOf(file, caseOf)) !== (await keyOf(prior.id, caseOf))) return change;
 
   return { ...change, replace: change.replace.filter(([name]) => name !== 'path') };
 }
 
 export class LocalFileResource implements ResourceHandler {
+  private readonly caseOf = askedOnce();
+
   async getSchema(): Promise<Schema> {
     return {
       id: { type: types.string, computed: true, kept: true, sensitiveWith: ['path'] },
@@ -114,7 +143,7 @@ export class LocalFileResource implements ResourceHandler {
 
   // A relative path resolves where the apply runs, so only an absolute one gives a known id.
   async plan(request: PlanRequest): Promise<PlannedChange> {
-    const change = await keepingTheFile(planFromSchema(await this.getSchema(), request), request.prior);
+    const change = await keepingTheFile(planFromSchema(await this.getSchema(), request), request.prior, this.caseOf);
     const file = own(request.config, 'path');
     if (typeof file !== 'string' || !path.isAbsolute(file) || !isUnknown(change.after.id)) return change;
 
@@ -162,6 +191,6 @@ export class LocalFileResource implements ResourceHandler {
     if (typeof file !== 'string') return undefined;
     const name = await onDisk(file);
 
-    return { key: `file ${await inOneCase(name)}`, name: `the file ${name}` };
+    return { key: `file ${await inOneCase(name, this.caseOf)}`, name: `the file ${name}` };
   }
 }

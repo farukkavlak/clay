@@ -975,8 +975,9 @@ Measured with the local provider; a remote provider makes the sequential calls c
       by their steps and goes under one step at a time: 0.22, 0.74, 0.21 and 0.30 seconds
 - [x] `length` counted the keys of a map on each call, so `length(local.m)` for each of
       8000 keys of `m` planned in 10.5 seconds. Each map is now counted once: 0.66 seconds
-- [ ] `local_file` reads the whole directory of each file to check how its name is
-      cased, so 8000 files in one directory take 8 seconds to plan
+- [x] `local_file` asked every directory above each file whether it ignores case, three
+      times a file, so planning 8000 files again took 58 seconds and 2000 took 16. Each
+      directory is now asked once: 3.2 and 1.4 seconds
 - [ ] The apply runs layer by layer, so one slow resource holds back every resource of the
       next layer, and one failure stops branches that do not read it. A `sleep 3` beside a
       chain of three `sleep 1` takes 5 seconds where 3 would do. Terraform walks the graph,
