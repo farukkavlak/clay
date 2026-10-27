@@ -16,6 +16,19 @@ const nested = (levels: number): unknown => (levels === 0 ? 'x' : [nested(levels
 
 const read = (content: unknown) => () => parsePlanFile(typeof content === 'string' ? content : JSON.stringify(content), 'tfplan.json');
 
+/** A plan file whose one change holds `size` values not known yet. */
+const unknownMembers = (size: number) => {
+  const members = Array.from({ length: size }, () => UNKNOWN);
+  return aPlanFile({ ...emptyPlan, actions: [{ type: 'UPDATE', resourceType: 'x', name: 'a', planned: {}, after: {}, changes: { members: { old: [], new: members } } }] });
+};
+
+/** Milliseconds reading `content` takes. */
+const readTime = (content: string) => {
+  const started = performance.now();
+  parsePlanFile(content, 'tfplan.json');
+  return performance.now() - started;
+};
+
 describe('reading a plan file', () => {
   // The file, its prior resources, the resource and its attributes are four levels around the value.
   it('reads a file nested 500 levels deep, and refuses one more', () => {
@@ -115,12 +128,21 @@ describe('reading a plan file', () => {
     ['an index below 0', [['list', -1]]],
     ['a path through the whole value', [[], ['env']]],
     ['a path through another', [['list'], ['list', 1]]],
+    ['a path through another written after it', [['list', 1], ['list']]],
     ['the same path twice', [['env'], ['env']]],
   ])('refuses a change that says a value is unknown with %s', (_, unknown) => {
     const changes = { tags: { new: { env: null, list: ['a', null] }, unknown } };
     const content = { ...fields(), actions: [{ type: 'UPDATE', resourceType: 'x', name: 'a', planned: {}, after: {}, changes }] };
 
     expect(read(content)).toThrow(/^tfplan\.json is not a plan file$/);
+  });
+
+  // About four where the check grows with the paths, sixteen where it holds each against every other. Read once first, so warming up does not slow the small one.
+  it('reads a change with many values not known yet in time that grows with them', () => {
+    const [small, large] = [unknownMembers(4000), unknownMembers(16_000)];
+    readTime(small);
+
+    expect(readTime(large) / readTime(small)).toBeLessThan(8);
   });
 
   it.each([

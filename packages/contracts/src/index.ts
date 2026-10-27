@@ -7,6 +7,7 @@ export { ExactNumber, NumberError } from './ExactNumber';
 export { isName, NAME, NAME_RULE, RESERVED_TYPES } from './name';
 export { isRecord } from './isRecord';
 export { jsonText } from './jsonText';
+export { memberKey } from './memberKey';
 export { MAX_NESTING, NestingError, nestingOf, typeNestingOf } from './nesting';
 export { planFromSchema } from './Provider';
 export type { CreateRequest, DataSourceHandler, Identity, PlannedChange, PlanRequest, Provider, ResourceHandler, UpdateRequest } from './Provider';

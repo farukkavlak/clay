@@ -1,10 +1,12 @@
 import { CreateRequest, Identity, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types } from '@clay/contracts';
+import { parsePlanFile, serializePlan } from '@clay/planner';
 import { LocalProvider } from '@clay/provider-local';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { displayPlan } from '../../../src/showPlan';
 import { orchestratorIn } from '../helpers';
 import { start } from '../start';
 
@@ -54,6 +56,52 @@ class Things implements Provider {
   }
 }
 
+const POOL: Schema = { id: { type: types.string, computed: true, kept: true }, members: { type: types.set(types.string) } };
+
+/** Holds a set of members, and returns them in reverse, as a remote API may. */
+class Pool implements Provider {
+  readonly resources = ['pool'];
+  readonly dataSources = [];
+
+  async getSchema(): Promise<Schema> {
+    return POOL;
+  }
+
+  async plan(_type: string, request: PlanRequest): Promise<PlannedChange> {
+    return planFromSchema(POOL, request);
+  }
+
+  async validate(): Promise<void> {}
+
+  async read(_type: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+    return prior;
+  }
+
+  async create(_type: string, { planned }: CreateRequest): Promise<Record<string, unknown>> {
+    return { ...planned, id: 'pool', members: Array.isArray(planned.members) ? [...planned.members].reverse() : planned.members };
+  }
+
+  async update(type: string, request: CreateRequest): Promise<Record<string, unknown>> {
+    return this.create(type, request);
+  }
+
+  async delete(): Promise<void> {}
+
+  async getDataSourceSchema(): Promise<Schema> {
+    return {};
+  }
+
+  async validateDataSource(): Promise<void> {}
+
+  async readDataSource(): Promise<Record<string, unknown>> {
+    return {};
+  }
+}
+
+/** A pool whose members are `size` strings, each `prefix` and its index. */
+const pool = (size: number, prefix: string) =>
+  `variable "xs" {\n  default = [${Array.from({ length: size }, (_, index) => `"${prefix}${index}"`).join(', ')}]\n}\nresource "pool" "p" {\n  members = var.xs\n}\n`;
+
 /** Milliseconds `work` takes. */
 async function timed(work: () => Promise<unknown>): Promise<number> {
   const started = performance.now();
@@ -73,6 +121,24 @@ const apply = async (at: string, config: string, ...providers: Provider[]) => {
 /** `size` instances of `b`, each reading its own instance of `a`. */
 const chain = (size: number) =>
   `resource "null_resource" "a" {\n  count = ${size}\n}\nresource "null_resource" "b" {\n  count    = ${size}\n  triggers = { a = null_resource.a[count.index].id }\n}\n`;
+
+/** Plans, shows and applies through a plan file a pool of `size` members changed to `size` others, and returns how long that took. */
+const changeEveryMember = async (at: string, size: number) => {
+  await apply(at, pool(size, 'a'), new Pool());
+  const config = pool(size, 'b');
+  const engine = orchestratorIn(at, new Pool());
+
+  return timed(async () => {
+    const saved = parsePlanFile(serializePlan(await engine.plan(config), { 'main.clay': config }), 'plan.json');
+    displayPlan(saved);
+    let applied = 0;
+    for await (const event of engine.runPlan(saved, config)) {
+      if (event.type === 'failed') throw event.error;
+      if (event.type === 'applied') applied += 1;
+    }
+    expect(applied).toBe(1);
+  });
+};
 
 /**
  * How much longer a run takes on four times the instances: about four where it grows with them, sixteen where each walked every other.
@@ -104,6 +170,7 @@ describe('a run over many instances', () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await fs.rm(dir, { recursive: true, force: true });
   });
 
@@ -188,5 +255,11 @@ describe('a run over many instances', () => {
     };
 
     expect(await growth(1000, run)).toBeLessThan(LINEAR);
+  });
+
+  it('shows and applies a change to every member of a set in time that grows with them', GENEROUS, async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    expect(await growth(1000, changeEveryMember)).toBeLessThan(LINEAR);
   });
 });
