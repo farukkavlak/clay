@@ -14,7 +14,8 @@ export type { CreateRequest, DataSourceHandler, Identity, PlannedChange, PlanReq
 export { isDependencies, readDeposed, readResources } from './readState';
 export { typeIn } from './Schema';
 export type { Schema, SchemaDefinition } from './Schema';
-export { EVERY_ITEM, EXACT, exactAt, holdsFirst, isExact, isMarker, isMaybe, marksOnly, MAYBE, SENSITIVE, sensitiveUnder, SOMEWHERE, touchesSensitive } from './sensitive';
+export { EVERY_ITEM, EXACT, isExact, isMarker, isMaybe, MAYBE, SOMEWHERE } from './markers';
+export { exactAt, holdsFirst, marksOnly, SENSITIVE, sensitiveUnder, touchesSensitive } from './sensitive';
 export { emptyState, isOutput, STATE_VERSION } from './State';
 export type { DeposedObject, Output, Resource, State } from './State';
 export { isType, typeAt, types } from './Type';
