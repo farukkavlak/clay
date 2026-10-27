@@ -145,6 +145,21 @@ describe('a run over many instances', () => {
     expect(await growth(25_000, run)).toBeLessThan(LINEAR);
   });
 
+  it('plans a for object with one key not known yet in time that grows with its items', GENEROUS, async () => {
+    const run = (at: string, size: number) => {
+      const items = Array.from({ length: size }, (_, index) => index).join(', ');
+      const config = `variable "xs" {\n  default = [${items}]\n}\nresource "null_resource" "r" {}\noutput "n" {\n  value = length({ for x in var.xs : (x == 0 ? null_resource.r.id : "\${x}") => x })\n}\n`;
+
+      return timed(async () => {
+        let outputs: Record<string, { value: unknown }> = {};
+        for await (const event of start(orchestratorIn(at), config)) if (event.type === 'done') outputs = event.outputs;
+        expect(String(outputs.n.value)).toBe(String(size));
+      });
+    };
+
+    expect(await growth(6000, run)).toBeLessThan(LINEAR);
+  });
+
   it('moves the instances of a module in time that grows with them', GENEROUS, async () => {
     const run = async (at: string, size: number) => {
       await apply(at, `module "m" {\n  source = "./m"\n  count  = ${size}\n}\n`);
