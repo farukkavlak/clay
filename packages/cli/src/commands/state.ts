@@ -1,4 +1,4 @@
-import { Address, Resource, sensitiveUnder, State } from '@clay/contracts';
+import { Address, Marks, Resource, State } from '@clay/contracts';
 import { forgetDependencies, moveResource, StateManager } from '@clay/state';
 import { Command } from 'commander';
 import { styleText } from 'node:util';
@@ -12,7 +12,8 @@ import { stateFile } from '../stateFile';
 /** A resource's attributes as `state show` prints them, a sensitive part hidden. */
 function printAttributes(resourceType: string, name: string, attributes: Record<string, unknown>, sensitive: Resource['sensitive']): void {
   console.log(`resource "${resourceType}" "${name}" {`);
-  for (const [key, value] of Object.entries(attributes)) console.log(`  ${attributeName(key)} = ${show(value, sensitiveUnder(sensitive ?? [], key))}`);
+  const marks = Marks.of(sensitive ?? []);
+  for (const [key, value] of Object.entries(attributes)) console.log(`  ${attributeName(key)} = ${show(value, marks.under(key))}`);
 
   console.log('}');
 }

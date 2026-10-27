@@ -1,4 +1,4 @@
-import { MAYBE, types, UNKNOWN } from '@clay/contracts';
+import { Marks, MAYBE, types, UNKNOWN } from '@clay/contracts';
 import { Plan } from '@clay/planner';
 import { stripVTControlCharacters } from 'node:util';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -113,6 +113,6 @@ describe('a value that may be sensitive, as the plan shows it', () => {
     ['hides a known one', 'x', '(sensitive value)'],
     ['says one not known yet is known after apply', UNKNOWN, '(known after apply)'],
   ])('%s', (_, value, shown) => {
-    expect(show(value, [[MAYBE]])).toBe(shown);
+    expect(show(value, Marks.of([[MAYBE]]))).toBe(shown);
   });
 });

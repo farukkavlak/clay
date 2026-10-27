@@ -1,4 +1,4 @@
-import { Address, AttributePath, isExact, isMaybe, isRecord, isUnknown, jsonText, memberKey, Output, samePaths, Schema, SENSITIVE, sensitiveUnder } from '@clay/contracts';
+import { Address, AttributePath, isExact, isMaybe, isRecord, isUnknown, jsonText, Marks, memberKey, Output, samePaths, Schema, SENSITIVE } from '@clay/contracts';
 import { changedOutside, Changes, Drift, OutputChanges, Plan, PlanAction } from '@clay/planner';
 import { isDeepStrictEqual, styleText } from 'node:util';
 
@@ -46,22 +46,23 @@ function pastTense(actionType: PlanAction['type']): string {
 }
 
 /** Built by hand, since no JSON text can stand for an unknown inside a value. That a part is sensitive, or may be, tells more than that it is not known. */
-export function show(value: unknown, sensitive: readonly AttributePath[] = []): string {
+export function show(value: unknown, marks = Marks.of([])): string {
+  const sensitive = marks.paths();
   if (sensitive.some((path) => path.length === 0)) return SENSITIVE;
   if (isUnknown(value)) return '(known after apply)';
   if (sensitive.some((path) => path.length === 1 && isMaybe(path))) return SENSITIVE;
-  if (Array.isArray(value)) return `[${value.map((item, index) => show(item, sensitiveUnder(sensitive, index))).join(',')}]`;
+  if (Array.isArray(value)) return `[${value.map((item, index) => show(item, marks.under(index))).join(',')}]`;
   // Numbers are ExactNumbers, which JSON text writes exactly.
   if (isRecord(value))
     return `{${Object.entries(value)
-      .map(([key, item]) => `${jsonText(key)}:${show(item, sensitiveUnder(sensitive, key))}`)
+      .map(([key, item]) => `${jsonText(key)}:${show(item, marks.under(key))}`)
       .join(',')}}`;
 
   return jsonText(value);
 }
 
-function showOr(value: unknown, whenAbsent: string, sensitive: readonly AttributePath[]): string {
-  return value === undefined ? whenAbsent : show(value, sensitive);
+function showOr(value: unknown, whenAbsent: string, marks: Marks): string {
+  return value === undefined ? whenAbsent : show(value, marks);
 }
 
 /** `will be created` when `planned`, `created` after apply. */
@@ -91,12 +92,12 @@ function displayMembers(old: unknown[], next: unknown[], indent: string): void {
   if (unchanged > 0) console.log(`${indent}(${unchanged} unchanged)`);
 }
 
-/** `sensitive` holds the parts marked before the change and after it: a part marked on either side is hidden on both. */
-function displayChanges(changes: Changes, schema: Schema, sensitive: readonly AttributePath[]): void {
+/** `marks` holds the parts marked before the change and after it: a part marked on either side is hidden on both. */
+function displayChanges(changes: Changes, schema: Schema, marks: Marks): void {
   for (const [key, change] of Object.entries(changes)) {
-    const under = sensitiveUnder(sensitive, key);
+    const under = marks.under(key);
     const isSet = Object.hasOwn(schema, key) && schema[key].type.kind === 'set';
-    if (isSet && under.length === 0 && Array.isArray(change.old) && Array.isArray(change.new)) {
+    if (isSet && under.paths().length === 0 && Array.isArray(change.old) && Array.isArray(change.new)) {
       console.log(`      ${attributeName(key)}:`);
       displayMembers(change.old, change.new, '        ');
     }
@@ -117,8 +118,10 @@ function marksNote(before: AttributePath[], after: AttributePath[]): string | un
 
 /** Each attribute whose sensitive parts change, whether or not its value does. */
 function displayMarks(before: AttributePath[], after: AttributePath[]): void {
+  const marksBefore = Marks.of(before);
+  const marksAfter = Marks.of(after);
   for (const key of new Set([...before, ...after].map(([attribute]) => String(attribute)))) {
-    const note = marksNote(sensitiveUnder(before, key), sensitiveUnder(after, key));
+    const note = marksNote(marksBefore.under(key).paths(), marksAfter.under(key).paths());
     if (note) console.log(`      ${attributeName(key)}: ${note}`);
   }
 }
@@ -136,7 +139,7 @@ function displayAction(action: PlanAction, plan: Plan): void {
   const prior = plan.prior[action.movedFrom ?? Address.of(action).toString()];
   const before = prior?.sensitive ?? [];
   const after = action.sensitive ?? [];
-  if (action.changes) displayChanges(action.changes, plan.schemas[action.resourceType], [...before, ...after]);
+  if (action.changes) displayChanges(action.changes, plan.schemas[action.resourceType], Marks.of([...before, ...after]));
   displayMarks(before, after);
   displayProtection(prior?.preventDestroy === true, action.preventDestroy === true);
 }
@@ -149,7 +152,7 @@ function displayChangedOutside({ address, changes }: Drift, plan: Plan): void {
 
   console.log(`  ${styleText('yellow', '~')} ${address} was changed outside Clay`);
   // A refresh changes values, never marks.
-  displayChanges(changes, plan.schemas[plan.prevRun[address].resourceType], plan.prevRun[address].sensitive ?? []);
+  displayChanges(changes, plan.schemas[plan.prevRun[address].resourceType], Marks.of(plan.prevRun[address].sensitive ?? []));
 }
 
 function displayDrift(drift: Drift[], plan: Plan): void {

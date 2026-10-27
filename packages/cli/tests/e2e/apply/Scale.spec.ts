@@ -7,7 +7,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { displayPlan } from '../../../src/showPlan';
-import { orchestratorIn } from '../helpers';
+import { clayOutput, orchestratorIn } from '../helpers';
 import { start } from '../start';
 
 const SCHEMA: Schema = { name: { type: types.string, required: true } };
@@ -121,6 +121,20 @@ const apply = async (at: string, config: string, ...providers: Provider[]) => {
 /** `size` instances of `b`, each reading its own instance of `a`. */
 const chain = (size: number) =>
   `resource "null_resource" "a" {\n  count = ${size}\n}\nresource "null_resource" "b" {\n  count    = ${size}\n  triggers = { a = null_resource.a[count.index].id }\n}\n`;
+
+/** A resource whose `triggers` hold `size` keys, each given the value `value` says. */
+const keyed = (size: number, value: string) =>
+  `variable "ks" {\n  default = [${Array.from({ length: size }, (_, index) => `"k${index}"`).join(', ')}]\n}\nresource "null_resource" "r" {\n  triggers = { for k in var.ks : k => ${value} }\n}\n`;
+
+const SENSITIVE_KEYS = 'sensitive(k)';
+
+/** Plans and shows `size` sensitive keys of which one is no longer sensitive, and returns how long that took. */
+const showSensitiveKeysChanged = async (at: string, size: number) => {
+  await apply(at, keyed(size, SENSITIVE_KEYS));
+  const engine = orchestratorIn(at);
+
+  return timed(async () => displayPlan(await engine.plan(keyed(size, `k == "k0" ? "plain" : ${SENSITIVE_KEYS}`))));
+};
 
 /** Plans, shows and applies through a plan file a pool of `size` members changed to `size` others, and returns how long that took. */
 const changeEveryMember = async (at: string, size: number) => {
@@ -261,5 +275,24 @@ describe('a run over many instances', () => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
 
     expect(await growth(1000, changeEveryMember)).toBeLessThan(LINEAR);
+  });
+
+  it('shows a change to a value with many sensitive keys in time that grows with them', GENEROUS, async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    expect(await growth(2000, showSensitiveKeysChanged)).toBeLessThan(LINEAR);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('triggers: {"k0":(sensitive value),"k1":(sensitive value)'));
+    expect(log).toHaveBeenCalledWith('      triggers: which parts are sensitive changes');
+  });
+
+  it('shows in state a value with many sensitive keys in time that grows with them', GENEROUS, async () => {
+    let shown = '';
+    const run = async (at: string, size: number) => {
+      await apply(at, keyed(size, SENSITIVE_KEYS));
+      return timed(async () => (shown = await clayOutput(at, 'state', 'show', 'null_resource.r')));
+    };
+
+    expect(await growth(4000, run)).toBeLessThan(LINEAR);
+    expect(shown).toContain('{"k0":(sensitive value),"k1":(sensitive value)');
   });
 });
