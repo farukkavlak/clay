@@ -947,9 +947,22 @@ Measured with the local provider; a remote provider makes the sequential calls c
       what it waited for before, and also for an instance the configuration no longer
       makes, gone with `count` or a module's `count`. At 1000 the state is 0.6 MB and the
       apply takes 0.6 seconds
+- [x] A run found an instance by walking every other one, or copied a list for each item
+      it added: an apply checked each data source instance, module instance and planned
+      object against all of them, a move rewrote the whole state for each instance, and a
+      `for` grouped by copying and went over every item for each key once a key was not
+      known yet. 10000 data source instances took 11 seconds, 8000 objects a provider
+      identifies 21, 100000 items grouped by one key 47, and a move of 4000 module
+      instances 27 seconds. Each now looks up or appends, and takes under a second
 - [ ] A destroy orders every object against every object it read, and checks each edge for
       a loop by walking the graph: destroying 1000 pairs of `null_resource` where `b[i]`
       reads `a[i]` takes 6 seconds, 500 take 1.5
+- [ ] The marks of a sensitive value are kept fewest by holding each against every other
+      (`fewest`), so a `for` object with one key not known yet over 16000 items plans in 4
+      seconds, 8000 in 1.3. The plan shows a set's change by comparing every member with
+      every other, and a plan file's unknown paths are checked pairwise
+- [ ] `local_file` reads the whole directory of each file to check how its name is
+      cased, so 8000 files in one directory take 8 seconds to plan
 - [ ] The apply runs layer by layer, so one slow resource holds back every resource of the
       next layer, and one failure stops branches that do not read it. A `sleep 3` beside a
       chain of three `sleep 1` takes 5 seconds where 3 would do. Terraform walks the graph,
