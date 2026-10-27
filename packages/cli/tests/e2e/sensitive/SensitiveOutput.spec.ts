@@ -149,7 +149,7 @@ describe('a sensitive output', () => {
   describe('of a type its value does not fit', () => {
     // A key a for makes is data too, so nothing of the value is quoted, whatever the mismatch.
     it.each([
-      ['a string where it takes a number', 'random_string.s.result', 'number', 'password: (sensitive value) is not a number'],
+      ['a string where it takes a number', '"x${random_string.s.result}"', 'number', 'password: (sensitive value) is not a number'],
       ['a key its object type does not have', '{ for v in [random_string.s.result] : v => 1 }', 'object({ a = number })', FIT],
       ['a string under a key where it takes a boolean', '{ for v in [random_string.s.result] : v => "x" }', 'map(bool)', FIT],
       ['a string under a key where it takes a list', '{ for v in [random_string.s.result] : v => "x" }', 'map(list(string))', FIT],

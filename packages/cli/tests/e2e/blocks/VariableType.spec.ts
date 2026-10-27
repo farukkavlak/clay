@@ -189,15 +189,14 @@ describe('a variable that names its type', () => {
 
   it('gives a value not known yet the type it names, and holds it to that type once the apply knows it', async () => {
     await writeModule('variable "n" { type = number }\noutput "n" { value = var.n }');
-    const config = 'resource "random_string" "r" { length = 4 }\nmodule "m" {\n  source = "./m"\n  n      = random_string.r.result\n}\noutput "n" { value = module.m.n }';
+    const config = 'resource "random_string" "r" { length = 4 }\nmodule "m" {\n  source = "./m"\n  n      = "x${random_string.r.result}"\n}\noutput "n" { value = module.m.n }';
 
     const plan = await newOrchestrator().plan(config);
     expect(plan.outputs.n.new).toEqual({ value: UNKNOWN, type: types.number });
 
     const error = await errorOf(() => apply(config));
-    expect(error.message).toContain('n: "');
-    expect(error.message).toContain('is not a number');
-    expect(error.position).toEqual({ file: 'main.clay', ...placeOf(config, 'random_string.r.result') });
+    expect(error.message).toMatch(/^n: "x.{4}" is not a number$/);
+    expect(error.position).toEqual({ file: 'main.clay', ...placeOf(config, '"x${random_string.r.result}"') });
   });
 
   it('refuses at plan a value not known yet whose type can never be the one named', async () => {

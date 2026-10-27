@@ -108,25 +108,25 @@ describe('an output that names its type', () => {
   });
 
   it('gives a value not known yet the type it names, and holds it to that type once the apply knows it', async () => {
-    const config = 'resource "random_string" "r" { length = 4 }\noutput "n" {\n  type  = number\n  value = random_string.r.result\n}';
+    const config = 'resource "random_string" "r" { length = 4 }\noutput "n" {\n  type  = number\n  value = "x${random_string.r.result}"\n}';
 
     const plan = await newOrchestrator().plan(config);
     expect(plan.outputs.n.new).toEqual({ value: UNKNOWN, type: types.number });
 
     const error = await errorOf(() => apply(config));
-    expect(error.message).toMatch(/^n: ".{4}" is not a number$/);
-    expect(error.position).toEqual({ file: 'main.clay', ...placeOf(config, 'random_string.r.result') });
+    expect(error.message).toMatch(/^n: "x.{4}" is not a number$/);
+    expect(error.position).toEqual({ file: 'main.clay', ...placeOf(config, '"x${random_string.r.result}"') });
   });
 
   it("holds a module output not known yet to its type once the apply knows it, in the module's file", async () => {
-    const module = 'resource "random_string" "r" { length = 4 }\noutput "n" {\n  type  = number\n  value = random_string.r.result\n}';
+    const module = 'resource "random_string" "r" { length = 4 }\noutput "n" {\n  type  = number\n  value = "x${random_string.r.result}"\n}';
     await writeModule(module);
     const config = 'module "m" { source = "./m" }\noutput "n" { value = module.m.n }';
 
     const error = await errorOf(() => apply(config));
 
-    expect(error.message).toMatch(/^n: ".{4}" is not a number$/);
-    expect(error.position).toEqual({ file: path.join('m', 'main.clay'), ...placeOf(module, 'random_string.r.result') });
+    expect(error.message).toMatch(/^n: "x.{4}" is not a number$/);
+    expect(error.position).toEqual({ file: path.join('m', 'main.clay'), ...placeOf(module, '"x${random_string.r.result}"') });
   });
 
   it("lets validate hold a module output's type to where it is given, where no plan reads it", async () => {
