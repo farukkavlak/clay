@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { inOrder, Limit } from '../../src/run/parallelism';
+import { inOrder, Limit } from '../../src/providers/Limit';
 
 const pause = (ms: number) =>
   new Promise<void>((resolve) => {

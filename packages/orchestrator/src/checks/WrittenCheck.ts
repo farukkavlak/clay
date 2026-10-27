@@ -11,6 +11,7 @@ import { NotKnownYet } from '../instances/NotKnownYet';
 import { tryAt, withPlace } from '../place';
 import { hidingReason } from '../providers/providerResult';
 import { ProviderRegistry } from '../providers/ProviderRegistry';
+import { inOrder, Limit } from '../providers/Limit';
 import { ReferenceResolver } from '../expressions/ReferenceResolver';
 import { marksOf } from '../values/schemaMarks';
 import { ScopeManager } from '../config/ScopeManager';
@@ -26,7 +27,8 @@ export class WrittenCheck {
     private scopeManager: ScopeManager,
     private schemas: Map<string, Schema>,
     private dataSchemas: Map<string, Schema>,
-    private providers: ProviderRegistry
+    private providers: ProviderRegistry,
+    private limit: Limit
   ) {}
 
   /** Runs after names are checked, so each has a type in its schema. */
@@ -41,29 +43,43 @@ export class WrittenCheck {
       }
   }
 
-  /** Each after the locals and blocks it reads, so no check reads down a chain of them, which can be longer than the call stack. */
+  /**
+   * Each after the locals and blocks it reads, so no check reads down a chain of them, which can be longer than the call stack.
+   * The checks stop at the first that fails; providers are asked all at once, and an earlier refusal of theirs comes first.
+   */
   private async checkBlocks(loadedResources: LoadedResource[], graph: Graph<GraphNode>): Promise<void> {
     const resources = new Map(loadedResources.map((loaded) => [loaded.uniqueId, loaded]));
+    const asked: Promise<void>[] = [];
 
-    for (const key of graph.topologicalSort().flat()) {
-      const node = graph.getNode(key)!;
-      if (node.kind === 'local') this.read(node.value, node.declaration, node.module);
-      if (node.kind === 'resource') await this.checkResource(resources.get(key)!);
-      if (node.kind === 'data') await this.checkData(node.block, node.module);
+    try {
+      for (const key of graph.topologicalSort().flat()) asked.push(this.checkNode(graph.getNode(key)!, key, resources));
+    } catch (error) {
+      await inOrder(asked);
+      throw error;
     }
+    await inOrder(asked);
   }
 
-  private async checkResource({ address, block }: LoadedResource): Promise<void> {
+  /** The provider's answer, once the rest is checked. */
+  private checkNode(node: GraphNode, key: string, resources: Map<string, LoadedResource>): Promise<void> {
+    if (node.kind === 'local') this.read(node.value, node.declaration, node.module);
+    if (node.kind === 'resource') return this.checkResource(resources.get(key)!);
+    if (node.kind === 'data') return this.checkData(node.block, node.module);
+
+    return Promise.resolve();
+  }
+
+  private checkResource({ address, block }: LoadedResource): Promise<void> {
     const declaration = spell(block);
     // Every schema is loaded by now.
     const schema = this.schemas.get(block.resourceType)!;
 
     this.checkRepetition(block, declaration, address);
     const given = this.checkAttributes(block.resourceType, block.attributes, schema, declaration, address);
-    await this.askProvider(block, block.resourceType, given, schema, address, (type, config) => this.providers.get(type).validate(type, config));
+    return this.askProvider(block, block.resourceType, given, schema, address, (type, config) => this.providers.get(type).validate(type, config));
   }
 
-  private async checkData(block: DataBlock, module: ModuleAddress): Promise<void> {
+  private checkData(block: DataBlock, module: ModuleAddress): Promise<void> {
     const declaration = spell(block);
     // Every data schema is loaded by now, its names checked.
     const schema = this.dataSchemas.get(block.dataSourceType)!;
@@ -71,7 +87,7 @@ export class WrittenCheck {
     this.checkRepetition(block, declaration, module);
     // In the block, so `each.value` finds its for_each.
     const given = this.checkAttributes(block.dataSourceType, block.attributes, schema, declaration, new DataInstance(module, block.dataSourceType, block.name));
-    await this.askProvider(block, block.dataSourceType, given, schema, module, (type, config) => this.providers.reader(type).validateDataSource(type, config));
+    return this.askProvider(block, block.dataSourceType, given, schema, module, (type, config) => this.providers.reader(type).validateDataSource(type, config));
   }
 
   /** As the provider receives them: a null sets nothing. */
@@ -97,7 +113,7 @@ export class WrittenCheck {
     validate: (type: string, config: Record<string, unknown>) => Promise<void>
   ): Promise<void> {
     try {
-      await hidingReason(type, marksOf(schema, given), () => validate(type, plainOf(given)));
+      await this.limit.run(() => hidingReason(type, marksOf(schema, given), () => validate(type, plainOf(given))));
     } catch (error) {
       throw withPlace(error, block.position, spell(block), context);
     }

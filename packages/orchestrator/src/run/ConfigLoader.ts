@@ -1,18 +1,27 @@
-import { ModuleAddress, Schema } from '@clay/contracts';
-import { AttributeValue, DataBlock, spell, Statement } from '@clay/parser';
+import { Schema } from '@clay/contracts';
+import { AttributeValue, spell, Statement } from '@clay/parser';
 
 import { checkNames } from '../checks/checkAttributes';
 import { checkDefaults } from '../values/declared';
-import { dataSourceKey } from '../keys';
+import { Context, dataSourceKey } from '../keys';
 import { Value } from '../values/Value';
 import { Instances } from '../instances/Instances';
 import { ModuleInstances } from '../instances/ModuleInstances';
 import { Planned } from '../values/Planned';
 import { ProviderRegistry } from '../providers/ProviderRegistry';
+import { Limit, taken } from '../providers/Limit';
 import { tryAt, withPlace } from '../place';
 import { ReferenceResolver } from '../expressions/ReferenceResolver';
 import { ScopeManager } from '../config/ScopeManager';
 import { LoadedModule, LoadedResource, ModuleLoader } from '../config/ModuleLoader';
+
+/** The first item of each key, in the order they come. */
+function firstOfEach<T>(items: T[], keyOf: (item: T) => string): T[] {
+  const firsts = new Map<string, T>();
+  for (const item of items) if (!firsts.has(keyOf(item))) firsts.set(keyOf(item), item);
+
+  return [...firsts.values()];
+}
 
 export interface LoadedConfig {
   mainProgram: Statement[];
@@ -33,7 +42,8 @@ export class ConfigLoader {
     private providers: ProviderRegistry,
     private instances: Instances,
     private modules: ModuleInstances,
-    private planned: Planned
+    private planned: Planned,
+    private limit: Limit
   ) {}
 
   async load(): Promise<LoadedConfig> {
@@ -68,37 +78,34 @@ export class ConfigLoader {
     }
   }
 
-  /** Loaded before any value is resolved, since resolving needs the schema's types. */
+  /** Loaded before any value is resolved, since resolving needs the schema's types. A failure names the first block of its type. */
   private async loadSchemas(loaded: LoadedResource[]): Promise<void> {
-    for (const { block, address } of loaded) {
-      const type = block.resourceType;
-      if (this.schemas.has(type)) continue;
+    const firsts = firstOfEach(loaded, ({ block }) => block.resourceType).filter(({ block }) => !this.schemas.has(block.resourceType));
+    const schemas = await Promise.allSettled(firsts.map(({ block, address }) => this.asked(block, address, () => this.providers.schema(block.resourceType))));
 
-      try {
-        this.schemas.set(type, await this.providers.schema(type));
-      } catch (error) {
-        throw withPlace(error, block.position, spell(block), address);
-      }
-    }
+    for (const [index, { block }] of firsts.entries()) this.schemas.set(block.resourceType, taken(schemas[index]));
   }
 
   /** With its names checked, so a misspelled input is refused before anything is read. */
   private async loadDataSchemas(loadedModules: LoadedModule[]): Promise<void> {
-    for (const { address, program } of loadedModules)
-      for (const stmt of program) {
-        if (stmt.type !== 'Data') continue;
+    const blocks = loadedModules.flatMap(({ address, program }) => program.flatMap((stmt) => (stmt.type === 'Data' ? [{ stmt, address }] : [])));
+    const firsts = firstOfEach(blocks, ({ stmt }) => stmt.dataSourceType).filter(({ stmt }) => !this.dataSchemas.has(stmt.dataSourceType));
+    const schemas = await Promise.allSettled(firsts.map(({ stmt, address }) => this.asked(stmt, address, () => this.providers.dataSourceSchema(stmt.dataSourceType))));
+    const loaded = new Map(firsts.map(({ stmt }, index) => [stmt.dataSourceType, schemas[index]]));
 
-        const schema = this.dataSchemas.get(stmt.dataSourceType) ?? (await this.dataSchemaOf(stmt, address));
-        this.dataSchemas.set(stmt.dataSourceType, schema);
-        checkNames(stmt, schema, address);
-      }
+    for (const { stmt, address } of blocks) {
+      const schema = this.dataSchemas.get(stmt.dataSourceType) ?? taken(loaded.get(stmt.dataSourceType)!);
+      this.dataSchemas.set(stmt.dataSourceType, schema);
+      checkNames(stmt, schema, address);
+    }
   }
 
-  private async dataSchemaOf(stmt: DataBlock, address: ModuleAddress): Promise<Schema> {
+  /** Through the limit, and placed at the block that asked. */
+  private async asked(block: Statement, address: Context, ask: () => Promise<Schema>): Promise<Schema> {
     try {
-      return await this.providers.dataSourceSchema(stmt.dataSourceType);
+      return await this.limit.run(ask);
     } catch (error) {
-      throw withPlace(error, stmt.position, spell(stmt), address);
+      throw withPlace(error, block.position, spell(block), address);
     }
   }
 

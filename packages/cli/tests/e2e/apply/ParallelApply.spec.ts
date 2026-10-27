@@ -103,7 +103,7 @@ describe('a layer of resources', () => {
 
   describe('when one fails', () => {
     // The failing one comes first, so a run one at a time would stop before it made the others.
-    const config = `resource "slow" "aa" {\n  name = "aa"\n  mode = "fails"\n}\n${blocks('x', 'y')}\nresource "slow" "after" {\n  name = "after"\n  note = slow.x.name\n}`;
+    const config = `resource "slow" "aa" {\n  name = "aa"\n  mode = "create fails"\n}\n${blocks('x', 'y')}\nresource "slow" "after" {\n  name = "after"\n  note = slow.x.name\n}`;
 
     it('keeps the others it started, starts nothing more, and reports the failure last', async () => {
       const events = await run(config);

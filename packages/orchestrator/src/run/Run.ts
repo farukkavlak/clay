@@ -22,6 +22,7 @@ import { SameObjects } from '../checks/sameObject';
 import { ScopeManager } from '../config/ScopeManager';
 import { Value } from '../values/Value';
 import { Versions } from '../values/Versions';
+import { Limit } from '../providers/Limit';
 
 /** What one plan, validate or apply works with. */
 export interface Run {
@@ -34,7 +35,7 @@ export interface Run {
 }
 
 /** Each run gets its own scopes, instances and data source values, so runs at the same time never read each other's. */
-export function newRun(stateManager: StateManager, providers: ProviderRegistry, files: ConfigFiles): Run {
+export function newRun(stateManager: StateManager, providers: ProviderRegistry, files: ConfigFiles, limit: Limit): Run {
   const versions = new Versions();
   const scopes = new ScopeManager(versions);
   const dataSources = new Map<string, Record<string, Value>>();
@@ -51,13 +52,13 @@ export function newRun(stateManager: StateManager, providers: ProviderRegistry, 
   const reader = new DataSourceReader(providers, dataSchemas, dataSources, versions);
 
   return {
-    loader: new ConfigLoader(new ModuleLoader(files, scopes), scopes, dataSources, schemas, dataSchemas, resolver, providers, instances, modules, planned),
+    loader: new ConfigLoader(new ModuleLoader(files, scopes), scopes, dataSources, schemas, dataSchemas, resolver, providers, instances, modules, planned, limit),
     graphBuilder,
-    writtenCheck: new WrittenCheck(resolver, scopes, schemas, dataSchemas, providers),
+    writtenCheck: new WrittenCheck(resolver, scopes, schemas, dataSchemas, providers, limit),
     desiredStateBuilder: new DesiredStateBuilder(scopes, resolver, graphBuilder, instances, modules, planned, resourcePlanner, reader, versions),
     runner: new PlanRunner(
       stateManager,
-      new ActionExecutor(providers, resolver, resourcePlanner, new SameObjects(providers), versions),
+      new ActionExecutor(providers, resolver, resourcePlanner, new SameObjects(providers, limit), versions),
       scopes,
       resolver,
       instances,

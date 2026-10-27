@@ -16,7 +16,8 @@ import { ConfigFiles } from './config/ConfigFiles';
 import { ProviderRegistry } from './providers/ProviderRegistry';
 import { newRun, Run } from './run/Run';
 import { RunEvent } from './run/RunEvent';
-import { checkParallelism, DEFAULT_PARALLELISM, inOrder, Limit } from './run/parallelism';
+import { checkParallelism, DEFAULT_PARALLELISM } from './run/parallelism';
+import { inOrder, Limit } from './providers/Limit';
 import { plainOf } from './values/Value';
 
 export type { RunEvent } from './run/RunEvent';
@@ -42,12 +43,12 @@ export class Orchestrator {
   constructor(
     private stateManager: StateManager,
     private providers: ProviderRegistry,
-    private newRun: () => Run
+    private newRun: (limit: Limit) => Run
   ) {}
 
   static create(stateManager: StateManager, files: ConfigFiles): Orchestrator {
     const providers = new ProviderRegistry();
-    return new Orchestrator(stateManager, providers, () => newRun(stateManager, providers, files));
+    return new Orchestrator(stateManager, providers, (limit) => newRun(stateManager, providers, files, limit));
   }
 
   registerProvider(provider: Provider): void {
@@ -57,19 +58,20 @@ export class Orchestrator {
   /** A plan never writes state, even what the refresh read. */
   async plan({ refresh = true, parallelism = DEFAULT_PARALLELISM }: PlanOptions = {}): Promise<Plan> {
     checkParallelism(parallelism);
+    const limit = new Limit(parallelism);
     const prevRun = await this.stateManager.read();
-    const prior = refresh ? await this.refresh(prevRun, new Limit(parallelism)) : prevRun;
+    const prior = refresh ? await this.refresh(prevRun, limit) : prevRun;
     // Planning applies the moves to a copy; the plan keeps the resources at their old addresses.
     const currentState = copyForMoves(prior);
     const moves = new Moves();
-    const { resources: desiredResources, outputs, dataSources, dataSensitive, readAtApply, graph } = await this.resolveAndCheck(currentState, 'plan', moves);
+    const { resources: desiredResources, outputs, dataSources, dataSensitive, readAtApply, graph } = await this.resolveAndCheck(currentState, 'plan', moves, limit);
 
     const actions = plan(desiredResources, currentState, (address) => moves.originOf(address));
     checkPreventDestroy(actions, desiredResources, currentState.resources);
-    await checkSameObjects(actions, desiredResources, currentState, this.providers);
+    await checkSameObjects(actions, desiredResources, currentState, this.providers, limit);
     checkApplyOrder(graph, actions, currentState, desiredResources);
     // The refresh only drops resources, so prior has no type prevRun lacks.
-    const held = [...actions, ...Object.values(prevRun.resources)];
+    const types = [...actions, ...Object.values(prevRun.resources)].map((resource) => resource.resourceType);
 
     return {
       serial: prevRun.serial,
@@ -77,21 +79,21 @@ export class Orchestrator {
       outputs: outputChanges(currentState.outputs ?? {}, outputs),
       prevRun: prevRun.resources,
       prior: prior.resources,
-      schemas: await this.schemasOf(held.map((resource) => resource.resourceType)),
+      schemas: await this.schemasOf(types, limit),
       dataSources,
       ...(Object.keys(dataSensitive).length > 0 && { dataSensitive }),
       readAtApply,
     };
   }
 
-  private async schemasOf(types: string[]): Promise<Record<string, Schema>> {
+  private async schemasOf(types: string[], limit: Limit): Promise<Record<string, Schema>> {
     const unique = [...new Set(types)];
-    return Object.fromEntries(await Promise.all(unique.map(async (type) => [type, await this.providers.schema(type)] as const)));
+    return Object.fromEntries(await inOrder(unique.map(async (type) => [type, await limit.run(() => this.providers.schema(type))] as const)));
   }
 
   /** Plans against an empty state and reads no data source, so what a resource or a data source gives is unknown and everything else is checked. */
   async validate(): Promise<void> {
-    await this.resolveAndCheck(emptyState(), 'check', new Moves());
+    await this.resolveAndCheck(emptyState(), 'check', new Moves(), new Limit(DEFAULT_PARALLELISM));
   }
 
   /** Holds the state lock. A state written since the plan was made is refused, since the approved plan no longer matches it. */
@@ -106,7 +108,7 @@ export class Orchestrator {
       // The actions were planned against the refreshed resources, so they run on those.
       state.resources = copyResources(saved.prior);
 
-      const { loader, graphBuilder, runner } = this.newRun();
+      const { loader, graphBuilder, runner } = this.newRun(new Limit(parallelism));
       const config = await loader.load();
       const graph = graphBuilder.buildExecutionGraph(config.loadedResources, config.loadedModules);
       yield* runner.run(saved, config, graph, state, { parallelism, signal });
@@ -145,8 +147,8 @@ export class Orchestrator {
   }
 
   /** Applies every move to `state` before anything reads it, and records each in `moves`. */
-  private async resolveAndCheck(state: State, walk: Walk, moves: Moves): Promise<DesiredState & { graph: Graph<GraphNode> }> {
-    const { loader, graphBuilder, writtenCheck, desiredStateBuilder, modules } = this.newRun();
+  private async resolveAndCheck(state: State, walk: Walk, moves: Moves, limit: Limit): Promise<DesiredState & { graph: Graph<GraphNode> }> {
+    const { loader, graphBuilder, writtenCheck, desiredStateBuilder, modules } = this.newRun(limit);
     const { loadedResources, loadedModules, schemas } = await loader.load();
 
     const graph = graphBuilder.buildExecutionGraph(loadedResources, loadedModules);

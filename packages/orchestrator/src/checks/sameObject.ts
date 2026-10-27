@@ -8,6 +8,7 @@ import { ConfiguredResource } from '../plan/DesiredStateBuilder';
 import { withPlace } from '../place';
 import { hidingReason } from '../providers/providerResult';
 import { ProviderRegistry } from '../providers/ProviderRegistry';
+import { Limit, taken } from '../providers/Limit';
 
 /** An object the plan destroys: a delete's, a deposed one, or the old one of a replace. */
 interface Going {
@@ -29,9 +30,9 @@ interface Staying {
 type Identify = (type: string, values: Record<string, unknown>, sensitive: readonly AttributePath[]) => Promise<Identity | undefined>;
 
 const identifyWith =
-  (providers: ProviderRegistry): Identify =>
+  (providers: ProviderRegistry, limit: Limit): Identify =>
   async (type, values, sensitive) =>
-    await hidingReason(type, sensitive, async () => await providers.get(type).identify?.(type, values), 'to identify');
+    await limit.run(async () => await hidingReason(type, sensitive, async () => await providers.get(type).identify?.(type, values), 'to identify'));
 
 /** A failure names what was asked about. */
 async function asking(
@@ -94,14 +95,24 @@ function planned(resource: ConfiguredResource, created: Set<string>): Staying {
 }
 
 /** Two objects that are one real thing, as two files at one path, would overwrite or destroy each other. Only the provider can tell. */
-export async function checkSameObjects(actions: PlanAction[], desired: ConfiguredResource[], state: State, providers: ProviderRegistry): Promise<void> {
-  const identify = identifyWith(providers);
+export async function checkSameObjects(actions: PlanAction[], desired: ConfiguredResource[], state: State, providers: ProviderRegistry, limit: Limit): Promise<void> {
+  const identify = identifyWith(providers, limit);
   const staying = new Map<string, Staying>();
   const created = new Set(actions.filter((action) => action.type === 'CREATE').map((action) => Address.of(action).toString()));
+  const going = goingIn(actions, state);
+  // Asked all at once, and taken in order, so the first refusal is the one a check one at a time would find.
+  const [identities, goingIdentities] = await Promise.all([
+    Promise.allSettled(
+      desired.map((resource) => {
+        const placed = (error: unknown) => withPlace(error, resource.block.position, spell(resource.block), resource.address.module);
+        return asking(identify, resource.address.resourceType, resource.after, resource.sensitive, placed);
+      })
+    ),
+    Promise.allSettled(going.map((each) => asking(identify, each.action.resourceType, each.values, each.sensitive, named(each.address)))),
+  ]);
 
-  for (const resource of desired) {
-    const placed = (error: unknown) => withPlace(error, resource.block.position, spell(resource.block), resource.address.module);
-    const identity = await asking(identify, resource.address.resourceType, resource.after, resource.sensitive, placed);
+  for (const [index, resource] of desired.entries()) {
+    const identity = taken(identities[index]);
     if (identity === undefined) continue;
 
     const object = planned(resource, created);
@@ -110,12 +121,12 @@ export async function checkSameObjects(actions: PlanAction[], desired: Configure
     staying.set(identity.key, object);
   }
 
-  for (const going of goingIn(actions, state)) {
-    const identity = await asking(identify, going.action.resourceType, going.values, going.sensitive, named(going.address));
+  for (const [index, each] of going.entries()) {
+    const identity = taken(goingIdentities[index]);
     if (identity === undefined) continue;
 
     const object = staying.get(identity.key);
-    if (object) checkGoing(going, identity.name, object);
+    if (object) checkGoing(each, identity.name, object);
   }
 }
 
@@ -150,8 +161,8 @@ export class SameObjects {
   /** Built at the first claim, so each claim looks its thing up instead of going over every object again. */
   private held?: Promise<HeldIndex>;
 
-  constructor(providers: ProviderRegistry) {
-    this.identify = identifyWith(providers);
+  constructor(providers: ProviderRegistry, limit: Limit) {
+    this.identify = identifyWith(providers, limit);
   }
 
   /** The objects the plan destroys, as the state holds them before the run. */

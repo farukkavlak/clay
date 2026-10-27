@@ -13,6 +13,8 @@ import { InstanceKeys } from '../../src/expressions/references/InstanceKeys';
 import { ReferenceResolver } from '../../src/expressions/ReferenceResolver';
 import { SameObjects } from '../../src/checks/sameObject';
 import { ScopeManager } from '../../src/config/ScopeManager';
+import { Limit } from '../../src/providers/Limit';
+import { DEFAULT_PARALLELISM } from '../../src/run/parallelism';
 import { str } from '../ast';
 
 /** An action with what its block gives, which the run hands over beside it. */
@@ -106,7 +108,7 @@ describe('ActionExecutor', () => {
       new InstanceKeys(instances, modules),
       versions
     );
-    executor = new ActionExecutor(providers, resolver, new ResourcePlanner(providers), new SameObjects(providers), versions);
+    executor = new ActionExecutor(providers, resolver, new ResourcePlanner(providers), new SameObjects(providers, new Limit(DEFAULT_PARALLELISM)), versions);
   });
 
   afterEach(() => {
