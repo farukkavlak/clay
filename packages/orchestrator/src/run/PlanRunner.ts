@@ -2,9 +2,10 @@ import { Address, ModuleAddress, Output, parseDataAddress, Resource, SENSITIVE, 
 import { Graph } from '@clay/graph';
 import { AttributeValue, DataBlock, OutputBlock, ResourceBlock, spell, Statement } from '@clay/parser';
 import { offPlan, Plan, PlanAction } from '@clay/planner';
-import { moveResource, StateManager } from '@clay/state';
+import { moveResources, StateManager } from '@clay/state';
 
 import { ApplyNode, applyGraph } from '../plan/applyGraph';
+import { append } from '../append';
 import { asError } from '../asError';
 import { countFrom } from '../instances/count';
 import { declaredOf, outputAs } from '../values/declared';
@@ -24,7 +25,7 @@ import { outputOf, Value } from '../values/Value';
 import { ActionExecutor, Running } from './ActionExecutor';
 import { LoadedConfig } from './ConfigLoader';
 import { DataSourceReader } from '../plan/DataSourceReader';
-import { checkMovedFrom, movesIn } from '../plan/moves';
+import { checkMovedFrom, movesIn, plannedMoves } from '../plan/moves';
 import { GraphNode, LocalNode, OutputNode, ValueNode } from '../graph/DependencyGraphBuilder';
 
 function undeclared(address: Address | string): Error {
@@ -34,12 +35,7 @@ function undeclared(address: Address | string): Error {
 /** Keeps the plan's order within each group. */
 function groupBy(actions: PlanAction[], key: (address: Address) => string): Map<string, PlanAction[]> {
   const groups = new Map<string, PlanAction[]>();
-
-  for (const action of actions) {
-    const group = key(Address.of(action));
-    if (!groups.has(group)) groups.set(group, []);
-    groups.get(group)!.push(action);
-  }
+  for (const action of actions) append(groups, key(Address.of(action)), action);
 
   return groups;
 }
@@ -61,7 +57,7 @@ type PlannedOutputs = Map<string, PlannedOutput>;
 
 /** Checked against the configuration before anything runs, and used as the run goes. */
 interface Checked {
-  named: Map<string, string[]>;
+  named: Map<string, Set<string>>;
   outputs: PlannedOutputs;
 }
 
@@ -92,7 +88,7 @@ export class PlanRunner {
     const checked = { outputs, named: this.dataNamed(saved, graph) };
     checkMovedFrom(actions, movesIn(config.loadedModules), state);
     // Every move first, as the plan made them, so each entry and every dependency on it is at its new address.
-    for (const action of actions) if (action.movedFrom) moveResource(state, Address.parse(action.movedFrom), Address.of(action));
+    moveResources(state, plannedMoves(actions));
     this.executor.expect(actions, state);
 
     const order = applyGraph(graph, actions, state);
@@ -167,7 +163,8 @@ export class PlanRunner {
       this.checkFlagMatches(stmt, output);
     }
 
-    for (const name of planned.keys()) if (!declared.some((stmt) => stmt.name === name)) throw new Error(`The plan has output "${name}", which the configuration does not declare`);
+    const names = new Set(declared.map((stmt) => stmt.name));
+    for (const name of planned.keys()) if (!names.has(name)) throw new Error(`The plan has output "${name}", which the configuration does not declare`);
   }
 
   /** A plan that hid an output would end by printing it, or one that printed it by hiding it. */
@@ -179,15 +176,15 @@ export class PlanRunner {
   }
 
   /** By block. A saved plan may name a data source with no block, whose value would be silently dropped. */
-  private dataNamed({ dataSources, readAtApply }: Approved, graph: Graph<GraphNode>): Map<string, string[]> {
-    const named = new Map<string, string[]>();
+  private dataNamed({ dataSources, readAtApply }: Approved, graph: Graph<GraphNode>): Map<string, Set<string>> {
+    const named = new Map<string, Set<string>>();
 
     for (const address of [...Object.keys(dataSources), ...readAtApply]) {
       const { module, type, name } = parseDataAddress(address);
       const block = dataSourceKey(scopeOf(module.withoutKeys()), type, name);
       if (!graph.hasNode(block)) throw undeclared(address);
 
-      named.set(block, [...(named.get(block) ?? []), address]);
+      named.set(block, (named.get(block) ?? new Set()).add(address));
     }
 
     return named;
@@ -205,18 +202,18 @@ export class PlanRunner {
     if (count) this.instances.setCount(address.toString(), read(count, countFrom));
     if (forEach) this.instances.setEach(address.toString(), read(forEach, eachFrom));
 
-    const keys = this.instances.keysOf(address.toString());
-    if (keys === undefined) return;
+    if (this.instances.keysOf(address.toString()) === undefined) return;
 
-    for (const action of actions) if (action.key === undefined || !keys.includes(action.key)) throw undeclared(Address.of(action));
+    for (const action of actions) if (action.key === undefined || !this.instances.hasKey(address.toString(), action.key)) throw undeclared(Address.of(action));
   }
 
   /** A plan has an action for every instance, a no-op for one that stays, so one with none would be silently skipped. */
   private checkEveryInstancePlanned(address: Address, block: ResourceBlock, actions: PlanAction[]): void {
     const keys = this.instances.keysOf(address.toString()) ?? [undefined];
+    const planned = new Set(actions.map((action) => action.key));
 
     for (const key of keys) {
-      if (actions.some((action) => action.key === key)) continue;
+      if (planned.has(key)) continue;
 
       const instance = new Address(address.module, address.resourceType, address.name, key);
       throw withPlace(new Error(`The plan has no action for ${instance}, which the configuration declares`), block.position, spell(block), instance);
@@ -290,14 +287,15 @@ export class PlanRunner {
   /** The plan's value, or a read now, after what it reads has run. A plan that has neither was made from another configuration. */
   private async *readData(
     { module, block }: Extract<GraphNode, { kind: 'data' }>,
-    named: string[] = [],
-    { dataSources, dataSensitive, readAtApply }: Pick<Approved, 'dataSources' | 'dataSensitive' | 'readAtApply'>,
+    named = new Set<string>(),
+    { dataSources, dataSensitive }: Pick<Approved, 'dataSources' | 'dataSensitive'>,
     state: State
   ): AsyncGenerator<RunEvent> {
     const made = this.modules.of(module).flatMap((instance) => this.dataInstances(block, instance, state));
+    const making = new Set(made.map((at) => at.toString()));
 
     // An instance the module or the count does not make would otherwise be silently skipped.
-    for (const address of named) if (!made.some((at) => at.toString() === address)) throw undeclared(address);
+    for (const address of named) if (!making.has(address)) throw undeclared(address);
 
     for (const at of made) {
       const address = at.toString();
@@ -306,7 +304,8 @@ export class PlanRunner {
         continue;
       }
 
-      if (!readAtApply.includes(address)) throw withPlace(new Error(`The plan has no value for ${address}, which the configuration declares`), block.position, spell(block), at);
+      // `named` holds a read at apply for each instance with no value.
+      if (!named.has(address)) throw withPlace(new Error(`The plan has no value for ${address}, which the configuration declares`), block.position, spell(block), at);
 
       await this.reader.read(block, this.resolveInputs(block, state, at), at);
       yield { type: 'read', address };
@@ -342,7 +341,8 @@ export class PlanRunner {
     const blocks = this.modules.of(module).map((instance) => new Address(instance, block.resourceType, block.name));
     const byInstance = groupBy(actions, (address) => address.withoutKey().toString());
 
-    for (const [instance, instanceActions] of byInstance) if (!blocks.some((at) => at.toString() === instance)) throw undeclared(Address.of(instanceActions[0]));
+    const declared = new Set(blocks.map((at) => at.toString()));
+    for (const [instance, instanceActions] of byInstance) if (!declared.has(instance)) throw undeclared(Address.of(instanceActions[0]));
 
     return blocks.flatMap((at) => {
       const instanceActions = byInstance.get(at.toString()) ?? [];

@@ -13,7 +13,7 @@ import { engineOn, TestEngine } from './engine';
 const readMock = vi.fn();
 const writeMock = vi.fn().mockResolvedValue(undefined);
 
-vi.mock('@clay/state', () => {
+vi.mock('@clay/state', async () => {
   const StateManager = vi.fn(function (backend) {
     return {
       read: readMock,
@@ -32,7 +32,7 @@ vi.mock('@clay/state', () => {
       unlock: vi.fn(),
     };
   });
-  return { StateManager, LocalBackend };
+  return { ...(await vi.importActual<object>('@clay/state')), StateManager, LocalBackend };
 });
 
 vi.mock('@clay/planner', async () => ({

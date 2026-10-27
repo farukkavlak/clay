@@ -17,6 +17,8 @@ export function repetitionOfKey(key: InstanceKey | undefined): Repetition | unde
 export class Instances {
   private repetitions = new Map<string, Repetition>();
   private keys = new Map<string, InstanceKey[]>();
+  /** The keys again, so a key is looked up without walking every instance. */
+  private keySets = new Map<string, Set<InstanceKey>>();
   private values = new Map<string, Map<string, Value>>();
 
   declare(block: string, repetition: Repetition): void {
@@ -28,12 +30,22 @@ export class Instances {
   }
 
   setCount(block: string, count: number): void {
-    this.keys.set(block, indexesOf(count));
+    this.setKeys(block, indexesOf(count));
   }
 
   setEach(block: string, values: Map<string, Value>): void {
-    this.keys.set(block, [...values.keys()]);
+    this.setKeys(block, [...values.keys()]);
     this.values.set(block, values);
+  }
+
+  private setKeys(block: string, keys: InstanceKey[]): void {
+    this.keys.set(block, keys);
+    this.keySets.set(block, new Set(keys));
+  }
+
+  /** False until count or for_each is read. */
+  hasKey(block: string, key: InstanceKey): boolean {
+    return this.keySets.get(block)?.has(key) === true;
   }
 
   /** Undefined until count or for_each is read. */

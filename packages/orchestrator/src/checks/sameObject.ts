@@ -2,6 +2,7 @@ import { Address, AttributePath, Identity, State } from '@clay/contracts';
 import { spell } from '@clay/parser';
 import { PlanAction } from '@clay/planner';
 
+import { append } from '../append';
 import { asError } from '../asError';
 import { ConfiguredResource } from '../plan/DesiredStateBuilder';
 import { withPlace } from '../place';
@@ -82,12 +83,12 @@ function checkGoing(going: Going, thing: string, staying: Staying): void {
     throw staying.refuse(`${going.address} makes its new object before it destroys the old one, but both are ${thing}, so the destroy would remove the new one.`);
 }
 
-function planned(resource: ConfiguredResource, actions: PlanAction[]): Staying {
+function planned(resource: ConfiguredResource, created: Set<string>): Staying {
   const address = resource.address.toString();
 
   return {
     address,
-    created: actions.some((action) => action.type === 'CREATE' && Address.of(action).toString() === address),
+    created: created.has(address),
     refuse: (message) => withPlace(new Error(message), resource.block.position, spell(resource.block), resource.address.module),
   };
 }
@@ -96,13 +97,14 @@ function planned(resource: ConfiguredResource, actions: PlanAction[]): Staying {
 export async function checkSameObjects(actions: PlanAction[], desired: ConfiguredResource[], state: State, providers: ProviderRegistry): Promise<void> {
   const identify = identifyWith(providers);
   const staying = new Map<string, Staying>();
+  const created = new Set(actions.filter((action) => action.type === 'CREATE').map((action) => Address.of(action).toString()));
 
   for (const resource of desired) {
     const placed = (error: unknown) => withPlace(error, resource.block.position, spell(resource.block), resource.address.module);
     const identity = await asking(identify, resource.address.resourceType, resource.after, resource.sensitive, placed);
     if (identity === undefined) continue;
 
-    const object = planned(resource, actions);
+    const object = planned(resource, created);
     const other = staying.get(identity.key);
     if (other) checkOther(object, identity.name, other.address);
     staying.set(identity.key, object);
@@ -117,6 +119,25 @@ export async function checkSameObjects(actions: PlanAction[], desired: Configure
   }
 }
 
+/** An object as the state holds it, and what it is. */
+interface Held {
+  address: string;
+  values: Record<string, unknown>;
+}
+
+/** The state's objects by what thing each is, and any its provider could not identify. */
+interface HeldIndex {
+  byKey: Map<string, Held[]>;
+  failed: (Held & { error: unknown })[];
+}
+
+/** The state replaces values on a change, so an object is still held only where its values still are. */
+function stillHeld(state: State, { address, values }: Held): boolean {
+  if (Object.hasOwn(state.resources, address) && state.resources[address].attributes === values) return true;
+
+  return (state.deposed?.[address] ?? []).some((object) => object.attributes === values);
+}
+
 /**
  * The same check at apply, for values only the apply knows. Only what exists then counts: an object already destroyed removes
  * nothing, so a create after it is safe.
@@ -126,8 +147,8 @@ export class SameObjects {
   private going = new Map<Record<string, unknown>, Going>();
   /** What each object being made or changed in this run is, by key, before it reaches the state. */
   private claimed = new Map<string, string>();
-  /** Asked once per state object: the state replaces values on a change, never changes them. */
-  private known = new WeakMap<Record<string, unknown>, Promise<Identity | undefined>>();
+  /** Built at the first claim, so each claim looks its thing up instead of going over every object again. */
+  private held?: Promise<HeldIndex>;
 
   constructor(providers: ProviderRegistry) {
     this.identify = identifyWith(providers);
@@ -158,30 +179,37 @@ export class SameObjects {
     this.claimed.set(identity.key, staying.address);
   }
 
-  /** Each object the state holds now, current or deposed, whose thing has the `key`. A failure names another object than the `claimant`'s. */
-  private async heldAs(key: string, state: State, claimant: string): Promise<{ address: string; values: Record<string, unknown> }[]> {
+  /**
+   * Each object the state holds now, current or deposed, whose thing has the `key`. One made in this run is in `claimed`.
+   * A failure names another object than the `claimant`'s, which the run names.
+   */
+  private async heldAs(key: string, state: State, claimant: string): Promise<Held[]> {
+    this.held ??= this.indexHeld(state);
+    const { byKey, failed } = await this.held;
+
+    // As every claim asked about every object the state holds then.
+    const failure = failed.find((object) => stillHeld(state, object));
+    if (failure) throw failure.address === claimant ? failure.error : named(failure.address)(failure.error);
+
+    return (byKey.get(key) ?? []).filter((object) => stillHeld(state, object));
+  }
+
+  private async indexHeld(state: State): Promise<HeldIndex> {
     const objects = [
       ...Object.entries(state.resources).map(([address, resource]) => ({ address, type: resource.resourceType, values: resource.attributes, sensitive: resource.sensitive ?? [] })),
       ...Object.entries(state.deposed ?? {}).flatMap(([address, deposed]) =>
         deposed.map(({ attributes, sensitive = [] }) => ({ address, type: Address.parse(address).resourceType, values: attributes, sensitive }))
       ),
     ];
-    const identities = await Promise.all(
-      objects.map(async ({ address, type, values, sensitive }) => await this.identifyHeld(type, values, sensitive, address === claimant ? undefined : address))
-    );
+    const index: HeldIndex = { byKey: new Map(), failed: [] };
+    const identities = await Promise.allSettled(objects.map(async ({ type, values, sensitive }) => await this.identify(type, values, sensitive)));
 
-    return objects.filter((_, index) => identities[index]?.key === key);
-  }
-
-  /** A failure is named by the `holder`, left out for the action's own object, which the run names. */
-  private async identifyHeld(type: string, values: Record<string, unknown>, sensitive: readonly AttributePath[], holder?: string): Promise<Identity | undefined> {
-    const known = this.known.get(values) ?? this.identify(type, values, sensitive);
-    this.known.set(values, known);
-
-    try {
-      return await known;
-    } catch (error) {
-      throw holder === undefined ? error : named(holder)(error);
+    for (const [at, identity] of identities.entries()) {
+      const { address, values } = objects[at];
+      if (identity.status === 'rejected') index.failed.push({ address, values, error: identity.reason });
+      else if (identity.value) append(index.byKey, identity.value.key, { address, values });
     }
+
+    return index;
   }
 }

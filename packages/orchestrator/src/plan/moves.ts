@@ -2,7 +2,7 @@ import { Address, InstanceKey, ModuleAddress, ModuleStep, Resource, spellKey, St
 import { Graph } from '@clay/graph';
 import { MovedBlock, spell } from '@clay/parser';
 import { PlanAction } from '@clay/planner';
-import { moveResource } from '@clay/state';
+import { moveResources } from '@clay/state';
 
 import { LoadedModule } from '../config/ModuleLoader';
 import { withPlace } from '../place';
@@ -18,11 +18,16 @@ export class Moves {
   private readonly origins = new Map<string, string>();
 
   move(state: State, from: Address, to: Address): void {
-    moveResource(state, from, to);
+    this.moveAll(state, [[from, to]]);
+  }
+
+  /** Together, so what reads them is rewritten once. */
+  moveAll(state: State, moves: [Address, Address][]): void {
+    moveResources(state, moves);
     // A chain of moves is one move from where the state held it.
-    const origin = this.origins.get(from.toString()) ?? from.toString();
-    this.origins.delete(from.toString());
-    this.origins.set(to.toString(), origin);
+    const origins = moves.map(([from, to]) => [to.toString(), this.origins.get(from.toString()) ?? from.toString()] as const);
+    for (const [from] of moves) this.origins.delete(from.toString());
+    for (const [to, origin] of origins) this.origins.set(to, origin);
   }
 
   originOf(address: string): string | undefined {
@@ -197,20 +202,34 @@ function destinationOf(address: Address, move: Move): Address | undefined {
   return module && new Address(module, address.resourceType, address.name, address.key);
 }
 
+/** Where a key is held, by what a move's destination is compared on: the module up to its depth, the resource, or the instance. */
+function placeOf(move: Move, address: Address): string | undefined {
+  const { block } = move;
+  if (block.kind === 'resource') return (isWhole(move) ? address.withoutKey() : address).toString();
+
+  const depth = move.module.path.length + block.to.path.length;
+  if (address.module.path.length < depth) return undefined;
+  const target = address.module.path.slice(0, depth);
+  // A whole call is held by any instance of it.
+  return new ModuleAddress(isWhole(move) ? [...target.slice(0, -1), { name: target[depth - 1].name }] : target).toString();
+}
+
 /**
  * A whole resource moves only where no instance of the resource is held, and an instance where none is.
  * A module moves only where nothing is held in it, and a whole call where nothing is held in any of its instances.
+ * Indexed once for the move, so each destination is looked up, not searched for.
  */
-function heldAt(move: Move, to: Address, others: string[]): string | undefined {
-  const { block } = move;
-  if (block.kind === 'module') {
-    const target = to.module.path.slice(0, move.module.path.length + block.to.path.length);
-    return others.find((key) => under(Address.parse(key).module.path, target, isWhole(move)));
+function heldBy(move: Move, others: string[]): (to: Address) => string | undefined {
+  const held = new Map<string, string>();
+  for (const key of others) {
+    const place = placeOf(move, Address.parse(key));
+    if (place !== undefined && !held.has(place)) held.set(place, key);
   }
-  if (!isWhole(move)) return others.includes(to.toString()) ? to.toString() : undefined;
 
-  const resource = to.withoutKey().toString();
-  return others.find((key) => Address.parse(key).withoutKey().toString() === resource);
+  return (to) => {
+    const place = placeOf(move, to);
+    return place === undefined ? undefined : held.get(place);
+  };
 }
 
 /** What the move takes, all checked before any moves, so a refusal leaves the state as it was. */
@@ -222,9 +241,12 @@ function movedBy(move: Move, state: State): [Address, Address][] {
   });
 
   const moving = new Set(found.map(([from]) => from.toString()));
-  const others = Object.keys(state.resources).filter((key) => !moving.has(key));
+  const heldAt = heldBy(
+    move,
+    Object.keys(state.resources).filter((key) => !moving.has(key))
+  );
   for (const [from, to] of found) {
-    const held = heldAt(move, to, others);
+    const held = heldAt(to);
     if (held !== undefined) throw refuse(move, `${from} cannot move to ${to}: the state already holds ${held}. Remove the one to forget from the state first, with clay state rm`);
   }
 
@@ -233,7 +255,7 @@ function movedBy(move: Move, state: State): [Address, Address][] {
 
 /** Each state entry a `moved` block names goes to its new address, before anything reads the state. */
 export function applyMoves(moves: Move[], state: State, record: Moves): void {
-  for (const move of ordered(moves)) for (const [from, to] of movedBy(move, state)) record.move(state, from, to);
+  for (const move of ordered(moves)) record.moveAll(state, movedBy(move, state));
 }
 
 /** What the configuration declares that the move's `from` names, and where the move takes it. */
@@ -254,6 +276,11 @@ export function checkMovedAway(moves: Move[], desired: { address: Address }[], m
     const [declared, destination] = stillDeclared(move, desired, modules) ?? [];
     if (declared) throw refuse(move, `${declared} is moved to ${destination}, but it is still declared: declare it as ${move.block.to} instead`);
   }
+}
+
+/** Every move the plan made, from where the state held each entry before the run. */
+export function plannedMoves(actions: PlanAction[]): [Address, Address][] {
+  return actions.flatMap((action): [Address, Address][] => (action.movedFrom ? [[Address.parse(action.movedFrom), Address.of(action)]] : []));
 }
 
 /** A saved plan moves only what the configuration's moves would, or what a count that came or went would. */

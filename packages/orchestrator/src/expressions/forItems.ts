@@ -1,6 +1,7 @@
 import { AttributePath, EVERY_ITEM, EXACT, ExactNumber, holdsFirst, isMarker, isUnknown, SENSITIVE, sensitiveUnder, Type, typeAt, types, UNKNOWN } from '@clay/contracts';
 import { ConfigError, ForNode, Position } from '@clay/parser';
 
+import { append } from '../append';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 import { child, described, hasText, mayBeSensitive, nullSource, objectOf, tupleOf, Value, valueOf, withSensitive } from '../values/Value';
 import { everyItemMarks, fewest, isSensitive, marksOfWhole, maybeMarks, sharedMarks, wholeWhere, Whole } from '../values/sensitive';
@@ -136,8 +137,6 @@ export function refuseDuplicateKeys(keys: Value[], position: Position): void {
 
 export const under = (step: string | number, marks: readonly AttributePath[]) => marks.map((path) => [step, ...path]);
 
-const givesKey = ([key]: ForItem, text: string) => !isUnknown(key.data) && String(key.data) === text;
-
 /** How many items come first that the if keeps for certain. */
 function leadingKept(kept: boolean[]): number {
   let leading = 0;
@@ -177,28 +176,52 @@ export function pickedTupleMarks(bodies: Value[], kept: boolean[], inOrder = bod
   ]);
 }
 
+/** The indexes of the items that give each known key, and of those whose key is not known yet, each in order; found once for every key. */
+interface Keyed {
+  giving: Map<string, number[]>;
+  later: number[];
+}
+
+function keyedIndexes(entries: ForItem[]): Keyed {
+  const keyed: Keyed = { giving: new Map(), later: [] };
+  for (const [index, [key]] of entries.entries())
+    if (isUnknown(key.data)) keyed.later.push(index);
+    else append(keyed.giving, String(key.data), index);
+
+  return keyed;
+}
+
+/** Both lists of indexes, in order. */
+function merged(one: number[], other: number[]): number[] {
+  const both: number[] = [];
+  let at = 0;
+  for (const index of one) {
+    while (at < other.length && other[at] < index) both.push(other[at++]);
+    both.push(index);
+  }
+
+  return [...both, ...other.slice(at)];
+}
+
 /**
  * The one item kept for certain that gives the key, which no other may give; else any item that gives it, which may be dropped,
  * or one whose key is not known yet.
  */
-function forKeyMarks(entries: ForItem[], kept: boolean[], text: string): AttributePath[] {
-  const giving = entries.flatMap((entry, index) => (givesKey(entry, text) ? [{ value: entry[1], kept: kept[index] }] : []));
-  const sure = giving.filter((item) => item.kept).map((item) => item.value);
-  const later = entries.filter(([key]) => isUnknown(key.data)).map(([, value]) => value);
+function forKeyMarks(entries: ForItem[], kept: boolean[], giving: number[], later: Value[]): AttributePath[] {
+  const sure = giving.filter((index) => kept[index]).map((index) => entries[index][1]);
 
   return sure.length > 0
     ? sharedMarks(sure)
     : maybeMarks(
-        giving.map((item) => item.value),
+        giving.map((index) => entries[index][1]),
         later
       );
 }
 
 /** The marks of a group as of a tuple of the values that may join it, the first `inOrder` of `entries` in its order; with no item sure to join, it may not be there. */
-function groupMarks(entries: ForItem[], kept: boolean[], text: string, inOrder: number): AttributePath[] {
-  const joining = entries.flatMap((entry, index) =>
-    isUnknown(entry[0].data) || givesKey(entry, text) ? [{ value: entry[1], sure: kept[index] && givesKey(entry, text), ordered: index < inOrder }] : []
-  );
+function groupMarks(entries: ForItem[], kept: boolean[], giving: number[], later: number[], inOrder: number): AttributePath[] {
+  const gives = new Set(giving);
+  const joining = merged(giving, later).map((index) => ({ value: entries[index][1], sure: kept[index] && gives.has(index), ordered: index < inOrder }));
   const values = joining.map(({ value }) => value);
   if (!joining.some(({ sure }) => sure)) return under(EVERY_ITEM, maybeMarks(values));
 
@@ -221,10 +244,12 @@ export function laterObjectMarks(entries: ForItem[], kept: boolean[], grouped: b
     values,
     entries.filter(([key]) => isUnknown(key.data)).map(([, value]) => value)
   );
-  const texts = new Set(entries.flatMap(([key]) => (isUnknown(key.data) ? [] : [String(key.data)])));
+  const { giving, later } = keyedIndexes(entries);
+  const laterValues = later.map((index) => entries[index][1]);
   // With an item kept for certain that gives it, the key is there; an item with a key not known yet may only join its group, or fail as a duplicate.
-  const exact = (text: string) => (entries.some((entry, index) => kept[index] && givesKey(entry, text)) ? [[EXACT]] : []);
-  const marks = [...texts].flatMap((text) => under(text, [...(grouped ? groupMarks(entries, kept, text, inOrder) : forKeyMarks(entries, kept, text)), ...exact(text)]));
+  const exact = (indexes: number[]) => (indexes.some((index) => kept[index]) ? [[EXACT]] : []);
+  const marksOf = (indexes: number[]) => (grouped ? groupMarks(entries, kept, indexes, later, inOrder) : forKeyMarks(entries, kept, indexes, laterValues));
+  const marks = [...giving].flatMap(([text, indexes]) => under(text, [...marksOf(indexes), ...exact(indexes)]));
 
   return fewest([...(grouped ? under(EVERY_ITEM, every) : every), ...marks]);
 }
@@ -256,10 +281,7 @@ export function forObject(entries: ForItem[], grouped: boolean, whole: Whole, po
   }
 
   const keys = new Map<string, Value[]>();
-  for (const [key, value] of entries) {
-    const text = String(key.data);
-    keys.set(text, [...(keys.get(text) ?? []), value]);
-  }
+  for (const [key, value] of entries) append(keys, String(key.data), value);
 
   const made = objectOf([...keys].map(([key, values]) => [key, grouped ? tupleOf(values) : values[0]]));
   return wholeWhere(made, keyed.sensitive, keyed.maybe);

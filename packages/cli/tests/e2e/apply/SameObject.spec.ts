@@ -204,6 +204,19 @@ describe('two objects that are one file', () => {
       expect(await fs.readFile(file('f.txt'), 'utf8')).toBe('d');
     });
 
+    // x is checked first, while c still holds the file; c's destroy waits for u, which now reads x, and d waits for w, which reads u.
+    it('creates onto the file of an object destroyed earlier in the run, after others were checked', async () => {
+      await write(fileBlock('c', 'f.txt'), reader('c'));
+      await clayIn('apply', '--yes');
+      const w = 'resource "null_resource" "w" {\n  triggers = { u = null_resource.u.id }\n}\n';
+      await write(late, fileBlock('x', 'g.txt'), reader('x'), w, lateFile('d').replace('  content', '  depends_on = [null_resource.w]\n  content'));
+
+      await clayIn('apply', '--yes');
+
+      expect(await fs.readFile(file('f.txt'), 'utf8')).toBe('d');
+      expect(await addresses()).not.toContain('local_file.c');
+    });
+
     // c's object is left deposed, and u still reads it, so its destroy waits for u's update, which waits for d.
     it('refuses a create onto the file of a deposed object still to be destroyed', async () => {
       await write(fileBlock('c', 'f.txt'), reader('c'));

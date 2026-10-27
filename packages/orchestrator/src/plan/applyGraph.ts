@@ -5,6 +5,7 @@ import { PlanAction } from '@clay/planner';
 
 import { GraphNode, spellNode } from '../graph/DependencyGraphBuilder';
 import { ConfiguredResource } from './DesiredStateBuilder';
+import { append } from '../append';
 import { blockKey } from '../keys';
 import { withPlace } from '../place';
 
@@ -81,7 +82,7 @@ function goingByBlock(going: Map<string, Going>): Map<string, string[]> {
   const byBlock = new Map<string, string[]>();
   for (const [key, { action }] of going) {
     const block = blockKey(Address.of(action));
-    byBlock.set(block, [...(byBlock.get(block) ?? []), key]);
+    append(byBlock, block, key);
   }
 
   return byBlock;
@@ -100,7 +101,7 @@ function readsAmong(going: Map<string, Going>): Map<string, string[]> {
       for (const read of byBlock.get(blockKey(dependency)) ?? []) {
         if (!covers(dependency, Address.of(going.get(read)!.action)) || reaches((at) => next.get(at) ?? [], read, key)) continue;
 
-        next.set(key, [...(next.get(key) ?? []), read]);
+        append(next, key, read);
       }
 
   return next;
@@ -109,7 +110,7 @@ function readsAmong(going: Map<string, Going>): Map<string, string[]> {
 /** What reads a replace that destroys its object before making the new one, or reads what does. Each has to be destroyed before that replace. */
 function beforeReplaces(going: Map<string, Going>, next: Map<string, string[]>): Set<string> {
   const readBy = new Map<string, string[]>();
-  for (const [key, reads] of next) for (const read of reads) readBy.set(read, [...(readBy.get(read) ?? []), key]);
+  for (const [key, reads] of next) for (const read of reads) append(readBy, read, key);
 
   const found = new Set<string>();
   const queue = [...going].filter(([, { action }]) => isPlainReplace(action)).map(([key]) => key);

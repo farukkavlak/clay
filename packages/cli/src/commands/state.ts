@@ -159,7 +159,7 @@ export function createStateCommand(): Command {
             console.log(styleText('yellow', `Removing ${key}...`));
             delete state.resources[key];
             forgetDeposed(state, key);
-            forgetDependencies(state, Address.parse(key));
+            forgetDependencies(state, [Address.parse(key)]);
 
             await manager.write(state);
             console.log(styleText('green', 'Successfully removed resource.'));

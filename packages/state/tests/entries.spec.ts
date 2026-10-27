@@ -1,9 +1,13 @@
 import { Address, emptyState, State } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { forgetDependencies, moveResource } from '../src/entries';
+import { forgetDependencies, moveResource, moveResources } from '../src/entries';
 
 const inM = (key: number) => ({ modulePath: [{ name: 'm', key }], resourceType: 'local_file', name: 'x', attributes: {} });
+
+const file = (name: string) => ({ resourceType: 'local_file', name, attributes: {} });
+
+const x = (modulePath: { name: string; key?: number }[]) => ({ modulePath, resourceType: 'null_resource', name: 'x', attributes: {} });
 
 describe('moving a resource in state', () => {
   it('files it under its new address, where what reads its block still reads it', () => {
@@ -51,6 +55,35 @@ describe('moving a resource in state', () => {
     moveResource(state, Address.parse('module.m[1].local_file.x'), Address.parse('module.n[1].local_file.x'));
 
     expect(state.resources['local_file.b'].dependencies).toEqual(['module.n.local_file.x']);
+  });
+
+  // A dependency keyed below a step it names no key at, as one becomes once that step gains a key.
+  it('keeps a dependency that still covers the object, whatever steps it keys', () => {
+    const state: State = {
+      ...emptyState(),
+      resources: {
+        'module.m.module.k[2].null_resource.x': x([{ name: 'm' }, { name: 'k', key: 2 }]),
+        'module.m.module.k[2].null_resource.z': { ...x([{ name: 'm' }, { name: 'k', key: 2 }]), name: 'z', dependencies: ['module.m.module.k[2].null_resource.x'] },
+      },
+    };
+
+    moveResource(state, Address.parse('module.m.module.k[2].null_resource.x'), Address.parse('module.m[0].module.k[2].null_resource.x'));
+
+    expect(state.resources['module.m.module.k[2].null_resource.z'].dependencies).toEqual(['module.m.module.k[2].null_resource.x']);
+  });
+
+  it('moves all at once, so what read an address another moves into reads only where its own object went', () => {
+    const state: State = {
+      ...emptyState(),
+      resources: { 'local_file.a': file('a'), 'local_file.b': file('b'), 'local_file.r': { ...file('r'), dependencies: ['local_file.b'] } },
+    };
+
+    moveResources(state, [
+      [Address.parse('local_file.b'), Address.parse('local_file.c')],
+      [Address.parse('local_file.a'), Address.parse('local_file.b')],
+    ]);
+
+    expect(state.resources['local_file.r'].dependencies).toEqual(['local_file.c']);
   });
 
   it('renames the block what read it reads, once the old one holds nothing', () => {
@@ -152,7 +185,7 @@ describe('forgetting what a removed object was read through', () => {
       deposed: { 'local_file.c': [{ attributes: {}, dependencies: ['local_file.a'] }] },
     };
 
-    forgetDependencies(state, Address.parse('local_file.a[0]'));
+    forgetDependencies(state, [Address.parse('local_file.a[0]')]);
 
     expect(state.resources['local_file.b'].dependencies).toEqual(['local_file.a']);
     expect(state.deposed?.['local_file.c'][0].dependencies).toEqual(['local_file.a']);
@@ -165,7 +198,7 @@ describe('forgetting what a removed object was read through', () => {
       deposed: { 'local_file.a': [{ attributes: {} }] },
     };
 
-    forgetDependencies(state, Address.parse('local_file.a'));
+    forgetDependencies(state, [Address.parse('local_file.a')]);
 
     expect(state.resources['local_file.b'].dependencies).toEqual(['local_file.a']);
   });

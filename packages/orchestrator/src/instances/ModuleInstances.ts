@@ -21,6 +21,8 @@ export class ModuleInstances {
   private repetitions = new Map<string, Repetition>();
   private instances = new Map<string, ModuleAddress[]>();
   private keys = new Map<string, InstanceKey[]>();
+  /** The keys again, so a key is looked up without walking every instance. */
+  private keySets = new Map<string, Set<InstanceKey>>();
   private values = new Map<string, Map<string, Value>>();
 
   declare(module: ModuleAddress, repetition: Repetition): void {
@@ -38,7 +40,7 @@ export class ModuleInstances {
       if (keys === undefined) return [instance.child(name)];
       if (keys === LATER) return [];
 
-      this.keys.set(instance.child(name).toString(), keys);
+      this.setKeys(instance.child(name), keys);
       return keys.map((key) => instance.child(name, key));
     });
 
@@ -70,8 +72,18 @@ export class ModuleInstances {
   }
 
   /** `call` is the call in one caller instance, as `module.a[1].module.b`. */
+  private setKeys(call: ModuleAddress, keys: InstanceKey[]): void {
+    this.keys.set(call.toString(), keys);
+    this.keySets.set(call.toString(), new Set(keys));
+  }
+
   keysOf(call: ModuleAddress): InstanceKey[] | undefined {
     return this.keys.get(call.toString());
+  }
+
+  /** False until count or for_each is read. */
+  hasKey(call: ModuleAddress, key: InstanceKey): boolean {
+    return this.keySets.get(call.toString())?.has(key) === true;
   }
 
   eachValue(call: ModuleAddress, key: string): Value | undefined {

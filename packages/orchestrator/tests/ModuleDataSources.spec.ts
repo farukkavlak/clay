@@ -12,7 +12,8 @@ import { engineOn, TestEngine } from './engine';
 const readMock = vi.fn().mockResolvedValue(emptyState());
 const writeMock = vi.fn().mockResolvedValue(undefined);
 
-vi.mock('@clay/state', () => ({
+vi.mock('@clay/state', async () => ({
+  ...(await vi.importActual<object>('@clay/state')),
   StateManager: vi.fn(function (backend) {
     return {
       read: readMock,
