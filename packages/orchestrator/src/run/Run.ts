@@ -48,7 +48,7 @@ export function newRun(stateManager: StateManager, providers: ProviderRegistry, 
   const scanner = new ReferenceScanner(modules);
   const graphBuilder = new DependencyGraphBuilder(scanner, instances, modules);
   const resourcePlanner = new ResourcePlanner(providers);
-  const reader = new DataSourceReader(providers, dataSchemas, dataSources);
+  const reader = new DataSourceReader(providers, dataSchemas, dataSources, versions);
 
   return {
     loader: new ConfigLoader(new ModuleLoader(files, scopes), scopes, dataSources, schemas, dataSchemas, resolver, providers, instances, modules, planned),

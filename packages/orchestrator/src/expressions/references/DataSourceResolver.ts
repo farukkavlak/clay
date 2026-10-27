@@ -1,18 +1,30 @@
-import { InstanceKey, Schema } from '@clay/contracts';
+import { InstanceKey, Schema, Type } from '@clay/contracts';
 import { DataReference, Position, Step } from '@clay/parser';
 
 import { Instances, Repetition } from '../../instances/Instances';
 import { Context, dataSourceAddress, dataSourceKey, moduleOf, scopeOf } from '../../keys';
 import { objectOf, sensitiveOf, Value, valueOf, withSensitive } from '../../values/Value';
+import { Versions } from '../../values/Versions';
 import { everyType, readInstance } from './instance';
 import { UnresolvedReferenceError } from '../UnresolvedReferenceError';
 
+/** Every instance of a block, as built from its keys, until one of its instances is read again. */
+interface EveryRead {
+  keys: readonly InstanceKey[];
+  version: number;
+  value: Value;
+}
+
 export class DataSourceResolver {
+  /** Built from every instance, so a value built for each reader would make n readers of n instances take n². */
+  private everyReads = new Map<string, EveryRead>();
+
   constructor(
     private dataSources: Map<string, Record<string, Value>>,
     // Loaded with the configuration, before any data source is read.
     private dataSchemas: Map<string, Schema>,
-    private instances: Instances
+    private instances: Instances,
+    private versions: Versions
   ) {}
 
   /** Returns the attribute and the steps still to take into it, the whole instance where the reference names no attribute, or every instance where it names no instance. */
@@ -40,9 +52,20 @@ export class DataSourceResolver {
   private every(reference: DataReference, scope: string, repetition: Repetition, spelled: string): Value {
     // The graph has already refused undeclared data sources, and every one has its schema.
     const type = everyType(repetition, this.dataSchemas.get(reference.type)!);
-    const keys = this.keysOf(reference, scope);
+    const at = dataSourceKey(scope, reference.type, reference.name);
+    const keys = this.instances.keysOf(at);
     if (keys === undefined) throw new UnresolvedReferenceError(`${spelled} is known only once its ${repetition} is read`, type);
 
+    const version = this.versions.of(at);
+    const read = this.everyReads.get(at);
+    if (read && read.keys === keys && read.version === version) return read.value;
+
+    const value = this.built(reference, scope, repetition, keys, type, spelled);
+    this.everyReads.set(at, { keys, version, value });
+    return value;
+  }
+
+  private built(reference: DataReference, scope: string, repetition: Repetition, keys: InstanceKey[], type: Type, spelled: string): Value {
     const instances = keys.map((key) => objectOf(Object.entries(this.read(reference, scope, key, spelled))));
     const data = instances.map((instance) => instance.data);
     const sensitive = instances.flatMap((instance, index) => sensitiveOf(instance).map((path) => [keys[index], ...path]));

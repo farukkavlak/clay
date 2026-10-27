@@ -9,6 +9,7 @@ import { withPlace } from '../place';
 import { marksOf, schemaRemarked } from '../values/schemaMarks';
 import { typedValues } from '../values/typed';
 import { plainOf, sensitiveOf, Value, valueOf, withSensitive } from '../values/Value';
+import { Versions } from '../values/Versions';
 
 /** A data source gives back, at an attribute it was given, the marks it was given with. */
 function remarked(values: Record<string, Value>, given: Record<string, Value>): Record<string, Value> {
@@ -21,7 +22,8 @@ export class DataSourceReader {
     private providers: ProviderRegistry,
     // Loaded with the configuration, before any data source is read.
     private dataSchemas: Map<string, Schema>,
-    private dataSources: Map<string, Record<string, Value>>
+    private dataSources: Map<string, Record<string, Value>>,
+    private versions: Versions
   ) {}
 
   async read(stmt: DataBlock, inputs: Record<string, Value>, at: DataInstance): Promise<Record<string, Value>> {
@@ -72,6 +74,7 @@ export class DataSourceReader {
   /** By the instance's address, as a plan names it. */
   private keep(at: DataInstance, values: Record<string, Value>): Record<string, Value> {
     this.dataSources.set(at.toString(), values);
+    this.versions.changed(at.block);
     return values;
   }
 }

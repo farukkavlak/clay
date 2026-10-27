@@ -171,7 +171,7 @@ export class ReferenceResolver {
     this.planned = planned;
     this.modules = modules;
     this.variables = new VariableResolver(scopeManager, this);
-    this.dataSources = new DataSourceResolver(dataSources, dataSchemas, instances);
+    this.dataSources = new DataSourceResolver(dataSources, dataSchemas, instances, versions);
     this.moduleOutputs = new ModuleOutputResolver(scopeManager, modules);
     this.resources = new ResourceResolver(instances, planned, schemas, versions);
     this.written = new WrittenTypes(scopeManager, schemas, dataSchemas, instances, modules);
