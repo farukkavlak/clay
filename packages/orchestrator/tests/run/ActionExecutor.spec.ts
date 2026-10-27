@@ -6,6 +6,7 @@ import { ActionExecutor, Written } from '../../src/run/ActionExecutor';
 import { ResourcePlanner } from '../../src/plan/ResourcePlanner';
 import { ModuleInstances } from '../../src/instances/ModuleInstances';
 import { Planned } from '../../src/values/Planned';
+import { Versions } from '../../src/values/Versions';
 import { ProviderRegistry } from '../../src/providers/ProviderRegistry';
 import { Instances } from '../../src/instances/Instances';
 import { InstanceKeys } from '../../src/expressions/references/InstanceKeys';
@@ -59,6 +60,9 @@ const create = (after: Record<string, unknown>): Step => ({
   after,
 });
 
+/** An action on `test.main[1]` whose block sets `path`. */
+const at = (type: Step['type']): Step => ({ type, resourceType: 'test', name: 'main', key: 1, attributes: { path: str('p') }, planned: { path: 'p' }, after: { path: 'p' } });
+
 const bug = 'test returned what the plan did not show, which is a bug in the provider:';
 
 describe('ActionExecutor', () => {
@@ -66,6 +70,7 @@ describe('ActionExecutor', () => {
   let executor: ActionExecutor;
   let mockProvider: Provider;
   let mockState: State;
+  let versions: Versions;
 
   beforeEach(() => {
     mockState = emptyState();
@@ -89,8 +94,19 @@ describe('ActionExecutor', () => {
     providers.register(mockProvider);
     const instances = new Instances();
     const modules = new ModuleInstances();
-    const resolver = new ReferenceResolver(new ScopeManager(), new Map(), new Map(), new Map(), instances, modules, new Planned(), new InstanceKeys(instances, modules));
-    executor = new ActionExecutor(providers, resolver, new ResourcePlanner(providers), new SameObjects(providers));
+    versions = new Versions();
+    const resolver = new ReferenceResolver(
+      new ScopeManager(),
+      new Map(),
+      new Map(),
+      new Map(),
+      instances,
+      modules,
+      new Planned(versions),
+      new InstanceKeys(instances, modules),
+      versions
+    );
+    executor = new ActionExecutor(providers, resolver, new ResourcePlanner(providers), new SameObjects(providers), versions);
   });
 
   afterEach(() => {
@@ -101,6 +117,10 @@ describe('ActionExecutor', () => {
 
   function plansAtApply(after: Record<string, unknown>, replace: (string | number)[][] = []): void {
     vi.mocked(mockProvider.plan).mockImplementationOnce(async (_type, request) => ({ after: { ...after, ...request.config }, replace }));
+  }
+
+  function hold(): void {
+    mockState.resources['test.main[1]'] = { resourceType: 'test', name: 'main', key: 1, attributes: { path: 'old' } };
   }
 
   function created(attributes: Record<string, unknown>): void {
@@ -157,6 +177,32 @@ describe('ActionExecutor', () => {
 
       expect(mockProvider.delete).toHaveBeenCalledWith('test', { id: 'existing-id' });
       expect(mockState.resources[key]).toBeUndefined();
+    });
+  });
+
+  describe('counting each write to state', () => {
+    // What reads every instance of the block reads them again after it.
+    it.each(['CREATE', 'UPDATE', 'NO_OP', 'DELETE'] as const)('counts a %s as a write to its block', async (type) => {
+      if (type !== 'CREATE') hold();
+
+      await run(executor, at(type), mockState);
+
+      expect(versions.of('test.main')).toBe(1);
+    });
+
+    it('counts a create whose result is off the plan, since state holds what it made', async () => {
+      created({ path: 'other' });
+
+      await expect(run(executor, at('CREATE'), mockState)).rejects.toThrow(bug);
+      expect(versions.of('test.main')).toBe(1);
+    });
+
+    it('counts an update whose result is off the plan, since state holds what it returned', async () => {
+      hold();
+      vi.mocked(mockProvider.update).mockResolvedValueOnce({ path: 'other' });
+
+      await expect(run(executor, at('UPDATE'), mockState)).rejects.toThrow(bug);
+      expect(versions.of('test.main')).toBe(1);
     });
   });
 

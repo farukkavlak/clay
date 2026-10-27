@@ -1,4 +1,6 @@
-import { AttributePath, isUnknown } from '@clay/contracts';
+import { Address, AttributePath, isUnknown } from '@clay/contracts';
+
+import { Versions } from './Versions';
 
 export interface PlannedInstance {
   known: Record<string, unknown>;
@@ -13,6 +15,8 @@ export class Planned {
   private instances = new Map<string, PlannedInstance>();
   private planning = false;
 
+  constructor(private versions: Versions) {}
+
   /** While planning, an item only the apply knows is UNKNOWN and the rest of the value stays known. */
   begin(): void {
     this.planning = true;
@@ -23,12 +27,13 @@ export class Planned {
     return this.planning;
   }
 
-  set(address: string, after: Record<string, unknown>, sensitive: readonly AttributePath[], changes: boolean): void {
+  set(address: Address, after: Record<string, unknown>, sensitive: readonly AttributePath[], changes: boolean): void {
     const entries = Object.entries(after);
     const known = Object.fromEntries(entries.filter(([, value]) => !isUnknown(value)));
     const later = new Set(entries.filter(([, value]) => isUnknown(value)).map(([name]) => name));
 
-    this.instances.set(address, { known, later, sensitive, changes });
+    this.instances.set(address.toString(), { known, later, sensitive, changes });
+    this.versions.changed(address.withoutKey().toString());
   }
 
   get(address: string): PlannedInstance | undefined {

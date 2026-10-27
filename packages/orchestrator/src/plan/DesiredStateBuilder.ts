@@ -23,6 +23,7 @@ import { DataSourceReader } from './DataSourceReader';
 import { DependencyGraphBuilder, GraphNode, LocalNode, OutputNode, ValueNode } from '../graph/DependencyGraphBuilder';
 import { LoadedResource } from '../config/ModuleLoader';
 import { Moves } from './moves';
+import { Versions } from '../values/Versions';
 import { Ignoring, ResourcePlan, ResourcePlanner } from './ResourcePlanner';
 
 /** With the block it was planned from, so a refusal can point at it. */
@@ -99,7 +100,8 @@ export class DesiredStateBuilder {
     private modules: ModuleInstances,
     private planned: Planned,
     private resourcePlanner: ResourcePlanner,
-    private reader: DataSourceReader
+    private reader: DataSourceReader,
+    private versions: Versions
   ) {}
 
   /** The blocks that say it, and every block they read, through any others. A module's block is one for all its instances. */
@@ -263,7 +265,7 @@ export class DesiredStateBuilder {
     const change = await this.askProvider(address, block, current, this.resolveForPlan(block, state, address), ignoring);
     const values = changes(current, change);
     // A change of values or of marks goes in, so a reader takes the marks from the plan too.
-    if (values || !samePaths(current?.sensitive ?? [], change.sensitive)) this.planned.set(address.toString(), change.after, change.sensitive, values);
+    if (values || !samePaths(current?.sensitive ?? [], change.sensitive)) this.planned.set(address, change.after, change.sensitive, values);
 
     return {
       address,
@@ -306,7 +308,11 @@ export class DesiredStateBuilder {
       throw new Error(`"${address}" may be ${found.map((kept) => `"${kept}"`).join(' or ')} in state, from before count came or went; say which with a moved block`);
 
     const [source] = found;
-    if (source) this.moves.move(state, source, address);
+    if (!source) return;
+
+    this.moves.move(state, source, address);
+    this.versions.changed(source.withoutKey().toString());
+    this.versions.changed(address.withoutKey().toString());
   }
 
   /** Only instances in the reader's own module instance: `module.a[0]` reads from `module.a[0]`, never `module.a[1]`. */

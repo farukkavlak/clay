@@ -11,6 +11,7 @@ import { ReferenceResolver } from '../expressions/ReferenceResolver';
 import { shown } from '../shown';
 import { TypeMismatch, typedValues } from '../values/typed';
 import { plainOf, sensitiveAmong, Value } from '../values/Value';
+import { Versions } from '../values/Versions';
 import { Ignoring, ResourcePlan, ResourcePlanner } from '../plan/ResourcePlanner';
 
 /** As state holds it, which is how the provider finds it. */
@@ -71,7 +72,8 @@ export class ActionExecutor {
     private providers: ProviderRegistry,
     private resolver: ReferenceResolver,
     private planner: ResourcePlanner,
-    private sameObjects: SameObjects
+    private sameObjects: SameObjects,
+    private versions: Versions
   ) {}
 
   /** Before the run, so a create onto an object the run will destroy is refused. */
@@ -227,6 +229,7 @@ export class ActionExecutor {
     if (replacing) depose(currentState, key, replacing);
     mark(currentState.resources[key], sending.sensitive);
     protect(currentState.resources[key], action);
+    this.wrote(action);
     this.holdToPlan(action.resourceType, sending, created, attributes);
   }
 
@@ -242,6 +245,7 @@ export class ActionExecutor {
     currentResource.dependencies = action.dependencies ?? [];
     mark(currentResource, sending.sensitive);
     protect(currentResource, action);
+    this.wrote(action);
     this.holdToPlan(action.resourceType, sending, updated, currentResource.attributes);
   }
 
@@ -252,6 +256,7 @@ export class ActionExecutor {
     resource.dependencies = action.dependencies ?? [];
     mark(resource, action.sensitive ?? []);
     protect(resource, action);
+    this.wrote(action);
   }
 
   /** One at a time, oldest first, each gone from state once destroyed, so a failure leaves the rest to the next run. */
@@ -280,5 +285,11 @@ export class ActionExecutor {
     const { attributes, sensitive = [] } = held(action, currentState);
     await hidingReason(action.resourceType, sensitive, () => provider.delete(action.resourceType, attributes), 'to destroy');
     delete currentState.resources[Address.of(action).toString()];
+    this.wrote(action);
+  }
+
+  /** Before any check that may throw: state already holds the write. */
+  private wrote(action: PlanAction): void {
+    this.versions.changed(Address.of(action).withoutKey().toString());
   }
 }

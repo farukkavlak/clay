@@ -4,17 +4,20 @@ import { describe, expect, it } from 'vitest';
 
 import { Instances } from '../../../src/instances/Instances';
 import { Planned } from '../../../src/values/Planned';
+import { Versions } from '../../../src/values/Versions';
 import { ResourceResolver } from '../../../src/expressions/references/ResourceResolver';
 import { UnresolvedReferenceError } from '../../../src/expressions/UnresolvedReferenceError';
 import { valueOf } from '../../../src/values/Value';
 import { steps } from '../../ast';
+
+const versions = new Versions();
 
 const ref = (spelled: string) => parseReference(steps(...spelled.split('.'))) as ResourceReference;
 
 const held = (id: string, tags: Record<string, unknown>) => ({ resourceType: 'item', name: 'a', attributes: { id, tags } });
 
 describe('ResourceResolver', () => {
-  const resolver = new ResourceResolver(new Instances(), new Planned(), new Map());
+  const resolver = new ResourceResolver(new Instances(), new Planned(versions), new Map(), versions);
   const context = Address.root('resource', 'main');
 
   const mockState: State = {
@@ -46,7 +49,7 @@ describe('ResourceResolver', () => {
 
   it('reads a value as the type its schema names', () => {
     const schemas = new Map<string, Schema>([['resource', { settings: { type: types.map(types.string) } }]]);
-    const { value: result } = new ResourceResolver(new Instances(), new Planned(), schemas).resolve(ref('resource.test.settings'), context, mockState);
+    const { value: result } = new ResourceResolver(new Instances(), new Planned(versions), schemas, versions).resolve(ref('resource.test.settings'), context, mockState);
 
     expect(result).toEqual(valueOf(types.map(types.string), { type: 'a', value: 'b' }));
   });
@@ -71,7 +74,7 @@ describe('ResourceResolver', () => {
 
   // A schema attribute missing from state was left out.
   it('reads a name its schema has and state does not hold as null, of the type the schema names', () => {
-    const named = new ResourceResolver(new Instances(), new Planned(), new Map([['resource', { note: { type: types.string } }]]));
+    const named = new ResourceResolver(new Instances(), new Planned(versions), new Map([['resource', { note: { type: types.string } }]]), versions);
 
     expect(named.resolve(ref('resource.test.note'), context, mockState).value).toEqual(valueOf(types.string, null));
   });
@@ -89,7 +92,7 @@ describe('ResourceResolver', () => {
   it('reads what an update leaves in state, not what it read before', () => {
     const resource = { ...mockState.resources['resource.test'] };
     const state = { ...mockState, resources: { 'resource.test': resource } };
-    const reading = new ResourceResolver(new Instances(), new Planned(), new Map());
+    const reading = new ResourceResolver(new Instances(), new Planned(versions), new Map(), versions);
     reading.resolve(ref('resource.test.simple'), context, state);
 
     resource.attributes = { ...resource.attributes, simple: 'updated' };
@@ -99,19 +102,20 @@ describe('ResourceResolver', () => {
 
   // A resource the plan creates or changes is read from the plan, not state.
   describe('an instance the plan will create or change', () => {
-    const planned = new Planned();
-    planned.set('resource.test', { simple: 'new', later: UNKNOWN, made: UNKNOWN }, [], true);
-    const planning = new ResourceResolver(new Instances(), planned, new Map([['resource', { made: { type: types.list(types.string), computed: true } }]]));
+    const planned = new Planned(versions);
+    planned.set(Address.parse('resource.test'), { simple: 'new', later: UNKNOWN, made: UNKNOWN }, [], true);
+    const planning = new ResourceResolver(new Instances(), planned, new Map([['resource', { made: { type: types.list(types.string), computed: true } }]]), versions);
 
     it('reads what its configuration sets, not what state holds', () => {
       expect(planning.resolve(ref('resource.test.simple'), context, mockState).value.data).toBe('new');
     });
 
     it('reads each attribute with the parts of it the plan says are sensitive, whatever the state says', () => {
-      const marked = new Planned();
-      marked.set('resource.test', { simple: 'new', settings: { type: 'a', value: UNKNOWN } }, [['simple'], ['settings', 'value']], true);
+      const marked = new Planned(versions);
+      marked.set(Address.parse('resource.test'), { simple: 'new', settings: { type: 'a', value: UNKNOWN } }, [['simple'], ['settings', 'value']], true);
       const state = { ...mockState, resources: { 'resource.test': { ...mockState.resources['resource.test'], sensitive: [['id']] } } };
-      const read = (spelled: string) => new ResourceResolver(new Instances(), marked, new Map([['resource', {}]])).resolve(ref(spelled), context, state).value.marks?.paths();
+      const read = (spelled: string) =>
+        new ResourceResolver(new Instances(), marked, new Map([['resource', {}]]), versions).resolve(ref(spelled), context, state).value.marks?.paths();
 
       expect(read('resource.test.simple')).toEqual([[]]);
       expect(read('resource.test.settings')).toEqual([['value']]);
@@ -119,13 +123,13 @@ describe('ResourceResolver', () => {
     });
 
     it('reads what the plan holds once it plans the instance again', () => {
-      const again = new Planned();
+      const again = new Planned(versions);
       const sensitive = [['settings']];
-      again.set('resource.test', { simple: 'first' }, sensitive, true);
-      const reading = new ResourceResolver(new Instances(), again, new Map());
+      again.set(Address.parse('resource.test'), { simple: 'first' }, sensitive, true);
+      const reading = new ResourceResolver(new Instances(), again, new Map(), versions);
       reading.resolve(ref('resource.test.simple'), context, mockState);
 
-      again.set('resource.test', { simple: 'second' }, sensitive, true);
+      again.set(Address.parse('resource.test'), { simple: 'second' }, sensitive, true);
 
       expect(reading.resolve(ref('resource.test.simple'), context, mockState).value.data).toBe('second');
     });
@@ -140,7 +144,7 @@ describe('ResourceResolver', () => {
 
     // Nothing sets it, so it reads as null.
     it('reads a name its schema has and nothing sets as null, of the type the schema names', () => {
-      const named = new ResourceResolver(new Instances(), planned, new Map([['resource', { note: { type: types.string } }]]));
+      const named = new ResourceResolver(new Instances(), planned, new Map([['resource', { note: { type: types.string } }]]), versions);
 
       expect(named.resolve(ref('resource.test.note'), context, mockState).value).toEqual(valueOf(types.string, null));
     });
@@ -159,7 +163,8 @@ describe('ResourceResolver', () => {
       },
     };
 
-    const read = (instances: Instances, planned = new Planned()) => new ResourceResolver(instances, planned, schemas).resolve(ref('item.a'), context, state);
+    const reading = (instances: Instances, planned = new Planned(versions)) => new ResourceResolver(instances, planned, schemas, versions);
+    const read = (instances: Instances, planned = new Planned(versions)) => reading(instances, planned).resolve(ref('item.a'), context, state);
 
     const counted = (count: number) => {
       const instances = new Instances();
@@ -195,11 +200,57 @@ describe('ResourceResolver', () => {
       const each = new Instances();
       each.declare('item.a', 'for_each');
       each.setEach('item.a', new Map([['x', valueOf(types.string, 'x')]]));
-      const all = (instances: Instances) => new ResourceResolver(instances, new Planned(), schemas).resolve(ref('item.a'), context, marked).value.marks?.paths();
+      const all = (instances: Instances) => new ResourceResolver(instances, new Planned(versions), schemas, versions).resolve(ref('item.a'), context, marked).value.marks?.paths();
 
       expect(all(counted(2))).toEqual([[1, 'tags', 'n']]);
       expect(all(each)).toEqual([['x', 'id']]);
       expect(read(counted(2)).value.marks).toBeUndefined();
+    });
+
+    describe('read again', () => {
+      it('reads every instance again once the plan plans one of them', () => {
+        const planned = new Planned(versions);
+        const resolver = reading(counted(2), planned);
+        resolver.resolve(ref('item.a'), context, state);
+
+        planned.set(Address.parse('item.a[1]'), { id: 'new', tags: {} }, [], true);
+
+        expect(resolver.resolve(ref('item.a'), context, state).value.data).toEqual([
+          { id: 'zero', tags: { n: 'text' } },
+          { id: 'new', tags: {} },
+        ]);
+      });
+
+      it('reads every instance again once its count is read again', () => {
+        const instances = counted(2);
+        const resolver = reading(instances);
+        resolver.resolve(ref('item.a'), context, state);
+
+        instances.setCount('item.a', 1);
+
+        expect(resolver.resolve(ref('item.a'), context, state).value.data).toEqual([{ id: 'zero', tags: { n: 'text' } }]);
+      });
+
+      it('reads every instance again from another state', () => {
+        const resolver = reading(counted(1));
+        resolver.resolve(ref('item.a'), context, state);
+
+        const other = { ...state, resources: { 'item.a[0]': held('other', {}) } };
+
+        expect(resolver.resolve(ref('item.a'), context, other).value.data).toEqual([{ id: 'other', tags: {} }]);
+      });
+
+      it('reads every instance again once state is written where it was read', () => {
+        const changing = { ...state, resources: { 'item.a[0]': held('zero', {}) } };
+        const writes = new Versions();
+        const resolver = new ResourceResolver(counted(1), new Planned(writes), schemas, writes);
+        resolver.resolve(ref('item.a'), context, changing);
+
+        changing.resources['item.a[0]'] = held('applied', {});
+        writes.changed('item.a');
+
+        expect(resolver.resolve(ref('item.a'), context, changing).value.data).toEqual([{ id: 'applied', tags: {} }]);
+      });
     });
 
     it('reads an empty list where count is 0', () => {
@@ -207,8 +258,8 @@ describe('ResourceResolver', () => {
     });
 
     it('reads an instance the plan creates from the plan, with what only the apply makes as unknown', () => {
-      const planned = new Planned();
-      planned.set('item.a[1]', { id: UNKNOWN, tags: { n: 'new' } }, [], true);
+      const planned = new Planned(versions);
+      planned.set(Address.parse('item.a[1]'), { id: UNKNOWN, tags: { n: 'new' } }, [], true);
 
       expect(read(counted(2), planned).value.data).toEqual([
         { id: 'zero', tags: { n: 'text' } },

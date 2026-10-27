@@ -5,6 +5,7 @@ import { Instances, Repetition } from '../../instances/Instances';
 import { blockKey, Context, moduleOf } from '../../keys';
 import { placed } from '../../place';
 import { Planned, PlannedInstance } from '../../values/Planned';
+import { Versions } from '../../values/Versions';
 import { TypeMismatch, typedValues } from '../../values/typed';
 import { objectOf, sensitiveOf, Value, valueOf, withSensitive } from '../../values/Value';
 import { everyType, noAttribute, readInstance } from './instance';
@@ -25,10 +26,22 @@ interface Held {
   values: object;
 }
 
+/** Every instance of a block, as built from its keys and the state it was read in, until one of its instances is written. */
+interface EveryRead {
+  keys: readonly InstanceKey[];
+  state: State;
+  version: number;
+  value: Value;
+}
+
 /** Attributes read from one instance's values while it has the same sensitive parts. */
 interface InstanceRead {
   sensitive: readonly AttributePath[] | undefined;
   attributes: Map<string, Value>;
+}
+
+function spelledBlock(reference: ResourceReference): string {
+  return spellReference([{ name: reference.type }, { name: reference.name }]);
 }
 
 function notFound(spelled: string, address: Address): string {
@@ -38,11 +51,14 @@ function notFound(spelled: string, address: Address): string {
 export class ResourceResolver {
   /** A read types the whole attribute, so a value read for each of its keys would be typed again for each. */
   private reads = new WeakMap<object, InstanceRead>();
+  /** Built from every instance, so a value built for each reader would make n readers of n instances take n². */
+  private everyReads = new Map<string, EveryRead>();
 
   constructor(
     private instances: Instances,
     private planned: Planned,
-    private schemas: Map<string, Schema>
+    private schemas: Map<string, Schema>,
+    private versions: Versions
   ) {}
 
   /** Returns the attribute and the steps still to take into it, the whole instance where the reference names no attribute, or every instance where it names no instance. */
@@ -63,11 +79,22 @@ export class ResourceResolver {
 
   /** Not known until its count or for_each is read and each instance is planned or in state; its type is known before then. */
   private every(reference: ResourceReference, block: Address, repetition: Repetition, schema: Schema, state: State, position?: Position): Value {
-    const type = everyType(repetition, schema);
-    const keys = this.instances.keysOf(block.toString());
-    const spelled = spellReference([{ name: reference.type }, { name: reference.name }]);
-    if (keys === undefined) throw new UnresolvedReferenceError(`${spelled} is known only once its ${repetition} is read`, type);
+    const at = block.toString();
+    const keys = this.instances.keysOf(at);
+    if (keys === undefined) throw new UnresolvedReferenceError(`${spelledBlock(reference)} is known only once its ${repetition} is read`, everyType(repetition, schema));
 
+    const version = this.versions.of(at);
+    const read = this.everyReads.get(at);
+    if (read && read.keys === keys && read.state === state && read.version === version) return read.value;
+
+    const value = this.built(reference, block, repetition, keys, schema, state, position);
+    this.everyReads.set(at, { keys, state, version, value });
+    return value;
+  }
+
+  private built(reference: ResourceReference, block: Address, repetition: Repetition, keys: InstanceKey[], schema: Schema, state: State, position?: Position): Value {
+    const type = everyType(repetition, schema);
+    const spelled = spelledBlock(reference);
     const instances = keys.map((key): [InstanceKey, Value] => {
       const address = new Address(block.module, reference.type, reference.name, key);
       const held = this.heldAt(address, reference.type, schema, state, position);

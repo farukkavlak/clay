@@ -143,6 +143,10 @@ const lookedUp = (size: number) => `${keyed(size, 'lookup(local.m, k, "")')}loca
 const readEach = (size: number, value: string) =>
   `${keyed(size, 'null_resource.s.triggers[k]')}resource "null_resource" "s" {\n  triggers = { for k in var.ks : k => ${value} }\n}\n`;
 
+/** A resource `s` with `size` instances, and `size` instances of a resource whose `triggers` read how many `s` has. */
+const readAll = (size: number) =>
+  `resource "null_resource" "s" {\n  count = ${size}\n}\nresource "null_resource" "r" {\n  count    = ${size}\n  triggers = { n = length(null_resource.s) }\n}\n`;
+
 /** Plans, shows and applies through a plan file a pool of `size` members changed to `size` others, and returns how long that took. */
 const changeEveryMember = async (at: string, size: number) => {
   await apply(at, pool(size, 'a'), new Pool());
@@ -349,5 +353,17 @@ describe('a run over many instances', () => {
 
     expect(await growth(1000, run)).toBeLessThan(LINEAR);
     expect(types).toEqual(['NO_OP', 'NO_OP']);
+  });
+
+  it('plans instances that each read every instance of a resource in time that grows with them', GENEROUS, async () => {
+    let triggers: unknown;
+    const run = (at: string, size: number) =>
+      timed(async () => {
+        const { actions } = await orchestratorIn(at).plan(readAll(size));
+        ({ triggers } = actions.find(({ name, key }) => name === 'r' && key === size - 1)?.after ?? {});
+      });
+
+    expect(await growth(1000, run)).toBeLessThan(LINEAR);
+    expect(JSON.stringify(triggers)).toBe('{"n":4000}');
   });
 });

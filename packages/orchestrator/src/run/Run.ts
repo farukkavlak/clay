@@ -21,6 +21,7 @@ import { ReferenceScanner } from '../expressions/references/ReferenceScanner';
 import { SameObjects } from '../checks/sameObject';
 import { ScopeManager } from '../config/ScopeManager';
 import { Value } from '../values/Value';
+import { Versions } from '../values/Versions';
 
 /** What one plan, validate or apply works with. */
 export interface Run {
@@ -40,9 +41,10 @@ export function newRun(stateManager: StateManager, providers: ProviderRegistry, 
   const dataSchemas = new Map<string, Schema>();
   const instances = new Instances();
   const modules = new ModuleInstances();
-  const planned = new Planned();
+  const versions = new Versions();
+  const planned = new Planned(versions);
   const keys = new InstanceKeys(instances, modules);
-  const resolver = new ReferenceResolver(scopes, dataSources, schemas, dataSchemas, instances, modules, planned, keys);
+  const resolver = new ReferenceResolver(scopes, dataSources, schemas, dataSchemas, instances, modules, planned, keys, versions);
   const scanner = new ReferenceScanner(modules);
   const graphBuilder = new DependencyGraphBuilder(scanner, instances, modules);
   const resourcePlanner = new ResourcePlanner(providers);
@@ -52,8 +54,16 @@ export function newRun(stateManager: StateManager, providers: ProviderRegistry, 
     loader: new ConfigLoader(new ModuleLoader(files, scopes), scopes, dataSources, schemas, dataSchemas, resolver, providers, instances, modules, planned),
     graphBuilder,
     writtenCheck: new WrittenCheck(resolver, scopes, schemas, dataSchemas, providers),
-    desiredStateBuilder: new DesiredStateBuilder(scopes, resolver, graphBuilder, instances, modules, planned, resourcePlanner, reader),
-    runner: new PlanRunner(stateManager, new ActionExecutor(providers, resolver, resourcePlanner, new SameObjects(providers)), scopes, resolver, instances, modules, reader),
+    desiredStateBuilder: new DesiredStateBuilder(scopes, resolver, graphBuilder, instances, modules, planned, resourcePlanner, reader, versions),
+    runner: new PlanRunner(
+      stateManager,
+      new ActionExecutor(providers, resolver, resourcePlanner, new SameObjects(providers), versions),
+      scopes,
+      resolver,
+      instances,
+      modules,
+      reader
+    ),
     modules,
   };
 }

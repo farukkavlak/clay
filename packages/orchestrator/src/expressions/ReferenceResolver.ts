@@ -43,6 +43,7 @@ import { tryAt } from '../place';
 import { ModuleInstances } from '../instances/ModuleInstances';
 import { checkBoolean } from './operators';
 import { Planned } from '../values/Planned';
+import { Versions } from '../values/Versions';
 import { ScopeManager } from '../config/ScopeManager';
 import { mayBeSensitive, objectOf, sensitiveOf, tupleOf, Value, valueOf, wholeIf, withSensitive } from '../values/Value';
 import { isSensitive, itemsOf, marksOfWhole, sharedMarks, Whole, wholeOf, wholeWhere } from '../values/sensitive';
@@ -162,7 +163,8 @@ export class ReferenceResolver {
     instances: Instances,
     modules: ModuleInstances,
     planned: Planned,
-    private keys: InstanceKeys
+    private keys: InstanceKeys,
+    versions: Versions
   ) {
     this.scopeManager = scopeManager;
     this.instances = instances;
@@ -171,7 +173,7 @@ export class ReferenceResolver {
     this.variables = new VariableResolver(scopeManager, this);
     this.dataSources = new DataSourceResolver(dataSources, dataSchemas, instances);
     this.moduleOutputs = new ModuleOutputResolver(scopeManager, modules);
-    this.resources = new ResourceResolver(instances, planned, schemas);
+    this.resources = new ResourceResolver(instances, planned, schemas, versions);
     this.written = new WrittenTypes(scopeManager, schemas, dataSchemas, instances, modules);
     // Bound, not wrapped, so a nested read costs no extra stack frame.
     const evaluator: Evaluator = {

@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { Instances } from '../../src/instances/Instances';
 import { ModuleInstances } from '../../src/instances/ModuleInstances';
 import { Planned } from '../../src/values/Planned';
+import { Versions } from '../../src/values/Versions';
 import { InstanceKeys } from '../../src/expressions/references/InstanceKeys';
 import { ReferenceResolver } from '../../src/expressions/ReferenceResolver';
 import { UnresolvedReferenceError } from '../../src/expressions/UnresolvedReferenceError';
@@ -28,13 +29,15 @@ const state: State = {
   resources: { 'resource.test': { resourceType: 'resource', name: 'test', attributes: { id: 'res-123', val: 'resolved' } } },
 };
 
+const versions = new Versions();
+
 const resolverOver = (scopes: ScopeManager, dataSources: Map<string, Record<string, Value>>, schemas: Map<string, Schema>, instances: Instances, planned: Planned) => {
   const modules = new ModuleInstances();
 
-  return new ReferenceResolver(scopes, dataSources, schemas, new Map(), instances, modules, planned, new InstanceKeys(instances, modules));
+  return new ReferenceResolver(scopes, dataSources, schemas, new Map(), instances, modules, planned, new InstanceKeys(instances, modules), versions);
 };
 
-const resolverWith = (scopes = new ScopeManager(), planned = new Planned(), dataSources = new Map<string, Record<string, Value>>()) =>
+const resolverWith = (scopes = new ScopeManager(), planned = new Planned(versions), dataSources = new Map<string, Record<string, Value>>()) =>
   resolverOver(scopes, dataSources, new Map(), new Instances(), planned);
 
 /** A template reading a resource not in state, so only the apply knows it. */
@@ -44,11 +47,11 @@ const readLater = () => resolverWith().resolveValue(template('id: ', reference('
 const written = (value: string) => (new Parser(new Lexer(`output "o" { value = ${value} }`, 'main.clay').tokenize()).parse()[0] as OutputBlock).value;
 const atColumn = (column: number) => ({ file: 'main.clay', line: 1, column });
 const planning = () => {
-  const planned = new Planned();
+  const planned = new Planned(versions);
   planned.begin();
   return planned;
 };
-const readWith = (value: string, sources = new Map<string, Record<string, Value>>(), planned = new Planned()) =>
+const readWith = (value: string, sources = new Map<string, Record<string, Value>>(), planned = new Planned(versions)) =>
   resolverWith(new ScopeManager(), planned, sources).resolveValue(written(value), state, context);
 const read = (value: string) => readWith(value);
 const source = (value: Value) => new Map([['data.src.s', { v: value }]]);
@@ -132,7 +135,7 @@ describe('ReferenceResolver', () => {
   // State may hold data outside the schema, so the error names the resource.
   it('refuses a value in state that its schema does not hold, naming the resource', () => {
     const schemas = new Map([['resource', { val: { type: types.number } }]]);
-    const resolver = resolverOver(new ScopeManager(), new Map(), schemas, new Instances(), new Planned());
+    const resolver = resolverOver(new ScopeManager(), new Map(), schemas, new Instances(), new Planned(versions));
 
     expect(() => resolver.resolveValue(reference('resource', 'test', 'val'), state, context)).toThrow(
       new ConfigError('resource.test holds what its schema does not: val is a string, where its type is a number', position)
@@ -149,7 +152,7 @@ describe('ReferenceResolver', () => {
   // A provider may return null where its schema names a string, which has no text to join.
   it('refuses to join a null of a type that joins into text', () => {
     const sources = new Map([['data.src.s', { v: valueOf(types.string, null) }]]);
-    const read = () => resolverWith(new ScopeManager(), new Planned(), sources).resolveValue(template('a ', reference('data', 'src', 's', 'v')), state, context);
+    const read = () => resolverWith(new ScopeManager(), new Planned(versions), sources).resolveValue(template('a ', reference('data', 'src', 's', 'v')), state, context);
 
     expect(read).toThrow(new ConfigError('data.src.s.v is null and cannot be joined into a string', position));
   });
@@ -180,7 +183,7 @@ describe('ReferenceResolver', () => {
 
   // While planning, an unknown item stands alone with its future type.
   it('reads an item not known yet in a list as unknown, of the type it will have', () => {
-    const planned = new Planned();
+    const planned = new Planned(versions);
     planned.begin();
 
     expect(resolverWith(new ScopeManager(), planned).resolveValue(list(str('a'), template('x', reference('resource', 'later', 'id'))), state, context)).toEqual(
@@ -424,7 +427,7 @@ describe('ReferenceResolver', () => {
         resources: { 'module.app[0].resource.dep[1]': { resourceType: 'resource', name: 'dep', attributes: { id: 'one' } } },
       };
 
-      const read = resolverOver(new ScopeManager(), new Map(), new Map(), instances, new Planned()).resolveValue(
+      const read = resolverOver(new ScopeManager(), new Map(), new Map(), instances, new Planned(versions)).resolveValue(
         reference('resource', 'dep', 1, 'id'),
         held,
         inInstance(ModuleAddress.root.child('app', 0))
@@ -450,7 +453,11 @@ describe('ReferenceResolver', () => {
         ['module.app[1].data.src.s', { v: valueOf(types.string, 'from app[1]') }],
       ]);
 
-      const read = resolverWith(new ScopeManager(), new Planned(), sources).resolveValue(reference('data', 'src', 's', 'v'), state, inInstance(ModuleAddress.root.child('app', 1)));
+      const read = resolverWith(new ScopeManager(), new Planned(versions), sources).resolveValue(
+        reference('data', 'src', 's', 'v'),
+        state,
+        inInstance(ModuleAddress.root.child('app', 1))
+      );
 
       expect(read.data).toBe('from app[1]');
     });
