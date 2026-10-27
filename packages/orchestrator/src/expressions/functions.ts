@@ -44,10 +44,17 @@ function one(call: OfOne): ClayFunction {
   return { takes: 1, call: ([value], refuse) => call(value, refuse) };
 }
 
+/** Keys counted once for each object, since a value's data is never changed in place. */
+const keyCounts = new WeakMap<object, number>();
+
 function sizeOf(data: unknown): number {
   if (typeof data === 'string') return charactersOf(data).length;
+  if (Array.isArray(data)) return data.length;
 
-  return Array.isArray(data) ? data.length : Object.keys(data as Record<string, unknown>).length;
+  const record = data as Record<string, unknown>;
+  const count = keyCounts.get(record) ?? Object.keys(record).length;
+  keyCounts.set(record, count);
+  return count;
 }
 
 const COUNTED = new Set(['string', 'list', 'tuple', 'set', 'map', 'object']);

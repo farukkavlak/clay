@@ -319,6 +319,18 @@ describe('a run over many instances', () => {
     );
   });
 
+  it('plans the length of a map for each of its keys in time that grows with them', GENEROUS, async () => {
+    let triggers: Record<string, unknown> = {};
+    const run = (at: string, size: number) =>
+      timed(async () => {
+        const { actions } = await orchestratorIn(at).plan(`${keyed(size, 'length(local.m)')}locals {\n  m = { for k in var.ks : k => k }\n}\n`);
+        triggers = actions[0].after?.triggers as Record<string, unknown>;
+      });
+
+    expect(await growth(2000, run)).toBeLessThan(LINEAR);
+    expect(JSON.stringify([triggers.k0, triggers.k7999])).toBe('[8000,8000]');
+  });
+
   it('shows in state a value with many sensitive keys in time that grows with them', GENEROUS, async () => {
     let shown = '';
     const run = async (at: string, size: number) => {

@@ -968,9 +968,13 @@ Measured with the local provider; a remote provider makes the sequential calls c
       pairwise: changing every member of a set of 8000 took 19.6 seconds to plan, show and
       apply, and reading a plan file with 16000 unknown members 1.7 seconds. Members and
       paths are now looked up by key: 0.16 seconds and 37 ms
-- [ ] `sensitiveUnder` goes over every mark for each key it is asked about, and the plan
+- [x] `sensitiveUnder` goes over every mark for each key it is asked about, and the plan
       asks it for each key of a value, so `triggers` with 8000 sensitive keys plans in 3.3
-      seconds, 2000 in 0.7
+      seconds, 2000 in 0.7. A change to them showed in 18.2 seconds, `state show` took 8.8,
+      and a `lookup` of each key in a map of them 5.0. A value now holds its marks as a tree
+      by their steps and goes under one step at a time: 0.22, 0.74, 0.21 and 0.30 seconds
+- [x] `length` counted the keys of a map on each call, so `length(local.m)` for each of
+      8000 keys of `m` planned in 10.5 seconds. Each map is now counted once: 0.66 seconds
 - [ ] `local_file` reads the whole directory of each file to check how its name is
       cased, so 8000 files in one directory take 8 seconds to plan
 - [ ] The apply runs layer by layer, so one slow resource holds back every resource of the
