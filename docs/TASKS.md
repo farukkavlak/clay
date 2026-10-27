@@ -963,9 +963,11 @@ Measured with the local provider; a remote provider makes the sequential calls c
 - [x] The marks of a sensitive value were kept fewest by holding each against every other,
       so a `for` object with one key not known yet over 16000 items planned in 5.4 seconds.
       The marks are now looked up by their steps: 0.6 seconds
-- [ ] The plan shows a set's change by comparing every member with every other, the apply
-      checks a set it got back the same way, and a plan file's unknown paths are checked
-      pairwise
+- [x] The plan showed a set's change by comparing every member with every other, the apply
+      checked a set it got back the same way, and a plan file's unknown paths were checked
+      pairwise: changing every member of a set of 8000 took 19.6 seconds to plan, show and
+      apply, and reading a plan file with 16000 unknown members 1.7 seconds. Members and
+      paths are now looked up by key: 0.16 seconds and 37 ms
 - [ ] `sensitiveUnder` goes over every mark for each key it is asked about, and the plan
       asks it for each key of a value, so `triggers` with 8000 sensitive keys plans in 3.3
       seconds, 2000 in 0.7

@@ -1,14 +1,10 @@
-import { AttributePath, containsUnknown, isRecord, isUnknown, own, Schema, Type, typeAt, typeIn, UNKNOWN, unknownPaths, valueAt } from '@clay/contracts';
+import { AttributePath, containsUnknown, isRecord, isUnknown, memberKey, own, Schema, Type, typeAt, typeIn, UNKNOWN, unknownPaths, valueAt } from '@clay/contracts';
 import { isDeepStrictEqual } from 'node:util';
 
 export interface Mismatch {
   path: AttributePath;
   planned: unknown;
   returned: unknown;
-}
-
-function includes(members: unknown[], member: unknown): boolean {
-  return members.some((other) => isDeepStrictEqual(other, member));
 }
 
 /**
@@ -19,8 +15,9 @@ function setMismatches(planned: unknown[], actual: unknown, at: AttributePath): 
   if (!Array.isArray(actual)) return [{ path: at, planned, returned: actual }];
 
   const known = planned.filter((member) => !containsUnknown(member));
-  const others = actual.filter((member) => !includes(known, member));
-  const holds = known.every((member) => includes(actual, member)) && others.length <= planned.length - known.length;
+  const [knownKeys, actualKeys] = [new Set(known.map((member) => memberKey(member))), new Set(actual.map((member) => memberKey(member)))];
+  const others = actual.filter((member) => !knownKeys.has(memberKey(member)));
+  const holds = [...knownKeys].every((key) => actualKeys.has(key)) && others.length <= planned.length - known.length;
 
   return holds ? [] : [{ path: at, planned, returned: actual }];
 }

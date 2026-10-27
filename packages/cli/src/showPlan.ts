@@ -1,4 +1,4 @@
-import { Address, AttributePath, isExact, isMaybe, isRecord, isUnknown, jsonText, Output, samePaths, Schema, SENSITIVE, sensitiveUnder } from '@clay/contracts';
+import { Address, AttributePath, isExact, isMaybe, isRecord, isUnknown, jsonText, memberKey, Output, samePaths, Schema, SENSITIVE, sensitiveUnder } from '@clay/contracts';
 import { changedOutside, Changes, Drift, OutputChanges, Plan, PlanAction } from '@clay/planner';
 import { isDeepStrictEqual, styleText } from 'node:util';
 
@@ -77,7 +77,8 @@ export function actionLine(action: PlanAction, planned: boolean): string {
 }
 
 function without(members: unknown[], others: unknown[]): unknown[] {
-  return members.filter((member) => !others.some((other) => isDeepStrictEqual(member, other)));
+  const keys = new Set(others.map((other) => memberKey(other)));
+  return members.filter((member) => !keys.has(memberKey(member)));
 }
 
 /** Sets have no order, so a change shows the members removed and added. */

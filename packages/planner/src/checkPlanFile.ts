@@ -29,7 +29,10 @@ function lands(value: unknown, path: AttributePath): boolean {
 
 /** A path that is a prefix of another would nest an unknown inside an unknown. */
 function overlaps(paths: AttributePath[]): boolean {
-  return paths.some((path, i) => paths.some((other, j) => i !== j && path.length <= other.length && path.every((step, k) => other[k] === step)));
+  const keys = new Set(paths.map((path) => JSON.stringify(path)));
+  if (keys.size < paths.length) return true;
+
+  return paths.some((path) => path.some((_, length) => keys.has(JSON.stringify(path.slice(0, length)))));
 }
 
 /** Each unknown path must exist in the value, and no two may overlap. */
