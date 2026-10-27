@@ -4,7 +4,7 @@ import { AttributeValue, DataBlock, OutputBlock, ResourceBlock, spell, Statement
 import { offPlan, Plan, PlanAction } from '@clay/planner';
 import { moveResources, StateManager } from '@clay/state';
 
-import { ApplyNode, applyGraph } from '../plan/applyGraph';
+import { ApplyNode, applyGraph, applyLayers } from '../plan/applyGraph';
 import { append } from '../append';
 import { asError } from '../asError';
 import { countFrom } from '../instances/count';
@@ -241,7 +241,7 @@ export class PlanRunner {
     // Each replace's object destroyed before its block runs, kept for what it ignored.
     const destroyed = new Map<string, Resource>();
 
-    for (const layer of graph.topologicalSort()) {
+    for (const layer of applyLayers(graph)) {
       // A data source is read even where no action runs; a layer of locals and outputs alone lets a run that did every action finish.
       if (pace.signal?.aborted && layer.some((key) => graph.getNode(key)!.kind === 'data')) return false;
       const steps: (() => AsyncGenerator<RunEvent, boolean>)[] = [];
@@ -249,6 +249,7 @@ export class PlanRunner {
       // Every block of the layer is checked before any action runs, so a wrong plan stops the run before it changes anything.
       for (const key of this.outputsFirst(layer, graph)) {
         const node = graph.getNode(key)!;
+        if (node.kind === 'wait') continue;
         if (node.kind === 'destroy') steps.push(() => this.destroyApart(node.action, state, pace.signal, destroyed));
         else
           for (const action of yield* this.visit(key, node, layers, state)) {

@@ -45,36 +45,38 @@ export class Graph<T> {
     return [...this.adjacencyList.get(id)!];
   }
 
-  /** Layers in dependency order; the nodes of one layer could run in parallel. */
-  topologicalSort(): string[][] {
-    const inDegree = this.calculateInDegrees();
+  /**
+   * Layers in dependency order; the nodes of one layer could run in parallel.
+   * A node `takesNoLayer` names is in the layer of the first node after it, so what follows it is not held back a layer.
+   */
+  topologicalSort(takesNoLayer: (id: string) => boolean = () => false): string[][] {
+    const { order, layerOf } = this.layered(takesNoLayer);
+    if (order.length !== this.nodes.size) throw new Error(`Dependency cycle detected: ${this.findCycle()!.join(' -> ')}`);
+
     const result: string[][] = [];
-    let queue: string[] = [];
-
-    for (const [node, degree] of inDegree.entries()) if (degree === 0) queue.push(node);
-
-    while (queue.length > 0) {
-      const currentLayer = [...queue];
-      result.push(currentLayer);
-
-      const nextQueue: string[] = [];
-
-      for (const node of currentLayer) {
-        const neighbors = this.adjacencyList.get(node)!;
-        for (const neighbor of neighbors) {
-          const newDegree = inDegree.get(neighbor)! - 1;
-          inDegree.set(neighbor, newDegree);
-          if (newDegree === 0) nextQueue.push(neighbor);
-        }
-      }
-
-      queue = nextQueue;
-    }
-
-    const totalNodes = result.reduce((acc, layer) => acc + layer.length, 0);
-    if (totalNodes !== this.nodes.size) throw new Error(`Dependency cycle detected: ${this.findCycle()!.join(' -> ')}`);
+    for (const node of order) (result[layerOf.get(node) ?? 0] ??= []).push(node);
 
     return result;
+  }
+
+  /** Each node once every node before it is placed, with its layer; a node in a cycle is never placed. */
+  private layered(takesNoLayer: (id: string) => boolean): { order: string[]; layerOf: Map<string, number> } {
+    const inDegree = this.calculateInDegrees();
+    const layerOf = new Map<string, number>();
+    const order = [...inDegree].filter(([, degree]) => degree === 0).map(([node]) => node);
+
+    for (let index = 0; index < order.length; index++) {
+      const node = order[index];
+      const after = (layerOf.get(node) ?? 0) + (takesNoLayer(node) ? 0 : 1);
+
+      for (const neighbor of this.adjacencyList.get(node)!) {
+        layerOf.set(neighbor, Math.max(layerOf.get(neighbor) ?? 0, after));
+        inDegree.set(neighbor, inDegree.get(neighbor)! - 1);
+        if (inDegree.get(neighbor) === 0) order.push(neighbor);
+      }
+    }
+
+    return { order, layerOf };
   }
 
   /** The first cycle found, each node followed by one it depends on. */
@@ -114,6 +116,55 @@ export class Graph<T> {
     }
 
     return undefined;
+  }
+
+  /** Each node to a node of its strongly connected component, the same for every node of it: two nodes share one when each reaches the other. */
+  components(): Map<string, string> {
+    const component = new Map<string, string>();
+
+    for (const root of this.finishOrder().reverse()) {
+      if (component.has(root)) continue;
+
+      component.set(root, root);
+      const stack = [root];
+      for (let at = stack.pop(); at !== undefined; at = stack.pop())
+        for (const from of this.reverseList.get(at)!)
+          if (!component.has(from)) {
+            component.set(from, root);
+            stack.push(from);
+          }
+    }
+
+    return component;
+  }
+
+  /** Every node, each after every node it reaches first; depth first with a stack of its own. */
+  private finishOrder(): string[] {
+    const finished: string[] = [];
+    const seen = new Set<string>();
+
+    for (const start of this.nodes.keys()) {
+      if (seen.has(start)) continue;
+
+      seen.add(start);
+      const path = [start];
+      const untried = [this.adjacencyList.get(start)!.values()];
+
+      while (path.length > 0) {
+        const next = untried.at(-1)!.next();
+
+        if (next.done) {
+          finished.push(path.pop()!);
+          untried.pop();
+        } else if (!seen.has(next.value)) {
+          seen.add(next.value);
+          path.push(next.value);
+          untried.push(this.adjacencyList.get(next.value)!.values());
+        }
+      }
+    }
+
+    return finished;
   }
 
   private calculateInDegrees(): Map<string, number> {
