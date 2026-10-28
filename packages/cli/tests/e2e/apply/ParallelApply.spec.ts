@@ -97,6 +97,13 @@ describe('resources an apply runs together', () => {
     expect(await held()).toEqual(['slow.a0', 'slow.a1', 'slow.a2', 'slow.z0', 'slow.z1', 'slow.z2']);
   });
 
+  it('writes the outputs in the order declared, not the order they resolve', async () => {
+    await run(`${blocks('a')}\noutput "late" { value = slow.a.name }\noutput "early" { value = "now" }`);
+
+    const { outputs = {} } = await new LocalBackend(dir).read();
+    expect(Object.keys(outputs)).toEqual(['late', 'early']);
+  });
+
   it('waits for the resource it reads', async () => {
     await run(`${blocks('a')}\nresource "slow" "b" {\n  name = "b"\n  note = slow.a.name\n}`);
 

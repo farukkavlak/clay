@@ -978,12 +978,13 @@ Measured with the local provider; a remote provider makes the sequential calls c
 - [x] `local_file` asked every directory above each file whether it ignores case, three
       times a file, so planning 8000 files again took 58 seconds and 2000 took 16. Each
       directory is now asked once: 3.2 and 1.4 seconds
-- [ ] The apply runs layer by layer, so one slow resource holds back every resource of the
+- [x] The apply runs layer by layer, so one slow resource holds back every resource of the
       next layer, and one failure stops branches that do not read it. A `sleep 3` beside a
       chain of three `sleep 1` takes 5 seconds where 3 would do. Terraform walks the graph,
       and skips only what reads a failed resource. Once the graph is walked, a root output
       can be written when it resolves, so a failure leaves only the outputs that read it
-      at their old value, as Terraform does
+      at their old value, as Terraform does. The apply now walks the graph, and each root
+      output is written as it resolves: the `sleep 3` beside the chain takes 3.2 seconds
 - [x] Refresh, planning, schema loading and data source reads call the provider one at a
       time. With 100 ms a call, 20 resources plan in 4 seconds. Terraform runs them as the
       graph allows, ten at a time. The plan now walks the graph, ten provider calls at once

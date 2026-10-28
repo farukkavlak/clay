@@ -138,14 +138,16 @@ from a sensitive one is sensitive too: `local_file.id` where `path` is, `stdout`
    between adds a line for each action to `clay.state.json.journal`, so a failure, or a
    run that is killed, leaves everything done before it on disk; the state is read with
    the journal's lines over it. When one fails, nothing that reads it starts, the rest
-   goes on, and every failure is reported at the end. Before each create, update or
-   replace, the provider plans it again with what is known by then. A value the plan
-   showed that comes out different, or a replace where the plan showed an update, stops
-   the run before it changes. What the provider returns is held to that plan. The state
-   is written to a temporary file and renamed, `clay.state.json.bak` keeps the state
-   from before the run, and a lock file stops two runs at once. The first Ctrl-C starts
-   nothing new, waits for what runs, saves it and unlocks; a second exits at once. A
-   terminal sends Ctrl-C to a `command_exec` command too, which then fails.
+   goes on, and every failure is reported at the end. Each root output is set in the
+   state as it resolves, so one that reads what failed keeps its old value, and one no
+   longer declared goes. Before each create, update or replace, the provider plans it
+   again with what is known by then. A value the plan showed that comes out different,
+   or a replace where the plan showed an update, stops the run before it changes. What
+   the provider returns is held to that plan. The state is written to a temporary file
+   and renamed, `clay.state.json.bak` keeps the state from before the run, and a lock
+   file stops two runs at once. The first Ctrl-C starts nothing new, waits for what
+   runs, saves it and unlocks; a second exits at once. A terminal sends Ctrl-C to a
+   `command_exec` command too, which then fails.
 
 An error says where it was written:
 

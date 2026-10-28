@@ -10,6 +10,10 @@ import { createApplyCommand } from '../../../src/commands/apply';
 import { orchestratorIn } from '../helpers';
 import { start } from '../start';
 
+const drain = async (events: AsyncGenerator<{ type: string; error?: Error }>) => {
+  for await (const event of events) if (event.type === 'failed') throw event.error;
+};
+
 describe('outputs in the state file', () => {
   let dir: string;
 
@@ -35,6 +39,8 @@ describe('outputs in the state file', () => {
     }
     output "greeting" { value = "\${local_file.a.content} \${local_file.b.content}" }
   `;
+
+  const lateAndEarly = (late: string) => `${withOutput('late').replace('${local_file.a.content}', late)}\noutput "early" { value = "now" }`;
 
   const run = async (config: string) => {
     let failed: Error | undefined;
@@ -115,7 +121,7 @@ describe('outputs in the state file', () => {
     expect(state.outputs).toEqual({ message: { value: 'hello', type: types.string } });
   });
 
-  it('keeps the outputs of the last finished run when a run fails', async () => {
+  it('keeps an output that reads a failed resource at its old value', async () => {
     await run(withOutput('greeting'));
 
     expect(await run(failing())).toBeInstanceOf(Error);
@@ -123,6 +129,38 @@ describe('outputs in the state file', () => {
     const state = await stored();
     expect(state.resources['local_file.a'].attributes.content).toBe('changed');
     expect(state.outputs).toEqual({ greeting: { value: 'hello', type: types.string } });
+  });
+
+  it('writes an output that reads only what was applied, though the run fails', async () => {
+    const content = 'output "content" { value = local_file.a.content }';
+    await run(`${withOutput('greeting')}\n${content}`);
+
+    expect(await run(`${failing()}\n${content}`)).toBeInstanceOf(Error);
+
+    const { outputs } = await stored();
+    expect(outputs).toEqual({ greeting: { value: 'hello', type: types.string }, content: { value: 'changed', type: types.string } });
+  });
+
+  it('drops an output the configuration no longer declares, though the run fails', async () => {
+    await run(withOutput('old'));
+
+    expect(await run(failing())).toBeInstanceOf(Error);
+
+    const { outputs } = await stored();
+    expect(outputs).toEqual({});
+  });
+
+  // `early` reads nothing, so it resolves at the start; `late` is held to the plan once `a` is made.
+  it('writes an output that resolved before another stops the run', async () => {
+    const engine = newOrchestrator();
+    const plan = await engine.plan(lateAndEarly('${local_file.a.content}'));
+
+    await expect(drain(engine.runPlan(plan, lateAndEarly('${local_file.a.content}!')))).rejects.toThrow(
+      'the plan showed late = "hello", but it now comes to "hello!". Plan again.'
+    );
+
+    const { outputs } = await stored();
+    expect(outputs).toEqual({ early: { value: 'now', type: types.string } });
   });
 
   it('plans no output change after a failed run, against the outputs it kept', async () => {

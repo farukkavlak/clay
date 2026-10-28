@@ -59,8 +59,8 @@ a configuration means or how the state file is written.
 - A state or plan file that is not valid is refused and says what is wrong
 - Ctrl-C during an apply starts nothing new, waits for what runs, saves it and releases
   the lock; a second Ctrl-C exits at once
-- A failed apply keeps the outputs of the last finished run, and `state mv` and
-  `state rm` leave them as they are
+- A failed apply leaves only the outputs that read what failed at their old value and
+  drops those no longer declared; `state mv` and `state rm` leave the outputs as they are
 - `clay apply` exits 1 when it is not approved, and names `--yes` when its input is
   closed; `state rm` of an address the state does not hold exits 1
 - Errors name what they are about by its address, point at where it is written, and

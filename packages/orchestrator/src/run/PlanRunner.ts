@@ -8,7 +8,7 @@ import { ApplyNode, applyGraph } from '../plan/applyGraph';
 import { append } from '../append';
 import { asError } from '../asError';
 import { countFrom } from '../instances/count';
-import { declaredOf, outputAs } from '../values/declared';
+import { outputAs } from '../values/declared';
 import { eachFrom } from '../instances/forEach';
 import { Instances, repetitionOfKey } from '../instances/Instances';
 import { blockKey, Context, contextIn, DataInstance, dataSourceKey, moduleOf, scopeOf } from '../keys';
@@ -40,6 +40,11 @@ function groupBy(actions: PlanAction[], key: (address: Address) => string): Map<
   return groups;
 }
 
+/** In declared order, so the state does not depend on which resolved first; one not reached keeps its old value. */
+function holdOutputs(state: State, { resolved, declared }: Applying): void {
+  state.outputs = Object.fromEntries(declared.filter((name) => resolved.has(name)).map((name) => [name, resolved.get(name)!]));
+}
+
 /** Held until nothing else runs, so a reader that stops at a failure cannot cut an action short. */
 const isFailure = (event: RunEvent) => event.type === 'failed';
 
@@ -66,6 +71,10 @@ interface Applying extends Checked {
   read: Omit<Approved, 'actions' | 'outputs'>;
   blocks: Map<string, ResourceBlock>;
   byBlock: Map<string, PlanAction[]>;
+  /** The root outputs' names, in the order the configuration gives them. */
+  declared: string[];
+  /** Each root output as state will hold it, set as it resolves. */
+  resolved: Map<string, Output>;
 }
 
 /** State is written whole before the first action and after the last; each action in between records its own address, so a killed run loses nothing done before it. */
@@ -106,11 +115,9 @@ export class PlanRunner {
         return;
       }
 
-      // Resolved after the last action, so outputs never reflect a half-applied run.
-      state.outputs = this.resolveOutputs(config.mainProgram, state, ModuleAddress.root);
       settled = true;
       await this.stateManager.write(state);
-      yield { type: 'done', outputs: state.outputs };
+      yield { type: 'done', outputs: state.outputs ?? {} };
     } catch (error) {
       if (settled) throw error;
       settled = true;
@@ -237,12 +244,18 @@ export class PlanRunner {
         actions.filter((action) => action.type !== 'DELETE'),
         blockKey
       ),
+      declared: config.mainProgram.flatMap((stmt) => (stmt.type === 'Output' ? [stmt.name] : [])),
+      resolved: new Map(Object.entries(state.outputs ?? {})),
     };
     // Each replace's object destroyed before its block runs, kept for what it ignored.
     const destroyed = new Map<string, Resource>();
     const reach = (key: string) => this.reach(key, graph.getNode(key)!, applying, state, pace.signal, destroyed);
 
-    return yield* walkTogether(graph.topologicalSort().flat(), graph, reach, pace.parallelism, isFailure);
+    try {
+      return yield* walkTogether(graph.topologicalSort().flat(), graph, reach, pace.parallelism, isFailure);
+    } finally {
+      holdOutputs(state, applying);
+    }
   }
 
   /** A data source is not read once the run is stopped; locals and outputs are still worked out. */
@@ -275,13 +288,13 @@ export class PlanRunner {
   }
 
   /** Gives the actions of a resource block, checked; the other kinds are resolved or read. */
-  private async *visit(key: string, node: GraphNode, { named, outputs, read, blocks, byBlock }: Applying, state: State): AsyncGenerator<RunEvent, PlanAction[]> {
+  private async *visit(key: string, node: GraphNode, { named, outputs, resolved, read, blocks, byBlock }: Applying, state: State): AsyncGenerator<RunEvent, PlanAction[]> {
     if (node.kind === 'module') this.expandCall(node, state);
     if (node.kind === 'data') yield* this.readData(node, named.get(key), read, state);
     if (node.kind === 'local') this.resolveLocal(node, state);
     if (node.kind === 'variable') this.checkVariable(node, state);
     // Only this output: a sibling may read a resource made later.
-    if (node.kind === 'output') this.resolveInEvery(node, outputs, state);
+    if (node.kind === 'output') this.resolveInEvery(node, { outputs, resolved }, state);
 
     return node.kind === 'resource' ? this.actionsOf(blocks.get(key)!, node.module, byBlock.get(key) ?? [], state) : [];
   }
@@ -407,19 +420,6 @@ export class PlanRunner {
     }
   }
 
-  private resolveOutputs(program: Statement[], state: State, context: ModuleAddress): Record<string, Output> {
-    // A map, so an output named `__proto__` is a key like any other.
-    const outputs = new Map<string, Output>();
-    for (const stmt of program)
-      if (stmt.type === 'Output') {
-        const resolved = tryAt(stmt.value.position, spell(stmt), context, () => this.outputValue(stmt.name, stmt.value, declaredOf(stmt), state, context));
-        outputs.set(stmt.name, outputOf(resolved, stmt.sensitive));
-        this.scopeManager.setOutput(context, stmt.name, resolved);
-      }
-
-    return Object.fromEntries(outputs);
-  }
-
   /** Read again, after what it reads has run, so its type and rules check a value the plan did not know even where nothing reads it. */
   private checkVariable(node: ValueNode, state: State): void {
     for (const instance of this.modules.of(node.module)) this.resolver.resolveVariable(node.name, instance, state);
@@ -433,10 +433,13 @@ export class PlanRunner {
     }
   }
 
-  private resolveInEvery(node: OutputNode, planned: PlannedOutputs, state: State): void {
+  private resolveInEvery(node: OutputNode, { outputs, resolved }: Pick<Applying, 'outputs' | 'resolved'>, state: State): void {
     for (const instance of this.modules.of(node.module)) {
       const value = this.resolveOutput(node, instance, state);
-      if (instance.isRoot()) this.checkOutput(node, value, planned.get(node.name)!);
+      if (!instance.isRoot()) continue;
+
+      this.checkOutput(node, value, outputs.get(node.name)!);
+      resolved.set(node.name, outputOf(value, node.declared.sensitive));
     }
   }
 
