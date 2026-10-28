@@ -12,6 +12,8 @@ const blocks = (...names: string[]) => names.map((name) => `resource "slow" "${n
 /** A resource whose provider fails it as `mode` says. */
 const failing = (name: string, mode: string) => `resource "slow" "${name}" {\n  name = "${name}"\n  mode = "${mode}"\n}`;
 
+const reads = (...names: string[]) => names.map((name) => `data "slow" "${name}" {\n  name = "${name}"\n}`).join('\n');
+
 const twelve = Array.from({ length: 12 }, (_, index) => `r${index}`);
 
 describe('a plan', () => {
@@ -128,7 +130,7 @@ describe('a plan', () => {
     it('asks the provider about each data source ten at a time', async () => {
       using(new Slow(['validateDataSource']));
 
-      await engine.validate(twelve.map((name) => `data "slow" "${name}" {\n  name = "${name}"\n}`).join('\n'));
+      await engine.validate(reads(...twelve));
 
       expect(provider.most).toBe(10);
     });
@@ -142,6 +144,89 @@ describe('a plan', () => {
       const config = `${failing('a', 'validate fails late')}\nresource "slow" "b" {\n  name = ["x"]\n}`;
 
       await expect(engine.validate(config)).rejects.toThrow('a fails to validate');
+    });
+  });
+
+  describe('planning', () => {
+    it('asks the provider to plan each resource ten at a time', async () => {
+      using(new Slow(['plan']));
+
+      await engine.plan(blocks(...twelve));
+
+      expect(provider.most).toBe(10);
+    });
+
+    it('asks the provider to plan each instance of a block ten at a time', async () => {
+      using(new Slow(['plan']));
+
+      await engine.plan('resource "slow" "r" {\n  count = 12\n  name  = "r${count.index}"\n}');
+
+      expect(provider.most).toBe(10);
+    });
+
+    it.each([1, 3])('plans %i at a time where it is told to', async (parallelism) => {
+      using(new Slow(['plan']));
+
+      await engine.plan(blocks('a', 'b', 'c', 'd'), { parallelism });
+
+      expect(provider.most).toBe(parallelism);
+    });
+
+    it('reads each data source ten at a time', async () => {
+      using(new Slow(['readDataSource']));
+
+      await engine.plan(reads(...twelve));
+
+      expect(provider.most).toBe(10);
+    });
+
+    it('asks the provider about each data source it reads ten at a time', async () => {
+      using(new Slow(['validateDataSource']));
+
+      await engine.plan(reads(...twelve));
+
+      expect(provider.most).toBe(10);
+    });
+
+    it('reads each instance of a data source ten at a time', async () => {
+      using(new Slow(['readDataSource']));
+
+      await engine.plan('data "slow" "d" {\n  count = 12\n  name  = "d${count.index}"\n}');
+
+      expect(provider.most).toBe(10);
+    });
+
+    // `d` waits only for the local, so it is read while `a` is planned, where a plan layer by layer would wait for `a`.
+    it('reads a data source while a resource it does not read is still planned', async () => {
+      using(new Slow(['plan', 'readDataSource']));
+
+      await engine.plan(`${blocks('a')}\nlocals {\n  l = "d"\n}\ndata "slow" "d" {\n  name = local.l\n}`);
+
+      expect(provider.most).toBe(2);
+    });
+
+    it('waits to plan a resource until what it reads is planned', async () => {
+      using(new Slow(['plan']));
+
+      await engine.plan(`${blocks('a')}\nresource "slow" "b" {\n  name = "b"\n  note = slow.a.name\n}`);
+
+      expect(provider.most).toBe(1);
+    });
+
+    it('names the first block its provider cannot plan, not the first failure to come', async () => {
+      await expect(engine.plan(`${failing('a', 'plan fails late')}\n${failing('b', 'plan fails')}`)).rejects.toThrow('a fails to plan');
+    });
+
+    it('names the first instance its provider cannot plan, not the first failure to come', async () => {
+      const config = 'resource "slow" "r" {\n  count = 2\n  name  = "r${count.index}"\n  mode  = count.index == 0 ? "plan fails late" : "plan fails"\n}';
+
+      await expect(engine.plan(config)).rejects.toThrow('r0 fails to plan');
+    });
+
+    it('names the first data source it cannot read, not the first failure to come', async () => {
+      const config = 'data "slow" "d" {\n  count = 2\n  name  = "d${count.index}"\n  mode  = count.index == 0 ? "readDataSource fails late" : "readDataSource fails"\n}';
+
+      await expect(engine.plan(config)).rejects.toThrow('d0 fails to readDataSource');
     });
   });
 

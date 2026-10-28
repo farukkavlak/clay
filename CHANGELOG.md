@@ -44,7 +44,9 @@ a configuration means or how the state file is written.
   deposed objects that a later plan destroys
 - `apply --parallelism`: the resources of one layer run together, ten by default, and
   every failure of a run is reported. `plan` takes it too: that many provider calls run
-  at once, for the refresh, schemas, block checks and what each object is
+  at once, for the refresh, schemas, block checks, what each object is, the plan of each
+  resource and each data source read. A plan walks the graph, so a block starts once
+  what it reads is planned
 
 ### Fixed
 

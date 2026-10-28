@@ -22,6 +22,7 @@ import { carried, outputOf, sensitiveAmong, Value } from '../values/Value';
 import { DataSourceReader } from './DataSourceReader';
 import { DependencyGraphBuilder, GraphNode, LocalNode, OutputNode, ValueNode } from '../graph/DependencyGraphBuilder';
 import { LoadedResource } from '../config/ModuleLoader';
+import { inOrder } from '../providers/Limit';
 import { Moves } from './moves';
 import { Versions } from '../values/Versions';
 import { Ignoring, ResourcePlan, ResourcePlanner } from './ResourcePlanner';
@@ -40,6 +41,19 @@ export interface DesiredState {
   dataSensitive: Record<string, AttributePath[]>;
   /** Data sources that wait for the apply, since what they read changes in it. */
   readAtApply: string[];
+}
+
+/** What a data source instance read, or nothing where it waits for the apply. */
+interface DataRead {
+  at: DataInstance;
+  read?: Record<string, Value>;
+}
+
+/** What planning one node found, kept until every node is planned so the plan lists it in the graph's order. */
+interface Found {
+  resources?: ConfiguredResource[];
+  reads?: DataRead[];
+  output?: [string, Output];
 }
 
 /** A plan reads the data sources it can and refuses a count or for_each only an apply knows; a check reads none and accepts one. */
@@ -127,54 +141,78 @@ export class DesiredStateBuilder {
     this.walk = walk;
     this.createsFirst = this.createFirst(loadedResources, graph);
     const byKey = new Map(loadedResources.map((r) => [r.address.toString(), r]));
-    const resources: ConfiguredResource[] = [];
-    const desired: DesiredState = { resources, outputs: {}, dataSources: {}, dataSensitive: {}, readAtApply: [] };
+    const found = new Map<string, Found>();
+
+    await graph.walk(async (key) => {
+      found.set(key, await this.planNode(key, graph.getNode(key)!, byKey, graph, state));
+    });
+
+    return this.desiredFrom(graph, found);
+  }
+
+  private async planNode(key: string, node: GraphNode, byKey: Map<string, LoadedResource>, graph: Graph<GraphNode>, state: State): Promise<Found> {
+    switch (node.kind) {
+      case 'module': {
+        this.planCall(node, state);
+        return {};
+      }
+      case 'resource': {
+        return { resources: await this.planResource(key, byKey.get(key)!, graph, state) };
+      }
+      case 'data': {
+        return { reads: await this.planData(key, node, graph, state) };
+      }
+      case 'output': {
+        // A module's own output never reaches the plan, so only the root's one instance gives one.
+        const outputs = this.modules.of(node.module).map((instance) => this.planOutput(node, instance, state));
+        return { output: outputs.find((output) => output !== undefined) };
+      }
+      default: {
+        for (const instance of this.modules.of(node.module)) this.planValue(node, instance, state);
+        return {};
+      }
+    }
+  }
+
+  /** In the graph's order, as a walk one node at a time would find them, so a plan lists the same however the provider answers. */
+  private desiredFrom(graph: Graph<GraphNode>, found: Map<string, Found>): DesiredState {
+    const desired: DesiredState = { resources: [], outputs: {}, dataSources: {}, dataSensitive: {}, readAtApply: [] };
     // A map, so an output named `__proto__` is a key like any other.
     const rootOutputs = new Map<string, Output>();
 
-    for (const layer of graph.topologicalSort())
-      for (const key of layer) {
-        const node = graph.getNode(key)!;
-
-        switch (node.kind) {
-          case 'module': {
-            this.planCall(node, state);
-            break;
-          }
-          case 'resource': {
-            resources.push(...(await this.planResource(key, byKey.get(key)!, graph, state)));
-            break;
-          }
-          case 'data': {
-            await this.planData(key, node, graph, state, desired);
-            break;
-          }
-          default: {
-            for (const instance of this.modules.of(node.module)) this.planValue(node, instance, state, rootOutputs);
-          }
-        }
-      }
+    for (const key of graph.topologicalSort().flat()) {
+      const { resources = [], reads = [], output } = found.get(key)!;
+      desired.resources.push(...resources);
+      for (const { at, read } of reads)
+        if (read) this.recordRead(desired, at, read);
+        else desired.readAtApply.push(at.toString());
+      if (output) rootOutputs.set(...output);
+    }
 
     desired.outputs = Object.fromEntries(rootOutputs);
     return desired;
   }
 
   /** Each module instance reads its own, and waits for the apply on its own. A check reads none. */
-  private async planData(key: string, { module, block }: Extract<GraphNode, { kind: 'data' }>, graph: Graph<GraphNode>, state: State, desired: DesiredState): Promise<void> {
+  private async planData(key: string, { module, block }: Extract<GraphNode, { kind: 'data' }>, graph: Graph<GraphNode>, state: State): Promise<DataRead[]> {
     const blocks = this.graphBuilder.resourceDependencies(graph, key);
+    const reads = await inOrder(this.modules.of(module).map((instance) => this.readIn(block, blocks, instance, state)));
 
-    for (const instance of this.modules.of(module)) {
-      const waits = this.walk === 'check' || this.waitsForApply(blocks, instance);
+    return reads.flat();
+  }
 
-      for (const at of this.dataInstances(block, instance, state)) {
-        const inputs = this.resolveInputs(block, state, at);
+  private async readIn(block: DataBlock, blocks: string[], instance: ModuleAddress, state: State): Promise<DataRead[]> {
+    const waits = this.walk === 'check' || this.waitsForApply(blocks, instance);
 
-        if (waits) {
-          await this.reader.defer(block, inputs, at);
-          desired.readAtApply.push(at.toString());
-        } else this.recordRead(desired, at, await this.reader.read(block, inputs, at));
-      }
-    }
+    return inOrder(this.dataInstances(block, instance, state).map((at) => this.readData(block, at, state, waits)));
+  }
+
+  private async readData(block: DataBlock, at: DataInstance, state: State, waits: boolean): Promise<DataRead> {
+    const inputs = this.resolveInputs(block, state, at);
+    if (!waits) return { at, read: await this.reader.read(block, inputs, at) };
+
+    await this.reader.defer(block, inputs, at);
+    return { at };
   }
 
   private recordRead(desired: DesiredState, at: DataInstance, read: Record<string, Value>): void {
@@ -228,14 +266,11 @@ export class DesiredStateBuilder {
     const { address, block } = loaded;
     const blocks = this.graphBuilder.resourceDependencies(graph, key);
 
-    const planned: ConfiguredResource[] = [];
+    const planned = await inOrder(
+      this.modules.of(address.module).map(async (module) => this.planBlock(new Address(module, address.resourceType, address.name), block, dependenciesOf(blocks, module), state))
+    );
 
-    for (const module of this.modules.of(address.module)) {
-      const dependencies = dependenciesOf(blocks, module);
-      planned.push(...(await this.planBlock(new Address(module, address.resourceType, address.name), block, dependencies, state)));
-    }
-
-    return planned;
+    return planned.flat();
   }
 
   private async planBlock(address: Address, block: ResourceBlock, dependencies: string[], state: State): Promise<ConfiguredResource[]> {
@@ -244,11 +279,11 @@ export class DesiredStateBuilder {
 
     this.setKeys(key, block, address, state);
 
-    const planned: ConfiguredResource[] = [];
-    for (const instance of this.instances.keysOf(key) ?? [])
-      planned.push(await this.planInstance(new Address(address.module, address.resourceType, address.name, instance), block, dependencies, state));
-
-    return planned;
+    return inOrder(
+      (this.instances.keysOf(key) ?? []).map(async (instance) =>
+        this.planInstance(new Address(address.module, address.resourceType, address.name, instance), block, dependencies, state)
+      )
+    );
   }
 
   /** For count and for_each, read before any instance exists. Undefined where only an apply knows it and a check reads it. */
@@ -336,10 +371,9 @@ export class DesiredStateBuilder {
     return keys.map((key) => new Address(block.module, block.resourceType, block.name, key).toString());
   }
 
-  private planValue(node: Extract<GraphNode, { kind: 'variable' | 'local' | 'output' }>, instance: ModuleAddress, state: State, rootOutputs: Map<string, Output>): void {
+  private planValue(node: Extract<GraphNode, { kind: 'variable' | 'local' }>, instance: ModuleAddress, state: State): void {
     if (node.kind === 'variable') this.planVariable(node, instance, state);
-    else if (node.kind === 'local') this.planLocal(node, instance, state);
-    else this.planOutput(node, instance, state, rootOutputs);
+    else this.planLocal(node, instance, state);
   }
 
   /** Kept as it comes, UNKNOWN where only the apply makes it, so every reader in the instance sees one value. */
@@ -360,7 +394,7 @@ export class DesiredStateBuilder {
     });
   }
 
-  private planOutput(node: OutputNode, instance: ModuleAddress, state: State, rootOutputs: Map<string, Output>): void {
+  private planOutput(node: OutputNode, instance: ModuleAddress, state: State): [string, Output] | undefined {
     const read = (constant: AttributeValue) => this.resolveNode(node, constant, instance, state);
     const resolved = this.resolveNode(node, node.value, instance, state);
     const value = tryAt(node.position, node.declaration, contextIn(node.context, instance), () =>
@@ -368,7 +402,7 @@ export class DesiredStateBuilder {
     );
     this.scopeManager.setOutput(instance, node.name, value);
 
-    if (instance.isRoot()) rootOutputs.set(node.name, outputOf(value, node.declared.sensitive));
+    return instance.isRoot() ? [node.name, outputOf(value, node.declared.sensitive)] : undefined;
   }
 
   private resolveForPlan(block: ResourceBlock, state: State, context: Context): Record<string, Value> {

@@ -4,6 +4,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { conformed } from '../values/conformValues';
 import { keepPrior } from './ignoredChanges';
 import { heldBy, hidingReason, undisclosed } from '../providers/providerResult';
+import { Limit } from '../providers/Limit';
 import { ProviderRegistry } from '../providers/ProviderRegistry';
 import { shown } from '../shown';
 import { marksOf } from '../values/schemaMarks';
@@ -83,7 +84,10 @@ function valuesOf(schema: Schema, { config, sensitive }: { config: Record<string
 }
 
 export class ResourcePlanner {
-  constructor(private providers: ProviderRegistry) {}
+  constructor(
+    private providers: ProviderRegistry,
+    private limit: Limit
+  ) {}
 
   /**
    * Validates first, since planning invalid values means nothing. Unknown values are validated again at apply.
@@ -96,7 +100,7 @@ export class ResourcePlanner {
     // After keepPrior, so an attribute made from an ignored one follows the mark it keeps.
     const { config } = kept;
     const sensitive = marksOf(schema, valuesOf(schema, kept));
-    await hidingReason(type, sensitive, () => provider.validate(type, config));
+    await hidingReason(type, sensitive, () => this.limit.run(() => provider.validate(type, config)));
     if (!current) return { ...(await this.create(provider, type, schema, config, sensitive)), sensitive };
 
     const request = { prior: current.attributes, proposed: proposed(current.attributes, config, schema), config };
@@ -118,7 +122,7 @@ export class ResourcePlanner {
 
   /** `hidden` adds what the prior holds sensitive, which the provider is sent too. */
   private async ask(provider: Provider, type: string, schema: Schema, request: PlanRequest, sensitive: AttributePath[], hidden = sensitive): Promise<PlannedChange> {
-    const change = await hidingReason(type, hidden, () => provider.plan(type, request));
+    const change = await hidingReason(type, hidden, () => this.limit.run(() => provider.plan(type, request)));
     const after = plainOf(heldBy(type, 'planned', schema, change.after));
     checkPlanned(type, schema, request.config, after, sensitive);
 

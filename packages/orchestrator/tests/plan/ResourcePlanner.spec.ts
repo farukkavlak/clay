@@ -2,7 +2,9 @@ import { ExactNumber, planFromSchema, PlannedChange, PlanRequest, Provider, Reso
 import { describe, expect, it, vi } from 'vitest';
 
 import { ResourcePlanner } from '../../src/plan/ResourcePlanner';
+import { Limit } from '../../src/providers/Limit';
 import { ProviderRegistry } from '../../src/providers/ProviderRegistry';
+import { DEFAULT_PARALLELISM } from '../../src/run/parallelism';
 import { allSensitive, inferred, Value, valueOf, withSensitive } from '../../src/values/Value';
 
 /** As the configuration writes them: a list is a tuple and a map an object. */
@@ -31,7 +33,7 @@ function plannerFor(provider: Provider): ResourcePlanner {
   const providers = new ProviderRegistry();
   providers.register(provider);
 
-  return new ResourcePlanner(providers);
+  return new ResourcePlanner(providers, new Limit(DEFAULT_PARALLELISM));
 }
 
 const current: Resource = { resourceType: 'thing', name: 'a', attributes: { path: 'a', tags: { x: '1' }, made: 'm' } };

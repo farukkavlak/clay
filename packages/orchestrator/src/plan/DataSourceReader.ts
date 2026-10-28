@@ -4,6 +4,7 @@ import { DataBlock, spell } from '@clay/parser';
 import { conformed, writtenAt } from '../values/conformValues';
 import { DataInstance } from '../keys';
 import { checkDataSourceGiven, checkDataSourceRead, heldBy, hidingReason } from '../providers/providerResult';
+import { Limit } from '../providers/Limit';
 import { ProviderRegistry } from '../providers/ProviderRegistry';
 import { withPlace } from '../place';
 import { marksOf, schemaRemarked } from '../values/schemaMarks';
@@ -23,7 +24,8 @@ export class DataSourceReader {
     // Loaded with the configuration, before any data source is read.
     private dataSchemas: Map<string, Schema>,
     private dataSources: Map<string, Record<string, Value>>,
-    private versions: Versions
+    private versions: Versions,
+    private limit: Limit
   ) {}
 
   async read(stmt: DataBlock, inputs: Record<string, Value>, at: DataInstance): Promise<Record<string, Value>> {
@@ -34,8 +36,8 @@ export class DataSourceReader {
       const given = conformed(stmt.dataSourceType, schema, inputs);
       const config = plainOf(given);
       const sensitive = marksOf(schema, given);
-      await hidingReason(stmt.dataSourceType, sensitive, () => provider.validateDataSource(stmt.dataSourceType, config));
-      const read = await hidingReason(stmt.dataSourceType, sensitive, () => provider.readDataSource(stmt.dataSourceType, config), 'to read');
+      await hidingReason(stmt.dataSourceType, sensitive, () => this.limit.run(() => provider.validateDataSource(stmt.dataSourceType, config)));
+      const read = await hidingReason(stmt.dataSourceType, sensitive, () => this.limit.run(() => provider.readDataSource(stmt.dataSourceType, config)), 'to read');
       const held = heldBy(stmt.dataSourceType, 'read', schema, read);
       checkDataSourceRead(stmt.dataSourceType, schema, plainOf(held));
       // A null reads as left out, so it never replaces what the configuration gave.
@@ -58,7 +60,7 @@ export class DataSourceReader {
       const given = conformed(stmt.dataSourceType, schema, inputs);
       const config = plainOf(given);
       const provider = this.providers.reader(stmt.dataSourceType);
-      await hidingReason(stmt.dataSourceType, marksOf(schema, given), () => provider.validateDataSource(stmt.dataSourceType, config));
+      await hidingReason(stmt.dataSourceType, marksOf(schema, given), () => this.limit.run(() => provider.validateDataSource(stmt.dataSourceType, config)));
       const later = Object.entries(schema).map(([name, { type }]) => [name, valueOf(type, UNKNOWN)]);
       return this.keep(at, schemaRemarked(schema, remarked({ ...Object.fromEntries(later), ...typedValues(schema, config) }, given), given));
     } catch (error) {

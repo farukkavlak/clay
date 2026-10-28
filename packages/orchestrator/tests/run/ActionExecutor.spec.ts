@@ -108,7 +108,13 @@ describe('ActionExecutor', () => {
       new InstanceKeys(instances, modules),
       versions
     );
-    executor = new ActionExecutor(providers, resolver, new ResourcePlanner(providers), new SameObjects(providers, new Limit(DEFAULT_PARALLELISM)), versions);
+    executor = new ActionExecutor(
+      providers,
+      resolver,
+      new ResourcePlanner(providers, new Limit(DEFAULT_PARALLELISM)),
+      new SameObjects(providers, new Limit(DEFAULT_PARALLELISM)),
+      versions
+    );
   });
 
   afterEach(() => {

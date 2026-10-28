@@ -51,6 +51,7 @@ export class Slow implements Provider {
   }
 
   async plan(_type: string, request: PlanRequest): Promise<PlannedChange> {
+    await this.answer('plan', request.config);
     return planFromSchema(SCHEMA, request);
   }
 

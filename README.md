@@ -124,11 +124,12 @@ from a sensitive one is sensitive too: `local_file.id` where `path` is, `stdout`
 3. The graph builder links each resource, variable, local and output to what it reads,
    and sorts them so nothing runs before what it needs. A cycle or a reference to
    nothing stops here.
-4. Each value is resolved in that order and held to the type its schema names. The
-   provider checks it and plans what the resource will hold: a value it computes is
-   known after apply once anything changes, unless it can work it out sooner, as
-   `local_file` does its id from an absolute path. It also says which changes replace
-   the resource. A plan that changes a value the configuration sets is refused. The
+4. Each value is resolved once what it reads is, so blocks that do not read each other
+   are planned together, ten provider calls at once or as many as `--parallelism` says.
+   Each is held to the type its schema names. The provider checks it and plans what the
+   resource will hold: a value it computes is known after apply once anything changes,
+   unless it can work it out sooner, as `local_file` does its id from an absolute path.
+   It also says which changes replace the resource. A plan that changes a value the configuration sets is refused. The
    planner compares each plan with the state and lists the actions: create, update,
    replace, delete, or nothing.
 5. `apply` runs the actions a layer of the graph at a time, ten at once or as many as

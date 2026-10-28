@@ -984,9 +984,11 @@ Measured with the local provider; a remote provider makes the sequential calls c
       and skips only what reads a failed resource. Once the graph is walked, a root output
       can be written when it resolves, so a failure leaves only the outputs that read it
       at their old value, as Terraform does
-- [ ] Refresh, planning, schema loading and data source reads call the provider one at a
+- [x] Refresh, planning, schema loading and data source reads call the provider one at a
       time. With 100 ms a call, 20 resources plan in 4 seconds. Terraform runs them as the
-      graph allows, ten at a time
+      graph allows, ten at a time. The plan now walks the graph, ten provider calls at once
+      or as many as `--parallelism` says: 20 resources plan in 1.0 seconds, not 4.7, and 20
+      data sources in 0.7, not 4.4
 - [x] `Graph.dependenciesOf` scans every node's edges on each call, and the plan calls it for
       every resource, so a plan of 4000 blocks spends 1.8 of its 2.4 seconds there. The graph
       can keep the reverse edges
