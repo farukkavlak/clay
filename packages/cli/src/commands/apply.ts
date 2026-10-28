@@ -49,6 +49,7 @@ function reportEvent(event: RunEvent, failures: string[]): void {
   if (event.type === 'applied') console.log(actionLine(event.action, false));
   if (event.type === 'destroyed') console.log(destroyedLine(event.action));
   if (event.type === 'read') console.log(readLine(event.address, false));
+  if (event.type === 'printed') console.log(`  ${Address.of(event.action).toString()} (${event.provisioner}): ${printable(event.line)}`);
   if (event.type === 'unsaved') console.error(styleText('red', 'The state could not be saved:'), printable(event.error.message));
   if (event.type === 'failed') {
     if (event.stateError) console.error(styleText('red', 'The state could not be saved:'), printable(event.stateError.message));

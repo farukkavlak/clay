@@ -9,6 +9,6 @@ export interface Provisioner {
   /** Throws on an invalid configuration. A value may be UNKNOWN until apply, and is checked again then. */
   validate(config: Record<string, unknown>): Promise<void>;
 
-  /** Throws when the step fails. */
-  run(config: Record<string, unknown>): Promise<void>;
+  /** Throws when the step fails. Each line it prints goes to `output` as it comes, without its line break. */
+  run(config: Record<string, unknown>, output: (line: string) => void): Promise<void>;
 }

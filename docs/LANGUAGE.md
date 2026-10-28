@@ -367,8 +367,13 @@ waits for, as it does for its own attributes. `self` is the object it runs on: `
 `self` anywhere else is refused where it is written. A command that fails stops the apply for
 that resource and the provisioners after it. The object stays in state, marked tainted:
 the next plan replaces it, `tainted, so it is replaced`, and its provisioners run again.
-`ignore_changes` keeps nothing of a tainted object. Where a value given to the command is
-sensitive, the error does not say why it failed.
+`ignore_changes` keeps nothing of a tainted object.
+
+Apply prints the command, then each line it prints on stdout and stderr as it comes:
+`null_resource.n (local-exec): hello`. Lines from stdout and stderr keep their order within
+each stream, not between the two. `quiet = true` leaves out the command, and still prints
+its lines. Where a value given to the command is sensitive, apply prints one line that says
+so in place of all of them, and the error does not say why it failed.
 
 `validate` refuses a type no provisioner has, an argument it does not take, and a
 `command` that is missing, null, empty or not a string, each where it is written. A plan

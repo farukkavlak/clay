@@ -12,6 +12,8 @@ export type RunEvent =
   /** A replace's object destroyed apart from its new one: before its turn, or before a create that failed. */
   | { type: 'destroyed'; action: PlanAction }
   | { type: 'read'; address: string }
+  /** A line a provisioner printed as the action ran. */
+  | { type: 'printed'; action: PlanAction; provisioner: string; line: string }
   | { type: 'failed'; action: PlanAction; error: Error; stateError?: Error }
   | { type: 'unsaved'; error: Error }
   | { type: 'done'; outputs: Record<string, Output> };

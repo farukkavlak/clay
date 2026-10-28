@@ -44,17 +44,19 @@ export class Provisioning {
     }
   }
 
-  /** The reason is hidden where a value given is sensitive. */
-  async run(type: string, { config, sensitive }: ProvisionerConfig): Promise<void> {
+  /** What it prints and why it failed are hidden where a value given is sensitive, since either may hold it. */
+  async run(type: string, { config, sensitive }: ProvisionerConfig, print: (line: string) => void): Promise<void> {
     const provisioner = this.provisioners.get(type);
+    const hidden = sensitive.length > 0;
 
     await hidingReason(
       type,
       sensitive,
       () =>
         this.limit.run(async () => {
+          if (hidden) print('a value given to it is sensitive, so what it prints is not shown');
           try {
-            await provisioner.run(config);
+            await provisioner.run(config, hidden ? () => {} : print);
           } catch (error) {
             // Whatever it throws, the step failed, and the message says which one.
             throw new Error(`${type} failed: ${asError(error).message}`, { cause: error });

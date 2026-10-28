@@ -21,8 +21,9 @@ import { ScopeManager } from '../config/ScopeManager';
 import { shown } from '../shown';
 import { typeFits } from '../values/typeFits';
 import { outputOf, Value } from '../values/Value';
-import { ActionExecutor, Running } from './ActionExecutor';
+import { ActionExecutor, ProvisionerPrint, Running } from './ActionExecutor';
 import { Step, walkTogether } from './walkTogether';
+import { streamed } from './streamed';
 import { LoadedConfig } from './ConfigLoader';
 import { DataSourceReader } from '../plan/DataSourceReader';
 import { checkMovedFrom, movesIn, plannedMoves } from '../plan/moves';
@@ -379,7 +380,7 @@ export class PlanRunner {
     const key = Address.of(action).toString();
     const held = Object.hasOwn(state.resources, key);
     const lost = () => held && !Object.hasOwn(state.resources, key);
-    if (!(yield* this.attempt(action, state, () => this.executor.execute(action, state, running), lost))) return false;
+    if (!(yield* this.attempt(action, state, (print) => this.executor.execute(action, state, { ...running, print }), lost))) return false;
 
     await this.stateManager.record(state, key);
     if (quiet) return true;
@@ -398,10 +399,10 @@ export class PlanRunner {
     return true;
   }
 
-  /** `lost` says whether the failed change destroyed the object, as a replace does before its create. */
-  private async *attempt(action: PlanAction, state: State, change: () => Promise<void>, lost = () => false): AsyncGenerator<RunEvent, boolean> {
+  /** `lost` says whether the failed change destroyed the object, as a replace does before its create. What a provisioner prints is given as it comes. */
+  private async *attempt(action: PlanAction, state: State, change: (print: ProvisionerPrint) => Promise<void>, lost = () => false): AsyncGenerator<RunEvent, boolean> {
     try {
-      await change();
+      yield* streamed<RunEvent, void>((emit) => change((provisioner, line) => emit({ type: 'printed', action, provisioner, line })));
       return true;
     } catch (error) {
       const stateError = await this.saveAfterFailure(state, Address.of(action).toString());

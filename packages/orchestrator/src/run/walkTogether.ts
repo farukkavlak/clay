@@ -36,6 +36,8 @@ class Walk<E> {
   /** The nodes ready at the start not reached yet, which hold back every step, so a node that cannot be reached stops the walk before any step runs. */
   private readonly opening = new Set<string>();
   private crash?: { at: number; error: unknown };
+  /** Set once the reader has left, so the work running ends and nothing starts. */
+  private stopping = false;
 
   constructor(
     private readonly order: string[],
@@ -85,14 +87,16 @@ class Walk<E> {
     if (this.crash) throw this.crash.error;
   }
 
-  async settle(): Promise<void> {
-    await Promise.allSettled(this.pending.values());
+  /** Runs every piece of work to its end, through events no one reads any more, and starts nothing. */
+  async drain(): Promise<void> {
+    this.stopping = true;
+    while (!this.idle()) this.receive(await this.next());
   }
 
-  /** In the order, and none once something crashed. */
+  /** In the order, and none once something crashed or the reader left. */
   private reachAll(ids: string[]): void {
     for (const id of ids.sort((one, other) => this.place.get(one)! - this.place.get(other)!)) {
-      if (this.crash) return;
+      if (this.crash || this.stopping) return;
 
       this.track(this.reach(id), id, false);
     }
@@ -157,9 +161,9 @@ class Walk<E> {
     this.fill();
   }
 
-  /** Starts steps while there is room, and none once something crashed. */
+  /** Starts steps while there is room, and none once something crashed or the reader left. */
   private fill(): void {
-    while (!this.crash && this.opening.size === 0 && this.stepsRunning < this.limit && this.queue.length > 0) {
+    while (!this.crash && !this.stopping && this.opening.size === 0 && this.stepsRunning < this.limit && this.queue.length > 0) {
       const { id, step } = this.queue.shift()!;
       this.stepsRunning += 1;
       this.track(step(), id, true);
@@ -186,6 +190,7 @@ class Walk<E> {
  * A step that fails, or a node that cannot go on, keeps what depends on it from being reached; the rest goes on, and the walk returns false.
  * Once anything throws, nothing starts, and the first throw in `order` is thrown after the running work is done.
  * An event `deferred` holds is given only once nothing runs, so a reader that stops at it cannot cut a step short.
+ * Once the reader leaves, the work running goes on to its end, through any events it still gives, and nothing starts.
  */
 export async function* walkTogether<E>(order: string[], edges: Edges, reach: Reach<E>, limit: number, deferred: (event: E) => boolean): AsyncGenerator<E, boolean> {
   const walk = new Walk(order, edges, reach, limit, deferred);
@@ -200,8 +205,8 @@ export async function* walkTogether<E>(order: string[], edges: Edges, reach: Rea
     yield* walk.waiting;
     walk.throwCrash();
   } finally {
-    // A reader that leaves early still waits for the work already started.
-    await walk.settle();
+    // A reader that leaves early still waits for the work already started, to its end.
+    await walk.drain();
   }
 
   return walk.succeeded;

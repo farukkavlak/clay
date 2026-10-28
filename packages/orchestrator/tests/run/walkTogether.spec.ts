@@ -281,6 +281,42 @@ describe('walking a graph together', () => {
     expect(steps.log).toEqual(['reach a', 'begin a', 'finish a']);
   });
 
+  it('runs the step that is working to its end when its reader stops early, through the events it gives, and starts nothing after it', async () => {
+    const log: string[] = [];
+    async function* working(): AsyncGenerator<Event, boolean> {
+      yield 'start a';
+      await pause(5);
+      yield 'middle a';
+      await pause(5);
+      log.push('finish a');
+      return true;
+    }
+    const graph = graphOf(['a', 'b'], [['a', 'b']]);
+    const walk = walkOf(graph, async function* (id) {
+      log.push(`reach ${id}`);
+      yield `reached ${id}`;
+      return id === 'a' ? [working] : [];
+    });
+
+    // `a` is working after these, and gives another event before it ends.
+    await walk.next();
+    await walk.next();
+    await walk.return(false);
+
+    expect(log).toEqual(['reach a', 'finish a']);
+  });
+
+  it('starts no step waiting for room once its reader stops early', async () => {
+    const steps = new Steps();
+    const walk = walkOf(graphOf(['a']), reaching(steps, { a: [steps.step('x', { ms: 10 }), steps.step('y')] }), 1);
+
+    await walk.next();
+    await walk.next();
+    await walk.return(false);
+
+    expect(steps.log).toEqual(['reach a', 'begin x', 'finish x']);
+  });
+
   it('walks a chain of nodes too long to reach one from the last on the stack', async () => {
     const ids = Array.from({ length: 6000 }, (_, index) => `n${index}`);
     const graph = graphOf(

@@ -27,13 +27,13 @@ describe('a local-exec provisioner', () => {
   const write = (config: string) => fs.writeFile(file('main.clay'), config, 'utf8');
   const stateOf = async () => JSON.parse(await read('clay.state.json')) as State;
 
-  /** What the command said on stderr, and the code it exited with. */
-  const failure = async (...args: string[]): Promise<{ stderr: string; code: number }> => {
+  /** What the command said on stdout and stderr, and the code it exited with. */
+  const failure = async (...args: string[]): Promise<{ stdout: string; stderr: string; code: number }> => {
     try {
       await clayIn(...args);
     } catch (error) {
-      const { stderr, code } = error as { stderr: string; code: number };
-      return { stderr: stripVTControlCharacters(stderr), code };
+      const { stdout, stderr, code } = error as { stdout: string; stderr: string; code: number };
+      return { stdout: stripVTControlCharacters(stdout), stderr: stripVTControlCharacters(stderr), code };
     }
 
     throw new Error('Expected the command to fail');
@@ -155,7 +155,7 @@ describe('a local-exec provisioner', () => {
 
     const state = await stateOf();
     expect(code).toBe(1);
-    expect(stderr).toContain('null_resource.n: local-exec failed: Command failed: exit 3');
+    expect(stderr).toContain('null_resource.n: local-exec failed: the command exited with 3');
     expect(await read('log.txt')).toBe('1\n');
     expect(state.resources['null_resource.n'].tainted).toBe(true);
   });
@@ -183,6 +183,53 @@ describe('a local-exec provisioner', () => {
 
     expect(stderr).toContain('local-exec failed to run; a value given to it is sensitive, so the reason is not shown');
     expect(stderr).not.toContain('s3cr3t-token');
+  });
+
+  it('prints the command and each line it prints, on stdout and stderr, with the object and the provisioner, before the object is shown created', async () => {
+    await write(`resource "null_resource" "n" {\n${step('echo one; echo two >&2')}}\n`);
+
+    const stdout = await clayIn('apply', '--yes');
+
+    const lines = ['Executing: "echo one; echo two >&2"', 'one', 'two'].map((line) => stdout.indexOf(`  null_resource.n (local-exec): ${line}\n`));
+    expect(lines.every((at) => at >= 0)).toBe(true);
+    expect(lines[0]).toBeLessThan(lines[1]);
+    expect(Math.max(...lines)).toBeLessThan(stdout.indexOf('null_resource.n created'));
+  });
+
+  it('prints what it printed before it failed', async () => {
+    await write(`resource "null_resource" "n" {\n${step('echo before; exit 3')}}\n`);
+
+    const { stdout } = await failure('apply', '--yes');
+
+    expect(stdout).toContain('  null_resource.n (local-exec): before\n');
+  });
+
+  it('does not print the command when it is quiet, and still prints what it prints', async () => {
+    await write('resource "null_resource" "n" {\n  provisioner "local-exec" {\n    command = "echo one"\n    quiet   = true\n  }\n}\n');
+
+    const stdout = await clayIn('apply', '--yes');
+
+    expect(stdout).toContain('  null_resource.n (local-exec): one\n');
+    expect(stdout).not.toContain('Executing');
+  });
+
+  it('prints a control character it prints as a character of its own', async () => {
+    await write(`resource "null_resource" "n" {\n${step(String.raw`printf 'a\\033[31mb'`)}}\n`);
+
+    const stdout = await clayIn('apply', '--yes');
+
+    expect(stdout).toContain('  null_resource.n (local-exec): a\u241B[31mb\n');
+  });
+
+  it('prints none of what it prints, and says so once, when a value given to it is sensitive', async () => {
+    await write('variable "token" {\n  default   = "s3cr3t-token"\n  sensitive = true\n}\n' + `resource "null_resource" "n" {\n${step('echo ${var.token}; echo two')}}\n`);
+
+    const stdout = await clayIn('apply', '--yes');
+
+    const said = '  null_resource.n (local-exec): a value given to it is sensitive, so what it prints is not shown\n';
+    expect(stdout.split(said)).toHaveLength(2);
+    expect(stdout).not.toContain('s3cr3t-token');
+    expect(stdout).not.toContain('(local-exec): two');
   });
 
   it('reads the object it runs on through self, each instance its own, computed values and all', async () => {
