@@ -1,5 +1,5 @@
 /** What a walk needs of a graph. */
-interface Edges {
+export interface Edges {
   dependenciesOf(id: string): string[];
   dependentsOf(id: string): string[];
 }
