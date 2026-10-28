@@ -65,6 +65,22 @@ const create = (after: Record<string, unknown>): Step => ({
 /** An action on `test.main[1]` whose block sets `path`. */
 const at = (type: Step['type']): Step => ({ type, resourceType: 'test', name: 'main', key: 1, attributes: { path: str('p') }, planned: { path: 'p' }, after: { path: 'p' } });
 
+/** Counts the work inside it, so a provider call can tell whether it took its turn. */
+class Watched extends Limit {
+  inside = 0;
+
+  override async run<T>(work: () => Promise<T>): Promise<T> {
+    return super.run(async () => {
+      this.inside += 1;
+      try {
+        return await work();
+      } finally {
+        this.inside -= 1;
+      }
+    });
+  }
+}
+
 const bug = 'test returned what the plan did not show, which is a bug in the provider:';
 
 describe('ActionExecutor', () => {
@@ -73,6 +89,7 @@ describe('ActionExecutor', () => {
   let mockProvider: Provider;
   let mockState: State;
   let versions: Versions;
+  let limit: Watched;
 
   beforeEach(() => {
     mockState = emptyState();
@@ -108,13 +125,8 @@ describe('ActionExecutor', () => {
       new InstanceKeys(instances, modules),
       versions
     );
-    executor = new ActionExecutor(
-      providers,
-      resolver,
-      new ResourcePlanner(providers, new Limit(DEFAULT_PARALLELISM)),
-      new SameObjects(providers, new Limit(DEFAULT_PARALLELISM)),
-      versions
-    );
+    limit = new Watched(DEFAULT_PARALLELISM);
+    executor = new ActionExecutor(providers, resolver, new ResourcePlanner(providers, limit), new SameObjects(providers, limit), versions, limit);
   });
 
   afterEach(() => {
@@ -556,6 +568,51 @@ describe('ActionExecutor', () => {
 
       await expect(executor.executeDelete(action, mockProvider, mockState)).rejects.toThrow(/^state holds no object for it, so the plan was made from another state$/);
       expect(mockProvider.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('each provider call', () => {
+    let calls: string[];
+
+    beforeEach(() => {
+      calls = [];
+      const seen = (call: string) => calls.push(`${call} ${limit.inside > 0 ? 'in turn' : 'outside'}`);
+      vi.mocked(mockProvider.getSchema).mockImplementation(async () => {
+        seen('getSchema');
+        return schema;
+      });
+      vi.mocked(mockProvider.create).mockImplementation(async (_type, { config }) => {
+        seen('create');
+        return config;
+      });
+      vi.mocked(mockProvider.update).mockImplementation(async (_type, { config }) => {
+        seen('update');
+        return config;
+      });
+      vi.mocked(mockProvider.delete).mockImplementation(async () => {
+        seen('delete');
+      });
+    });
+
+    it.each([
+      ['CREATE', ['getSchema in turn', 'create in turn']],
+      ['UPDATE', ['getSchema in turn', 'update in turn']],
+      ['REPLACE', ['getSchema in turn', 'delete in turn', 'create in turn']],
+      ['DELETE', ['delete in turn']],
+    ] as const)('of a %s takes its turn in the run', async (type, expected) => {
+      hold();
+
+      await run(executor, at(type), mockState);
+
+      expect(calls).toEqual(expected);
+    });
+
+    it('of a deposed object takes its turn in the run', async () => {
+      mockState.deposed = { 'test.main[1]': [{ attributes: { path: 'old' } }] };
+
+      await run(executor, { ...at('DELETE'), deposed: true }, mockState);
+
+      expect(calls).toEqual(['delete in turn']);
     });
   });
 });

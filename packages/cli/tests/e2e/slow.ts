@@ -4,6 +4,7 @@ const SCHEMA: Schema = {
   name: { type: types.string, required: true },
   note: { type: types.string, optional: true },
   mode: { type: types.string, optional: true },
+  id: { type: types.string, computed: true },
 };
 
 const DATA_SCHEMA: Schema = { name: { type: types.string, required: true }, mode: { type: types.string, optional: true } };
@@ -16,7 +17,7 @@ const pause = (ms: number) =>
 /**
  * Takes a moment for each call it is told to, create and delete unless told others, and counts how many it has going at once.
  * An object whose `mode` is `<call> fails` fails that call at once, and `<call> fails late` after the others have had their moment.
- * One whose `mode` is `<call> slow` takes three moments over that call.
+ * One whose `mode` is `<call> slow` takes three moments over that call. A resource's `id` is its name, known once it is made.
  */
 export class Slow implements Provider {
   readonly dataSources: string[];
@@ -73,11 +74,11 @@ export class Slow implements Provider {
 
   async create(_type: string, { config }: CreateRequest): Promise<Record<string, unknown>> {
     await this.answer('create', config);
-    return { ...config };
+    return { ...config, id: config.name };
   }
 
   async update(_type: string, { config }: CreateRequest): Promise<Record<string, unknown>> {
-    return { ...config };
+    return { ...config, id: config.name };
   }
 
   async delete(): Promise<void> {

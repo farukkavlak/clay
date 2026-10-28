@@ -84,6 +84,19 @@ describe('resources an apply runs together', () => {
     });
   });
 
+  // The `a` resources come first, so the reads of their ids start while the `z` resources are made.
+  it('reads at apply within the parallelism, beside what it makes', async () => {
+    provider = new Slow(['create', 'readDataSource']);
+    engine = orchestratorIn(dir, provider);
+    const reads = [0, 1, 2].map((index) => `data "slow" "d${index}" {\n  name = slow.a${index}.id\n  mode = "readDataSource slow"\n}`);
+    const config = [blocks('a0', 'a1', 'a2', 'z0', 'z1', 'z2'), ...reads].join('\n');
+
+    await runWith(config, 3);
+
+    expect(provider.most).toBe(3);
+    expect(await held()).toEqual(['slow.a0', 'slow.a1', 'slow.a2', 'slow.z0', 'slow.z1', 'slow.z2']);
+  });
+
   it('waits for the resource it reads', async () => {
     await run(`${blocks('a')}\nresource "slow" "b" {\n  name = "b"\n  note = slow.a.name\n}`);
 

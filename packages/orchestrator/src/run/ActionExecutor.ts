@@ -5,6 +5,7 @@ import { offApply, offFinal, offPlan, PlanAction } from '@clay/planner';
 import { conformValues } from '../values/conformValues';
 import { keepPrior } from '../plan/ignoredChanges';
 import { checkNesting, heldBy, hidingReason, inconsistent, tooDeep } from '../providers/providerResult';
+import { Limit } from '../providers/Limit';
 import { ProviderRegistry } from '../providers/ProviderRegistry';
 import { SameObjects } from '../checks/sameObject';
 import { ReferenceResolver } from '../expressions/ReferenceResolver';
@@ -73,7 +74,8 @@ export class ActionExecutor {
     private resolver: ReferenceResolver,
     private planner: ResourcePlanner,
     private sameObjects: SameObjects,
-    private versions: Versions
+    private versions: Versions,
+    private limit: Limit
   ) {}
 
   /** Before the run, so a create onto an object the run will destroy is refused. */
@@ -141,7 +143,7 @@ export class ActionExecutor {
     if (!action.after) throw new Error(`${action.type} action missing what its provider planned`);
 
     const type = action.resourceType;
-    const schema = await this.providers.schema(type);
+    const schema = await this.limit.run(() => this.providers.schema(type));
     const inputs = this.resolver.resolveAttributes(written, currentState, Address.of(action));
     const ignoring = this.ignoringFor(action, currentState, destroyed);
     const conformed = conformValues(type, schema, inputs);
@@ -215,7 +217,7 @@ export class ActionExecutor {
     const created = await hidingReason(
       action.resourceType,
       sending.hidden,
-      () => provider.create(action.resourceType, { config: sending.inputs, planned: sending.after }),
+      () => this.limit.run(() => provider.create(action.resourceType, { config: sending.inputs, planned: sending.after })),
       'to create'
     );
     const attributes = this.returned(sending, created);
@@ -240,7 +242,7 @@ export class ActionExecutor {
     const request = { prior: currentResource.attributes, config: sending.inputs, planned: sending.after };
 
     const hidden = [...sending.hidden, ...(currentResource.sensitive ?? [])];
-    const updated = await hidingReason(action.resourceType, hidden, () => provider.update(action.resourceType, request), 'to update');
+    const updated = await hidingReason(action.resourceType, hidden, () => this.limit.run(() => provider.update(action.resourceType, request)), 'to update');
     currentResource.attributes = this.returned(sending, updated);
     currentResource.dependencies = action.dependencies ?? [];
     mark(currentResource, sending.sensitive);
@@ -268,7 +270,7 @@ export class ActionExecutor {
 
     while (objects.length > 0) {
       const [object] = objects;
-      await hidingReason(action.resourceType, object.sensitive ?? [], () => provider.delete(action.resourceType, object.attributes), 'to destroy');
+      await hidingReason(action.resourceType, object.sensitive ?? [], () => this.limit.run(() => provider.delete(action.resourceType, object.attributes)), 'to destroy');
       objects.shift();
     }
 
@@ -283,7 +285,7 @@ export class ActionExecutor {
 
   async executeDelete(action: PlanAction, provider: Provider, currentState: State): Promise<void> {
     const { attributes, sensitive = [] } = held(action, currentState);
-    await hidingReason(action.resourceType, sensitive, () => provider.delete(action.resourceType, attributes), 'to destroy');
+    await hidingReason(action.resourceType, sensitive, () => this.limit.run(() => provider.delete(action.resourceType, attributes)), 'to destroy');
     delete currentState.resources[Address.of(action).toString()];
     this.wrote(action);
   }

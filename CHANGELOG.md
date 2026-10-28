@@ -42,11 +42,11 @@ a configuration means or how the state file is written.
   resources and data sources, and hidden in plan, apply, `output` and `state show`
 - `lifecycle` with `prevent_destroy`, `create_before_destroy` and `ignore_changes`, and
   deposed objects that a later plan destroys
-- `apply --parallelism`: each action runs once what it reads is done, ten at once by
-  default. A failure stops only what reads it, and every failure of a run is reported.
-  `plan` takes it too: that many provider calls run at once, for the refresh, schemas,
-  block checks, what each object is, the plan of each resource and each data source
-  read. A plan walks the graph, so a block starts once what it reads is planned
+- `apply --parallelism`: each action runs once what it reads is done, with ten provider
+  calls at once by default. A failure stops only what reads it, and every failure of a
+  run is reported. `plan` takes it too, for the refresh, schemas, block checks, what
+  each object is, the plan of each resource and each data source read. A plan walks the
+  graph, so a block starts once what it reads is planned
 
 ### Fixed
 

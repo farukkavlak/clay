@@ -58,7 +58,7 @@ export function newRun(stateManager: StateManager, providers: ProviderRegistry, 
     desiredStateBuilder: new DesiredStateBuilder(scopes, resolver, graphBuilder, instances, modules, planned, resourcePlanner, reader, versions),
     runner: new PlanRunner(
       stateManager,
-      new ActionExecutor(providers, resolver, resourcePlanner, new SameObjects(providers, limit), versions),
+      new ActionExecutor(providers, resolver, resourcePlanner, new SameObjects(providers, limit), versions, limit),
       scopes,
       resolver,
       instances,
