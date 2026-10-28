@@ -5,12 +5,19 @@ import { ModuleInstances } from '../../../src/instances/ModuleInstances';
 import { Reference, ReferenceScanner } from '../../../src/expressions/references/ReferenceScanner';
 import { steps } from '../../ast';
 
-const keysOf = (references: Reference[]) => references.map((reference) => (reference.kind === 'count' || reference.kind === 'each' ? reference.kind : reference.key));
+const keysOf = (references: Reference[]) =>
+  references.map((reference) => (reference.kind === 'count' || reference.kind === 'each' || reference.kind === 'self' ? reference.kind : reference.key));
 
 describe('ReferenceScanner', () => {
   const scanner = new ReferenceScanner(new ModuleInstances());
   const context = Address.root('resource', 'main');
   const inModule = new Address(ModuleAddress.root.child('app'), 'resource', 'main');
+
+  it('finds self as a reference to no block, so it adds no edge', () => {
+    const attributes = { command: { type: 'Reference', value: steps('self', 'path') } };
+
+    expect(keysOf(scanner.referencesIn(attributes, context))).toEqual(['self']);
+  });
 
   it('should find a resource reference', () => {
     const attributes = { id: { type: 'Reference', value: steps('resource', 'dep', 'id') } };

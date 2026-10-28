@@ -1,5 +1,5 @@
 import { Address, AttributePath, InstanceKey, Schema, sensitiveUnder, State, UNKNOWN } from '@clay/contracts';
-import { Position, ResourceReference, spellReference, Step } from '@clay/parser';
+import { Position, ResourceReference, SelfReference, spellReference, Step } from '@clay/parser';
 
 import { Instances, Repetition } from '../../instances/Instances';
 import { blockKey, Context, moduleOf } from '../../keys';
@@ -8,7 +8,7 @@ import { Planned, PlannedInstance } from '../../values/Planned';
 import { Versions } from '../../values/Versions';
 import { TypeMismatch, typedValues } from '../../values/typed';
 import { objectOf, sensitiveOf, Value, valueOf, withSensitive } from '../../values/Value';
-import { everyType, noAttribute, readInstance } from './instance';
+import { everyType, noAttribute, readInstance, readSelf, SELF_OUTSIDE } from './instance';
 import { UnresolvedReferenceError } from '../UnresolvedReferenceError';
 
 /** A name only the apply sets is unknown; any other unplanned name is null. Names outside the schema were refused earlier. */
@@ -74,6 +74,21 @@ export class ResourceResolver {
     if (!held) throw new UnresolvedReferenceError(notFound(spelled, address));
 
     const values = this.typedRead(reference, attribute === undefined ? Object.keys(schema) : [attribute], held, schema, position);
+    return { value: attribute === undefined ? objectOf(Object.entries(values)) : values[attribute], path };
+  }
+
+  /** The instance a provisioner runs on, as the plan or the state holds it; `self` names no instance. */
+  resolveSelf(reference: SelfReference, context: Context, state: State, position?: Position): { value: Value; path: Step[] } {
+    // The graph refuses `self` anywhere but in a provisioner, whose context is its instance.
+    if (!(context instanceof Address)) throw placed(SELF_OUTSIDE, position);
+
+    const schema = this.schemas.get(context.resourceType) ?? {};
+    const { attribute, path } = readSelf(reference.path, position);
+    const held = this.heldAt(context, context.resourceType, schema, state, position);
+    if (!held) throw new UnresolvedReferenceError(`self is known only once ${context.toString()} is made`);
+
+    const read: ResourceReference = { kind: 'resource', type: context.resourceType, name: context.name, path: reference.path };
+    const values = this.typedRead(read, attribute === undefined ? Object.keys(schema) : [attribute], held, schema, position);
     return { value: attribute === undefined ? objectOf(Object.entries(values)) : values[attribute], path };
   }
 

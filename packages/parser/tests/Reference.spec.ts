@@ -41,6 +41,7 @@ describe('a reference read into a value', () => {
     ['data.local_file.f.tags.env', { kind: 'data', type: 'local_file', name: 'f', path: steps('tags', 'env') }],
     ['module.app.tags.env', { kind: 'module', module: 'app', path: steps('tags', 'env') }],
     ['local_file.a.tags.env.name', { kind: 'resource', type: 'local_file', name: 'a', path: steps('tags', 'env', 'name') }],
+    ['self.tags.env', { kind: 'self', path: steps('tags', 'env') }],
   ])('reads %s as what it names, what it reads on it, and the steps into that value', (spelled, expected) => {
     expect(parse(spelled)).toEqual(expected);
   });
@@ -54,6 +55,10 @@ describe('a reference read into a value', () => {
   // Whether the first step is an instance key depends on the module call, which only the engine knows.
   it('reads what follows a module name as steps, an index and all', () => {
     expect(parseReference(steps('module', 'app', 0, 'url'), position)).toEqual({ kind: 'module', module: 'app', path: steps(0, 'url') });
+  });
+
+  it('reads self alone as the whole object', () => {
+    expect(parseReference(steps('self'), position)).toEqual({ kind: 'self', path: [] });
   });
 
   it('reads an index as a step into the value', () => {

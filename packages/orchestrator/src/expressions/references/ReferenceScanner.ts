@@ -27,6 +27,7 @@ export type Reference = (
   | { kind: 'output'; key: string; call: ModuleAddress; instanceKey?: InstanceKey; scope: string; module: string; name?: string; reference: ModuleOutputReference }
   | { kind: 'count' }
   | { kind: 'each'; name: 'key' | 'value' }
+  | { kind: 'self' }
 ) & { position?: Position };
 
 /** An index read from a value is the instance's key too, though only its value says which. */
@@ -84,6 +85,10 @@ export class ReferenceScanner {
       }
       case 'each': {
         return { kind: 'each', name: reference.name };
+      }
+      // The object the provisioner runs on, which its resource makes first; no edge.
+      case 'self': {
+        return { kind: 'self' };
       }
       case 'variable': {
         return { kind: 'variable', key: variableKey(scope, reference.name), name: reference.name };

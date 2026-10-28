@@ -66,7 +66,22 @@ export interface PathReference {
   path: Step[];
 }
 
-export type ParsedReference = VariableReference | LocalReference | DataReference | ModuleOutputReference | ResourceReference | CountReference | EachReference | PathReference;
+/** The object a provisioner runs on. With no attribute, it reads the whole object. */
+export interface SelfReference {
+  kind: 'self';
+  path: Step[];
+}
+
+export type ParsedReference =
+  | VariableReference
+  | LocalReference
+  | DataReference
+  | ModuleOutputReference
+  | ResourceReference
+  | CountReference
+  | EachReference
+  | PathReference
+  | SelfReference;
 
 /** A key is spelled in brackets as it was written, since under for_each only that form names an instance. */
 function spellStep(part: Step, first: boolean): string {
@@ -174,6 +189,7 @@ export function parseReference(parts: Step[], position?: Position): ParsedRefere
   if (head === 'count') return countReference(parts, position);
   if (head === 'each') return eachReference(parts, position);
   if (head === 'path') return pathReference(parts, position);
+  if (head === 'self') return { kind: 'self', path: parts.slice(1) };
 
   return resourceReference(parts, position);
 }

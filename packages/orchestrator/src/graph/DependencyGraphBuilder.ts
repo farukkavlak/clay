@@ -8,7 +8,7 @@ import { functionCalled } from '../expressions/functions';
 import { callKey, Context, dataSourceAddress, dataSourceKey, localKey, ModuleCall, outputKey, scopeOf, variableKey } from '../keys';
 import { ModuleInstances } from '../instances/ModuleInstances';
 import { placed, tryAt, withPlace } from '../place';
-import { COUNT_INDEX_OUTSIDE, eachOutside, readCall, readInstance } from '../expressions/references/instance';
+import { COUNT_INDEX_OUTSIDE, eachOutside, readCall, readInstance, SELF_OUTSIDE } from '../expressions/references/instance';
 import { Reference, ReferenceScanner } from '../expressions/references/ReferenceScanner';
 import { LoadedModule, LoadedResource, outputsOf } from '../config/ModuleLoader';
 
@@ -61,7 +61,19 @@ function checkInstanceReference(reference: Extract<Reference, { kind: 'count' | 
   if (reference.kind === 'each' && repetition !== 'for_each') throw placed(eachOutside(reference.name), reference.position);
 }
 
-function describeMissing(reference: Exclude<Reference, { kind: 'count' | 'each' }>, moduleScopes: Set<string>): string {
+type Unnamed = Extract<Reference, { kind: 'count' | 'each' | 'self' }>;
+
+/** What names no block: an instance's own key, or the object a provisioner runs on. */
+function namesNoBlock(reference: Reference): reference is Unnamed {
+  return reference.kind === 'count' || reference.kind === 'each' || reference.kind === 'self';
+}
+
+function checkUnnamed(reference: Unnamed, repetition: Repetition | undefined, { provisioning }: Dependent): void {
+  if (reference.kind !== 'self') checkInstanceReference(reference, repetition);
+  else if (!provisioning) throw placed(SELF_OUTSIDE, reference.position);
+}
+
+function describeMissing(reference: Exclude<Reference, Unnamed>, moduleScopes: Set<string>): string {
   if (reference.kind === 'variable') return `variable "${reference.name}" is not defined`;
   if (reference.kind === 'local') return `local "${reference.name}" is not defined`;
   if (reference.kind === 'resource') return `"${reference.key}" is not declared in the configuration`;
@@ -77,6 +89,8 @@ interface Dependent {
   context: Context;
   /** A value the dependent is given, so reading it is no dependency: a rule's own variable. */
   given?: string;
+  /** A provisioner's value, which may read the object it runs on. */
+  provisioning?: true;
 }
 
 type ReferencePlace = Omit<Dependent, 'key' | 'given'> & { position: Position };
@@ -186,10 +200,12 @@ export class DependencyGraphBuilder {
     for (const value of [block.count, block.forEach])
       if (value) tryAt(value.position, dependent.declaration, address, () => this.addDependencies(value, graph, dependent, moduleScopes));
     this.addWaits(block.dependsOn, graph, dependent, moduleScopes);
-    // A provisioner runs as part of the resource, so what it reads, the resource waits for.
-    const provisioned = (block.provisioners ?? []).flatMap((provisioner) => Object.values(provisioner.attributes));
-    for (const value of [...Object.values(block.attributes), ...provisioned])
+    for (const value of Object.values(block.attributes))
       tryAt(value.position, dependent.declaration, address, () => this.addDependencies(value, graph, dependent, moduleScopes, repetition));
+    // A provisioner runs as part of the resource, so what it reads, the resource waits for.
+    const provisioning = { ...dependent, provisioning: true as const };
+    for (const value of (block.provisioners ?? []).flatMap((provisioner) => Object.values(provisioner.attributes)))
+      tryAt(value.position, dependent.declaration, address, () => this.addDependencies(value, graph, provisioning, moduleScopes, repetition));
   }
 
   /** Looks through the variables, locals, outputs and data sources in between. */
@@ -287,8 +303,8 @@ export class DependencyGraphBuilder {
     this.checkCalls(value);
 
     for (const reference of this.scanner.referencesIn(value, dependent.context)) {
-      if (reference.kind === 'count' || reference.kind === 'each') {
-        checkInstanceReference(reference, repetition);
+      if (namesNoBlock(reference)) {
+        checkUnnamed(reference, repetition, dependent);
         continue;
       }
 
@@ -318,7 +334,7 @@ export class DependencyGraphBuilder {
   private addWait(wait: ReferenceNode, graph: Graph<GraphNode>, dependent: Dependent, moduleScopes: Set<string>): void {
     for (const reference of this.scanner.referencesIn(wait, dependent.context)) {
       // Refused by the parser; this narrows the type.
-      if (reference.kind === 'count' || reference.kind === 'each') continue;
+      if (namesNoBlock(reference)) continue;
       if (!graph.hasNode(reference.key)) throw placed(describeMissing(reference, moduleScopes), reference.position);
 
       for (const from of this.waitedFrom(reference, graph)) this.addEdge(from, dependent, graph, reference.position);
@@ -326,7 +342,7 @@ export class DependencyGraphBuilder {
   }
 
   /** A whole module is done once its call and every node in it, and in the modules it calls, are. */
-  private waitedFrom(reference: Exclude<Reference, { kind: 'count' | 'each' }>, graph: Graph<GraphNode>): string[] {
+  private waitedFrom(reference: Exclude<Reference, Unnamed>, graph: Graph<GraphNode>): string[] {
     if (reference.kind !== 'output' || reference.name !== undefined) return [reference.key];
 
     const within = [...graph.entries()].filter(([, node]) => inside(node.module, reference.scope)).map(([key]) => key);
@@ -340,7 +356,7 @@ export class DependencyGraphBuilder {
   }
 
   /** A whole module is read once every output of it has a value. */
-  private readFrom(reference: Exclude<Reference, { kind: 'count' | 'each' }>): string[] {
+  private readFrom(reference: Exclude<Reference, Unnamed>): string[] {
     if (reference.kind !== 'output' || reference.name !== undefined) return [reference.key];
 
     return [reference.key, ...(this.outputs.get(reference.scope) ?? []).map((name) => outputKey(reference.scope, name))];

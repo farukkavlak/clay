@@ -300,10 +300,10 @@ export class DesiredStateBuilder {
     const current = state.resources[address.toString()];
     const ignoring = this.ignoringIn(block, current);
     const change = await this.askProvider(address, block, current, this.resolveForPlan(block, state, address), ignoring);
-    await this.checkProvisioners(block, state, address);
     const values = changes(current, change);
     // A change of values or of marks goes in, so a reader takes the marks from the plan too.
     if (values || !samePaths(current?.sensitive ?? [], change.sensitive)) this.planned.set(address, change.after, change.sensitive, values);
+    await this.checkProvisioners(block, state, address, !current || change.replace);
 
     return {
       address,
@@ -408,8 +408,13 @@ export class DesiredStateBuilder {
     return instance.isRoot() ? [node.name, outputOf(value, node.declared.sensitive)] : undefined;
   }
 
-  /** Read as the resource's own values are: what is known now is checked now, and every value again at apply. */
-  private async checkProvisioners(block: ResourceBlock, state: State, address: Address): Promise<void> {
+  /**
+   * Read as the resource's own values are: what is known now is checked now, and every value again at apply. Only a create runs them,
+   * so an instance the plan makes no object for is not checked, and `self` reads the one it makes, already in the plan.
+   */
+  private async checkProvisioners(block: ResourceBlock, state: State, address: Address, creates: boolean): Promise<void> {
+    if (!creates) return;
+
     const declaration = spell(block);
     for (const provisioner of block.provisioners ?? []) {
       const given = Object.fromEntries(

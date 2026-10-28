@@ -1022,7 +1022,7 @@ run as a step of another resource instead.
 - [x] `provisioner "local-exec" { command = "..." }` inside a resource, run after create.
       One that fails leaves the object tainted, and the next plan replaces it, as in
       Terraform
-- [ ] `self` in a provisioner, for the values of the object it runs on
+- [x] `self` in a provisioner, for the values of the object it runs on
 - [ ] What a provisioner prints, shown as it runs and hidden where a value given to it is
       sensitive; `quiet` to show none
 - [ ] `working_dir`, `environment` and `on_failure = continue` on `local-exec`

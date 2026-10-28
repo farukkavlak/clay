@@ -361,7 +361,10 @@ An update runs none. The command runs through the shell, in the directory Clay r
 Several run in the order written.
 
 Its values are read at apply, after the object is made, and what they read the resource
-waits for, as it does for its own attributes. A command that fails stops the apply for
+waits for, as it does for its own attributes. `self` is the object it runs on: `self.path`,
+`self.id`, or `self` for the whole object, each instance its own under `count` or
+`for_each`. A provisioner cannot name its own resource, which would wait for itself, and
+`self` anywhere else is refused where it is written. A command that fails stops the apply for
 that resource and the provisioners after it. The object stays in state, marked tainted:
 the next plan replaces it, `tainted, so it is replaced`, and its provisioners run again.
 `ignore_changes` keeps nothing of a tainted object. Where a value given to the command is
@@ -369,8 +372,10 @@ sensitive, the error does not say why it failed.
 
 `validate` refuses a type no provisioner has, an argument it does not take, and a
 `command` that is missing, null, empty or not a string, each where it is written. A plan
-checks each value it knows, such as a key a map does not have; one only the apply knows
-is checked then, before the command runs.
+that makes an object checks the values of its provisioners it knows, such as a key a map
+does not have, with `self` as the object the plan makes; one only the apply knows is
+checked then, before the command runs. A plan that makes no object, an update or no
+change, runs no provisioner and checks none of their values.
 
 ## Moved
 

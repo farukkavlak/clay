@@ -12,6 +12,8 @@ export interface InstanceRead {
   path: Step[];
 }
 
+export const SELF_OUTSIDE = 'self is only known inside a provisioner, as the object it runs on';
+
 export const COUNT_INDEX_OUTSIDE = 'count.index is only known inside a resource, a data source or a module call that has count';
 
 export function eachOutside(name: 'key' | 'value'): string {
@@ -82,6 +84,13 @@ export function readInstance(block: string, path: Step[], repetition: Repetition
   if (path.length === 0) return { every: repetition, path: [] };
 
   return { key: instanceKeyIn(path), attribute: readAttribute(block, path, rest, position), path: rest.slice(1) };
+}
+
+/** The one object a provisioner runs on, so no index or key is read, whatever its block repeats by. */
+export function readSelf(path: Step[], position?: Position): InstanceRead {
+  if (path.length > 0 && !('name' in path[0])) refuse('self is the one object a provisioner runs on, so it takes no index', position);
+
+  return readInstance('self', path, undefined, position);
 }
 
 export function instanceType(schema: Schema): Type {

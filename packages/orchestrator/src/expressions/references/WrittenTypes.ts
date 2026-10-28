@@ -11,6 +11,7 @@ import {
   Position,
   ResourceBlock,
   ResourceReference,
+  SelfReference,
   spell,
   Step,
   VariableReference,
@@ -25,10 +26,10 @@ import { placed } from '../../place';
 import { DeclaredBlock, ScopeManager } from '../../config/ScopeManager';
 import { Value, valueOf, withSensitive } from '../../values/Value';
 import { itemsOf, sharedMarks } from '../../values/sensitive';
-import { everyOf, everyType, instanceType, noAttribute, outputsType, readCall, readInstance } from './instance';
+import { everyOf, everyType, instanceType, noAttribute, outputsType, readCall, readInstance, readSelf, SELF_OUTSIDE } from './instance';
 
 /** Paths are known at load and a local is read as written, so they are not here. */
-type Unread = VariableReference | DataReference | ModuleOutputReference | ResourceReference | CountReference | EachReference;
+type Unread = VariableReference | DataReference | ModuleOutputReference | ResourceReference | CountReference | EachReference | SelfReference;
 
 /** A value written once for every instance, whose marks a reference takes at `at` once it is held as an instance holds it. */
 export interface Source {
@@ -99,6 +100,7 @@ export class WrittenTypes {
     if (reference.kind === 'each') return this.eachType(reference, where);
     if (reference.kind === 'module') return this.callType(reference, where, position);
     if (reference.kind === 'data') return this.dataType(reference, where, position);
+    if (reference.kind === 'self') return this.selfType(reference, where, position);
 
     return this.resourceType(reference, where, position);
   }
@@ -165,6 +167,19 @@ export class WrittenTypes {
     if (attribute !== undefined && !Object.hasOwn(schema, attribute)) throw placed(noAttribute(reference.type, attribute), position);
 
     return { ...fromSchema(schema, every, attribute), from: sourcesOf(this.valuesOf(block, schema), every, attribute), path };
+  }
+
+  /** One instance of the block the provisioner is in, whichever it runs on. */
+  private selfType(reference: SelfReference, where: Context, position: Position): Written {
+    // The graph refuses `self` anywhere but in a provisioner, whose context is its resource.
+    if (!(where instanceof Address)) throw placed(SELF_OUTSIDE, position);
+
+    const block = blockKey(where);
+    const { attribute, path } = readSelf(reference.path, position);
+    const schema = this.schemas.get(where.resourceType)!;
+    if (attribute !== undefined && !Object.hasOwn(schema, attribute)) throw placed(noAttribute(where.resourceType, attribute), position);
+
+    return { ...fromSchema(schema, undefined, attribute), from: sourcesOf(this.valuesOf(block, schema), undefined, attribute), path };
   }
 
   /** Every block is declared at load, and each value is held in the type its schema gives it. */

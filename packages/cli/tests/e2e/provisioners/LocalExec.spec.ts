@@ -185,6 +185,92 @@ describe('a local-exec provisioner', () => {
     expect(stderr).not.toContain('s3cr3t-token');
   });
 
+  it('reads the object it runs on through self, each instance its own, computed values and all', async () => {
+    await write('resource "local_file" "f" {\n  count   = 2\n  path    = "f${count.index}.txt"\n  content = "x"\n' + step('echo ${self.id} > ${self.path}.id') + '}\n');
+
+    await clayIn('apply', '--yes');
+
+    const { resources } = await stateOf();
+    expect(await read('f0.txt.id')).toBe(`${String(resources['local_file.f[0]'].attributes.id)}\n`);
+    expect(await read('f1.txt.id')).toBe(`${String(resources['local_file.f[1]'].attributes.id)}\n`);
+  });
+
+  it('reads the new object through self when a plan replaces one, not the one it replaces', async () => {
+    await write('resource "local_file" "f" {\n  path    = "a.txt"\n  content = "x"\n}\n');
+    await clayIn('apply', '--yes');
+    await write('resource "local_file" "f" {\n  path    = "b.txt"\n  content = "x"\n' + step('${self.path == "a.txt" ? "" : "echo ok > ok.txt"}') + '}\n');
+
+    await clayIn('apply', '--yes');
+
+    expect(await read('ok.txt')).toBe('ok\n');
+  });
+
+  it('is not checked by a plan that makes no object for it to run on', async () => {
+    await write('resource "local_file" "f" {\n  path    = "a.txt"\n  content = "x"\n}\n');
+    await clayIn('apply', '--yes');
+    await write('resource "local_file" "f" {\n  path    = "a.txt"\n  content = "x"\n' + step('${self.path == "a.txt" ? "" : "echo ok"}') + '}\n');
+
+    const output = await clayIn('plan');
+
+    expect(output).toContain('No changes');
+  });
+
+  it('reads the object through self in an apply of a saved plan', async () => {
+    await write('resource "null_resource" "n" {\n' + step('echo ${self.id} > id.txt') + '}\n');
+    await clayIn('plan', '--out', 'saved.plan');
+
+    await clayIn('apply', 'saved.plan');
+
+    const { resources } = await stateOf();
+    expect(await read('id.txt')).toBe(`${String(resources['null_resource.n'].attributes.id)}\n`);
+  });
+
+  it('reads the whole object through self', async () => {
+    await write('resource "null_resource" "n" {\n  triggers = { a = "made" }\n' + step('echo ${self.triggers["a"]} > a.txt') + '}\n');
+
+    await clayIn('apply', '--yes');
+
+    expect(await read('a.txt')).toBe('made\n');
+  });
+
+  it('refuses an attribute self does not have in a block that makes no instance', async () => {
+    await write('resource "null_resource" "n" {\n  count = 0\n' + step('echo ${self.nope}') + '}\n');
+
+    const { stderr } = await failure('validate');
+
+    expect(stderr).toContain('null_resource has no attribute "nope"');
+    expect(stderr).toContain('line 4, in resource "null_resource" "n"');
+  });
+
+  it('does not show why it failed when a value it reads through self is sensitive', async () => {
+    await write(
+      'variable "token" {\n  default   = "s3cr3t-token"\n  sensitive = true\n}\n' +
+        'resource "local_file" "f" {\n  path    = "f.txt"\n  content = var.token\n' +
+        step('false ${self.content}') +
+        '}\n'
+    );
+
+    const { stderr } = await failure('apply', '--yes');
+
+    expect(stderr).toContain('local-exec failed to run; a value given to it is sensitive, so the reason is not shown');
+    expect(stderr).not.toContain('s3cr3t-token');
+  });
+
+  it.each([
+    ['a resource attribute', 'resource "null_resource" "n" {\n  triggers = { a = self.id }\n}\n', 'line 2, in resource "null_resource" "n"'],
+    ['a count', 'resource "null_resource" "n" {\n  count = length(self.id)\n}\n', 'line 2, in resource "null_resource" "n"'],
+    ['an output', 'output "o" {\n  value = self.id\n}\n', 'line 2, in output "o"'],
+    ['a local', 'locals {\n  a = self.id\n}\n', 'line 2, in local "a"'],
+    ['a data source', 'data "local_file" "d" {\n  path = self.id\n}\n', 'line 2, in data "local_file" "d"'],
+  ])('refuses self outside a provisioner, in %s', async (_, config, place) => {
+    await write(config);
+
+    const { stderr } = await failure('validate');
+
+    expect(stderr).toContain('self is only known inside a provisioner, as the object it runs on');
+    expect(stderr).toContain(place);
+  });
+
   it.each([
     ['a type no provisioner has', '  provisioner "remote" {}\n', 'There is no provisioner "remote"', 'line 2', '  provisioner "remote" {}'],
     ['an argument local-exec does not take', '  provisioner "local-exec" {\n    when = "destroy"\n  }\n', 'local-exec has no attribute "when"', 'line 3', '    when = "destroy"'],
@@ -192,11 +278,25 @@ describe('a local-exec provisioner', () => {
     ['a command that is not a string', '  provisioner "local-exec" {\n    command = ["a"]\n  }\n', 'command', 'line 3', '    command = ["a"]'],
     ['an empty command', '  provisioner "local-exec" {\n    command = ""\n  }\n', 'local-exec "command" must not be empty', 'line 2', '  provisioner "local-exec" {'],
     [
+      'its own resource, which would wait for itself',
+      '  provisioner "local-exec" {\n    command = null_resource.n.id\n  }\n',
+      'Dependency cycle detected: null_resource.n -> null_resource.n',
+      'line 3',
+      '    command = null_resource.n.id',
+    ],
+    [
       'a resource no block declares',
       '  provisioner "local-exec" {\n    command = local_file.missing.path\n  }\n',
       'local_file.missing',
       'line 3',
       '    command = local_file.missing.path',
+    ],
+    [
+      'an index on self',
+      '  count = 1\n  provisioner "local-exec" {\n    command = self[0].id\n  }\n',
+      'self is the one object a provisioner runs on, so it takes no index',
+      'line 4',
+      '    command = self[0].id',
     ],
   ])('is refused by validate for %s, where it is written', async (_, body, message, line, source) => {
     await write(`resource "null_resource" "n" {\n${body}}\n`);

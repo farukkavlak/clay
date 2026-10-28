@@ -311,6 +311,7 @@ export class ReferenceResolver {
     if (reference.kind === 'count') return { value: countIndex(where, position), path: reference.path };
     if (reference.kind === 'each') return { value: this.each(reference, where, position), path: reference.path };
     if (reference.kind === 'path') return { value: valueOf(types.string, this.directory(reference, where)), path: reference.path };
+    if (reference.kind === 'self') return this.resources.resolveSelf(reference, where, state, position);
 
     return this.resources.resolve(reference, where, state, position);
   }
