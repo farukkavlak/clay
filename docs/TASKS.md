@@ -1019,7 +1019,15 @@ Measured with the local provider; a remote provider makes the sequential calls c
 `command_exec` is a resource, so a command has state of its own. Terraform's provisioners
 run as a step of another resource instead.
 
-- [ ] `provisioner "local-exec" { command = "..." }` inside a resource, run after create
+- [x] `provisioner "local-exec" { command = "..." }` inside a resource, run after create.
+      One that fails leaves the object tainted, and the next plan replaces it, as in
+      Terraform
+- [ ] `self` in a provisioner, for the values of the object it runs on
+- [ ] What a provisioner prints, shown as it runs and hidden where a value given to it is
+      sensitive; `quiet` to show none
+- [ ] `working_dir`, `environment` and `on_failure = continue` on `local-exec`
+- [ ] `when = destroy`: a provisioner run before the object is destroyed, reading only
+      `self`
 - [ ] `remote-exec` and `file`, once a resource can carry a connection
 
 ## 3. State

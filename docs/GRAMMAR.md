@@ -161,6 +161,11 @@ around the attribute and no reference or call as a key. Another argument, a seco
 so is an attribute the resource type does not have or a path into a set, whose items have
 no place to name. `lifecycle = ...` with an equals sign is an attribute like any other.
 
+A resource may hold any number of `provisioner` blocks, each with one label, its type:
+`provisioner "local-exec" { command = "..." }`. Its arguments are attributes; a block
+inside it, a missing label or a second one is refused where it is written. A type no
+provisioner has, and an argument the type does not take, are refused by the engine.
+
 A module's `source` starts with `./` or `../`. Anything else, a registry address or an
 absolute path, is refused where it is written.
 
@@ -726,6 +731,7 @@ interface ResourceBlock {
   forEach?: AttributeValue;
   dependsOn?: Reference[];
   lifecycle?: { preventDestroy?: boolean; createBeforeDestroy?: boolean; ignoreChanges?: 'all' | { path: (string | number)[]; position: Position }[]; position: Position };
+  provisioners?: { provisionerType: { value: string; position: Position }; attributes: Record<string, AttributeValue>; position: Position }[];
   attributes: Record<string, AttributeValue>;
   position: Position;
 }
@@ -816,8 +822,8 @@ throws the same for a character it does not know, a string not closed on its lin
 
 ## Not in the language
 
-- Provisioners, and any `lifecycle` argument but `prevent_destroy`, `create_before_destroy` and `ignore_changes`
-- Nested blocks inside a block, but `lifecycle` in a resource and `validation` in a variable
+- Any `lifecycle` argument but `prevent_destroy`, `create_before_destroy` and `ignore_changes`
+- Nested blocks inside a block, but `lifecycle` and `provisioner` in a resource and `validation` in a variable
 - Override files, whose blocks would change those of another file
 
 `TASKS.md` lists what is planned.

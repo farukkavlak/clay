@@ -42,6 +42,7 @@ describe('CLI: plan command', () => {
     vi.mocked(Orchestrator.create).mockImplementation(function () {
       return {
         registerProvider: vi.fn(),
+        registerProvisioner: vi.fn(),
         plan: planMock,
       } as Partial<Orchestrator> as Orchestrator;
     });
@@ -71,6 +72,7 @@ describe('CLI: plan command', () => {
     vi.mocked(Orchestrator.create).mockImplementation(function () {
       return {
         registerProvider: vi.fn(),
+        registerProvisioner: vi.fn(),
         plan: planMock,
       } as Partial<Orchestrator> as Orchestrator;
     });
@@ -99,6 +101,7 @@ describe('CLI: plan command', () => {
     vi.mocked(Orchestrator.create).mockImplementation(function () {
       return {
         registerProvider: vi.fn(),
+        registerProvisioner: vi.fn(),
         plan: planMock,
       } as Partial<Orchestrator> as Orchestrator;
     });
@@ -128,6 +131,7 @@ describe('CLI: plan command', () => {
     vi.mocked(Orchestrator.create).mockImplementation(function () {
       return {
         registerProvider: vi.fn(),
+        registerProvisioner: vi.fn(),
         plan: planMock,
       } as Partial<Orchestrator> as Orchestrator;
     });
@@ -166,7 +170,7 @@ describe('CLI: plan command', () => {
       readAtApply: [],
     });
     vi.mocked(Orchestrator.create).mockImplementation(function () {
-      return { registerProvider: vi.fn(), plan: planMock } as Partial<Orchestrator> as Orchestrator;
+      return { registerProvider: vi.fn(), registerProvisioner: vi.fn(), plan: planMock } as Partial<Orchestrator> as Orchestrator;
     });
     const printed: string[] = [];
     vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => printed.push(stripVTControlCharacters(args.join(' '))));
@@ -200,6 +204,7 @@ describe('CLI: plan command', () => {
     vi.mocked(Orchestrator.create).mockImplementation(function () {
       return {
         registerProvider: vi.fn(),
+        registerProvisioner: vi.fn(),
         plan: planMock,
       } as Partial<Orchestrator> as Orchestrator;
     });
@@ -229,6 +234,7 @@ describe('CLI: plan command', () => {
     vi.mocked(Orchestrator.create).mockImplementation(function () {
       return {
         registerProvider: vi.fn(),
+        registerProvisioner: vi.fn(),
         plan: planMock,
       } as Partial<Orchestrator> as Orchestrator;
     });
@@ -251,6 +257,7 @@ describe('CLI: plan command', () => {
     vi.mocked(Orchestrator.create).mockImplementation(function () {
       return {
         registerProvider: vi.fn(),
+        registerProvisioner: vi.fn(),
         plan: planMock,
       } as Partial<Orchestrator> as Orchestrator;
     });
@@ -269,6 +276,7 @@ describe('CLI: plan command', () => {
     vi.mocked(Orchestrator.create).mockImplementation(function () {
       return {
         registerProvider: vi.fn(),
+        registerProvisioner: vi.fn(),
         plan: vi.fn().mockRejectedValue(new Error('Parse error')),
       } as Partial<Orchestrator> as Orchestrator;
     });
@@ -292,6 +300,7 @@ describe('CLI: plan command', () => {
     vi.mocked(Orchestrator.create).mockImplementation(function () {
       return {
         registerProvider: vi.fn(),
+        registerProvisioner: vi.fn(),
         plan: planMock,
       } as Partial<Orchestrator> as Orchestrator;
     });
@@ -310,6 +319,7 @@ describe('CLI: plan command', () => {
     vi.mocked(Orchestrator.create).mockImplementation(function () {
       return {
         registerProvider: vi.fn(),
+        registerProvisioner: vi.fn(),
         plan: vi.fn().mockRejectedValue('String Error'),
       } as Partial<Orchestrator> as Orchestrator;
     });

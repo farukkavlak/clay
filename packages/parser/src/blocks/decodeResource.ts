@@ -1,4 +1,4 @@
-import { AttributeValue, IgnoredPath, Lifecycle, ResourceBlock } from '../ast';
+import { AttributeValue, IgnoredPath, Lifecycle, ProvisionerBlock, ResourceBlock } from '../ast';
 import { Attribute, Block } from '../body';
 import { ConfigError } from '../ConfigError';
 import { stepKey } from '../reference';
@@ -61,15 +61,21 @@ function decodeLifecycle(block: Block): Lifecycle {
   return Object.assign({ position: block.position }, ...attributesOnly(block.body).map((item) => lifecycleArgument(item))) as Lifecycle;
 }
 
+function decodeProvisioner({ labels: [provisionerType], body, position }: Block): ProvisionerBlock {
+  return { provisionerType, attributes: attributesIn(body), position };
+}
+
 export function decodeResource(block: Block, [resourceType, name]: string[]): ResourceBlock {
   let lifecycle: Lifecycle | undefined;
+  const provisioners: ProvisionerBlock[] = [];
   const {
     count,
     for_each: forEach,
     depends_on: dependsOn,
     ...attributes
   } = attributesIn(block.body, (inner) => {
-    lifecycle = decodeLifecycle(inner);
+    if (inner.name === 'provisioner') provisioners.push(decodeProvisioner(inner));
+    else lifecycle = decodeLifecycle(inner);
   });
   if (count && forEach) throw new ConfigError(`resource "${resourceType}" "${name}" has count or for_each, not both`, forEach.position);
 
@@ -81,6 +87,7 @@ export function decodeResource(block: Block, [resourceType, name]: string[]): Re
     ...(forEach && { forEach }),
     ...(dependsOn && { dependsOn: dependsOnOf(dependsOn) }),
     ...(lifecycle && { lifecycle }),
+    ...(provisioners.length > 0 && { provisioners }),
     attributes,
     position: block.position,
   };

@@ -11,6 +11,7 @@ export { memberKey } from './memberKey';
 export { MAX_NESTING, NestingError, nestingOf, typeNestingOf } from './nesting';
 export { planFromSchema } from './Provider';
 export type { CreateRequest, DataSourceHandler, Identity, PlannedChange, PlanRequest, Provider, ResourceHandler, UpdateRequest } from './Provider';
+export type { Provisioner } from './Provisioner';
 export { isDependencies, readDeposed, readResources } from './readState';
 export { typeIn } from './Schema';
 export type { Schema, SchemaDefinition } from './Schema';

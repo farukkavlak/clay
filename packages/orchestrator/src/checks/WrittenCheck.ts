@@ -1,6 +1,6 @@
 import { ModuleAddress, Schema } from '@clay/contracts';
 import { Graph } from '@clay/graph';
-import { AttributeValue, DataBlock, ModuleBlock, OutputBlock, ResourceBlock, spell, VariableBlock } from '@clay/parser';
+import { AttributeValue, DataBlock, ModuleBlock, OutputBlock, Position, ProvisionerBlock, ResourceBlock, spell, VariableBlock } from '@clay/parser';
 
 import { converted } from '../values/conformValues';
 import { countFrom } from '../instances/count';
@@ -11,6 +11,7 @@ import { NotKnownYet } from '../instances/NotKnownYet';
 import { tryAt, withPlace } from '../place';
 import { hidingReason } from '../providers/providerResult';
 import { ProviderRegistry } from '../providers/ProviderRegistry';
+import { ProvisionerRegistry } from '../providers/ProvisionerRegistry';
 import { inOrder, Limit } from '../providers/Limit';
 import { ReferenceResolver } from '../expressions/ReferenceResolver';
 import { marksOf } from '../values/schemaMarks';
@@ -27,7 +28,9 @@ export class WrittenCheck {
     private scopeManager: ScopeManager,
     private schemas: Map<string, Schema>,
     private dataSchemas: Map<string, Schema>,
+    private provisionerSchemas: Map<string, Schema>,
     private providers: ProviderRegistry,
+    private provisioners: ProvisionerRegistry,
     private limit: Limit
   ) {}
 
@@ -49,7 +52,7 @@ export class WrittenCheck {
    */
   private async checkBlocks(loadedResources: LoadedResource[], graph: Graph<GraphNode>): Promise<void> {
     const resources = new Map(loadedResources.map((loaded) => [loaded.uniqueId, loaded]));
-    const asked: Promise<void>[] = [];
+    const asked: Promise<unknown>[] = [];
 
     try {
       for (const key of graph.topologicalSort().flat()) asked.push(this.checkNode(graph.getNode(key)!, key, resources));
@@ -61,7 +64,7 @@ export class WrittenCheck {
   }
 
   /** The provider's answer, once the rest is checked. */
-  private checkNode(node: GraphNode, key: string, resources: Map<string, LoadedResource>): Promise<void> {
+  private checkNode(node: GraphNode, key: string, resources: Map<string, LoadedResource>): Promise<unknown> {
     if (node.kind === 'local') this.read(node.value, node.declaration, node.module);
     if (node.kind === 'resource') return this.checkResource(resources.get(key)!);
     if (node.kind === 'data') return this.checkData(node.block, node.module);
@@ -69,14 +72,29 @@ export class WrittenCheck {
     return Promise.resolve();
   }
 
-  private checkResource({ address, block }: LoadedResource): Promise<void> {
+  private checkResource({ address, block }: LoadedResource): Promise<unknown> {
     const declaration = spell(block);
     // Every schema is loaded by now.
     const schema = this.schemas.get(block.resourceType)!;
 
     this.checkRepetition(block, declaration, address);
     const given = this.checkAttributes(block.resourceType, block.attributes, schema, declaration, address);
-    return this.askProvider(block, block.resourceType, given, schema, address, (type, config) => this.providers.get(type).validate(type, config));
+    // Each value is checked before any provider or provisioner is asked.
+    const provisioned = (block.provisioners ?? []).map((provisioner) => this.checkProvisioner(provisioner, block, address));
+    const asked = [
+      this.askProvider(block, block.resourceType, given, schema, address, (type, config) => this.providers.get(type).validate(type, config)),
+      ...provisioned.map((ask) => ask()),
+    ];
+    return inOrder(asked);
+  }
+
+  /** As a resource's attributes are checked, in the resource's instance; gives the provisioner's own check, to be asked. */
+  private checkProvisioner({ provisionerType: { value: type }, attributes, position }: ProvisionerBlock, block: ResourceBlock, address: Context): () => Promise<void> {
+    // Loaded with the names checked.
+    const schema = this.provisionerSchemas.get(type)!;
+    const given = this.checkAttributes(type, attributes, schema, spell(block), address);
+
+    return () => this.ask(type, given, schema, () => this.provisioners.get(type).validate(plainOf(given)), position, block, address);
   }
 
   private checkData(block: DataBlock, module: ModuleAddress): Promise<void> {
@@ -112,10 +130,22 @@ export class WrittenCheck {
     context: Context,
     validate: (type: string, config: Record<string, unknown>) => Promise<void>
   ): Promise<void> {
+    return this.ask(type, given, schema, () => validate(type, plainOf(given)), block.position, block, context);
+  }
+
+  private async ask(
+    type: string,
+    given: Record<string, Value>,
+    schema: Schema,
+    validate: () => Promise<void>,
+    at: Position,
+    block: ResourceBlock | DataBlock,
+    context: Context
+  ): Promise<void> {
     try {
-      await this.limit.run(() => hidingReason(type, marksOf(schema, given), () => validate(type, plainOf(given))));
+      await this.limit.run(() => hidingReason(type, marksOf(schema, given), validate));
     } catch (error) {
-      throw withPlace(error, block.position, spell(block), context);
+      throw withPlace(error, at, spell(block), context);
     }
   }
 

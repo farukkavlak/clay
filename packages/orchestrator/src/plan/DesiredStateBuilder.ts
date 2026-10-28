@@ -26,6 +26,7 @@ import { inOrder } from '../providers/Limit';
 import { Moves } from './moves';
 import { Versions } from '../values/Versions';
 import { Ignoring, ResourcePlan, ResourcePlanner } from './ResourcePlanner';
+import { Provisioning } from '../providers/Provisioning';
 
 /** With the block it was planned from, so a refusal can point at it. */
 export interface ConfiguredResource extends DesiredResource {
@@ -114,6 +115,7 @@ export class DesiredStateBuilder {
     private modules: ModuleInstances,
     private planned: Planned,
     private resourcePlanner: ResourcePlanner,
+    private provisioning: Provisioning,
     private reader: DataSourceReader,
     private versions: Versions
   ) {}
@@ -298,6 +300,7 @@ export class DesiredStateBuilder {
     const current = state.resources[address.toString()];
     const ignoring = this.ignoringIn(block, current);
     const change = await this.askProvider(address, block, current, this.resolveForPlan(block, state, address), ignoring);
+    await this.checkProvisioners(block, state, address);
     const values = changes(current, change);
     // A change of values or of marks goes in, so a reader takes the marks from the plan too.
     if (values || !samePaths(current?.sensitive ?? [], change.sensitive)) this.planned.set(address, change.after, change.sensitive, values);
@@ -403,6 +406,17 @@ export class DesiredStateBuilder {
     this.scopeManager.setOutput(instance, node.name, value);
 
     return instance.isRoot() ? [node.name, outputOf(value, node.declared.sensitive)] : undefined;
+  }
+
+  /** Read as the resource's own values are: what is known now is checked now, and every value again at apply. */
+  private async checkProvisioners(block: ResourceBlock, state: State, address: Address): Promise<void> {
+    const declaration = spell(block);
+    for (const provisioner of block.provisioners ?? []) {
+      const given = Object.fromEntries(
+        Object.entries(provisioner.attributes).map(([name, value]) => [name, tryAt(value.position, declaration, address, () => this.resolveOrUnknown(value, state, address))])
+      );
+      await this.provisioning.check(provisioner, given, declaration, address);
+    }
   }
 
   private resolveForPlan(block: ResourceBlock, state: State, context: Context): Record<string, Value> {

@@ -58,6 +58,7 @@ describe('CLI: apply command', () => {
       vi.mocked(Orchestrator.create).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
+          registerProvisioner: vi.fn(),
           plan: planMock,
           runPlan: runMock,
         } as Partial<Orchestrator> as Orchestrator;
@@ -93,6 +94,7 @@ describe('CLI: apply command', () => {
       vi.mocked(Orchestrator.create).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
+          registerProvisioner: vi.fn(),
           plan: planMock,
           runPlan: runMock,
         } as Partial<Orchestrator> as Orchestrator;
@@ -125,6 +127,7 @@ describe('CLI: apply command', () => {
       vi.mocked(Orchestrator.create).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
+          registerProvisioner: vi.fn(),
           plan: planMock,
           runPlan: runMock,
         } as Partial<Orchestrator> as Orchestrator;
@@ -152,6 +155,7 @@ describe('CLI: apply command', () => {
       vi.mocked(Orchestrator.create).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
+          registerProvisioner: vi.fn(),
           plan: planMock,
           runPlan: runMock,
         } as Partial<Orchestrator> as Orchestrator;
@@ -188,6 +192,7 @@ describe('CLI: apply command', () => {
       vi.mocked(Orchestrator.create).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
+          registerProvisioner: vi.fn(),
           plan: planMock,
         } as Partial<Orchestrator> as Orchestrator;
       });
@@ -218,6 +223,7 @@ describe('CLI: apply command', () => {
       vi.mocked(Orchestrator.create).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
+          registerProvisioner: vi.fn(),
           plan: planMock,
           runPlan: runMock,
         } as Partial<Orchestrator> as Orchestrator;
@@ -249,6 +255,7 @@ describe('CLI: apply command', () => {
       vi.mocked(Orchestrator.create).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
+          registerProvisioner: vi.fn(),
           plan: planMock,
           runPlan: runMock,
         } as Partial<Orchestrator> as Orchestrator;
@@ -283,6 +290,7 @@ describe('CLI: apply command', () => {
       vi.mocked(Orchestrator.create).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
+          registerProvisioner: vi.fn(),
           plan: planMock,
           runPlan: runMock,
         } as Partial<Orchestrator> as Orchestrator;
@@ -327,6 +335,7 @@ describe('CLI: apply command', () => {
       vi.mocked(Orchestrator.create).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
+          registerProvisioner: vi.fn(),
           runPlan: runPlanMock,
         } as Partial<Orchestrator> as Orchestrator;
       });
@@ -371,6 +380,7 @@ describe('CLI: apply command', () => {
       vi.mocked(Orchestrator.create).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
+          registerProvisioner: vi.fn(),
           runPlan: runPlanMock,
         } as Partial<Orchestrator> as Orchestrator;
       });
@@ -415,7 +425,7 @@ describe('CLI: apply command', () => {
         if (finishes) yield { type: 'done', outputs: {} };
       });
       vi.mocked(Orchestrator.create).mockImplementation(function () {
-        return { registerProvider: vi.fn(), plan: vi.fn().mockResolvedValue(planned), runPlan: runMock } as Partial<Orchestrator> as Orchestrator;
+        return { registerProvider: vi.fn(), registerProvisioner: vi.fn(), plan: vi.fn().mockResolvedValue(planned), runPlan: runMock } as Partial<Orchestrator> as Orchestrator;
       });
 
       const exit = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
@@ -464,6 +474,7 @@ describe('CLI: apply command', () => {
       vi.mocked(Orchestrator.create).mockImplementation(function () {
         return {
           registerProvider: vi.fn(),
+          registerProvisioner: vi.fn(),
           plan: planMock,
           runPlan: runMock,
         } as Partial<Orchestrator> as Orchestrator;
@@ -492,6 +503,7 @@ describe('CLI: apply command', () => {
     vi.mocked(Orchestrator.create).mockImplementation(function () {
       return {
         registerProvider: vi.fn(),
+        registerProvisioner: vi.fn(),
         plan: vi.fn().mockResolvedValue({
           serial: 0,
           actions: [{ type: 'CREATE', resourceType: 'test', name: 't' }],
@@ -524,6 +536,7 @@ describe('CLI: apply command', () => {
     vi.mocked(Orchestrator.create).mockImplementation(function () {
       return {
         registerProvider: vi.fn(),
+        registerProvisioner: vi.fn(),
         plan: vi.fn().mockRejectedValue('String Error'),
       } as Partial<Orchestrator> as Orchestrator;
     });

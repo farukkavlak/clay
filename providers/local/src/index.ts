@@ -83,3 +83,4 @@ export { LocalFileResource } from './resources/LocalFileResource';
 export { RandomStringResource } from './resources/RandomStringResource';
 export { NullResource } from './resources/NullResource';
 export { CommandExecResource } from './resources/CommandExecResource';
+export { LocalExecProvisioner } from './provisioners/LocalExecProvisioner';

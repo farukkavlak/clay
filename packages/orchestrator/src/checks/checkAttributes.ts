@@ -1,5 +1,5 @@
 import { Schema } from '@clay/contracts';
-import { ConfigError, DataBlock, Position, ResourceBlock, spell } from '@clay/parser';
+import { ConfigError, DataBlock, Position, ProvisionerBlock, ResourceBlock, spell } from '@clay/parser';
 
 import { nameProblem, namesOf } from '../values/conformValues';
 import { LoadedResource } from '../config/ModuleLoader';
@@ -44,6 +44,15 @@ function problemIn(block: Block, schema: Schema): { message: string; position: P
 export function checkNames(block: Block, schema: Schema, address: Context): void {
   const problem = problemIn(block, schema);
   if (problem) throw withPlace(new ConfigError(problem.message, problem.position), problem.position, spell(block), address);
+}
+
+/** A provisioner takes only what its schema names, and needs what it requires; `within` is the resource block it is written in. */
+export function checkProvisionerNames({ provisionerType, attributes, position }: ProvisionerBlock, schema: Schema, within: ResourceBlock, address: Context): void {
+  const named = nameProblem(provisionerType.value, namesOf(schema), Object.keys(attributes));
+  if (!named) return;
+
+  const at = named.set === undefined ? position : attributes[named.set].position;
+  throw withPlace(new ConfigError(named.message, at), at, spell(within), address);
 }
 
 /** Once per block, so a block with no instance is checked too. */

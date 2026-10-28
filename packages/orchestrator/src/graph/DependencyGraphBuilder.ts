@@ -186,7 +186,9 @@ export class DependencyGraphBuilder {
     for (const value of [block.count, block.forEach])
       if (value) tryAt(value.position, dependent.declaration, address, () => this.addDependencies(value, graph, dependent, moduleScopes));
     this.addWaits(block.dependsOn, graph, dependent, moduleScopes);
-    for (const value of Object.values(block.attributes))
+    // A provisioner runs as part of the resource, so what it reads, the resource waits for.
+    const provisioned = (block.provisioners ?? []).flatMap((provisioner) => Object.values(provisioner.attributes));
+    for (const value of [...Object.values(block.attributes), ...provisioned])
       tryAt(value.position, dependent.declaration, address, () => this.addDependencies(value, graph, dependent, moduleScopes, repetition));
   }
 

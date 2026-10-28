@@ -1,5 +1,5 @@
 import { Address, AttributePath, DeposedObject, Provider, Resource, Schema, State, touchesSensitive } from '@clay/contracts';
-import { AttributeValue } from '@clay/parser';
+import { AttributeValue, ProvisionerBlock, ResourceBlock, spell } from '@clay/parser';
 import { offApply, offFinal, offPlan, PlanAction } from '@clay/planner';
 
 import { conformValues } from '../values/conformValues';
@@ -7,6 +7,8 @@ import { keepPrior } from '../plan/ignoredChanges';
 import { checkNesting, heldBy, hidingReason, inconsistent, tooDeep } from '../providers/providerResult';
 import { Limit } from '../providers/Limit';
 import { ProviderRegistry } from '../providers/ProviderRegistry';
+import { Provisioning } from '../providers/Provisioning';
+import { tryAt } from '../place';
 import { SameObjects } from '../checks/sameObject';
 import { ReferenceResolver } from '../expressions/ReferenceResolver';
 import { shown } from '../shown';
@@ -59,6 +61,16 @@ function protect(resource: Resource, { preventDestroy }: PlanAction): void {
   else delete resource.preventDestroy;
 }
 
+/** Where a provisioner runs: the object, and the block that makes it. */
+interface Provisioned {
+  address: Address;
+  declaration: string;
+}
+
+function taint(state: State, address: Address): void {
+  state.resources[address.toString()].tainted = true;
+}
+
 /** The expressions of a resource block, as the configuration gives them. */
 export type Written = Record<string, AttributeValue>;
 
@@ -66,11 +78,14 @@ export type Written = Record<string, AttributeValue>;
 export interface Running {
   written?: Written;
   destroyed?: Resource;
+  /** The block it is made from, whose provisioners run in order on the object a create makes. */
+  resource?: ResourceBlock;
 }
 
 export class ActionExecutor {
   constructor(
     private providers: ProviderRegistry,
+    private provisioning: Provisioning,
     private resolver: ReferenceResolver,
     private planner: ResourcePlanner,
     private sameObjects: SameObjects,
@@ -85,9 +100,10 @@ export class ActionExecutor {
 
   /**
    * `written` is what the action's block gives, resolved again for a create, an update or a replace. `destroyed` is the object of a
-   * replace that was destroyed before it, so that only the create is left.
+   * replace that was destroyed before it, so that only the create is left. `resource` is the block, whose provisioners run once a create or a replace has made its object.
    */
-  async execute(action: PlanAction, currentState: State, { written, destroyed }: Running = {}): Promise<void> {
+  async execute(action: PlanAction, currentState: State, running: Running = {}): Promise<void> {
+    const { written, resource } = running;
     // A no-op only updates what state keeps beside the values, so it needs no provider.
     if (action.type === 'NO_OP') {
       this.recordUnchanged(action, currentState);
@@ -98,7 +114,7 @@ export class ActionExecutor {
 
     switch (action.type) {
       case 'CREATE': {
-        await this.executeCreate(action, written, provider, currentState);
+        await this.executeCreate(action, written, provider, currentState, resource);
         break;
       }
       case 'UPDATE': {
@@ -106,20 +122,7 @@ export class ActionExecutor {
         break;
       }
       case 'REPLACE': {
-        // Checked before the delete, so a value off the plan or refused by the provider leaves the resource untouched, unless it was destroyed first.
-        const sending = await this.sendingFor(action, written, currentState, destroyed);
-        if (destroyed) {
-          await this.create(action, provider, currentState, sending);
-          break;
-        }
-        if (action.createBeforeDestroy) {
-          // The old object stays the current one until the new one exists, so a create that fails leaves it whole.
-          await this.create(action, provider, currentState, sending, held(action, currentState));
-          break;
-        }
-
-        await this.executeDelete(action, provider, currentState);
-        await this.create(action, provider, currentState, sending);
+        await this.executeReplace(action, provider, currentState, running);
         break;
       }
       case 'DELETE': {
@@ -206,12 +209,29 @@ export class ActionExecutor {
     if (mismatches.length > 0) throw inconsistent(type, 'apply', mismatches, hidden);
   }
 
-  async executeCreate(action: PlanAction, written: Written | undefined, provider: Provider, currentState: State): Promise<void> {
-    await this.create(action, provider, currentState, await this.sendingFor(action, written, currentState));
+  private async executeReplace(action: PlanAction, provider: Provider, currentState: State, { written, destroyed, resource }: Running): Promise<void> {
+    // Checked before the delete, so a value off the plan or refused by the provider leaves the resource untouched, unless it was destroyed first.
+    const sending = await this.sendingFor(action, written, currentState, destroyed);
+    if (destroyed) {
+      await this.create(action, provider, currentState, sending, resource);
+      return;
+    }
+    if (action.createBeforeDestroy) {
+      // The old object stays the current one until the new one exists, so a create that fails leaves it whole.
+      await this.create(action, provider, currentState, sending, resource, held(action, currentState));
+      return;
+    }
+
+    await this.executeDelete(action, provider, currentState);
+    await this.create(action, provider, currentState, sending, resource);
+  }
+
+  async executeCreate(action: PlanAction, written: Written | undefined, provider: Provider, currentState: State, resource?: ResourceBlock): Promise<void> {
+    await this.create(action, provider, currentState, await this.sendingFor(action, written, currentState), resource);
   }
 
   /** `replacing` is the object a replace made first leaves deposed, once the new one is in state. */
-  private async create(action: PlanAction, provider: Provider, currentState: State, sending: Sending, replacing?: Resource): Promise<void> {
+  private async create(action: PlanAction, provider: Provider, currentState: State, sending: Sending, resource: ResourceBlock | undefined, replacing?: Resource): Promise<void> {
     const contextAddress = Address.of(action);
 
     const created = await hidingReason(
@@ -233,6 +253,30 @@ export class ActionExecutor {
     protect(currentState.resources[key], action);
     this.wrote(action);
     this.holdToPlan(action.resourceType, sending, created, attributes);
+    if (resource) await this.provision({ address: contextAddress, declaration: spell(resource) }, resource.provisioners ?? [], currentState);
+  }
+
+  /** In the order written. One that fails leaves the object tainted, so the next plan replaces it, and the rest do not run. */
+  private async provision(on: Provisioned, provisioners: ProvisionerBlock[], currentState: State): Promise<void> {
+    for (const provisioner of provisioners)
+      try {
+        await this.runProvisioner(provisioner, on, currentState);
+      } catch (error) {
+        taint(currentState, on.address);
+        throw error;
+      }
+  }
+
+  /** Resolved now, as the resource's own values are, and checked again now that every value is known. */
+  private async runProvisioner(provisioner: ProvisionerBlock, { address, declaration }: Provisioned, currentState: State): Promise<void> {
+    const given = Object.fromEntries(
+      Object.entries(provisioner.attributes).map(([name, value]) => [
+        name,
+        tryAt(value.position, declaration, address, () => this.resolver.resolveValue(value, currentState, address)),
+      ])
+    );
+    const checked = await this.provisioning.check(provisioner, given, declaration, address);
+    await this.provisioning.run(provisioner.provisionerType.value, checked);
   }
 
   async executeUpdate(action: PlanAction, written: Written | undefined, provider: Provider, currentState: State): Promise<void> {

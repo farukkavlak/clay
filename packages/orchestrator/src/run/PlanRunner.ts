@@ -273,7 +273,8 @@ export class PlanRunner {
 
     const actions = yield* this.visit(key, node, applying, state);
     return actions.map((action) => {
-      const running = { written: applying.blocks.get(key)!.attributes, destroyed: destroyed.get(Address.of(action).toString()) };
+      const resource = applying.blocks.get(key)!;
+      const running = { written: resource.attributes, destroyed: destroyed.get(Address.of(action).toString()), resource };
       return () => this.step(action, state, signal, running);
     });
   }

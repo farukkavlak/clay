@@ -1,4 +1,5 @@
 import { Address, ExactNumber, ModuleAddress, Type } from '@clay/contracts';
+import type { Label } from './body';
 import { Position } from './Position';
 import { spellReference, spellSteps, Step } from './reference';
 
@@ -82,6 +83,13 @@ export interface Lifecycle extends Node {
   ignoreChanges?: 'all' | IgnoredPath[];
 }
 
+/** A step run on the object a resource block makes, once it is made. */
+export interface ProvisionerBlock extends Node {
+  /** As its label names it, at the label. */
+  provisionerType: Label;
+  attributes: Record<string, AttributeValue>;
+}
+
 export interface ResourceBlock extends Node {
   type: 'Resource';
   resourceType: string;
@@ -93,6 +101,8 @@ export interface ResourceBlock extends Node {
   /** What the block waits for though it reads nothing of it. */
   dependsOn?: ReferenceNode[];
   lifecycle?: Lifecycle;
+  /** In the order written, which is the order they run in. */
+  provisioners?: ProvisionerBlock[];
   attributes: Record<string, AttributeValue>;
 }
 

@@ -79,10 +79,20 @@ function checkFileBlock(header: Header, opened: boolean): void {
   if (!opened) throw new ConfigError(kind.opening, header.open);
 }
 
-/** Only a resource takes a block, one `lifecycle`, and only a variable its `validation`. */
+/** The type is checked once the engine knows which provisioners there are. */
+function checkProvisioner({ labels, open }: Header): void {
+  if (labels.length === 0) throw new ConfigError("Expect provisioner type string after 'provisioner'.", open);
+  if (labels.length > 1) throw new ConfigError("Expect '{' after provisioner type.", labels[1].position);
+}
+
+/** Only a resource takes a block, one `lifecycle` and any number of `provisioner`s, and only a variable its `validation`. */
 function checkInnerBlock(header: Header, { block: within, before }: Inside): void {
+  if (within.name === 'resource' && header.name === 'provisioner') {
+    checkProvisioner(header);
+    return;
+  }
   if (within.name === 'resource' && header.name === 'lifecycle' && header.labels.length === 0) {
-    if (before.some((item) => item.type === 'Block')) throw new ConfigError(`${spellHeader(within)} has two lifecycle blocks`, header.position);
+    if (before.some((item) => item.type === 'Block' && item.name === 'lifecycle')) throw new ConfigError(`${spellHeader(within)} has two lifecycle blocks`, header.position);
     return;
   }
 

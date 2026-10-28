@@ -1,4 +1,4 @@
-import { emptyState, Provider, Resource, Schema, State } from '@clay/contracts';
+import { emptyState, Provider, Provisioner, Resource, Schema, State } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { outputChanges, plan, Plan } from '@clay/planner';
 import { StateManager } from '@clay/state';
@@ -14,6 +14,7 @@ import { checkPreventDestroy } from './checks/preventDestroy';
 import { checkSameObjects } from './checks/sameObject';
 import { ConfigFiles } from './config/ConfigFiles';
 import { ProviderRegistry } from './providers/ProviderRegistry';
+import { ProvisionerRegistry } from './providers/ProvisionerRegistry';
 import { newRun, Run } from './run/Run';
 import { RunEvent } from './run/RunEvent';
 import { checkParallelism, DEFAULT_PARALLELISM } from './run/parallelism';
@@ -43,16 +44,22 @@ export class Orchestrator {
   constructor(
     private stateManager: StateManager,
     private providers: ProviderRegistry,
+    private provisioners: ProvisionerRegistry,
     private newRun: (limit: Limit) => Run
   ) {}
 
   static create(stateManager: StateManager, files: ConfigFiles): Orchestrator {
     const providers = new ProviderRegistry();
-    return new Orchestrator(stateManager, providers, (limit) => newRun(stateManager, providers, files, limit));
+    const provisioners = new ProvisionerRegistry();
+    return new Orchestrator(stateManager, providers, provisioners, (limit) => newRun(stateManager, { providers, provisioners }, files, limit));
   }
 
   registerProvider(provider: Provider): void {
     this.providers.register(provider);
+  }
+
+  registerProvisioner(provisioner: Provisioner): void {
+    this.provisioners.register(provisioner);
   }
 
   /** A plan never writes state, even what the refresh read. */

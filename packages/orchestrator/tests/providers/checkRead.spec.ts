@@ -1,7 +1,7 @@
 import { Schema, types, UNKNOWN } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { checkDataSourceRead, checkDataSourceSchema, checkRead, checkSchema } from '../../src/providers/providerResult';
+import { checkDataSourceRead, checkDataSourceSchema, checkProvisionerSchema, checkRead, checkSchema } from '../../src/providers/providerResult';
 
 const schema: Schema = { label: { type: types.string, required: true }, made: { type: types.string, computed: true } };
 const bug = 'echo read what the resource cannot hold, which is a bug in the provider:';
@@ -129,5 +129,28 @@ describe('a type a schema gives', () => {
     ['a data source', () => checkDataSourceSchema('echo', broken), 'data source echo'],
   ])('is refused for %s when it is not whole', (_, check, named) => {
     expect(check).toThrow(`${named} gives box a type Clay cannot read, which is a bug in the provider`);
+  });
+});
+
+describe('a schema a provisioner gives', () => {
+  it.each([
+    ['forceNew', { command: { type: types.string, forceNew: false } }],
+    ['computed', { command: { type: types.string, computed: true } }],
+    ['optional', { command: { type: types.string, optional: true } }],
+    ['kept', { command: { type: types.string, kept: true } }],
+    ['sensitiveWith', { command: { type: types.string, sensitiveWith: [] } }],
+    ['default', { command: { type: types.string, default: 'x' } }],
+  ] satisfies [string, Schema][])('is refused where a value is given %s', (flag, given) => {
+    expect(() => checkProvisionerSchema('echo', given)).toThrow(`provisioner echo gives command ${flag}, but only a resource takes it, which is a bug in the provisioner`);
+  });
+
+  it('is refused where a type is one Clay cannot read', () => {
+    expect(() => checkProvisionerSchema('echo', { command: { type: { kind: 'text' } } } as unknown as Schema)).toThrow('provisioner echo gives command a type Clay cannot read');
+  });
+
+  it('is taken as it is when it marks only what the configuration gives', () => {
+    const given: Schema = { command: { type: types.string, required: true, sensitive: true } };
+
+    expect(checkProvisionerSchema('echo', given)).toBe(given);
   });
 });

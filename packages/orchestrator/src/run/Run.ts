@@ -15,6 +15,8 @@ import { Instances } from '../instances/Instances';
 import { ModuleInstances } from '../instances/ModuleInstances';
 import { Planned } from '../values/Planned';
 import { ProviderRegistry } from '../providers/ProviderRegistry';
+import { ProvisionerRegistry } from '../providers/ProvisionerRegistry';
+import { Provisioning } from '../providers/Provisioning';
 import { InstanceKeys } from '../expressions/references/InstanceKeys';
 import { ReferenceResolver } from '../expressions/ReferenceResolver';
 import { ReferenceScanner } from '../expressions/references/ReferenceScanner';
@@ -34,13 +36,20 @@ export interface Run {
   modules: ModuleInstances;
 }
 
+/** What the engine has registered, which every run shares. */
+export interface Registries {
+  providers: ProviderRegistry;
+  provisioners: ProvisionerRegistry;
+}
+
 /** Each run gets its own scopes, instances and data source values, so runs at the same time never read each other's. */
-export function newRun(stateManager: StateManager, providers: ProviderRegistry, files: ConfigFiles, limit: Limit): Run {
+export function newRun(stateManager: StateManager, { providers, provisioners }: Registries, files: ConfigFiles, limit: Limit): Run {
   const versions = new Versions();
   const scopes = new ScopeManager(versions);
   const dataSources = new Map<string, Record<string, Value>>();
   const schemas = new Map<string, Schema>();
   const dataSchemas = new Map<string, Schema>();
+  const provisionerSchemas = new Map<string, Schema>();
   const instances = new Instances();
   const modules = new ModuleInstances();
   const planned = new Planned(versions);
@@ -49,16 +58,31 @@ export function newRun(stateManager: StateManager, providers: ProviderRegistry, 
   const scanner = new ReferenceScanner(modules);
   const graphBuilder = new DependencyGraphBuilder(scanner, instances, modules);
   const resourcePlanner = new ResourcePlanner(providers, limit);
+  const provisioning = new Provisioning(provisioners, limit);
   const reader = new DataSourceReader(providers, dataSchemas, dataSources, versions, limit);
 
   return {
-    loader: new ConfigLoader(new ModuleLoader(files, scopes), scopes, dataSources, schemas, dataSchemas, resolver, providers, instances, modules, planned, limit),
+    loader: new ConfigLoader(
+      new ModuleLoader(files, scopes),
+      scopes,
+      dataSources,
+      schemas,
+      dataSchemas,
+      resolver,
+      providers,
+      provisioners,
+      provisionerSchemas,
+      instances,
+      modules,
+      planned,
+      limit
+    ),
     graphBuilder,
-    writtenCheck: new WrittenCheck(resolver, scopes, schemas, dataSchemas, providers, limit),
-    desiredStateBuilder: new DesiredStateBuilder(scopes, resolver, graphBuilder, instances, modules, planned, resourcePlanner, reader, versions),
+    writtenCheck: new WrittenCheck(resolver, scopes, schemas, dataSchemas, provisionerSchemas, providers, provisioners, limit),
+    desiredStateBuilder: new DesiredStateBuilder(scopes, resolver, graphBuilder, instances, modules, planned, resourcePlanner, provisioning, reader, versions),
     runner: new PlanRunner(
       stateManager,
-      new ActionExecutor(providers, resolver, resourcePlanner, new SameObjects(providers, limit), versions, limit),
+      new ActionExecutor(providers, provisioning, resolver, resourcePlanner, new SameObjects(providers, limit), versions, limit),
       scopes,
       resolver,
       instances,

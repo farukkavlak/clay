@@ -1,7 +1,7 @@
 import { Schema } from '@clay/contracts';
-import { AttributeValue, spell, Statement } from '@clay/parser';
+import { AttributeValue, ConfigError, spell, Statement } from '@clay/parser';
 
-import { checkNames } from '../checks/checkAttributes';
+import { checkNames, checkProvisionerNames } from '../checks/checkAttributes';
 import { checkDefaults } from '../values/declared';
 import { Context, dataSourceKey } from '../keys';
 import { Value } from '../values/Value';
@@ -9,6 +9,7 @@ import { Instances } from '../instances/Instances';
 import { ModuleInstances } from '../instances/ModuleInstances';
 import { Planned } from '../values/Planned';
 import { ProviderRegistry } from '../providers/ProviderRegistry';
+import { ProvisionerRegistry } from '../providers/ProvisionerRegistry';
 import { Limit, taken } from '../providers/Limit';
 import { tryAt, withPlace } from '../place';
 import { ReferenceResolver } from '../expressions/ReferenceResolver';
@@ -40,6 +41,8 @@ export class ConfigLoader {
     private dataSchemas: Map<string, Schema>,
     private resolver: ReferenceResolver,
     private providers: ProviderRegistry,
+    private provisioners: ProvisionerRegistry,
+    private provisionerSchemas: Map<string, Schema>,
     private instances: Instances,
     private modules: ModuleInstances,
     private planned: Planned,
@@ -58,6 +61,7 @@ export class ConfigLoader {
     this.declareData(loadedModules);
     this.declareCalls(loadedModules);
     await this.loadSchemas(loadedResources);
+    await this.loadProvisionerSchemas(loadedResources);
     await this.loadDataSchemas(loadedModules);
 
     return { mainProgram, loadedResources, loadedModules, schemas: this.schemas };
@@ -84,6 +88,25 @@ export class ConfigLoader {
     const schemas = await Promise.allSettled(firsts.map(({ block, address }) => this.asked(block, address, () => this.providers.schema(block.resourceType))));
 
     for (const [index, { block }] of firsts.entries()) this.schemas.set(block.resourceType, taken(schemas[index]));
+  }
+
+  /** With each block's names checked; a type no provisioner has is refused at its label. */
+  private async loadProvisionerSchemas(loaded: LoadedResource[]): Promise<void> {
+    const blocks = loaded.flatMap(({ block, address }) => (block.provisioners ?? []).map((provisioner) => ({ provisioner, block, address })));
+    for (const { provisioner, block, address } of blocks) {
+      const { value, position } = provisioner.provisionerType;
+      if (!this.provisioners.has(value)) throw withPlace(new ConfigError(`There is no provisioner "${value}"`, position), position, spell(block), address);
+    }
+
+    const firsts = firstOfEach(blocks, ({ provisioner }) => provisioner.provisionerType.value).filter(
+      ({ provisioner }) => !this.provisionerSchemas.has(provisioner.provisionerType.value)
+    );
+    const schemas = await Promise.allSettled(
+      firsts.map(({ block, address, provisioner }) => this.asked(block, address, () => this.provisioners.schema(provisioner.provisionerType.value)))
+    );
+    for (const [index, { provisioner }] of firsts.entries()) this.provisionerSchemas.set(provisioner.provisionerType.value, taken(schemas[index]));
+
+    for (const { provisioner, block, address } of blocks) checkProvisionerNames(provisioner, this.provisionerSchemas.get(provisioner.provisionerType.value)!, block, address);
   }
 
   /** With its names checked, so a misspelled input is refused before anything is read. */

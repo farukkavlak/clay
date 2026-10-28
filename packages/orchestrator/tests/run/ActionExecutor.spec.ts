@@ -8,6 +8,8 @@ import { ModuleInstances } from '../../src/instances/ModuleInstances';
 import { Planned } from '../../src/values/Planned';
 import { Versions } from '../../src/values/Versions';
 import { ProviderRegistry } from '../../src/providers/ProviderRegistry';
+import { ProvisionerRegistry } from '../../src/providers/ProvisionerRegistry';
+import { Provisioning } from '../../src/providers/Provisioning';
 import { Instances } from '../../src/instances/Instances';
 import { InstanceKeys } from '../../src/expressions/references/InstanceKeys';
 import { ReferenceResolver } from '../../src/expressions/ReferenceResolver';
@@ -126,7 +128,15 @@ describe('ActionExecutor', () => {
       versions
     );
     limit = new Watched(DEFAULT_PARALLELISM);
-    executor = new ActionExecutor(providers, resolver, new ResourcePlanner(providers, limit), new SameObjects(providers, limit), versions, limit);
+    executor = new ActionExecutor(
+      providers,
+      new Provisioning(new ProvisionerRegistry(), limit),
+      resolver,
+      new ResourcePlanner(providers, limit),
+      new SameObjects(providers, limit),
+      versions,
+      limit
+    );
   });
 
   afterEach(() => {
