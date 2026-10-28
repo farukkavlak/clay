@@ -1,4 +1,4 @@
-import { AttributePath } from '@clay/contracts';
+import { AttributePath, DestroyProvisioner } from '@clay/contracts';
 import { ProvisionerBlock } from '@clay/parser';
 
 import { conformed, SchemaMismatch } from '../values/conformValues';
@@ -15,6 +15,16 @@ import { withPlace } from '../place';
 export interface ProvisionerConfig {
   config: Record<string, unknown>;
   sensitive: AttributePath[];
+}
+
+/** As state keeps one run before a destroy, left out where it says nothing beside the default. */
+export function keptFor(provisioner: ProvisionerBlock, { config, sensitive }: ProvisionerConfig): DestroyProvisioner {
+  return {
+    type: provisioner.provisionerType.value,
+    config,
+    ...(sensitive.length > 0 && { sensitive }),
+    ...(provisioner.onFailure === 'continue' && { onFailure: 'continue' as const }),
+  };
 }
 
 /** A provisioner that ran and failed, as against a value refused before it runs. */

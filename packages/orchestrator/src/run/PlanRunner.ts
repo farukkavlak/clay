@@ -1,7 +1,7 @@
 import { Address, ModuleAddress, Output, parseDataAddress, Resource, SENSITIVE, State } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { AttributeValue, DataBlock, OutputBlock, ResourceBlock, spell, Statement } from '@clay/parser';
-import { offPlan, Plan, PlanAction } from '@clay/planner';
+import { changesState, offPlan, Plan, PlanAction } from '@clay/planner';
 import { moveResources, StateManager } from '@clay/state';
 
 import { ApplyNode, applyGraph } from '../plan/applyGraph';
@@ -373,8 +373,8 @@ export class PlanRunner {
   private async *step(action: PlanAction, state: State, signal?: AbortSignal, running: Running = {}): AsyncGenerator<RunEvent, boolean> {
     if (signal?.aborted) return false;
 
-    // A no-op is not reported, but its dependencies are saved. A move, or a change in which parts are sensitive or in what a destroy is prevented, is reported.
-    const quiet = action.type === 'NO_OP' && !action.movedFrom && !action.marksChange && !action.protectionChange;
+    // A no-op that changes nothing in state is not reported, but its dependencies are saved.
+    const quiet = !changesState(action);
     if (!quiet) yield { type: 'started', action };
 
     const key = Address.of(action).toString();
@@ -392,7 +392,7 @@ export class PlanRunner {
   /** Reported as it happens: the run may stop before the replace makes its new object. */
   private async *destroyFirst(action: PlanAction, state: State, signal?: AbortSignal): AsyncGenerator<RunEvent, boolean> {
     if (signal?.aborted) return false;
-    if (!(yield* this.attempt(action, state, () => this.executor.destroy(action, state)))) return false;
+    if (!(yield* this.attempt(action, state, (print) => this.executor.destroy(action, state, print)))) return false;
 
     await this.stateManager.record(state, Address.of(action).toString());
     yield { type: 'destroyed', action };

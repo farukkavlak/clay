@@ -38,6 +38,9 @@ function preventing(name: string, attributes: Record<string, string>): DesiredRe
 
 const moved = (address: string) => (address === 'mock_resource.r' ? 'mock_resource.old' : undefined);
 
+/** One local-exec run before a destroy, echoing `text`. */
+const echo = (text: string) => [{ type: 'local-exec', config: { command: `echo ${text}` } }];
+
 function stateWith(name: string, attributes: Record<string, unknown>): State {
   return {
     version: STATE_VERSION,
@@ -198,6 +201,22 @@ describe('Planner', () => {
       expect(plan([preventing('r', planned)], protectedState())[0]).not.toHaveProperty('protectionChange');
       expect(plan([desiredResource('r', planned)], stateWith('r', planned))[0]).not.toHaveProperty('protectionChange');
     });
+  });
+
+  it('says a no-op changes what runs before a destroy where the block and the state disagree, and only then', () => {
+    const planned = { path: 'x' };
+    const running = (text: string) => ({ ...desiredResource('r', planned), destroyProvisioners: echo(text) });
+    const keeping = (text: string): State => {
+      const state = stateWith('r', planned);
+      state.resources['mock_resource.r'].destroyProvisioners = echo(text);
+      return state;
+    };
+
+    expect(plan([running('new')], keeping('old'))[0]).toMatchObject({ type: 'NO_OP', provisionersChange: true });
+    expect(plan([running('new')], stateWith('r', planned))[0]).toMatchObject({ type: 'NO_OP', provisionersChange: true });
+    expect(plan([desiredResource('r', planned)], keeping('old'))[0]).toMatchObject({ type: 'NO_OP', provisionersChange: true });
+    expect(plan([running('same')], keeping('same'))[0]).not.toHaveProperty('provisionersChange');
+    expect(plan([desiredResource('r', planned)], stateWith('r', planned))[0]).not.toHaveProperty('provisionersChange');
   });
 
   it('says a no-op changes which parts are sensitive where the state marks other parts, and only then', () => {

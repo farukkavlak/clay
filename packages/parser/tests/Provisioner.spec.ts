@@ -46,6 +46,17 @@ describe('Parser - provisioner block', () => {
     expect(resource('resource "t" "a" { provisioner "x" {} }').provisioners![0]).not.toHaveProperty('onFailure');
   });
 
+  it.each(['create', 'destroy'])('reads when = %s apart from the arguments', (word) => {
+    const [provisioner] = resource(`resource "t" "a" {\n  provisioner "x" {\n    when    = ${word}\n    command = "echo"\n  }\n}`).provisioners!;
+
+    expect(provisioner.when).toBe(word);
+    expect(Object.keys(provisioner.attributes)).toEqual(['command']);
+  });
+
+  it('leaves when out of a provisioner that does not set it', () => {
+    expect(resource('resource "t" "a" { provisioner "x" {} }').provisioners![0]).not.toHaveProperty('when');
+  });
+
   it('is left out of a resource without one', () => {
     expect(resource('resource "t" "a" {}')).not.toHaveProperty('provisioners');
   });
@@ -58,6 +69,10 @@ describe('Parser - provisioner block', () => {
     ['on_failure in quotes', 'resource "t" "a" {\n  provisioner "x" {\n    on_failure = "continue"\n  }\n}', 'on_failure is continue or fail, written without quotes.', 3, 18],
     ['on_failure as another word', 'resource "t" "a" {\n  provisioner "x" {\n    on_failure = ignore\n  }\n}', 'on_failure is continue or fail.', 3, 18],
     ['on_failure as a reference', 'resource "t" "a" {\n  provisioner "x" {\n    on_failure = var.mode\n  }\n}', 'on_failure is continue or fail.', 3, 18],
+    ['when in quotes', 'resource "t" "a" {\n  provisioner "x" {\n    when = "destroy"\n  }\n}', 'when is create or destroy, written without quotes.', 3, 12],
+    ['when as another word', 'resource "t" "a" {\n  provisioner "x" {\n    when = later\n  }\n}', 'when is create or destroy.', 3, 12],
+    ['a wrong when, before a block later in it', 'resource "t" "a" {\n  provisioner "x" {\n    when = later\n    connection {}\n  }\n}', 'when is create or destroy.', 3, 12],
+    ['when as a reference', 'resource "t" "a" {\n  provisioner "x" {\n    when = var.when\n  }\n}', 'when is create or destroy.', 3, 12],
     ['on_failure with a step below the word', 'resource "t" "a" {\n  provisioner "x" {\n    on_failure = continue.now\n  }\n}', 'on_failure is continue or fail.', 3, 18],
     [
       'a wrong on_failure, before a block later in it',

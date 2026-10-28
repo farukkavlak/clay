@@ -165,9 +165,9 @@ A resource may hold any number of `provisioner` blocks, each with one label, its
 `provisioner "local-exec" { command = "..." }`. Its arguments are attributes; a block
 inside it, a missing label or a second one is refused where it is written. A type no
 provisioner has, and an argument the type does not take, are refused by the engine.
-`on_failure` is read by the engine and never given to the provisioner: `continue` or
-`fail`, a word written out, so a quoted string, another word or a reference is refused
-where it is written.
+`when` and `on_failure` are read by the engine and never given to the provisioner:
+`create` or `destroy`, and `continue` or `fail`, each a word written out, so a quoted
+string, another word or a reference is refused where it is written.
 
 A module's `source` starts with `./` or `../`. Anything else, a registry address or an
 absolute path, is refused where it is written.
@@ -735,7 +735,13 @@ interface ResourceBlock {
   forEach?: AttributeValue;
   dependsOn?: Reference[];
   lifecycle?: { preventDestroy?: boolean; createBeforeDestroy?: boolean; ignoreChanges?: 'all' | { path: (string | number)[]; position: Position }[]; position: Position };
-  provisioners?: { provisionerType: { value: string; position: Position }; onFailure?: 'continue' | 'fail'; attributes: Record<string, AttributeValue>; position: Position }[];
+  provisioners?: {
+    provisionerType: { value: string; position: Position };
+    when?: 'create' | 'destroy';
+    onFailure?: 'continue' | 'fail';
+    attributes: Record<string, AttributeValue>;
+    position: Position;
+  }[];
   attributes: Record<string, AttributeValue>;
   position: Position;
 }

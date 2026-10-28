@@ -1,23 +1,18 @@
 import { Address, AttributePath, isExact, isMaybe, isRecord, isUnknown, jsonText, Marks, memberKey, Output, Resource, samePaths, Schema, SENSITIVE } from '@clay/contracts';
-import { changedOutside, Changes, Drift, OutputChanges, Plan, PlanAction } from '@clay/planner';
+import { changedOutside, Changes, changesState, Drift, keptChange, OutputChanges, Plan, PlanAction } from '@clay/planner';
 import { isDeepStrictEqual, styleText } from 'node:util';
 
 import { attributeName } from './printable';
 import { typeName } from './typeName';
 
-/** A move, or a change of marks or of what a destroy is prevented, changes state. */
-function changes(action: PlanAction): boolean {
-  return action.type !== 'NO_OP' || action.movedFrom !== undefined || action.marksChange === true || action.protectionChange === true;
-}
-
-/** A no-op that changes which parts are sensitive, or whether a destroy is prevented, shows and counts as an update. */
+/** A no-op that changes what state keeps beside the values shows and counts as an update. */
 export function shownType(action: PlanAction): PlanAction['type'] {
-  return action.marksChange || action.protectionChange ? 'UPDATE' : action.type;
+  return keptChange(action) ? 'UPDATE' : action.type;
 }
 
 /** Apply writes drift into state, so a plan that found drift has work to do. */
 export function changesNothing(plan: Plan): boolean {
-  return !plan.actions.some((action) => changes(action)) && Object.keys(plan.outputs).length === 0 && changedOutside(plan).length === 0;
+  return !plan.actions.some((action) => changesState(action)) && Object.keys(plan.outputs).length === 0 && changedOutside(plan).length === 0;
 }
 
 /** `will be read during apply` when `planned`, `read` after. */
@@ -146,6 +141,7 @@ function displayAction(action: PlanAction, plan: Plan): void {
   if (action.changes) displayChanges(action.changes, plan.schemas[action.resourceType], Marks.of([...before, ...after]));
   displayMarks(before, after);
   displayProtection(prior?.preventDestroy === true, action.preventDestroy === true);
+  if (action.provisionersChange) console.log('      the provisioners run before it is destroyed will change');
 }
 
 function displayChangedOutside({ address, changes }: Drift, plan: Plan): void {
@@ -221,7 +217,7 @@ export function displayPlan(plan: Plan): void {
   const drift = changedOutside(plan);
   displayDrift(drift, plan);
 
-  const changing = plan.actions.filter((action) => changes(action));
+  const changing = plan.actions.filter((action) => changesState(action));
   if (changing.length > 0) {
     console.log(styleText('bold', '\nClay will perform the following actions:\n'));
     for (const action of changing) displayAction(action, plan);

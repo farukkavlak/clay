@@ -1027,8 +1027,10 @@ run as a step of another resource instead.
       sensitive; `quiet` to leave out the command, as in Terraform, since a command can
       already send its own output away
 - [x] `working_dir`, `environment` and `on_failure = continue` on `local-exec`
-- [ ] `when = destroy`: a provisioner run before the object is destroyed, reading only
-      `self`
+- [x] `when = destroy`: a provisioner run before the object is destroyed, reading only
+      `self`. State keeps it as the last apply resolved it, so it runs once the block is
+      gone
+- [ ] `when = destroy` on the object a `create_before_destroy` replace leaves deposed
 - [ ] `remote-exec` and `file`, once a resource can carry a connection
 
 ## 3. State

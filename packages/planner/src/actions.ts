@@ -1,4 +1,5 @@
 import { Address, Resource, samePaths, State } from '@clay/contracts';
+import { isDeepStrictEqual } from 'node:util';
 
 import { calculateDiff } from './diff';
 import { DesiredResource, PlanAction } from './Plan';
@@ -24,6 +25,15 @@ function carriedOver(desired: DesiredResource): Pick<PlanAction, 'sensitive' | '
   return { ...marked(desired), ...protectedBy(desired), ...ignoring(desired), ...(desired.replace && desired.createBeforeDestroy && { createBeforeDestroy: true as const }) };
 }
 
+/** What state keeps beside the values that a no-op changes: which parts are sensitive, whether a destroy is prevented and what runs before it. */
+function keptChanges(desired: DesiredResource, current: Resource): Pick<PlanAction, 'marksChange' | 'protectionChange' | 'provisionersChange'> {
+  return {
+    ...(!samePaths(current.sensitive ?? [], desired.sensitive) && { marksChange: true }),
+    ...(prevents(desired) !== (current.preventDestroy === true) && { protectionChange: true }),
+    ...(!isDeepStrictEqual(current.destroyProvisioners ?? [], desired.destroyProvisioners ?? []) && { provisionersChange: true }),
+  };
+}
+
 /** Where the state held what is now at an address, if a move took it there. */
 export type MovedFrom = (address: string) => string | undefined;
 
@@ -37,8 +47,7 @@ function processExistingResource(actions: PlanAction[], desired: DesiredResource
       ...(moved && { movedFrom: moved }),
       ...marked(desired),
       ...protectedBy(desired),
-      ...(!samePaths(currentResource.sensitive ?? [], desired.sensitive) && { marksChange: true }),
-      ...(prevents(desired) !== (currentResource.preventDestroy === true) && { protectionChange: true }),
+      ...keptChanges(desired, currentResource),
       dependencies: desired.dependencies,
     });
     return;

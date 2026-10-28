@@ -107,6 +107,41 @@ describe('a state file that is not valid state', () => {
       '"local_file.a" is not a resource',
     ],
     [
+      'a resource whose destroy provisioners are not a list',
+      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"destroyProvisioners":{}}}}`,
+      '"local_file.a" is not a resource',
+    ],
+    [
+      'a destroy provisioner whose type is not a string',
+      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"destroyProvisioners":[{"type":1,"config":{}}]}}}`,
+      '"local_file.a" is not a resource',
+    ],
+    [
+      'a destroy provisioner whose config is not a record',
+      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"destroyProvisioners":[{"type":"local-exec","config":"echo"}]}}}`,
+      '"local_file.a" is not a resource',
+    ],
+    [
+      'a destroy provisioner whose sensitive is not a list of paths',
+      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"destroyProvisioners":[{"type":"local-exec","config":{},"sensitive":"command"}]}}}`,
+      '"local_file.a" is not a resource',
+    ],
+    [
+      'a destroy provisioner with no config',
+      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"destroyProvisioners":[{"type":"local-exec"}]}}}`,
+      '"local_file.a" is not a resource',
+    ],
+    [
+      'a destroy provisioner whose on_failure is not continue',
+      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"destroyProvisioners":[{"type":"local-exec","config":{},"onFailure":"fail"}]}}}`,
+      '"local_file.a" is not a resource',
+    ],
+    [
+      'a destroy provisioner with a sensitive index that is not whole',
+      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"destroyProvisioners":[{"type":"local-exec","config":{},"sensitive":[["environment",1.5]]}]}}}`,
+      'a sensitive index of a provisioner of "local_file.a": 1.5 is not a whole number',
+    ],
+    [
       'a resource with a sensitive index that is not whole',
       `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"sensitive":[["content",1.5]]}}}`,
       'a sensitive index of "local_file.a": 1.5 is not a whole number',

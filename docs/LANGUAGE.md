@@ -392,6 +392,18 @@ plan makes; one only the apply knows is checked then, before the command runs. A
 that makes no object, an update or no change, runs no provisioner and checks none of
 their values.
 
+`when = destroy` runs a provisioner before the object is destroyed instead: when its block
+is gone, and before a replace destroys the old object, though not yet the old object a
+`create_before_destroy` replace leaves behind. `when = create` is the default.
+Its values are read once the object is made, and again by each apply that keeps it, and
+state keeps them, so it runs once the block is gone too. A command changed in the
+configuration runs from the next apply; a plan that changes only that shows an update,
+`the provisioners run before it is destroyed will change`. It reads only `self`,
+`count.index` and `each.key`; anything else is refused where it is written. A command
+that fails stops the destroy, and the object stays in state, not tainted, for the next
+apply to try again. `on_failure = continue` destroys it anyway. None run on a tainted
+object, which a failed step left half made.
+
 ## Moved
 
 A `moved` block says a resource was renamed, so the plan moves its state to the new

@@ -417,7 +417,7 @@ describe('a local-exec provisioner', () => {
 
   it.each([
     ['a type no provisioner has', '  provisioner "remote" {}\n', 'There is no provisioner "remote"', 'line 2', '  provisioner "remote" {}'],
-    ['an argument local-exec does not take', '  provisioner "local-exec" {\n    when = "destroy"\n  }\n', 'local-exec has no attribute "when"', 'line 3', '    when = "destroy"'],
+    ['an argument local-exec does not take', '  provisioner "local-exec" {\n    shell = "sh"\n  }\n', 'local-exec has no attribute "shell"', 'line 3', '    shell = "sh"'],
     ['no command', '  provisioner "local-exec" {}\n', 'local-exec requires "command"', 'line 2', '  provisioner "local-exec" {}'],
     ['a command that is not a string', '  provisioner "local-exec" {\n    command = ["a"]\n  }\n', 'command', 'line 3', '    command = ["a"]'],
     ['an empty command', '  provisioner "local-exec" {\n    command = ""\n  }\n', 'local-exec "command" must not be empty', 'line 2', '  provisioner "local-exec" {'],

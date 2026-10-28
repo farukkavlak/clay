@@ -4,6 +4,16 @@ import { isRecord } from './isRecord';
 import { isType } from './Type';
 import type { Type } from './Type';
 
+/** A provisioner run before its object is destroyed, with what it is given as the last apply resolved it. */
+export interface DestroyProvisioner {
+  type: string;
+  config: Record<string, unknown>;
+  /** The steps to each sensitive part of `config`, left out where there is none. */
+  sensitive?: AttributePath[];
+  /** Where set, a failure lets the destroy go on. */
+  onFailure?: 'continue';
+}
+
 /** Whatever the provider finds it by, such as an id, is one of its attributes. */
 export interface Resource {
   resourceType: string;
@@ -17,6 +27,8 @@ export interface Resource {
   preventDestroy?: true;
   /** Made, but a step after its create failed, so the next plan replaces it. */
   tainted?: true;
+  /** Resolved at the last apply, so they run before a destroy once the block is gone too. */
+  destroyProvisioners?: DestroyProvisioner[];
   /** The blocks it read, as `covers` reads them, kept so it can be deleted before their objects once the config drops it. */
   dependencies?: string[];
 }
@@ -54,7 +66,7 @@ export interface State {
 }
 
 /** Bump on any change to the shape after a release. A higher version was written by a newer Clay and is refused. */
-export const STATE_VERSION = 9;
+export const STATE_VERSION = 10;
 
 export function emptyState(): State {
   return { version: STATE_VERSION, serial: 0, resources: {} };

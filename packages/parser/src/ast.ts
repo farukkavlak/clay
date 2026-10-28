@@ -83,11 +83,13 @@ export interface Lifecycle extends Node {
   ignoreChanges?: 'all' | IgnoredPath[];
 }
 
-/** A step run on the object a resource block makes, once it is made. */
+/** A step run on the object a resource block makes, once it is made, or before it is destroyed. */
 export interface ProvisionerBlock extends Node {
   /** As its label names it, at the label. */
   provisionerType: Label;
-  /** Where it is set; `continue` goes on past a command that fails, where `fail` taints the object and stops. */
+  /** Where it is set; `destroy` runs it before the object is destroyed, where `create` runs it once the object is made. */
+  when?: 'create' | 'destroy';
+  /** Where it is set; `continue` goes on past a command that fails, where `fail` stops, tainting an object just made or keeping one about to be destroyed. */
   onFailure?: 'continue' | 'fail';
   attributes: Record<string, AttributeValue>;
 }

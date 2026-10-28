@@ -69,7 +69,7 @@ On top of these:
   `<`, `<=`, `>`, `>=`.
 - Sensitive values, followed part by part and hidden wherever they would be printed.
 - `lifecycle` with `prevent_destroy`, `create_before_destroy` and `ignore_changes`.
-- `provisioner "local-exec"`, run once a resource's object is made.
+- `provisioner "local-exec"`, run once a resource's object is made, or before it is destroyed.
 - `depends_on` in a resource, a data source, a module call or an output, for an order no
   reference shows.
 

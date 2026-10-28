@@ -293,6 +293,16 @@ describe('reading a plan file', () => {
   });
 
   it.each([
+    ['anything but true', 'NO_OP', 'yes'],
+    ['false', 'NO_OP', false],
+    ['on an update', 'UPDATE', true],
+  ])('refuses a change in what runs before a destroy that is %s', (_, type, provisionersChange) => {
+    const content = { ...fields(), actions: [{ type, resourceType: 'null_resource', name: 'a', provisionersChange }] };
+
+    expect(read(content)).toThrow(/^tfplan\.json is not a plan file$/);
+  });
+
+  it.each([
     ['anything but true', 'NO_OP', false],
     ['on a delete', 'DELETE', true],
   ])('refuses prevent_destroy that is %s', (_, type, preventDestroy) => {

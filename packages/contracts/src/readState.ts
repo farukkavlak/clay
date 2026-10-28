@@ -2,11 +2,25 @@ import { Address, isAddress, isInstanceKey, isModulePath } from './Address';
 import { isAttributePaths, readPaths } from './AttributePath';
 import { ExactNumber, NumberError } from './ExactNumber';
 import { isRecord } from './isRecord';
-import type { DeposedObject, Resource } from './State';
+import type { DeposedObject, DestroyProvisioner, Resource } from './State';
 
 /** The blocks an object was made after, whose objects its delete must come before. A dependency names no instance of its block. */
 export function isDependencies(value: unknown): value is string[] | undefined {
   return value === undefined || (Array.isArray(value) && value.every((address) => typeof address === 'string' && isAddress(address) && Address.parse(address).key === undefined));
+}
+
+function isDestroyProvisioner(value: unknown): value is DestroyProvisioner {
+  return (
+    isRecord(value) &&
+    typeof value.type === 'string' &&
+    isRecord(value.config) &&
+    (value.sensitive === undefined || isAttributePaths(value.sensitive)) &&
+    (value.onFailure === undefined || value.onFailure === 'continue')
+  );
+}
+
+function isDestroyProvisioners(value: unknown): value is DestroyProvisioner[] | undefined {
+  return value === undefined || (Array.isArray(value) && value.every((provisioner) => isDestroyProvisioner(provisioner)));
 }
 
 /** What a resource keeps beside its values, each left out where there is none. */
@@ -15,11 +29,12 @@ function isKeptBesideValues(value: Record<string, unknown>): boolean {
     (value.sensitive === undefined || isAttributePaths(value.sensitive)) &&
     (value.preventDestroy === undefined || value.preventDestroy === true) &&
     (value.tainted === undefined || value.tainted === true) &&
+    isDestroyProvisioners(value.destroyProvisioners) &&
     isDependencies(value.dependencies)
   );
 }
 
-/** Checks what the engine reads without asking: the address fields, `attributes`, `sensitive`, `preventDestroy`, `tainted` and `dependencies`. */
+/** Checks what the engine reads without asking: the address fields, `attributes`, `sensitive`, `preventDestroy`, `tainted`, `destroyProvisioners` and `dependencies`. */
 function isResource(value: unknown): value is Resource {
   return (
     isRecord(value) &&
@@ -31,6 +46,14 @@ function isResource(value: unknown): value is Resource {
   );
 }
 
+function readProvisionerPaths(provisioners: unknown, address: string): void {
+  if (!Array.isArray(provisioners)) return;
+
+  for (const provisioner of provisioners as unknown[])
+    if (isRecord(provisioner) && provisioner.sensitive !== undefined)
+      provisioner.sensitive = readPaths(provisioner.sensitive, `a sensitive index of a provisioner of "${address}"`);
+}
+
 /** Instance keys are part of the address and indexes in sensitive paths are steps, so both read back as plain numbers. */
 function readKeys(resources: Record<string, unknown>): void {
   for (const [address, resource] of Object.entries(resources)) {
@@ -38,6 +61,7 @@ function readKeys(resources: Record<string, unknown>): void {
 
     if (resource.key instanceof ExactNumber) resource.key = resource.key.toSafeInteger(`the key of "${address}"`);
     if (resource.sensitive !== undefined) resource.sensitive = readPaths(resource.sensitive, `a sensitive index of "${address}"`);
+    readProvisionerPaths(resource.destroyProvisioners, address);
     if (Array.isArray(resource.modulePath))
       for (const step of resource.modulePath) if (isRecord(step) && step.key instanceof ExactNumber) step.key = step.key.toSafeInteger(`a module key of "${address}"`);
   }

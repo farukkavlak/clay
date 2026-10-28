@@ -92,7 +92,7 @@ function carriesValues(action: Record<string, unknown>): boolean {
 }
 
 /** Only a no-op carries the mark of a change that is not one of the values. */
-function isNoOpMark(action: Record<string, unknown>, field: 'marksChange' | 'protectionChange'): boolean {
+function isNoOpMark(action: Record<string, unknown>, field: 'marksChange' | 'protectionChange' | 'provisionersChange'): boolean {
   return action[field] === undefined || (action[field] === true && action.type === 'NO_OP');
 }
 
@@ -118,7 +118,7 @@ function isIgnored(action: Record<string, unknown>): boolean {
 
 /** What a plan holds beside the values: the marks, the prevented destroy and the paths left as they are. */
 function isStateOnly(action: Record<string, unknown>): boolean {
-  return isNoOpMark(action, 'marksChange') && isProtection(action) && isIgnored(action) && isDeposed(action) && isCreatedFirst(action);
+  return isNoOpMark(action, 'marksChange') && isNoOpMark(action, 'provisionersChange') && isProtection(action) && isIgnored(action) && isDeposed(action) && isCreatedFirst(action);
 }
 
 const ACTION_TYPES = new Set<unknown>(['CREATE', 'UPDATE', 'REPLACE', 'DELETE', 'NO_OP'] satisfies ActionType[]);

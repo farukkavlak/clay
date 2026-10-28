@@ -74,6 +74,14 @@ function checkUnnamed(reference: Unnamed, repetition: Repetition | undefined, { 
   else if (!provisioning) throw placed(SELF_OUTSIDE, reference.position);
 }
 
+const DESTROY_READS = 'a provisioner with when = destroy reads only self, count.index and each.key, as it runs on the object alone';
+
+/** Kept with the object and run before it is destroyed, maybe once the rest of the configuration is gone. */
+function checkDestroyTime(reference: Reference, { destroying }: Dependent): void {
+  const own = reference.kind === 'self' || reference.kind === 'count' || (reference.kind === 'each' && reference.name === 'key');
+  if (destroying && !own) throw placed(DESTROY_READS, reference.position);
+}
+
 function describeMissing(reference: Exclude<Reference, Unnamed>, moduleScopes: Set<string>): string {
   if (reference.kind === 'variable') return `variable "${reference.name}" is not defined`;
   if (reference.kind === 'local') return `local "${reference.name}" is not defined`;
@@ -92,6 +100,8 @@ interface Dependent {
   given?: string;
   /** A provisioner's value, which may read the object it runs on. */
   provisioning?: true;
+  /** A value of a provisioner run before the object is destroyed. */
+  destroying?: true;
 }
 
 type ReferencePlace = Omit<Dependent, 'key' | 'given'> & { position: Position };
@@ -204,9 +214,11 @@ export class DependencyGraphBuilder {
     for (const value of Object.values(block.attributes))
       tryAt(value.position, dependent.declaration, address, () => this.addDependencies(value, graph, dependent, moduleScopes, repetition));
     // A provisioner runs as part of the resource, so what it reads, the resource waits for.
-    const provisioning = { ...dependent, provisioning: true as const };
-    for (const value of (block.provisioners ?? []).flatMap((provisioner) => Object.values(provisioner.attributes)))
-      tryAt(value.position, dependent.declaration, address, () => this.addDependencies(value, graph, provisioning, moduleScopes, repetition));
+    for (const provisioner of block.provisioners ?? []) {
+      const provisioning = { ...dependent, provisioning: true as const, ...(provisioner.when === 'destroy' && { destroying: true as const }) };
+      for (const value of Object.values(provisioner.attributes))
+        tryAt(value.position, dependent.declaration, address, () => this.addDependencies(value, graph, provisioning, moduleScopes, repetition));
+    }
   }
 
   /** Looks through the variables, locals, outputs and data sources in between. */
@@ -304,6 +316,7 @@ export class DependencyGraphBuilder {
     this.checkCalls(value);
 
     for (const reference of this.scanner.referencesIn(value, dependent.context)) {
+      checkDestroyTime(reference, dependent);
       if (namesNoBlock(reference)) {
         checkUnnamed(reference, repetition, dependent);
         continue;

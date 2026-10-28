@@ -1,4 +1,4 @@
-import { Address, AttributePath, InstanceKey, ModuleStep, Output, Resource, Schema } from '@clay/contracts';
+import { Address, AttributePath, DestroyProvisioner, InstanceKey, ModuleStep, Output, Resource, Schema } from '@clay/contracts';
 
 export type ActionType = 'CREATE' | 'UPDATE' | 'REPLACE' | 'DELETE' | 'NO_OP';
 
@@ -17,6 +17,8 @@ export interface DesiredResource {
   preventDestroy?: true;
   /** Its block says so, or a block that reads it does: a replace makes the new object first. */
   createBeforeDestroy?: true;
+  /** As state would keep them, with what the plan knows; left out where there is none. */
+  destroyProvisioners?: DestroyProvisioner[];
 }
 
 /** An undefined `old` means added, an undefined `new` means removed. */
@@ -50,8 +52,20 @@ export interface PlanAction {
   preventDestroy?: true;
   /** On a no-op: the values stay, whether the block prevents a destroy changes. */
   protectionChange?: true;
+  /** On a no-op: the values stay, what runs before a destroy changes. */
+  provisionersChange?: true;
   changes?: Changes;
   dependencies?: string[];
+}
+
+/** A no-op that changes which parts are sensitive, whether a destroy is prevented, or what runs before it. */
+export function keptChange(action: PlanAction): boolean {
+  return action.marksChange === true || action.protectionChange === true || action.provisionersChange === true;
+}
+
+/** A move, or a change of what state keeps beside the values, changes state though the values stay. */
+export function changesState(action: PlanAction): boolean {
+  return action.type !== 'NO_OP' || action.movedFrom !== undefined || keptChange(action);
 }
 
 export interface Plan {
@@ -73,7 +87,7 @@ export interface Plan {
 }
 
 /** Bump on any change to the file's shape after a release, so an older plan file is refused instead of misread. */
-export const PLAN_FILE_VERSION = '34.0';
+export const PLAN_FILE_VERSION = '35.0';
 
 export interface PlanFile extends Plan {
   version: string;

@@ -1,4 +1,4 @@
-import { Address, AttributePath, ModuleAddress, Output, Resource, samePaths, Schema, State } from '@clay/contracts';
+import { Address, AttributePath, DestroyProvisioner, ModuleAddress, Output, Resource, samePaths, Schema, State } from '@clay/contracts';
 import { Graph } from '@clay/graph';
 import { AttributeValue, DataBlock, ResourceBlock, spell, Statement } from '@clay/parser';
 import { DesiredResource, hasChanges } from '@clay/planner';
@@ -26,7 +26,7 @@ import { inOrder } from '../providers/Limit';
 import { Moves } from './moves';
 import { Versions } from '../values/Versions';
 import { Ignoring, ResourcePlan, ResourcePlanner } from './ResourcePlanner';
-import { Provisioning } from '../providers/Provisioning';
+import { keptFor, Provisioning } from '../providers/Provisioning';
 import { Queue } from '../Queue';
 
 /** With the block it was planned from, so a refusal can point at it. */
@@ -304,7 +304,7 @@ export class DesiredStateBuilder {
     const values = changes(current, change);
     // A change of values or of marks goes in, so a reader takes the marks from the plan too.
     if (values || !samePaths(current?.sensitive ?? [], change.sensitive)) this.planned.set(address, change.after, change.sensitive, values);
-    await this.checkProvisioners(block, state, address, !current || change.replace);
+    const kept = await this.checkProvisioners(block, state, address, !current || change.replace);
 
     return {
       address,
@@ -317,6 +317,7 @@ export class DesiredStateBuilder {
       ...(block.lifecycle?.preventDestroy === true && { preventDestroy: true as const }),
       ...(ignoring && { ignored: ignoring.paths }),
       ...(this.createsFirst.has(block) && { createBeforeDestroy: true as const }),
+      ...kept,
     };
   }
 
@@ -410,19 +411,23 @@ export class DesiredStateBuilder {
   }
 
   /**
-   * Read as the resource's own values are: what is known now is checked now, and every value again at apply. Only a create runs them,
-   * so an instance the plan makes no object for is not checked, and `self` reads the one it makes, already in the plan.
+   * Read as the resource's own values are: what is known now is checked now, and every value again at apply. Only a create runs the others,
+   * so an instance the plan makes no object for is not checked for them, and `self` reads the one it makes, already in the plan.
+   * One run before a destroy is resolved again at every apply, so it is checked at every plan, and given back as state would keep it.
    */
-  private async checkProvisioners(block: ResourceBlock, state: State, address: Address, creates: boolean): Promise<void> {
-    if (!creates) return;
-
+  private async checkProvisioners(block: ResourceBlock, state: State, address: Address, creates: boolean): Promise<Pick<DesiredResource, 'destroyProvisioners'>> {
     const declaration = spell(block);
+    const kept: DestroyProvisioner[] = [];
     for (const provisioner of block.provisioners ?? []) {
+      if (!creates && provisioner.when !== 'destroy') continue;
       const given = Object.fromEntries(
         Object.entries(provisioner.attributes).map(([name, value]) => [name, tryAt(value.position, declaration, address, () => this.resolveOrUnknown(value, state, address))])
       );
-      await this.provisioning.check(provisioner, given, declaration, address);
+      const checked = await this.provisioning.check(provisioner, given, declaration, address);
+      if (provisioner.when === 'destroy') kept.push(keptFor(provisioner, checked));
     }
+
+    return kept.length > 0 ? { destroyProvisioners: kept } : {};
   }
 
   private resolveForPlan(block: ResourceBlock, state: State, context: Context): Record<string, Value> {
