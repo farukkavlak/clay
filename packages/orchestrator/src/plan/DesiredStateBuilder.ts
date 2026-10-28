@@ -316,11 +316,11 @@ export class DesiredStateBuilder {
     };
   }
 
-  /** Nothing to ignore in what does not exist yet. */
+  /** Nothing to ignore in what does not exist yet, or in what is replaced because it is tainted. */
   private ignoringIn(block: ResourceBlock, current: Resource | undefined): Ignoring | undefined {
     const paths = ignoredPaths(block.lifecycle?.ignoreChanges, this.schemas.get(block.resourceType) ?? {});
 
-    return current && paths.length > 0 ? { prior: current, paths } : undefined;
+    return current && !current.tainted && paths.length > 0 ? { prior: current, paths } : undefined;
   }
 
   private async askProvider(address: Address, block: ResourceBlock, current: Resource | undefined, attributes: Record<string, Value>, ignoring?: Ignoring): Promise<ResourcePlan> {

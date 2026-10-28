@@ -15,6 +15,8 @@ export interface Resource {
   sensitive?: AttributePath[];
   /** The block's flag at the last apply, so a delete is judged by it once the block is gone. */
   preventDestroy?: true;
+  /** Made, but a step after its create failed, so the next plan replaces it. */
+  tainted?: true;
   /** The blocks it read, as `covers` reads them, kept so it can be deleted before their objects once the config drops it. */
   dependencies?: string[];
 }
@@ -52,7 +54,7 @@ export interface State {
 }
 
 /** Bump on any change to the shape after a release. A higher version was written by a newer Clay and is refused. */
-export const STATE_VERSION = 8;
+export const STATE_VERSION = 9;
 
 export function emptyState(): State {
   return { version: STATE_VERSION, serial: 0, resources: {} };

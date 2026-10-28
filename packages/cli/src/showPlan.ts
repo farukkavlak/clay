@@ -1,4 +1,4 @@
-import { Address, AttributePath, isExact, isMaybe, isRecord, isUnknown, jsonText, Marks, memberKey, Output, samePaths, Schema, SENSITIVE } from '@clay/contracts';
+import { Address, AttributePath, isExact, isMaybe, isRecord, isUnknown, jsonText, Marks, memberKey, Output, Resource, samePaths, Schema, SENSITIVE } from '@clay/contracts';
 import { changedOutside, Changes, Drift, OutputChanges, Plan, PlanAction } from '@clay/planner';
 import { isDeepStrictEqual, styleText } from 'node:util';
 
@@ -130,6 +130,10 @@ function displayProtection(before: boolean, after: boolean): void {
   if (before !== after) console.log(`      prevent_destroy: will ${after ? 'be set' : 'no longer be set'}`);
 }
 
+function displayTaint({ type }: PlanAction, prior: Resource | undefined): void {
+  if (type === 'REPLACE' && prior?.tainted) console.log('      tainted, so it is replaced');
+}
+
 function displayAction(action: PlanAction, plan: Plan): void {
   console.log(actionLine(action, true));
   if (shownType(action) !== 'UPDATE' && action.type !== 'REPLACE') return;
@@ -138,6 +142,7 @@ function displayAction(action: PlanAction, plan: Plan): void {
   const prior = plan.prior[action.movedFrom ?? Address.of(action).toString()];
   const before = prior?.sensitive ?? [];
   const after = action.sensitive ?? [];
+  displayTaint(action, prior);
   if (action.changes) displayChanges(action.changes, plan.schemas[action.resourceType], Marks.of([...before, ...after]));
   displayMarks(before, after);
   displayProtection(prior?.preventDestroy === true, action.preventDestroy === true);

@@ -14,11 +14,12 @@ function isKeptBesideValues(value: Record<string, unknown>): boolean {
   return (
     (value.sensitive === undefined || isAttributePaths(value.sensitive)) &&
     (value.preventDestroy === undefined || value.preventDestroy === true) &&
+    (value.tainted === undefined || value.tainted === true) &&
     isDependencies(value.dependencies)
   );
 }
 
-/** Checks what the engine reads without asking: the address fields, `attributes`, `sensitive`, `preventDestroy` and `dependencies`. */
+/** Checks what the engine reads without asking: the address fields, `attributes`, `sensitive`, `preventDestroy`, `tainted` and `dependencies`. */
 function isResource(value: unknown): value is Resource {
   return (
     isRecord(value) &&

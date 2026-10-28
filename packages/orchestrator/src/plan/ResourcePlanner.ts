@@ -103,11 +103,14 @@ export class ResourcePlanner {
     await hidingReason(type, sensitive, () => this.limit.run(() => provider.validate(type, config)));
     if (!current) return { ...(await this.create(provider, type, schema, config, sensitive)), sensitive };
 
-    const request = { prior: current.attributes, proposed: proposed(current.attributes, config, schema), config };
-    const change = await this.ask(provider, type, schema, request, sensitive, [...sensitive, ...(current.sensitive ?? [])]);
-    if (!replaces(change.replace, current.attributes, change.after)) {
-      checkKept(type, schema, current.attributes, change.after);
-      return { after: change.after, replace: false, config, sensitive };
+    // A tainted object is replaced whatever the configuration says.
+    if (!current.tainted) {
+      const request = { prior: current.attributes, proposed: proposed(current.attributes, config, schema), config };
+      const change = await this.ask(provider, type, schema, request, sensitive, [...sensitive, ...(current.sensitive ?? [])]);
+      if (!replaces(change.replace, current.attributes, change.after)) {
+        checkKept(type, schema, current.attributes, change.after);
+        return { after: change.after, replace: false, config, sensitive };
+      }
     }
 
     // The old resource's values go with it, so the new one is planned from nothing.

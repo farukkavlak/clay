@@ -95,7 +95,7 @@ export function createStateCommand(): Command {
         }
 
         if (resource) {
-          console.log(styleText('bold', `# ${address}:`));
+          console.log(styleText('bold', `# ${address}${resource.tainted ? ' (tainted)' : ''}:`));
           printAttributes(resource.resourceType, resource.name, resource.attributes || {}, resource.sensitive);
         }
 

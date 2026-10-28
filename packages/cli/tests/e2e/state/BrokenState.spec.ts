@@ -102,6 +102,11 @@ describe('a state file that is not valid state', () => {
       '"local_file.a" is not a resource',
     ],
     [
+      'a resource whose tainted is not true',
+      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"tainted":false}}}`,
+      '"local_file.a" is not a resource',
+    ],
+    [
       'a resource with a sensitive index that is not whole',
       `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"sensitive":[["content",1.5]]}}}`,
       'a sensitive index of "local_file.a": 1.5 is not a whole number',
