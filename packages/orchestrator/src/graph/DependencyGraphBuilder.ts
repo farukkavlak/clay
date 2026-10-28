@@ -11,6 +11,7 @@ import { placed, tryAt, withPlace } from '../place';
 import { COUNT_INDEX_OUTSIDE, eachOutside, readCall, readInstance, SELF_OUTSIDE } from '../expressions/references/instance';
 import { Reference, ReferenceScanner } from '../expressions/references/ReferenceScanner';
 import { LoadedModule, LoadedResource, outputsOf } from '../config/ModuleLoader';
+import { Queue } from '../Queue';
 
 /** The module as written, not an instance; a node runs once per instance. A module call sits in its caller. */
 interface InModule {
@@ -212,7 +213,7 @@ export class DependencyGraphBuilder {
   resourceDependencies(graph: Graph<GraphNode>, key: string): string[] {
     const found = new Set<string>();
     const seen = new Set<string>([key]);
-    const queue = [key];
+    const queue = new Queue([key]);
 
     for (let next = queue.shift(); next !== undefined; next = queue.shift())
       for (const dependency of graph.dependenciesOf(next)) {

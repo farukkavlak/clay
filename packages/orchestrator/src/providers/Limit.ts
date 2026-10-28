@@ -1,7 +1,9 @@
+import { Queue } from '../Queue';
+
 /** At most `size` pieces of work at once; the rest wait their turn in the order they came. */
 export class Limit {
   private running = 0;
-  private readonly waiting: (() => void)[] = [];
+  private readonly waiting = new Queue<() => void>();
 
   constructor(private readonly size: number) {}
 

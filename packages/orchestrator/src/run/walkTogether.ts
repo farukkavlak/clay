@@ -1,5 +1,7 @@
 import { Edges } from '@clay/graph';
 
+import { Queue } from '../Queue';
+
 /** One piece of a node's work: it gives events and returns whether it succeeded. */
 export type Step<E> = () => AsyncGenerator<E, boolean>;
 
@@ -26,11 +28,11 @@ class Walk<E> {
   private readonly left: Map<string, number>;
   private readonly stepsLeft = new Map<string, number>();
   private readonly failed = new Set<string>();
-  private readonly queue: { id: string; step: Step<E> }[] = [];
+  private readonly queue = new Queue<{ id: string; step: Step<E> }>();
   private readonly owners = new Map<Work<E>, { id: string; isStep: boolean }>();
   /** Each piece of work with a pull in flight, which lands in `settled`. */
   private readonly pending = new Map<Work<E>, Promise<void>>();
-  private readonly settled: Pulled<E>[] = [];
+  private readonly settled = new Queue<Pulled<E>>();
   private wake?: () => void;
   private stepsRunning = 0;
   /** The nodes ready at the start not reached yet, which hold back every step, so a node that cannot be reached stops the walk before any step runs. */

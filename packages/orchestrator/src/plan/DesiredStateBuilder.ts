@@ -27,6 +27,7 @@ import { Moves } from './moves';
 import { Versions } from '../values/Versions';
 import { Ignoring, ResourcePlan, ResourcePlanner } from './ResourcePlanner';
 import { Provisioning } from '../providers/Provisioning';
+import { Queue } from '../Queue';
 
 /** With the block it was planned from, so a refusal can point at it. */
 export interface ConfiguredResource extends DesiredResource {
@@ -123,13 +124,13 @@ export class DesiredStateBuilder {
   /** The blocks that say it, and every block they read, through any others. A module's block is one for all its instances. */
   private createFirst(loadedResources: LoadedResource[], graph: Graph<GraphNode>): Set<ResourceBlock> {
     const found = new Set<string>();
-    const queue = loadedResources.filter(({ block }) => block.lifecycle?.createBeforeDestroy === true).map(({ uniqueId }) => uniqueId);
+    const queue = new Queue(loadedResources.filter(({ block }) => block.lifecycle?.createBeforeDestroy === true).map(({ uniqueId }) => uniqueId));
 
     for (let next = queue.shift(); next !== undefined; next = queue.shift()) {
       if (found.has(next)) continue;
 
       found.add(next);
-      queue.push(...this.graphBuilder.resourceDependencies(graph, next));
+      for (const dependency of this.graphBuilder.resourceDependencies(graph, next)) queue.push(dependency);
     }
 
     return new Set(loadedResources.filter(({ uniqueId }) => found.has(uniqueId)).map(({ block }) => block));

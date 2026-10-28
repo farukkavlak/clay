@@ -8,6 +8,7 @@ import { ConfiguredResource } from './DesiredStateBuilder';
 import { append } from '../append';
 import { blockKey } from '../keys';
 import { withPlace } from '../place';
+import { Queue } from '../Queue';
 
 /** An object destroyed apart from its block: a delete, a deposed object, the old object of a create-first replace, or a replace's old object that has to go before its turn. */
 export interface DestroyNode {
@@ -69,7 +70,7 @@ function goingObjects(actions: PlanAction[], state: State): Map<string, Going> {
 
 function reaches(stepsFrom: (at: string) => string[], from: string, to: string): boolean {
   const seen = new Set([from]);
-  const queue = [from];
+  const queue = new Queue([from]);
 
   for (let at = queue.shift(); at !== undefined; at = queue.shift()) {
     if (at === to) return true;
@@ -141,7 +142,7 @@ function beforeReplaces(going: Map<string, Going>, next: Map<string, string[]>):
   for (const [key, reads] of next) for (const read of reads) append(readBy, read, key);
 
   const found = new Set<string>();
-  const queue = [...going].filter(([, { action }]) => isPlainReplace(action)).map(([key]) => key);
+  const queue = new Queue([...going].filter(([, { action }]) => isPlainReplace(action)).map(([key]) => key));
 
   for (let at = queue.shift(); at !== undefined; at = queue.shift())
     for (const reader of readBy.get(at) ?? [])

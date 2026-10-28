@@ -1,6 +1,8 @@
+import { Queue } from '../Queue';
+
 /** Runs `work`, giving each event it emits as it comes, and then what it returns or throws. A reader that leaves early still waits for the work. */
 export async function* streamed<E, R>(work: (emit: (event: E) => void) => Promise<R>): AsyncGenerator<E, R> {
-  const queue: E[] = [];
+  const queue = new Queue<E>();
   let wake: (() => void) | undefined;
   let ended = false;
   const emit = (event: E) => {
