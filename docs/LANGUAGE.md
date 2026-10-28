@@ -371,6 +371,11 @@ that resource and the provisioners after it. The object stays in state, marked t
 the next plan replaces it, `tainted, so it is replaced`, and its provisioners run again.
 `ignore_changes` keeps nothing of a tainted object.
 
+`on_failure = continue` goes on past a command that fails: apply prints why, the object
+is not tainted, and the provisioners after it still run. `on_failure = fail` is the
+default. Either is a word written without quotes. A value refused at apply, before the
+command runs, still stops the apply.
+
 Apply prints the command, then each line it prints on stdout and stderr as it comes:
 `null_resource.n (local-exec): hello`. Lines from stdout and stderr keep their order within
 each stream, not between the two. `quiet = true` leaves out the command, and still prints

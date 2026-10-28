@@ -45,7 +45,8 @@ a configuration means or how the state file is written.
 - `provisioner "local-exec"` in a resource, run after its object is made, reading it
   through `self`. One that fails leaves the object tainted, and the next plan replaces it.
   Apply prints the command and each line it prints as it runs; `quiet = true` leaves out
-  the command. `working_dir` sets the directory it runs in and `environment` its variables
+  the command. `working_dir` sets the directory it runs in and `environment` its variables.
+  `on_failure = continue` goes on past a command that fails
 - `apply --parallelism`: each action runs once what it reads is done, with ten provider
   calls at once by default. A failure stops only what reads it, and every failure of a
   run is reported. `plan` takes it too, for the refresh, schemas, block checks, what

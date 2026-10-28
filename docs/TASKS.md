@@ -1026,7 +1026,7 @@ run as a step of another resource instead.
 - [x] What a provisioner prints, shown as it runs and hidden where a value given to it is
       sensitive; `quiet` to leave out the command, as in Terraform, since a command can
       already send its own output away
-- [ ] `working_dir`, `environment` and `on_failure = continue` on `local-exec`
+- [x] `working_dir`, `environment` and `on_failure = continue` on `local-exec`
 - [ ] `when = destroy`: a provisioner run before the object is destroyed, reading only
       `self`
 - [ ] `remote-exec` and `file`, once a resource can carry a connection

@@ -61,8 +61,20 @@ function decodeLifecycle(block: Block): Lifecycle {
   return Object.assign({ position: block.position }, ...attributesOnly(block.body).map((item) => lifecycleArgument(item))) as Lifecycle;
 }
 
+/** A word written out, read with the block, so what a failure does is known before any value is. */
+export function onFailureOf(value: AttributeValue): 'continue' | 'fail' {
+  const [word, ...rest] = value.type === 'Reference' ? value.value : [];
+  if (word !== undefined && rest.length === 0 && 'name' in word && (word.name === 'continue' || word.name === 'fail')) return word.name;
+  const quoted = value.type === 'String' || value.type === 'Template';
+
+  throw new ConfigError(`on_failure is continue or fail${quoted ? ', written without quotes' : ''}.`, value.position);
+}
+
+/** `on_failure` is read by the engine, never given to the provisioner. */
 function decodeProvisioner({ labels: [provisionerType], body, position }: Block): ProvisionerBlock {
-  return { provisionerType, attributes: attributesIn(body), position };
+  const { on_failure: onFailure, ...attributes } = attributesIn(body);
+
+  return { provisionerType, ...(onFailure && { onFailure: onFailureOf(onFailure) }), attributes, position };
 }
 
 export function decodeResource(block: Block, [resourceType, name]: string[]): ResourceBlock {

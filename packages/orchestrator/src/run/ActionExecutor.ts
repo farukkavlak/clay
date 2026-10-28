@@ -7,7 +7,7 @@ import { keepPrior } from '../plan/ignoredChanges';
 import { checkNesting, heldBy, hidingReason, inconsistent, tooDeep } from '../providers/providerResult';
 import { Limit } from '../providers/Limit';
 import { ProviderRegistry } from '../providers/ProviderRegistry';
-import { Provisioning } from '../providers/Provisioning';
+import { ProvisionerFailed, Provisioning } from '../providers/Provisioning';
 import { tryAt } from '../place';
 import { SameObjects } from '../checks/sameObject';
 import { ReferenceResolver } from '../expressions/ReferenceResolver';
@@ -262,12 +262,16 @@ export class ActionExecutor {
     if (resource) await this.provision({ address: contextAddress, declaration: spell(resource), print }, resource.provisioners ?? [], currentState);
   }
 
-  /** In the order written. One that fails leaves the object tainted, so the next plan replaces it, and the rest do not run. */
+  /** In the order written. One that fails leaves the object tainted, so the next plan replaces it, and the rest do not run; one with on_failure = continue fails alone. */
   private async provision(on: Provisioned, provisioners: ProvisionerBlock[], currentState: State): Promise<void> {
     for (const provisioner of provisioners)
       try {
         await this.runProvisioner(provisioner, on, currentState);
       } catch (error) {
+        if (error instanceof ProvisionerFailed && provisioner.onFailure === 'continue') {
+          on.print?.(provisioner.provisionerType.value, `${error.message}, and the apply goes on as on_failure = continue says`);
+          continue;
+        }
         taint(currentState, on.address);
         throw error;
       }

@@ -7,7 +7,7 @@ import { decodeData } from './decodeData';
 import { decodeModule } from './decodeModule';
 import { checkMovedArgument, decodeMoved } from './decodeMoved';
 import { decodeOutput, outputRules } from './decodeOutput';
-import { decodeResource, lifecycleArgument } from './decodeResource';
+import { decodeResource, lifecycleArgument, onFailureOf } from './decodeResource';
 import { checkValidationArgument, decodeValidation } from './decodeValidation';
 import { checkVariableName, decodeVariable, variableRules } from './decodeVariable';
 import { LabelRule, labelsOf } from './labels';
@@ -127,6 +127,10 @@ export const SCHEMA: Schema = {
       }
       case 'moved': {
         checkMovedArgument(attribute);
+        break;
+      }
+      case 'provisioner': {
+        if (attribute.name === 'on_failure') onFailureOf(attribute.value);
         break;
       }
       case 'validation': {

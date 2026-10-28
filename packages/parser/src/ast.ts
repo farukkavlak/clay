@@ -87,6 +87,8 @@ export interface Lifecycle extends Node {
 export interface ProvisionerBlock extends Node {
   /** As its label names it, at the label. */
   provisionerType: Label;
+  /** Where it is set; `continue` goes on past a command that fails, where `fail` taints the object and stops. */
+  onFailure?: 'continue' | 'fail';
   attributes: Record<string, AttributeValue>;
 }
 

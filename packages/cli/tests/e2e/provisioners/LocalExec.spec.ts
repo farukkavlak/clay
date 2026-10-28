@@ -181,6 +181,60 @@ describe('a local-exec provisioner', () => {
     expect(state.resources['null_resource.n'].tainted).toBe(true);
   });
 
+  it('goes on past one that fails with on_failure = continue, says so, and leaves the object whole', async () => {
+    await write(
+      'resource "null_resource" "n" {\n  provisioner "local-exec" {\n    command    = "exit 3"\n    on_failure = continue\n  }\n' +
+        `${step('echo 2 >> log.txt')}}\n` +
+        'resource "local_file" "after" {\n  path    = "after.txt"\n  content = null_resource.n.id\n}\n'
+    );
+
+    const stdout = await clayIn('apply', '--yes');
+
+    const state = await stateOf();
+    expect(stdout).toContain('  null_resource.n (local-exec): local-exec failed: the command exited with 3, and the apply goes on as on_failure = continue says\n');
+    expect(await read('log.txt')).toBe('2\n');
+    expect(await read('after.txt')).toBe(state.resources['null_resource.n'].attributes.id);
+    expect(state.resources['null_resource.n'].tainted).toBeUndefined();
+  });
+
+  it('stops at one that fails with on_failure = fail, as it does without it', async () => {
+    await write('resource "null_resource" "n" {\n  provisioner "local-exec" {\n    command    = "exit 3"\n    on_failure = fail\n  }\n' + `${step('echo 2 >> log.txt')}}\n`);
+
+    const { stderr } = await failure('apply', '--yes');
+
+    const state = await stateOf();
+    expect(stderr).toContain('null_resource.n: local-exec failed: the command exited with 3');
+    expect(state.resources['null_resource.n'].tainted).toBe(true);
+    await expect(read('log.txt')).rejects.toThrow('ENOENT');
+  });
+
+  it('does not show why one with on_failure = continue failed when a value given to it is sensitive', async () => {
+    await write(
+      'variable "token" {\n  default   = "s3cr3t-token"\n  sensitive = true\n}\n' +
+        'resource "null_resource" "n" {\n  provisioner "local-exec" {\n    command    = "false ${var.token}"\n    on_failure = continue\n  }\n}\n'
+    );
+
+    const stdout = await clayIn('apply', '--yes');
+
+    expect(stdout).toContain(
+      '  null_resource.n (local-exec): local-exec failed to run; a value given to it is sensitive, so the reason is not shown, and the apply goes on as on_failure = continue says\n'
+    );
+    expect(stdout).not.toContain('s3cr3t-token');
+  });
+
+  it('stops at a value refused at apply though on_failure = continue, since only a command that runs and fails goes on', async () => {
+    await write(
+      'resource "command_exec" "e" {\n  command = "printf %s \\"\\""\n}\n' +
+        'resource "null_resource" "n" {\n  provisioner "local-exec" {\n    command    = command_exec.e.stdout\n    on_failure = continue\n  }\n}\n'
+    );
+
+    const { stderr } = await failure('apply', '--yes');
+
+    const state = await stateOf();
+    expect(stderr).toContain('null_resource.n: local-exec "command" must not be empty');
+    expect(state.resources['null_resource.n'].tainted).toBe(true);
+  });
+
   it('runs in working_dir, read from the directory Clay runs in, with the environment given', async () => {
     await fs.mkdir(file('sub'));
     await write(

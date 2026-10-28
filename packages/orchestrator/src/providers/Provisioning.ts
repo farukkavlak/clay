@@ -17,6 +17,9 @@ export interface ProvisionerConfig {
   sensitive: AttributePath[];
 }
 
+/** A provisioner that ran and failed, as against a value refused before it runs. */
+export class ProvisionerFailed extends Error {}
+
 /** Checks what a provisioner block gives, at plan with what is known and at apply with every value, and runs it on an object once it is made. */
 export class Provisioning {
   constructor(
@@ -49,20 +52,21 @@ export class Provisioning {
     const provisioner = this.provisioners.get(type);
     const hidden = sensitive.length > 0;
 
-    await hidingReason(
-      type,
-      sensitive,
-      () =>
-        this.limit.run(async () => {
-          if (hidden) print('a value given to it is sensitive, so what it prints is not shown');
-          try {
+    try {
+      await hidingReason(
+        type,
+        sensitive,
+        () =>
+          this.limit.run(async () => {
+            if (hidden) print('a value given to it is sensitive, so what it prints is not shown');
             await provisioner.run(config, hidden ? () => {} : print);
-          } catch (error) {
-            // Whatever it throws, the step failed, and the message says which one.
-            throw new Error(`${type} failed: ${asError(error).message}`, { cause: error });
-          }
-        }),
-      'to run'
-    );
+          }),
+        'to run'
+      );
+    } catch (error) {
+      // Whatever it throws, the step failed, and the message says which one.
+      const { message } = asError(error);
+      throw new ProvisionerFailed(hidden ? message : `${type} failed: ${message}`, { cause: error });
+    }
   }
 }
