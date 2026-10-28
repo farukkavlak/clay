@@ -357,7 +357,9 @@ removes them with the resource.
 
 A `provisioner "local-exec" { command = "..." }` block in a resource runs its command
 once the resource's object is made: after a create, and after the create of a replace.
-An update runs none. The command runs through the shell, in the directory Clay runs in.
+An update runs none. The command runs through the shell, in the directory Clay runs in or
+in `working_dir`, which a relative path reads from there. `environment = { NAME = "value" }`
+sets variables over Clay's own environment; one set to null keeps the one Clay has.
 Several run in the order written.
 
 Its values are read at apply, after the object is made, and what they read the resource
@@ -376,11 +378,14 @@ its lines. Where a value given to the command is sensitive, apply prints one lin
 so in place of all of them, and the error does not say why it failed.
 
 `validate` refuses a type no provisioner has, an argument it does not take, and a
-`command` that is missing, null, empty or not a string, each where it is written. A plan
-that makes an object checks the values of its provisioners it knows, such as a key a map
-does not have, with `self` as the object the plan makes; one only the apply knows is
-checked then, before the command runs. A plan that makes no object, an update or no
-change, runs no provisioner and checks none of their values.
+`command` that is missing, null, empty or not a string, an empty `working_dir`, and an
+`environment` with a name that is empty or holds `=`, or a NUL character in a name or
+value, each where it is written. A `working_dir` that is not a directory fails at apply,
+before the command runs. A plan that makes an object checks the values of its
+provisioners it knows, such as a key a map does not have, with `self` as the object the
+plan makes; one only the apply knows is checked then, before the command runs. A plan
+that makes no object, an update or no change, runs no provisioner and checks none of
+their values.
 
 ## Moved
 

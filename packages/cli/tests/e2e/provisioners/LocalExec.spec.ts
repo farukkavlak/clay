@@ -129,6 +129,27 @@ describe('a local-exec provisioner', () => {
       'line 9',
       '  provisioner "local-exec" {',
     ],
+    [
+      'an empty working_dir',
+      '  provisioner "local-exec" {\n    command     = "x"\n    working_dir = ""\n  }\n',
+      'local-exec "working_dir" must not be empty',
+      'line 9',
+      '  provisioner "local-exec" {',
+    ],
+    [
+      'a variable named with = in its environment',
+      '  provisioner "local-exec" {\n    command     = "x"\n    environment = { "A=B" = "x" }\n  }\n',
+      'local-exec "environment" cannot name a variable "A=B"',
+      'line 9',
+      '  provisioner "local-exec" {',
+    ],
+    [
+      'an environment that is not a map of strings',
+      '  provisioner "local-exec" {\n    command     = "x"\n    environment = ["x"]\n  }\n',
+      'environment is a tuple, where local-exec takes a map',
+      'line 11',
+      '    environment = ["x"]',
+    ],
   ])('is refused by plan for %s, where it is written', async (_, body, message, line, source) => {
     const declared = 'variable "m" {\n  default = { a = "x" }\n}\n' + 'resource "local_file" "a" {\n  path    = "a.txt"\n  content = ""\n}\n';
     await write(`${declared}resource "null_resource" "n" {\n${body}}\n`);
@@ -157,6 +178,28 @@ describe('a local-exec provisioner', () => {
     expect(code).toBe(1);
     expect(stderr).toContain('null_resource.n: local-exec failed: the command exited with 3');
     expect(await read('log.txt')).toBe('1\n');
+    expect(state.resources['null_resource.n'].tainted).toBe(true);
+  });
+
+  it('runs in working_dir, read from the directory Clay runs in, with the environment given', async () => {
+    await fs.mkdir(file('sub'));
+    await write(
+      'resource "null_resource" "n" {\n  provisioner "local-exec" {\n    command     = "echo $GREETING x$LEFT. > greeting.txt"\n    working_dir = "sub"\n    environment = { GREETING = "hi", LEFT = null }\n  }\n}\n'
+    );
+
+    await clayIn('apply', '--yes');
+
+    expect(await read('sub/greeting.txt')).toBe('hi x.\n');
+  });
+
+  it('fails, leaving the object tainted, when working_dir is not a directory', async () => {
+    await write('resource "null_resource" "n" {\n  provisioner "local-exec" {\n    command     = "echo ran"\n    working_dir = "nope"\n  }\n}\n');
+
+    const { stdout, stderr } = await failure('apply', '--yes');
+
+    const state = await stateOf();
+    expect(stderr).toContain('null_resource.n: local-exec failed: working_dir "nope" is not a directory');
+    expect(stdout).not.toContain('Executing');
     expect(state.resources['null_resource.n'].tainted).toBe(true);
   });
 
