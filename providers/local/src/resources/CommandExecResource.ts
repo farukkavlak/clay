@@ -3,10 +3,14 @@ import { exec } from 'node:child_process';
 import crypto from 'node:crypto';
 import { promisify } from 'node:util';
 
+import { checkDirectory } from '../checkDirectory';
+
 const execAsync = promisify(exec);
 
 async function run(planned: Record<string, unknown>): Promise<string> {
-  const { stdout } = await execAsync(planned.command as string, { cwd: (planned.cwd as string) || process.cwd() });
+  const cwd = (planned.cwd as string | null) ?? undefined;
+  if (cwd !== undefined) await checkDirectory('cwd', cwd);
+  const { stdout } = await execAsync(planned.command as string, { cwd });
   return stdout;
 }
 
@@ -22,6 +26,7 @@ export class CommandExecResource implements ResourceHandler {
 
   async validate(inputs: Record<string, unknown>): Promise<void> {
     if (inputs.command === '') throw new Error('command_exec "command" must not be empty');
+    if (inputs.cwd === '') throw new Error('command_exec "cwd" must not be empty');
   }
 
   async plan(request: PlanRequest): Promise<PlannedChange> {

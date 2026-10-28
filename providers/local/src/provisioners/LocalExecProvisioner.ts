@@ -1,27 +1,16 @@
 import { isUnknown, Provisioner, Schema, types } from '@clay/contracts';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import fs from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import { createInterface } from 'node:readline';
+
+import { checkDirectory } from '../checkDirectory';
 
 /** Every line read from `stream`, given as it comes; resolves once the stream ends. */
 function readLines(stream: Readable, output: (line: string) => void): Promise<unknown> {
   const lines = createInterface({ input: stream, crlfDelay: Infinity });
   lines.on('line', output);
   return once(lines, 'close');
-}
-
-/** Spawn reports a missing directory as the shell not found, so it is checked first. */
-async function checkDirectory(dir: string): Promise<void> {
-  try {
-    const stats = await fs.stat(dir);
-    if (stats.isDirectory()) return;
-  } catch (error) {
-    const { code } = error as NodeJS.ErrnoException;
-    if (code !== 'ENOENT' && code !== 'ENOTDIR') throw error;
-  }
-  throw new Error(`working_dir ${JSON.stringify(dir)} is not a directory`);
 }
 
 /** `=` would split the name and NUL cut it or its value short, so either is refused. */
@@ -64,7 +53,7 @@ export class LocalExecProvisioner implements Provisioner {
   async run(config: Record<string, unknown>, output: (line: string) => void): Promise<void> {
     const command = config.command as string;
     const cwd = (config.working_dir as string | null) ?? undefined;
-    if (cwd !== undefined) await checkDirectory(cwd);
+    if (cwd !== undefined) await checkDirectory('working_dir', cwd);
     if (config.quiet !== true) output(`Executing: ${JSON.stringify(command)}`);
 
     const child = spawn(command, { shell: true, cwd, env: environmentOf(config.environment), stdio: ['ignore', 'pipe', 'pipe'] });

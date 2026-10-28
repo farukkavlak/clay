@@ -449,6 +449,24 @@ describe('LocalProvider', () => {
       expect(await fs.realpath(String(attributes.stdout).trim())).toBe(await fs.realpath(tmpDir));
     });
 
+    it('refuses an empty cwd, and takes any other', async () => {
+      await expect(provider.validate('command_exec', { command: 'x', cwd: '' })).rejects.toThrow('command_exec "cwd" must not be empty');
+      await expect(provider.validate('command_exec', { command: 'x', cwd: ' ' })).resolves.toBeUndefined();
+    });
+
+    it.each([
+      ['that does not exist', 'nope'],
+      ['that is a file', 'file.txt'],
+      ['under a file', 'file.txt/nope'],
+    ])('fails before it runs, with cwd a path %s', async (_, name) => {
+      await fs.writeFile(path.join(tmpDir, 'file.txt'), '');
+      const cwd = path.join(tmpDir, name);
+      const ran = path.join(tmpDir, 'ran');
+
+      await expect(create('command_exec', { command: `touch '${ran}'`, cwd })).rejects.toThrow(`cwd ${JSON.stringify(cwd)} is not a directory`);
+      await expect(fs.access(ran)).rejects.toMatchObject({ code: 'ENOENT' });
+    });
+
     it('should fail if command fails', async () => {
       await expect(create('command_exec', { command: 'exit 1' })).rejects.toThrow();
     });

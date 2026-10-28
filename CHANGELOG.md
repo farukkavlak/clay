@@ -69,6 +69,8 @@ a configuration means or how the state file is written.
   closed; `state rm` of an address the state does not hold exits 1
 - Errors name what they are about by its address, point at where it is written, and
   quote no sensitive value
+- `command_exec` refuses an empty `cwd` and names one that is not a directory, instead of
+  running in Clay's directory or failing with `spawn /bin/sh ENOENT`
 
 ## 0.1.0 - 2026-09-21
 
