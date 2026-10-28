@@ -1,4 +1,4 @@
-import { ExactNumber, isName, isOutput, isRecord, NestingError, NumberError, readDeposed, readResources, State, STATE_VERSION } from '@clay/contracts';
+import { ExactNumber, inAddressOrder, isName, isOutput, isRecord, NestingError, NumberError, readDeposed, readResources, State, STATE_VERSION } from '@clay/contracts';
 
 import { replay } from './journal';
 
@@ -35,8 +35,17 @@ function check(state: unknown, say: Say): asserts state is State {
   readDeposed(deposed, say);
 }
 
+/** A run holds each resource as its action finishes, so the file puts them in address order instead. */
+function inOrder(state: State): State {
+  return {
+    ...state,
+    resources: Object.fromEntries(inAddressOrder(state.resources)),
+    ...(state.deposed && { deposed: Object.fromEntries(inAddressOrder(state.deposed)) }),
+  };
+}
+
 export function serializeState(state: State): string {
-  return JSON.stringify(state, null, 2);
+  return JSON.stringify(inOrder(state), null, 2);
 }
 
 /** The state's counters are plain numbers; every other number is a value and stays exact. */
@@ -76,5 +85,6 @@ export function parseState(content: string, source: string, journal?: Journal): 
   if (journal) replay(parsed, journal.content, journal.source);
   check(parsed, say);
 
-  return parsed;
+  // The journal adds each resource as its action finished.
+  return inOrder(parsed);
 }

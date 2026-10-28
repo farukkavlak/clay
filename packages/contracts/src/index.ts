@@ -1,4 +1,4 @@
-export { Address, isAddress, isInstanceKey, isModulePath, ModuleAddress, parseDataAddress, parseMovable, spellKey } from './Address';
+export { Address, inAddressOrder, isAddress, isInstanceKey, isModulePath, ModuleAddress, parseDataAddress, parseMovable, spellKey } from './Address';
 export type { InstanceKey, ModuleStep } from './Address';
 export { covers } from './dependency';
 export { isAttributePaths, own, readPaths, samePaths, valueAt } from './AttributePath';

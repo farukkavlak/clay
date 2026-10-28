@@ -1,4 +1,4 @@
-import { Address, AttributePath, Identity, State } from '@clay/contracts';
+import { Address, AttributePath, Identity, inAddressOrder, State } from '@clay/contracts';
 import { spell } from '@clay/parser';
 import { PlanAction } from '@clay/planner';
 
@@ -207,8 +207,8 @@ export class SameObjects {
 
   private async indexHeld(state: State): Promise<HeldIndex> {
     const objects = [
-      ...Object.entries(state.resources).map(([address, resource]) => ({ address, type: resource.resourceType, values: resource.attributes, sensitive: resource.sensitive ?? [] })),
-      ...Object.entries(state.deposed ?? {}).flatMap(([address, deposed]) =>
+      ...inAddressOrder(state.resources).map(([address, resource]) => ({ address, type: resource.resourceType, values: resource.attributes, sensitive: resource.sensitive ?? [] })),
+      ...inAddressOrder(state.deposed ?? {}).flatMap(([address, deposed]) =>
         deposed.map(({ attributes, sensitive = [] }) => ({ address, type: Address.parse(address).resourceType, values: attributes, sensitive }))
       ),
     ];

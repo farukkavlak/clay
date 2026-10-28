@@ -73,6 +73,15 @@ describe('state and output against a real state file', () => {
     expect(printed).toContain('local_file.a');
   });
 
+  it('lists the instances of a count in the order of their index', async () => {
+    await run('resource "null_resource" "r" {\n  count = 11\n}\n');
+
+    await createStateCommand().parseAsync(['node', 'clay', 'list']);
+
+    expect(printed.slice(0, 3)).toEqual(['null_resource.r[0]', 'null_resource.r[1]', 'null_resource.r[2]']);
+    expect(printed.at(-1)).toBe('null_resource.r[10]');
+  });
+
   it('shows a resource an apply wrote', async () => {
     await applyConfig();
 

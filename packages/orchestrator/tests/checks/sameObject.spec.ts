@@ -11,7 +11,7 @@ import { engineOn, TestEngine } from '../engine';
 /** A thing named by `place` in any case, which a change of `label` replaces. */
 class PlacedProvider implements Provider {
   readonly resources = ['placed'];
-  /** A place that can no longer be told, as a disk changed under a run. */
+  /** The start of each place that can no longer be told, as a disk changed under a run. */
   lost = 'lost';
   readonly dataSources: string[] = [];
 
@@ -44,7 +44,7 @@ class PlacedProvider implements Provider {
   async delete(): Promise<void> {}
 
   async identify(_type: string, values: Record<string, unknown>): Promise<Identity | undefined> {
-    if (values.place === this.lost) throw new Error('the place is lost');
+    if (String(values.place).startsWith(this.lost)) throw new Error('the place is lost');
     return typeof values.place === 'string' ? { key: values.place.toLowerCase(), name: `the place ${values.place}` } : undefined;
   }
 
@@ -58,6 +58,9 @@ class PlacedProvider implements Provider {
     return {};
   }
 }
+
+/** `name` at `place`, labelled after its name. */
+const named = (name: string, place: string) => `resource "placed" "${name}" {\n  place = "${place}"\n  label = "${name}1"\n}\n`;
 
 const placedAt = (place: string) => `resource "placed" "a" {\n  place = "${place}"\n  label = "a1"\n}\n`;
 
@@ -152,6 +155,20 @@ describe('a replace whose new object is its old one', () => {
     };
 
     await expect(run()).rejects.toThrow('placed.a: the place is lost');
+  });
+
+  // The move puts `placed.y` after `placed.z` among what the run holds.
+  it('names the first object in address order where the apply can tell what none is', async () => {
+    await apply(orchestrator, named('a', 'x1') + named('z', 'x2'));
+    const config = `${named('y', 'x1').replace('y1', 'a1')}moved {\n  from = placed.a\n  to   = placed.y\n}\n${named('z', 'x2')}${named('c', 'c')}`;
+    const planned = await orchestrator.plan(config);
+    provider.lost = 'x';
+
+    const run = async () => {
+      for await (const event of orchestrator.runPlan(planned, config)) if (event.type === 'failed') throw event.error;
+    };
+
+    await expect(run()).rejects.toThrow('placed.y: the place is lost');
   });
 
   it('fails an update unnamed, where the apply can no longer tell what its own old object is', async () => {

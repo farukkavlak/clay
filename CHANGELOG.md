@@ -54,6 +54,8 @@ a configuration means or how the state file is written.
 - A saved plan is refused when it does not match its configuration: an action, an
   output or a data source missing or extra, an index `count` no longer gives
 - State writes are queued so two never overlap, and each run has its own scopes
+- The state file holds its resources in address order, not in the order an apply
+  finished them, so which one an error names never depends on timing
 - A state or plan file that is not valid is refused and says what is wrong
 - Ctrl-C during an apply starts nothing new, waits for what runs, saves it and releases
   the lock; a second Ctrl-C exits at once

@@ -1,4 +1,4 @@
-import { Address, Marks, Resource, State } from '@clay/contracts';
+import { Address, inAddressOrder, Marks, Resource, State } from '@clay/contracts';
 import { forgetDependencies, moveResource, StateManager } from '@clay/state';
 import { Command } from 'commander';
 import { styleText } from 'node:util';
@@ -63,14 +63,14 @@ export function createStateCommand(): Command {
         const backend = stateFile();
         const state = await getStateManager(backend).read();
 
-        const deposed = Object.keys(state.deposed ?? {});
+        const deposed = inAddressOrder(state.deposed ?? {});
         if (Object.keys(state.resources).length === 0 && deposed.length === 0) {
           await reportEmpty(backend.path);
           return;
         }
 
-        for (const key of Object.keys(state.resources).sort()) console.log(key);
-        for (const key of deposed.sort()) console.log(`${key} (deposed)`);
+        for (const [key] of inAddressOrder(state.resources)) console.log(key);
+        for (const [key] of deposed) console.log(`${key} (deposed)`);
       } catch (error) {
         console.error(styleText('red', 'Error listing state:'), messageOf(error));
         process.exit(1);

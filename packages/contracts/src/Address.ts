@@ -262,3 +262,39 @@ export function isAddress(text: string): boolean {
     throw error;
   }
 }
+
+/** No key first, then numbers by value, then strings. */
+function keyOrder(one: InstanceKey | undefined, other: InstanceKey | undefined): number {
+  if (one === other) return 0;
+  if (one === undefined || other === undefined) return one === undefined ? -1 : 1;
+  if (typeof one !== typeof other) return typeof one === 'number' ? -1 : 1;
+
+  return one < other ? -1 : 1;
+}
+
+function textOrder(one: string, other: string): number {
+  if (one === other) return 0;
+
+  return one < other ? -1 : 1;
+}
+
+/** A module before the modules it calls, and one with no key before its instances. */
+function moduleOrder(one: ModuleAddress, other: ModuleAddress): number {
+  for (let at = 0; at < Math.min(one.path.length, other.path.length); at += 1) {
+    const order = textOrder(one.path[at].name, other.path[at].name) || keyOrder(one.path[at].key, other.path[at].key);
+    if (order !== 0) return order;
+  }
+
+  return one.path.length - other.path.length;
+}
+
+function addressOrder(one: Address, other: Address): number {
+  return moduleOrder(one.module, other.module) || textOrder(one.resourceType, other.resourceType) || textOrder(one.name, other.name) || keyOrder(one.key, other.key);
+}
+
+/** The root's first, then each module's; within one, by type, name and key. The order is the addresses' alone. */
+export function inAddressOrder<T>(byAddress: Record<string, T>): [string, T][] {
+  const entries = Object.entries(byAddress).map(([key, value]) => ({ key, value, address: Address.parse(key) }));
+
+  return entries.sort((one, other) => addressOrder(one.address, other.address)).map(({ key, value }) => [key, value]);
+}

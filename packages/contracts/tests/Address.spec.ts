@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { Address, isModulePath, ModuleAddress, parseDataAddress, parseMovable } from '../src/index';
+import { Address, inAddressOrder, isModulePath, ModuleAddress, parseDataAddress, parseMovable } from '../src/index';
 
 describe('Address', () => {
   describe('toString', () => {
@@ -255,6 +255,52 @@ describe('Address', () => {
       ['no list', { name: 'app' }],
     ])('refuses %s', (_, value) => {
       expect(isModulePath(value)).toBe(false);
+    });
+  });
+
+  describe('inAddressOrder', () => {
+    const order = [
+      'b.x',
+      'a.x',
+      'a.x[10]',
+      'a.x["b"]',
+      'a.x[2]',
+      'a.x["a"]',
+      'a.y',
+      'module.b.a.x',
+      'module.a[1].a.x',
+      'module.a.module.c.a.x',
+      'module.a.a.x',
+      'module.a[0].a.x',
+      'module.a["k"].a.x',
+    ];
+
+    // A key in a module or on a resource: none first, then numbers by value, then strings.
+    it('puts the root first, then each module in turn, then the type, the name and the key', () => {
+      const sorted = inAddressOrder(Object.fromEntries(order.map((address) => [address, address]))).map(([address]) => address);
+
+      expect(sorted).toEqual([
+        'a.x',
+        'a.x[2]',
+        'a.x[10]',
+        'a.x["a"]',
+        'a.x["b"]',
+        'a.y',
+        'b.x',
+        'module.a.a.x',
+        'module.a.module.c.a.x',
+        'module.a[0].a.x',
+        'module.a[1].a.x',
+        'module.a["k"].a.x',
+        'module.b.a.x',
+      ]);
+    });
+
+    it('keeps what each address holds', () => {
+      expect(inAddressOrder({ 'b.x': 1, 'a.x': 2 })).toEqual([
+        ['a.x', 2],
+        ['b.x', 1],
+      ]);
     });
   });
 });

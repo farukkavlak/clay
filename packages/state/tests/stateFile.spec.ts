@@ -1,9 +1,12 @@
 import { emptyState, ExactNumber, STATE_VERSION } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
+import { journalLine } from '../src/journal';
 import { parseState, serializeState } from '../src/stateFile';
 
 const nested = (levels: number): unknown => (levels === 0 ? 'x' : [nested(levels - 1)]);
+
+const resource = (type: string, name: string, key?: number) => ({ resourceType: type, name, ...(key !== undefined && { key }), attributes: {} });
 
 const read = (content: unknown) => () => parseState(typeof content === 'string' ? content : JSON.stringify(content), 'clay.state.json');
 
@@ -20,6 +23,30 @@ describe('reading a state file', () => {
     const state = { ...emptyState(), serial: 3, resources: { 'local_file.a': { resourceType: 'local_file', name: 'a', attributes: { path: 'a.txt' } } } };
 
     expect(parseState(serializeState(state), 'clay.state.json')).toEqual(state);
+  });
+
+  // A run writes each resource as its action finishes, which is no order at all.
+  it('writes the resources and the deposed objects in address order, whatever order they were held in', () => {
+    const state = {
+      ...emptyState(),
+      resources: { 'b.x': resource('b', 'x'), 'a.x[10]': resource('a', 'x', 10), 'a.x[2]': resource('a', 'x', 2) },
+      deposed: { 'b.x': [{ attributes: {} }], 'a.x[2]': [{ attributes: {} }] },
+    };
+
+    const written = JSON.parse(serializeState(state)) as { resources: Record<string, unknown>; deposed: Record<string, unknown> };
+
+    expect(Object.keys(written.resources)).toEqual(['a.x[2]', 'a.x[10]', 'b.x']);
+    expect(Object.keys(written.deposed)).toEqual(['a.x[2]', 'b.x']);
+    expect(Object.keys(state.resources)).toEqual(['b.x', 'a.x[10]', 'a.x[2]']);
+  });
+
+  it('reads the resources the journal adds in address order', () => {
+    const file = { ...emptyState(), resources: { 'b.x': resource('b', 'x') } };
+    const after = { ...file, resources: { ...file.resources, 'a.x': resource('a', 'x') } };
+
+    const state = parseState(serializeState(file), 'clay.state.json', { content: journalLine(after, 'a.x', 1), source: 'clay.state.json.journal' });
+
+    expect(Object.keys(state.resources)).toEqual(['a.x', 'b.x']);
   });
 
   // Counters are plain numbers; values stay exact.
