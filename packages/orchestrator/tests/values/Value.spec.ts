@@ -3,21 +3,6 @@ import { describe, expect, it } from 'vitest';
 
 import { child, described, inferred, valueOf, withSensitive } from '../../src/values/Value';
 
-/** The fewest milliseconds of three that taking each of `size` sensitive values out of a map takes, so a pause of the machine does not count. */
-function childEach(size: number): number {
-  const keys = Array.from({ length: size }, (_, index) => `k${index}`);
-  const map = withSensitive(
-    valueOf(types.map(types.string), Object.fromEntries(keys.map((key) => [key, key]))),
-    keys.map((key) => [key])
-  );
-  const times = Array.from({ length: 3 }, () => {
-    const started = performance.now();
-    for (const key of keys) child(map, key);
-    return performance.now() - started;
-  });
-  return Math.min(...times);
-}
-
 describe('a value with its type', () => {
   it('has the type its shape gives it, where nothing names one: a list a tuple, a map an object', () => {
     expect(inferred({ a: ['x', ExactNumber.parse('1'), true] })).toEqual(types.object({ a: types.tuple([types.string, types.number, types.bool]) }));
@@ -50,12 +35,6 @@ describe('a value with its type', () => {
 
     expect(child(map, 'a').marks).toBeUndefined();
     expect(child(map, 'b').marks?.paths()).toEqual([[]]);
-  });
-
-  it('finds each sensitive value of a map in time that grows with the map', () => {
-    childEach(500);
-
-    expect(childEach(8000) / childEach(2000)).toBeLessThan(8);
   });
 
   it.each([

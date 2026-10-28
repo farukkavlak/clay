@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { growth, LINEAR } from '../../../../../tests/growth';
 import { displayPlan } from '../../../src/showPlan';
 import { clayOutput, orchestratorIn } from '../helpers';
 import { start } from '../start';
@@ -171,30 +172,22 @@ const changeEveryMember = async (at: string, size: number) => {
   });
 };
 
-/**
- * How much longer a run takes on four times the instances: about four where it grows with them, sixteen where each walked every other.
- * A ratio, so a loaded machine slows both runs alike. Each case grew by 3 to 4.5 here, and by 13 to 18 when it walked every instance.
- */
-const LINEAR = 8;
+// Each case grew by 3 to 4.5 here, and by 13 to 18 when it walked every instance.
 const GENEROUS = { timeout: 60_000 };
 
 describe('a run over many instances', () => {
   let dir: string;
 
-  /** A fresh directory for each size, under the test's own. */
+  /** A fresh directory for each run, under the test's own. */
   const sized = async (size: number) => {
-    const at = path.join(dir, String(size));
+    const at = await fs.mkdtemp(path.join(dir, `${size}-`));
     await fs.mkdir(path.join(at, 'm'), { recursive: true });
     await fs.writeFile(path.join(at, 'm', 'main.clay'), 'resource "null_resource" "x" {}\n', 'utf8');
     return at;
   };
 
-  /** The time `run` takes at four times `size` over the time at `size`; `run` says what it times. */
-  const growth = async (size: number, run: (at: string, size: number) => Promise<number>) => {
-    const small = await run(await sized(size), size);
-    const large = await run(await sized(size * 4), size * 4);
-    return large / small;
-  };
+  /** How many times longer `run` takes at four times `size`, each run in a fresh directory; `run` says what it times. Three rounds, as each takes seconds. */
+  const growthIn = (size: number, run: (at: string, size: number) => Promise<number>) => growth(size, async (each) => run(await sized(each), each), 3);
 
   beforeEach(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-scale-'));
@@ -212,20 +205,20 @@ describe('a run over many instances', () => {
       return timed(async () => expect(await apply(at, config)).toBe(1));
     };
 
-    expect(await growth(2500, run)).toBeLessThan(LINEAR);
+    expect(await growthIn(2500, run)).toBeLessThan(LINEAR);
   });
 
   it('makes a resource in each instance of a module in time that grows with them', GENEROUS, async () => {
     const run = (at: string, size: number) => timed(async () => expect(await apply(at, `module "m" {\n  source = "./m"\n  count  = ${size}\n}\n`)).toBe(size));
 
-    expect(await growth(2000, run)).toBeLessThan(LINEAR);
+    expect(await growthIn(2000, run)).toBeLessThan(LINEAR);
   });
 
   it('claims objects a provider identifies in time that grows with them', GENEROUS, async () => {
     const run = (at: string, size: number) =>
       timed(async () => expect(await apply(at, `resource "thing" "t" {\n  count = ${size}\n  name  = "t\${count.index}"\n}\n`, new Things(), new LocalProvider())).toBe(size));
 
-    expect(await growth(2000, run)).toBeLessThan(LINEAR);
+    expect(await growthIn(2000, run)).toBeLessThan(LINEAR);
   });
 
   it('groups items under one key in time that grows with them', GENEROUS, async () => {
@@ -240,7 +233,7 @@ describe('a run over many instances', () => {
       });
     };
 
-    expect(await growth(25_000, run)).toBeLessThan(LINEAR);
+    expect(await growthIn(25_000, run)).toBeLessThan(LINEAR);
   });
 
   it('plans a for object with one key not known yet in time that grows with its items', GENEROUS, async () => {
@@ -255,7 +248,7 @@ describe('a run over many instances', () => {
       });
     };
 
-    expect(await growth(6000, run)).toBeLessThan(LINEAR);
+    expect(await growthIn(6000, run)).toBeLessThan(LINEAR);
   });
 
   it('moves the instances of a module in time that grows with them', GENEROUS, async () => {
@@ -265,7 +258,7 @@ describe('a run over many instances', () => {
       return timed(async () => expect(await apply(at, `moved {\n  from = module.m\n  to   = module.n\n}\nmodule "n" {\n  source = "./m"\n  count  = ${size}\n}\n`)).toBe(size));
     };
 
-    expect(await growth(1000, run)).toBeLessThan(LINEAR);
+    expect(await growthIn(1000, run)).toBeLessThan(LINEAR);
   });
 
   it('destroys instances that each read a block in time that grows with them', GENEROUS, async () => {
@@ -275,7 +268,7 @@ describe('a run over many instances', () => {
       return timed(async () => expect(await apply(at, '')).toBe(size * 2));
     };
 
-    expect(await growth(500, run)).toBeLessThan(LINEAR);
+    expect(await growthIn(500, run)).toBeLessThan(LINEAR);
   });
 
   it('destroys a chain that what stays read in state in time that grows with it', GENEROUS, async () => {
@@ -285,19 +278,19 @@ describe('a run over many instances', () => {
       return timed(async () => expect(await apply(at, `resource "null_resource" "c" {\n  count = ${size}\n}\n`)).toBe(size * 3));
     };
 
-    expect(await growth(1000, run)).toBeLessThan(LINEAR);
+    expect(await growthIn(1000, run)).toBeLessThan(LINEAR);
   });
 
   it('shows and applies a change to every member of a set in time that grows with them', GENEROUS, async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    expect(await growth(1000, changeEveryMember)).toBeLessThan(LINEAR);
+    expect(await growthIn(1000, changeEveryMember)).toBeLessThan(LINEAR);
   });
 
   it('shows a change to a value with many sensitive keys in time that grows with them', GENEROUS, async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    expect(await growth(2000, showSensitiveKeysChanged)).toBeLessThan(LINEAR);
+    expect(await growthIn(2000, showSensitiveKeysChanged)).toBeLessThan(LINEAR);
     expect(log).toHaveBeenCalledWith(expect.stringContaining('triggers: {"k0":(sensitive value),"k1":(sensitive value)'));
     expect(log).toHaveBeenCalledWith('      triggers: which parts are sensitive changes');
   });
@@ -310,7 +303,7 @@ describe('a run over many instances', () => {
         ({ sensitive } = actions[0]);
       });
 
-    expect(await growth(4000, run)).toBeLessThan(LINEAR);
+    expect(await growthIn(4000, run)).toBeLessThan(LINEAR);
     expect(sensitive).toEqual(
       expect.arrayContaining([
         ['triggers', 'k0'],
@@ -327,7 +320,7 @@ describe('a run over many instances', () => {
         triggers = actions[0].after?.triggers as Record<string, unknown>;
       });
 
-    expect(await growth(2000, run)).toBeLessThan(LINEAR);
+    expect(await growthIn(2000, run)).toBeLessThan(LINEAR);
     expect(JSON.stringify([triggers.k0, triggers.k7999])).toBe('[8000,8000]');
   });
 
@@ -338,7 +331,7 @@ describe('a run over many instances', () => {
       return timed(async () => (shown = await clayOutput(at, 'state', 'show', 'null_resource.r')));
     };
 
-    expect(await growth(4000, run)).toBeLessThan(LINEAR);
+    expect(await growthIn(4000, run)).toBeLessThan(LINEAR);
     expect(shown).toContain('{"k0":(sensitive value),"k1":(sensitive value)');
   });
 
@@ -350,7 +343,7 @@ describe('a run over many instances', () => {
         ({ sensitive } = actions.find(({ name }) => name === 'r') ?? {});
       });
 
-    expect(await growth(1000, run)).toBeLessThan(LINEAR);
+    expect(await growthIn(1000, run)).toBeLessThan(LINEAR);
     expect(sensitive).toEqual(
       expect.arrayContaining([
         ['triggers', 'k0'],
@@ -369,7 +362,7 @@ describe('a run over many instances', () => {
       });
     };
 
-    expect(await growth(1000, run)).toBeLessThan(LINEAR);
+    expect(await growthIn(1000, run)).toBeLessThan(LINEAR);
     expect(types).toEqual(['NO_OP', 'NO_OP']);
   });
 
@@ -381,7 +374,7 @@ describe('a run over many instances', () => {
         ({ triggers } = actions.find(({ name, key }) => name === 'r' && key === size - 1)?.after ?? {});
       });
 
-    expect(await growth(1000, run)).toBeLessThan(LINEAR);
+    expect(await growthIn(1000, run)).toBeLessThan(LINEAR);
     expect(JSON.stringify(triggers)).toBe('{"n":4000}');
   });
 
@@ -396,7 +389,7 @@ describe('a run over many instances', () => {
       });
     };
 
-    expect(await growth(1000, run)).toBeLessThan(LINEAR);
+    expect(await growthIn(1000, run)).toBeLessThan(LINEAR);
     expect(JSON.stringify(triggers)).toBe('{"n":4000}');
   });
 
@@ -410,7 +403,7 @@ describe('a run over many instances', () => {
       });
     };
 
-    expect(await growth(1000, run)).toBeLessThan(LINEAR);
+    expect(await growthIn(1000, run)).toBeLessThan(LINEAR);
     expect(JSON.stringify(triggers)).toBe('{"n":4000}');
   });
 });

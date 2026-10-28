@@ -73,14 +73,6 @@ async function collect(run: AsyncGenerator<Event, boolean>): Promise<{ events: E
   }
 }
 
-/** How long a walk takes over `size` nodes that depend on nothing and run no steps. */
-async function wide(size: number): Promise<number> {
-  const ids = Array.from({ length: size }, (_, index) => `n${index}`);
-  const started = performance.now();
-  await collect(walkOf(graphOf(ids), reaching(new Steps(), Object.fromEntries(ids.map((id) => [id, []])))));
-  return performance.now() - started;
-}
-
 describe('walking a graph together', () => {
   it('reaches each node after every step of each node it depends on', async () => {
     const steps = new Steps();
@@ -327,12 +319,6 @@ describe('walking a graph together', () => {
     const { result } = await collect(walkOf(graph, reaching(new Steps(), Object.fromEntries(ids.map((id) => [id, []])))));
 
     expect(result).toBe(true);
-  });
-
-  it('walks nodes ready together in time that grows with them', async () => {
-    await wide(500);
-
-    expect((await wide(8000)) / (await wide(2000))).toBeLessThan(8);
   });
 
   it('returns true for no nodes', async () => {

@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 const packages = {
   cli: 'packages/cli',
@@ -19,6 +19,8 @@ export default defineConfig({
     env: { NO_COLOR: '1' },
     // A test against real files takes about a second alone, and past 5 when many run in parallel under coverage.
     testTimeout: 15_000,
+    // Tests that time how work grows run alone, after these.
+    exclude: [...configDefaults.exclude, '**/*.timing.spec.ts'],
   },
   resolve: {
     alias: Object.fromEntries(Object.entries(packages).map(([name, dir]) => [`@clay/${name}`, path.resolve(import.meta.dirname, dir, 'src/index.ts')])),

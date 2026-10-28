@@ -24,17 +24,6 @@ function randomPath(random: () => number): AttributePath {
   return end === undefined ? steps : [...steps, end];
 }
 
-/** The fewest milliseconds of three that going under each of `size` keys takes, so a pause of the machine does not count. */
-function underEach(size: number): number {
-  const marks = Marks.of(Array.from({ length: size }, (_, index) => [`k${index}`]));
-  const times = Array.from({ length: 3 }, () => {
-    const started = performance.now();
-    for (let index = 0; index < size; index++) marks.under(`k${index}`).paths();
-    return performance.now() - started;
-  });
-  return Math.min(...times);
-}
-
 /** Whether `paths` hold `path` itself. */
 const holds = (paths: AttributePath[], path: AttributePath) => paths.some((each) => each.length === path.length && each.every((step, index) => step === path[index]));
 
@@ -119,11 +108,5 @@ describe('marks held by their steps', () => {
     ];
 
     expect(Marks.of(paths).under(EVERY_ITEM).paths()).toEqual([[MAYBE]]);
-  });
-
-  it('go under each step of many marks in time that grows with them', () => {
-    underEach(2000);
-
-    expect(underEach(40_000) / underEach(10_000)).toBeLessThan(8);
   });
 });

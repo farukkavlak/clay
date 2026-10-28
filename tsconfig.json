@@ -7,5 +7,5 @@
       "@clay/*": ["./packages/*/src/index.ts"]
     }
   },
-  "include": ["packages/*/src", "packages/*/tests", "providers/*/src", "providers/*/tests", "*.ts", "*.mts"]
+  "include": ["packages/*/src", "packages/*/tests", "providers/*/src", "providers/*/tests", "tests", "*.ts", "*.mts"]
 }
