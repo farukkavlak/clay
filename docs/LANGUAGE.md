@@ -393,8 +393,8 @@ that makes no object, an update or no change, runs no provisioner and checks non
 their values.
 
 `when = destroy` runs a provisioner before the object is destroyed instead: when its block
-is gone, and before a replace destroys the old object, though not yet the old object a
-`create_before_destroy` replace leaves behind. `when = create` is the default.
+is gone, and before a replace destroys the old object, the one a `create_before_destroy`
+replace leaves behind too. `when = create` is the default.
 Its values are read once the object is made, and again by each apply that keeps it, and
 state keeps them, so it runs once the block is gone too. A command changed in the
 configuration runs from the next apply; a plan that changes only that shows an update,

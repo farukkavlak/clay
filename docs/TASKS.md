@@ -1030,7 +1030,7 @@ run as a step of another resource instead.
 - [x] `when = destroy`: a provisioner run before the object is destroyed, reading only
       `self`. State keeps it as the last apply resolved it, so it runs once the block is
       gone
-- [ ] `when = destroy` on the object a `create_before_destroy` replace leaves deposed
+- [x] `when = destroy` on the object a `create_before_destroy` replace leaves deposed
 - [ ] `remote-exec` and `file`, once a resource can carry a connection
 
 ## 3. State

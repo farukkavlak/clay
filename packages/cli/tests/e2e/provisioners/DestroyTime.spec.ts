@@ -28,6 +28,10 @@ const readingStdout = (printed: string) =>
   `resource "command_exec" "e" {\n  command = "printf %s ${printed}"\n}\n` +
   `resource "null_resource" "n" {\n  triggers = { v = command_exec.e.stdout }\n${onDestroy('    command = self.triggers.v\n')}}\n`;
 
+/** A file at `name` made first on a replace, with `body` inside its block. */
+const createsFirst = (name: string, body: string) =>
+  `resource "local_file" "f" {\n  path    = "${name}"\n  content = "x"\n  lifecycle {\n    create_before_destroy = true\n  }\n${body}}\n`;
+
 describe('a provisioner with when = destroy', () => {
   let dir: string;
 
@@ -116,6 +120,61 @@ describe('a provisioner with when = destroy', () => {
 
     expect(await read('log.txt')).toBe('b1.txt\n');
     expect(stdout).toContain('  local_file.b (local-exec): Executing: "echo b1.txt >> log.txt"\n');
+  });
+
+  it('runs on the old object a create_before_destroy replace leaves, reading it through self, once the new one is made', async () => {
+    const body = `  provisioner "local-exec" {\n${command('echo made ${self.path} >> log.txt')}  }\n` + onDestroy(command('echo gone ${self.path} >> log.txt'));
+    await write(createsFirst('a.txt', body));
+    await clayIn('apply', '--yes');
+    await write(createsFirst('b.txt', body));
+
+    const stdout = await clayIn('apply', '--yes');
+
+    expect(await read('log.txt')).toBe('made a.txt\nmade b.txt\ngone a.txt\n');
+    expect(stdout).toContain('  local_file.f (local-exec): Executing: "echo gone a.txt >> log.txt"\n');
+    await expect(read('a.txt')).rejects.toThrow('ENOENT');
+  });
+
+  it('keeps the old object deposed when it fails, and the next apply runs it again', async () => {
+    const body = onDestroy(command('echo tried >> log.txt; test -f go.txt'));
+    await write(createsFirst('a.txt', body));
+    await clayIn('apply', '--yes');
+    await write(createsFirst('b.txt', body));
+
+    const { stderr } = await failure('apply', '--yes');
+
+    const state = await stateOf();
+    expect(stderr).toContain('local_file.f: local-exec failed: the command exited with 1');
+    expect(state.deposed?.['local_file.f']).toHaveLength(1);
+    expect(await read('a.txt')).toBe('x');
+    expect(state.resources['local_file.f'].attributes.path).toBe('b.txt');
+    expect(await read('b.txt')).toBe('x');
+
+    await fs.writeFile(file('go.txt'), '');
+    await clayIn('apply', '--yes');
+
+    const after = await stateOf();
+    expect(await read('log.txt')).toBe('tried\ntried\n');
+    expect(after.deposed).toBeUndefined();
+    await expect(read('a.txt')).rejects.toThrow('ENOENT');
+  });
+
+  it('does not run on a tainted object a create_before_destroy replace leaves', async () => {
+    await write(
+      'resource "null_resource" "n" {\n  lifecycle {\n    create_before_destroy = true\n  }\n' +
+        `  provisioner "local-exec" {\n${command('test -f ok.txt')}  }\n` +
+        onDestroy(command('echo gone >> log.txt')) +
+        '}\n'
+    );
+    await failure('apply', '--yes');
+    await fs.writeFile(file('ok.txt'), '');
+
+    await clayIn('apply', '--yes');
+
+    const state = await stateOf();
+    expect(state.resources['null_resource.n'].tainted).toBeUndefined();
+    expect(state.deposed).toBeUndefined();
+    await expect(read('log.txt')).rejects.toThrow('ENOENT');
   });
 
   it('runs as the last update left it', async () => {

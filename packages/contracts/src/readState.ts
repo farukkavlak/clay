@@ -46,12 +46,12 @@ function isResource(value: unknown): value is Resource {
   );
 }
 
-function readProvisionerPaths(provisioners: unknown, address: string): void {
+/** `of` names the object they are kept with. */
+function readProvisionerPaths(provisioners: unknown, of: string): void {
   if (!Array.isArray(provisioners)) return;
 
   for (const provisioner of provisioners as unknown[])
-    if (isRecord(provisioner) && provisioner.sensitive !== undefined)
-      provisioner.sensitive = readPaths(provisioner.sensitive, `a sensitive index of a provisioner of "${address}"`);
+    if (isRecord(provisioner) && provisioner.sensitive !== undefined) provisioner.sensitive = readPaths(provisioner.sensitive, `a sensitive index of a provisioner of ${of}`);
 }
 
 /** Instance keys are part of the address and indexes in sensitive paths are steps, so both read back as plain numbers. */
@@ -61,7 +61,7 @@ function readKeys(resources: Record<string, unknown>): void {
 
     if (resource.key instanceof ExactNumber) resource.key = resource.key.toSafeInteger(`the key of "${address}"`);
     if (resource.sensitive !== undefined) resource.sensitive = readPaths(resource.sensitive, `a sensitive index of "${address}"`);
-    readProvisionerPaths(resource.destroyProvisioners, address);
+    readProvisionerPaths(resource.destroyProvisioners, `"${address}"`);
     if (Array.isArray(resource.modulePath))
       for (const step of resource.modulePath) if (isRecord(step) && step.key instanceof ExactNumber) step.key = step.key.toSafeInteger(`a module key of "${address}"`);
   }
@@ -80,14 +80,21 @@ function checkResources(resources: Record<string, unknown>, say: (problem: strin
 }
 
 function isDeposedObject(value: unknown): value is DeposedObject {
-  return isRecord(value) && isRecord(value.attributes) && (value.sensitive === undefined || isAttributePaths(value.sensitive)) && isDependencies(value.dependencies);
+  return (
+    isRecord(value) &&
+    isRecord(value.attributes) &&
+    (value.sensitive === undefined || isAttributePaths(value.sensitive)) &&
+    isDependencies(value.dependencies) &&
+    isDestroyProvisioners(value.destroyProvisioners)
+  );
 }
 
 function readDeposedPaths(object: unknown, address: string, say: (problem: string) => never): void {
-  if (!isRecord(object) || object.sensitive === undefined) return;
+  if (!isRecord(object)) return;
 
   try {
-    object.sensitive = readPaths(object.sensitive, `a sensitive index of a deposed object of "${address}"`);
+    if (object.sensitive !== undefined) object.sensitive = readPaths(object.sensitive, `a sensitive index of a deposed object of "${address}"`);
+    readProvisionerPaths(object.destroyProvisioners, `a deposed object of "${address}"`);
   } catch (error) {
     if (error instanceof NumberError) say(error.message);
 
@@ -106,7 +113,7 @@ export function readDeposed(deposed: unknown, say: (problem: string) => never): 
 
     for (const object of objects as unknown[]) {
       readDeposedPaths(object, address, say);
-      if (!isDeposedObject(object)) say(`a deposed object of "${address}" has no attributes, or its sensitive or dependencies are not what they should be`);
+      if (!isDeposedObject(object)) say(`a deposed object of "${address}" has no attributes, or its sensitive, dependencies or destroy provisioners are not what they should be`);
     }
   }
 }

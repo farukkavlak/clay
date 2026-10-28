@@ -48,9 +48,14 @@ function offPlanMessage(off: NonNullable<ReturnType<typeof offPlan>>, hidden: At
   return `the plan showed ${off.name} = ${shown(off.planned)}, but it now comes to ${shown(off.resolved)}. Plan again.`;
 }
 
-/** After any it already has for the address, so the oldest goes first. */
+/** After any it already has for the address, so the oldest goes first. A tainted object keeps nothing to run before its destroy. */
 function depose(state: State, key: string, old: Resource): void {
-  const left: DeposedObject = { attributes: old.attributes, ...(old.sensitive && { sensitive: old.sensitive }), ...(old.dependencies && { dependencies: old.dependencies }) };
+  const left: DeposedObject = {
+    attributes: old.attributes,
+    ...(old.sensitive && { sensitive: old.sensitive }),
+    ...(old.dependencies && { dependencies: old.dependencies }),
+    ...(old.destroyProvisioners && !old.tainted && { destroyProvisioners: old.destroyProvisioners }),
+  };
 
   state.deposed = { ...state.deposed, [key]: [...(state.deposed?.[key] ?? []), left] };
 }
@@ -138,7 +143,7 @@ export class ActionExecutor {
         break;
       }
       case 'DELETE': {
-        await (action.deposed ? this.executeDeleteDeposed(action, provider, currentState) : this.executeDelete(action, provider, currentState, running.print));
+        await (action.deposed ? this.executeDeleteDeposed(action, provider, currentState, running.print) : this.executeDelete(action, provider, currentState, running.print));
         break;
       }
       default: {
@@ -329,7 +334,7 @@ export class ActionExecutor {
   }
 
   /** In the order written. One that fails keeps the object, unless on_failure = continue. A tainted object was never fully made, so none run on it. */
-  private async runBeforeDestroy({ destroyProvisioners = [], tainted }: Resource, print: ProvisionerPrint | undefined): Promise<void> {
+  private async runBeforeDestroy({ destroyProvisioners = [], tainted }: Pick<Resource, 'destroyProvisioners' | 'tainted'>, print: ProvisionerPrint | undefined): Promise<void> {
     if (tainted) return;
 
     for (const { type, config, sensitive = [], onFailure } of destroyProvisioners)
@@ -369,8 +374,8 @@ export class ActionExecutor {
     await this.keepForDestroy(Address.of(action), resource, currentState);
   }
 
-  /** One at a time, oldest first, each gone from state once destroyed, so a failure leaves the rest to the next run. */
-  async executeDeleteDeposed(action: PlanAction, provider: Provider, currentState: State): Promise<void> {
+  /** One at a time, oldest first, each after what it kept to run before its destroy, and gone from state once destroyed, so a failure leaves the rest to the next run. */
+  async executeDeleteDeposed(action: PlanAction, provider: Provider, currentState: State, print?: ProvisionerPrint): Promise<void> {
     const address = Address.of(action).toString();
     const { deposed } = currentState;
     const objects = deposed?.[address];
@@ -378,6 +383,7 @@ export class ActionExecutor {
 
     while (objects.length > 0) {
       const [object] = objects;
+      await this.runBeforeDestroy(object, print);
       await hidingReason(action.resourceType, object.sensitive ?? [], () => this.limit.run(() => provider.delete(action.resourceType, object.attributes)), 'to destroy');
       objects.shift();
     }

@@ -52,6 +52,8 @@ export interface DeposedObject {
   sensitive?: AttributePath[];
   /** Kept so it can be destroyed before what it depended on. */
   dependencies?: string[];
+  /** As the current object kept them, left out where there is none or the object was tainted. */
+  destroyProvisioners?: DestroyProvisioner[];
 }
 
 export interface State {
