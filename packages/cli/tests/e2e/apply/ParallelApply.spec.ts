@@ -88,7 +88,7 @@ describe('resources an apply runs together', () => {
   it('reads at apply within the parallelism, beside what it makes', async () => {
     provider = new Slow(['create', 'readDataSource']);
     engine = orchestratorIn(dir, provider);
-    const reads = [0, 1, 2].map((index) => `data "slow" "d${index}" {\n  name = slow.a${index}.id\n  mode = "readDataSource slow"\n}`);
+    const reads = [0, 1, 2].map((index) => `data "slow" "d${index}" {\n  name = slow.a${index}.id\n}`);
     const config = [blocks('a0', 'a1', 'a2', 'z0', 'z1', 'z2'), ...reads].join('\n');
 
     await runWith(config, 3);
@@ -121,11 +121,13 @@ describe('resources an apply runs together', () => {
     expect(await held()).toEqual([]);
   });
 
-  // `long` takes three times as long as `a`, so `b` can be made while it is.
+  // `long` is made only once `b` is; a run that waited for `long` would make it a second later.
   it('makes a resource once what it reads is made, not once all beside that is', async () => {
-    const events = await run(`resource "slow" "long" {\n  name = "long"\n  mode = "create slow"\n}\n${blocks('a')}\nresource "slow" "b" {\n  name = "b"\n  note = slow.a.name\n}`);
+    const events = await run(
+      `resource "slow" "long" {\n  name = "long"\n  mode = "create after b"\n}\n${blocks('a')}\nresource "slow" "b" {\n  name = "b"\n  note = slow.a.name\n}`
+    );
 
-    expect(events.indexOf('applied b')).toBeLessThan(events.indexOf('applied long'));
+    expect(events.filter((event) => event.startsWith('applied'))).toEqual(['applied a', 'applied b', 'applied long']);
   });
 
   describe('when one fails', () => {

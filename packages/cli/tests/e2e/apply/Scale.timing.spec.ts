@@ -198,6 +198,18 @@ describe('a run over many instances', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
+  // Written whole after each, 8000 took more than a minute.
+  it('writes the state of a run in time that grows with the resources it makes', GENEROUS, async () => {
+    const run = async (at: string, size: number) => {
+      const took = await timed(async () => expect(await apply(at, `resource "null_resource" "a" {\n  count = ${size}\n}\n`)).toBe(size));
+      const written = JSON.parse(await fs.readFile(path.join(at, 'clay.state.json'), 'utf8')) as { resources: object };
+      expect(Object.keys(written.resources)).toHaveLength(size);
+      return took;
+    };
+
+    expect(await growthIn(2000, run)).toBeLessThan(LINEAR);
+  });
+
   it('reads the instances of a data source in time that grows with them', GENEROUS, async () => {
     const run = async (at: string, size: number) => {
       await fs.writeFile(path.join(at, 'f.txt'), 'x', 'utf8');

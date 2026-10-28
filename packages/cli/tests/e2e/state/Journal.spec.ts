@@ -120,16 +120,6 @@ describe('the state of a run', () => {
     expect(Object.keys(written.resources)).toEqual(['null_resource.a[0]', 'null_resource.a[1]', 'null_resource.a[2]']);
   });
 
-  // Written whole after each, 8000 took more than a minute.
-  it('takes time in line with the resources it makes', { timeout: 15_000 }, async () => {
-    const config = 'resource "null_resource" "a" {\n  count = 8000\n}\n';
-
-    for await (const event of start(orchestratorIn(dir), config)) if (event.type === 'failed') throw event.error;
-
-    const written = JSON.parse(await fs.readFile(path.join(dir, 'clay.state.json'), 'utf8')) as { resources: object };
-    expect(Object.keys(written.resources)).toHaveLength(8000);
-  });
-
   it('is written whole when the caller stops reading the run', async () => {
     let first = '';
 

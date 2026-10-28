@@ -1,6 +1,7 @@
 import { Graph } from '@clay/graph';
 import { describe, expect, it } from 'vitest';
 
+import { Signals } from '../../../../tests/signals';
 import { Reach, Step, walkTogether } from '../../src/run/walkTogether';
 
 type Event = string;
@@ -20,19 +21,23 @@ function graphOf(nodes: string[], edges: [string, string][] = []): Graph<string>
 
 interface Plan {
   ms?: number;
+  /** A step this one finishes only after. */
+  after?: string;
   succeeds?: boolean;
   crashes?: boolean;
 }
 
-async function* stepping(steps: Steps, name: string, { ms = 5, succeeds = true, crashes = false }: Plan): AsyncGenerator<Event, boolean> {
+async function* stepping(steps: Steps, name: string, { ms = 5, after, succeeds = true, crashes = false }: Plan): AsyncGenerator<Event, boolean> {
   steps.running += 1;
   steps.most = Math.max(steps.most, steps.running);
   steps.log.push(`begin ${name}`);
   yield `start ${name}`;
   await pause(ms);
+  if (after) await steps.finished.wait(after);
   steps.running -= 1;
   if (crashes) throw new Error(`${name} crashed`);
   steps.log.push(`finish ${name}`);
+  steps.finished.give(name);
   yield succeeds ? `end ${name}` : `failed ${name}`;
   return succeeds;
 }
@@ -40,6 +45,7 @@ async function* stepping(steps: Steps, name: string, { ms = 5, succeeds = true, 
 /** Logs when each step begins and finishes and counts how many run at once. */
 class Steps {
   readonly log: string[] = [];
+  readonly finished = new Signals();
   most = 0;
   running = 0;
 
@@ -102,13 +108,14 @@ describe('walking a graph together', () => {
     expect(steps.most).toBe(3);
   });
 
+  // `slow` finishes only after `after`; a walk that waited for `slow` would finish it a second later.
   it('reaches a node once what it depends on is done, not once all beside that are', async () => {
     const steps = new Steps();
     const graph = graphOf(['slow', 'quick', 'after'], [['quick', 'after']]);
 
-    await collect(walkOf(graph, reaching(steps, { slow: [steps.step('slow', { ms: 30 })] })));
+    await collect(walkOf(graph, reaching(steps, { slow: [steps.step('slow', { after: 'after' })] })));
 
-    expect(steps.log.indexOf('finish after')).toBeLessThan(steps.log.indexOf('finish slow'));
+    expect(steps.log.filter((entry) => entry.startsWith('finish'))).toEqual(['finish quick', 'finish after', 'finish slow']);
   });
 
   it('gives events as they come, not a node at a time', async () => {

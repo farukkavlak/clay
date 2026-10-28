@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { Signals } from '../../../tests/signals';
 import { Graph } from '../src/Graph';
 
 const pause = (ms: number) =>
@@ -22,11 +23,14 @@ function throwAtOnce(): never {
 interface Step {
   ms?: number;
   fails?: boolean;
+  /** A node this one ends only after. */
+  after?: string;
 }
 
 /** Logs when each visit starts and ends, waits as `steps` say, and fails where they say. */
 function visitor(steps: Record<string, Step> = {}) {
   const log: string[] = [];
+  const ended = new Signals();
   let running = 0;
   let most = 0;
   const visit = async (id: string) => {
@@ -34,9 +38,11 @@ function visitor(steps: Record<string, Step> = {}) {
     most = Math.max(most, running);
     log.push(`start ${id}`);
     await pause(steps[id]?.ms ?? 0);
+    if (steps[id]?.after) await ended.wait(steps[id].after);
     running -= 1;
     if (steps[id]?.fails) throw new Error(`${id} failed`);
     log.push(`end ${id}`);
+    ended.give(id);
   };
 
   return { visit, log, most: () => most };
@@ -70,13 +76,13 @@ describe('a walk over a graph', () => {
     expect(most()).toBe(3);
   });
 
-  // In layers, `c` would wait for `a`, which is in the layer before it.
+  // `a` ends only after `c`. In layers, `c` would wait for `a`, which is in the layer before it, and `a` would end a second later.
   it('visits a node once what it depends on is done, though a node before it in the order still runs', async () => {
-    const { visit, log } = visitor({ a: { ms: 30 } });
+    const { visit, log } = visitor({ a: { after: 'c' } });
 
     await graphOf(['a', 'b', 'c'], [['b', 'c']]).walk(visit);
 
-    expect(log.indexOf('end c')).toBeLessThan(log.indexOf('end a'));
+    expect(log.filter((entry) => entry.startsWith('end'))).toEqual(['end b', 'end c', 'end a']);
   });
 
   it('starts nothing the order meets after a failure, and lets the visits running end', async () => {
