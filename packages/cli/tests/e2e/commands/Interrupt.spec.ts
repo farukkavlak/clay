@@ -9,7 +9,7 @@ import { promisify, stripVTControlCharacters } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { clay } from '../helpers';
 
-// `after` reads `slow`, so it runs in the layer after it.
+// `after` reads `slow`, so it runs after it.
 // `slow` makes its mark from the shell: a child that exits 0 during an interrupt lets the shell go on.
 const config = `resource "command_exec" "slow" {
   command = ": > started.txt; sleep 2; touch made.txt"

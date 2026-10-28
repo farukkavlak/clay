@@ -33,7 +33,7 @@ export interface PlanOptions {
 }
 
 export interface RunOptions {
-  /** How many actions of a layer run at once. */
+  /** How many actions run at once. */
   parallelism?: number;
   /** Once it aborts, no action starts and the ones running are waited for and saved. A run stopped short ends without `done`. */
   signal?: AbortSignal;

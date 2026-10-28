@@ -217,7 +217,7 @@ describe('create_before_destroy', () => {
     expect(await held('rec.a')).toBe('a3');
   });
 
-  it('leaves the old object deposed for the next plan where a later layer fails', async () => {
+  it('leaves the old object deposed for the next plan where something after it fails', async () => {
     await applied(reader('a1'));
     provider.failingUpdate.add('b');
 

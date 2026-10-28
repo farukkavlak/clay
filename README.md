@@ -132,16 +132,16 @@ from a sensitive one is sensitive too: `local_file.id` where `path` is, `stdout`
    It also says which changes replace the resource. A plan that changes a value the configuration sets is refused. The
    planner compares each plan with the state and lists the actions: create, update,
    replace, delete, or nothing.
-5. `apply` runs the actions a layer of the graph at a time, ten at once or as many as
+5. `apply` runs each action once what it reads is done, ten at once or as many as
    `--parallelism` says, which a saved plan takes too. It deletes in reverse order. It
    writes the state whole before the first action and after the last, and in between
    adds a line for each action to `clay.state.json.journal`, so a failure, or a run that
    is killed, leaves everything done before it on disk; the state is read with the
-   journal's lines over it. When one fails, the ones already running finish and none
-   starts, and every failure is reported at the end. Before each create, update or
+   journal's lines over it. When one fails, nothing that reads it starts, the rest goes
+   on, and every failure is reported at the end. Before each create, update or
    replace, the provider plans it again with what is known by then. A value the plan
    showed that comes out different, or a replace where the plan showed an update, stops
-   the run before anything changes. What the provider returns is held to that plan. The
+   the run before it changes. What the provider returns is held to that plan. The
    state is written to a temporary file and renamed, `clay.state.json.bak` keeps the
    state from before the run, and a lock file stops two runs at once. The first Ctrl-C
    starts nothing new, waits for what runs, saves it and unlocks; a second exits at

@@ -10,7 +10,7 @@ import { start } from '../start';
 
 const blocks = (...names: string[]) => names.map((name) => `resource "slow" "${name}" {\n  name = "${name}"\n}`).join('\n');
 
-describe('a layer of resources', () => {
+describe('resources an apply runs together', () => {
   let dir: string;
   let provider: Slow;
   let engine: TestEngine;
@@ -101,18 +101,26 @@ describe('a layer of resources', () => {
     expect(await held()).toEqual([]);
   });
 
+  // `long` takes three times as long as `a`, so `b` can be made while it is.
+  it('makes a resource once what it reads is made, not once all beside that is', async () => {
+    const events = await run(`resource "slow" "long" {\n  name = "long"\n  mode = "create slow"\n}\n${blocks('a')}\nresource "slow" "b" {\n  name = "b"\n  note = slow.a.name\n}`);
+
+    expect(events.indexOf('applied b')).toBeLessThan(events.indexOf('applied long'));
+  });
+
   describe('when one fails', () => {
     // The failing one comes first, so a run one at a time would stop before it made the others.
-    const config = `resource "slow" "aa" {\n  name = "aa"\n  mode = "create fails"\n}\n${blocks('x', 'y')}\nresource "slow" "after" {\n  name = "after"\n  note = slow.x.name\n}`;
+    const config = `resource "slow" "aa" {\n  name = "aa"\n  mode = "create fails"\n}\n${blocks('x', 'y')}\nresource "slow" "after" {\n  name = "after"\n  note = slow.x.name\n}\nresource "slow" "reader" {\n  name = "reader"\n  note = slow.aa.name\n}`;
 
-    it('keeps the others it started, starts nothing more, and reports the failure last', async () => {
+    it('makes all that does not read it, starts nothing that does, and reports the failure last', async () => {
       const events = await run(config);
 
       expect(events.at(-1)).toBe('failed aa');
       expect(events).toContain('applied x');
       expect(events).toContain('applied y');
-      expect(events).not.toContain('started after');
-      expect(await held()).toEqual(['slow.x', 'slow.y']);
+      expect(events).toContain('applied after');
+      expect(events).not.toContain('started reader');
+      expect(await held()).toEqual(['slow.after', 'slow.x', 'slow.y']);
     });
   });
 });

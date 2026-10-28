@@ -11,7 +11,7 @@ import { engineOn, TestEngine } from './engine';
 const SCHEMA: Schema = { id: { type: types.string, computed: true, kept: true }, name: { type: types.string } };
 const DATA_SCHEMA: Schema = { id: { type: types.string, computed: true }, name: { type: types.string } };
 
-/** Aborts the run while it creates a resource, so that one finishes and nothing after it starts. */
+/** Aborts the run while it creates or deletes a resource, so that one finishes and nothing after it starts. */
 class Interrupting implements Provider {
   readonly resources = ['mock_resource'];
   readonly dataSources = ['mock_data'];
@@ -42,6 +42,7 @@ class Interrupting implements Provider {
   }
 
   async delete(_type: string, prior: Record<string, unknown>): Promise<void> {
+    this.aborting?.abort();
     this.deleted.push(String(prior.name));
   }
 
@@ -86,14 +87,14 @@ describe('a run whose signal aborts', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
-  it('starts no action of the layer that waits for room, and ends without done', async () => {
+  it('starts no action that waits for room, and ends without done', async () => {
     const events = await run('resource "mock_resource" "a" { name = "a" }\nresource "mock_resource" "b" { name = "b" }');
 
     expect(provider.created).toHaveLength(1);
     expect(events).toEqual(['planned', 'started', 'applied']);
   });
 
-  it('reads no data source of a later layer', async () => {
+  it('reads no data source that waits for a resource', async () => {
     await run('resource "mock_resource" "a" { name = "a" }\ndata "mock_data" "d" { name = mock_resource.a.id }');
 
     expect(provider.created).toEqual(['a']);
@@ -107,17 +108,17 @@ describe('a run whose signal aborts', () => {
     expect(Object.keys(state.resources)).toEqual([`mock_resource.${provider.created[0]}`]);
   });
 
+  // `reader` reads `read`, so `read` is deleted only after it.
   it('deletes nothing once it aborts', async () => {
     provider.aborting = undefined;
-    await run('resource "mock_resource" "gone" { name = "gone" }');
+    await run('resource "mock_resource" "read" { name = "read" }\nresource "mock_resource" "reader" { name = "${mock_resource.read.name}er" }');
     provider.aborting = controller;
 
-    await run('resource "mock_resource" "a" { name = "a" }');
+    await run('');
 
-    expect(provider.deleted).toEqual([]);
+    expect(provider.deleted).toEqual(['reader']);
     const state = JSON.parse(await fs.readFile(path.join(dir, 'clay.state.json'), 'utf8')) as { resources: Record<string, unknown> };
-    expect(Object.keys(state.resources)).toHaveLength(2);
-    expect(Object.keys(state.resources)).toEqual(expect.arrayContaining(['mock_resource.a', 'mock_resource.gone']));
+    expect(Object.keys(state.resources)).toEqual(['mock_resource.read']);
   });
 
   it('finishes a run whose last action it waited for, when only outputs are left', async () => {

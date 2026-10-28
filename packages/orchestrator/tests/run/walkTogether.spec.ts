@@ -198,13 +198,37 @@ describe('walking a graph together', () => {
     expect(steps.log).not.toContain('reach after');
   });
 
+  // `broken` is reached once `first` runs, while `slow` runs.
   it('starts no step once a node cannot be reached', async () => {
     const steps = new Steps();
-    const graph = graphOf(['slow', 'broken', 'after'], [['slow', 'after']]);
+    const graph = graphOf(
+      ['slow', 'first', 'broken', 'after'],
+      [
+        ['first', 'broken'],
+        ['slow', 'after'],
+      ]
+    );
 
     await expect(collect(walkOf(graph, reaching(steps, { slow: [steps.step('slow', { ms: 20 })] }, ['broken'])))).rejects.toThrow('broken cannot be reached');
     expect(steps.log).toContain('finish slow');
     expect(steps.log).not.toContain('reach after');
+  });
+
+  // `late` is ready at the start but takes longer to reach than `quick` takes to give its step.
+  it('starts no step until every node ready at the start is reached', async () => {
+    const steps = new Steps();
+    const graph = graphOf(['quick', 'late']);
+    const reach: Reach<Event> = async function* (id) {
+      yield `reached ${id}`;
+      if (id === 'late') {
+        await pause(20);
+        throw new Error('late cannot be reached');
+      }
+      return [steps.step(id)];
+    };
+
+    await expect(collect(walkOf(graph, reach))).rejects.toThrow('late cannot be reached');
+    expect(steps.log).not.toContain('begin quick');
   });
 
   // Room comes once `slow` ends, after `boom` has thrown.

@@ -291,11 +291,6 @@ export function applyGraph(config: Graph<GraphNode>, actions: PlanAction[], stat
   return graph;
 }
 
-/** The layers the run takes, where a wait node holds nothing back a layer. */
-export function applyLayers(graph: Graph<ApplyNode>): string[][] {
-  return graph.topologicalSort((key) => graph.getNode(key)!.kind === 'wait');
-}
-
 /** Run at plan too, so a loop is refused before the plan is approved, at the block to change. */
 export function checkApplyOrder(config: Graph<GraphNode>, actions: PlanAction[], state: State, desired: ConfiguredResource[]): void {
   try {

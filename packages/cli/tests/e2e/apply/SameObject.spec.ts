@@ -168,7 +168,7 @@ describe('two objects that are one file', () => {
       expect(await addresses()).toEqual(['command_exec.e', 'local_file.a']);
     });
 
-    // Both are made in one layer, so neither is in the state when the other is checked.
+    // Both are made together, so neither is in the state when the other is checked.
     it('refuses one of two blocks that write one file at the same time', async () => {
       await write(late, lateFile('a'), lateFile('b'));
 

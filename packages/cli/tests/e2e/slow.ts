@@ -16,6 +16,7 @@ const pause = (ms: number) =>
 /**
  * Takes a moment for each call it is told to, create and delete unless told others, and counts how many it has going at once.
  * An object whose `mode` is `<call> fails` fails that call at once, and `<call> fails late` after the others have had their moment.
+ * One whose `mode` is `<call> slow` takes three moments over that call.
  */
 export class Slow implements Provider {
   readonly dataSources: string[];
@@ -36,7 +37,7 @@ export class Slow implements Provider {
     if (this.slow.includes(call)) {
       this.running += 1;
       this.most = Math.max(this.most, this.running);
-      await pause(30);
+      await pause(values.mode === `${call} slow` ? 90 : 30);
       this.running -= 1;
     }
 

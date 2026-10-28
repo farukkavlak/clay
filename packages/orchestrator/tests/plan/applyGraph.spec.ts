@@ -3,7 +3,7 @@ import { Graph } from '@clay/graph';
 import { ActionType, PlanAction } from '@clay/planner';
 import { describe, expect, it } from 'vitest';
 
-import { ApplyNode, applyGraph, applyLayers } from '../../src/plan/applyGraph';
+import { ApplyNode, applyGraph } from '../../src/plan/applyGraph';
 import { GraphNode } from '../../src/graph/DependencyGraphBuilder';
 
 /** Resource blocks `rec.<name>`, each edge from what is read to what reads it. */
@@ -35,9 +35,10 @@ const object = (address: string, ...reads: string[]): [string, Resource] => [add
 const holding = (...objects: [string, Resource][]): State => ({ version: STATE_VERSION, serial: 0, resources: Object.fromEntries(objects) });
 const going = (address: string): PlanAction => ({ type: 'DELETE', ...Address.parse(address).fields() });
 
-/** As the run takes them, without the wait nodes, which run nothing. */
+/** The order as layers, where a wait node, which runs nothing, holds nothing back a layer. */
 const layers = (graph: Graph<ApplyNode>) =>
-  applyLayers(graph)
+  graph
+    .topologicalSort((key) => graph.getNode(key)!.kind === 'wait')
     .map((layer) => layer.filter((key) => graph.getNode(key)!.kind !== 'wait').sort())
     .filter((layer) => layer.length > 0);
 

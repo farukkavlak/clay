@@ -4,7 +4,7 @@ import { AttributeValue, DataBlock, OutputBlock, ResourceBlock, spell, Statement
 import { offPlan, Plan, PlanAction } from '@clay/planner';
 import { moveResources, StateManager } from '@clay/state';
 
-import { ApplyNode, applyGraph, applyLayers } from '../plan/applyGraph';
+import { ApplyNode, applyGraph } from '../plan/applyGraph';
 import { append } from '../append';
 import { asError } from '../asError';
 import { countFrom } from '../instances/count';
@@ -17,12 +17,12 @@ import { Pace } from './parallelism';
 import { tryAt, withPlace } from '../place';
 import { ReferenceResolver } from '../expressions/ReferenceResolver';
 import { RunEvent } from './RunEvent';
-import { runTogether } from './runTogether';
 import { ScopeManager } from '../config/ScopeManager';
 import { shown } from '../shown';
 import { typeFits } from '../values/typeFits';
 import { outputOf, Value } from '../values/Value';
 import { ActionExecutor, Running } from './ActionExecutor';
+import { Step, walkTogether } from './walkTogether';
 import { LoadedConfig } from './ConfigLoader';
 import { DataSourceReader } from '../plan/DataSourceReader';
 import { checkMovedFrom, movesIn, plannedMoves } from '../plan/moves';
@@ -61,8 +61,8 @@ interface Checked {
   outputs: PlannedOutputs;
 }
 
-/** What each layer's blocks are run with. */
-interface Layers extends Checked {
+/** What a run applies each block with. */
+interface Applying extends Checked {
   read: Omit<Approved, 'actions' | 'outputs'>;
   blocks: Map<string, ResourceBlock>;
   byBlock: Map<string, PlanAction[]>;
@@ -228,7 +228,7 @@ export class PlanRunner {
     state: State,
     pace: Pace
   ): AsyncGenerator<RunEvent, boolean> {
-    const layers: Layers = {
+    const applying: Applying = {
       named,
       outputs,
       read,
@@ -240,28 +240,29 @@ export class PlanRunner {
     };
     // Each replace's object destroyed before its block runs, kept for what it ignored.
     const destroyed = new Map<string, Resource>();
+    const reach = (key: string) => this.reach(key, graph.getNode(key)!, applying, state, pace.signal, destroyed);
 
-    for (const layer of applyLayers(graph)) {
-      // A data source is read even where no action runs; a layer of locals and outputs alone lets a run that did every action finish.
-      if (pace.signal?.aborted && layer.some((key) => graph.getNode(key)!.kind === 'data')) return false;
-      const steps: (() => AsyncGenerator<RunEvent, boolean>)[] = [];
+    return yield* walkTogether(graph.topologicalSort().flat(), graph, reach, pace.parallelism, isFailure);
+  }
 
-      // Every block of the layer is checked before any action runs, so a wrong plan stops the run before it changes anything.
-      for (const key of this.outputsFirst(layer, graph)) {
-        const node = graph.getNode(key)!;
-        if (node.kind === 'wait') continue;
-        if (node.kind === 'destroy') steps.push(() => this.destroyApart(node.action, state, pace.signal, destroyed));
-        else
-          for (const action of yield* this.visit(key, node, layers, state)) {
-            const running = { written: layers.blocks.get(key)!.attributes, destroyed: destroyed.get(Address.of(action).toString()) };
-            steps.push(() => this.step(action, state, pace.signal, running));
-          }
-      }
+  /** A data source is not read once the run is stopped; locals and outputs are still worked out. */
+  private async *reach(
+    key: string,
+    node: ApplyNode,
+    applying: Applying,
+    state: State,
+    signal: AbortSignal | undefined,
+    destroyed: Map<string, Resource>
+  ): AsyncGenerator<RunEvent, Step<RunEvent>[] | false> {
+    if (node.kind === 'wait') return [];
+    if (node.kind === 'destroy') return [() => this.destroyApart(node.action, state, signal, destroyed)];
+    if (signal?.aborted && node.kind === 'data') return false;
 
-      if (!(yield* runTogether(steps, pace.parallelism, isFailure))) return false;
-    }
-
-    return true;
+    const actions = yield* this.visit(key, node, applying, state);
+    return actions.map((action) => {
+      const running = { written: applying.blocks.get(key)!.attributes, destroyed: destroyed.get(Address.of(action).toString()) };
+      return () => this.step(action, state, signal, running);
+    });
   }
 
   /** A delete, reported as any action, or a replace's object, which the replace's block makes again. */
@@ -274,12 +275,12 @@ export class PlanRunner {
   }
 
   /** Gives the actions of a resource block, checked; the other kinds are resolved or read. */
-  private async *visit(key: string, node: GraphNode, { named, outputs, read, blocks, byBlock }: Layers, state: State): AsyncGenerator<RunEvent, PlanAction[]> {
+  private async *visit(key: string, node: GraphNode, { named, outputs, read, blocks, byBlock }: Applying, state: State): AsyncGenerator<RunEvent, PlanAction[]> {
     if (node.kind === 'module') this.expandCall(node, state);
     if (node.kind === 'data') yield* this.readData(node, named.get(key), read, state);
     if (node.kind === 'local') this.resolveLocal(node, state);
     if (node.kind === 'variable') this.checkVariable(node, state);
-    // Only this output: a sibling may read a resource a later layer creates.
+    // Only this output: a sibling may read a resource made later.
     if (node.kind === 'output') this.resolveInEvery(node, outputs, state);
 
     return node.kind === 'resource' ? this.actionsOf(blocks.get(key)!, node.module, byBlock.get(key) ?? [], state) : [];
@@ -417,13 +418,6 @@ export class PlanRunner {
       }
 
     return Object.fromEntries(outputs);
-  }
-
-  /** Nothing in a layer reads another of it, so an output that is not what the plan showed stops the run before the layer's resources. */
-  private outputsFirst(layer: string[], graph: Graph<ApplyNode>): string[] {
-    const isOutput = (key: string) => graph.getNode(key)!.kind === 'output';
-
-    return [...layer.filter((key) => isOutput(key)), ...layer.filter((key) => !isOutput(key))];
   }
 
   /** Read again, after what it reads has run, so its type and rules check a value the plan did not know even where nothing reads it. */

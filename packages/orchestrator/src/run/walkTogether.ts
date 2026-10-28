@@ -33,6 +33,8 @@ class Walk<E> {
   private readonly settled: Pulled<E>[] = [];
   private wake?: () => void;
   private stepsRunning = 0;
+  /** The nodes ready at the start not reached yet, which hold back every step, so a node that cannot be reached stops the walk before any step runs. */
+  private readonly opening = new Set<string>();
   private crash?: { at: number; error: unknown };
 
   constructor(
@@ -47,7 +49,9 @@ class Walk<E> {
   }
 
   begin(): void {
-    this.reachAll(this.order.filter((id) => this.left.get(id) === 0));
+    const ready = this.order.filter((id) => this.left.get(id) === 0);
+    for (const id of ready) this.opening.add(id);
+    this.reachAll(ready);
   }
 
   idle(): boolean {
@@ -113,6 +117,7 @@ class Walk<E> {
     const { id, isStep } = this.owners.get(work)!;
     this.owners.delete(work);
     if (isStep) this.stepsRunning -= 1;
+    else this.opening.delete(id);
 
     const at = this.place.get(id)!;
     if (!this.crash || at < this.crash.at) this.crash = { at, error };
@@ -124,7 +129,11 @@ class Walk<E> {
     this.owners.delete(work);
 
     if (isStep) this.stepEnded(id, value === true);
-    else this.reached(id, Array.isArray(value) ? value : false);
+    else {
+      this.opening.delete(id);
+      this.reached(id, Array.isArray(value) ? value : false);
+      this.fill();
+    }
   }
 
   private reached(id: string, steps: Step<E>[] | false): void {
@@ -150,7 +159,7 @@ class Walk<E> {
 
   /** Starts steps while there is room, and none once something crashed. */
   private fill(): void {
-    while (!this.crash && this.stepsRunning < this.limit && this.queue.length > 0) {
+    while (!this.crash && this.opening.size === 0 && this.stepsRunning < this.limit && this.queue.length > 0) {
       const { id, step } = this.queue.shift()!;
       this.stepsRunning += 1;
       this.track(step(), id, true);
