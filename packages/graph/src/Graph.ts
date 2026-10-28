@@ -1,3 +1,5 @@
+import { walk } from './walk';
+
 export class Graph<T> {
   private nodes: Map<string, T> = new Map();
   private adjacencyList: Map<string, Set<string>> = new Map();
@@ -57,6 +59,11 @@ export class Graph<T> {
     for (const node of order) (result[layerOf.get(node) ?? 0] ??= []).push(node);
 
     return result;
+  }
+
+  /** Visits the nodes as `walk` says, in the order `topologicalSort` gives. */
+  async walk(visit: (id: string) => Promise<void> | void): Promise<void> {
+    await walk(this.topologicalSort().flat(), this, visit);
   }
 
   /** Each node once every node before it is placed, with its layer; a node in a cycle is never placed. */
