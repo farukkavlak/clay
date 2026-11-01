@@ -217,6 +217,8 @@ describe('the journal', () => {
     it('is written whole', async () => {
       const written: State[] = [];
       const whole: StateBackend = {
+        location: 'whole',
+        exists: () => Promise.resolve(true),
         read: async () => emptyState(),
         writeIfAbsent: () => Promise.resolve(true),
         lock: () => Promise.resolve(),

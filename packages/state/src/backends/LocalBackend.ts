@@ -18,8 +18,20 @@ export class LocalBackend implements StateBackend {
     this.journalPath = `${this.filePath}.journal`;
   }
 
-  get path(): string {
+  get location(): string {
     return this.filePath;
+  }
+
+  /** Only ENOENT means missing; any other error is thrown. */
+  async exists(): Promise<boolean> {
+    try {
+      await fs.access(this.filePath);
+      return true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+
+      throw error;
+    }
   }
 
   async read(): Promise<State> {

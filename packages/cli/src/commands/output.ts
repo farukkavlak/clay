@@ -3,7 +3,6 @@ import { StateManager } from '@clay/state';
 import { Command } from 'commander';
 import { styleText } from 'node:util';
 
-import { exists } from '../exists';
 import { messageOf, printable } from '../printable';
 import { stateFile } from '../stateFile';
 
@@ -33,9 +32,9 @@ export function createOutputCommand(): Command {
       const backend = stateFile();
 
       try {
-        if (!(await exists(backend.path))) {
+        if (!(await backend.exists())) {
           if (options.json) displayOutputs({}, true);
-          else console.log(styleText('yellow', `No state file found at ${printable(backend.path)}`));
+          else console.log(styleText('yellow', `No state file found at ${printable(backend.location)}`));
           return;
         }
 

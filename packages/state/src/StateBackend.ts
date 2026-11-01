@@ -1,6 +1,12 @@
 import { State } from '@clay/contracts';
 
 export interface StateBackend {
+  /** Where the state lives, as a message names it. */
+  readonly location: string;
+
+  /** Whether a state was ever written, which `read` cannot tell from an empty one. */
+  exists(): Promise<boolean>;
+
   read(): Promise<State>;
 
   /** Replaces the state and every line appended since. */

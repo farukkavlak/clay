@@ -1045,7 +1045,7 @@ Terraform has it since backends replaced `-state`.
 - [ ] `init` reads it, checks the backend answers, and remembers the choice
 - [ ] A factory builds the backend from the block; `StateBackend` is the contract it
       already has to meet
-- [ ] The CLI stops reading `LocalBackend.path`. It names the state file in its messages
+- [x] The CLI stops reading `LocalBackend.path`. It names the state file in its messages
       through a field only the local backend has, so no other backend can be put in its
       place
 - [ ] An HTTP backend, since it needs no SDK: read, write, lock and unlock over four

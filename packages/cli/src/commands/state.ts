@@ -1,9 +1,8 @@
 import { Address, inAddressOrder, Marks, Resource, State } from '@clay/contracts';
-import { forgetDependencies, moveResource, StateManager } from '@clay/state';
+import { forgetDependencies, moveResource, StateBackend, StateManager } from '@clay/state';
 import { Command } from 'commander';
 import { styleText } from 'node:util';
 
-import { exists } from '../exists';
 import { interruptible } from '../interruptible';
 import { attributeName, messageOf, printable } from '../printable';
 import { show } from '../showPlan';
@@ -30,10 +29,10 @@ function getStateManager(backend = stateFile()): StateManager {
   return new StateManager(backend);
 }
 
-async function reportEmpty(path: string): Promise<void> {
-  const found = await exists(path);
+async function reportEmpty(backend: StateBackend): Promise<void> {
+  const start = (await backend.exists()) ? 'No resources in' : 'No state file found at';
 
-  console.log(styleText('yellow', printable(found ? `No resources in ${path}` : `No state file found at ${path}`)));
+  console.log(styleText('yellow', printable(`${start} ${backend.location}`)));
 }
 
 /** Own keys only, so `toString` is not a resource. */
@@ -65,7 +64,7 @@ export function createStateCommand(): Command {
 
         const deposed = inAddressOrder(state.deposed ?? {});
         if (Object.keys(state.resources).length === 0 && deposed.length === 0) {
-          await reportEmpty(backend.path);
+          await reportEmpty(backend);
           return;
         }
 
