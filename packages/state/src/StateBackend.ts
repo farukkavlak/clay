@@ -1,8 +1,20 @@
 import { State } from '@clay/contracts';
 
+/** What `init` remembers, so a later command can tell the configuration has moved the state. */
+export interface BackendChoice {
+  readonly type: string;
+  /** The same wherever the workspace is moved to. */
+  readonly where: string;
+}
+
 export interface StateBackend {
   /** Where the state lives, as a message names it. */
   readonly location: string;
+
+  readonly choice: BackendChoice;
+
+  /** Refuses a place no state can be kept in, saying why. */
+  check(): Promise<void>;
 
   /** Whether a state was ever written, which `read` cannot tell from an empty one. */
   exists(): Promise<boolean>;

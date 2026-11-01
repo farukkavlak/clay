@@ -1042,7 +1042,7 @@ should be the workspace's choice, written once and read by every command, the wa
 Terraform has it since backends replaced `-state`.
 
 - [x] A `clay { backend "local" { path = "..." } }` block in the configuration
-- [ ] `init` reads it, checks the backend answers, and remembers the choice
+- [x] `init` reads it, checks the backend answers, and remembers the choice
 - [x] A factory builds the backend from the block; `StateBackend` is the contract it
       already has to meet
 - [x] The CLI stops reading `LocalBackend.path`. It names the state file in its messages

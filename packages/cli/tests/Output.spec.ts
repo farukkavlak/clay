@@ -8,6 +8,7 @@ import { createOutputCommand } from '../src/commands/output';
 vi.mock('@clay/state', () => {
   return {
     backendFrom: vi.fn(() => ({ location: '/tmp/clay.state.json', exists: vi.fn() })),
+    checkBackend: vi.fn(),
     StateManager: vi.fn().mockImplementation(function () {
       return {
         read: vi.fn().mockResolvedValue(emptyState()),

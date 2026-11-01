@@ -1,12 +1,26 @@
+import { Stats } from 'node:fs';
 import * as fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { emptyState, State } from '@clay/contracts';
 
-import { StateBackend } from '../StateBackend';
+import { BackendChoice, StateBackend } from '../StateBackend';
 import { Journal, parseState, serializeState } from '../stateFile';
 
+/** Undefined where nothing is there, or a file stands in the way of the path. */
+async function statOf(target: string): Promise<Stats | undefined> {
+  try {
+    return await fs.stat(target);
+  } catch (error) {
+    const { code } = error as NodeJS.ErrnoException;
+    if (code === 'ENOENT' || code === 'ENOTDIR') return undefined;
+
+    throw error;
+  }
+}
+
 export class LocalBackend implements StateBackend {
+  readonly choice: BackendChoice;
   private filePath: string;
   private lockFilePath: string;
   private journalPath: string;
@@ -16,10 +30,20 @@ export class LocalBackend implements StateBackend {
     this.filePath = path.resolve(workingDir, filename);
     this.lockFilePath = `${this.filePath}.lock`;
     this.journalPath = `${this.filePath}.journal`;
+    this.choice = { type: 'local', where: path.relative(workingDir, this.filePath) };
   }
 
   get location(): string {
     return this.filePath;
+  }
+
+  async check(): Promise<void> {
+    const file = await statOf(this.filePath);
+    if (file?.isDirectory()) throw new Error(`${this.filePath} is a directory, and the state is a file`);
+
+    const parent = path.dirname(this.filePath);
+    const holder = await statOf(parent);
+    if (!holder?.isDirectory()) throw new Error(`${parent} is not a directory, so the state cannot be kept in it; Clay makes none`);
   }
 
   /** Only ENOENT means missing; any other error is thrown. */
@@ -32,6 +56,11 @@ export class LocalBackend implements StateBackend {
 
       throw error;
     }
+  }
+
+  /** A journal counts: a state moved without it would lose what a stopped run recorded. */
+  async holdsAnything(): Promise<boolean> {
+    return (await this.exists()) || (await statOf(this.journalPath)) !== undefined;
   }
 
   async read(): Promise<State> {

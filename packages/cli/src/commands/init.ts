@@ -1,11 +1,11 @@
 import { emptyState } from '@clay/contracts';
 import { DiskFiles, RecordingFiles } from '@clay/orchestrator';
-import { StateManager } from '@clay/state';
+import { adoptBackend, StateManager } from '@clay/state';
 import { Command } from 'commander';
 import { styleText } from 'node:util';
 
 import { describeError } from '../describeError';
-import { stateFile } from '../stateFile';
+import { namedBackend } from '../stateFile';
 
 export function createInitCommand() {
   return new Command('init').description('Initialize a new Clay workspace').action(async () => {
@@ -15,7 +15,10 @@ export function createInitCommand() {
     console.log(styleText('blue', 'Initializing Clay workspace...'));
 
     try {
-      const stateManager = new StateManager(stateFile(cwd, files));
+      const backend = namedBackend(cwd, files);
+      await adoptBackend(backend, cwd);
+
+      const stateManager = new StateManager(backend);
       const wroteState = await stateManager.writeIfAbsent(emptyState());
       console.log(styleText('green', wroteState ? '✓ Created an empty state' : '✓ Kept the state already here'));
 

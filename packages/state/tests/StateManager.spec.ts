@@ -16,6 +16,8 @@ const slow = (log: string[], failing: number[] = []): StateBackend => {
 
   return {
     location: 'slow',
+    choice: { type: 'slow', where: 'slow' },
+    check: () => Promise.resolve(),
     exists: () => Promise.resolve(true),
     read: async () => emptyState(),
     writeIfAbsent: () => Promise.resolve(true),

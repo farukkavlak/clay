@@ -4,9 +4,10 @@ import { styleText } from 'node:util';
 
 import { newOrchestrator } from '../engine';
 import { describeError } from '../describeError';
+import { namedBackend } from '../stateFile';
 
 async function executeValidate(cwd: string, files: ConfigFiles): Promise<void> {
-  await newOrchestrator(cwd, files).validate();
+  await newOrchestrator(cwd, files, namedBackend(cwd, files)).validate();
 }
 
 export function createValidateCommand(): Command {

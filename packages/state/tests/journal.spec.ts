@@ -218,6 +218,8 @@ describe('the journal', () => {
       const written: State[] = [];
       const whole: StateBackend = {
         location: 'whole',
+        choice: { type: 'whole', where: 'whole' },
+        check: () => Promise.resolve(),
         exists: () => Promise.resolve(true),
         read: async () => emptyState(),
         writeIfAbsent: () => Promise.resolve(true),

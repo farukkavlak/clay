@@ -82,7 +82,7 @@ one file per module. `docs/TASKS.md` has the full list.
 
 | Command                  | Does                                                                                                      |
 | ------------------------ | --------------------------------------------------------------------------------------------------------- |
-| `clay init`              | Creates an empty state file, or says so if one is already there                                           |
+| `clay init`              | Takes the backend the configuration names, and creates an empty state file if there is none               |
 | `clay validate`          | Resolves references and checks values with the schema and the provider; reads no state and no data source |
 | `clay plan [--out file]` | Shows what `apply` would do; `--out` saves the plan with its configuration                                |
 | `clay apply [plan] [-y]` | Runs the plan it shows, or a saved one; `-y` skips the question                                           |

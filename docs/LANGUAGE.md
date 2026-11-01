@@ -513,6 +513,15 @@ A root module holds one backend across its files, and a module none. Every comma
 the block, so a syntax error in a root file stops `output` and `state` too. A saved plan
 runs on the backend in the files it carries.
 
+`clay init` takes the block and remembers its choice in `.clay/backend.json`, which belongs
+to one checkout and stays out of version control. It refuses a directory that does not
+exist, and makes none. Every command but `validate` then refuses a configuration that names
+another place than `init` took, a removed block too, and says to run `clay init`. With no
+block and no record the state is the default file, and no `init` is needed.
+
+`clay init` does not move a state. Where one is at the old place it refuses, until the file
+is moved by hand or removed, with any `.journal` beside it.
+
 ## Saved plans
 
 A saved plan carries the configuration it was made from, the state it was planned

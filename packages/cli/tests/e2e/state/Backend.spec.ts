@@ -46,6 +46,7 @@ describe('a state kept where a backend block says', () => {
   });
 
   it('is written there by apply, with its backup and no file at the old place', async () => {
+    await clayOutput(dir, 'init');
     await clayOutput(dir, 'apply', '--yes');
     await write('main.clay', BLOCK + FILE.replace('"x"', '"y"'));
     await clayOutput(dir, 'apply', '--yes');
@@ -56,6 +57,7 @@ describe('a state kept where a backend block says', () => {
   });
 
   it('is read by plan, output and every state command', async () => {
+    await clayOutput(dir, 'init');
     await clayOutput(dir, 'apply', '--yes');
 
     expect(await clayOutput(dir, 'plan')).toContain('No changes');
@@ -71,6 +73,7 @@ describe('a state kept where a backend block says', () => {
   });
 
   it('is written where the saved plan says, though the block has changed on disk since', async () => {
+    await clayOutput(dir, 'init');
     await clayOutput(dir, 'plan', '--out', 'saved.json');
     await write('main.clay', FILE);
 
@@ -81,6 +84,9 @@ describe('a state kept where a backend block says', () => {
   });
 
   it('is named by its own place where a command finds none', async () => {
+    await clayOutput(dir, 'init');
+    await fs.rm(path.join(dir, 'kept', 'here.json'));
+
     expect(await clayOutput(dir, 'output')).toContain(path.join('kept', 'here.json'));
     expect(await clayOutput(dir, 'state', 'list')).toContain(path.join('kept', 'here.json'));
   });
@@ -106,6 +112,7 @@ describe('a state kept where a backend block says', () => {
   });
 
   it('stops a state command at a syntax error in a root file, since the block may be anywhere in them', async () => {
+    await clayOutput(dir, 'init');
     await clayOutput(dir, 'apply', '--yes');
     await write('other.clay', 'resource {}\n');
 
@@ -129,5 +136,153 @@ describe('a state kept where a backend block says', () => {
     await clayOutput(dir, 'apply', '--yes');
 
     await expect(fs.access(path.join(dir, 'clay.state.json'))).resolves.toBeUndefined();
+  });
+
+  describe('remembered by init', () => {
+    const CHANGED = 'This workspace keeps its state in';
+
+    it.each([
+      ['plan', ['plan']],
+      ['apply', ['apply', '--yes']],
+      ['output', ['output']],
+      ['state list', ['state', 'list']],
+      ['state show', ['state', 'show', 'local_file.f']],
+      ['state mv', ['state', 'mv', 'local_file.f', 'local_file.g']],
+      ['state rm', ['state', 'rm', 'local_file.f']],
+    ])('refuses %s where init never took the block, at its line', async (_title, args) => {
+      const printed = await refusal(...args);
+
+      expect(printed).toContain(`${CHANGED} "clay.state.json" (local), and the configuration names "${path.join('kept', 'here.json')}" (local); run \`clay init\``);
+      expect(printed).toContain('on main.clay line 2');
+    });
+
+    it('needs no init with no block, and writes no record', async () => {
+      await write('main.clay', FILE);
+
+      await clayOutput(dir, 'apply', '--yes');
+
+      expect(await clayOutput(dir, 'state', 'list')).toBe('local_file.f\n');
+      await expect(fs.access(path.join(dir, '.clay'))).rejects.toThrow('ENOENT');
+    });
+
+    it('takes the same place spelled another way as the same choice', async () => {
+      await clayOutput(dir, 'init');
+      await write('main.clay', BLOCK.replace('kept/here.json', './kept/../kept/here.json') + FILE);
+
+      expect(await clayOutput(dir, 'plan')).toContain('local_file.f');
+    });
+
+    it('lets validate through, since it touches no state', async () => {
+      expect(await clayOutput(dir, 'validate')).toContain('Configuration is valid.');
+    });
+
+    it('refuses a block taken away after init, with no line to quote', async () => {
+      await clayOutput(dir, 'init');
+      await write('main.clay', FILE);
+
+      const printed = await refusal('plan');
+
+      expect(printed).toContain(`${CHANGED} "${path.join('kept', 'here.json')}" (local), and the configuration names "clay.state.json" (local)`);
+      expect(printed).not.toContain('on main.clay');
+    });
+
+    it('refuses a saved plan whose block is not the one init took, and writes nothing', async () => {
+      await clayOutput(dir, 'init');
+      await clayOutput(dir, 'plan', '--out', 'saved.json');
+      const saved = JSON.parse(await fs.readFile(path.join(dir, 'saved.json'), 'utf8')) as { files: Record<string, string> };
+      saved.files['main.clay'] = BLOCK.replace('kept/here.json', 'other.json') + FILE;
+      await write('saved.json', JSON.stringify(saved));
+
+      const printed = await refusal('apply', 'saved.json');
+
+      expect(printed).toContain(`${CHANGED} "${path.join('kept', 'here.json')}" (local), and the configuration names "other.json" (local)`);
+      expect(printed).toContain('on main.clay line 2');
+      await expect(fs.access(path.join(dir, 'f.txt'))).rejects.toThrow('ENOENT');
+    });
+
+    it('refuses to leave a state behind, and takes the new place once it has moved', async () => {
+      await clayOutput(dir, 'init');
+      await clayOutput(dir, 'apply', '--yes');
+      await write('main.clay', BLOCK.replace('here.json', 'there.json') + FILE);
+
+      const printed = await refusal('init');
+
+      expect(printed).toContain(`The state in "${path.join('kept', 'here.json')}" would be left behind, as the configuration names "${path.join('kept', 'there.json')}"`);
+      await expect(fs.access(path.join(dir, 'kept', 'there.json'))).rejects.toThrow('ENOENT');
+      expect(await refusal('plan')).toContain(CHANGED);
+
+      await fs.rename(path.join(dir, 'kept', 'here.json'), path.join(dir, 'kept', 'there.json'));
+      await clayOutput(dir, 'init');
+
+      expect(await clayOutput(dir, 'plan')).toContain('No changes');
+      expect(await clayOutput(dir, 'state', 'list')).toBe('local_file.f\n');
+    });
+
+    it('refuses to leave the default state behind when a block is added', async () => {
+      await write('main.clay', FILE);
+      await clayOutput(dir, 'init');
+      await write('main.clay', BLOCK + FILE);
+
+      expect(await refusal('init')).toContain('The state in "clay.state.json" would be left behind');
+      await expect(fs.access(path.join(dir, '.clay'))).rejects.toThrow('ENOENT');
+    });
+
+    it('goes back to the default place when the block is taken away and nothing is left behind', async () => {
+      await clayOutput(dir, 'init');
+      await fs.rm(path.join(dir, 'kept', 'here.json'));
+      await write('main.clay', FILE);
+
+      await clayOutput(dir, 'init');
+
+      expect(await clayOutput(dir, 'plan')).toContain('local_file.f');
+      await expect(fs.access(path.join(dir, 'clay.state.json'))).resolves.toBeUndefined();
+    });
+
+    it('refuses a directory that does not exist and makes none', async () => {
+      await write('main.clay', BLOCK.replace('kept/here.json', 'nowhere/here.json') + FILE);
+
+      expect(await refusal('init')).toContain(`${path.sep}nowhere is not a directory`);
+      await expect(fs.access(path.join(dir, 'nowhere'))).rejects.toThrow('ENOENT');
+      await expect(fs.access(path.join(dir, '.clay'))).rejects.toThrow('ENOENT');
+    });
+
+    it('refuses a path that is a directory', async () => {
+      await write('main.clay', BLOCK.replace('kept/here.json', 'kept') + FILE);
+
+      expect(await refusal('init')).toContain('kept is a directory, and the state is a file');
+      await expect(fs.access(path.join(dir, '.clay'))).rejects.toThrow('ENOENT');
+    });
+
+    it('refuses a parent that is a file', async () => {
+      await write('plain', 'x');
+      await write('main.clay', BLOCK.replace('kept/here.json', 'plain/here.json') + FILE);
+
+      expect(await refusal('init')).toContain('plain is not a directory');
+    });
+
+    it.each([
+      ['no JSON', 'nope'],
+      ['no object', 'null'],
+      ['a type Clay does not have', '{"type":"s3","where":"x"}'],
+      ['no place', '{"type":"local"}'],
+    ])('refuses a record holding %s, in init too', async (_title, record) => {
+      await fs.mkdir(path.join(dir, '.clay'));
+      await write('.clay/backend.json', record);
+
+      for (const command of ['plan', 'init']) expect(await refusal(command)).toContain(`backend.json is not what \`clay init\` writes; remove it and run \`clay init\``);
+    });
+
+    it('stays with the workspace when it moves', async () => {
+      await clayOutput(dir, 'init');
+      await clayOutput(dir, 'apply', '--yes');
+      const moved = `${dir}-moved`;
+      await fs.rename(dir, moved);
+
+      try {
+        expect(await clayOutput(moved, 'state', 'list')).toBe('local_file.f\n');
+      } finally {
+        await fs.rm(moved, { recursive: true, force: true });
+      }
+    });
   });
 });
