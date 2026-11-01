@@ -1,3 +1,4 @@
+import { BackendBlock, ModuleFile, parseModule } from '@clay/parser';
 import * as fs from 'node:fs';
 import path from 'node:path';
 
@@ -20,6 +21,27 @@ function isDirectory(entry: fs.Dirent, dir: string): boolean {
 
     throw error;
   }
+}
+
+/** A directory's configuration, in the order a module reads it. A hidden file is an editor's or a tool's, not the configuration. */
+export function moduleFiles(files: ConfigFiles, dir: string): ModuleFile[] {
+  const names = files
+    .list(dir)
+    .filter((name) => name.endsWith('.clay') && !name.startsWith('.'))
+    .sort();
+
+  return names.map((name) => {
+    const file = path.posix.join(dir, name);
+    const content = files.read(file);
+    if (content === undefined) throw new Error(`${file} is listed but not found`);
+
+    return { file, content };
+  });
+}
+
+/** Asked before anything else is built, since the engine runs on the state it names. */
+export function rootBackend(files: ConfigFiles): BackendBlock | undefined {
+  return parseModule(moduleFiles(files, '.')).find((statement) => statement.type === 'Backend');
 }
 
 export class DiskFiles implements ConfigFiles {

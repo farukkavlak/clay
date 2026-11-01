@@ -492,6 +492,27 @@ reads one makes the instances the plan showed. A `count` or `for_each` that read
 apply reads is refused at plan, since the plan cannot show its instances. A plan file
 holds them unencrypted, a secret a data source read among them.
 
+## Backend
+
+A `clay` block in the root module names where the state lives:
+
+```
+clay {
+  backend "local" {
+    path = "state/prod.json"
+  }
+}
+```
+
+`local` is the one type so far. `path` is relative to the root, or absolute, and is a
+string written out, since the state has to be found before anything has a value. It cannot
+be empty or end in `.clay`. With no block, or no `path`, the state is `clay.state.json` next
+to the configuration. The lock, the backup and the journal sit beside the file it names.
+
+A root module holds one backend across its files, and a module none. Every command reads
+the block, so a syntax error in a root file stops `output` and `state` too. A saved plan
+runs on the backend in the files it carries.
+
 ## Saved plans
 
 A saved plan carries the configuration it was made from, the state it was planned

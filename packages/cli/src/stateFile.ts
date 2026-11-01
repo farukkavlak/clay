@@ -1,5 +1,7 @@
-import { LocalBackend, StateBackend } from '@clay/state';
+import { ConfigFiles, rootBackend } from '@clay/orchestrator';
+import { backendFrom, StateBackend } from '@clay/state';
 
-export function stateFile(): StateBackend {
-  return new LocalBackend(process.cwd());
+/** The backend the root configuration names. */
+export function stateFile(cwd: string, files: ConfigFiles): StateBackend {
+  return backendFrom(rootBackend(files), cwd);
 }

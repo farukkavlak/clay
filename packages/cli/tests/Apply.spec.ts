@@ -15,9 +15,11 @@ vi.mock('@clay/orchestrator', async () => {
     ...actual,
     Orchestrator: { create: vi.fn() },
     DiskFiles: vi.fn(),
-    InMemoryFiles: vi.fn(),
+    InMemoryFiles: vi.fn(function () {
+      return { read: vi.fn(), list: () => [] };
+    }),
     RecordingFiles: vi.fn(function () {
-      return { read: vi.fn(), snapshot: () => ({}) };
+      return { read: vi.fn(), list: () => [], snapshot: () => ({}) };
     }),
   };
 });

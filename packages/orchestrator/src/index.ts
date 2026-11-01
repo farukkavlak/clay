@@ -22,7 +22,7 @@ import { inOrder, Limit } from './providers/Limit';
 import { plainOf } from './values/Value';
 
 export type { RunEvent } from './run/RunEvent';
-export { DiskFiles, InMemoryFiles, RecordingFiles } from './config/ConfigFiles';
+export { DiskFiles, InMemoryFiles, RecordingFiles, rootBackend } from './config/ConfigFiles';
 export type { ConfigFiles } from './config/ConfigFiles';
 export { DEFAULT_PARALLELISM } from './run/parallelism';
 

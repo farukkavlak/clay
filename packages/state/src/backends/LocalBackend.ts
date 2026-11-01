@@ -13,7 +13,7 @@ export class LocalBackend implements StateBackend {
   private backedUp = false;
 
   constructor(workingDir: string, filename: string = 'clay.state.json') {
-    this.filePath = path.join(workingDir, filename);
+    this.filePath = path.resolve(workingDir, filename);
     this.lockFilePath = `${this.filePath}.lock`;
     this.journalPath = `${this.filePath}.journal`;
   }

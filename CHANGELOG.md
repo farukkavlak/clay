@@ -49,6 +49,7 @@ a configuration means or how the state file is written.
   `on_failure = continue` goes on past a command that fails. `when = destroy` runs one
   before the object is destroyed, even once its block is gone or a
   `create_before_destroy` replace has left it deposed
+- A `clay { backend "local" { path = "..." } }` block names where the state lives
 - `apply --parallelism`: each action runs once what it reads is done, with ten provider
   calls at once by default. A failure stops only what reads it, and every failure of a
   run is reported. `plan` takes it too, for the refresh, schemas, block checks, what

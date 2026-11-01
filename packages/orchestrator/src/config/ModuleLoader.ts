@@ -2,7 +2,7 @@ import { Address, ModuleAddress, Type, types } from '@clay/contracts';
 import { ConfigError, ModuleBlock, ModuleFile, OutputBlock, parseModule, ResourceBlock, Statement, spell, VariableBlock } from '@clay/parser';
 import path from 'node:path';
 
-import { ConfigFiles } from './ConfigFiles';
+import { ConfigFiles, moduleFiles } from './ConfigFiles';
 import { required } from '../values/declared';
 import { blockKey, callKey, DataInstance, dataSourceKey, ModuleCall, scopeOf } from '../keys';
 import { ScopeManager } from './ScopeManager';
@@ -106,31 +106,19 @@ export class ModuleLoader {
     const moduleProgram = this.parseConfig(moduleDir);
     if (moduleProgram === undefined) throw new ConfigError(`module "${stmt.name}" has no .clay file in directory "${moduleDir}"`, source.position, place);
 
+    const backend = moduleProgram.find((moduleStmt) => moduleStmt.type === 'Backend');
+    if (backend)
+      throw new ConfigError(`module "${stmt.name}" names a backend, which only the root configuration can: a module keeps its state with its caller's`, backend.position);
+
     return { moduleDir, moduleProgram };
   }
 
   private parseConfig(dir: string): Statement[] | undefined {
-    if (!this.contents.has(dir)) this.contents.set(dir, this.readDir(dir));
+    if (!this.contents.has(dir)) this.contents.set(dir, moduleFiles(this.files, dir));
     const files = this.contents.get(dir) ?? [];
     if (files.length === 0) return undefined;
 
     return parseModule(files);
-  }
-
-  private readDir(dir: string): ModuleFile[] {
-    // A hidden file is an editor's or a tool's, not the configuration.
-    const names = this.files
-      .list(dir)
-      .filter((name) => name.endsWith('.clay') && !name.startsWith('.'))
-      .sort();
-
-    return names.map((name) => {
-      const file = path.posix.join(dir, name);
-      const content = this.files.read(file);
-      if (content === undefined) throw new Error(`${file} is listed but not found`);
-
-      return { file, content };
-    });
   }
 
   private declareInputs(stmt: ModuleBlock, program: Statement[], childAddress: ModuleAddress, parentAddress: ModuleAddress): void {

@@ -1,10 +1,12 @@
 import { Address, inAddressOrder, Marks, Resource, State } from '@clay/contracts';
+import { DiskFiles, RecordingFiles } from '@clay/orchestrator';
 import { forgetDependencies, moveResource, StateBackend, StateManager } from '@clay/state';
 import { Command } from 'commander';
 import { styleText } from 'node:util';
 
+import { describeError } from '../describeError';
 import { interruptible } from '../interruptible';
-import { attributeName, messageOf, printable } from '../printable';
+import { attributeName, printable } from '../printable';
 import { show } from '../showPlan';
 import { stateFile } from '../stateFile';
 
@@ -25,8 +27,10 @@ function forgetDeposed(state: State, key: string): void {
   if (Object.keys(state.deposed).length === 0) delete state.deposed;
 }
 
-function getStateManager(backend = stateFile()): StateManager {
-  return new StateManager(backend);
+const configHere = () => new RecordingFiles(new DiskFiles(process.cwd()));
+
+function getStateManager(files: RecordingFiles): StateManager {
+  return new StateManager(stateFile(process.cwd(), files));
 }
 
 async function reportEmpty(backend: StateBackend): Promise<void> {
@@ -58,9 +62,10 @@ export function createStateCommand(): Command {
     .command('list')
     .description('List resources in the state')
     .action(async () => {
+      const files = configHere();
       try {
-        const backend = stateFile();
-        const state = await getStateManager(backend).read();
+        const backend = stateFile(process.cwd(), files);
+        const state = await new StateManager(backend).read();
 
         const deposed = inAddressOrder(state.deposed ?? {});
         if (Object.keys(state.resources).length === 0 && deposed.length === 0) {
@@ -71,7 +76,7 @@ export function createStateCommand(): Command {
         for (const [key] of inAddressOrder(state.resources)) console.log(key);
         for (const [key] of deposed) console.log(`${key} (deposed)`);
       } catch (error) {
-        console.error(styleText('red', 'Error listing state:'), messageOf(error));
+        console.error(styleText('red', 'Error listing state:'), describeError(error, files));
         process.exit(1);
       }
     });
@@ -81,8 +86,9 @@ export function createStateCommand(): Command {
     .description('Show a resource in the state')
     .argument('<address>', 'Resource address')
     .action(async (address) => {
+      const files = configHere();
       try {
-        const manager = getStateManager();
+        const manager = getStateManager(files);
         const state = await manager.read();
         const resource = findResource(state, address);
         const parsed = Address.parse(address);
@@ -103,7 +109,7 @@ export function createStateCommand(): Command {
           printAttributes(parsed.resourceType, parsed.name, object.attributes, object.sensitive);
         }
       } catch (error) {
-        console.error(styleText('red', 'Error showing resource:'), messageOf(error));
+        console.error(styleText('red', 'Error showing resource:'), describeError(error, files));
         process.exit(1);
       }
     });
@@ -114,8 +120,9 @@ export function createStateCommand(): Command {
     .argument('<source>', 'Source address')
     .argument('<destination>', 'Destination address')
     .action(async (source, destination) => {
+      const files = configHere();
       try {
-        const manager = getStateManager();
+        const manager = getStateManager(files);
         await interruptible(async () => {
           await manager.lock();
           try {
@@ -136,7 +143,7 @@ export function createStateCommand(): Command {
           }
         });
       } catch (error) {
-        console.error(styleText('red', 'Error moving resource:'), messageOf(error));
+        console.error(styleText('red', 'Error moving resource:'), describeError(error, files));
         process.exit(1);
       }
     });
@@ -146,8 +153,9 @@ export function createStateCommand(): Command {
     .description('Remove instances from the state')
     .argument('<address>', 'Resource address')
     .action(async (address) => {
+      const files = configHere();
       try {
-        const manager = getStateManager();
+        const manager = getStateManager(files);
         await interruptible(async () => {
           await manager.lock();
           try {
@@ -168,7 +176,7 @@ export function createStateCommand(): Command {
           }
         });
       } catch (error) {
-        console.error(styleText('red', 'Error removing resource:'), messageOf(error));
+        console.error(styleText('red', 'Error removing resource:'), describeError(error, files));
         process.exit(1);
       }
     });

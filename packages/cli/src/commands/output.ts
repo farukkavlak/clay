@@ -1,9 +1,11 @@
 import { jsonText, Output, SENSITIVE } from '@clay/contracts';
+import { DiskFiles, RecordingFiles } from '@clay/orchestrator';
 import { StateManager } from '@clay/state';
 import { Command } from 'commander';
 import { styleText } from 'node:util';
 
-import { messageOf, printable } from '../printable';
+import { describeError } from '../describeError';
+import { printable } from '../printable';
 import { stateFile } from '../stateFile';
 
 /** JSON includes each type, so a script can tell a set from a list. */
@@ -29,9 +31,11 @@ export function createOutputCommand(): Command {
     .description('Show output values from the current state')
     .option('--json', 'Output in JSON format')
     .action(async (options) => {
-      const backend = stateFile();
+      const cwd = process.cwd();
+      const files = new RecordingFiles(new DiskFiles(cwd));
 
       try {
+        const backend = stateFile(cwd, files);
         if (!(await backend.exists())) {
           if (options.json) displayOutputs({}, true);
           else console.log(styleText('yellow', `No state file found at ${printable(backend.location)}`));
@@ -42,7 +46,7 @@ export function createOutputCommand(): Command {
 
         displayOutputs(state.outputs ?? {}, options.json);
       } catch (error) {
-        console.error(styleText('red', 'Error reading outputs:'), messageOf(error));
+        console.error(styleText('red', 'Error reading outputs:'), describeError(error, files));
         process.exit(1);
       }
     });

@@ -1041,9 +1041,9 @@ The state is always the file `clay.state.json` next to the configuration. Where 
 should be the workspace's choice, written once and read by every command, the way
 Terraform has it since backends replaced `-state`.
 
-- [ ] A `clay { backend "local" { path = "..." } }` block in the configuration
+- [x] A `clay { backend "local" { path = "..." } }` block in the configuration
 - [ ] `init` reads it, checks the backend answers, and remembers the choice
-- [ ] A factory builds the backend from the block; `StateBackend` is the contract it
+- [x] A factory builds the backend from the block; `StateBackend` is the contract it
       already has to meet
 - [x] The CLI stops reading `LocalBackend.path`. It names the state file in its messages
       through a field only the local backend has, so no other backend can be put in its

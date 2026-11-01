@@ -1,5 +1,5 @@
 import { STATE_VERSION } from '@clay/contracts';
-import { StateManager } from '@clay/state';
+import { backendFrom, StateBackend, StateManager } from '@clay/state';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createInitCommand } from '../src/commands/init';
@@ -22,9 +22,12 @@ describe('CLI: init command', () => {
       } as Partial<StateManager> as StateManager;
     });
 
+    const backend = {} as StateBackend;
+    vi.mocked(backendFrom).mockReturnValue(backend);
+
     await createInitCommand().parseAsync(['node', 'clay', 'init']);
 
-    expect(StateManager).toHaveBeenCalledWith(expect.any(Object));
+    expect(StateManager).toHaveBeenCalledWith(backend);
     expect(writeIfAbsentMock).toHaveBeenCalledWith({ version: STATE_VERSION, serial: 0, resources: {} });
   });
 

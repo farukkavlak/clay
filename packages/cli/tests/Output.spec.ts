@@ -1,5 +1,5 @@
 import { emptyState, types } from '@clay/contracts';
-import { LocalBackend, StateManager } from '@clay/state';
+import { backendFrom, StateBackend, StateManager } from '@clay/state';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, Mock, vi } from 'vitest';
 
@@ -7,7 +7,7 @@ import { createOutputCommand } from '../src/commands/output';
 
 vi.mock('@clay/state', () => {
   return {
-    LocalBackend: vi.fn(() => ({ location: '/tmp/clay.state.json', exists: vi.fn() })),
+    backendFrom: vi.fn(() => ({ location: '/tmp/clay.state.json', exists: vi.fn() })),
     StateManager: vi.fn().mockImplementation(function () {
       return {
         read: vi.fn().mockResolvedValue(emptyState()),
@@ -42,9 +42,7 @@ describe('Output Command', () => {
       } as unknown as StateManager;
     });
 
-    vi.mocked(LocalBackend).mockImplementation(function () {
-      return { location: testStatePath, exists: existsMock } as unknown as LocalBackend;
-    });
+    vi.mocked(backendFrom).mockReturnValue({ location: testStatePath, exists: existsMock } as unknown as StateBackend);
   });
 
   afterEach(() => {
@@ -97,7 +95,7 @@ describe('Output Command', () => {
     const command = createOutputCommand();
     await command.parseAsync(['node', 'test']);
 
-    expect(LocalBackend).toHaveBeenCalledWith(process.cwd());
+    expect(backendFrom).toHaveBeenCalledWith(undefined, process.cwd());
 
     expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('defaultOut'));
   });

@@ -3,6 +3,7 @@ import { Attribute, Block, Header, Inside, Schema } from '../body';
 import { checkKey } from '../checkKey';
 import { ConfigError } from '../ConfigError';
 import { attributesOnly, refuseBlock } from './attributes';
+import { checkBackendArgument, checkClayHeader, decodeClay, refuseClayArgument } from './decodeClay';
 import { decodeData } from './decodeData';
 import { decodeModule } from './decodeModule';
 import { checkMovedArgument, decodeMoved } from './decodeMoved';
@@ -50,6 +51,7 @@ const KINDS = new Map<string, Kind>([
   ['module', { labels: named('module'), opening: "Expect '{' after module name.", decode: (block, labels) => [decodeModule(block, labels)] }],
   ['locals', { labels: [], opening: "Expect '{' after 'locals'.", decode: decodeLocals }],
   ['moved', { labels: [], opening: "Expect '{' after 'moved'.", decode: (block) => [decodeMoved(block)] }],
+  ['clay', { labels: [], opening: "Expect '{' after 'clay'.", decode: decodeClay }],
 ]);
 
 function kindOf(header: Header): Kind {
@@ -85,8 +87,12 @@ function checkProvisioner({ labels, open }: Header): void {
   if (labels.length > 1) throw new ConfigError("Expect '{' after provisioner type.", labels[1].position);
 }
 
-/** Only a resource takes a block, one `lifecycle` and any number of `provisioner`s, and only a variable its `validation`. */
+/** Only a resource takes a block, one `lifecycle` and any number of `provisioner`s, only a variable its `validation`, and only `clay` its `backend`. */
 function checkInnerBlock(header: Header, { block: within, before }: Inside): void {
+  if (within.name === 'clay') {
+    checkClayHeader(header);
+    return;
+  }
   if (within.name === 'resource' && header.name === 'provisioner') {
     checkProvisioner(header);
     return;
@@ -121,6 +127,14 @@ export const SCHEMA: Schema = {
     const { name } = inside.block;
     const rules = typedRules(inside.block);
     switch (name) {
+      case 'clay': {
+        refuseClayArgument(attribute);
+        break;
+      }
+      case 'backend': {
+        checkBackendArgument(attribute, inside.block);
+        break;
+      }
       case 'lifecycle': {
         lifecycleArgument(attribute);
         break;

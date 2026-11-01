@@ -190,7 +190,15 @@ export interface LocalBlock extends Node {
  */
 export type MovedBlock = Node & { type: 'Moved' } & ({ kind: 'resource'; from: Address; to: Address } | { kind: 'module'; from: ModuleAddress; to: ModuleAddress });
 
-export type Statement = ResourceBlock | VariableBlock | OutputBlock | DataBlock | ModuleBlock | LocalBlock | MovedBlock;
+/** Where the state lives, from the `clay` block of the root module. */
+export interface BackendBlock extends Node {
+  type: 'Backend';
+  /** As its label names it, at the label. */
+  backendType: Label;
+  attributes: Record<string, AttributeValue>;
+}
+
+export type Statement = ResourceBlock | VariableBlock | OutputBlock | DataBlock | ModuleBlock | LocalBlock | MovedBlock | BackendBlock;
 export type Program = Statement[];
 
 /** `resource "local_file" "a"`, `module "m"`, `moved from local_file.a`. */
@@ -198,6 +206,7 @@ export function spell(statement: Statement): string {
   if (statement.type === 'Resource') return `resource "${statement.resourceType}" "${statement.name}"`;
   if (statement.type === 'Data') return `data "${statement.dataSourceType}" "${statement.name}"`;
   if (statement.type === 'Moved') return `moved from ${statement.from}`;
+  if (statement.type === 'Backend') return 'a backend';
   return `${statement.type.toLowerCase()} "${statement.name}"`;
 }
 

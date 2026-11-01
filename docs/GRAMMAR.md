@@ -67,8 +67,8 @@ opens a map, so the `}` that closes the map does not close the `${`. A heredoc i
 same way, a line at a time, until its closing line; one still open at the end is refused
 where it opens.
 
-There are no keywords. `resource`, `data`, `variable`, `locals`, `output`, `module` and
-`moved` start a block only at the top level; anywhere else they are ordinary identifiers, so
+There are no keywords. `resource`, `data`, `variable`, `locals`, `output`, `module`,
+`moved` and `clay` start a block only at the top level; anywhere else they are ordinary identifiers, so
 `data = "x"` inside a block is an attribute. `for` right after `[` or `{`, and `in` after
 its names, start a for expression; `[for.a.id]` is still a list holding a reference, and
 `{ for = 1 }` a map with a key named `for`.
@@ -102,6 +102,7 @@ locals { attributes }
 output "name" { value = value }
 module "name" { attributes }
 moved { from = address to = address }
+clay { backend "type" { attributes } }
 ```
 
 A `type` and a `name` are written as strings, and each has to spell an `IDENTIFIER`, since
@@ -141,6 +142,7 @@ What the engine reads from each:
 | `output`   | `value`; `type`, read below; `sensitive`, which hides the value of a root output wherever it is printed; `description`, checked and dropped; `depends_on`             |
 | `module`   | `source`, a literal string naming a directory relative to the file; `count` or `for_each`, and `depends_on`; every other attribute is an input                        |
 | `moved`    | `from` and `to`, each a resource or module address written out                                                                                                        |
+| `clay`     | one `backend` block, with one label, its type; its attributes are constants, and what each type takes is checked by the backend                                       |
 
 A resource, a data source or a module with both `count` and `for_each` is refused where
 it is written.
@@ -833,7 +835,7 @@ throws the same for a character it does not know, a string not closed on its lin
 ## Not in the language
 
 - Any `lifecycle` argument but `prevent_destroy`, `create_before_destroy` and `ignore_changes`
-- Nested blocks inside a block, but `lifecycle` and `provisioner` in a resource and `validation` in a variable
+- Nested blocks inside a block, but `lifecycle` and `provisioner` in a resource, `validation` in a variable and `backend` in `clay`
 - Override files, whose blocks would change those of another file
 
 `TASKS.md` lists what is planned.
