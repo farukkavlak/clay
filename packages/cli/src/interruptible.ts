@@ -1,4 +1,7 @@
+import { StateManager } from '@clay/state';
 import { styleText } from 'node:util';
+
+import { messageOf, printable } from './printable';
 
 /** The exit code of a process stopped by SIGINT: 128 plus the signal's number. */
 export const INTERRUPTED = 130;
@@ -22,6 +25,27 @@ export async function interruptible<T>(work: (signal: AbortSignal) => Promise<T>
   process.on('SIGINT', onInterrupt);
   try {
     return await work(controller.signal);
+  } finally {
+    process.off('SIGINT', onInterrupt);
+  }
+}
+
+/** For work that writes no state, as a plan: Ctrl-C releases the lock `manager` holds and exits at once, with nothing to wait for. */
+export async function stoppedAtOnce<T>(manager: StateManager, work: () => Promise<T>): Promise<T> {
+  const onInterrupt = async () => {
+    console.error(styleText('yellow', '\nInterrupted. Nothing was written.'));
+    try {
+      await manager.unlock();
+    } catch (error) {
+      // Every error is reported and none rethrown: in a signal handler a rethrow is an unhandled rejection, and the process exits either way.
+      console.error(styleText('red', 'The lock could not be released:'), printable(messageOf(error)));
+    }
+    process.exit(INTERRUPTED);
+  };
+
+  process.on('SIGINT', onInterrupt);
+  try {
+    return await work();
   } finally {
     process.off('SIGINT', onInterrupt);
   }

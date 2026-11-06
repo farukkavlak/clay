@@ -1,7 +1,7 @@
 import { State, STATE_VERSION } from '@clay/contracts';
 
 import { journalLine } from './journal';
-import { newLockInfo } from './lockInfo';
+import { LockInfo, newLockInfo } from './lockInfo';
 import { StateBackend } from './StateBackend';
 
 export class StateManager {
@@ -10,6 +10,7 @@ export class StateManager {
   /** Set by an append that failed, which may have left part of a line; the next line would follow it. */
   private journalBroken = false;
   private lockId: string | undefined;
+  private taking: Promise<void> = Promise.resolve();
 
   constructor(backend: StateBackend) {
     this.backend = backend;
@@ -78,17 +79,37 @@ export class StateManager {
   /** `operation` names the command, so a run the lock stops can say what holds it. */
   async lock(operation: string): Promise<void> {
     const info = newLockInfo(operation);
+    const taken = this.take(info);
+    // Waited for by unlock, so a lock still being taken is released too; a failure to take it is the caller's to see.
+    this.taking = taken.catch(() => {});
+    await taken;
+  }
+
+  private async take(info: LockInfo): Promise<void> {
     await this.backend.lock(info);
     this.lockId = info.id;
   }
 
   /** Releases only what this manager took, once. */
   async unlock(): Promise<void> {
+    await this.taking;
     const id = this.lockId;
     if (id === undefined) return;
 
     this.lockId = undefined;
     await this.backend.unlock(id);
+  }
+
+  /** Runs `work` under the lock and releases it however `work` ends, keeping its failure. */
+  async whileLocked<T>(operation: string, work: () => Promise<T>): Promise<T> {
+    await this.lock(operation);
+    try {
+      return await work();
+    } catch (error) {
+      return await this.unlockAfter(error);
+    } finally {
+      await this.unlock();
+    }
   }
 
   /** For a `catch`: releases the lock and throws `failure` again, beside the unlock's own error if that fails too. */

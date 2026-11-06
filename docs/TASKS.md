@@ -1061,8 +1061,9 @@ Terraform has it since backends replaced `-state`.
       it cannot undo the run. The backup is now taken once a lock, at the run's first write,
       as Terraform writes its backup once a run
 - [ ] An apply takes the lock after it has refreshed, planned and been answered `yes`, so
-      a second apply asks its question and then fails on the lock. A plan never looks at the
-      lock
+      a second apply asks its question and then fails on the lock
+- [x] A plan never looked at the lock, so it could read a state an apply was writing. It
+      now holds the lock while it reads, and Ctrl-C releases it and exits at once
 - [x] The lock file held a time and no process or host, so a stale one could not be told
       from a live one. It now names the command, user, machine and pid, and a run it stops
       says when that pid runs no more on this machine

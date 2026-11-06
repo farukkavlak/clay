@@ -75,13 +75,13 @@ describe('the state of a run', () => {
     expect(read.resources['null_resource.x'].dependencies).toEqual(['null_resource.y']);
   });
 
-  it('refuses a plan made while it ran, once it was killed after more actions', async () => {
-    const planning = `resource "command_exec" "plan" {\n  command = "node ${clay} plan --out mid.plan # \${null_resource.a[2].id}"\n  cwd = "${dir}"\n}\n`;
+  // The lock keeps a plan out while a run writes, until someone takes it for one that is gone.
+  it('refuses a plan made while it ran with its lock removed, once it was killed after more actions', async () => {
+    const planning = `resource "command_exec" "plan" {\n  command = "rm clay.state.json.lock && node ${clay} plan --out mid.plan # \${null_resource.a[2].id}"\n  cwd = "${dir}"\n}\n`;
     const more = 'resource "null_resource" "c" {\n  depends_on = [command_exec.plan]\n}\n';
     const kill = 'resource "command_exec" "last" {\n  command = "kill -9 $PPID # ${null_resource.c.id}"\n}\n';
     await configure(THREE + planning + more + kill);
     await killedApply();
-    await fs.rm(path.join(dir, 'clay.state.json.lock'));
 
     await expect(clayOutput(dir, 'apply', 'mid.plan')).rejects.toMatchObject({ stderr: expect.stringContaining('The state has changed since the plan was made. Plan again.') });
 

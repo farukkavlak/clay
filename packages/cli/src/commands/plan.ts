@@ -1,22 +1,26 @@
 import { DiskFiles, PlanOptions, RecordingFiles } from '@clay/orchestrator';
 import { serializePlan } from '@clay/planner';
+import { StateManager } from '@clay/state';
 import { Command } from 'commander';
 import fs from 'node:fs/promises';
 import { styleText } from 'node:util';
 
 import { newOrchestrator } from '../engine';
 import { describeError } from '../describeError';
+import { stoppedAtOnce } from '../interruptible';
+import { stateFile } from '../stateFile';
 import { printable } from '../printable';
 import { displayPlan } from '../showPlan';
 import { parallelismOption } from '../parallelismOption';
 import { refreshOption } from '../refreshOption';
 
 async function executePlan(cwd: string, files: RecordingFiles, options: PlanOptions, outFile?: string): Promise<void> {
-  const orchestrator = newOrchestrator(cwd, files);
+  const manager = new StateManager(stateFile(cwd, files));
+  const orchestrator = newOrchestrator(cwd, files, manager);
 
   console.log(styleText('blue', 'Planning...'));
 
-  const planned = await orchestrator.plan(options);
+  const planned = await stoppedAtOnce(manager, () => orchestrator.plan(options));
   displayPlan(planned);
 
   if (outFile) {

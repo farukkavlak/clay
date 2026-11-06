@@ -96,7 +96,7 @@ output "word" {
   value = local.word
 }`;
 
-describe('a plan made while another run is half way', () => {
+describe('a second configuration while a run is half way', () => {
   let dir: string;
   let provider: Gate;
   let engine: TestEngine;
@@ -111,16 +111,27 @@ describe('a plan made while another run is half way', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
-  it('leaves the run with the values of its own configuration', async () => {
+  it('refuses a plan', async () => {
     const first = configWith('first');
     const running = events(engine.runPlan(await engine.plan(first), first));
     await provider.reached.opened;
 
-    const second = await engine.plan(configWith('second'));
+    await expect(engine.plan(configWith('second'))).rejects.toThrow('State is locked by apply');
+
+    provider.released.open();
+    await running;
+  });
+
+  it('leaves the run with the values of its own configuration while another is checked', async () => {
+    const first = configWith('first');
+    const running = events(engine.runPlan(await engine.plan(first), first));
+    await provider.reached.opened;
+
+    // A check takes no lock, so it resolves the second configuration while the run is half way.
+    await engine.validate(configWith('second'));
     provider.released.open();
     const seen = await running;
 
-    expect(second.outputs.word.new?.value).toBe('second');
     expect(seen.filter((event) => event.type === 'failed')).toEqual([]);
     const { resources } = await new LocalBackend(dir).read();
     expect(resources['gate.b'].attributes).toEqual({ name: 'first-a' });

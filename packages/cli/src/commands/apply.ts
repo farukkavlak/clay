@@ -1,6 +1,7 @@
 import { Address, jsonText, Output, SENSITIVE } from '@clay/contracts';
 import { ConfigFiles, DiskFiles, InMemoryFiles, PlanOptions, RecordingFiles, RunEvent } from '@clay/orchestrator';
 import { changedOutside, parsePlanFile, Plan, PlanAction, PlanFile } from '@clay/planner';
+import { StateManager } from '@clay/state';
 import { Command } from 'commander';
 import fs from 'node:fs/promises';
 import { styleText } from 'node:util';
@@ -8,11 +9,12 @@ import { styleText } from 'node:util';
 import { confirm } from '../confirm';
 import { newOrchestrator } from '../engine';
 import { describeError } from '../describeError';
-import { interruptible, INTERRUPTED } from '../interruptible';
+import { interruptible, INTERRUPTED, stoppedAtOnce } from '../interruptible';
 import { actionLine, changesNothing, destroyedLine, displayPlan, readLine, shownType } from '../showPlan';
 import { parallelismOption } from '../parallelismOption';
 import { printable } from '../printable';
 import { refreshOption } from '../refreshOption';
+import { stateFile } from '../stateFile';
 
 /** Counts as the plan summary does: a replace is one add and one destroy. */
 function summarize(applied: PlanAction[], forgotten: number): string {
@@ -115,7 +117,8 @@ interface PlannedApply {
 
 async function planFromDisk(cwd: string, recording: RecordingFiles, options: PlanOptions): Promise<PlannedApply> {
   console.log(styleText('blue', 'Calculating plan...'));
-  const plan = await newOrchestrator(cwd, recording).plan(options);
+  const manager = new StateManager(stateFile(cwd, recording));
+  const plan = await stoppedAtOnce(manager, () => newOrchestrator(cwd, recording, manager).plan(options));
 
   return { plan, files: new InMemoryFiles(recording.snapshot()) };
 }

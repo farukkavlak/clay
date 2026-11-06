@@ -21,6 +21,7 @@ vi.mock('@clay/state', async () => ({
       record: writeMock,
       lock: vi.fn(),
       unlock: vi.fn(),
+      whileLocked: (_operation: string, work: () => Promise<unknown>) => work(),
       backend,
     };
   }),

@@ -74,6 +74,8 @@ a configuration means or how the state file is written.
   lock another run has taken since, and says so
 - A run that fails and then cannot release its lock reports both errors, not the lock's
   alone
+- `plan` holds the state lock while it reads, so it never reads a state an apply is
+  writing; Ctrl-C during a plan releases the lock and exits at once
 - A failed apply leaves only the outputs that read what failed at their old value and
   drops those no longer declared; `state mv` and `state rm` leave the outputs as they are
 - `clay apply` exits 1 when it is not approved, and names `--yes` when its input is

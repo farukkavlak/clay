@@ -205,6 +205,16 @@ describe('the state lock', () => {
       expect(left.isDirectory()).toBe(true);
     });
 
+    // As Ctrl-C does, which may come while the lock file is being written.
+    it('takes away a lock that was still being taken when unlock was asked for', async () => {
+      const taking = manager.lock('plan');
+
+      await manager.unlock();
+      await taking;
+
+      await expect(fs.access(lockPath())).rejects.toThrow(/ENOENT/);
+    });
+
     it('is done when the lock was removed and nothing took its place', async () => {
       await manager.lock('apply');
       await fs.rm(lockPath());
@@ -212,6 +222,53 @@ describe('the state lock', () => {
       await manager.unlock();
 
       await expect(fs.access(lockPath())).rejects.toThrow(/ENOENT/);
+    });
+  });
+
+  describe('held for a piece of work', () => {
+    const other = holder({ operation: 'apply' });
+
+    it('is taken for the work, named for it, and released once the work is done', async () => {
+      const seen = await manager.whileLocked('plan', async () => {
+        const { operation } = await held();
+        return operation;
+      });
+
+      expect(seen).toBe('plan');
+      await expect(fs.access(lockPath())).rejects.toThrow(/ENOENT/);
+    });
+
+    it('is released when the work fails, and the failure is thrown', async () => {
+      const failure = new Error('the plan failed');
+
+      await expect(manager.whileLocked('plan', () => Promise.reject(failure))).rejects.toBe(failure);
+      await expect(fs.access(lockPath())).rejects.toThrow(/ENOENT/);
+    });
+
+    it('keeps the failure of the work beside an unlock that fails too', async () => {
+      const failure = new Error('the plan failed');
+
+      const thrown: unknown = await manager
+        .whileLocked('plan', async () => {
+          await leave(other);
+          throw failure;
+        })
+        .catch((error: unknown) => error);
+
+      expect(thrown).toBeInstanceOf(AggregateError);
+      expect((thrown as AggregateError).errors[0]).toBe(failure);
+    });
+
+    it('runs no work while another run holds it', async () => {
+      await leave(holder());
+      let ran = false;
+
+      await expect(
+        manager.whileLocked('plan', async () => {
+          ran = true;
+        })
+      ).rejects.toThrow('State is locked by state rm');
+      expect(ran).toBe(false);
     });
   });
 

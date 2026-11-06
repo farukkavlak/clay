@@ -62,10 +62,13 @@ export class Orchestrator {
     this.provisioners.register(provisioner);
   }
 
-  /** A plan never writes state, even what the refresh read. */
+  /** Holds the state lock while it reads. A plan never writes state, even what the refresh read. */
   async plan({ refresh = true, parallelism = DEFAULT_PARALLELISM }: PlanOptions = {}): Promise<Plan> {
     checkParallelism(parallelism);
-    const limit = new Limit(parallelism);
+    return this.stateManager.whileLocked('plan', () => this.planLocked(refresh, new Limit(parallelism)));
+  }
+
+  private async planLocked(refresh: boolean, limit: Limit): Promise<Plan> {
     const prevRun = await this.stateManager.read();
     const prior = refresh ? await this.refresh(prevRun, limit) : prevRun;
     // Planning applies the moves to a copy; the plan keeps the resources at their old addresses.

@@ -1,4 +1,5 @@
 import { ConfigFiles, DiskFiles, RecordingFiles } from '@clay/orchestrator';
+import { StateManager } from '@clay/state';
 import { Command } from 'commander';
 import { styleText } from 'node:util';
 
@@ -7,7 +8,7 @@ import { describeError } from '../describeError';
 import { namedBackend } from '../stateFile';
 
 async function executeValidate(cwd: string, files: ConfigFiles): Promise<void> {
-  await newOrchestrator(cwd, files, namedBackend(cwd, files)).validate();
+  await newOrchestrator(cwd, files, new StateManager(namedBackend(cwd, files))).validate();
 }
 
 export function createValidateCommand(): Command {
