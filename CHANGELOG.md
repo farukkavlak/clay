@@ -74,6 +74,8 @@ a configuration means or how the state file is written.
   the lock; a second Ctrl-C exits at once
 - A run the lock stops names the command, user, machine, pid and time of the run that
   holds it, and says that run looks gone when it was on this machine and its pid runs no more
+- The lock file and a first state file are filled before they appear. A second run no
+  longer finds an empty lock and calls a live run gone
 - A run releases only the lock it took. One whose lock was removed while it ran leaves the
   lock another run has taken since, and says so
 - A run that fails and then cannot release its lock reports both errors, not the lock's

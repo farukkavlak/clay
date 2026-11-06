@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Stats } from 'node:fs';
 import * as fs from 'node:fs/promises';
 import path from 'node:path';
@@ -17,6 +18,22 @@ async function statOf(target: string): Promise<Stats | undefined> {
     if (code === 'ENOENT' || code === 'ENOTDIR') return undefined;
 
     throw error;
+  }
+}
+
+/** False where something is there already. A link fails on a target that exists, and the file it links is already full. */
+async function createFilled(target: string, content: string): Promise<boolean> {
+  const filling = `${target}.${randomUUID()}`;
+  try {
+    await fs.writeFile(filling, content, 'utf8');
+    await fs.link(filling, target);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false;
+
+    throw error;
+  } finally {
+    await fs.rm(filling, { force: true });
   }
 }
 
@@ -126,30 +143,18 @@ export class LocalBackend implements StateBackend {
     this.backedUp = true;
   }
 
-  /** The `wx` flag makes check and write one step, so nothing can slip in between. */
   async writeIfAbsent(state: State): Promise<boolean> {
-    try {
-      await fs.writeFile(this.filePath, serializeState(state), { encoding: 'utf8', flag: 'wx' });
-      return true;
-    } catch (error) {
-      if ((error as { code?: string }).code === 'EEXIST') return false;
-
-      throw error;
-    }
+    return createFilled(this.filePath, serializeState(state));
   }
 
   async lock(info: LockInfo): Promise<void> {
-    try {
-      await fs.writeFile(this.lockFilePath, JSON.stringify(info), { encoding: 'utf8', flag: 'wx' });
-      this.backedUp = false;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    const taken = await createFilled(this.lockFilePath, JSON.stringify(info));
+    if (!taken) throw new StateLocked(await this.holder(), `remove ${this.lockFilePath}`);
 
-      throw new StateLocked(await this.holder(), `remove ${this.lockFilePath}`);
-    }
+    this.backedUp = false;
   }
 
-  /** A run killed between making the lock file and filling it leaves it empty; one that has just unlocked leaves none. */
+  /** A run that has just unlocked leaves no lock file. */
   private async holder(): Promise<LockInfo | undefined> {
     const text = await this.lockText();
     return text === undefined ? undefined : lockInfoFrom(text);
