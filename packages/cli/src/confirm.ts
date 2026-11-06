@@ -3,7 +3,8 @@ import readline from 'node:readline/promises';
 
 /** Only `yes` approves, so a stray Enter runs nothing. */
 export async function confirm(question: string): Promise<boolean> {
-  const terminal = readline.createInterface({ input: process.stdin, output: process.stdout });
+  // Cooked mode: the terminal turns Ctrl-C into a real SIGINT, not a key that readline takes.
+  const terminal = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: false });
 
   try {
     // Closed input is most often a pipeline that left out the flag.
