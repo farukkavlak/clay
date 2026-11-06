@@ -1060,8 +1060,9 @@ Terraform has it since backends replaced `-state`.
       of three resources the state is serial 4 and `.bak` serial 3, with all three in it, so
       it cannot undo the run. The backup is now taken once a lock, at the run's first write,
       as Terraform writes its backup once a run
-- [ ] An apply takes the lock after it has refreshed, planned and been answered `yes`, so
-      a second apply asks its question and then fails on the lock
+- [x] An apply took the lock after it had refreshed, planned and been answered `yes`, so
+      a second apply asked its question and then failed on the lock. It now takes the lock
+      before it plans and holds it to the end of the run, as Terraform does
 - [x] A plan never looked at the lock, so it could read a state an apply was writing. It
       now holds the lock while it reads, and Ctrl-C releases it and exits at once
 - [x] The lock file held a time and no process or host, so a stale one could not be told

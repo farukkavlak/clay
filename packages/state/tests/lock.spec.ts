@@ -270,6 +270,42 @@ describe('the state lock', () => {
       ).rejects.toThrow('State is locked by state rm');
       expect(ran).toBe(false);
     });
+
+    it('runs under the lock the manager already holds, and leaves it held', async () => {
+      await manager.lock('apply');
+
+      const seen = await manager.whileLocked('plan', held);
+
+      expect(seen.operation).toBe('apply');
+      expect(manager.held).toBe(true);
+      expect(await held()).toEqual(seen);
+    });
+
+    it('leaves the lock the manager already holds when the work fails', async () => {
+      await manager.lock('apply');
+      const failure = new Error('the plan failed');
+
+      await expect(manager.whileLocked('plan', () => Promise.reject(failure))).rejects.toBe(failure);
+      expect(manager.held).toBe(true);
+      expect(await held()).toMatchObject({ operation: 'apply' });
+    });
+  });
+
+  describe('held', () => {
+    it('is false before the lock is taken, true once it is, and false once it is released', async () => {
+      expect(manager.held).toBe(false);
+      await manager.lock('apply');
+      expect(manager.held).toBe(true);
+      await manager.unlock();
+      expect(manager.held).toBe(false);
+    });
+
+    it('is false when another run holds the lock', async () => {
+      await leave(holder());
+
+      await expect(manager.lock('apply')).rejects.toThrow('State is locked');
+      expect(manager.held).toBe(false);
+    });
   });
 
   it('names a lock that cannot be read', async () => {

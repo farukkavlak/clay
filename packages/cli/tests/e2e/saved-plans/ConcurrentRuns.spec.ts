@@ -116,7 +116,8 @@ describe('a second configuration while a run is half way', () => {
     const running = events(engine.runPlan(await engine.plan(first), first));
     await provider.reached.opened;
 
-    await expect(engine.plan(configWith('second'))).rejects.toThrow('State is locked by apply');
+    // A second run has a state manager of its own; the first one's would plan under the lock it holds.
+    await expect(orchestratorIn(dir, provider).plan(configWith('second'))).rejects.toThrow('State is locked by apply');
 
     provider.released.open();
     await running;

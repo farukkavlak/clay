@@ -1,5 +1,5 @@
 import { Address, jsonText, Output, SENSITIVE } from '@clay/contracts';
-import { ConfigFiles, DiskFiles, InMemoryFiles, PlanOptions, RecordingFiles, RunEvent } from '@clay/orchestrator';
+import { ConfigFiles, DiskFiles, InMemoryFiles, RecordingFiles, RunEvent } from '@clay/orchestrator';
 import { changedOutside, parsePlanFile, Plan, PlanAction, PlanFile } from '@clay/planner';
 import { StateManager } from '@clay/state';
 import { Command } from 'commander';
@@ -83,7 +83,8 @@ async function collect(events: AsyncGenerator<RunEvent>): Promise<Ran> {
   return ran;
 }
 
-async function runAndReport(start: (signal: AbortSignal) => AsyncGenerator<RunEvent>, forgotten: number): Promise<void> {
+/** Returns the exit code, so the caller exits once the lock is released. */
+async function runAndReport(start: (signal: AbortSignal) => AsyncGenerator<RunEvent>, forgotten: number): Promise<number> {
   console.log(styleText('blue', '\napplying...'));
 
   const { applied, failures, outputs, interrupted } = await interruptible(async (signal) => ({ ...(await collect(start(signal))), interrupted: signal.aborted }));
@@ -91,7 +92,7 @@ async function runAndReport(start: (signal: AbortSignal) => AsyncGenerator<RunEv
   if (interrupted && outputs === undefined) {
     printFailures(failures);
     console.error(styleText('yellow', 'Apply interrupted. What finished is in the state; plan again to see what is left.'));
-    process.exit(INTERRUPTED);
+    return INTERRUPTED;
   }
 
   const failed = failuresError(failures);
@@ -103,37 +104,49 @@ async function runAndReport(start: (signal: AbortSignal) => AsyncGenerator<RunEv
     console.log(styleText('cyan', '\nOutputs:'));
     for (const [key, { value, sensitive }] of Object.entries(outputs)) console.log(styleText('white', `  ${key} = ${sensitive ? SENSITIVE : jsonText(value)}`));
   }
+  return 0;
 }
 
 async function confirmApply(autoConfirm: boolean): Promise<boolean> {
   return autoConfirm || confirm('Do you want to perform these actions?');
 }
 
-interface PlannedApply {
-  plan: Plan;
-  /** What the plan read, so the run does not read files changed while the question was open. */
-  files: ConfigFiles;
+interface ApplyOptions {
+  yes: boolean;
+  refresh: boolean;
+  parallelism?: number;
 }
 
-async function planFromDisk(cwd: string, recording: RecordingFiles, options: PlanOptions): Promise<PlannedApply> {
-  console.log(styleText('blue', 'Calculating plan...'));
+/**
+ * Holds one lock from the plan to the end of the run, so a second run is refused before it asks anything. Ctrl-C before the run starts
+ * releases it and exits at once. Returns the exit code.
+ */
+async function applyFromDisk(cwd: string, recording: RecordingFiles, options: ApplyOptions): Promise<number> {
   const manager = new StateManager(stateFile(cwd, recording));
-  const plan = await stoppedAtOnce(manager, () => newOrchestrator(cwd, recording, manager).plan(options));
 
-  return { plan, files: new InMemoryFiles(recording.snapshot()) };
-}
+  try {
+    console.log(styleText('blue', 'Calculating plan...'));
+    const plan = await stoppedAtOnce(manager, async () => {
+      await manager.lock('apply');
+      return newOrchestrator(cwd, recording, manager).plan({ refresh: options.refresh, parallelism: options.parallelism });
+    });
+    // What the plan read, so the run does not read files changed while the question was open.
+    const files = new InMemoryFiles(recording.snapshot());
 
-async function executeApply(cwd: string, { plan, files }: PlannedApply, autoConfirm: boolean, parallelism?: number): Promise<void> {
-  displayPlan(plan);
-  if (changesNothing(plan)) return;
+    displayPlan(plan);
+    if (changesNothing(plan)) return 0;
 
-  const confirmed = await confirmApply(autoConfirm);
-  if (!confirmed) {
-    console.error(styleText('yellow', 'Apply cancelled.'));
-    process.exit(1);
+    if (!(await stoppedAtOnce(manager, () => confirmApply(options.yes)))) {
+      console.error(styleText('yellow', 'Apply cancelled.'));
+      return 1;
+    }
+
+    return await runAndReport((signal) => newOrchestrator(cwd, files, manager).runPlan(plan, { parallelism: options.parallelism, signal }), forgotten(plan));
+  } catch (error) {
+    return await manager.unlockAfter(error);
+  } finally {
+    await manager.unlock();
   }
-
-  await runAndReport((signal) => newOrchestrator(cwd, files).runPlan(plan, { parallelism, signal }), forgotten(plan));
 }
 
 /** Errors name the user's file and say what to do. */
@@ -155,16 +168,16 @@ async function readPlanFile(planFileArg: string, files: ConfigFiles): Promise<Pl
   }
 }
 
-async function executeApplyFromPlan(cwd: string, planFile: PlanFile, files: ConfigFiles, parallelism?: number): Promise<void> {
+async function executeApplyFromPlan(cwd: string, planFile: PlanFile, files: ConfigFiles, parallelism?: number): Promise<number> {
   const orchestrator = newOrchestrator(cwd, files);
 
   console.log(styleText('blue', 'Applying from saved plan...'));
   console.log(styleText('gray', `Plan created: ${planFile.timestamp}`));
 
   displayPlan(planFile);
-  if (changesNothing(planFile)) return;
+  if (changesNothing(planFile)) return 0;
 
-  await runAndReport((signal) => orchestrator.runPlan(planFile, { parallelism, signal }), forgotten(planFile));
+  return runAndReport((signal) => orchestrator.runPlan(planFile, { parallelism, signal }), forgotten(planFile));
 }
 
 export function createApplyCommand() {
@@ -178,6 +191,7 @@ export function createApplyCommand() {
       const cwd = process.cwd();
       const recording = new RecordingFiles(new DiskFiles(cwd));
       let files: ConfigFiles = recording;
+      let code: number;
 
       try {
         if (planFileArg && !planFileArg.startsWith('-')) {
@@ -186,16 +200,12 @@ export function createApplyCommand() {
           const planData = await readPlanFile(planFileArg, files);
 
           files = new InMemoryFiles(planData.files);
-          await executeApplyFromPlan(cwd, planData, files, options.parallelism);
-        } else {
-          const planned = await planFromDisk(cwd, recording, { refresh: options.refresh ?? true, parallelism: options.parallelism });
-
-          files = planned.files;
-          await executeApply(cwd, planned, options.yes, options.parallelism);
-        }
+          code = await executeApplyFromPlan(cwd, planData, files, options.parallelism);
+        } else code = await applyFromDisk(cwd, recording, { yes: options.yes ?? false, refresh: options.refresh ?? true, parallelism: options.parallelism });
       } catch (error: unknown) {
         console.error(styleText('red', 'Apply failed:'), describeError(error, files));
-        process.exit(1);
+        code = 1;
       }
+      if (code !== 0) process.exit(code);
     });
 }

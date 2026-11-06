@@ -1,4 +1,6 @@
+import { emptyState } from '@clay/contracts';
 import { LocalProvider } from '@clay/provider-local';
+import { newLockInfo } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -56,19 +58,36 @@ describe('the plan apply showed', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
-  it('is refused when the state changes while the question is open', async () => {
+  it('refuses another run while the question is open, and applies what it showed', async () => {
     await fs.writeFile(path.join(dir, 'main.clay'), fileConfig('mine'), 'utf8');
-    // Another run writes the state before the answer comes.
+    let refused: unknown;
     const question = vi.fn(async () => {
-      await applyElsewhere(fileConfig('theirs'));
+      refused = await applyElsewhere(fileConfig('theirs')).catch((error: unknown) => error);
       return 'yes';
     });
     vi.mocked(readline.createInterface).mockReturnValue(Object.assign(new EventTarget(), { question, close: vi.fn() }) as unknown as readline.Interface);
 
     await createApplyCommand().parseAsync(['node', 'clay']);
 
-    expect(printed.join('\n')).toContain('The state has changed since the plan was made. Plan again.');
-    expect(await fs.readFile(path.join(dir, 'a.txt'), 'utf8')).toBe('theirs');
+    expect((refused as Error).message).toContain('State is locked by apply');
+    expect(await fs.readFile(path.join(dir, 'a.txt'), 'utf8')).toBe('mine');
+  });
+
+  it('keeps the error that stopped the run beside an unlock that fails too', async () => {
+    await fs.writeFile(path.join(dir, 'main.clay'), fileConfig('mine'), 'utf8');
+    // Written by hand, past the lock: the state moves on and another lock takes the place of this run's.
+    const question = vi.fn(async () => {
+      await fs.writeFile(path.join(dir, 'clay.state.json'), JSON.stringify({ ...emptyState(), serial: 5 }), 'utf8');
+      await fs.writeFile(path.join(dir, 'clay.state.json.lock'), JSON.stringify(newLockInfo('state rm')), 'utf8');
+      return 'yes';
+    });
+    vi.mocked(readline.createInterface).mockReturnValue(Object.assign(new EventTarget(), { question, close: vi.fn() }) as unknown as readline.Interface);
+
+    await createApplyCommand().parseAsync(['node', 'clay']);
+
+    const shown = printed.join('\n');
+    expect(shown).toContain('The state has changed since the plan was made. Plan again.');
+    expect(shown).toContain('holds a lock this run did not take');
   });
 
   it('runs the module files it planned when one changes while the question is open', async () => {

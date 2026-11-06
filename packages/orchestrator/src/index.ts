@@ -106,28 +106,39 @@ export class Orchestrator {
     await this.resolveAndCheck(emptyState(), 'check', new Moves(), new Limit(DEFAULT_PARALLELISM));
   }
 
-  /** Holds the state lock. A state written since the plan was made is refused, since the approved plan no longer matches it. */
+  /**
+   * Holds the state lock, or runs under the one its state manager already holds. A state written since the plan was made is refused, since
+   * the approved plan no longer matches it.
+   */
   async *runPlan(saved: Plan, { parallelism = DEFAULT_PARALLELISM, signal }: RunOptions = {}): AsyncGenerator<RunEvent> {
     checkParallelism(parallelism);
-    await this.stateManager.lock('apply');
+    if (this.stateManager.held) {
+      yield* this.runLocked(saved, parallelism, signal);
+      return;
+    }
 
+    await this.stateManager.lock('apply');
     // Released however the run ends: done, failed, thrown, or abandoned by the caller.
     try {
-      const state = await this.stateManager.read();
-      if (state.serial !== saved.serial) throw new Error('The state has changed since the plan was made. Plan again.');
-      // The actions were planned against the refreshed resources, so they run on those.
-      state.resources = copyResources(saved.prior);
-
-      const { loader, graphBuilder, runner } = this.newRun(new Limit(parallelism));
-      const config = await loader.load();
-      const graph = graphBuilder.buildExecutionGraph(config.loadedResources, config.loadedModules);
-      yield* runner.run(saved, config, graph, state, { parallelism, signal });
+      yield* this.runLocked(saved, parallelism, signal);
     } catch (error) {
       await this.stateManager.unlockAfter(error);
     } finally {
       // Releases the lock when the run is done or its caller stops reading; after a failure the catch has already released it.
       await this.stateManager.unlock();
     }
+  }
+
+  private async *runLocked(saved: Plan, parallelism: number, signal: AbortSignal | undefined): AsyncGenerator<RunEvent> {
+    const state = await this.stateManager.read();
+    if (state.serial !== saved.serial) throw new Error('The state has changed since the plan was made. Plan again.');
+    // The actions were planned against the refreshed resources, so they run on those.
+    state.resources = copyResources(saved.prior);
+
+    const { loader, graphBuilder, runner } = this.newRun(new Limit(parallelism));
+    const config = await loader.load();
+    const graph = graphBuilder.buildExecutionGraph(config.loadedResources, config.loadedModules);
+    yield* runner.run(saved, config, graph, state, { parallelism, signal });
   }
 
   /** A resource the provider no longer finds is dropped; the plan recreates it if the configuration still has it. */

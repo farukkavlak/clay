@@ -100,8 +100,18 @@ export class StateManager {
     await this.backend.unlock(id);
   }
 
-  /** Runs `work` under the lock and releases it however `work` ends, keeping its failure. */
+  /** True once this manager has taken the lock, until it releases it. */
+  get held(): boolean {
+    return this.lockId !== undefined;
+  }
+
+  /**
+   * Runs `work` under the lock and releases it however `work` ends, keeping its failure. A lock this manager already holds is its
+   * caller's to release.
+   */
   async whileLocked<T>(operation: string, work: () => Promise<T>): Promise<T> {
+    if (this.held) return work();
+
     await this.lock(operation);
     try {
       return await work();

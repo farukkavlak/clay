@@ -78,6 +78,9 @@ a configuration means or how the state file is written.
   writing; Ctrl-C during a plan releases the lock and exits at once
 - Ctrl-C at the apply question on a terminal is an interrupt, not an apply that failed
   with "Aborted with Ctrl+C"
+- `apply` holds the state lock from its plan through the question to the end of the run,
+  so a second apply or plan is refused before it asks anything. Answering no, or Ctrl-C
+  at the question, releases the lock
 - A failed apply leaves only the outputs that read what failed at their old value and
   drops those no longer declared; `state mv` and `state rm` leave the outputs as they are
 - `clay apply` exits 1 when it is not approved, and names `--yes` when its input is
