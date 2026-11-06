@@ -1,5 +1,6 @@
 import { ChildProcess, execFile, spawn } from 'node:child_process';
 import { once } from 'node:events';
+import { constants } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -52,6 +53,25 @@ describe('a plan and the state lock', () => {
     return { ended, stderr: () => stderr };
   };
 
+  /** False while nothing reads the pipe: a write that does not wait is refused with ENXIO then. */
+  const gateOpened = async (): Promise<boolean> => {
+    try {
+      const gate = await fs.open(file('gate'), constants.O_WRONLY | constants.O_NONBLOCK);
+      await gate.write('open');
+      await gate.close();
+      return true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENXIO') throw error;
+
+      return false;
+    }
+  };
+
+  /** A run that left before it read never opens its end of the pipe, and a write that waits would wait forever. */
+  const openGate = async (child: ChildProcess) => {
+    while (child.exitCode === null && child.signalCode === null && !(await gateOpened())) await sleep(20);
+  };
+
   const run = async (...args: string[]): Promise<Ended> => {
     try {
       const { stdout, stderr } = await promisify(execFile)('node', [clay, ...args], { cwd: dir });
@@ -95,7 +115,7 @@ describe('a plan and the state lock', () => {
   it('releases the lock once it is done', async () => {
     const { ended } = await atTheGate('plan');
 
-    await fs.writeFile(file('gate'), 'open');
+    await openGate(waiting!);
 
     const { code, stdout } = await ended;
     expect(code).toBe(0);
@@ -108,8 +128,8 @@ describe('a plan and the state lock', () => {
 
     waiting!.kill('SIGINT');
     while (!stderr().includes('Interrupted. Nothing was written.')) await sleep(20);
-    // A process exits only once its blocked read of the pipe returns; no plan runs on after that.
-    await fs.writeFile(file('gate'), 'open');
+    // A run that reached the pipe exits only once its read returns; no plan runs on after that.
+    await openGate(waiting!);
 
     const { code, stdout } = await ended;
     expect(code).toBe(130);
