@@ -1,6 +1,6 @@
 import { emptyState } from '@clay/contracts';
 import { StateManager } from '@clay/state';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, Mock, vi } from 'vitest';
 
 import { createStateCommand } from '../src/commands/state';
 
@@ -14,7 +14,7 @@ describe('CLI: state command', () => {
   let readMock: ReturnType<typeof vi.fn>;
   let writeMock: ReturnType<typeof vi.fn>;
   let lockMock: ReturnType<typeof vi.fn>;
-  let unlockMock: ReturnType<typeof vi.fn>;
+  let unlockMock: Mock<() => Promise<void>>;
 
   const mockState = {
     ...emptyState(),
