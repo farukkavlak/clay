@@ -239,11 +239,15 @@ describe('StateManager', () => {
     });
 
     it('should re-throw generic errors during unlock', async () => {
-      // A directory at the lock path makes the unlink fail with EISDIR or EPERM.
-      const lockPath = path.join(tmpDir, 'test.state.json.lock');
-      await fs.mkdir(lockPath);
+      // A directory that cannot be written makes the unlink fail with EACCES.
+      await stateManager.lock('apply');
+      await fs.chmod(tmpDir, 0o500);
 
-      await expect(stateManager.unlock()).rejects.toThrow();
+      try {
+        await expect(stateManager.unlock()).rejects.toThrow(/EACCES/);
+      } finally {
+        await fs.chmod(tmpDir, 0o700);
+      }
     });
   });
 

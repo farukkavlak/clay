@@ -1,5 +1,5 @@
 import { Output, types } from '@clay/contracts';
-import { LocalBackend } from '@clay/state';
+import { LocalBackend, newLockInfo } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -535,6 +535,17 @@ describe('apply and plan against real files', () => {
     await expect(apply(orchestrator, secondFails())).rejects.toThrow();
 
     await expect(fs.access(lockFile())).rejects.toThrow();
+  });
+
+  it("leaves the lock of a run that took it once this run's was removed", async () => {
+    const run = start(orchestrator, fileConfig('hello'));
+    await run.next();
+    const other = newLockInfo('apply');
+    await fs.writeFile(lockFile(), JSON.stringify(other));
+
+    await expect(run.return(undefined)).rejects.toThrow(`${lockFile()} holds a lock this run did not take, so it is left in place`);
+
+    expect(JSON.parse(await fs.readFile(lockFile(), 'utf8'))).toEqual(other);
   });
 
   it('holds the lock while running and releases it when the caller stops reading', async () => {

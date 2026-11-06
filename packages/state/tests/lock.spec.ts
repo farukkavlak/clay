@@ -128,9 +128,74 @@ describe('the state lock', () => {
     await expect(manager.lock('apply')).rejects.toThrow(`State is locked by a run that left no word of who it is. If that run is gone, remove ${lockPath()}`);
   });
 
+  describe('released', () => {
+    const other = holder({ operation: 'apply' });
+
+    it('takes away the lock this run took', async () => {
+      await manager.lock('apply');
+
+      await manager.unlock();
+
+      await expect(fs.access(lockPath())).rejects.toThrow(/ENOENT/);
+    });
+
+    it("leaves the lock of a run that took it after this one's was removed, and says so", async () => {
+      await manager.lock('apply');
+      await leave(other);
+
+      await expect(manager.unlock()).rejects.toThrow(`${lockPath()} holds a lock this run did not take, so it is left in place`);
+      expect(await held()).toEqual(other);
+    });
+
+    it('leaves a lock that says nothing of who took it', async () => {
+      await manager.lock('apply');
+      await fs.writeFile(lockPath(), '');
+
+      await expect(manager.unlock()).rejects.toThrow('holds a lock this run did not take');
+      expect(await fs.readFile(lockPath(), 'utf8')).toBe('');
+    });
+
+    it('leaves the lock of another run where this one took none', async () => {
+      await leave(other);
+
+      await manager.unlock();
+
+      expect(await held()).toEqual(other);
+    });
+
+    it("is done once: a second unlock leaves the next run's lock", async () => {
+      await manager.lock('apply');
+      await manager.unlock();
+      await leave(other);
+
+      await manager.unlock();
+
+      expect(await held()).toEqual(other);
+    });
+
+    it('names a lock that cannot be read, and leaves it', async () => {
+      await manager.lock('apply');
+      await fs.rm(lockPath());
+      await fs.mkdir(lockPath());
+
+      await expect(manager.unlock()).rejects.toThrow(`The lock ${lockPath()} cannot be read (EISDIR)`);
+      const left = await fs.stat(lockPath());
+      expect(left.isDirectory()).toBe(true);
+    });
+
+    it('is done when the lock was removed and nothing took its place', async () => {
+      await manager.lock('apply');
+      await fs.rm(lockPath());
+
+      await manager.unlock();
+
+      await expect(fs.access(lockPath())).rejects.toThrow(/ENOENT/);
+    });
+  });
+
   it('names a lock that cannot be read', async () => {
     await fs.mkdir(lockPath());
 
-    await expect(manager.lock('apply')).rejects.toThrow(`State is locked, and its lock ${lockPath()} cannot be read (EISDIR)`);
+    await expect(manager.lock('apply')).rejects.toThrow(`The lock ${lockPath()} cannot be read (EISDIR)`);
   });
 });

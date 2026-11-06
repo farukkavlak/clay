@@ -1066,8 +1066,9 @@ Terraform has it since backends replaced `-state`.
 - [x] The lock file held a time and no process or host, so a stale one could not be told
       from a live one. It now names the command, user, machine and pid, and a run it stops
       says when that pid runs no more on this machine
-- [ ] A run unlocks whatever lock is there, so one whose lock was removed takes away the
-      lock of the run that took it next. The lock has an id; unlock should check it
+- [x] A run unlocked whatever lock was there, so one whose lock was removed took away the
+      lock of the run that took it next. Unlock now removes only the lock with its own id
+- [ ] An unlock that fails in a `finally` replaces the error the run itself failed with
 - [ ] The state is renamed into place, and the journal appended to, without an fsync, so
       a power loss may leave either empty on a file system that reorders writes
 

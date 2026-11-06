@@ -9,6 +9,7 @@ export class StateManager {
   private writing: Promise<void> = Promise.resolve();
   /** Set by an append that failed, which may have left part of a line; the next line would follow it. */
   private journalBroken = false;
+  private lockId: string | undefined;
 
   constructor(backend: StateBackend) {
     this.backend = backend;
@@ -76,10 +77,17 @@ export class StateManager {
 
   /** `operation` names the command, so a run the lock stops can say what holds it. */
   async lock(operation: string): Promise<void> {
-    await this.backend.lock(newLockInfo(operation));
+    const info = newLockInfo(operation);
+    await this.backend.lock(info);
+    this.lockId = info.id;
   }
 
+  /** Releases only what this manager took, once. */
   async unlock(): Promise<void> {
-    await this.backend.unlock();
+    const id = this.lockId;
+    if (id === undefined) return;
+
+    this.lockId = undefined;
+    await this.backend.unlock(id);
   }
 }

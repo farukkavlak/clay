@@ -34,5 +34,6 @@ export interface StateBackend {
   /** Throws `StateLocked` while another run holds it. */
   lock(info: LockInfo): Promise<void>;
 
-  unlock(): Promise<void>;
+  /** Releases the lock taken with `id`, and no other. */
+  unlock(id: string): Promise<void>;
 }

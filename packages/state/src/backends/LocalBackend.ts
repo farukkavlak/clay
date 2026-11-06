@@ -151,23 +151,31 @@ export class LocalBackend implements StateBackend {
 
   /** A run killed between making the lock file and filling it leaves it empty; one that has just unlocked leaves none. */
   private async holder(): Promise<LockInfo | undefined> {
+    const text = await this.lockText();
+    return text === undefined ? undefined : lockInfoFrom(text);
+  }
+
+  private async lockText(): Promise<string | undefined> {
     try {
-      return lockInfoFrom(await fs.readFile(this.lockFilePath, 'utf8'));
+      return await fs.readFile(this.lockFilePath, 'utf8');
     } catch (error) {
       const { code, message } = error as NodeJS.ErrnoException;
       if (code === 'ENOENT') return undefined;
 
-      throw new Error(`State is locked, and its lock ${this.lockFilePath} cannot be read (${code ?? message})`, { cause: error });
+      throw new Error(`The lock ${this.lockFilePath} cannot be read (${code ?? message})`, { cause: error });
     }
   }
 
-  async unlock(): Promise<void> {
+  /** A lock already gone is released. One with another id is another run's, taken once this run's was removed. */
+  async unlock(id: string): Promise<void> {
+    const text = await this.lockText();
+    if (text === undefined) return;
+    if (lockInfoFrom(text)?.id !== id) throw new Error(`${this.lockFilePath} holds a lock this run did not take, so it is left in place`);
+
     try {
       await fs.unlink(this.lockFilePath);
     } catch (error) {
-      if ((error as { code: string }).code !== 'ENOENT') throw error;
-
-      // Unlocking twice is not an error.
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
   }
 }
