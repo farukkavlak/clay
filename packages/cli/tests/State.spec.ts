@@ -42,6 +42,10 @@ describe('CLI: state command', () => {
         write: writeMock,
         lock: lockMock,
         unlock: unlockMock,
+        unlockAfter: async (failure: unknown) => {
+          await unlockMock();
+          throw failure;
+        },
       } as unknown as StateManager;
     });
 

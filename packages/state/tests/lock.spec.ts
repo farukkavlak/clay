@@ -173,6 +173,28 @@ describe('the state lock', () => {
       expect(await held()).toEqual(other);
     });
 
+    it('after a failure, throws that failure again', async () => {
+      const failure = new Error('the run failed');
+      await manager.lock('apply');
+
+      await expect(manager.unlockAfter(failure)).rejects.toBe(failure);
+      await expect(fs.access(lockPath())).rejects.toThrow(/ENOENT/);
+    });
+
+    it('after a failure, keeps it beside the error of an unlock that fails too', async () => {
+      const failure = new Error('the run failed');
+      await manager.lock('apply');
+      await leave(other);
+
+      const thrown: unknown = await manager.unlockAfter(failure).catch((error: unknown) => error);
+
+      expect(thrown).toBeInstanceOf(AggregateError);
+      const [first, second] = (thrown as AggregateError).errors as Error[];
+      expect(first).toBe(failure);
+      expect(second.message).toBe(`${lockPath()} holds a lock this run did not take, so it is left in place`);
+      expect(await held()).toEqual(other);
+    });
+
     it('names a lock that cannot be read, and leaves it', async () => {
       await manager.lock('apply');
       await fs.rm(lockPath());

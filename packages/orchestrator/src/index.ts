@@ -119,7 +119,10 @@ export class Orchestrator {
       const config = await loader.load();
       const graph = graphBuilder.buildExecutionGraph(config.loadedResources, config.loadedModules);
       yield* runner.run(saved, config, graph, state, { parallelism, signal });
+    } catch (error) {
+      await this.stateManager.unlockAfter(error);
     } finally {
+      // Releases the lock when the run is done or its caller stops reading; after a failure the catch has already released it.
       await this.stateManager.unlock();
     }
   }

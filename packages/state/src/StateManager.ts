@@ -90,4 +90,16 @@ export class StateManager {
     this.lockId = undefined;
     await this.backend.unlock(id);
   }
+
+  /** For a `catch`: releases the lock and throws `failure` again, beside the unlock's own error if that fails too. */
+  async unlockAfter(failure: unknown): Promise<never> {
+    try {
+      await this.unlock();
+    } catch (unlockError) {
+      // Every unlock error is kept, so none can hide the failure.
+      throw new AggregateError([failure, unlockError], 'The run failed, and its lock was not released');
+    }
+
+    throw failure;
+  }
 }

@@ -52,6 +52,7 @@ function sourceLine(position: Position, files: ConfigFiles): string | undefined 
 
 /** Printable, since the message, the line and the path come from outside Clay. */
 export function describeError(error: unknown, files: ConfigFiles): string {
+  if (error instanceof AggregateError) return error.errors.map((each) => describeError(each, files)).join('\n\n');
   if (!(error instanceof ConfigError)) return messageOf(error);
 
   const inBlock = error.block ? `, in ${error.block}` : '';

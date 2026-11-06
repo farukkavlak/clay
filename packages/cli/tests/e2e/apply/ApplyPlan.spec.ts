@@ -548,6 +548,27 @@ describe('apply and plan against real files', () => {
     expect(JSON.parse(await fs.readFile(lockFile(), 'utf8'))).toEqual(other);
   });
 
+  it('fails with what stopped the run, and releases the lock', async () => {
+    const run = start(orchestrator, fileConfig('hello'));
+    await run.next();
+
+    await expect(run.throw(new Error('stopped'))).rejects.toThrow('stopped');
+
+    await expect(fs.access(lockFile())).rejects.toThrow();
+  });
+
+  it('keeps what stopped the run beside an unlock that fails too', async () => {
+    const run = start(orchestrator, fileConfig('hello'));
+    await run.next();
+    await fs.writeFile(lockFile(), JSON.stringify(newLockInfo('apply')));
+
+    const thrown: unknown = await run.throw(new Error('stopped')).catch((error: unknown) => error);
+
+    expect(thrown).toBeInstanceOf(AggregateError);
+    const messages = ((thrown as AggregateError).errors as Error[]).map((error) => error.message);
+    expect(messages).toEqual(['stopped', `${lockFile()} holds a lock this run did not take, so it is left in place`]);
+  });
+
   it('holds the lock while running and releases it when the caller stops reading', async () => {
     const run = start(orchestrator, fileConfig('hello'));
     await run.next();

@@ -14,6 +14,14 @@ const failingWith = (thrown: Error): ConfigFiles => ({
 });
 
 describe('describeError', () => {
+  it('describes each error a failure holds, each in its own way', () => {
+    const both = new AggregateError([error, new Error('the lock was left')], 'The run failed, and its lock was not released');
+
+    expect(describeError(both, failingWith(Object.assign(new Error('ENOENT: gone'), { code: 'ENOENT' })))).toBe(
+      'Invalid name "a.b"\n\n  on main.clay line 1:\n\nthe lock was left'
+    );
+  });
+
   // The file may be gone or broken by the time the error is shown.
   it('still says what went wrong and where when the file cannot be read again', () => {
     const files = failingWith(Object.assign(new Error('ELOOP: too many symbolic links'), { code: 'ELOOP' }));

@@ -1068,7 +1068,8 @@ Terraform has it since backends replaced `-state`.
       says when that pid runs no more on this machine
 - [x] A run unlocked whatever lock was there, so one whose lock was removed took away the
       lock of the run that took it next. Unlock now removes only the lock with its own id
-- [ ] An unlock that fails in a `finally` replaces the error the run itself failed with
+- [x] An unlock that failed in a `finally` replaced the error the run itself failed with.
+      Both are now kept, and the CLI prints each
 - [ ] The state is renamed into place, and the journal appended to, without an fsync, so
       a power loss may leave either empty on a file system that reorders writes
 

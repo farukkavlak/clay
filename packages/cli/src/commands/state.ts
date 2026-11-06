@@ -138,6 +138,8 @@ export function createStateCommand(): Command {
 
             await manager.write(state);
             console.log(styleText('green', 'Successfully moved resource.'));
+          } catch (error) {
+            await manager.unlockAfter(error);
           } finally {
             await manager.unlock();
           }
@@ -171,6 +173,8 @@ export function createStateCommand(): Command {
 
             await manager.write(state);
             console.log(styleText('green', 'Successfully removed resource.'));
+          } catch (error) {
+            await manager.unlockAfter(error);
           } finally {
             await manager.unlock();
           }

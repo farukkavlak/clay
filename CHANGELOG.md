@@ -72,6 +72,8 @@ a configuration means or how the state file is written.
   holds it, and says that run looks gone when it was on this machine and its pid runs no more
 - A run releases only the lock it took. One whose lock was removed while it ran leaves the
   lock another run has taken since, and says so
+- A run that fails and then cannot release its lock reports both errors, not the lock's
+  alone
 - A failed apply leaves only the outputs that read what failed at their old value and
   drops those no longer declared; `state mv` and `state rm` leave the outputs as they are
 - `clay apply` exits 1 when it is not approved, and names `--yes` when its input is

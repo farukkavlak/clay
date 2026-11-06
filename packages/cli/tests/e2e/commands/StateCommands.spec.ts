@@ -120,6 +120,16 @@ describe('state and output against a real state file', () => {
     await expect(fs.access(path.join(dir, 'clay.state.json.lock'))).rejects.toThrow();
   });
 
+  it('says both why rm failed and that its lock was not released', async () => {
+    await applyConfig();
+    vi.spyOn(LocalBackend.prototype, 'unlock').mockRejectedValue(new Error('the lock was left'));
+
+    await createStateCommand().parseAsync(['node', 'clay', 'rm', 'local_file.missing']);
+
+    expect(process.exit).toHaveBeenCalledWith(1);
+    expect(printed.join('\n')).toContain('Resource not found in state: local_file.missing\n\nthe lock was left');
+  });
+
   it('exits 1 naming the run that holds the lock, and leaves its lock', async () => {
     await applyConfig();
     await new StateManager(new LocalBackend(dir)).lock('apply');
