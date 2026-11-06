@@ -7,7 +7,7 @@ import { emptyState } from '@clay/contracts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocalBackend } from '../src/backends/LocalBackend';
-import { LockInfo, newLockInfo } from '../src/lockInfo';
+import { LockInfo, LockNotReleased, newLockInfo } from '../src/lockInfo';
 import { StateManager } from '../src/StateManager';
 
 /** A process that has exited, so its pid names none. */
@@ -157,6 +157,17 @@ describe('the state lock', () => {
 
       await expect(manager.unlock()).rejects.toThrow(`${lockPath()} holds a lock this run did not take, so it is left in place`);
       expect(await held()).toEqual(other);
+    });
+
+    it('names a failed release as a lock left, keeping why it failed', async () => {
+      await manager.lock('apply');
+      await leave(other);
+
+      const thrown: unknown = await manager.unlock().catch((error: unknown) => error);
+
+      expect(thrown).toBeInstanceOf(LockNotReleased);
+      expect((thrown as LockNotReleased).cause).toBeInstanceOf(Error);
+      expect((thrown as LockNotReleased).message).toBe(`${lockPath()} holds a lock this run did not take, so it is left in place`);
     });
 
     it('leaves a lock that says nothing of who took it', async () => {

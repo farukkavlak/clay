@@ -5,6 +5,7 @@ import { Command } from 'commander';
 import { styleText } from 'node:util';
 
 import { describeError } from '../describeError';
+import { releasedAfter } from '../released';
 import { namedBackend } from '../stateFile';
 
 export function createInitCommand() {
@@ -14,18 +15,24 @@ export function createInitCommand() {
 
     console.log(styleText('blue', 'Initializing Clay workspace...'));
 
+    let code: number;
     try {
       const backend = namedBackend(cwd, files);
       await adoptBackend(backend, cwd);
 
       const stateManager = new StateManager(backend);
-      const wroteState = await stateManager.writeIfAbsent(emptyState());
-      console.log(styleText('green', wroteState ? '✓ Created an empty state' : '✓ Kept the state already here'));
+      code = await releasedAfter(stateManager, async () => {
+        await stateManager.lock('init');
+        const wroteState = await stateManager.writeIfAbsent(emptyState());
+        console.log(styleText('green', wroteState ? '✓ Created an empty state' : '✓ Kept the state already here'));
 
-      console.log(styleText(['bold', 'green'], '\nClay initialized successfully! 🚀'));
+        console.log(styleText(['bold', 'green'], '\nClay initialized successfully! 🚀'));
+        return 0;
+      });
     } catch (error: unknown) {
       console.error(styleText('red', 'Failed to initialize workspace:'), describeError(error, files));
-      process.exit(1);
+      code = 1;
     }
+    if (code !== 0) process.exit(code);
   });
 }

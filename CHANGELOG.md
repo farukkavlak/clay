@@ -85,6 +85,9 @@ a configuration means or how the state file is written.
 - `apply` holds the state lock from its plan through the question to the end of the run,
   so a second apply or plan is refused before it asks anything. Answering no, or Ctrl-C
   at the question, releases the lock
+- A command whose work is done but whose lock cannot be released says what it did, then
+  "The lock could not be released: <reason>", and exits 1. `apply` printed "Apply complete" and then "Apply
+  failed"; a saved plan's apply, `plan` and `init` hid what they did
 - A failed apply leaves only the outputs that read what failed at their old value and
   drops those no longer declared; `state mv` and `state rm` leave the outputs as they are
 - `clay apply` exits 1 when it is not approved, and names `--yes` when its input is

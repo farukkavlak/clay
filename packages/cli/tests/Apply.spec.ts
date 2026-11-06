@@ -329,7 +329,8 @@ describe('CLI: apply command', () => {
 
       vi.mocked(fs.readFile).mockImplementation(async (path) => {
         if (String(path).includes('plan.json')) return planFileContent;
-        return 'config content';
+        // The lock the run took, which the mocked write never made.
+        throw Object.assign(new Error('not found'), { code: 'ENOENT' });
       });
 
       const runPlanMock = vi.fn(doneWith({}));
@@ -374,7 +375,8 @@ describe('CLI: apply command', () => {
 
       vi.mocked(fs.readFile).mockImplementation(async (path) => {
         if (String(path).includes('plan.json')) return planFileContent;
-        return 'config content';
+        // The lock the run took, which the mocked write never made.
+        throw Object.assign(new Error('not found'), { code: 'ENOENT' });
       });
 
       const runPlanMock = vi.fn(doneWith({ planOutput: text('value') }));
