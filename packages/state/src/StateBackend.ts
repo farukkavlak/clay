@@ -1,5 +1,7 @@
 import { State } from '@clay/contracts';
 
+import { LockInfo } from './lockInfo';
+
 /** What `init` remembers, so a later command can tell the configuration has moved the state. */
 export interface BackendChoice {
   readonly type: string;
@@ -29,7 +31,8 @@ export interface StateBackend {
 
   writeIfAbsent(state: State): Promise<boolean>;
 
-  lock(): Promise<void>;
+  /** Throws `StateLocked` while another run holds it. */
+  lock(info: LockInfo): Promise<void>;
 
   unlock(): Promise<void>;
 }

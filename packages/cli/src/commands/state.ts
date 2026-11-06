@@ -124,7 +124,7 @@ export function createStateCommand(): Command {
       try {
         const manager = getStateManager(files);
         await interruptible(async () => {
-          await manager.lock();
+          await manager.lock('state mv');
           try {
             const state = await manager.read();
 
@@ -157,7 +157,7 @@ export function createStateCommand(): Command {
       try {
         const manager = getStateManager(files);
         await interruptible(async () => {
-          await manager.lock();
+          await manager.lock('state rm');
           try {
             const state = await manager.read();
             const key = Address.parse(address).toString();

@@ -1,6 +1,6 @@
 import { types } from '@clay/contracts';
 import { LocalProvider } from '@clay/provider-local';
-import { LocalBackend } from '@clay/state';
+import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -118,6 +118,19 @@ describe('state and output against a real state file', () => {
     expect(printed.join('\n')).toContain('Resource not found in state: local_file.missing');
     expect(await fs.readFile(path.join(dir, 'clay.state.json'), 'utf8')).toBe(before);
     await expect(fs.access(path.join(dir, 'clay.state.json.lock'))).rejects.toThrow();
+  });
+
+  it('exits 1 naming the run that holds the lock, and leaves its lock', async () => {
+    await applyConfig();
+    await new StateManager(new LocalBackend(dir)).lock('apply');
+
+    await createStateCommand().parseAsync(['node', 'clay', 'rm', 'local_file.a']);
+
+    expect(process.exit).toHaveBeenCalledWith(1);
+    expect(printed.join('\n')).toContain(`State is locked by apply of ${os.userInfo().username} on ${os.hostname()}, pid ${process.pid}`);
+    const { resources } = await stored();
+    expect(Object.keys(resources)).toEqual(['local_file.a']);
+    expect(JSON.parse(await fs.readFile(path.join(dir, 'clay.state.json.lock'), 'utf8'))).toMatchObject({ operation: 'apply' });
   });
 
   it('keeps the outputs when rm takes a resource out', async () => {

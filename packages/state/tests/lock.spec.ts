@@ -1,0 +1,136 @@
+import { spawnSync } from 'node:child_process';
+import * as fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { LocalBackend } from '../src/backends/LocalBackend';
+import { LockInfo, newLockInfo } from '../src/lockInfo';
+import { StateManager } from '../src/StateManager';
+
+/** A process that has exited, so its pid names none. */
+const gonePid = (): number => spawnSync(process.execPath, ['-e', '']).pid!;
+
+describe('the state lock', () => {
+  let dir: string;
+  let manager: StateManager;
+
+  const lockPath = () => path.join(dir, 'clay.state.json.lock');
+  const held = async () => JSON.parse(await fs.readFile(lockPath(), 'utf8')) as LockInfo;
+  const leave = (info: unknown) => fs.writeFile(lockPath(), JSON.stringify(info));
+  const holder = (changes: Partial<LockInfo> = {}): LockInfo => ({ ...newLockInfo('state rm'), created: '2026-11-06T10:00:00.000Z', ...changes });
+
+  beforeEach(async () => {
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-lock-test-'));
+    manager = new StateManager(new LocalBackend(dir));
+  });
+
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it('says which run took it, where, and when', async () => {
+    const before = Date.now();
+    await manager.lock('apply');
+
+    const info = await held();
+    expect(info).toMatchObject({ operation: 'apply', who: os.userInfo().username, host: os.hostname(), pid: process.pid });
+    expect(Date.parse(info.created)).toBeGreaterThanOrEqual(before);
+    expect(info.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+  });
+
+  it('has a new id each time it is taken', async () => {
+    await manager.lock('apply');
+    const { id: first } = await held();
+    await manager.unlock();
+    await manager.lock('apply');
+
+    const { id: second } = await held();
+    expect(second).not.toBe(first);
+  });
+
+  it('names the user unknown where the system has no entry for them', async () => {
+    vi.spyOn(os, 'userInfo').mockImplementation(() => {
+      throw Object.assign(new Error('no such user'), { code: 'ERR_SYSTEM_ERROR' });
+    });
+
+    await manager.lock('apply');
+
+    const { who } = await held();
+    expect(who).toBe('unknown');
+  });
+
+  it('passes on any other failure to find the user', async () => {
+    vi.spyOn(os, 'userInfo').mockImplementation(() => {
+      throw new Error('broken');
+    });
+
+    await expect(manager.lock('apply')).rejects.toThrow('broken');
+  });
+
+  it('refuses a second run and names the run that holds it', async () => {
+    const live = holder();
+    await leave(live);
+
+    await expect(manager.lock('apply')).rejects.toThrow(
+      `State is locked by state rm of ${live.who} on ${live.host}, pid ${process.pid}, since 2026-11-06T10:00:00.000Z. If that run is gone, remove ${lockPath()}`
+    );
+  });
+
+  it('says the run looks gone when no process of its pid runs on this machine', async () => {
+    const pid = gonePid();
+    const gone = holder({ pid });
+    await leave(gone);
+
+    await expect(manager.lock('apply')).rejects.toThrow(
+      `State is locked by state rm of ${gone.who} on ${gone.host}, pid ${pid}, since 2026-11-06T10:00:00.000Z. No process ${pid} runs on this machine, so that run looks gone. If it is, remove ${lockPath()}`
+    );
+  });
+
+  it('cannot tell whether a run on another machine is gone', async () => {
+    await leave(holder({ host: 'elsewhere', pid: gonePid() }));
+
+    await expect(manager.lock('apply')).rejects.toThrow(/on elsewhere, .*\. If that run is gone, remove /);
+  });
+
+  it("takes a process of another user's as running", async () => {
+    vi.spyOn(process, 'kill').mockImplementation(() => {
+      throw Object.assign(new Error('not permitted'), { code: 'EPERM' });
+    });
+    await leave(holder({ pid: gonePid() }));
+
+    await expect(manager.lock('apply')).rejects.toThrow(/\. If that run is gone, remove /);
+  });
+
+  it('passes on any other failure to look for the process', async () => {
+    vi.spyOn(process, 'kill').mockImplementation(() => {
+      throw Object.assign(new Error('bad signal'), { code: 'EINVAL' });
+    });
+    await leave(holder());
+
+    await expect(manager.lock('apply')).rejects.toThrow('bad signal');
+  });
+
+  // A pid of 0 or below would ask `kill` about a process group, which is always there.
+  it.each([
+    ['an empty file', ''],
+    ['text that is not JSON', 'locked'],
+    ['a list', '[]'],
+    ['no host', JSON.stringify({ ...newLockInfo('apply'), host: undefined })],
+    ['a pid that is text', JSON.stringify({ ...newLockInfo('apply'), pid: '42' })],
+    ['a pid of 0', JSON.stringify({ ...newLockInfo('apply'), pid: 0 })],
+    ['a pid of -1', JSON.stringify({ ...newLockInfo('apply'), pid: -1 })],
+  ])('says nothing of who holds a lock that holds %s', async (_, content) => {
+    await fs.writeFile(lockPath(), content);
+
+    await expect(manager.lock('apply')).rejects.toThrow(`State is locked by a run that left no word of who it is. If that run is gone, remove ${lockPath()}`);
+  });
+
+  it('names a lock that cannot be read', async () => {
+    await fs.mkdir(lockPath());
+
+    await expect(manager.lock('apply')).rejects.toThrow(`State is locked, and its lock ${lockPath()} cannot be read (EISDIR)`);
+  });
+});

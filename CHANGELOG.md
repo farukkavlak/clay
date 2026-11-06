@@ -68,6 +68,8 @@ a configuration means or how the state file is written.
 - A state or plan file that is not valid is refused and says what is wrong
 - Ctrl-C during an apply starts nothing new, waits for what runs, saves it and releases
   the lock; a second Ctrl-C exits at once
+- A run the lock stops names the command, user, machine, pid and time of the run that
+  holds it, and says that run looks gone when it was on this machine and its pid runs no more
 - A failed apply leaves only the outputs that read what failed at their old value and
   drops those no longer declared; `state mv` and `state rm` leave the outputs as they are
 - `clay apply` exits 1 when it is not approved, and names `--yes` when its input is

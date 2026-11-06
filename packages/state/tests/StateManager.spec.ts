@@ -49,7 +49,7 @@ describe('StateManager', () => {
 
   /** A run as apply and the state commands make it: every write under one lock. */
   const run = async (...states: State[]) => {
-    await stateManager.lock();
+    await stateManager.lock('apply');
     for (const state of states) await stateManager.write(state);
     await stateManager.unlock();
   };
@@ -214,19 +214,14 @@ describe('StateManager', () => {
 
   describe('Locking', () => {
     it('should create a lock file', async () => {
-      await stateManager.lock();
+      await stateManager.lock('apply');
       const lockPath = path.join(tmpDir, 'test.state.json.lock');
       const lockFile = await fs.stat(lockPath);
       expect(lockFile.isFile()).toBe(true);
     });
 
-    it('should throw if already locked', async () => {
-      await stateManager.lock();
-      await expect(stateManager.lock()).rejects.toThrow(/locked by another run/i);
-    });
-
     it('should remove lock file on unlock', async () => {
-      await stateManager.lock();
+      await stateManager.lock('apply');
       await stateManager.unlock();
       const lockPath = path.join(tmpDir, 'test.state.json.lock');
       await expect(fs.stat(lockPath)).rejects.toThrow(/ENOENT/);
@@ -240,7 +235,7 @@ describe('StateManager', () => {
       // A missing directory makes the write fail with ENOENT, which is not EEXIST, so it is rethrown.
       const invalidBackend = new LocalBackend('/non/existent/path/xyz/123');
       const invalidManager = new StateManager(invalidBackend);
-      await expect(invalidManager.lock()).rejects.toThrow(/ENOENT/);
+      await expect(invalidManager.lock('apply')).rejects.toThrow(/ENOENT/);
     });
 
     it('should re-throw generic errors during unlock', async () => {
@@ -288,7 +283,7 @@ describe('StateManager', () => {
     beforeEach(async () => {
       before = holding('a');
       await run(before);
-      await stateManager.lock();
+      await stateManager.lock('apply');
       await fs.mkdir(`${statePath()}.bak`);
     });
 

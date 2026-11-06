@@ -4,6 +4,7 @@ import path from 'node:path';
 
 import { emptyState, State } from '@clay/contracts';
 
+import { LockInfo, lockInfoFrom, StateLocked } from '../lockInfo';
 import { BackendChoice, StateBackend } from '../StateBackend';
 import { Journal, parseState, serializeState } from '../stateFile';
 
@@ -137,14 +138,26 @@ export class LocalBackend implements StateBackend {
     }
   }
 
-  async lock(): Promise<void> {
+  async lock(info: LockInfo): Promise<void> {
     try {
-      await fs.writeFile(this.lockFilePath, String(Date.now()), { flag: 'wx' });
+      await fs.writeFile(this.lockFilePath, JSON.stringify(info), { encoding: 'utf8', flag: 'wx' });
       this.backedUp = false;
     } catch (error) {
-      if ((error as { code: string }).code === 'EEXIST') throw new Error(`State is locked by another run. If that run is gone, remove ${this.lockFilePath}`);
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
 
-      throw error;
+      throw new StateLocked(await this.holder(), `remove ${this.lockFilePath}`);
+    }
+  }
+
+  /** A run killed between making the lock file and filling it leaves it empty; one that has just unlocked leaves none. */
+  private async holder(): Promise<LockInfo | undefined> {
+    try {
+      return lockInfoFrom(await fs.readFile(this.lockFilePath, 'utf8'));
+    } catch (error) {
+      const { code, message } = error as NodeJS.ErrnoException;
+      if (code === 'ENOENT') return undefined;
+
+      throw new Error(`State is locked, and its lock ${this.lockFilePath} cannot be read (${code ?? message})`, { cause: error });
     }
   }
 

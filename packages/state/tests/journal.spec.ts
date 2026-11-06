@@ -138,7 +138,7 @@ describe('the journal', () => {
       await manager.record(state, 'rt.b');
       const stopped = structuredClone(state);
 
-      await manager.lock();
+      await manager.lock('apply');
       await manager.write(emptyState());
 
       const backup = JSON.parse(await fs.readFile(`${statePath()}.bak`, 'utf8')) as State;

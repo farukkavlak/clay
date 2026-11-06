@@ -106,7 +106,7 @@ export class Orchestrator {
   /** Holds the state lock. A state written since the plan was made is refused, since the approved plan no longer matches it. */
   async *runPlan(saved: Plan, { parallelism = DEFAULT_PARALLELISM, signal }: RunOptions = {}): AsyncGenerator<RunEvent> {
     checkParallelism(parallelism);
-    await this.stateManager.lock();
+    await this.stateManager.lock('apply');
 
     // Released however the run ends: done, failed, thrown, or abandoned by the caller.
     try {

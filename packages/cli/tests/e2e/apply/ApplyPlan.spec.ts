@@ -518,7 +518,9 @@ describe('apply and plan against real files', () => {
     const first = start(orchestrator, fileConfig('hello'));
     await first.next();
 
-    await expect(apply(newOrchestrator(), fileConfig('hello'))).rejects.toThrow('locked by another run');
+    await expect(apply(newOrchestrator(), fileConfig('hello'))).rejects.toThrow(
+      `State is locked by apply of ${os.userInfo().username} on ${os.hostname()}, pid ${process.pid}, since `
+    );
 
     await first.return(undefined);
   });

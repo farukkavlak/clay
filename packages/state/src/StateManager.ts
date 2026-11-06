@@ -1,6 +1,7 @@
 import { State, STATE_VERSION } from '@clay/contracts';
 
 import { journalLine } from './journal';
+import { newLockInfo } from './lockInfo';
 import { StateBackend } from './StateBackend';
 
 export class StateManager {
@@ -73,8 +74,9 @@ export class StateManager {
     return this.backend.writeIfAbsent(state);
   }
 
-  async lock(): Promise<void> {
-    await this.backend.lock();
+  /** `operation` names the command, so a run the lock stops can say what holds it. */
+  async lock(operation: string): Promise<void> {
+    await this.backend.lock(newLockInfo(operation));
   }
 
   async unlock(): Promise<void> {
