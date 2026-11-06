@@ -119,7 +119,7 @@ describe('reading a state file', () => {
   });
 
   it('names the file when the text is not json', () => {
-    expect(read('{oops')).toThrow('clay.state.json is not valid state: the file is not JSON');
+    expect(read('{oops')).toThrow('clay.state.json is not valid state: it is not JSON');
   });
 
   // These used to be accepted, and a string `resources` planned a delete per character.

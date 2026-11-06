@@ -202,7 +202,7 @@ describe('a state file that is not valid state', () => {
       'it is nested more than 500 levels deep',
     ],
     ['no version at all', '{}', 'its version is not a number'],
-    ['text that is not json', '{oops', 'the file is not JSON'],
+    ['text that is not json', '{oops', 'it is not JSON'],
   ])('refuses %s, and says which file', async (_, state, reason) => {
     const output = await planWith(state);
 

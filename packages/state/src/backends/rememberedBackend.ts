@@ -3,6 +3,8 @@ import * as fs from 'node:fs';
 import path from 'node:path';
 
 import { BackendChoice, StateBackend } from '../StateBackend';
+import { holdsState, NoAnswer } from './HttpBackend';
+import { urlProblem } from './httpFrom';
 import { LocalBackend } from './LocalBackend';
 
 const recordOf = (workingDir: string) => path.join(workingDir, '.clay', 'backend.json');
@@ -20,7 +22,9 @@ function parsedChoice(content: string): unknown {
 function isChoice(value: unknown): value is BackendChoice {
   const { type, where } = (value ?? {}) as Partial<BackendChoice>;
 
-  return type === 'local' && typeof where === 'string';
+  if (typeof where !== 'string') return false;
+
+  return type === 'local' || (type === 'http' && URL.canParse(where) && urlProblem(new URL(where)) === undefined);
 }
 
 /** With no record, the state is where it is with no block. */
@@ -42,6 +46,23 @@ function remembered(workingDir: string): BackendChoice {
   return choice;
 }
 
+/** A journal counts where the state is a file: a state moved without it would lose what a stopped run recorded. */
+async function leftBehind({ type, where }: BackendChoice, workingDir: string): Promise<boolean> {
+  if (type !== 'http') return new LocalBackend(workingDir, where).holdsAnything();
+
+  try {
+    return await holdsState(new URL(where));
+  } catch (error) {
+    if (error instanceof NoAnswer)
+      throw new Error(
+        `${error.message}, so whether a state is left there is not known. If that server is gone for good, remove ${recordOf(workingDir)} and run \`clay init\` again`,
+        { cause: error }
+      );
+
+    throw error;
+  }
+}
+
 const isSame = (a: BackendChoice, b: BackendChoice) => a.type === b.type && a.where === b.where;
 
 /** Refuses a configuration that names another place than `init` last took, which would start from an empty state. */
@@ -60,9 +81,9 @@ export async function adoptBackend(backend: StateBackend, workingDir: string): P
   const before = remembered(workingDir);
   if (isSame(before, backend.choice)) return;
 
-  if (await new LocalBackend(workingDir, before.where).holdsAnything())
+  if (await leftBehind(before, workingDir))
     throw new Error(
-      `The state in "${before.where}" would be left behind, as the configuration names "${backend.choice.where}"; move it there by hand with any .journal beside it, or remove them, and run \`clay init\` again`
+      `The state in "${before.where}" would be left behind, as the configuration names "${backend.choice.where}"; move it there by hand${before.type === 'local' ? ' with any .journal beside it, or remove them' : ', or remove it'}, and run \`clay init\` again`
     );
 
   const record = recordOf(workingDir);

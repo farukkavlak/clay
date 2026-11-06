@@ -105,7 +105,7 @@ describe('state and output against a real state file', () => {
   it('says where state list looked when there is no state file', async () => {
     await createStateCommand().parseAsync(['node', 'clay', 'list']);
 
-    expect(printed.join('\n')).toContain(`No state file found at ${path.join(process.cwd(), 'clay.state.json')}`);
+    expect(printed.join('\n')).toContain(`No state found at ${path.join(process.cwd(), 'clay.state.json')}`);
   });
 
   it('exits 1 and unlocks when rm names a resource the state does not hold', async () => {
@@ -338,6 +338,6 @@ describe('state and output against a real state file', () => {
   it('says where output looked when there is no state file', async () => {
     await createOutputCommand().parseAsync(['node', 'clay']);
 
-    expect(printed.join('\n')).toContain(`No state file found at ${path.join(process.cwd(), 'clay.state.json')}`);
+    expect(printed.join('\n')).toContain(`No state found at ${path.join(process.cwd(), 'clay.state.json')}`);
   });
 });

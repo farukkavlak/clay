@@ -71,7 +71,7 @@ export function parseState(content: string, source: string, journal?: Journal): 
   try {
     parsed = readState(content);
   } catch (error) {
-    if (error instanceof SyntaxError) throw new Error(`${source} is not valid state: the file is not JSON`, { cause: error });
+    if (error instanceof SyntaxError) throw new Error(`${source} is not valid state: it is not JSON`, { cause: error });
 
     if (error instanceof NumberError || error instanceof NestingError) throw new Error(`${source} is not valid state: ${error.message}`, { cause: error });
 

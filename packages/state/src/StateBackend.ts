@@ -29,6 +29,7 @@ export interface StateBackend {
   /** Adds a line of the journal over the state last written; a backend without one is written whole instead. */
   append?(line: string): Promise<void>;
 
+  /** Called under the lock. */
   writeIfAbsent(state: State): Promise<boolean>;
 
   /** Throws `StateLocked` while another run holds it. */

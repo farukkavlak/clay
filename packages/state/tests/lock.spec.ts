@@ -3,6 +3,7 @@ import * as fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
+import { emptyState } from '@clay/contracts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocalBackend } from '../src/backends/LocalBackend';
@@ -29,6 +30,17 @@ describe('the state lock', () => {
   afterEach(async () => {
     vi.restoreAllMocks();
     await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it('is taken by the first state init writes, and released', async () => {
+    await leave(holder());
+
+    await expect(manager.writeIfAbsent(emptyState())).rejects.toThrow('State is locked by state rm');
+    await expect(fs.access(path.join(dir, 'clay.state.json'))).rejects.toThrow('ENOENT');
+
+    await fs.rm(lockPath());
+    expect(await manager.writeIfAbsent(emptyState())).toBe(true);
+    await expect(fs.access(lockPath())).rejects.toThrow('ENOENT');
   });
 
   it('says which run took it, where, and when', async () => {

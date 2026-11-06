@@ -62,7 +62,7 @@ describe('a file that is there but cannot be opened', () => {
   it('leaves a state file that is not there called missing, as before', async () => {
     await createOutputCommand().parseAsync(['node', 'clay']);
 
-    expect(printed.join('\n')).toContain(`No state file found at ${path.join(process.cwd(), 'clay.state.json')}`);
+    expect(printed.join('\n')).toContain(`No state found at ${path.join(process.cwd(), 'clay.state.json')}`);
     expect(process.exit).not.toHaveBeenCalled();
   });
 
@@ -74,6 +74,6 @@ describe('a file that is there but cannot be opened', () => {
     const output = printed.join('\n');
     expect(output).toContain('Error reading outputs:');
     expect(output).toContain('ELOOP');
-    expect(output).not.toContain('No state file found');
+    expect(output).not.toContain('No state found');
   });
 });

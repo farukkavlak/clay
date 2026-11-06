@@ -72,8 +72,9 @@ export class StateManager {
     this.journalBroken = false;
   }
 
+  /** Under the lock, so a backend that cannot check and write in one step has no run write in between. */
   async writeIfAbsent(state: State): Promise<boolean> {
-    return this.backend.writeIfAbsent(state);
+    return this.whileLocked('init', () => this.backend.writeIfAbsent(state));
   }
 
   /** `operation` names the command, so a run the lock stops can say what holds it. */
