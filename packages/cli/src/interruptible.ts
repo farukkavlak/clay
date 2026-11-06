@@ -30,12 +30,20 @@ export async function interruptible<T>(work: (signal: AbortSignal) => Promise<T>
   }
 }
 
-/** For work that writes no state, as a plan: Ctrl-C releases the lock `manager` holds and exits at once, with nothing to wait for. */
+/** The process exits before it settles. */
+const untilExit = () => new Promise<never>(() => {});
+
+/**
+ * For work that writes no state, as a plan: Ctrl-C releases the lock `manager` holds and exits at once, with nothing to wait for. The work
+ * goes on while the release is under way, and what it gives then is not used.
+ */
 export async function stoppedAtOnce<T>(manager: StateManager, work: () => Promise<T>): Promise<T> {
+  let interrupted = false;
   const onInterrupt = async () => {
+    interrupted = true;
     console.error(styleText('yellow', '\nInterrupted. Nothing was written.'));
     try {
-      await manager.unlock();
+      await manager.stop();
     } catch (error) {
       // Every error is reported and none rethrown: in a signal handler a rethrow is an unhandled rejection, and the process exits either way.
       reportLockLeft(error);
@@ -45,7 +53,12 @@ export async function stoppedAtOnce<T>(manager: StateManager, work: () => Promis
 
   process.on('SIGINT', onInterrupt);
   try {
-    return await work();
+    const value = await work();
+    return interrupted ? await untilExit() : value;
+  } catch (error) {
+    if (interrupted) return await untilExit();
+
+    throw error;
   } finally {
     process.off('SIGINT', onInterrupt);
   }

@@ -1070,6 +1070,9 @@ Terraform has it since backends replaced `-state`.
       before it plans and holds it to the end of the run, as Terraform does
 - [x] A plan never looked at the lock, so it could read a state an apply was writing. It
       now holds the lock while it reads, and Ctrl-C releases it and exits at once
+- [x] Ctrl-C on a plan released the lock while the plan went on, so the plan could take a
+      new lock that the exit left behind, or print its result. The release now stops the
+      run: no lock is taken after it, and what the plan gives is not used
 - [x] The lock file held a time and no process or host, so a stale one could not be told
       from a live one. It now names the command, user, machine and pid, and a run it stops
       says when that pid runs no more on this machine

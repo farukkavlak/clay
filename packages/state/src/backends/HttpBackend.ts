@@ -86,11 +86,6 @@ async function stateText(address: URL): Promise<string | undefined> {
   return answer.body === '' ? undefined : answer.body;
 }
 
-/** Whether the server at `address` holds a state, for a state another backend would leave behind. */
-export async function holdsState(address: URL): Promise<boolean> {
-  return (await stateText(address)) !== undefined;
-}
-
 /** The state is one document at one address. A server with no journal gets it whole on every write. */
 export class HttpBackend implements StateBackend {
   readonly choice: BackendChoice;
@@ -98,7 +93,19 @@ export class HttpBackend implements StateBackend {
   private held: { readonly id: string; readonly body: string } | undefined;
 
   constructor(private readonly settings: HttpSettings) {
-    this.choice = { type: 'http', where: settings.address.href };
+    const { address, updateMethod, lockAddress, lockMethod, unlockAddress, unlockMethod } = settings;
+    this.choice = {
+      type: 'http',
+      where: address.href,
+      settings: {
+        address: address.href,
+        update_method: updateMethod,
+        lock_address: lockAddress.href,
+        lock_method: lockMethod,
+        unlock_address: unlockAddress.href,
+        unlock_method: unlockMethod,
+      },
+    };
   }
 
   get location(): string {
@@ -110,7 +117,7 @@ export class HttpBackend implements StateBackend {
   }
 
   async exists(): Promise<boolean> {
-    return holdsState(this.settings.address);
+    return (await stateText(this.settings.address)) !== undefined;
   }
 
   async read(): Promise<State> {

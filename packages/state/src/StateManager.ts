@@ -11,6 +11,8 @@ export class StateManager {
   private journalBroken = false;
   private lockId: string | undefined;
   private taking: Promise<void> = Promise.resolve();
+  /** Set by `stop`, after which no lock is taken. */
+  private stopped = false;
 
   constructor(backend: StateBackend) {
     this.backend = backend;
@@ -79,6 +81,8 @@ export class StateManager {
 
   /** `operation` names the command, so a run the lock stops can say what holds it. */
   async lock(operation: string): Promise<void> {
+    if (this.stopped) throw new Error('This run is stopping, so it takes no lock');
+
     const info = newLockInfo(operation);
     const taken = this.take(info);
     // Waited for by unlock, so a lock still being taken is released too; a failure to take it is the caller's to see.
@@ -104,6 +108,12 @@ export class StateManager {
       // Whatever stopped the release, the lock may still be held, so every failure is that one.
       throw new LockNotReleased(error);
     }
+  }
+
+  /** For a run that exits at once: releases the lock, and refuses one to work that goes on while the release is under way. */
+  async stop(): Promise<void> {
+    this.stopped = true;
+    await this.unlock();
   }
 
   /** True once this manager has taken the lock, until it releases it. */

@@ -48,7 +48,8 @@ export class LocalBackend implements StateBackend {
     this.filePath = path.resolve(workingDir, filename);
     this.lockFilePath = `${this.filePath}.lock`;
     this.journalPath = `${this.filePath}.journal`;
-    this.choice = { type: 'local', where: path.relative(workingDir, this.filePath) };
+    const where = path.relative(workingDir, this.filePath);
+    this.choice = { type: 'local', where, settings: { path: where } };
   }
 
   get location(): string {

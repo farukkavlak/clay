@@ -52,7 +52,17 @@ describe('a state kept on an HTTP server', () => {
 
     expect(stateOnServer()).toMatchObject({ serial: 0, resources: {} });
     expect(await exists('clay.state.json')).toBe(false);
-    expect(JSON.parse(await fs.readFile(path.join(dir, '.clay', 'backend.json'), 'utf8'))).toEqual({ type: 'http', where: `${server.url}/state` });
+    expect(JSON.parse(await fs.readFile(path.join(dir, '.clay', 'backend.json'), 'utf8'))).toEqual({
+      type: 'http',
+      settings: {
+        address: `${server.url}/state`,
+        update_method: 'POST',
+        lock_address: `${server.url}/lock`,
+        lock_method: 'LOCK',
+        unlock_address: `${server.url}/lock`,
+        unlock_method: 'UNLOCK',
+      },
+    });
   });
 
   it('is written by apply under the lock it takes, and the lock released', async () => {
@@ -69,6 +79,23 @@ describe('a state kept on an HTTP server', () => {
     expect(writes.map(({ id }) => id)).toEqual(writes.map(() => lockId));
     expect(server.received.at(-1)?.method).toBe('UNLOCK');
     expect(await exists('clay.state.json')).toBe(false);
+  });
+
+  it('is run on again once init takes a lock address the configuration changed, with the state left on the server', async () => {
+    await clayOutput(dir, 'init');
+    await clayOutput(dir, 'apply', '--yes');
+    const config = path.join(dir, 'main.clay');
+    const written = await fs.readFile(config, 'utf8');
+    await fs.writeFile(config, written.replace(`${server.url}/lock`, `${server.url}/lock?team=a`), 'utf8');
+
+    const refused = await refusal('plan');
+    expect(refused.code).toBe(1);
+    expect(refused.stderr).toContain(
+      `lock_address of backend "http" is "${server.url}/lock?team=a" in the configuration, and "${server.url}/lock" where \`clay init\` took it; run \`clay init\``
+    );
+
+    expect(await clayOutput(dir, 'init')).toContain('Kept the state already here');
+    expect(await clayOutput(dir, 'plan')).toContain('No changes');
   });
 
   it('is named by its address where the server holds none', async () => {
