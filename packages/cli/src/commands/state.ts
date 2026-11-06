@@ -7,6 +7,7 @@ import { styleText } from 'node:util';
 import { describeError } from '../describeError';
 import { interruptible } from '../interruptible';
 import { attributeName, printable } from '../printable';
+import { releasedAfter } from '../released';
 import { show } from '../showPlan';
 import { stateFile } from '../stateFile';
 
@@ -121,11 +122,12 @@ export function createStateCommand(): Command {
     .argument('<destination>', 'Destination address')
     .action(async (source, destination) => {
       const files = configHere();
+      let code: number;
       try {
         const manager = getStateManager(files);
-        await interruptible(async () => {
-          await manager.lock('state mv');
-          try {
+        code = await interruptible(() =>
+          releasedAfter(manager, async () => {
+            await manager.lock('state mv');
             const state = await manager.read();
 
             if (!findResource(state, source)) throw new Error(`Source resource not found: ${source}`);
@@ -138,16 +140,14 @@ export function createStateCommand(): Command {
 
             await manager.write(state);
             console.log(styleText('green', 'Successfully moved resource.'));
-          } catch (error) {
-            await manager.unlockAfter(error);
-          } finally {
-            await manager.unlock();
-          }
-        });
+            return 0;
+          })
+        );
       } catch (error) {
         console.error(styleText('red', 'Error moving resource:'), describeError(error, files));
-        process.exit(1);
+        code = 1;
       }
+      if (code !== 0) process.exit(code);
     });
 
   command
@@ -156,11 +156,12 @@ export function createStateCommand(): Command {
     .argument('<address>', 'Resource address')
     .action(async (address) => {
       const files = configHere();
+      let code: number;
       try {
         const manager = getStateManager(files);
-        await interruptible(async () => {
-          await manager.lock('state rm');
-          try {
+        code = await interruptible(() =>
+          releasedAfter(manager, async () => {
+            await manager.lock('state rm');
             const state = await manager.read();
             const key = Address.parse(address).toString();
 
@@ -173,16 +174,14 @@ export function createStateCommand(): Command {
 
             await manager.write(state);
             console.log(styleText('green', 'Successfully removed resource.'));
-          } catch (error) {
-            await manager.unlockAfter(error);
-          } finally {
-            await manager.unlock();
-          }
-        });
+            return 0;
+          })
+        );
       } catch (error) {
         console.error(styleText('red', 'Error removing resource:'), describeError(error, files));
-        process.exit(1);
+        code = 1;
       }
+      if (code !== 0) process.exit(code);
     });
 
   return command;

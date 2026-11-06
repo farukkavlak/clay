@@ -33,7 +33,13 @@ describe('CLI: init command', () => {
 
   it('should handle errors gracefully', async () => {
     vi.mocked(StateManager).mockImplementation(function () {
-      return { writeIfAbsent: vi.fn().mockRejectedValue(new Error('Permission denied')) } as Partial<StateManager> as StateManager;
+      return {
+        lock: vi.fn(),
+        writeIfAbsent: vi.fn().mockRejectedValue(new Error('Permission denied')),
+        unlockAfter: vi.fn(async (error: unknown) => {
+          throw error;
+        }),
+      } as Partial<StateManager> as StateManager;
     });
 
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
@@ -50,7 +56,13 @@ describe('CLI: init command', () => {
 
   it('should handle non-Error exceptions', async () => {
     vi.mocked(StateManager).mockImplementation(function () {
-      return { writeIfAbsent: vi.fn().mockRejectedValue('String error') } as Partial<StateManager> as StateManager;
+      return {
+        lock: vi.fn(),
+        writeIfAbsent: vi.fn().mockRejectedValue('String error'),
+        unlockAfter: vi.fn(async (error: unknown) => {
+          throw error;
+        }),
+      } as Partial<StateManager> as StateManager;
     });
 
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);

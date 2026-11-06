@@ -14,6 +14,7 @@ import { actionLine, changesNothing, destroyedLine, displayPlan, readLine, shown
 import { parallelismOption } from '../parallelismOption';
 import { printable } from '../printable';
 import { refreshOption } from '../refreshOption';
+import { releasedAfter } from '../released';
 import { stateFile } from '../stateFile';
 
 /** Counts as the plan summary does: a replace is one add and one destroy. */
@@ -124,7 +125,7 @@ interface ApplyOptions {
 async function applyFromDisk(cwd: string, recording: RecordingFiles, options: ApplyOptions): Promise<number> {
   const manager = new StateManager(stateFile(cwd, recording));
 
-  try {
+  return releasedAfter(manager, async () => {
     console.log(styleText('blue', 'Calculating plan...'));
     const plan = await stoppedAtOnce(manager, async () => {
       await manager.lock('apply');
@@ -141,12 +142,8 @@ async function applyFromDisk(cwd: string, recording: RecordingFiles, options: Ap
       return 1;
     }
 
-    return await runAndReport((signal) => newOrchestrator(cwd, files, manager).runPlan(plan, { parallelism: options.parallelism, signal }), forgotten(plan));
-  } catch (error) {
-    return await manager.unlockAfter(error);
-  } finally {
-    await manager.unlock();
-  }
+    return runAndReport((signal) => newOrchestrator(cwd, files, manager).runPlan(plan, { parallelism: options.parallelism, signal }), forgotten(plan));
+  });
 }
 
 /** Errors name the user's file and say what to do. */
@@ -169,7 +166,7 @@ async function readPlanFile(planFileArg: string, files: ConfigFiles): Promise<Pl
 }
 
 async function executeApplyFromPlan(cwd: string, planFile: PlanFile, files: ConfigFiles, parallelism?: number): Promise<number> {
-  const orchestrator = newOrchestrator(cwd, files);
+  const manager = new StateManager(stateFile(cwd, files));
 
   console.log(styleText('blue', 'Applying from saved plan...'));
   console.log(styleText('gray', `Plan created: ${planFile.timestamp}`));
@@ -177,7 +174,10 @@ async function executeApplyFromPlan(cwd: string, planFile: PlanFile, files: Conf
   displayPlan(planFile);
   if (changesNothing(planFile)) return 0;
 
-  return runAndReport((signal) => orchestrator.runPlan(planFile, { parallelism, signal }), forgotten(planFile));
+  return releasedAfter(manager, async () => {
+    await stoppedAtOnce(manager, () => manager.lock('apply'));
+    return runAndReport((signal) => newOrchestrator(cwd, files, manager).runPlan(planFile, { parallelism, signal }), forgotten(planFile));
+  });
 }
 
 export function createApplyCommand() {

@@ -1077,6 +1077,13 @@ Terraform has it since backends replaced `-state`.
       lock of the run that took it next. Unlock now removes only the lock with its own id
 - [x] An unlock that failed in a `finally` replaced the error the run itself failed with.
       Both are now kept, and the CLI prints each
+- [x] An unlock that failed after the work was done was reported as the work failing.
+      The CLI now says what the work did, then "The lock could not be released: <reason>",
+      and exits 1
+- [ ] Every command now takes and releases the lock itself, so the engine's own locking
+      (`Orchestrator.plan`, `runPlan` without a held lock, `writeIfAbsent`) is reached
+      only from tests. Drop it and have the engine require a held lock, or keep it as the
+      library's way to run
 - [ ] The state is renamed into place, and the journal appended to, without an fsync, so
       a power loss may leave either empty on a file system that reorders writes
 

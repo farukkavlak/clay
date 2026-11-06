@@ -1,7 +1,7 @@
 import { StateManager } from '@clay/state';
 import { styleText } from 'node:util';
 
-import { messageOf, printable } from './printable';
+import { reportLockLeft } from './released';
 
 /** The exit code of a process stopped by SIGINT: 128 plus the signal's number. */
 export const INTERRUPTED = 130;
@@ -38,7 +38,7 @@ export async function stoppedAtOnce<T>(manager: StateManager, work: () => Promis
       await manager.unlock();
     } catch (error) {
       // Every error is reported and none rethrown: in a signal handler a rethrow is an unhandled rejection, and the process exits either way.
-      console.error(styleText('red', 'The lock could not be released:'), printable(messageOf(error)));
+      reportLockLeft(error);
     }
     process.exit(INTERRUPTED);
   };

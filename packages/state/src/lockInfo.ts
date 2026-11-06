@@ -83,3 +83,11 @@ export class StateLocked extends Error {
     this.name = 'StateLocked';
   }
 }
+
+/** A release that failed, so the lock may still be held; the backend's error is its cause. */
+export class LockNotReleased extends Error {
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause });
+    this.name = 'LockNotReleased';
+  }
+}

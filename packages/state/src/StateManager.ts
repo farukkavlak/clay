@@ -1,7 +1,7 @@
 import { State, STATE_VERSION } from '@clay/contracts';
 
 import { journalLine } from './journal';
-import { LockInfo, newLockInfo } from './lockInfo';
+import { LockInfo, LockNotReleased, newLockInfo } from './lockInfo';
 import { StateBackend } from './StateBackend';
 
 export class StateManager {
@@ -91,14 +91,19 @@ export class StateManager {
     this.lockId = info.id;
   }
 
-  /** Releases only what this manager took, once. */
+  /** Releases only what this manager took, once. A release that fails throws `LockNotReleased`. */
   async unlock(): Promise<void> {
     await this.taking;
     const id = this.lockId;
     if (id === undefined) return;
 
     this.lockId = undefined;
-    await this.backend.unlock(id);
+    try {
+      await this.backend.unlock(id);
+    } catch (error) {
+      // Whatever stopped the release, the lock may still be held, so every failure is that one.
+      throw new LockNotReleased(error);
+    }
   }
 
   /** True once this manager has taken the lock, until it releases it. */
