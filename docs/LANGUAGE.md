@@ -504,10 +504,39 @@ clay {
 }
 ```
 
-`local` is the one type so far. `path` is relative to the root, or absolute, and is a
-string written out, since the state has to be found before anything has a value. It cannot
-be empty or end in `.clay`. With no block, or no `path`, the state is `clay.state.json` next
-to the configuration. The lock, the backup and the journal sit beside the file it names.
+Every value in the block is a string written out, since the state has to be found before
+anything has a value.
+
+`local` keeps the state in a file. `path` is relative to the root, or absolute. It cannot be
+empty or end in `.clay`. With no block, or no `path`, the state is `clay.state.json` next to
+the configuration. The lock, the backup and the journal sit beside the file it names.
+
+`http` keeps the state on a server, in the protocol Terraform's `http` backend uses:
+
+```
+clay {
+  backend "http" {
+    address      = "https://state.example.com/prod"
+    lock_address = "https://state.example.com/prod/lock"
+  }
+}
+```
+
+- A `GET` of `address` reads the state. A 404, a 204 or an empty body is no state yet.
+- `update_method` (`POST` by default) writes it whole, with a `Content-MD5` header and
+  the lock's id as `?ID=`. 200, 201 and 204 count as written.
+- `lock_method` (`LOCK`) sends the lock to `lock_address` as JSON. A 409 or 423 means
+  another run holds it, and its body names that run.
+- `unlock_method` (`UNLOCK`) sends the same body to `unlock_address`, which is
+  `lock_address` where none is given. A lock or an unlock counts on 200, 201 or 204.
+
+No redirect is followed. Followed, a `POST` would go on as a `GET`, and its 200 would
+count as written. An address names where the server answers.
+
+`address` and `lock_address` are required, so the state is never written without the lock.
+An address is `http` or `https`. It cannot hold a user or a password, since every message
+that names the state would print them. Clay sends no credentials yet, and does not retry
+a request that fails.
 
 A root module holds one backend across its files, and a module none. Every command reads
 the block, so a syntax error in a root file stops `output` and `state` too. A saved plan
@@ -519,8 +548,9 @@ exist, and makes none. Every command but `validate` then refuses a configuration
 another place than `init` took, a removed block too, and says to run `clay init`. With no
 block and no record the state is the default file, and no `init` is needed.
 
-`clay init` does not move a state. Where one is at the old place it refuses, until the file
-is moved by hand or removed, with any `.journal` beside it.
+`clay init` takes the lock while it writes the first state. It does not move a state. Where
+one is at the old place it refuses, until it is moved by hand or removed, with any
+`.journal` beside a file.
 
 ## Saved plans
 

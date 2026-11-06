@@ -34,7 +34,7 @@ function getStateManager(files: RecordingFiles): StateManager {
 }
 
 async function reportEmpty(backend: StateBackend): Promise<void> {
-  const start = (await backend.exists()) ? 'No resources in' : 'No state file found at';
+  const start = (await backend.exists()) ? 'No resources in' : 'No state found at';
 
   console.log(styleText('yellow', printable(`${start} ${backend.location}`)));
 }

@@ -216,7 +216,7 @@ describe('a control character in what the CLI prints to stdout', () => {
   ])('shows an escape in the path of a state it cannot find as a character of its own, in %s', async (_, args) => {
     const printed = await succeeding(...args);
 
-    expect(printed).toContain('No state file found at');
+    expect(printed).toContain('No state found at');
     expect(printed).toContain('\u241B');
     expect(printed).not.toContain(ESCAPE);
   });

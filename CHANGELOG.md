@@ -51,6 +51,10 @@ a configuration means or how the state file is written.
   `create_before_destroy` replace has left it deposed
 - A `clay { backend "local" { path = "..." } }` block names where the state lives.
   `clay init` remembers it, and a command refuses a configuration that names another place
+- `backend "http"` keeps the state on a server, read and written over HTTP with a lock
+  the server holds
+- `clay init` takes the state lock while it writes the first state, on every backend, so
+  a lock left behind stops it
 - `apply --parallelism`: each action runs once what it reads is done, with ten provider
   calls at once by default. A failure stops only what reads it, and every failure of a
   run is reported. `plan` takes it too, for the refresh, schemas, block checks, what

@@ -38,7 +38,7 @@ export function createOutputCommand(): Command {
         const backend = stateFile(cwd, files);
         if (!(await backend.exists())) {
           if (options.json) displayOutputs({}, true);
-          else console.log(styleText('yellow', `No state file found at ${printable(backend.location)}`));
+          else console.log(styleText('yellow', `No state found at ${printable(backend.location)}`));
           return;
         }
 
