@@ -1,12 +1,13 @@
 import { HttpBackend } from './HttpBackend';
 import { credentialsFrom, PASSWORD, USERNAME } from './httpCredentials';
+import { RETRY_NAMES, retryFrom } from './httpRetry';
 import { checkNames, Environment, Settings } from './settings';
 
 const SECRETS = new Map([
   ['username', USERNAME],
   ['password', PASSWORD],
 ]);
-const TAKES = ['address', 'update_method', 'lock_address', 'lock_method', 'unlock_address', 'unlock_method'];
+const TAKES = ['address', 'update_method', 'lock_address', 'lock_method', 'unlock_address', 'unlock_method', ...RETRY_NAMES];
 
 /** A token, as a request line spells a method. */
 const METHOD = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
@@ -83,5 +84,6 @@ export function httpFrom(settings: Settings, env: Environment): HttpBackend {
     unlockAddress: unlock === undefined ? lockAddress : urlOf(settings, unlock, 'unlock_address'),
     unlockMethod: methodOf(settings, 'unlock_method', 'UNLOCK'),
     credentials: credentialsFrom(env),
+    retry: retryFrom(settings),
   });
 }

@@ -69,12 +69,14 @@ async function leftBehind(before: StateBackend, workingDir: string): Promise<boo
 
 const isSame = (a: BackendChoice, b: BackendChoice) => a.type === b.type && a.where === b.where;
 
+const spelled = (value: string | number | undefined) => (typeof value === 'number' ? String(value) : `"${value}"`);
+
 /** The first setting the configuration gives otherwise than `init` took it, for the same place. */
 function changed(before: BackendChoice, now: BackendChoice): string | undefined {
   const name = [...Object.keys(now.settings), ...Object.keys(before.settings)].find((key) => now.settings[key] !== before.settings[key]);
   if (name === undefined) return undefined;
 
-  return `${name} of backend "${now.type}" is "${now.settings[name]}" in the configuration, and "${before.settings[name]}" where \`clay init\` took it; run \`clay init\``;
+  return `${name} of backend "${now.type}" is ${spelled(now.settings[name])} in the configuration, and ${spelled(before.settings[name])} where \`clay init\` took it; run \`clay init\``;
 }
 
 /** Refuses a configuration that names another place than `init` last took, which would start from an empty state, or reaches it otherwise. */

@@ -1,3 +1,4 @@
+import { ExactNumber } from '@clay/contracts';
 import { BackendBlock, ConfigError } from '@clay/parser';
 
 /** The process environment, passed in so a backend reads no global. */
@@ -9,6 +10,8 @@ export interface Settings {
   readonly names: readonly string[];
   /** Undefined where none is given. */
   text(name: string): string | undefined;
+  /** Undefined where none is given. */
+  number(name: string): ExactNumber | undefined;
   /** Refuses the value of `name`, or the backend as a whole. */
   refuse(problem: string, name?: string): never;
 }
@@ -25,11 +28,20 @@ function textOf({ backendType, attributes }: BackendBlock, name: string): string
   return at.value;
 }
 
+function numberOf({ backendType, attributes }: BackendBlock, name: string): ExactNumber | undefined {
+  const at = attributes[name];
+  if (at === undefined) return undefined;
+  if (at.type !== 'Number') throw new ConfigError(`${name} of backend "${backendType.value}" is a number written out`, at.position);
+
+  return at.value;
+}
+
 export function blockSettings(block: BackendBlock): Settings {
   return {
     type: block.backendType.value,
     names: Object.keys(block.attributes),
     text: (name) => textOf(block, name),
+    number: (name) => numberOf(block, name),
     refuse: (problem, name) => {
       throw new ConfigError(problem, (name === undefined ? undefined : block.attributes[name])?.position ?? block.backendType.position);
     },
@@ -44,11 +56,13 @@ export function recordSettings(type: string, values: Readonly<Record<string, unk
     throw unwritten(record);
   };
   const textIn = (value: unknown): string => (typeof value === 'string' && value !== '' ? value : refuse());
+  const numberIn = (value: unknown): ExactNumber => (Number.isSafeInteger(value) ? ExactNumber.parse(String(value)) : refuse());
 
   return {
     type,
     names: Object.keys(values),
     text: (name) => (Object.hasOwn(values, name) ? textIn(values[name]) : undefined),
+    number: (name) => (Object.hasOwn(values, name) ? numberIn(values[name]) : undefined),
     refuse,
   };
 }

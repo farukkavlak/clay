@@ -1,10 +1,12 @@
 import { emptyState, State } from '@clay/contracts';
 import { createHash } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 
 import { LockInfo, lockInfoFrom, StateLocked } from '../lockInfo';
 import { BackendChoice, StateBackend } from '../StateBackend';
 import { parseState, serializeState } from '../stateFile';
 import { authorization, Credentials, PASSWORD, USERNAME } from './httpCredentials';
+import { askedWait, backoff, passing, Retry } from './httpRetry';
 
 export interface HttpSettings {
   readonly address: URL;
@@ -14,14 +16,24 @@ export interface HttpSettings {
   readonly unlockAddress: URL;
   readonly unlockMethod: string;
   readonly credentials?: Credentials;
+  readonly retry: Retry;
 }
 
-interface Answer {
+/** What one try was answered. */
+interface Reply {
   readonly status: number;
   readonly body: string;
   /** Where a redirect points. */
   readonly location: string | null;
+  readonly retryAfter: string | null;
 }
+
+interface Answer extends Reply {
+  /** The last of them gave this answer. */
+  readonly tries: number;
+}
+
+export type Sleep = (ms: number) => Promise<void>;
 
 /** A request the server gave no answer to, or no whole one, so whether it acted is not known. */
 export class NoAnswer extends Error {
@@ -45,45 +57,72 @@ function withBody(method: string, body: string): Outgoing {
   return { method, body, headers: { 'Content-Type': 'application/json', 'Content-MD5': digest } };
 }
 
-/** fetch throws a TypeError for a connection that failed, with the reason as its cause. */
-function reason(error: TypeError): string {
+/** fetch throws a TypeError for a connection that failed, with the reason as its cause, and the signal's reason for a timeout. */
+function noAnswer(error: unknown, what: string, timeout: number): NoAnswer {
+  if (error instanceof DOMException && error.name === 'TimeoutError') return new NoAnswer(`${what} (timed out after ${timeout}s)`, error);
+  if (!(error instanceof TypeError)) throw error;
+
   const { code, message } = (error.cause ?? error) as NodeJS.ErrnoException;
-  return code ?? message;
+  return new NoAnswer(`${what} (${code ?? message})`, error);
 }
 
 /**
  * No redirect is followed: fetch would send a POST on as a GET, and a 200 for that would count as written or locked.
  * The body is read apart, so one cut off after the status is not taken for no answer.
  */
-async function send(url: URL, request: Outgoing): Promise<Answer> {
+async function tryOnce(url: URL, request: Outgoing, timeout: number): Promise<Reply | NoAnswer> {
   const { method } = request;
+  const signal = AbortSignal.timeout(timeout * 1000);
   let response: Response;
   try {
-    response = await fetch(url, { ...request, redirect: 'manual' });
+    response = await fetch(url, { ...request, redirect: 'manual', signal });
   } catch (error) {
-    if (error instanceof TypeError) throw new NoAnswer(`${method} ${url.href} got no answer (${reason(error)})`, error);
-
-    throw error;
+    return noAnswer(error, `${method} ${url.href} got no answer`, timeout);
   }
 
+  const { headers } = response;
   try {
-    return { status: response.status, body: await response.text(), location: response.headers.get('location') };
+    return { status: response.status, body: await response.text(), location: headers.get('location'), retryAfter: headers.get('retry-after') };
   } catch (error) {
-    if (error instanceof TypeError) throw new NoAnswer(`${method} ${url.href} answered ${response.status}, but the body was cut off (${reason(error)})`, error);
-
-    throw error;
+    return noAnswer(error, `${method} ${url.href} answered ${response.status}, but the body was cut off`, timeout);
   }
 }
 
-function unexpectedAnswer(method: string, url: URL, { status, location }: Answer, withCredentials: boolean): Error {
-  const at = `${method} ${url.href} answered ${status}`;
-  if (status === 401 && withCredentials) return new Error(`${at}: the server refuses the credentials in ${USERNAME} and ${PASSWORD}`);
-  if (status === 401) return new Error(`${at}: the server asks for credentials; give them in ${USERNAME} and ${PASSWORD}`);
-  if (status === 403) return new Error(`${at}: the server refuses this request`);
-  if (status >= 300 && status < 400) return new Error(`${at}${location ? ` to ${location}` : ''}; Clay follows no redirect, so the address must name where the server answers`);
+/** Undefined where the request is not tried again: the tries are used up, another would be answered the same, or the server asks for a longer wait than the longest. */
+function waitAfter(retry: Retry, tried: number, reply: Reply | NoAnswer, now: number): number | undefined {
+  if (tried > retry.max) return undefined;
+  if (reply instanceof NoAnswer) return backoff(retry, tried);
+  if (!passing(reply.status)) return undefined;
 
-  return new Error(at);
+  const asked = askedWait(reply.retryAfter, now);
+  if (asked === undefined) return backoff(retry, tried);
+  return asked <= retry.waitMax ? asked : undefined;
 }
+
+const triedOf = (tries: number) => (tries > 1 ? ` after ${tries} tries` : '');
+
+function why({ status, location }: Answer, withCredentials: boolean): string {
+  if (status === 401 && withCredentials) return `: the server refuses the credentials in ${USERNAME} and ${PASSWORD}`;
+  if (status === 401) return `: the server asks for credentials; give them in ${USERNAME} and ${PASSWORD}`;
+  if (status === 403) return ': the server refuses this request';
+  if (status >= 300 && status < 400) return `${location ? ` to ${location}` : ''}; Clay follows no redirect, so the address must name where the server answers`;
+
+  return '';
+}
+
+function unexpectedAnswer(method: string, url: URL, answer: Answer, withCredentials: boolean): Error {
+  const asked = answer.retryAfter === null ? '' : `; it asks to be tried again after ${answer.retryAfter}`;
+
+  return new Error(`${method} ${url.href} answered ${answer.status}${triedOf(answer.tries)}${why(answer, withCredentials)}${asked}`);
+}
+
+function settled(reply: Reply | NoAnswer, tries: number): Answer {
+  if (reply instanceof NoAnswer) throw new NoAnswer(`${reply.message}${triedOf(tries)}`, reply.cause);
+
+  return { ...reply, tries };
+}
+
+const mayHold = (id: string, free: string) => `The server may hold lock ${id} all the same; if it does, ${free}`;
 
 /** What a write, a lock or an unlock the server took answers. */
 const DONE = new Set([200, 201, 204]);
@@ -96,8 +135,11 @@ export class HttpBackend implements StateBackend {
   /** Sent with every request, the lock's among them. */
   private readonly authorization: string | undefined;
 
-  constructor(private readonly settings: HttpSettings) {
-    const { address, updateMethod, lockAddress, lockMethod, unlockAddress, unlockMethod, credentials } = settings;
+  constructor(
+    private readonly settings: HttpSettings,
+    private readonly sleep: Sleep = delay
+  ) {
+    const { address, updateMethod, lockAddress, lockMethod, unlockAddress, unlockMethod, credentials, retry } = settings;
     this.authorization = credentials && authorization(credentials);
     this.choice = {
       type: 'http',
@@ -109,6 +151,10 @@ export class HttpBackend implements StateBackend {
         lock_method: lockMethod,
         unlock_address: unlockAddress.href,
         unlock_method: unlockMethod,
+        retry_max: retry.max,
+        retry_wait_min: retry.waitMin,
+        retry_wait_max: retry.waitMax,
+        timeout: retry.timeout,
       },
     };
   }
@@ -154,10 +200,19 @@ export class HttpBackend implements StateBackend {
     const free = `send ${unlockMethod} to ${unlockAddress.href} with what the lock holds`;
 
     const answer = await this.asked(this.send(lockAddress, withBody(lockMethod, body)), info.id, free);
-    if (answer.status === 409 || answer.status === 423) throw new StateLocked(lockInfoFrom(answer.body), free);
-    if (!DONE.has(answer.status)) throw this.unexpected(lockMethod, lockAddress, answer);
+    if (!DONE.has(answer.status) && !this.ownLock(answer, info.id)) {
+      if (answer.status === 409 || answer.status === 423) throw new StateLocked(lockInfoFrom(answer.body), free);
+
+      const error = this.unexpected(lockMethod, lockAddress, answer);
+      throw answer.tries === 1 ? error : new Error(`${error.message}. ${mayHold(info.id, free)}`);
+    }
 
     this.held = { id: info.id, body };
+  }
+
+  /** A try the server took, and whose answer was lost, has the lock held by this run's own id when the next try comes. */
+  private ownLock(answer: Answer, id: string): boolean {
+    return (answer.status === 409 || answer.status === 423) && lockInfoFrom(answer.body)?.id === id;
   }
 
   /** A lock request with no whole answer may have been taken all the same, and no run would release it. */
@@ -165,7 +220,7 @@ export class HttpBackend implements StateBackend {
     try {
       return await sent;
     } catch (error) {
-      if (error instanceof NoAnswer) throw new Error(`${error.message}. The server may hold lock ${id} all the same; if it does, ${free}`, { cause: error });
+      if (error instanceof NoAnswer) throw new Error(`${error.message}. ${mayHold(id, free)}`, { cause: error });
 
       throw error;
     }
@@ -177,7 +232,12 @@ export class HttpBackend implements StateBackend {
     if (this.held?.id !== id) throw new Error(`This run holds no lock ${id} on ${unlockAddress.href}, so it releases none`);
 
     const answer = await this.send(unlockAddress, withBody(unlockMethod, this.held.body));
-    if (!DONE.has(answer.status)) throw this.unexpected(unlockMethod, unlockAddress, answer);
+    if (!DONE.has(answer.status)) {
+      const error = this.unexpected(unlockMethod, unlockAddress, answer);
+      if (answer.tries === 1) throw error;
+
+      throw new Error(`${error.message}. A try before it may have released lock ${id} all the same`);
+    }
 
     this.held = undefined;
   }
@@ -192,10 +252,18 @@ export class HttpBackend implements StateBackend {
     return answer.body === '' ? undefined : answer.body;
   }
 
-  private send(url: URL, request: Outgoing): Promise<Answer> {
-    if (this.authorization === undefined) return send(url, request);
+  /** A try with no answer is taken again too: a write sent twice writes the same, and a lock a lost try took is known by its id. */
+  private async send(url: URL, request: Outgoing): Promise<Answer> {
+    const { retry } = this.settings;
+    const outgoing = this.authorization === undefined ? request : { ...request, headers: { ...request.headers, Authorization: this.authorization } };
 
-    return send(url, { ...request, headers: { ...request.headers, Authorization: this.authorization } });
+    for (let tried = 1; ; tried += 1) {
+      const reply = await tryOnce(url, outgoing, retry.timeout);
+      const wait = waitAfter(retry, tried, reply, Date.now());
+      if (wait === undefined) return settled(reply, tried);
+
+      await this.sleep(wait * 1000);
+    }
   }
 
   private unexpected(method: string, url: URL, answer: Answer): Error {

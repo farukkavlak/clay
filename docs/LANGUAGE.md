@@ -504,8 +504,8 @@ clay {
 }
 ```
 
-Every value in the block is a string written out, since the state has to be found before
-anything has a value.
+Every value in the block is a string or a number written out, since the state has to be
+found before anything has a value.
 
 `local` keeps the state in a file. `path` is relative to the root, or absolute. It cannot be
 empty or end in `.clay`. With no block, or no `path`, the state is `clay.state.json` next to
@@ -535,7 +535,21 @@ count as written. An address names where the server answers.
 
 `address` and `lock_address` are required, so the state is never written without the lock.
 An address is `http` or `https`. It cannot hold a user or a password, since every message
-that names the state would print them. Clay does not retry a request that fails.
+that names the state would print them.
+
+A request that gets no answer, a 429 or a 5xx other than 501 is tried again. Each setting
+is a whole number:
+
+- `retry_max` (2, up to 100): the tries after the first.
+- `retry_wait_min` (1) and `retry_wait_max` (30), up to 3600: the first wait in
+  seconds, doubled after each try, and the longest. A `Retry-After` on the answer sets
+  the wait; one longer than `retry_wait_max` ends the tries.
+- `timeout` (30, 1 to 3600): the seconds one try may take, its body read whole. A try
+  that takes longer got no answer.
+
+A write sent twice writes the same state. A lock whose answer was lost is known on the next
+try, as the server names this run's own lock. A failed lock or unlock after more than one
+try says an earlier one may have taken or released the lock already.
 
 Basic auth comes from the environment: `CLAY_HTTP_USERNAME` and `CLAY_HTTP_PASSWORD`, sent
 with every request, the lock's too. The block refuses `username` and `password`, since the

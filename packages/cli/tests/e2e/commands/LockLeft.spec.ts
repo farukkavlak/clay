@@ -44,7 +44,7 @@ describe('a command whose work is done but whose lock is not released', () => {
   beforeEach(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-lock-left-'));
     server = await HttpStateServer.start();
-    const backend = `clay {\n  backend "http" {\n    address      = "${server.url}/state"\n    lock_address = "${server.url}/lock"\n  }\n}\n`;
+    const backend = `clay {\n  backend "http" {\n    address      = "${server.url}/state"\n    lock_address = "${server.url}/lock"\n    retry_max    = 0\n  }\n}\n`;
     await fs.writeFile(path.join(dir, 'main.clay'), backend + FILE, 'utf8');
   });
 

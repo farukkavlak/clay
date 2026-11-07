@@ -4,6 +4,7 @@ export * from './lockInfo';
 export * from './stateFile';
 export * from './backends/LocalBackend';
 export * from './backends/HttpBackend';
+export type { Retry } from './backends/httpRetry';
 export * from './backends/backendFrom';
 export * from './backends/rememberedBackend';
 export * from './entries';
