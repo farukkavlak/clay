@@ -509,6 +509,55 @@ describe('a request the HTTP server fails', () => {
   });
 });
 
+describe('a TLS handshake that fails', () => {
+  let server: HttpStateServer;
+  let waits: number[];
+
+  const TWICE: Retry = { max: 2, waitMin: 1, waitMax: 30, timeout: 5 };
+  const backendWith = (base: string) =>
+    backendAt(base, {}, 'state', TWICE, async (ms) => {
+      waits.push(ms);
+    });
+
+  beforeEach(() => {
+    waits = [];
+  });
+
+  afterEach(async () => {
+    await server.stop();
+  });
+
+  it('is not tried again where the certificate is not trusted', async () => {
+    server = await HttpStateServer.start({ tls: true });
+
+    await expect(backendWith(server.url).read()).rejects.toMatchObject({
+      name: 'HandshakeFailed',
+      message: `GET ${server.url}/state failed the TLS handshake (UNABLE_TO_VERIFY_LEAF_SIGNATURE)`,
+    });
+    expect(server.received).toEqual([]);
+    expect(waits).toEqual([]);
+  });
+
+  it('says nothing of a lock the server may hold, as no request reached it', async () => {
+    server = await HttpStateServer.start({ tls: true });
+
+    await expect(backendWith(server.url).lock(newLockInfo('apply'))).rejects.toMatchObject({
+      name: 'HandshakeFailed',
+      message: `LOCK ${server.url}/lock failed the TLS handshake (UNABLE_TO_VERIFY_LEAF_SIGNATURE)`,
+    });
+    expect(server.received).toEqual([]);
+  });
+
+  it('is not tried again where the server speaks no TLS', async () => {
+    server = await HttpStateServer.start();
+    const base = server.url.replace('http:', 'https:');
+
+    await expect(backendWith(base).read()).rejects.toMatchObject({ name: 'HandshakeFailed', message: `GET ${base}/state failed the TLS handshake (EPROTO)` });
+    expect(server.received).toEqual([]);
+    expect(waits).toEqual([]);
+  });
+});
+
 describe('the http block', () => {
   let server: HttpStateServer;
 

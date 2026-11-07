@@ -8,7 +8,7 @@ import { LockNotReleased } from '../lockInfo';
 import { BackendChoice, StateBackend } from '../StateBackend';
 import { StateManager } from '../StateManager';
 import { build } from './build';
-import { NoAnswer } from './httpRequest';
+import { HandshakeFailed, NoAnswer } from './httpRequest';
 import { LocalBackend } from './LocalBackend';
 import { Environment, recordSettings, unwritten } from './settings';
 
@@ -57,7 +57,7 @@ async function leftBehind(before: StateBackend, workingDir: string): Promise<boo
   try {
     return await before.exists();
   } catch (error) {
-    if (error instanceof NoAnswer)
+    if (error instanceof NoAnswer || error instanceof HandshakeFailed)
       throw new Error(
         `${error.message}, so whether a state is left there is not known. If that server is gone for good, remove ${recordOf(workingDir)} and run \`clay init\` again`,
         { cause: error }

@@ -1,7 +1,10 @@
 import { createHash } from 'node:crypto';
 import { once } from 'node:events';
+import { readFileSync } from 'node:fs';
 import { createServer, IncomingMessage, Server, ServerResponse } from 'node:http';
+import { createServer as createTlsServer } from 'node:https';
 import { AddressInfo } from 'node:net';
+import path from 'node:path';
 
 export interface Received {
   readonly method: string;
@@ -45,6 +48,8 @@ function send(response: ServerResponse, { status, body = '', location, retryAfte
 
 const digestOf = (body: string) => createHash('md5').update(body, 'utf8').digest('base64');
 
+const certificate = (file: string) => readFileSync(path.join(__dirname, 'tls', file));
+
 /** A state server as Terraform's http backend expects one: the state at /state, its lock at /lock. A second state at /other shares the lock. */
 export class HttpStateServer {
   state: string | undefined;
@@ -56,19 +61,21 @@ export class HttpStateServer {
   private overrides = new Map<string, Override[]>();
   private server: Server;
 
-  private constructor() {
-    this.server = createServer((request, response) => void this.answer(request, response));
+  private constructor(private readonly tls: boolean) {
+    const listener = this.answer.bind(this);
+    this.server = tls ? createTlsServer({ key: certificate('server.key'), cert: certificate('server.pem') }, listener) : createServer(listener);
   }
 
-  static async start(): Promise<HttpStateServer> {
-    const server = new HttpStateServer();
+  /** Over TLS, the server shows a certificate the test CA signed for localhost and 127.0.0.1. */
+  static async start({ tls = false } = {}): Promise<HttpStateServer> {
+    const server = new HttpStateServer(tls);
     server.server.listen(0, '127.0.0.1');
     await once(server.server, 'listening');
     return server;
   }
 
   get url(): string {
-    return `http://127.0.0.1:${(this.server.address() as AddressInfo).port}`;
+    return `${this.tls ? 'https' : 'http'}://127.0.0.1:${(this.server.address() as AddressInfo).port}`;
   }
 
   /** `request` is a method and a path, as `GET /state`; each answer is given once, in turn. */
