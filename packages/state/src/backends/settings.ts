@@ -1,5 +1,8 @@
 import { BackendBlock, ConfigError } from '@clay/parser';
 
+/** The process environment, passed in so a backend reads no global. */
+export type Environment = Readonly<Record<string, string | undefined>>;
+
 /** What a backend is built from: the block in the configuration, or the record `init` wrote. Both are checked the same way. */
 export interface Settings {
   readonly type: string;

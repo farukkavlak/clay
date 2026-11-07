@@ -22,7 +22,7 @@ async function initialize(backend: StateBackend, cwd: string, yes: boolean): Pro
   await backend.check();
 
   const stateManager = new StateManager(backend);
-  const before = rememberedBackend(cwd);
+  const before = rememberedBackend(cwd, process.env);
   const previous = { backend: before, manager: new StateManager(before) };
   const approve: Approve = yes ? async () => true : (question) => stoppedAtOnce([stateManager, previous.manager], () => confirm(question));
 

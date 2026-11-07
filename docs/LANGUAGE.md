@@ -535,8 +535,15 @@ count as written. An address names where the server answers.
 
 `address` and `lock_address` are required, so the state is never written without the lock.
 An address is `http` or `https`. It cannot hold a user or a password, since every message
-that names the state would print them. Clay sends no credentials yet, and does not retry
-a request that fails.
+that names the state would print them. Clay does not retry a request that fails.
+
+Basic auth comes from the environment: `CLAY_HTTP_USERNAME` and `CLAY_HTTP_PASSWORD`, sent
+with every request, the lock's too. The block refuses `username` and `password`, since the
+configuration is checked in, and `init` does not remember them. A variable set empty counts
+as unset. A password needs a username; a username alone is sent with an empty password. A
+401 names the two variables, and no message prints their values. A password or a username
+the variables cannot hold stops every command on an `http` backend, `validate` too.
+They go to every address the block names, over `http` as well as `https`.
 
 A root module holds one backend across its files, and a module none. Every command reads
 the block, so a syntax error in a root file stops `output` and `state` too. A saved plan

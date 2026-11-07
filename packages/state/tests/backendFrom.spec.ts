@@ -12,7 +12,7 @@ const http = (body: string) => blockOf(body, 'http');
 
 const errorOf = (block: BackendBlock): ConfigError => {
   try {
-    backendFrom(block, dir);
+    backendFrom(block, dir, {});
   } catch (error) {
     if (error instanceof ConfigError) return error;
 
@@ -24,28 +24,28 @@ const errorOf = (block: BackendBlock): ConfigError => {
 
 describe('backendFrom', () => {
   it('keeps the state next to the configuration where no block names a place', () => {
-    const backend = backendFrom(undefined, dir);
+    const backend = backendFrom(undefined, dir, {});
 
     expect(backend).toBeInstanceOf(LocalBackend);
     expect(backend.location).toBe(path.join(dir, 'clay.state.json'));
   });
 
   it('keeps it there where the block names none', () => {
-    expect(backendFrom(blockOf(''), dir).location).toBe(path.join(dir, 'clay.state.json'));
+    expect(backendFrom(blockOf(''), dir, {}).location).toBe(path.join(dir, 'clay.state.json'));
   });
 
   it('reads a path from the working directory', () => {
-    expect(backendFrom(blockOf('path = "deep/s.json"'), dir).location).toBe(path.join(dir, 'deep', 's.json'));
+    expect(backendFrom(blockOf('path = "deep/s.json"'), dir, {}).location).toBe(path.join(dir, 'deep', 's.json'));
   });
 
   it('reads a path out of the working directory', () => {
-    expect(backendFrom(blockOf('path = "../s.json"'), dir).location).toBe(path.join(path.dirname(dir), 's.json'));
+    expect(backendFrom(blockOf('path = "../s.json"'), dir, {}).location).toBe(path.join(path.dirname(dir), 's.json'));
   });
 
   it('takes an absolute path as it is', () => {
     const elsewhere = path.resolve('/elsewhere/s.json');
 
-    expect(backendFrom(blockOf(`path = "${elsewhere}"`), dir).location).toBe(elsewhere);
+    expect(backendFrom(blockOf(`path = "${elsewhere}"`), dir, {}).location).toBe(elsewhere);
   });
 
   it.each([
@@ -79,7 +79,7 @@ describe('backendFrom', () => {
     const ADDRESSES = 'address = "https://state.example/s"\n    lock_address = "https://state.example/l"';
 
     it('keeps the state at its address', () => {
-      const backend = backendFrom(http(ADDRESSES), dir);
+      const backend = backendFrom(http(ADDRESSES), dir, {});
 
       expect(backend).toBeInstanceOf(HttpBackend);
       expect(backend.location).toBe('https://state.example/s');
@@ -127,9 +127,20 @@ describe('backendFrom', () => {
     });
 
     it('refuses an attribute it does not take, naming those it does', () => {
-      const error = errorOf(http(`${ADDRESSES}\n    username = "me"`));
+      const error = errorOf(http(`${ADDRESSES}\n    bucket = "b"`));
 
-      expect(error.message).toBe('backend "http" takes only "address", "update_method", "lock_address", "lock_method", "unlock_address", "unlock_method", not "username"');
+      expect(error.message).toBe('backend "http" takes only "address", "update_method", "lock_address", "lock_method", "unlock_address", "unlock_method", not "bucket"');
+      expect(error.position).toMatchObject({ line: 5, column: 14 });
+    });
+
+    it.each([
+      ['username', 'CLAY_HTTP_USERNAME'],
+      ['password', 'CLAY_HTTP_PASSWORD'],
+    ])('refuses a %s in the block, naming where it is read from, at the value', (name, variable) => {
+      const error = errorOf(http(`${ADDRESSES}\n    ${name} = "secret"`));
+
+      expect(error.message).toBe(`${name} of backend "http" is read from ${variable}, never from the configuration, which is checked in`);
+      expect(error.message).not.toContain('secret');
       expect(error.position).toMatchObject({ line: 5, column: 16 });
     });
   });

@@ -10,7 +10,7 @@ import { StateManager } from '../StateManager';
 import { build } from './build';
 import { NoAnswer } from './HttpBackend';
 import { LocalBackend } from './LocalBackend';
-import { recordSettings, unwritten } from './settings';
+import { Environment, recordSettings, unwritten } from './settings';
 
 const recordOf = (workingDir: string) => path.join(workingDir, '.clay', 'backend.json');
 
@@ -32,7 +32,7 @@ function shapeOf(read: unknown): { type: string; settings: Record<string, unknow
 }
 
 /** Built again from what `init` wrote, so it is checked as a block is. With no record, the state is where it is with no block. */
-export function rememberedBackend(workingDir: string): StateBackend {
+export function rememberedBackend(workingDir: string, env: Environment): StateBackend {
   const record = recordOf(workingDir);
   let content: string;
 
@@ -47,7 +47,7 @@ export function rememberedBackend(workingDir: string): StateBackend {
   const shape = shapeOf(parsedChoice(content));
   if (shape === undefined) throw unwritten(record);
 
-  return build(recordSettings(shape.type, shape.settings, record), workingDir);
+  return build(recordSettings(shape.type, shape.settings, record), workingDir, env);
 }
 
 /** A journal alone counts where the state is a file, so what a stopped run recorded is not left unseen. */
@@ -78,8 +78,8 @@ function changed(before: BackendChoice, now: BackendChoice): string | undefined 
 }
 
 /** Refuses a configuration that names another place than `init` last took, which would start from an empty state, or reaches it otherwise. */
-export function checkBackend(backend: StateBackend, workingDir: string, position?: Position): void {
-  const before = rememberedBackend(workingDir).choice;
+export function checkBackend(backend: StateBackend, workingDir: string, env: Environment, position?: Position): void {
+  const before = rememberedBackend(workingDir, env).choice;
   const now = backend.choice;
   const message = isSame(before, now)
     ? changed(before, now)

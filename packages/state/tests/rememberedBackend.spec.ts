@@ -23,7 +23,7 @@ describe('the backend init remembers', () => {
   const write = (content: unknown) => fs.writeFile(recordPath(), JSON.stringify(content), 'utf8');
   const recorded = async (): Promise<unknown> => JSON.parse(await fs.readFile(recordPath(), 'utf8'));
   const previous = () => {
-    const backend = rememberedBackend(dir);
+    const backend = rememberedBackend(dir, {});
     return { backend, manager: new StateManager(backend) };
   };
   const old = () => new LocalBackend(dir);
@@ -46,8 +46,8 @@ describe('the backend init remembers', () => {
     await adoptBackend(new LocalBackend(dir, 'other.json'), previous(), dir, unasked);
 
     expect(await fs.readdir(path.join(dir, '.clay'))).toEqual(['backend.json']);
-    expect(() => checkBackend(new LocalBackend(dir, 'other.json'), dir)).not.toThrow();
-    expect(() => checkBackend(new LocalBackend(dir), dir)).toThrow('keeps its state in "other.json"');
+    expect(() => checkBackend(new LocalBackend(dir, 'other.json'), dir, {})).not.toThrow();
+    expect(() => checkBackend(new LocalBackend(dir), dir, {})).toThrow('keeps its state in "other.json"');
   });
 
   it('records every setting, and nothing else', async () => {
@@ -70,13 +70,13 @@ describe('the backend init remembers', () => {
     await fs.mkdir(path.join(dir, '.clay'));
     await (typeof content === 'string' ? fs.writeFile(recordPath(), content, 'utf8') : write(content));
 
-    expect(() => checkBackend(new LocalBackend(dir), dir)).toThrow(`${recordPath()} is not what \`clay init\` writes; remove it and run \`clay init\``);
+    expect(() => checkBackend(new LocalBackend(dir), dir, {})).toThrow(`${recordPath()} is not what \`clay init\` writes; remove it and run \`clay init\``);
   });
 
   it('passes on a record it cannot read, rather than taking it as no record', async () => {
     await fs.mkdir(path.join(dir, '.clay', 'backend.json'), { recursive: true });
 
-    expect(() => checkBackend(new LocalBackend(dir), dir)).toThrow('EISDIR');
+    expect(() => checkBackend(new LocalBackend(dir), dir, {})).toThrow('EISDIR');
   });
 
   it('passes on a place it cannot ask about, rather than taking it as nothing there', async () => {
@@ -101,14 +101,14 @@ describe('the backend init remembers', () => {
     it('is remembered by its address', async () => {
       await adoptBackend(backendOn('state'), previous(), dir, unasked);
 
-      expect(() => checkBackend(backendOn('state'), dir)).not.toThrow();
-      expect(() => checkBackend(backendOn('other'), dir)).toThrow(`keeps its state in "${server.url}/state" (http), and the configuration names "${server.url}/other" (http)`);
+      expect(() => checkBackend(backendOn('state'), dir, {})).not.toThrow();
+      expect(() => checkBackend(backendOn('other'), dir, {})).toThrow(`keeps its state in "${server.url}/state" (http), and the configuration names "${server.url}/other" (http)`);
     });
 
     it('is built again with the settings the record holds', async () => {
       await adoptBackend(backendAt(server.url, { lock: 'POST' }), previous(), dir, unasked);
 
-      expect(() => checkBackend(backendOn('state'), dir)).toThrow(
+      expect(() => checkBackend(backendOn('state'), dir, {})).toThrow(
         'lock_method of backend "http" is "LOCK" in the configuration, and "POST" where `clay init` took it; run `clay init`'
       );
     });
@@ -116,7 +116,7 @@ describe('the backend init remembers', () => {
     it('is refused where the record leaves out an address the backend needs', async () => {
       await write({ type: 'http', settings: { address: `${server.url}/state` } });
 
-      expect(() => checkBackend(backendOn('state'), dir)).toThrow('is not what `clay init` writes');
+      expect(() => checkBackend(backendOn('state'), dir, {})).toThrow('is not what `clay init` writes');
     });
 
     it('takes other settings for the same place while the server holds a state', async () => {
@@ -126,7 +126,7 @@ describe('the backend init remembers', () => {
       await adoptBackend(backendAt(server.url, { lock: 'POST' }), previous(), dir, unasked);
 
       expect(await recorded()).toMatchObject({ settings: { lock_method: 'POST' } });
-      expect(() => checkBackend(backendAt(server.url, { lock: 'POST' }), dir)).not.toThrow();
+      expect(() => checkBackend(backendAt(server.url, { lock: 'POST' }), dir, {})).not.toThrow();
     });
 
     it('moves its state to a file, and keeps it on the server', async () => {
@@ -138,7 +138,7 @@ describe('the backend init remembers', () => {
       expect(await new LocalBackend(dir).read()).toEqual(holding('a'));
       expect(server.state).toBe(serializeState(holding('a')));
       expect(server.lock).toBeUndefined();
-      expect(() => checkBackend(new LocalBackend(dir), dir)).not.toThrow();
+      expect(() => checkBackend(new LocalBackend(dir), dir, {})).not.toThrow();
     });
 
     it('takes a file state to the server', async () => {
@@ -147,7 +147,7 @@ describe('the backend init remembers', () => {
       await adoptBackend(backendOn('state'), previous(), dir, yes);
 
       expect(JSON.parse(server.state!)).toEqual(holding('a'));
-      expect(() => checkBackend(backendOn('state'), dir)).not.toThrow();
+      expect(() => checkBackend(backendOn('state'), dir, {})).not.toThrow();
     });
 
     it('says the old lock is left once the state has moved, and keeps the record', async () => {
@@ -160,7 +160,7 @@ describe('the backend init remembers', () => {
       expect(lockLeft).toBeInstanceOf(LockNotReleased);
       expect(lockLeft?.message).toContain(`UNLOCK ${server.url}/lock`);
       expect(await new LocalBackend(dir).read()).toEqual(holding('a'));
-      expect(() => checkBackend(new LocalBackend(dir), dir)).not.toThrow();
+      expect(() => checkBackend(new LocalBackend(dir), dir, {})).not.toThrow();
     });
 
     it('is left for another place where its state is gone once locked', async () => {
@@ -169,7 +169,7 @@ describe('the backend init remembers', () => {
 
       expect(await adoptBackend(new LocalBackend(dir), previous(), dir, unasked)).toEqual({});
 
-      expect(() => checkBackend(new LocalBackend(dir), dir)).not.toThrow();
+      expect(() => checkBackend(new LocalBackend(dir), dir, {})).not.toThrow();
       expect(server.lock).toBeUndefined();
     });
 
@@ -203,7 +203,7 @@ describe('the backend init remembers', () => {
 
       await adoptBackend(new LocalBackend(dir), previous(), dir, unasked);
 
-      expect(() => checkBackend(new LocalBackend(dir), dir)).not.toThrow();
+      expect(() => checkBackend(new LocalBackend(dir), dir, {})).not.toThrow();
       expect(server.received.map(({ method, path: at }) => `${method} ${at}`)).toEqual(['GET /state']);
     });
 
@@ -214,7 +214,13 @@ describe('the backend init remembers', () => {
     ])('is refused where the record names %s', async (_title, where) => {
       await record({ address: where });
 
-      expect(() => checkBackend(new LocalBackend(dir), dir)).toThrow('is not what `clay init` writes');
+      expect(() => checkBackend(new LocalBackend(dir), dir, {})).toThrow('is not what `clay init` writes');
+    });
+
+    it('is refused where the record holds a password', async () => {
+      await record({ password: 'secret' });
+
+      expect(() => checkBackend(new LocalBackend(dir), dir, {})).toThrow('is not what `clay init` writes');
     });
 
     it('names the way out where the old server gives no answer', async () => {
@@ -244,7 +250,7 @@ describe('the backend init remembers', () => {
       expect(await other().read()).toEqual(state);
       expect(await old().read()).toEqual(state);
       expect(await exists('clay.state.json.journal')).toBe(true);
-      expect(() => checkBackend(other(), dir)).not.toThrow();
+      expect(() => checkBackend(other(), dir, {})).not.toThrow();
     });
 
     it('is asked about under the lock of the old place, which is then released', async () => {
@@ -300,7 +306,7 @@ describe('the backend init remembers', () => {
 
       expect(await adoptBackend(other(), previous(), dir, unasked)).toEqual({ moved: { from: old().choice, copied: false } });
 
-      expect(() => checkBackend(other(), dir)).not.toThrow();
+      expect(() => checkBackend(other(), dir, {})).not.toThrow();
     });
 
     it('is refused where the old place holds a journal and no state', async () => {

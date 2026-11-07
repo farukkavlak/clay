@@ -1,7 +1,7 @@
 import { StateBackend } from '../StateBackend';
 import { httpFrom } from './httpFrom';
 import { LocalBackend } from './LocalBackend';
-import { checkNames, Settings } from './settings';
+import { checkNames, Environment, Settings } from './settings';
 
 function localFrom(settings: Settings, workingDir: string): StateBackend {
   checkNames(settings, ['path']);
@@ -14,14 +14,14 @@ function localFrom(settings: Settings, workingDir: string): StateBackend {
 }
 
 /** A Map, so `toString` is no backend. */
-const BACKENDS = new Map<string, (settings: Settings, workingDir: string) => StateBackend>([
+const BACKENDS = new Map<string, (settings: Settings, workingDir: string, env: Environment) => StateBackend>([
   ['local', localFrom],
-  ['http', httpFrom],
+  ['http', (settings, _workingDir, env) => httpFrom(settings, env)],
 ]);
 
-export function build(settings: Settings, workingDir: string): StateBackend {
+export function build(settings: Settings, workingDir: string, env: Environment): StateBackend {
   const make = BACKENDS.get(settings.type);
   if (make === undefined) settings.refuse(`Clay has no backend "${settings.type}"; it has ${[...BACKENDS.keys()].map((type) => `"${type}"`).join(', ')}`);
 
-  return make(settings, workingDir);
+  return make(settings, workingDir, env);
 }

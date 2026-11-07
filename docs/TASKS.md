@@ -1050,7 +1050,7 @@ Terraform has it since backends replaced `-state`.
       place
 - [x] An HTTP backend, since it needs no SDK: read, write, lock and unlock over four
       requests
-- [ ] The HTTP backend sends credentials: basic auth from the environment, never from
+- [x] The HTTP backend sends credentials: basic auth from the environment, never from
       the configuration, which is checked in
 - [ ] The HTTP backend retries a request that got no answer or a 5xx, and gives up on one
       that hangs after a time it names

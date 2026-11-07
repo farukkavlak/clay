@@ -1,6 +1,11 @@
 import { HttpBackend } from './HttpBackend';
-import { checkNames, Settings } from './settings';
+import { credentialsFrom, PASSWORD, USERNAME } from './httpCredentials';
+import { checkNames, Environment, Settings } from './settings';
 
+const SECRETS = new Map([
+  ['username', USERNAME],
+  ['password', PASSWORD],
+]);
 const TAKES = ['address', 'update_method', 'lock_address', 'lock_method', 'unlock_address', 'unlock_method'];
 
 /** A token, as a request line spells a method. */
@@ -54,7 +59,16 @@ function required(settings: Settings, name: string): URL {
   return urlOf(settings, value, name);
 }
 
-export function httpFrom(settings: Settings): HttpBackend {
+/** Refuses a credential written in the block, which would be checked in with it. */
+function checkNoSecrets(settings: Settings): void {
+  for (const name of settings.names) {
+    const variable = SECRETS.get(name);
+    if (variable !== undefined) settings.refuse(`${name} of backend "http" is read from ${variable}, never from the configuration, which is checked in`, name);
+  }
+}
+
+export function httpFrom(settings: Settings, env: Environment): HttpBackend {
+  checkNoSecrets(settings);
   checkNames(settings, TAKES);
 
   const address = required(settings, 'address');
@@ -68,5 +82,6 @@ export function httpFrom(settings: Settings): HttpBackend {
     lockMethod: methodOf(settings, 'lock_method', 'LOCK'),
     unlockAddress: unlock === undefined ? lockAddress : urlOf(settings, unlock, 'unlock_address'),
     unlockMethod: methodOf(settings, 'unlock_method', 'UNLOCK'),
+    credentials: credentialsFrom(env),
   });
 }
