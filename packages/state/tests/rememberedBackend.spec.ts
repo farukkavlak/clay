@@ -246,7 +246,7 @@ describe('the backend init remembers', () => {
       await record({ address: `${url}/state` });
 
       await expect(adoptBackend(new LocalBackend(dir), previous(), dir, unasked)).rejects.toThrow(
-        `GET ${url}/state got no answer (ECONNREFUSED), so whether a state is left there is not known. If that server is gone for good, remove ${path.join(dir, '.clay', 'backend.json')} and run \`clay init\` again`
+        `GET ${url}/state got no answer (ECONNREFUSED). Whether a state is left there is not known; if that server is gone for good, remove ${path.join(dir, '.clay', 'backend.json')} and run \`clay init\` again`
       );
     });
 
@@ -256,7 +256,7 @@ describe('the backend init remembers', () => {
       await record({ address: `${url}/state` });
 
       await expect(adoptBackend(new LocalBackend(dir), previous(), dir, unasked)).rejects.toThrow(
-        `GET ${url}/state failed the TLS handshake (UNABLE_TO_VERIFY_LEAF_SIGNATURE), so whether a state is left there is not known. If that server is gone for good, remove ${path.join(dir, '.clay', 'backend.json')} and run \`clay init\` again`
+        `GET ${url}/state failed the TLS handshake (UNABLE_TO_VERIFY_LEAF_SIGNATURE); name the CA that signed its certificate in ca_certificate of the backend block. Whether a state is left there is not known; if that server is gone for good, remove ${path.join(dir, '.clay', 'backend.json')} and run \`clay init\` again`
       );
       await untrusted.stop();
     });

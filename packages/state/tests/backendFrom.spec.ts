@@ -130,7 +130,7 @@ describe('backendFrom', () => {
       const error = errorOf(http(`${ADDRESSES}\n    bucket = "b"`));
 
       expect(error.message).toBe(
-        'backend "http" takes only "address", "update_method", "lock_address", "lock_method", "unlock_address", "unlock_method", "retry_max", "retry_wait_min", "retry_wait_max", "timeout", not "bucket"'
+        'backend "http" takes only "address", "update_method", "lock_address", "lock_method", "unlock_address", "unlock_method", "ca_certificate", "retry_max", "retry_wait_min", "retry_wait_max", "timeout", not "bucket"'
       );
       expect(error.position).toMatchObject({ line: 5, column: 14 });
     });

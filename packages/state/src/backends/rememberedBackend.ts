@@ -58,10 +58,9 @@ async function leftBehind(before: StateBackend, workingDir: string): Promise<boo
     return await before.exists();
   } catch (error) {
     if (error instanceof NoAnswer || error instanceof HandshakeFailed)
-      throw new Error(
-        `${error.message}, so whether a state is left there is not known. If that server is gone for good, remove ${recordOf(workingDir)} and run \`clay init\` again`,
-        { cause: error }
-      );
+      throw new Error(`${error.message}. Whether a state is left there is not known; if that server is gone for good, remove ${recordOf(workingDir)} and run \`clay init\` again`, {
+        cause: error,
+      });
 
     throw error;
   }
@@ -69,7 +68,11 @@ async function leftBehind(before: StateBackend, workingDir: string): Promise<boo
 
 const isSame = (a: BackendChoice, b: BackendChoice) => a.type === b.type && a.where === b.where;
 
-const spelled = (value: string | number | undefined) => (typeof value === 'number' ? String(value) : `"${value}"`);
+function spelled(value: string | number | undefined): string {
+  if (value === undefined) return 'unset';
+
+  return typeof value === 'number' ? String(value) : `"${value}"`;
+}
 
 /** The first setting the configuration gives otherwise than `init` took it, for the same place. */
 function changed(before: BackendChoice, now: BackendChoice): string | undefined {

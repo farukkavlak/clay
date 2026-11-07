@@ -540,9 +540,23 @@ that names the state would print them.
 Over `https`, Clay trusts the CAs Node brings, those in `NODE_EXTRA_CA_CERTS`, and those
 the system trusts: the macOS keychain, the Windows store, or `/etc/ssl` on Linux.
 
+`ca_certificate` names a PEM file of CAs, relative to the root or absolute. Clay then
+trusts those alone, in place of the ones above. The file is read again on each command, so
+a new CA needs no `clay init`. Every block in it must be a certificate Clay can read.
+
+A server that asks who the client is gets the certificate in `CLAY_HTTP_CLIENT_CERTIFICATE`
+and its key in `CLAY_HTTP_CLIENT_KEY`, both PEM text. Both are set, or neither. The key is
+the first certificate's, and not encrypted, since Clay asks for no passphrase. The block
+refuses `client_certificate` and `client_private_key`, and `init` does not remember them.
+`ca_certificate` with no `https` address is refused. The client certificate goes only to
+`https` addresses, so the variables can stay set for a backend on plain `http`.
+
 A request that gets no answer, a 429 or a 5xx other than 501 is tried again. A failed TLS
-handshake is not: a certificate Clay does not trust, or a server that speaks no TLS, fails
-the same way on every try. Each setting is a whole number:
+handshake is not: a certificate Clay does not trust, a server that asks for a client
+certificate it is not shown, or a server that speaks no TLS fails the same way on every
+try. A server that refuses the client certificate it is shown may close the connection
+without saying why, which Clay cannot tell from a lost one, and tries again. Each setting
+is a whole number:
 
 - `retry_max` (2, up to 100): the tries after the first.
 - `retry_wait_min` (1) and `retry_wait_max` (30), up to 3600: the first wait in

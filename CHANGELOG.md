@@ -59,6 +59,9 @@ a configuration means or how the state file is written.
   a try that takes longer than `timeout`. A failed TLS handshake is not tried again.
 - `backend "http"` trusts the CAs of the system store over `https`, beside the ones Node
   brings and `NODE_EXTRA_CA_CERTS`
+- `backend "http"` trusts the CAs in the file `ca_certificate` names in place of Node's and the system's, and
+  shows a server the client certificate in `CLAY_HTTP_CLIENT_CERTIFICATE` and
+  `CLAY_HTTP_CLIENT_KEY`
 - `clay init` takes the state lock while it writes the first state, on every backend, so
   a lock left behind stops it
 - `clay init` moves the state to the place the block names, once asked or with `--yes`,

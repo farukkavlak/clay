@@ -1,4 +1,4 @@
-import { Environment } from './settings';
+import { Environment, variable } from './settings';
 
 export const USERNAME = 'CLAY_HTTP_USERNAME';
 export const PASSWORD = 'CLAY_HTTP_PASSWORD';
@@ -8,13 +8,10 @@ export interface Credentials {
   readonly password: string;
 }
 
-/** An empty variable counts as unset, as `export NAME=` is how a shell often clears one. */
-const valueOf = (env: Environment, name: string) => (env[name] === '' ? undefined : env[name]);
-
 /** Basic auth, from the environment alone: the configuration is checked in. */
 export function credentialsFrom(env: Environment): Credentials | undefined {
-  const username = valueOf(env, USERNAME);
-  const password = valueOf(env, PASSWORD);
+  const username = variable(env, USERNAME);
+  const password = variable(env, PASSWORD);
 
   if (username === undefined) {
     if (password !== undefined) throw new Error(`${PASSWORD} is set and ${USERNAME} is not; basic auth sends a password only with a username`);

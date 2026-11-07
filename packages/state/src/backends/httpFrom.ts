@@ -1,13 +1,16 @@
 import { HttpBackend } from './HttpBackend';
 import { credentialsFrom, PASSWORD, USERNAME } from './httpCredentials';
 import { RETRY_NAMES, retryFrom } from './httpRetry';
+import { caFrom, CLIENT_CERTIFICATE, CLIENT_KEY, clientFrom } from './httpTls';
 import { checkNames, Environment, Settings } from './settings';
 
 const SECRETS = new Map([
   ['username', USERNAME],
   ['password', PASSWORD],
+  ['client_certificate', CLIENT_CERTIFICATE],
+  ['client_private_key', CLIENT_KEY],
 ]);
-const TAKES = ['address', 'update_method', 'lock_address', 'lock_method', 'unlock_address', 'unlock_method', ...RETRY_NAMES];
+const TAKES = ['address', 'update_method', 'lock_address', 'lock_method', 'unlock_address', 'unlock_method', 'ca_certificate', ...RETRY_NAMES];
 
 /** A token, as a request line spells a method. */
 const METHOD = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
@@ -63,27 +66,37 @@ function required(settings: Settings, name: string): URL {
 /** Refuses a credential written in the block, which would be checked in with it. */
 function checkNoSecrets(settings: Settings): void {
   for (const name of settings.names) {
-    const variable = SECRETS.get(name);
-    if (variable !== undefined) settings.refuse(`${name} of backend "http" is read from ${variable}, never from the configuration, which is checked in`, name);
+    const holder = SECRETS.get(name);
+    if (holder !== undefined) settings.refuse(`${name} of backend "http" is read from ${holder}, never from the configuration, which is checked in`, name);
   }
 }
 
-export function httpFrom(settings: Settings, env: Environment): HttpBackend {
+/** A CA file with no https address to ask is a mistake in the address or the setting. A client certificate is the environment's, which serves every backend, so it goes only where an address is https. */
+function checkHttps(settings: Settings, addresses: readonly URL[]): void {
+  if (settings.text('ca_certificate') !== undefined && !addresses.some(({ protocol }) => protocol === 'https:'))
+    settings.refuse('ca_certificate of backend "http" is given, and no address is https, so no CA would be asked', 'ca_certificate');
+}
+
+export function httpFrom(settings: Settings, workingDir: string, env: Environment): HttpBackend {
   checkNoSecrets(settings);
   checkNames(settings, TAKES);
 
   const address = required(settings, 'address');
   const lockAddress = required(settings, 'lock_address');
   const unlock = settings.text('unlock_address');
+  const unlockAddress = unlock === undefined ? lockAddress : urlOf(settings, unlock, 'unlock_address');
+  checkHttps(settings, [address, lockAddress, unlockAddress]);
 
   return new HttpBackend({
     address,
     updateMethod: methodOf(settings, 'update_method', 'POST'),
     lockAddress,
     lockMethod: methodOf(settings, 'lock_method', 'LOCK'),
-    unlockAddress: unlock === undefined ? lockAddress : urlOf(settings, unlock, 'unlock_address'),
+    unlockAddress,
     unlockMethod: methodOf(settings, 'unlock_method', 'UNLOCK'),
     credentials: credentialsFrom(env),
     retry: retryFrom(settings),
+    ca: caFrom(settings, workingDir),
+    client: clientFrom(env),
   });
 }

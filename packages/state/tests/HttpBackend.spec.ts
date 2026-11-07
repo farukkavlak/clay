@@ -1,5 +1,7 @@
 import { emptyState } from '@clay/contracts';
 import { BackendBlock, parseModule } from '@clay/parser';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { HttpStateServer } from '../../../tests/httpStateServer';
@@ -8,6 +10,8 @@ import { backendAt, Methods, ONCE } from './backendAt';
 
 const resource = { resourceType: 'local_file', name: 'a', attributes: { path: 'a.txt' } };
 const blockOf = (body: string) => parseModule([{ file: 'main.clay', content: `clay {\n  backend "http" {\n${body}\n  }\n}` }])[0] as BackendBlock;
+const fixture = (name: string) => readFileSync(path.join(__dirname, '../../../tests/tls', name), 'utf8');
+const HINT = '; name the CA that signed its certificate in ca_certificate of the backend block';
 const basic = (pair: string) => `Basic ${Buffer.from(pair, 'utf8').toString('base64')}`;
 
 /** A read, a write, a lock and its release: every request the backend sends. */
@@ -532,7 +536,7 @@ describe('a TLS handshake that fails', () => {
 
     await expect(backendWith(server.url).read()).rejects.toMatchObject({
       name: 'HandshakeFailed',
-      message: `GET ${server.url}/state failed the TLS handshake (UNABLE_TO_VERIFY_LEAF_SIGNATURE)`,
+      message: `GET ${server.url}/state failed the TLS handshake (UNABLE_TO_VERIFY_LEAF_SIGNATURE); name the CA that signed its certificate in ca_certificate of the backend block`,
     });
     expect(server.received).toEqual([]);
     expect(waits).toEqual([]);
@@ -543,9 +547,55 @@ describe('a TLS handshake that fails', () => {
 
     await expect(backendWith(server.url).lock(newLockInfo('apply'))).rejects.toMatchObject({
       name: 'HandshakeFailed',
-      message: `LOCK ${server.url}/lock failed the TLS handshake (UNABLE_TO_VERIFY_LEAF_SIGNATURE)`,
+      message: `LOCK ${server.url}/lock failed the TLS handshake (UNABLE_TO_VERIFY_LEAF_SIGNATURE); name the CA that signed its certificate in ca_certificate of the backend block`,
     });
     expect(server.received).toEqual([]);
+  });
+
+  it.each([
+    ['self', undefined, 'DEPTH_ZERO_SELF_SIGNED_CERT'],
+    ['chained+intermediate', undefined, 'UNABLE_TO_GET_ISSUER_CERT_LOCALLY'],
+    ['chained+intermediate', 'intermediate.pem', 'UNABLE_TO_GET_ISSUER_CERT'],
+    ['chained+intermediate+ca', undefined, 'SELF_SIGNED_CERT_IN_CHAIN'],
+  ])('names ca_certificate where the server shows %s and the CA is not trusted', async (shows, trust, code) => {
+    server = await HttpStateServer.start({ tls: true, shows });
+    const roots = trust === undefined ? undefined : () => [fixture(trust)];
+
+    await expect(backendAt(server.url, {}, 'state', ONCE, undefined, roots).read()).rejects.toMatchObject({
+      name: 'HandshakeFailed',
+      message: `GET ${server.url}/state failed the TLS handshake (${code})${HINT}`,
+    });
+  });
+
+  it('names no CA where the certificate is trusted, but not for a server', async () => {
+    server = await HttpStateServer.start({ tls: true, shows: 'client' });
+
+    await expect(backendAt(server.url, {}, 'state', ONCE, undefined, () => [fixture('ca.pem')]).read()).rejects.toMatchObject({
+      name: 'HandshakeFailed',
+      message: `GET ${server.url}/state failed the TLS handshake (INVALID_PURPOSE)`,
+    });
+  });
+
+  it('is not tried again where the server asks for a client certificate it is not shown', async () => {
+    server = await HttpStateServer.start({ tls: true, askClient: true });
+    const testCa = fixture('ca.pem');
+    const backend = backendAt(
+      server.url,
+      {},
+      'state',
+      TWICE,
+      async (ms) => {
+        waits.push(ms);
+      },
+      () => [testCa]
+    );
+
+    await expect(backend.read()).rejects.toMatchObject({
+      name: 'HandshakeFailed',
+      message: `GET ${server.url}/state failed the TLS handshake (ERR_SSL_TLSV13_ALERT_CERTIFICATE_REQUIRED)`,
+    });
+    expect(server.received).toEqual([]);
+    expect(waits).toEqual([]);
   });
 
   it('is not tried again where the server speaks no TLS', async () => {

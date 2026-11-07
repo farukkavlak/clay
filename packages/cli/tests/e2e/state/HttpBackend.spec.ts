@@ -1,5 +1,6 @@
 import { newLockInfo } from '@clay/state';
 import { execFile } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -8,6 +9,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { HttpStateServer } from '../../../../../tests/httpStateServer';
 import { clay, clayOutput } from '../helpers';
+
+const fixture = (name: string) => readFileSync(path.join(__dirname, '../../../../../tests/tls', name), 'utf8');
 
 const FILE = 'resource "local_file" "f" {\n  path    = "f.txt"\n  content = "x"\n}\n';
 
@@ -35,7 +38,7 @@ describe('a state kept on an HTTP server', () => {
 
   /** What the CLI printed and exited with, run with `env` in place of any credentials the test runs with. */
   const runWith = async (env: Record<string, string>, ...args: string[]): Promise<{ code: number; stdout: string; stderr: string }> => {
-    const { CLAY_HTTP_USERNAME: _username, CLAY_HTTP_PASSWORD: _password, ...inherited } = process.env;
+    const { CLAY_HTTP_USERNAME: _username, CLAY_HTTP_PASSWORD: _password, CLAY_HTTP_CLIENT_CERTIFICATE: _cert, CLAY_HTTP_CLIENT_KEY: _key, ...inherited } = process.env;
     try {
       const { stdout, stderr } = await promisify(execFile)('node', [clay, ...args], { cwd: dir, env: { ...inherited, ...env } });
       return { code: 0, stdout: stripVTControlCharacters(stdout), stderr: stripVTControlCharacters(stderr) };
@@ -300,8 +303,86 @@ describe('a state kept on an HTTP server', () => {
       const { code, stderr } = await runWith({ NODE_EXTRA_CA_CERTS: '' }, 'init');
 
       expect(code).toBe(1);
-      expect(stderr).toContain(`GET ${tls.url}/state failed the TLS handshake (UNABLE_TO_VERIFY_LEAF_SIGNATURE)`);
+      expect(stderr).toContain(
+        `GET ${tls.url}/state failed the TLS handshake (UNABLE_TO_VERIFY_LEAF_SIGNATURE); name the CA that signed its certificate in ca_certificate of the backend block`
+      );
       expect(tls.received).toEqual([]);
+    });
+  });
+
+  describe('with a CA file and a client certificate', () => {
+    const client = { CLAY_HTTP_CLIENT_CERTIFICATE: fixture('client.pem'), CLAY_HTTP_CLIENT_KEY: fixture('client.key') };
+    let tls: HttpStateServer;
+
+    beforeEach(async () => {
+      tls = await HttpStateServer.start({ tls: true, askClient: true });
+      await fs.mkdir(path.join(dir, 'certs'));
+      await fs.writeFile(path.join(dir, 'certs', 'ca.pem'), fixture('ca.pem'), 'utf8');
+      await configure(tls.url, 'ca_certificate = "certs/ca.pem"');
+    });
+
+    afterEach(async () => {
+      await tls.stop();
+    });
+
+    it('trusts the CA the file holds, and shows the certificate the environment gives', async () => {
+      const { code, stdout } = await runWith({ NODE_EXTRA_CA_CERTS: '', ...client }, 'init');
+
+      expect(code).toBe(0);
+      expect(stdout).toContain('Created an empty state');
+      expect(JSON.parse(tls.state!)).toMatchObject({ serial: 0, resources: {} });
+    });
+
+    it('trusts the file alone, not the CAs Node is told of', async () => {
+      await fs.writeFile(path.join(dir, 'certs', 'ca.pem'), fixture('client.pem'), 'utf8');
+
+      const { code, stderr } = await runWith({ NODE_EXTRA_CA_CERTS: path.join(__dirname, '../../../../../tests/tls/ca.pem'), ...client }, 'init');
+
+      expect(code).toBe(1);
+      expect(stderr).toContain(
+        `GET ${tls.url}/state failed the TLS handshake (SELF_SIGNED_CERT_IN_CHAIN); certs/ca.pem, which ca_certificate names, holds no CA that signed its certificate`
+      );
+      expect(tls.received).toEqual([]);
+    });
+
+    it('exits 1 at once where no client certificate is given, and the server is sent nothing', async () => {
+      const { code, stderr } = await runWith({}, 'init');
+
+      expect(code).toBe(1);
+      expect(stderr).toContain(`GET ${tls.url}/state failed the TLS handshake (ERR_SSL_TLSV13_ALERT_CERTIFICATE_REQUIRED)`);
+      expect(tls.received).toEqual([]);
+    });
+
+    it('names the setting where the file cannot be read', async () => {
+      await fs.rm(path.join(dir, 'certs', 'ca.pem'));
+
+      const { code, stderr } = await runWith(client, 'init');
+
+      expect(code).toBe(1);
+      expect(stderr).toContain(`ca_certificate of backend "http" is "certs/ca.pem", and ${path.join(await fs.realpath(dir), 'certs', 'ca.pem')} cannot be read (ENOENT)`);
+      expect(stderr).toContain('on main.clay line 5');
+    });
+
+    it('reads the file again on each command, so a new CA needs no init', async () => {
+      const { code: initialized } = await runWith(client, 'init');
+      expect(initialized).toBe(0);
+      await fs.writeFile(path.join(dir, 'certs', 'ca.pem'), fixture('client.pem'), 'utf8');
+
+      const { code, stderr } = await runWith(client, 'plan');
+
+      expect(code).toBe(1);
+      expect(stderr).toContain('failed the TLS handshake (SELF_SIGNED_CERT_IN_CHAIN)');
+    });
+
+    it('asks for init where the configuration drops the file init took', async () => {
+      const { code: initialized } = await runWith(client, 'init');
+      expect(initialized).toBe(0);
+      await configure(tls.url);
+
+      const { code, stderr } = await runWith(client, 'plan');
+
+      expect(code).toBe(1);
+      expect(stderr).toContain('ca_certificate of backend "http" is unset in the configuration, and "certs/ca.pem" where `clay init` took it; run `clay init`');
     });
   });
 });

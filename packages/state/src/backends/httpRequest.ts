@@ -2,6 +2,8 @@ import { ClientRequest, IncomingMessage, request as plainRequest } from 'node:ht
 import { request as tlsRequest } from 'node:https';
 import { getCACertificates, TLSSocket } from 'node:tls';
 
+import { ClientCertificate } from './httpTls';
+
 export interface Outgoing {
   readonly method: string;
   readonly body?: string;
@@ -36,21 +38,49 @@ export class HandshakeFailed extends Error {
 /** The CAs an https request trusts, asked for at its first request. */
 export type Roots = () => string[];
 
+/** What an https request trusts, and shows a server that asks who the client is. */
+export interface Tls {
+  readonly ca: Roots;
+  /** The file `ca_certificate` names, where the CAs are its. */
+  readonly caFile?: string;
+  readonly client?: ClientCertificate;
+}
+
 /** Node trusts only its own CA list unless told; the system store holds the CAs a company adds. `default` keeps NODE_EXTRA_CA_CERTS. */
 export function trusted(): Roots {
   let list: string[] | undefined;
   return () => (list ??= [...getCACertificates('default'), ...getCACertificates('system')]);
 }
 
+/** What a certificate whose CA is not trusted is refused with. */
+const UNKNOWN_ISSUER = new Set([
+  'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+  'UNABLE_TO_GET_ISSUER_CERT',
+  'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+  'SELF_SIGNED_CERT_IN_CHAIN',
+  'DEPTH_ZERO_SELF_SIGNED_CERT',
+]);
+
+/** An alert the server sent, as for a client certificate it asks for and is not shown; another ERR_SSL_ code is a connection that broke. */
+const ALERT = /^ERR_SSL_\w*_ALERT_/;
+
+function hintFor(code: string | undefined, caFile: string | undefined): string {
+  if (code === undefined || !UNKNOWN_ISSUER.has(code)) return '';
+
+  return caFile === undefined
+    ? '; name the CA that signed its certificate in ca_certificate of the backend block'
+    : `; ${caFile}, which ca_certificate names, holds no CA that signed its certificate`;
+}
+
 /** A certificate not trusted marks the socket; EPROTO is a server that speaks no TLS, or none Clay takes. */
-function handshakeFailed(request: ClientRequest, error: Error, what: string): HandshakeFailed | undefined {
+function handshakeFailed(request: ClientRequest, error: Error, what: string, caFile: string | undefined): HandshakeFailed | undefined {
   const { socket } = request;
   if (!(socket instanceof TLSSocket)) return undefined;
 
   const { code } = error as NodeJS.ErrnoException;
-  if (socket.authorizationError !== null || code === 'EPROTO') return new HandshakeFailed(`${what} failed the TLS handshake (${code ?? error.message})`, error);
+  if (socket.authorizationError === null && code !== 'EPROTO' && !(code !== undefined && ALERT.test(code))) return undefined;
 
-  return undefined;
+  return new HandshakeFailed(`${what} failed the TLS handshake (${code ?? error.message})${hintFor(code, caFile)}`, error);
 }
 
 /** What the request or the response emits is the connection failing, or the timeout ending it. */
@@ -66,14 +96,14 @@ function noAnswer(error: unknown, what: string, signal: AbortSignal, timeout: nu
  * The client is named, as a proxy may refuse a request that names none.
  * A wrong header throws here, outside the promise: that is a mistake in Clay, not the server giving no answer.
  */
-function sent(url: URL, { method, body, headers }: Outgoing, signal: AbortSignal, ca: Roots): Promise<IncomingMessage> {
+function sent(url: URL, { method, body, headers }: Outgoing, signal: AbortSignal, { ca, caFile, client }: Tls): Promise<IncomingMessage> {
   const length = body === undefined ? {} : { 'Content-Length': String(Buffer.byteLength(body, 'utf8')) };
   const options = { method, headers: { 'User-Agent': 'clay', ...headers, ...length }, signal };
-  const request: ClientRequest = url.protocol === 'https:' ? tlsRequest(url, { ...options, ca: ca() }) : plainRequest(url, options);
+  const request: ClientRequest = url.protocol === 'https:' ? tlsRequest(url, { ...options, ca: ca(), ...client }) : plainRequest(url, options);
 
   const answered = new Promise<IncomingMessage>((resolve, reject) => {
     request.once('response', resolve);
-    request.on('error', (error) => reject(handshakeFailed(request, error, `${method} ${url.href}`) ?? error));
+    request.on('error', (error) => reject(handshakeFailed(request, error, `${method} ${url.href}`, caFile) ?? error));
   });
   request.end(body);
 
@@ -92,9 +122,9 @@ async function textOf(response: IncomingMessage): Promise<string> {
  * No redirect is followed: a POST sent on as a GET would be answered 200, which would count as written or locked.
  * The body is read apart, so one cut off after the status is not taken for no answer.
  */
-export async function tryOnce(url: URL, request: Outgoing, timeout: number, ca: Roots): Promise<Reply | NoAnswer> {
+export async function tryOnce(url: URL, request: Outgoing, timeout: number, tls: Tls): Promise<Reply | NoAnswer> {
   const signal = AbortSignal.timeout(timeout * 1000);
-  const answered = sent(url, request, signal, ca);
+  const answered = sent(url, request, signal, tls);
   let response: IncomingMessage;
   try {
     response = await answered;

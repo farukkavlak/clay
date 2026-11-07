@@ -14,7 +14,12 @@ export interface Settings {
   number(name: string): ExactNumber | undefined;
   /** Refuses the value of `name`, or the backend as a whole. */
   refuse(problem: string, name?: string): never;
+  /** Stops at a value `init` may have written, which names something gone or wrong since. */
+  cannotUse(problem: string, name: string): never;
 }
+
+/** An empty variable counts as unset, as `export NAME=` is how a shell often clears one. */
+export const variable = (env: Environment, name: string) => (env[name] === '' ? undefined : env[name]);
 
 /** A string written out, since the state has to be found before anything has a value. */
 function textOf({ backendType, attributes }: BackendBlock, name: string): string | undefined {
@@ -37,14 +42,17 @@ function numberOf({ backendType, attributes }: BackendBlock, name: string): Exac
 }
 
 export function blockSettings(block: BackendBlock): Settings {
+  const refuse = (problem: string, name?: string): never => {
+    throw new ConfigError(problem, (name === undefined ? undefined : block.attributes[name])?.position ?? block.backendType.position);
+  };
+
   return {
     type: block.backendType.value,
     names: Object.keys(block.attributes),
     text: (name) => textOf(block, name),
     number: (name) => numberOf(block, name),
-    refuse: (problem, name) => {
-      throw new ConfigError(problem, (name === undefined ? undefined : block.attributes[name])?.position ?? block.backendType.position);
-    },
+    refuse,
+    cannotUse: refuse,
   };
 }
 
@@ -64,6 +72,9 @@ export function recordSettings(type: string, values: Readonly<Record<string, unk
     text: (name) => (Object.hasOwn(values, name) ? textIn(values[name]) : undefined),
     number: (name) => (Object.hasOwn(values, name) ? numberIn(values[name]) : undefined),
     refuse,
+    cannotUse: (problem) => {
+      throw new Error(problem);
+    },
   };
 }
 

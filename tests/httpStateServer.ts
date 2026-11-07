@@ -50,6 +50,12 @@ const digestOf = (body: string) => createHash('md5').update(body, 'utf8').digest
 
 const certificate = (file: string) => readFileSync(path.join(__dirname, 'tls', file));
 
+interface TlsOptions {
+  readonly askClient?: boolean;
+  /** Fixtures in tests/tls, the first of which the key is for. */
+  readonly shows?: string;
+}
+
 /** A state server as Terraform's http backend expects one: the state at /state, its lock at /lock. A second state at /other shares the lock. */
 export class HttpStateServer {
   state: string | undefined;
@@ -61,14 +67,23 @@ export class HttpStateServer {
   private overrides = new Map<string, Override[]>();
   private server: Server;
 
-  private constructor(private readonly tls: boolean) {
+  private constructor(
+    private readonly tls: boolean,
+    { askClient = false, shows = 'server' }: TlsOptions
+  ) {
     const listener = this.answer.bind(this);
-    this.server = tls ? createTlsServer({ key: certificate('server.key'), cert: certificate('server.pem') }, listener) : createServer(listener);
+    const asks = askClient && { requestCert: true, rejectUnauthorized: true, ca: certificate('ca.pem') };
+    const names = shows.split('+');
+    const options = { key: certificate(`${names[0]}.key`), cert: Buffer.concat(names.map((name) => certificate(`${name}.pem`))), ...asks };
+    this.server = tls ? createTlsServer(options, listener) : createServer(listener);
   }
 
-  /** Over TLS, the server shows a certificate the test CA signed for localhost and 127.0.0.1. */
-  static async start({ tls = false } = {}): Promise<HttpStateServer> {
-    const server = new HttpStateServer(tls);
+  /**
+   * Over TLS, the server shows the certificate the test CA signed for localhost and 127.0.0.1, or the chain `shows` names, as `chained+intermediate`.
+   * `askClient` refuses a client the test CA did not sign.
+   */
+  static async start({ tls = false, ...options }: { tls?: boolean } & TlsOptions = {}): Promise<HttpStateServer> {
+    const server = new HttpStateServer(tls, options);
     server.server.listen(0, '127.0.0.1');
     await once(server.server, 'listening');
     return server;
