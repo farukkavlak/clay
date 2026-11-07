@@ -16,7 +16,7 @@ function localFrom(settings: Settings, workingDir: string): StateBackend {
 /** A Map, so `toString` is no backend. */
 const BACKENDS = new Map<string, (settings: Settings, workingDir: string, env: Environment) => StateBackend>([
   ['local', localFrom],
-  ['http', (settings, _workingDir, env) => httpFrom(settings, env)],
+  ['http', httpFrom],
 ]);
 
 export function build(settings: Settings, workingDir: string, env: Environment): StateBackend {

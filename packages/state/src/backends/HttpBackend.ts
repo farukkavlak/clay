@@ -6,8 +6,9 @@ import { LockInfo, lockInfoFrom, StateLocked } from '../lockInfo';
 import { BackendChoice, StateBackend } from '../StateBackend';
 import { parseState, serializeState } from '../stateFile';
 import { authorization, Credentials, PASSWORD, USERNAME } from './httpCredentials';
-import { NoAnswer, Outgoing, Reply, Roots, trusted, tryOnce } from './httpRequest';
+import { NoAnswer, Outgoing, Reply, Roots, Tls, trusted, tryOnce } from './httpRequest';
 import { askedWait, backoff, passing, Retry } from './httpRetry';
+import { CaFile, ClientCertificate } from './httpTls';
 
 export interface HttpSettings {
   readonly address: URL;
@@ -18,6 +19,9 @@ export interface HttpSettings {
   readonly unlockMethod: string;
   readonly credentials?: Credentials;
   readonly retry: Retry;
+  /** Trusted in place of the CAs Node and the system bring. */
+  readonly ca?: CaFile;
+  readonly client?: ClientCertificate;
 }
 
 interface Answer extends Reply {
@@ -81,14 +85,16 @@ export class HttpBackend implements StateBackend {
   private held: { readonly id: string; readonly body: string } | undefined;
   /** Sent with every request, the lock's among them. */
   private readonly authorization: string | undefined;
+  private readonly tls: Tls;
 
   constructor(
     private readonly settings: HttpSettings,
     private readonly sleep: Sleep = delay,
-    private readonly roots: Roots = trusted()
+    roots: Roots = trusted()
   ) {
-    const { address, updateMethod, lockAddress, lockMethod, unlockAddress, unlockMethod, credentials, retry } = settings;
+    const { address, updateMethod, lockAddress, lockMethod, unlockAddress, unlockMethod, credentials, retry, ca, client } = settings;
     this.authorization = credentials && authorization(credentials);
+    this.tls = { ca: ca?.roots ?? roots, caFile: ca?.name, client };
     this.choice = {
       type: 'http',
       where: address.href,
@@ -103,6 +109,7 @@ export class HttpBackend implements StateBackend {
         retry_wait_min: retry.waitMin,
         retry_wait_max: retry.waitMax,
         timeout: retry.timeout,
+        ...(ca && { ca_certificate: ca.name }),
       },
     };
   }
@@ -206,7 +213,7 @@ export class HttpBackend implements StateBackend {
     const outgoing = this.authorization === undefined ? request : { ...request, headers: { ...request.headers, Authorization: this.authorization } };
 
     for (let tried = 1; ; tried += 1) {
-      const reply = await tryOnce(url, outgoing, retry.timeout, this.roots);
+      const reply = await tryOnce(url, outgoing, retry.timeout, this.tls);
       const wait = waitAfter(retry, tried, reply, Date.now());
       if (wait === undefined) return settled(reply, tried);
 
