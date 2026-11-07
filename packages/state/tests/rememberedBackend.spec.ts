@@ -249,6 +249,17 @@ describe('the backend init remembers', () => {
         `GET ${url}/state got no answer (ECONNREFUSED), so whether a state is left there is not known. If that server is gone for good, remove ${path.join(dir, '.clay', 'backend.json')} and run \`clay init\` again`
       );
     });
+
+    it('names the way out where the old server fails the TLS handshake', async () => {
+      const untrusted = await HttpStateServer.start({ tls: true });
+      const { url } = untrusted;
+      await record({ address: `${url}/state` });
+
+      await expect(adoptBackend(new LocalBackend(dir), previous(), dir, unasked)).rejects.toThrow(
+        `GET ${url}/state failed the TLS handshake (UNABLE_TO_VERIFY_LEAF_SIGNATURE), so whether a state is left there is not known. If that server is gone for good, remove ${path.join(dir, '.clay', 'backend.json')} and run \`clay init\` again`
+      );
+      await untrusted.stop();
+    });
   });
 
   describe('a state at the old place', () => {

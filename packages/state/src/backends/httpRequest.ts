@@ -1,5 +1,6 @@
 import { ClientRequest, IncomingMessage, request as plainRequest } from 'node:http';
 import { request as tlsRequest } from 'node:https';
+import { TLSSocket } from 'node:tls';
 
 export interface Outgoing {
   readonly method: string;
@@ -24,6 +25,25 @@ export class NoAnswer extends Error {
   }
 }
 
+/** A handshake that failed fails the same on every try, and no request reached the server. */
+export class HandshakeFailed extends Error {
+  constructor(message: string, cause: Error) {
+    super(message, { cause });
+    this.name = 'HandshakeFailed';
+  }
+}
+
+/** A certificate not trusted marks the socket; EPROTO is a server that speaks no TLS, or none Clay takes. */
+function handshakeFailed(request: ClientRequest, error: Error, what: string): HandshakeFailed | undefined {
+  const { socket } = request;
+  if (!(socket instanceof TLSSocket)) return undefined;
+
+  const { code } = error as NodeJS.ErrnoException;
+  if (socket.authorizationError !== null || code === 'EPROTO') return new HandshakeFailed(`${what} failed the TLS handshake (${code ?? error.message})`, error);
+
+  return undefined;
+}
+
 /** What the request or the response emits is the connection failing, or the timeout ending it. */
 function noAnswer(error: unknown, what: string, signal: AbortSignal, timeout: number): NoAnswer {
   if (signal.aborted) return new NoAnswer(`${what} (timed out after ${timeout}s)`, error);
@@ -43,7 +63,7 @@ function sent(url: URL, { method, body, headers }: Outgoing, signal: AbortSignal
 
   const answered = new Promise<IncomingMessage>((resolve, reject) => {
     request.once('response', resolve);
-    request.on('error', reject);
+    request.on('error', (error) => reject(handshakeFailed(request, error, `${method} ${url.href}`) ?? error));
   });
   request.end(body);
 
@@ -69,6 +89,8 @@ export async function tryOnce(url: URL, request: Outgoing, timeout: number): Pro
   try {
     response = await answered;
   } catch (error) {
+    if (error instanceof HandshakeFailed) throw error;
+
     return noAnswer(error, `${request.method} ${url.href} got no answer`, signal, timeout);
   }
 

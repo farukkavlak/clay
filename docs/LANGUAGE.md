@@ -537,8 +537,9 @@ count as written. An address names where the server answers.
 An address is `http` or `https`. It cannot hold a user or a password, since every message
 that names the state would print them.
 
-A request that gets no answer, a 429 or a 5xx other than 501 is tried again. Each setting
-is a whole number:
+A request that gets no answer, a 429 or a 5xx other than 501 is tried again. A failed TLS
+handshake is not: a certificate Clay does not trust, or a server that speaks no TLS, fails
+the same way on every try. Each setting is a whole number:
 
 - `retry_max` (2, up to 100): the tries after the first.
 - `retry_wait_min` (1) and `retry_wait_max` (30), up to 3600: the first wait in
