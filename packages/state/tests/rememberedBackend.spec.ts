@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { HttpStateServer } from '../../../tests/httpStateServer';
 import { adoptBackend, Approve, checkBackend, LocalBackend, LockNotReleased, newLockInfo, rememberedBackend, serializeState, StateLocked, StateManager } from '../src';
-import { backendAt } from './backendAt';
+import { backendAt, ONCE } from './backendAt';
 
 /** For a call that must not ask. */
 const unasked: Approve = () => {
@@ -87,7 +87,7 @@ describe('the backend init remembers', () => {
     let server: HttpStateServer;
 
     const backendOn = (name: string) => backendAt(server.url, {}, name);
-    const record = (settings: Record<string, string>) => write({ type: 'http', settings: { ...backendOn('state').choice.settings, ...settings } });
+    const record = (settings: Record<string, unknown>) => write({ type: 'http', settings: { ...backendOn('state').choice.settings, ...settings } });
 
     beforeEach(async () => {
       server = await HttpStateServer.start();
@@ -111,6 +111,22 @@ describe('the backend init remembers', () => {
       expect(() => checkBackend(backendOn('state'), dir, {})).toThrow(
         'lock_method of backend "http" is "LOCK" in the configuration, and "POST" where `clay init` took it; run `clay init`'
       );
+    });
+
+    it('is built again with how the record tries a request again', async () => {
+      await adoptBackend(backendAt(server.url, {}, 'state', { ...ONCE, max: 4 }), previous(), dir, unasked);
+
+      expect(() => checkBackend(backendOn('state'), dir, {})).toThrow('retry_max of backend "http" is 0 in the configuration, and 4 where `clay init` took it; run `clay init`');
+    });
+
+    it.each([
+      ['a string', '2'],
+      ['a fraction', 1.5],
+      ['fewer than no tries', -1],
+    ])('is refused where the record holds %s for retry_max', async (_title, value) => {
+      await record({ retry_max: value });
+
+      expect(() => checkBackend(new LocalBackend(dir), dir, {})).toThrow('is not what `clay init` writes');
     });
 
     it('is refused where the record leaves out an address the backend needs', async () => {

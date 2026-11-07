@@ -3,8 +3,8 @@ import { BackendBlock, parseModule } from '@clay/parser';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { HttpStateServer } from '../../../tests/httpStateServer';
-import { backendFrom, HttpBackend, newLockInfo, serializeState, StateBackend, StateLocked, StateManager } from '../src';
-import { backendAt, Methods } from './backendAt';
+import { backendFrom, HttpBackend, newLockInfo, Retry, serializeState, StateBackend, StateLocked, StateManager } from '../src';
+import { backendAt, Methods, ONCE } from './backendAt';
 
 const resource = { resourceType: 'local_file', name: 'a', attributes: { path: 'a.txt' } };
 const blockOf = (body: string) => parseModule([{ file: 'main.clay', content: `clay {\n  backend "http" {\n${body}\n  }\n}` }])[0] as BackendBlock;
@@ -50,6 +50,10 @@ describe('a state kept on an HTTP server', () => {
         lock_method: 'POST',
         unlock_address: `${server.url}/lock`,
         unlock_method: 'DELETE',
+        retry_max: 0,
+        retry_wait_min: 0,
+        retry_wait_max: 0,
+        timeout: 5,
       },
     });
   });
@@ -296,6 +300,195 @@ describe('a state kept on an HTTP server', () => {
   });
 });
 
+describe('a request the HTTP server fails', () => {
+  let server: HttpStateServer;
+  let waits: number[];
+
+  const TWICE: Retry = { max: 2, waitMin: 1, waitMax: 30, timeout: 5 };
+  const backendWith = (retry: Retry) =>
+    backendAt(server.url, {}, 'state', retry, async (ms) => {
+      waits.push(ms);
+    });
+  const sent = () => server.received.map(({ method, path }) => `${method} ${path}`);
+
+  beforeEach(async () => {
+    server = await HttpStateServer.start();
+    waits = [];
+  });
+
+  afterEach(async () => {
+    await server.stop();
+  });
+
+  it('is tried again after a 5xx, waiting twice as long each time', async () => {
+    server.state = serializeState(stateWith(2));
+    server.override('GET /state', { status: 503 }, { status: 502 }, { status: 500 });
+
+    expect(await backendWith({ ...TWICE, max: 3 }).read()).toEqual(stateWith(2));
+
+    expect(waits).toEqual([1000, 2000, 4000]);
+    expect(sent()).toEqual(['GET /state', 'GET /state', 'GET /state', 'GET /state']);
+  });
+
+  it('is given up after its tries, naming how many', async () => {
+    server.override('GET /state', { status: 500 }, { status: 500 }, { status: 500 });
+
+    await expect(backendWith(TWICE).read()).rejects.toThrow(new Error(`GET ${server.url}/state answered 500 after 3 tries`));
+    expect(waits).toEqual([1000, 2000]);
+  });
+
+  it('waits no longer than the longest wait', async () => {
+    server.override('GET /state', { status: 500 }, { status: 500 }, { status: 500 });
+
+    await backendWith({ ...TWICE, max: 3, waitMin: 10, waitMax: 15 }).read();
+
+    expect(waits).toEqual([10_000, 15_000, 15_000]);
+  });
+
+  it('is tried again after a 429', async () => {
+    server.override('GET /state', { status: 429 });
+
+    await backendWith(TWICE).read();
+
+    expect(waits).toEqual([1000]);
+  });
+
+  it.each([400, 403, 501])('is not tried again after a %d, which another try answers the same', async (status) => {
+    server.override('GET /state', { status });
+
+    await expect(backendWith(TWICE).read()).rejects.toThrow(`GET ${server.url}/state answered ${status}`);
+    expect(sent()).toEqual(['GET /state']);
+  });
+
+  it.each([
+    ['in seconds', '7', 7000],
+    ['as a date gone by', 'Thu, 01 Jan 1970 00:00:00 GMT', 0],
+  ])('waits as long as Retry-After asks %s', async (_title, retryAfter, wait) => {
+    server.override('GET /state', { status: 503, retryAfter });
+
+    await backendWith(TWICE).read();
+
+    expect(waits).toEqual([wait]);
+  });
+
+  it.each(['1.5', '-1', 'soon'])('waits as it would without a Retry-After of %s, which is neither seconds nor a date', async (retryAfter) => {
+    server.override('GET /state', { status: 503, retryAfter });
+
+    await backendWith(TWICE).read();
+
+    expect(waits).toEqual([1000]);
+  });
+
+  it('is given up where Retry-After asks for longer than the longest wait', async () => {
+    server.override('GET /state', { status: 503, retryAfter: '120' });
+
+    await expect(backendWith(TWICE).read()).rejects.toThrow(new Error(`GET ${server.url}/state answered 503; it asks to be tried again after 120`));
+    expect(sent()).toEqual(['GET /state']);
+  });
+
+  it('is tried again where it got no answer', async () => {
+    server.override('GET /state', { lost: true });
+
+    expect(await backendWith(TWICE).read()).toEqual(emptyState());
+    expect(waits).toEqual([1000]);
+  });
+
+  it('says how many tries got no answer', async () => {
+    const gone = await HttpStateServer.start();
+    const { url } = gone;
+    await gone.stop();
+
+    await expect(backendAt(url, {}, 'state', TWICE, async () => {}).read()).rejects.toMatchObject({ message: `GET ${url}/state got no answer (ECONNREFUSED) after 3 tries` });
+  });
+
+  it('gives up on a try the server does not answer in time, and tries again', async () => {
+    server.override('GET /state', { hang: true }, { hang: true });
+
+    await expect(backendWith({ ...ONCE, timeout: 0.2 }).read()).rejects.toMatchObject({ message: `GET ${server.url}/state got no answer (timed out after 0.2s)` });
+    expect(await backendWith({ ...ONCE, max: 1, timeout: 0.2 }).read()).toEqual(emptyState());
+  });
+
+  it('gives up on a body that stops coming', async () => {
+    server.override('GET /state', { status: 200, stall: true });
+
+    await expect(backendWith({ ...ONCE, timeout: 0.2 }).read()).rejects.toMatchObject({
+      message: `GET ${server.url}/state answered 200, but the body was cut off (timed out after 0.2s)`,
+    });
+  });
+
+  it('writes the same state again where the answer to a write was lost', async () => {
+    server.override('POST /state', { lost: true });
+
+    await backendWith(TWICE).write(stateWith(1));
+
+    expect(server.state).toBe(serializeState(stateWith(1)));
+    expect(server.received.map(({ body }) => body)).toEqual([serializeState(stateWith(1)), serializeState(stateWith(1))]);
+  });
+
+  it('holds the lock a try took whose answer was lost, as the next try finds it under its own id', async () => {
+    server.override('LOCK /lock', { lost: true });
+    const backend = backendWith(TWICE);
+    const info = newLockInfo('apply');
+
+    await backend.lock(info);
+    await backend.write(stateWith(1));
+    await backend.unlock(info.id);
+
+    expect(sent()).toEqual(['LOCK /lock', 'LOCK /lock', 'POST /state', 'UNLOCK /lock']);
+    expect(server.received[2].id).toBe(info.id);
+    expect(server.lock).toBeUndefined();
+  });
+
+  it('says the server may hold the lock where a lost try came before a failed one', async () => {
+    server.override('LOCK /lock', { lost: true }, { status: 503 });
+    const info = newLockInfo('apply');
+
+    await expect(backendWith({ ...TWICE, max: 1 }).lock(info)).rejects.toThrow(
+      new Error(
+        `LOCK ${server.url}/lock answered 503 after 2 tries. The server may hold lock ${info.id} all the same; if it does, send UNLOCK to ${server.url}/lock with what the lock holds`
+      )
+    );
+    expect(JSON.parse(server.lock!)).toEqual(info);
+  });
+
+  it('is locked by another run that took the lock between two tries', async () => {
+    const holder = newLockInfo('plan');
+    server.override('LOCK /lock', { status: 503 }, { status: 423, body: JSON.stringify(holder) });
+
+    await expect(backendWith(TWICE).lock(newLockInfo('apply'))).rejects.toThrow(`State is locked by plan of ${holder.who}`);
+  });
+
+  it('says the server may hold the lock where every try went unanswered', async () => {
+    server.override('LOCK /lock', { lost: true }, { hang: true });
+    const info = newLockInfo('apply');
+
+    await expect(backendWith({ ...TWICE, max: 1, timeout: 0.2 }).lock(info)).rejects.toThrow(
+      `LOCK ${server.url}/lock got no answer (timed out after 0.2s) after 2 tries. The server may hold lock ${info.id} all the same`
+    );
+  });
+
+  it('says nothing of a try before where a release was tried once', async () => {
+    const backend = backendWith(ONCE);
+    const info = newLockInfo('apply');
+    await backend.lock(info);
+    server.override('UNLOCK /lock', { status: 409 });
+
+    await expect(backend.unlock(info.id)).rejects.toThrow(new Error(`UNLOCK ${server.url}/lock answered 409`));
+  });
+
+  it('says a try before a refused release may have released the lock', async () => {
+    const backend = backendWith({ ...TWICE, max: 1 });
+    const info = newLockInfo('apply');
+    await backend.lock(info);
+    server.override('UNLOCK /lock', { lost: true });
+
+    await expect(backend.unlock(info.id)).rejects.toThrow(
+      new Error(`UNLOCK ${server.url}/lock answered 409 after 2 tries. A try before it may have released lock ${info.id} all the same`)
+    );
+    expect(server.lock).toBeUndefined();
+  });
+});
+
 describe('the http block', () => {
   let server: HttpStateServer;
 
@@ -360,7 +553,18 @@ describe('the http block', () => {
     it('keeps them out of the settings init remembers', () => {
       const { settings } = backendWith({ CLAY_HTTP_USERNAME: 'ci', CLAY_HTTP_PASSWORD: 'secret' }).choice;
 
-      expect(Object.keys(settings)).toEqual(['address', 'update_method', 'lock_address', 'lock_method', 'unlock_address', 'unlock_method']);
+      expect(Object.keys(settings)).toEqual([
+        'address',
+        'update_method',
+        'lock_address',
+        'lock_method',
+        'unlock_address',
+        'unlock_method',
+        'retry_max',
+        'retry_wait_min',
+        'retry_wait_max',
+        'timeout',
+      ]);
       expect(JSON.stringify(settings)).not.toContain('secret');
     });
 

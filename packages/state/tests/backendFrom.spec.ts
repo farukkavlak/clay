@@ -129,8 +129,31 @@ describe('backendFrom', () => {
     it('refuses an attribute it does not take, naming those it does', () => {
       const error = errorOf(http(`${ADDRESSES}\n    bucket = "b"`));
 
-      expect(error.message).toBe('backend "http" takes only "address", "update_method", "lock_address", "lock_method", "unlock_address", "unlock_method", not "bucket"');
+      expect(error.message).toBe(
+        'backend "http" takes only "address", "update_method", "lock_address", "lock_method", "unlock_address", "unlock_method", "retry_max", "retry_wait_min", "retry_wait_max", "timeout", not "bucket"'
+      );
       expect(error.position).toMatchObject({ line: 5, column: 14 });
+    });
+
+    it('takes how it tries a request again, in seconds, and fills in the rest', () => {
+      const { settings } = (backendFrom(http(`${ADDRESSES}\n    retry_max = 5\n    timeout = 90`), dir, {}) as HttpBackend).choice;
+
+      expect(settings).toMatchObject({ retry_max: 5, retry_wait_min: 1, retry_wait_max: 30, timeout: 90 });
+    });
+
+    it.each([
+      ['a string', 'timeout = "30"', 'timeout of backend "http" is a number written out'],
+      ['a fraction', 'timeout = 1.5', 'timeout of backend "http" is 1.5, which is not a whole number'],
+      ['no time', 'timeout = 0', 'timeout of backend "http" is 0, and it takes 1 to 3600 seconds'],
+      ['too long a wait', 'retry_wait_max = 3601', 'retry_wait_max of backend "http" is 3601, and it takes 0 to 3600 seconds'],
+      ['fewer than no tries', 'retry_max = -1', 'retry_max of backend "http" is -1, and it takes 0 to 100 tries'],
+      ['a shortest wait above the longest', 'retry_wait_min = 10\n    retry_wait_max = 5', 'retry_wait_min of backend "http" is 10, longer than retry_wait_max, 5'],
+    ])('refuses %s, at the value', (_title, body, message) => {
+      const error = errorOf(http(`${ADDRESSES}\n    ${body}`));
+      const name = body.split(' ')[0];
+
+      expect(error.message).toBe(message);
+      expect(error.position).toMatchObject({ line: 5, column: name.length + 8 });
     });
 
     it.each([

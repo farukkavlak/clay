@@ -26,8 +26,12 @@ describe('a state kept on an HTTP server', () => {
     throw new Error('Expected the command to fail');
   };
 
-  const configure = (url: string) =>
-    fs.writeFile(path.join(dir, 'main.clay'), `clay {\n  backend "http" {\n    address      = "${url}/state"\n    lock_address = "${url}/lock"\n  }\n}\n${FILE}`, 'utf8');
+  const configure = (url: string, ...more: string[]) =>
+    fs.writeFile(
+      path.join(dir, 'main.clay'),
+      `clay {\n  backend "http" {\n    address      = "${url}/state"\n    lock_address = "${url}/lock"\n${more.map((line) => `    ${line}\n`).join('')}  }\n}\n${FILE}`,
+      'utf8'
+    );
 
   /** What the CLI printed and exited with, run with `env` in place of any credentials the test runs with. */
   const runWith = async (env: Record<string, string>, ...args: string[]): Promise<{ code: number; stdout: string; stderr: string }> => {
@@ -73,8 +77,35 @@ describe('a state kept on an HTTP server', () => {
         lock_method: 'LOCK',
         unlock_address: `${server.url}/lock`,
         unlock_method: 'UNLOCK',
+        retry_max: 2,
+        retry_wait_min: 1,
+        retry_wait_max: 30,
+        timeout: 30,
       },
     });
+  });
+
+  it('writes the state where the server failed the first try', async () => {
+    await configure(server.url, 'retry_wait_min = 0');
+    await clayOutput(dir, 'init');
+    server.override('POST /state', { status: 503 });
+
+    expect(await clayOutput(dir, 'apply', '--yes')).toContain('Apply complete! Resources: 1 added');
+
+    expect(Object.keys(stateOnServer().resources)).toEqual(['local_file.f']);
+    const [failed, again] = server.received.filter(({ method }) => method === 'POST').slice(1);
+    expect(again).toEqual(failed);
+  });
+
+  it('gives up on a server that does not answer in the time the block names', async () => {
+    await configure(server.url, 'retry_max = 0', 'timeout = 1');
+    await clayOutput(dir, 'init');
+    server.override('GET /state', { hang: true });
+
+    const { code, stderr } = await refusal('plan');
+
+    expect(code).toBe(1);
+    expect(stderr).toContain(`GET ${server.url}/state got no answer (timed out after 1s)`);
   });
 
   it('is written by apply under the lock it takes, and the lock released', async () => {
@@ -170,7 +201,7 @@ describe('a state kept on an HTTP server', () => {
   });
 
   it('moves the state off the server, and exits 1 naming the lock it could not release there', async () => {
-    await configure(server.url);
+    await configure(server.url, 'retry_max = 0');
     await clayOutput(dir, 'init');
     await clayOutput(dir, 'apply', '--yes');
     await fs.writeFile(path.join(dir, 'main.clay'), FILE, 'utf8');

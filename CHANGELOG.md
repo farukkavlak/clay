@@ -55,6 +55,8 @@ a configuration means or how the state file is written.
   the server holds
 - `backend "http"` sends basic auth from `CLAY_HTTP_USERNAME` and `CLAY_HTTP_PASSWORD`,
   never from the configuration
+- `backend "http"` tries a request again after no answer, a 429 or a 5xx other than 501, and gives up on
+  a try that takes longer than `timeout`
 - `clay init` takes the state lock while it writes the first state, on every backend, so
   a lock left behind stops it
 - `clay init` moves the state to the place the block names, once asked or with `--yes`,
