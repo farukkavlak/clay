@@ -1,8 +1,11 @@
 import { State, STATE_VERSION } from '@clay/contracts';
 
 import { journalLine } from './journal';
-import { LockInfo, LockNotReleased, newLockInfo } from './lockInfo';
+import { LockInfo, LockNotReleased, newLockInfo, StateLocked } from './lockInfo';
+import { FIRST_PAUSE, LockWait, nextPause, NO_WAIT, REAL_TIME, Timer } from './lockWait';
 import { StateBackend } from './StateBackend';
+
+const isAbort = (error: unknown) => error instanceof Error && error.name === 'AbortError';
 
 export class StateManager {
   private backend: StateBackend;
@@ -13,8 +16,14 @@ export class StateManager {
   private taking: Promise<void> = Promise.resolve();
   /** Set by `stop`, after which no lock is taken. */
   private stopped = false;
+  /** Aborted by `stop`, which ends a wait for the lock. */
+  private readonly stopping = new AbortController();
 
-  constructor(backend: StateBackend) {
+  constructor(
+    backend: StateBackend,
+    private readonly wait: LockWait = NO_WAIT,
+    private readonly timer: Timer = REAL_TIME
+  ) {
     this.backend = backend;
   }
 
@@ -91,8 +100,46 @@ export class StateManager {
   }
 
   private async take(info: LockInfo): Promise<void> {
-    await this.backend.lock(info);
+    await this.waitedFor(info);
     this.lockId = info.id;
+  }
+
+  /** Tries again while another run holds the lock, until `wait.seconds` have passed since the first try. */
+  private async waitedFor(info: LockInfo): Promise<void> {
+    const until = this.timer.now() + this.wait.seconds * 1000;
+    for (let pause = FIRST_PAUSE; ; pause = nextPause(pause)) {
+      const locked = await this.tried(info);
+      if (!locked) return;
+
+      const left = until - this.timer.now();
+      if (left <= 0) throw this.wait.seconds === 0 ? locked : new Error(`Waited ${this.wait.seconds}s for the lock. ${locked.message}`, { cause: locked });
+
+      // A run stopped while it tried has nothing to wait for.
+      if (pause === FIRST_PAUSE && !this.stopping.signal.aborted) this.wait.told(locked);
+      await this.paused(Math.min(pause, left), locked);
+    }
+  }
+
+  /** The lock another run holds, or undefined once this run has taken it. */
+  private async tried(info: LockInfo): Promise<StateLocked | undefined> {
+    try {
+      await this.backend.lock(info);
+      return undefined;
+    } catch (error) {
+      if (error instanceof StateLocked) return error;
+
+      throw error;
+    }
+  }
+
+  private async paused(ms: number, locked: StateLocked): Promise<void> {
+    try {
+      await this.timer.sleep(ms, this.stopping.signal);
+    } catch (error) {
+      if (!isAbort(error)) throw error;
+
+      throw new Error(`Stopped waiting for the lock. ${locked.message}`, { cause: locked });
+    }
   }
 
   /** Releases only what this manager took, once. A release that fails throws `LockNotReleased`. */
@@ -110,9 +157,10 @@ export class StateManager {
     }
   }
 
-  /** For a run that exits at once: releases the lock, and refuses one to work that goes on while the release is under way. */
+  /** For a run that exits at once: ends a wait for the lock, releases it, and refuses one to work that goes on while the release is under way. */
   async stop(): Promise<void> {
     this.stopped = true;
+    this.stopping.abort();
     await this.unlock();
   }
 

@@ -1,12 +1,13 @@
 import { emptyState } from '@clay/contracts';
 import { DiskFiles, RecordingFiles } from '@clay/orchestrator';
-import { adoptBackend, Approve, Moved, rememberedBackend, StateBackend, StateManager } from '@clay/state';
+import { adoptBackend, Approve, Moved, rememberedBackend, StateBackend, StateManager, Stoppable } from '@clay/state';
 import { Command } from 'commander';
 import { styleText } from 'node:util';
 
 import { confirm } from '../confirm';
 import { describeError } from '../describeError';
 import { stoppedAtOnce } from '../interruptible';
+import { lockTimeoutOption, lockWait } from '../lockTimeoutOption';
 import { releasedAfter, reportLockLeft } from '../released';
 import { namedBackend } from '../stateFile';
 
@@ -17,18 +18,24 @@ function reportMoved({ from, copied }: Moved, to: StateBackend): void {
   console.log(styleText('green', line));
 }
 
-/** The question is asked under both locks, so Ctrl-C at it releases both. */
-async function initialize(backend: StateBackend, cwd: string, yes: boolean): Promise<number> {
+interface InitOptions {
+  yes: boolean;
+  lockTimeout?: number;
+}
+
+/** Ctrl-C while either lock is awaited, or at the question, stops both managers and releases what they hold. */
+async function initialize(backend: StateBackend, cwd: string, options: InitOptions): Promise<number> {
   await backend.check();
 
-  const stateManager = new StateManager(backend);
+  const stateManager = new StateManager(backend, lockWait(options.lockTimeout));
   const before = rememberedBackend(cwd, process.env);
-  const previous = { backend: before, manager: new StateManager(before) };
-  const approve: Approve = yes ? async () => true : (question) => stoppedAtOnce([stateManager, previous.manager], () => confirm(question));
+  const previous = { backend: before, manager: new StateManager(before, lockWait(options.lockTimeout)) };
+  const stoppable: Stoppable = (step) => stoppedAtOnce([stateManager, previous.manager], step);
+  const approve: Approve = options.yes ? async () => true : (question) => stoppable(() => confirm(question));
 
   return releasedAfter(stateManager, async () => {
-    await stateManager.lock('init');
-    const { moved, lockLeft } = await adoptBackend(backend, previous, cwd, approve);
+    await stoppable(() => stateManager.lock('init'));
+    const { moved, lockLeft } = await adoptBackend(backend, previous, cwd, approve, stoppable);
     if (moved) reportMoved(moved, backend);
     else {
       const wroteState = await stateManager.writeIfAbsent(emptyState());
@@ -46,7 +53,8 @@ export function createInitCommand() {
   return new Command('init')
     .description('Initialize a new Clay workspace')
     .option('-y, --yes', 'Move a state to the backend the configuration names without asking')
-    .action(async (options: { yes?: boolean }) => {
+    .addOption(lockTimeoutOption())
+    .action(async (options: { yes?: boolean; lockTimeout?: number }) => {
       const cwd = process.cwd();
       const files = new RecordingFiles(new DiskFiles(cwd));
 
@@ -54,7 +62,7 @@ export function createInitCommand() {
 
       let code: number;
       try {
-        code = await initialize(namedBackend(cwd, files), cwd, options.yes ?? false);
+        code = await initialize(namedBackend(cwd, files), cwd, { yes: options.yes ?? false, lockTimeout: options.lockTimeout });
       } catch (error: unknown) {
         console.error(styleText('red', 'Failed to initialize workspace:'), describeError(error, files));
         code = 1;

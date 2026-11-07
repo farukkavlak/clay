@@ -11,13 +11,14 @@ import { stoppedAtOnce } from '../interruptible';
 import { stateFile } from '../stateFile';
 import { printable } from '../printable';
 import { displayPlan } from '../showPlan';
+import { lockTimeoutOption, lockWait } from '../lockTimeoutOption';
 import { parallelismOption } from '../parallelismOption';
 import { refreshOption } from '../refreshOption';
 import { releasedAfter } from '../released';
 
 /** Returns the exit code. */
-async function executePlan(cwd: string, files: RecordingFiles, options: PlanOptions, outFile?: string): Promise<number> {
-  const manager = new StateManager(stateFile(cwd, files));
+async function executePlan(cwd: string, files: RecordingFiles, options: PlanOptions, lockTimeout: number | undefined, outFile?: string): Promise<number> {
+  const manager = new StateManager(stateFile(cwd, files), lockWait(lockTimeout));
   const orchestrator = newOrchestrator(cwd, files, manager);
 
   console.log(styleText('blue', 'Planning...'));
@@ -43,13 +44,14 @@ export function createPlanCommand() {
     .option('--out <file>', 'Save plan to file')
     .addOption(refreshOption())
     .addOption(parallelismOption())
+    .addOption(lockTimeoutOption())
     .action(async (options) => {
       const cwd = process.cwd();
       const files = new RecordingFiles(new DiskFiles(cwd));
 
       let code: number;
       try {
-        code = await executePlan(cwd, files, { refresh: options.refresh ?? true, parallelism: options.parallelism }, options.out);
+        code = await executePlan(cwd, files, { refresh: options.refresh ?? true, parallelism: options.parallelism }, options.lockTimeout, options.out);
       } catch (error: unknown) {
         console.error(styleText('red', 'Planning failed:'), describeError(error, files));
         code = 1;

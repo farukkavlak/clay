@@ -97,6 +97,11 @@ export function checkBackend(backend: StateBackend, workingDir: string, env: Env
 /** Asked before a state is moved; only true moves it. */
 export type Approve = (question: string) => Promise<boolean>;
 
+/** Runs a step that Ctrl-C may end at once, as the CLI runs one that writes nothing. */
+export type Stoppable = <T>(step: () => Promise<T>) => Promise<T>;
+
+const unstoppable: Stoppable = (step) => step();
+
 /** A state `init` found at the place it took before. */
 export interface Moved {
   readonly from: BackendChoice;
@@ -156,9 +161,9 @@ async function copyState(before: StateBackend, backend: StateBackend, approve: A
 }
 
 /** The record is written before the old lock is released, so no run takes the old place in between. */
-async function moveState(backend: StateBackend, previous: Previous, workingDir: string, approve: Approve): Promise<Adopted> {
+async function moveState(backend: StateBackend, previous: Previous, workingDir: string, approve: Approve, stoppable: Stoppable): Promise<Adopted> {
   const { backend: before, manager: old } = previous;
-  if (!sharedLock(before.choice, backend.choice)) await old.lock('init');
+  if (!sharedLock(before.choice, backend.choice)) await stoppable(() => old.lock('init'));
 
   let outcome: 'copied' | 'same' | 'gone';
   try {
@@ -181,13 +186,13 @@ async function moveState(backend: StateBackend, previous: Previous, workingDir: 
 
 /**
  * Takes what the configuration names, and moves the state from the place `previous` holds once `approve` says so. Called under the lock
- * of `backend`.
+ * of `backend`; the lock of the old place is taken through `stoppable`.
  */
-export async function adoptBackend(backend: StateBackend, previous: Previous, workingDir: string, approve: Approve): Promise<Adopted> {
+export async function adoptBackend(backend: StateBackend, previous: Previous, workingDir: string, approve: Approve, stoppable: Stoppable = unstoppable): Promise<Adopted> {
   const before = previous.backend;
   if (isDeepStrictEqual(before.choice, backend.choice)) return {};
 
-  if (!isSame(before.choice, backend.choice) && (await leftBehind(before, workingDir))) return moveState(backend, previous, workingDir, approve);
+  if (!isSame(before.choice, backend.choice) && (await leftBehind(before, workingDir))) return moveState(backend, previous, workingDir, approve, stoppable);
 
   writeRecord(backend.choice, workingDir);
   return {};

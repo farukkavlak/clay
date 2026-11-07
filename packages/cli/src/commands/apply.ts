@@ -11,6 +11,7 @@ import { newOrchestrator } from '../engine';
 import { describeError } from '../describeError';
 import { interruptible, INTERRUPTED, stoppedAtOnce } from '../interruptible';
 import { actionLine, changesNothing, destroyedLine, displayPlan, readLine, shownType } from '../showPlan';
+import { lockTimeoutOption, lockWait } from '../lockTimeoutOption';
 import { parallelismOption } from '../parallelismOption';
 import { printable } from '../printable';
 import { refreshOption } from '../refreshOption';
@@ -112,10 +113,14 @@ async function confirmApply(autoConfirm: boolean): Promise<boolean> {
   return autoConfirm || confirm('Do you want to perform these actions?');
 }
 
-interface ApplyOptions {
+interface RunFlags {
+  parallelism?: number;
+  lockTimeout?: number;
+}
+
+interface ApplyOptions extends RunFlags {
   yes: boolean;
   refresh: boolean;
-  parallelism?: number;
 }
 
 /**
@@ -123,7 +128,7 @@ interface ApplyOptions {
  * releases it and exits at once. Returns the exit code.
  */
 async function applyFromDisk(cwd: string, recording: RecordingFiles, options: ApplyOptions): Promise<number> {
-  const manager = new StateManager(stateFile(cwd, recording));
+  const manager = new StateManager(stateFile(cwd, recording), lockWait(options.lockTimeout));
 
   return releasedAfter(manager, async () => {
     console.log(styleText('blue', 'Calculating plan...'));
@@ -165,8 +170,9 @@ async function readPlanFile(planFileArg: string, files: ConfigFiles): Promise<Pl
   }
 }
 
-async function executeApplyFromPlan(cwd: string, planFile: PlanFile, files: ConfigFiles, parallelism?: number): Promise<number> {
-  const manager = new StateManager(stateFile(cwd, files));
+async function executeApplyFromPlan(cwd: string, planFile: PlanFile, files: ConfigFiles, options: RunFlags): Promise<number> {
+  const { parallelism } = options;
+  const manager = new StateManager(stateFile(cwd, files), lockWait(options.lockTimeout));
 
   console.log(styleText('blue', 'Applying from saved plan...'));
   console.log(styleText('gray', `Plan created: ${planFile.timestamp}`));
@@ -186,6 +192,7 @@ export function createApplyCommand() {
     .option('-y, --yes', 'Approve changes automatically')
     .addOption(refreshOption())
     .addOption(parallelismOption())
+    .addOption(lockTimeoutOption())
     .argument('[plan-file]', 'Plan file to apply (optional)')
     .action(async (planFileArg: string | undefined, options) => {
       const cwd = process.cwd();
@@ -200,8 +207,14 @@ export function createApplyCommand() {
           const planData = await readPlanFile(planFileArg, files);
 
           files = new InMemoryFiles(planData.files);
-          code = await executeApplyFromPlan(cwd, planData, files, options.parallelism);
-        } else code = await applyFromDisk(cwd, recording, { yes: options.yes ?? false, refresh: options.refresh ?? true, parallelism: options.parallelism });
+          code = await executeApplyFromPlan(cwd, planData, files, { parallelism: options.parallelism, lockTimeout: options.lockTimeout });
+        } else
+          code = await applyFromDisk(cwd, recording, {
+            yes: options.yes ?? false,
+            refresh: options.refresh ?? true,
+            parallelism: options.parallelism,
+            lockTimeout: options.lockTimeout,
+          });
       } catch (error: unknown) {
         console.error(styleText('red', 'Apply failed:'), describeError(error, files));
         code = 1;
