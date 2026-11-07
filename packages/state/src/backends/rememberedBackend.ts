@@ -4,7 +4,9 @@ import * as fs from 'node:fs';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 
+import { LockNotReleased } from '../lockInfo';
 import { BackendChoice, StateBackend } from '../StateBackend';
+import { StateManager } from '../StateManager';
 import { build } from './build';
 import { NoAnswer } from './HttpBackend';
 import { LocalBackend } from './LocalBackend';
@@ -30,7 +32,7 @@ function shapeOf(read: unknown): { type: string; settings: Record<string, unknow
 }
 
 /** Built again from what `init` wrote, so it is checked as a block is. With no record, the state is where it is with no block. */
-function remembered(workingDir: string): StateBackend {
+export function rememberedBackend(workingDir: string): StateBackend {
   const record = recordOf(workingDir);
   let content: string;
 
@@ -48,7 +50,7 @@ function remembered(workingDir: string): StateBackend {
   return build(recordSettings(shape.type, shape.settings, record), workingDir);
 }
 
-/** A journal counts where the state is a file: a state moved without it would lose what a stopped run recorded. */
+/** A journal alone counts where the state is a file, so what a stopped run recorded is not left unseen. */
 async function leftBehind(before: StateBackend, workingDir: string): Promise<boolean> {
   if (before instanceof LocalBackend) return before.holdsAnything();
 
@@ -77,7 +79,7 @@ function changed(before: BackendChoice, now: BackendChoice): string | undefined 
 
 /** Refuses a configuration that names another place than `init` last took, which would start from an empty state, or reaches it otherwise. */
 export function checkBackend(backend: StateBackend, workingDir: string, position?: Position): void {
-  const before = remembered(workingDir).choice;
+  const before = rememberedBackend(workingDir).choice;
   const now = backend.choice;
   const message = isSame(before, now)
     ? changed(before, now)
@@ -87,23 +89,101 @@ export function checkBackend(backend: StateBackend, workingDir: string, position
   throw position ? new ConfigError(message, position) : new Error(message);
 }
 
-/** Takes what the configuration names, once no state is left behind at an old place. */
-export async function adoptBackend(backend: StateBackend, workingDir: string): Promise<void> {
-  await backend.check();
+/** Asked before a state is moved; only true moves it. */
+export type Approve = (question: string) => Promise<boolean>;
 
-  const before = remembered(workingDir);
-  const { where, type } = before.choice;
-  if (isDeepStrictEqual(before.choice, backend.choice)) return;
+/** A state `init` found at the place it took before. */
+export interface Moved {
+  readonly from: BackendChoice;
+  /** False where the new place held the same state already. */
+  readonly copied: boolean;
+}
 
-  if (!isSame(before.choice, backend.choice) && (await leftBehind(before, workingDir)))
-    throw new Error(
-      `The state in "${where}" would be left behind, as the configuration names "${backend.choice.where}"; move it there by hand${type === 'local' ? ' with any .journal beside it, or remove them' : ', or remove it'}, and run \`clay init\` again`
-    );
+export interface Adopted {
+  /** Unset where the old place held no state. */
+  readonly moved?: Moved;
+  /** Set where the lock of the old place could not be released. */
+  readonly lockLeft?: LockNotReleased;
+}
 
-  const { type: kept, settings } = backend.choice;
+function writeRecord(choice: BackendChoice, workingDir: string): void {
   const record = recordOf(workingDir);
   fs.mkdirSync(path.dirname(record), { recursive: true });
   // Rename is atomic, so a stopped init leaves the old record whole.
-  fs.writeFileSync(`${record}.tmp`, `${JSON.stringify({ type: kept, settings })}\n`, 'utf8');
+  fs.writeFileSync(`${record}.tmp`, `${JSON.stringify({ type: choice.type, settings: choice.settings })}\n`, 'utf8');
   fs.renameSync(`${record}.tmp`, record);
+}
+
+/** What `init` took before, and the manager that locks it while the state moves. */
+export interface Previous {
+  readonly backend: StateBackend;
+  readonly manager: StateManager;
+}
+
+/** Two places on one server may share a lock, which `init` holds already. */
+const sharedLock = (a: BackendChoice, b: BackendChoice) =>
+  a.type === b.type && a.settings.lock_address !== undefined && a.settings.lock_address === b.settings.lock_address && a.settings.lock_method === b.settings.lock_method;
+
+const journalAlone = ({ where }: BackendChoice) =>
+  new Error(`"${where}" has a journal and no state, so there is nothing to move; remove ${where}.journal and run \`clay init\` again`);
+
+/** Called under both locks. `gone` is a state another run removed since `init` looked. */
+async function copyState(before: StateBackend, backend: StateBackend, approve: Approve): Promise<'copied' | 'same' | 'gone'> {
+  if (!(await before.exists())) {
+    if (before instanceof LocalBackend) throw journalAlone(before.choice);
+    return 'gone';
+  }
+
+  const from = before.choice;
+  const to = backend.choice;
+  const state = await before.read();
+  if (await backend.exists()) {
+    // The same state is what an init stopped after the copy leaves.
+    if (isDeepStrictEqual(await backend.read(), state)) return 'same';
+
+    throw new Error(`"${from.where}" and "${to.where}" both hold a state, and they differ; remove the one you do not want, and run \`clay init\` again`);
+  }
+
+  if (!(await approve(`Move the state in "${from.where}" (${from.type}) to "${to.where}" (${to.type})?`))) throw new Error('The state was not moved, and nothing changed');
+
+  await backend.write(state);
+  return 'copied';
+}
+
+/** The record is written before the old lock is released, so no run takes the old place in between. */
+async function moveState(backend: StateBackend, previous: Previous, workingDir: string, approve: Approve): Promise<Adopted> {
+  const { backend: before, manager: old } = previous;
+  if (!sharedLock(before.choice, backend.choice)) await old.lock('init');
+
+  let outcome: 'copied' | 'same' | 'gone';
+  try {
+    outcome = await copyState(before, backend, approve);
+    writeRecord(backend.choice, workingDir);
+  } catch (error) {
+    return await old.unlockAfter(error);
+  }
+
+  const adopted = outcome === 'gone' ? {} : { moved: { from: before.choice, copied: outcome === 'copied' } };
+  try {
+    await old.unlock();
+    return adopted;
+  } catch (error) {
+    if (!(error instanceof LockNotReleased)) throw error;
+
+    return { ...adopted, lockLeft: error };
+  }
+}
+
+/**
+ * Takes what the configuration names, and moves the state from the place `previous` holds once `approve` says so. Called under the lock
+ * of `backend`.
+ */
+export async function adoptBackend(backend: StateBackend, previous: Previous, workingDir: string, approve: Approve): Promise<Adopted> {
+  const before = previous.backend;
+  if (isDeepStrictEqual(before.choice, backend.choice)) return {};
+
+  if (!isSame(before.choice, backend.choice) && (await leftBehind(before, workingDir))) return moveState(backend, previous, workingDir, approve);
+
+  writeRecord(backend.choice, workingDir);
+  return {};
 }

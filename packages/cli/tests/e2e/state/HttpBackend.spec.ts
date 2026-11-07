@@ -15,12 +15,12 @@ describe('a state kept on an HTTP server', () => {
   let dir: string;
   let server: HttpStateServer;
 
-  const refusal = async (...args: string[]): Promise<{ code: number; stderr: string }> => {
+  const refusal = async (...args: string[]): Promise<{ code: number; stdout: string; stderr: string }> => {
     try {
       await promisify(execFile)('node', [clay, ...args], { cwd: dir });
     } catch (error) {
-      const failed = error as { code: number; stderr: string };
-      return { code: failed.code, stderr: stripVTControlCharacters(failed.stderr) };
+      const failed = error as { code: number; stdout: string; stderr: string };
+      return { code: failed.code, stdout: stripVTControlCharacters(failed.stdout), stderr: stripVTControlCharacters(failed.stderr) };
     }
 
     throw new Error('Expected the command to fail');
@@ -141,15 +141,34 @@ describe('a state kept on an HTTP server', () => {
     expect(await exists('.clay')).toBe(false);
   });
 
-  it('is not taken by init while a local state would be left behind', async () => {
+  it('takes a local state to the server with init --yes', async () => {
     await fs.writeFile(path.join(dir, 'main.clay'), FILE, 'utf8');
     await clayOutput(dir, 'init');
+    await clayOutput(dir, 'apply', '--yes');
     await configure(server.url);
 
-    const { code, stderr } = await refusal('init');
+    const stdout = await clayOutput(dir, 'init', '--yes');
+
+    expect(stdout).toContain(`Moved the state in "clay.state.json" to "${server.url}/state"`);
+    expect(Object.keys(stateOnServer().resources)).toEqual(['local_file.f']);
+    expect(server.lock).toBeUndefined();
+    expect(await exists('clay.state.json')).toBe(true);
+    expect(await exists('clay.state.json.lock')).toBe(false);
+    expect(await clayOutput(dir, 'plan')).toContain('No changes');
+  });
+
+  it('moves the state off the server, and exits 1 naming the lock it could not release there', async () => {
+    await configure(server.url);
+    await clayOutput(dir, 'init');
+    await clayOutput(dir, 'apply', '--yes');
+    await fs.writeFile(path.join(dir, 'main.clay'), FILE, 'utf8');
+    server.override('UNLOCK /lock', { status: 500 });
+
+    const { code, stdout, stderr } = await refusal('init', '--yes');
 
     expect(code).toBe(1);
-    expect(stderr).toContain(`The state in "clay.state.json" would be left behind, as the configuration names "${server.url}/state"`);
-    expect(server.state).toBeUndefined();
+    expect(stdout).toContain(`Moved the state in "${server.url}/state" to "clay.state.json"`);
+    expect(stderr).toContain(`The lock could not be released: UNLOCK ${server.url}/lock`);
+    expect(await clayOutput(dir, 'state', 'list')).toBe('local_file.f\n');
   });
 });

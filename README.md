@@ -80,17 +80,17 @@ one file per module. `docs/TASKS.md` has the full list.
 
 ## Commands
 
-| Command                  | Does                                                                                                      |
-| ------------------------ | --------------------------------------------------------------------------------------------------------- |
-| `clay init`              | Takes the backend the configuration names, and creates an empty state file if there is none               |
-| `clay validate`          | Resolves references and checks values with the schema and the provider; reads no state and no data source |
-| `clay plan [--out file]` | Shows what `apply` would do; `--out` saves the plan with its configuration                                |
-| `clay apply [plan] [-y]` | Runs the plan it shows, or a saved one; `-y` skips the question                                           |
-| `clay output [--json]`   | Prints the root outputs from the last apply; `--json` gives each with its type, a sensitive one too       |
-| `clay state list`        | Lists the resources in state, and `<addr> (deposed)` for an address that holds deposed objects            |
-| `clay state show <addr>` | Prints one resource as it is in state, and each deposed object under it                                   |
-| `clay state mv <a> <b>`  | Renames a resource in state, so the next plan does not recreate it                                        |
-| `clay state rm <addr>`   | Forgets a resource, and its deposed objects, without destroying them                                      |
+| Command                  | Does                                                                                                                             |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| `clay init [-y]`         | Takes the backend the configuration names; moves a state left at the old place, or creates an empty one; `-y` skips the question |
+| `clay validate`          | Resolves references and checks values with the schema and the provider; reads no state and no data source                        |
+| `clay plan [--out file]` | Shows what `apply` would do; `--out` saves the plan with its configuration                                                       |
+| `clay apply [plan] [-y]` | Runs the plan it shows, or a saved one; `-y` skips the question                                                                  |
+| `clay output [--json]`   | Prints the root outputs from the last apply; `--json` gives each with its type, a sensitive one too                              |
+| `clay state list`        | Lists the resources in state, and `<addr> (deposed)` for an address that holds deposed objects                                   |
+| `clay state show <addr>` | Prints one resource as it is in state, and each deposed object under it                                                          |
+| `clay state mv <a> <b>`  | Renames a resource in state, so the next plan does not recreate it                                                               |
+| `clay state rm <addr>`   | Forgets a resource, and its deposed objects, without destroying them                                                             |
 
 A saved plan carries the configuration it was made from and the state it was planned
 against. `apply` runs that configuration, not the one on disk now, and refuses the plan

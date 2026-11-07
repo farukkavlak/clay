@@ -1055,7 +1055,7 @@ Terraform has it since backends replaced `-state`.
 - [ ] The HTTP backend retries a request that got no answer or a 5xx, and gives up on one
       that hangs after a time it names
 - [ ] The HTTP backend takes a CA certificate and a client certificate for TLS
-- [ ] `init` offers to move the state when the block names a different backend than the
+- [x] `init` offers to move the state when the block names a different backend than the
       one in use
 - [ ] An S3 backend, with the lock a second run has to wait for; an Azure Blob backend
 

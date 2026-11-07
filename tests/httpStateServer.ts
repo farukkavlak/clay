@@ -24,9 +24,10 @@ const read = async (request: IncomingMessage): Promise<string> => {
 
 const digestOf = (body: string) => createHash('md5').update(body, 'utf8').digest('base64');
 
-/** A state server as Terraform's http backend expects one: the state at /state, its lock at /lock. */
+/** A state server as Terraform's http backend expects one: the state at /state, its lock at /lock. A second state at /other shares the lock. */
 export class HttpStateServer {
   state: string | undefined;
+  other: string | undefined;
   lock: string | undefined;
   readonly received: Received[] = [];
   private overrides = new Map<string, Override>();
@@ -79,6 +80,11 @@ export class HttpStateServer {
     if (key === 'GET /state') return this.state === undefined ? { status: 404 } : { status: 200, body: this.state };
     if (key === 'POST /state') {
       this.state = body;
+      return { status: 200 };
+    }
+    if (key === 'GET /other') return this.other === undefined ? { status: 404 } : { status: 200, body: this.other };
+    if (key === 'POST /other') {
+      this.other = body;
       return { status: 200 };
     }
     if (key === 'LOCK /lock') return this.take(body);

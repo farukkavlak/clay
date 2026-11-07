@@ -1,7 +1,9 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import { once } from 'node:events';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { promisify, stripVTControlCharacters } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -21,6 +23,16 @@ describe('a state kept where a backend block says', () => {
     }
 
     throw new Error('Expected the command to fail');
+  };
+
+  const shell = async (command: string): Promise<{ code: number; stdout: string; stderr: string }> => {
+    try {
+      const { stdout, stderr } = await promisify(execFile)('sh', ['-c', command], { cwd: dir });
+      return { code: 0, stdout: stripVTControlCharacters(stdout), stderr: stripVTControlCharacters(stderr) };
+    } catch (error) {
+      const failed = error as { code: number; stdout: string; stderr: string };
+      return { code: failed.code, stdout: stripVTControlCharacters(failed.stdout), stderr: stripVTControlCharacters(failed.stderr) };
+    }
   };
 
   const write = (name: string, content: string) => fs.writeFile(path.join(dir, name), content, 'utf8');
@@ -200,31 +212,87 @@ describe('a state kept where a backend block says', () => {
       await expect(fs.access(path.join(dir, 'f.txt'))).rejects.toThrow('ENOENT');
     });
 
-    it('refuses to leave a state behind, and takes the new place once it has moved', async () => {
-      await clayOutput(dir, 'init');
-      await clayOutput(dir, 'apply', '--yes');
-      await write('main.clay', BLOCK.replace('here.json', 'there.json') + FILE);
+    describe('a block that names another place', () => {
+      const QUESTION = `Move the state in "${path.join('kept', 'here.json')}" (local) to "${path.join('kept', 'there.json')}" (local)?`;
 
-      const printed = await refusal('init');
+      beforeEach(async () => {
+        await clayOutput(dir, 'init');
+        await clayOutput(dir, 'apply', '--yes');
+        await write('main.clay', BLOCK.replace('here.json', 'there.json') + FILE);
+      });
 
-      expect(printed).toContain(`The state in "${path.join('kept', 'here.json')}" would be left behind, as the configuration names "${path.join('kept', 'there.json')}"`);
-      await expect(fs.access(path.join(dir, 'kept', 'there.json'))).rejects.toThrow('ENOENT');
-      expect(await refusal('plan')).toContain(CHANGED);
+      it('has its state moved there by init once the answer is yes, and the old one kept', async () => {
+        const { code, stdout } = await shell(`echo yes | node ${clay} init`);
 
-      await fs.rename(path.join(dir, 'kept', 'here.json'), path.join(dir, 'kept', 'there.json'));
-      await clayOutput(dir, 'init');
+        expect(code).toBe(0);
+        expect(stdout).toContain(QUESTION);
+        expect(stdout).toContain(`Moved the state in "${path.join('kept', 'here.json')}" to "${path.join('kept', 'there.json')}"; the old one is left as it was`);
+        expect(await filesKept()).toEqual(['here.json', 'here.json.bak', 'there.json']);
+        expect(await clayOutput(dir, 'plan')).toContain('No changes');
+        expect(await clayOutput(dir, 'state', 'list')).toBe('local_file.f\n');
+      });
 
-      expect(await clayOutput(dir, 'plan')).toContain('No changes');
-      expect(await clayOutput(dir, 'state', 'list')).toBe('local_file.f\n');
+      it('has its state moved without a question by init --yes', async () => {
+        const stdout = await clayOutput(dir, 'init', '--yes');
+
+        expect(stdout).not.toContain(QUESTION);
+        expect(await clayOutput(dir, 'state', 'list')).toBe('local_file.f\n');
+      });
+
+      it('changes nothing and exits 1 when the answer is no', async () => {
+        const { code, stderr } = await shell(`echo no | node ${clay} init`);
+
+        expect(code).toBe(1);
+        expect(stderr).toContain('The state was not moved, and nothing changed');
+        expect(await filesKept()).toEqual(['here.json', 'here.json.bak']);
+        expect(await refusal('plan')).toContain(CHANGED);
+      });
+
+      it('releases both locks and changes nothing on Ctrl-C at the question', async () => {
+        const child = spawn('node', [clay, 'init'], { cwd: dir });
+        let stdout = '';
+        child.stdout.on('data', (chunk: Buffer) => (stdout += chunk.toString()));
+        const ended = once(child, 'exit');
+        while (!stdout.includes(QUESTION)) await sleep(20);
+        expect(await filesKept()).toEqual(['here.json', 'here.json.bak', 'here.json.lock', 'there.json.lock']);
+
+        child.kill('SIGINT');
+
+        const [code] = await ended;
+        expect(code).toBe(130);
+        expect(await filesKept()).toEqual(['here.json', 'here.json.bak']);
+        expect(await refusal('plan')).toContain(CHANGED);
+      });
+
+      it('takes the new place as it is, without asking, where an init stopped after the copy', async () => {
+        await fs.copyFile(path.join(dir, 'kept', 'here.json'), path.join(dir, 'kept', 'there.json'));
+
+        const { code, stdout } = await shell(`node ${clay} init < /dev/null`);
+
+        expect(code).toBe(0);
+        expect(stdout).toContain(`Took "${path.join('kept', 'there.json')}", which holds the same state as "${path.join('kept', 'here.json')}"`);
+        expect(await clayOutput(dir, 'state', 'list')).toBe('local_file.f\n');
+      });
+
+      it('names --yes and changes nothing when the input is closed', async () => {
+        const { code, stderr } = await shell(`node ${clay} init < /dev/null`);
+
+        expect(code).toBe(1);
+        expect(stderr).toContain('No answer: the input is closed. Run with --yes to approve without asking');
+        expect(await filesKept()).toEqual(['here.json', 'here.json.bak']);
+      });
     });
 
-    it('refuses to leave the default state behind when a block is added', async () => {
+    it('moves the default state when a block is added', async () => {
       await write('main.clay', FILE);
       await clayOutput(dir, 'init');
+      await clayOutput(dir, 'apply', '--yes');
       await write('main.clay', BLOCK + FILE);
 
-      expect(await refusal('init')).toContain('The state in "clay.state.json" would be left behind');
-      await expect(fs.access(path.join(dir, '.clay'))).rejects.toThrow('ENOENT');
+      await clayOutput(dir, 'init', '--yes');
+
+      expect(await resourcesHere()).toEqual(['local_file.f']);
+      expect(await clayOutput(dir, 'plan')).toContain('No changes');
     });
 
     it('goes back to the default place when the block is taken away and nothing is left behind', async () => {

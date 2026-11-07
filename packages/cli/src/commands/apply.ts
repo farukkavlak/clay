@@ -127,7 +127,7 @@ async function applyFromDisk(cwd: string, recording: RecordingFiles, options: Ap
 
   return releasedAfter(manager, async () => {
     console.log(styleText('blue', 'Calculating plan...'));
-    const plan = await stoppedAtOnce(manager, async () => {
+    const plan = await stoppedAtOnce([manager], async () => {
       await manager.lock('apply');
       return newOrchestrator(cwd, recording, manager).plan({ refresh: options.refresh, parallelism: options.parallelism });
     });
@@ -137,7 +137,7 @@ async function applyFromDisk(cwd: string, recording: RecordingFiles, options: Ap
     displayPlan(plan);
     if (changesNothing(plan)) return 0;
 
-    if (!(await stoppedAtOnce(manager, () => confirmApply(options.yes)))) {
+    if (!(await stoppedAtOnce([manager], () => confirmApply(options.yes)))) {
       console.error(styleText('yellow', 'Apply cancelled.'));
       return 1;
     }
@@ -175,7 +175,7 @@ async function executeApplyFromPlan(cwd: string, planFile: PlanFile, files: Conf
   if (changesNothing(planFile)) return 0;
 
   return releasedAfter(manager, async () => {
-    await stoppedAtOnce(manager, () => manager.lock('apply'));
+    await stoppedAtOnce([manager], () => manager.lock('apply'));
     return runAndReport((signal) => newOrchestrator(cwd, files, manager).runPlan(planFile, { parallelism, signal }), forgotten(planFile));
   });
 }

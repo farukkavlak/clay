@@ -55,6 +55,8 @@ a configuration means or how the state file is written.
   the server holds
 - `clay init` takes the state lock while it writes the first state, on every backend, so
   a lock left behind stops it
+- `clay init` moves the state to the place the block names, once asked or with `--yes`,
+  and leaves the old one as it was
 - `apply --parallelism`: each action runs once what it reads is done, with ten provider
   calls at once by default. A failure stops only what reads it, and every failure of a
   run is reported. `plan` takes it too, for the refresh, schemas, block checks, what
