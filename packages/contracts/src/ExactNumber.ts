@@ -1,6 +1,6 @@
 import { MAX_FILE_NESTING, NestingError, nestingOf } from './nesting';
 
-// Node 22.13, the engines floor, has JSON.rawJSON and the reviver's source; the es2022 lib typings have neither.
+// Node 22.15, the engines floor, has JSON.rawJSON and the reviver's source; the es2022 lib typings have neither.
 declare global {
   interface JSON {
     rawJSON(text: string): unknown;

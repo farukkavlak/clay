@@ -12,7 +12,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           # The lowest version engines allows, so what breaks there is seen here.
-          node-version: '22.13'
+          node-version: '22.15'
           cache: npm
       - run: npm ci
       - run: npm run format:check

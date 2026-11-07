@@ -537,6 +537,9 @@ count as written. An address names where the server answers.
 An address is `http` or `https`. It cannot hold a user or a password, since every message
 that names the state would print them.
 
+Over `https`, Clay trusts the CAs Node brings, those in `NODE_EXTRA_CA_CERTS`, and those
+the system trusts: the macOS keychain, the Windows store, or `/etc/ssl` on Linux.
+
 A request that gets no answer, a 429 or a 5xx other than 501 is tried again. A failed TLS
 handshake is not: a certificate Clay does not trust, or a server that speaks no TLS, fails
 the same way on every try. Each setting is a whole number:

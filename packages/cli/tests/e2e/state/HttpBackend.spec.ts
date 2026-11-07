@@ -274,4 +274,34 @@ describe('a state kept on an HTTP server', () => {
       expect(server.received).toEqual([]);
     });
   });
+
+  describe('over TLS', () => {
+    const testCa = path.join(__dirname, '../../../../../tests/tls/ca.pem');
+    let tls: HttpStateServer;
+
+    beforeEach(async () => {
+      tls = await HttpStateServer.start({ tls: true });
+      await configure(tls.url);
+    });
+
+    afterEach(async () => {
+      await tls.stop();
+    });
+
+    it('trusts a CA that NODE_EXTRA_CA_CERTS adds', async () => {
+      const { code, stdout } = await runWith({ NODE_EXTRA_CA_CERTS: testCa }, 'init');
+
+      expect(code).toBe(0);
+      expect(stdout).toContain('Created an empty state');
+      expect(JSON.parse(tls.state!)).toMatchObject({ serial: 0, resources: {} });
+    });
+
+    it('exits 1 on a CA nothing adds, and the server is sent nothing', async () => {
+      const { code, stderr } = await runWith({ NODE_EXTRA_CA_CERTS: '' }, 'init');
+
+      expect(code).toBe(1);
+      expect(stderr).toContain(`GET ${tls.url}/state failed the TLS handshake (UNABLE_TO_VERIFY_LEAF_SIGNATURE)`);
+      expect(tls.received).toEqual([]);
+    });
+  });
 });

@@ -6,7 +6,7 @@ import { LockInfo, lockInfoFrom, StateLocked } from '../lockInfo';
 import { BackendChoice, StateBackend } from '../StateBackend';
 import { parseState, serializeState } from '../stateFile';
 import { authorization, Credentials, PASSWORD, USERNAME } from './httpCredentials';
-import { NoAnswer, Outgoing, Reply, tryOnce } from './httpRequest';
+import { NoAnswer, Outgoing, Reply, Roots, trusted, tryOnce } from './httpRequest';
 import { askedWait, backoff, passing, Retry } from './httpRetry';
 
 export interface HttpSettings {
@@ -84,7 +84,8 @@ export class HttpBackend implements StateBackend {
 
   constructor(
     private readonly settings: HttpSettings,
-    private readonly sleep: Sleep = delay
+    private readonly sleep: Sleep = delay,
+    private readonly roots: Roots = trusted()
   ) {
     const { address, updateMethod, lockAddress, lockMethod, unlockAddress, unlockMethod, credentials, retry } = settings;
     this.authorization = credentials && authorization(credentials);
@@ -205,7 +206,7 @@ export class HttpBackend implements StateBackend {
     const outgoing = this.authorization === undefined ? request : { ...request, headers: { ...request.headers, Authorization: this.authorization } };
 
     for (let tried = 1; ; tried += 1) {
-      const reply = await tryOnce(url, outgoing, retry.timeout);
+      const reply = await tryOnce(url, outgoing, retry.timeout, this.roots);
       const wait = waitAfter(retry, tried, reply, Date.now());
       if (wait === undefined) return settled(reply, tried);
 

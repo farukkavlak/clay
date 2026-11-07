@@ -1,6 +1,6 @@
 import { ClientRequest, IncomingMessage, request as plainRequest } from 'node:http';
 import { request as tlsRequest } from 'node:https';
-import { TLSSocket } from 'node:tls';
+import { getCACertificates, TLSSocket } from 'node:tls';
 
 export interface Outgoing {
   readonly method: string;
@@ -33,6 +33,15 @@ export class HandshakeFailed extends Error {
   }
 }
 
+/** The CAs an https request trusts, asked for at its first request. */
+export type Roots = () => string[];
+
+/** Node trusts only its own CA list unless told; the system store holds the CAs a company adds. `default` keeps NODE_EXTRA_CA_CERTS. */
+export function trusted(): Roots {
+  let list: string[] | undefined;
+  return () => (list ??= [...getCACertificates('default'), ...getCACertificates('system')]);
+}
+
 /** A certificate not trusted marks the socket; EPROTO is a server that speaks no TLS, or none Clay takes. */
 function handshakeFailed(request: ClientRequest, error: Error, what: string): HandshakeFailed | undefined {
   const { socket } = request;
@@ -57,9 +66,10 @@ function noAnswer(error: unknown, what: string, signal: AbortSignal, timeout: nu
  * The client is named, as a proxy may refuse a request that names none.
  * A wrong header throws here, outside the promise: that is a mistake in Clay, not the server giving no answer.
  */
-function sent(url: URL, { method, body, headers }: Outgoing, signal: AbortSignal): Promise<IncomingMessage> {
+function sent(url: URL, { method, body, headers }: Outgoing, signal: AbortSignal, ca: Roots): Promise<IncomingMessage> {
   const length = body === undefined ? {} : { 'Content-Length': String(Buffer.byteLength(body, 'utf8')) };
-  const request: ClientRequest = (url.protocol === 'https:' ? tlsRequest : plainRequest)(url, { method, headers: { 'User-Agent': 'clay', ...headers, ...length }, signal });
+  const options = { method, headers: { 'User-Agent': 'clay', ...headers, ...length }, signal };
+  const request: ClientRequest = url.protocol === 'https:' ? tlsRequest(url, { ...options, ca: ca() }) : plainRequest(url, options);
 
   const answered = new Promise<IncomingMessage>((resolve, reject) => {
     request.once('response', resolve);
@@ -82,9 +92,9 @@ async function textOf(response: IncomingMessage): Promise<string> {
  * No redirect is followed: a POST sent on as a GET would be answered 200, which would count as written or locked.
  * The body is read apart, so one cut off after the status is not taken for no answer.
  */
-export async function tryOnce(url: URL, request: Outgoing, timeout: number): Promise<Reply | NoAnswer> {
+export async function tryOnce(url: URL, request: Outgoing, timeout: number, ca: Roots): Promise<Reply | NoAnswer> {
   const signal = AbortSignal.timeout(timeout * 1000);
-  const answered = sent(url, request, signal);
+  const answered = sent(url, request, signal, ca);
   let response: IncomingMessage;
   try {
     response = await answered;
