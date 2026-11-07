@@ -53,6 +53,8 @@ a configuration means or how the state file is written.
   `clay init` remembers it, and a command refuses a configuration that names another place
 - `backend "http"` keeps the state on a server, read and written over HTTP with a lock
   the server holds
+- `backend "http"` sends basic auth from `CLAY_HTTP_USERNAME` and `CLAY_HTTP_PASSWORD`,
+  never from the configuration
 - `clay init` takes the state lock while it writes the first state, on every backend, so
   a lock left behind stops it
 - `clay init` moves the state to the place the block names, once asked or with `--yes`,

@@ -11,6 +11,7 @@ export interface Received {
   readonly body: string;
   /** Whether `Content-MD5` matched the body. */
   readonly digestMatches: boolean;
+  readonly authorization: string | undefined;
 }
 
 /** An answer of its own for the next request a test names, as a failing server gives. */
@@ -29,6 +30,8 @@ export class HttpStateServer {
   state: string | undefined;
   other: string | undefined;
   lock: string | undefined;
+  /** The `Authorization` every request must carry, where the server asks for one. */
+  authorization: string | undefined;
   readonly received: Received[] = [];
   private overrides = new Map<string, Override>();
   private server: Server;
@@ -64,12 +67,14 @@ export class HttpStateServer {
     const body = await read(request);
     const method = request.method!;
     const digest = request.headers['content-md5'];
-    this.received.push({ method, path: url.pathname, id: url.searchParams.get('ID'), body, digestMatches: digest === digestOf(body) });
+    const { authorization } = request.headers;
+    this.received.push({ method, path: url.pathname, id: url.searchParams.get('ID'), body, digestMatches: digest === digestOf(body), authorization });
 
     const key = `${method} ${url.pathname}`;
     const override = this.overrides.get(key);
     this.overrides.delete(key);
-    const { status, body: sent = '', location, cut } = override ?? this.serve(key, body);
+    const refused = this.authorization !== undefined && authorization !== this.authorization;
+    const { status, body: sent = '', location, cut } = override ?? (refused ? { status: 401 } : this.serve(key, body));
     // A cut body promises more than it sends, then the connection closes.
     response.writeHead(status, { ...(location && { location }), ...(cut && { 'content-length': '100' }) });
     if (cut) response.write('{', () => response.destroy());

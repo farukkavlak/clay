@@ -29,6 +29,18 @@ describe('a state kept on an HTTP server', () => {
   const configure = (url: string) =>
     fs.writeFile(path.join(dir, 'main.clay'), `clay {\n  backend "http" {\n    address      = "${url}/state"\n    lock_address = "${url}/lock"\n  }\n}\n${FILE}`, 'utf8');
 
+  /** What the CLI printed and exited with, run with `env` in place of any credentials the test runs with. */
+  const runWith = async (env: Record<string, string>, ...args: string[]): Promise<{ code: number; stdout: string; stderr: string }> => {
+    const { CLAY_HTTP_USERNAME: _username, CLAY_HTTP_PASSWORD: _password, ...inherited } = process.env;
+    try {
+      const { stdout, stderr } = await promisify(execFile)('node', [clay, ...args], { cwd: dir, env: { ...inherited, ...env } });
+      return { code: 0, stdout: stripVTControlCharacters(stdout), stderr: stripVTControlCharacters(stderr) };
+    } catch (error) {
+      const failed = error as { code: number; stdout: string; stderr: string };
+      return { code: failed.code, stdout: stripVTControlCharacters(failed.stdout), stderr: stripVTControlCharacters(failed.stderr) };
+    }
+  };
+
   const stateOnServer = () => JSON.parse(server.state!) as { serial: number; resources: Record<string, unknown> };
   const exists = (name: string) =>
     fs.access(path.join(dir, name)).then(
@@ -170,5 +182,65 @@ describe('a state kept on an HTTP server', () => {
     expect(stdout).toContain(`Moved the state in "${server.url}/state" to "clay.state.json"`);
     expect(stderr).toContain(`The lock could not be released: UNLOCK ${server.url}/lock`);
     expect(await clayOutput(dir, 'state', 'list')).toBe('local_file.f\n');
+  });
+
+  describe('with credentials in the environment', () => {
+    const CREDENTIALS = { CLAY_HTTP_USERNAME: 'ci', CLAY_HTTP_PASSWORD: 'p4ss-word' };
+    const basic = `Basic ${Buffer.from('ci:p4ss-word', 'utf8').toString('base64')}`;
+
+    beforeEach(() => {
+      server.authorization = basic;
+    });
+
+    it('sends them with every request, and writes them nowhere', async () => {
+      const init = await runWith(CREDENTIALS, 'init');
+      const apply = await runWith(CREDENTIALS, 'apply', '--yes');
+
+      expect(init.code).toBe(0);
+      expect(apply.stdout).toContain('Apply complete! Resources: 1 added');
+
+      expect(Object.keys(stateOnServer().resources)).toEqual(['local_file.f']);
+      expect(server.received.every(({ authorization }) => authorization === basic)).toBe(true);
+      expect(server.received.map(({ method }) => method)).toEqual(expect.arrayContaining(['GET', 'LOCK', 'POST', 'UNLOCK']));
+      expect(await fs.readFile(path.join(dir, '.clay', 'backend.json'), 'utf8')).not.toContain('p4ss-word');
+    });
+
+    it('exits 1 where the server refuses them, and prints none', async () => {
+      const { code, stdout, stderr } = await runWith({ ...CREDENTIALS, CLAY_HTTP_PASSWORD: 'wrong-one' }, 'init');
+
+      expect(code).toBe(1);
+      expect(stderr).toContain(`GET ${server.url}/state answered 401: the server refuses the credentials in CLAY_HTTP_USERNAME and CLAY_HTTP_PASSWORD`);
+      expect(stdout + stderr).not.toContain('wrong-one');
+    });
+
+    it('exits 1 naming the variables where a server asks and none are given', async () => {
+      const { code, stderr } = await runWith({}, 'init');
+
+      expect(code).toBe(1);
+      expect(stderr).toContain('answered 401: the server asks for credentials; give them in CLAY_HTTP_USERNAME and CLAY_HTTP_PASSWORD');
+    });
+
+    it('exits 1 on a password with no username, before any request', async () => {
+      const { code, stderr } = await runWith({ CLAY_HTTP_PASSWORD: 'p4ss-word' }, 'init');
+
+      expect(code).toBe(1);
+      expect(stderr).toContain('CLAY_HTTP_PASSWORD is set and CLAY_HTTP_USERNAME is not');
+      expect(server.received).toEqual([]);
+    });
+
+    it('refuses a password written in the block at its line, before any request, and prints it nowhere', async () => {
+      await fs.writeFile(
+        path.join(dir, 'main.clay'),
+        `clay {\n  backend "http" {\n    address      = "${server.url}/state"\n    lock_address = "${server.url}/lock"\n    password     = "p4ss-word"\n  }\n}\n${FILE}`,
+        'utf8'
+      );
+
+      const { code, stderr } = await runWith(CREDENTIALS, 'init');
+
+      expect(code).toBe(1);
+      expect(stderr).toContain('password of backend "http" is read from CLAY_HTTP_PASSWORD, never from the configuration, which is checked in');
+      expect(stderr).toContain('main.clay line 5');
+      expect(server.received).toEqual([]);
+    });
   });
 });

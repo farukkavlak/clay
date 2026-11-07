@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { LockInfo, lockInfoFrom, StateLocked } from '../lockInfo';
 import { BackendChoice, StateBackend } from '../StateBackend';
 import { parseState, serializeState } from '../stateFile';
+import { authorization, Credentials, PASSWORD, USERNAME } from './httpCredentials';
 
 export interface HttpSettings {
   readonly address: URL;
@@ -12,6 +13,7 @@ export interface HttpSettings {
   readonly lockMethod: string;
   readonly unlockAddress: URL;
   readonly unlockMethod: string;
+  readonly credentials?: Credentials;
 }
 
 interface Answer {
@@ -29,8 +31,16 @@ export class NoAnswer extends Error {
   }
 }
 
+interface Outgoing {
+  readonly method: string;
+  readonly body?: string;
+  readonly headers: Readonly<Record<string, string>>;
+}
+
+const GET: Outgoing = { method: 'GET', headers: {} };
+
 /** The body goes with a digest, so a server can refuse one cut short on the way. */
-function withBody(method: string, body: string): RequestInit {
+function withBody(method: string, body: string): Outgoing {
   const digest = createHash('md5').update(body, 'utf8').digest('base64');
   return { method, body, headers: { 'Content-Type': 'application/json', 'Content-MD5': digest } };
 }
@@ -45,11 +55,11 @@ function reason(error: TypeError): string {
  * No redirect is followed: fetch would send a POST on as a GET, and a 200 for that would count as written or locked.
  * The body is read apart, so one cut off after the status is not taken for no answer.
  */
-async function send(url: URL, init: RequestInit = {}): Promise<Answer> {
-  const method = init.method ?? 'GET';
+async function send(url: URL, request: Outgoing): Promise<Answer> {
+  const { method } = request;
   let response: Response;
   try {
-    response = await fetch(url, { ...init, redirect: 'manual' });
+    response = await fetch(url, { ...request, redirect: 'manual' });
   } catch (error) {
     if (error instanceof TypeError) throw new NoAnswer(`${method} ${url.href} got no answer (${reason(error)})`, error);
 
@@ -65,9 +75,10 @@ async function send(url: URL, init: RequestInit = {}): Promise<Answer> {
   }
 }
 
-function unexpected(method: string, url: URL, { status, location }: Answer): Error {
+function unexpectedAnswer(method: string, url: URL, { status, location }: Answer, withCredentials: boolean): Error {
   const at = `${method} ${url.href} answered ${status}`;
-  if (status === 401) return new Error(`${at}: the server asks for credentials, and Clay sends none`);
+  if (status === 401 && withCredentials) return new Error(`${at}: the server refuses the credentials in ${USERNAME} and ${PASSWORD}`);
+  if (status === 401) return new Error(`${at}: the server asks for credentials; give them in ${USERNAME} and ${PASSWORD}`);
   if (status === 403) return new Error(`${at}: the server refuses this request`);
   if (status >= 300 && status < 400) return new Error(`${at}${location ? ` to ${location}` : ''}; Clay follows no redirect, so the address must name where the server answers`);
 
@@ -77,23 +88,17 @@ function unexpected(method: string, url: URL, { status, location }: Answer): Err
 /** What a write, a lock or an unlock the server took answers. */
 const DONE = new Set([200, 201, 204]);
 
-/** The body of a 200, or undefined where the server holds no state, which 204, 404 and an empty body all say. */
-async function stateText(address: URL): Promise<string | undefined> {
-  const answer = await send(address);
-  if (answer.status === 204 || answer.status === 404) return undefined;
-  if (answer.status !== 200) throw unexpected('GET', address, answer);
-
-  return answer.body === '' ? undefined : answer.body;
-}
-
 /** The state is one document at one address. A server with no journal gets it whole on every write. */
 export class HttpBackend implements StateBackend {
   readonly choice: BackendChoice;
   /** What the lock was taken with, which the unlock sends back. */
   private held: { readonly id: string; readonly body: string } | undefined;
+  /** Sent with every request, the lock's among them. */
+  private readonly authorization: string | undefined;
 
   constructor(private readonly settings: HttpSettings) {
-    const { address, updateMethod, lockAddress, lockMethod, unlockAddress, unlockMethod } = settings;
+    const { address, updateMethod, lockAddress, lockMethod, unlockAddress, unlockMethod, credentials } = settings;
+    this.authorization = credentials && authorization(credentials);
     this.choice = {
       type: 'http',
       where: address.href,
@@ -113,15 +118,15 @@ export class HttpBackend implements StateBackend {
   }
 
   async check(): Promise<void> {
-    await stateText(this.settings.address);
+    await this.stateText();
   }
 
   async exists(): Promise<boolean> {
-    return (await stateText(this.settings.address)) !== undefined;
+    return (await this.stateText()) !== undefined;
   }
 
   async read(): Promise<State> {
-    const text = await stateText(this.settings.address);
+    const text = await this.stateText();
     return text === undefined ? emptyState() : parseState(text, this.location);
   }
 
@@ -131,8 +136,8 @@ export class HttpBackend implements StateBackend {
     const url = new URL(address);
     if (this.held) url.searchParams.set('ID', this.held.id);
 
-    const answer = await send(url, withBody(updateMethod, serializeState(state)));
-    if (!DONE.has(answer.status)) throw unexpected(updateMethod, url, answer);
+    const answer = await this.send(url, withBody(updateMethod, serializeState(state)));
+    if (!DONE.has(answer.status)) throw this.unexpected(updateMethod, url, answer);
   }
 
   /** Called under the lock, since the server cannot write only where nothing is. */
@@ -148,9 +153,9 @@ export class HttpBackend implements StateBackend {
     const body = JSON.stringify(info);
     const free = `send ${unlockMethod} to ${unlockAddress.href} with what the lock holds`;
 
-    const answer = await this.asked(send(lockAddress, withBody(lockMethod, body)), info.id, free);
+    const answer = await this.asked(this.send(lockAddress, withBody(lockMethod, body)), info.id, free);
     if (answer.status === 409 || answer.status === 423) throw new StateLocked(lockInfoFrom(answer.body), free);
-    if (!DONE.has(answer.status)) throw unexpected(lockMethod, lockAddress, answer);
+    if (!DONE.has(answer.status)) throw this.unexpected(lockMethod, lockAddress, answer);
 
     this.held = { id: info.id, body };
   }
@@ -171,9 +176,29 @@ export class HttpBackend implements StateBackend {
     const { unlockAddress, unlockMethod } = this.settings;
     if (this.held?.id !== id) throw new Error(`This run holds no lock ${id} on ${unlockAddress.href}, so it releases none`);
 
-    const answer = await send(unlockAddress, withBody(unlockMethod, this.held.body));
-    if (!DONE.has(answer.status)) throw unexpected(unlockMethod, unlockAddress, answer);
+    const answer = await this.send(unlockAddress, withBody(unlockMethod, this.held.body));
+    if (!DONE.has(answer.status)) throw this.unexpected(unlockMethod, unlockAddress, answer);
 
     this.held = undefined;
+  }
+
+  /** The body of a 200, or undefined where the server holds no state, which 204, 404 and an empty body all say. */
+  private async stateText(): Promise<string | undefined> {
+    const { address } = this.settings;
+    const answer = await this.send(address, GET);
+    if (answer.status === 204 || answer.status === 404) return undefined;
+    if (answer.status !== 200) throw this.unexpected('GET', address, answer);
+
+    return answer.body === '' ? undefined : answer.body;
+  }
+
+  private send(url: URL, request: Outgoing): Promise<Answer> {
+    if (this.authorization === undefined) return send(url, request);
+
+    return send(url, { ...request, headers: { ...request.headers, Authorization: this.authorization } });
+  }
+
+  private unexpected(method: string, url: URL, answer: Answer): Error {
+    return unexpectedAnswer(method, url, answer, this.authorization !== undefined);
   }
 }

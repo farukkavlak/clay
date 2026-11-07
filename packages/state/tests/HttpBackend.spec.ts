@@ -3,11 +3,22 @@ import { BackendBlock, parseModule } from '@clay/parser';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { HttpStateServer } from '../../../tests/httpStateServer';
-import { backendFrom, HttpBackend, newLockInfo, serializeState, StateLocked, StateManager } from '../src';
+import { backendFrom, HttpBackend, newLockInfo, serializeState, StateBackend, StateLocked, StateManager } from '../src';
 import { backendAt, Methods } from './backendAt';
 
 const resource = { resourceType: 'local_file', name: 'a', attributes: { path: 'a.txt' } };
 const blockOf = (body: string) => parseModule([{ file: 'main.clay', content: `clay {\n  backend "http" {\n${body}\n  }\n}` }])[0] as BackendBlock;
+const basic = (pair: string) => `Basic ${Buffer.from(pair, 'utf8').toString('base64')}`;
+
+/** A read, a write, a lock and its release: every request the backend sends. */
+async function runAll(backend: StateBackend): Promise<void> {
+  const info = newLockInfo('apply');
+  await backend.lock(info);
+  await backend.read();
+  await backend.write(emptyState());
+  await backend.unlock(info.id);
+}
+
 const stateWith = (serial: number) => ({ ...emptyState(), serial, resources: { 'local_file.a': resource } });
 
 describe('a state kept on an HTTP server', () => {
@@ -152,7 +163,7 @@ describe('a state kept on an HTTP server', () => {
   });
 
   it.each([
-    [401, 'answered 401: the server asks for credentials, and Clay sends none'],
+    [401, 'answered 401: the server asks for credentials; give them in CLAY_HTTP_USERNAME and CLAY_HTTP_PASSWORD'],
     [403, 'answered 403: the server refuses this request'],
     [500, 'answered 500'],
   ])('refuses a read answered %d', async (status, message) => {
@@ -288,6 +299,8 @@ describe('a state kept on an HTTP server', () => {
 describe('the http block', () => {
   let server: HttpStateServer;
 
+  const backendWith = (env: Record<string, string>) => backendFrom(blockOf(`address = "${server.url}/state"\nlock_address = "${server.url}/lock"`), '/workspace', env);
+
   beforeEach(async () => {
     server = await HttpStateServer.start();
   });
@@ -297,7 +310,7 @@ describe('the http block', () => {
   });
 
   it('releases the lock at the lock address where no unlock address is given', async () => {
-    const backend = backendFrom(blockOf(`address = "${server.url}/state"\nlock_address = "${server.url}/lock"`), '/workspace');
+    const backend = backendFrom(blockOf(`address = "${server.url}/state"\nlock_address = "${server.url}/lock"`), '/workspace', {});
     const info = newLockInfo('apply');
 
     await backend.lock(info);
@@ -321,7 +334,8 @@ describe('the http block', () => {
           'unlock_method = "DELETE"',
         ].join('\n')
       ),
-      '/workspace'
+      '/workspace',
+      {}
     );
     const info = newLockInfo('apply');
 
@@ -330,5 +344,56 @@ describe('the http block', () => {
     await backend.unlock(info.id);
 
     expect(server.received.map(({ method, path }) => `${method} ${path}`)).toEqual(['POST /lock', 'PUT /state', 'DELETE /free']);
+  });
+
+  describe('with credentials in the environment', () => {
+    it('sends them with every request, to a server that asks for them', async () => {
+      server.authorization = basic('ci:p:ss ş');
+
+      await runAll(backendWith({ CLAY_HTTP_USERNAME: 'ci', CLAY_HTTP_PASSWORD: 'p:ss ş' }));
+
+      expect(server.received.map(({ method, authorization }) => `${method} ${authorization}`)).toEqual(
+        ['LOCK', 'GET', 'POST', 'UNLOCK'].map((method) => `${method} ${server.authorization}`)
+      );
+    });
+
+    it('keeps them out of the settings init remembers', () => {
+      const { settings } = backendWith({ CLAY_HTTP_USERNAME: 'ci', CLAY_HTTP_PASSWORD: 'secret' }).choice;
+
+      expect(Object.keys(settings)).toEqual(['address', 'update_method', 'lock_address', 'lock_method', 'unlock_address', 'unlock_method']);
+      expect(JSON.stringify(settings)).not.toContain('secret');
+    });
+
+    it('sends a username alone with an empty password', async () => {
+      await backendWith({ CLAY_HTTP_USERNAME: 'token' }).read();
+
+      expect(server.received[0].authorization).toBe(basic('token:'));
+    });
+
+    it.each([
+      ['none', {}],
+      ['empty ones', { CLAY_HTTP_USERNAME: '', CLAY_HTTP_PASSWORD: '' }],
+    ])('sends no credentials with %s', async (_title, env) => {
+      await runAll(backendWith(env));
+
+      expect(server.received.map(({ authorization }) => authorization)).toEqual([undefined, undefined, undefined, undefined]);
+    });
+
+    it.each([
+      ['a password alone', { CLAY_HTTP_PASSWORD: 'secret' }, 'CLAY_HTTP_PASSWORD is set and CLAY_HTTP_USERNAME is not; basic auth sends a password only with a username'],
+      ['an empty username', { CLAY_HTTP_USERNAME: '', CLAY_HTTP_PASSWORD: 'secret' }, 'CLAY_HTTP_PASSWORD is set and CLAY_HTTP_USERNAME is not'],
+      ['a colon in the username', { CLAY_HTTP_USERNAME: 'c:i', CLAY_HTTP_PASSWORD: 'secret' }, 'CLAY_HTTP_USERNAME holds a colon, which basic auth cannot send in a username'],
+    ])('refuses %s before sending anything', (_title, env, message) => {
+      expect(() => backendWith(env)).toThrow(message);
+      expect(server.received).toEqual([]);
+    });
+
+    it('says the server refuses the credentials it was given, and prints none', async () => {
+      server.authorization = basic('ci:right');
+
+      const refused = backendWith({ CLAY_HTTP_USERNAME: 'ci', CLAY_HTTP_PASSWORD: 'wrong' }).read();
+
+      await expect(refused).rejects.toThrow(new Error(`GET ${server.url}/state answered 401: the server refuses the credentials in CLAY_HTTP_USERNAME and CLAY_HTTP_PASSWORD`));
+    });
   });
 });

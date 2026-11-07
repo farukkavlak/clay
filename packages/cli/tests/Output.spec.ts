@@ -96,7 +96,7 @@ describe('Output Command', () => {
     const command = createOutputCommand();
     await command.parseAsync(['node', 'test']);
 
-    expect(backendFrom).toHaveBeenCalledWith(undefined, process.cwd());
+    expect(backendFrom).toHaveBeenCalledWith(undefined, process.cwd(), process.env);
 
     expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('defaultOut'));
   });
