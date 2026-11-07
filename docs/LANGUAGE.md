@@ -549,9 +549,15 @@ refuses a configuration that names another place than `init` took, a removed blo
 the same place with another setting, and says to run `clay init`. With no
 block and no record the state is the default file, and no `init` is needed.
 
-`clay init` takes the lock while it writes the first state. It does not move a state. Where
-one is at the old place it refuses, until it is moved by hand or removed, with any
-`.journal` beside a file.
+`clay init` takes the lock while it writes the first state. Where the block names another
+place and the old one holds a state, `init` takes the lock of both, asks, and copies the
+state there with its serial and what its `.journal` holds. `--yes` approves without
+asking; with the input closed it stops and names `--yes`. Ctrl-C at the question releases
+both locks and changes nothing. The old state is left as it was.
+`init` refuses when the new place holds another state, before it asks. Where it holds the
+same one, as an `init` stopped after the copy leaves it, `init` takes it as it is. A
+`.journal` with no state beside it is refused, and `init` names it to remove. Two
+addresses on one server that share a lock address are moved under that one lock.
 
 ## Saved plans
 

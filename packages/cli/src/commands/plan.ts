@@ -23,7 +23,7 @@ async function executePlan(cwd: string, files: RecordingFiles, options: PlanOpti
   console.log(styleText('blue', 'Planning...'));
 
   return releasedAfter(manager, async () => {
-    const planned = await stoppedAtOnce(manager, async () => {
+    const planned = await stoppedAtOnce([manager], async () => {
       await manager.lock('plan');
       return orchestrator.plan(options);
     });

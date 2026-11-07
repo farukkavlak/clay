@@ -1,5 +1,5 @@
 import { STATE_VERSION } from '@clay/contracts';
-import { backendFrom, StateBackend, StateManager } from '@clay/state';
+import { adoptBackend, backendFrom, StateBackend, StateManager } from '@clay/state';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createInitCommand } from '../src/commands/init';
@@ -7,8 +7,12 @@ import { createInitCommand } from '../src/commands/init';
 vi.mock('@clay/state');
 
 describe('CLI: init command', () => {
+  const backend = { check: vi.fn() } as Partial<StateBackend> as StateBackend;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(backendFrom).mockReturnValue(backend);
+    vi.mocked(adoptBackend).mockResolvedValue({});
   });
 
   it('should initialize state', async () => {
@@ -21,9 +25,6 @@ describe('CLI: init command', () => {
         unlock: vi.fn(),
       } as Partial<StateManager> as StateManager;
     });
-
-    const backend = {} as StateBackend;
-    vi.mocked(backendFrom).mockReturnValue(backend);
 
     await createInitCommand().parseAsync(['node', 'clay', 'init']);
 

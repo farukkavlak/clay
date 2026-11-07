@@ -41,7 +41,7 @@ describe('stoppedAtOnce', () => {
     const manager = { stop: vi.fn().mockResolvedValue(undefined) } as Partial<StateManager> as StateManager;
     const run = controlled();
     let settled = false;
-    void stoppedAtOnce(manager, () => run.work).finally(() => {
+    void stoppedAtOnce([manager], () => run.work).finally(() => {
       settled = true;
     });
 
@@ -52,5 +52,17 @@ describe('stoppedAtOnce', () => {
     await sleep(20);
     expect(manager.stop).toHaveBeenCalledOnce();
     expect(settled).toBe(false);
+  });
+
+  it('releases every lock it is given, and reports each one left', async () => {
+    const left = { stop: vi.fn().mockRejectedValue(new Error('UNLOCK got 500')) } as Partial<StateManager> as StateManager;
+    const released = { stop: vi.fn().mockResolvedValue(undefined) } as Partial<StateManager> as StateManager;
+    void stoppedAtOnce([left, released], () => controlled().work);
+
+    process.emit('SIGINT', 'SIGINT');
+
+    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(INTERRUPTED));
+    expect(released.stop).toHaveBeenCalledOnce();
+    expect(printed).toHaveBeenCalledWith('The lock could not be released:', 'UNLOCK got 500');
   });
 });
