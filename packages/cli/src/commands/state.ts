@@ -5,7 +5,8 @@ import { Command } from 'commander';
 import { styleText } from 'node:util';
 
 import { describeError } from '../describeError';
-import { interruptible } from '../interruptible';
+import { interruptible, stoppedAtOnce } from '../interruptible';
+import { lockTimeoutOption, lockWait } from '../lockTimeoutOption';
 import { attributeName, printable } from '../printable';
 import { releasedAfter } from '../released';
 import { show } from '../showPlan';
@@ -30,8 +31,14 @@ function forgetDeposed(state: State, key: string): void {
 
 const configHere = () => new RecordingFiles(new DiskFiles(process.cwd()));
 
-function getStateManager(files: RecordingFiles): StateManager {
-  return new StateManager(stateFile(process.cwd(), files));
+function getStateManager(files: RecordingFiles, lockTimeout?: number): StateManager {
+  return new StateManager(stateFile(process.cwd(), files), lockWait(lockTimeout));
+}
+
+/** Ctrl-C while the lock is awaited exits at once; once it is held, the change and the release are let finish. */
+async function underLock(manager: StateManager, operation: string, change: () => Promise<number>): Promise<number> {
+  await stoppedAtOnce([manager], () => manager.lock(operation));
+  return interruptible(() => releasedAfter(manager, change));
 }
 
 async function reportEmpty(backend: StateBackend): Promise<void> {
@@ -120,29 +127,27 @@ export function createStateCommand(): Command {
     .description('Move an item in the state')
     .argument('<source>', 'Source address')
     .argument('<destination>', 'Destination address')
-    .action(async (source, destination) => {
+    .addOption(lockTimeoutOption())
+    .action(async (source: string, destination: string, options: { lockTimeout?: number }) => {
       const files = configHere();
       let code: number;
       try {
-        const manager = getStateManager(files);
-        code = await interruptible(() =>
-          releasedAfter(manager, async () => {
-            await manager.lock('state mv');
-            const state = await manager.read();
+        const manager = getStateManager(files, options.lockTimeout);
+        code = await underLock(manager, 'state mv', async () => {
+          const state = await manager.read();
 
-            if (!findResource(state, source)) throw new Error(`Source resource not found: ${source}`);
+          if (!findResource(state, source)) throw new Error(`Source resource not found: ${source}`);
 
-            if (findResource(state, destination)) throw new Error(`Destination resource already exists: ${destination}`);
+          if (findResource(state, destination)) throw new Error(`Destination resource already exists: ${destination}`);
 
-            console.log(styleText('yellow', `Moving ${source} to ${destination}...`));
+          console.log(styleText('yellow', `Moving ${source} to ${destination}...`));
 
-            checkedMove(state, source, destination);
+          checkedMove(state, source, destination);
 
-            await manager.write(state);
-            console.log(styleText('green', 'Successfully moved resource.'));
-            return 0;
-          })
-        );
+          await manager.write(state);
+          console.log(styleText('green', 'Successfully moved resource.'));
+          return 0;
+        });
       } catch (error) {
         console.error(styleText('red', 'Error moving resource:'), describeError(error, files));
         code = 1;
@@ -154,29 +159,27 @@ export function createStateCommand(): Command {
     .command('rm')
     .description('Remove instances from the state')
     .argument('<address>', 'Resource address')
-    .action(async (address) => {
+    .addOption(lockTimeoutOption())
+    .action(async (address: string, options: { lockTimeout?: number }) => {
       const files = configHere();
       let code: number;
       try {
-        const manager = getStateManager(files);
-        code = await interruptible(() =>
-          releasedAfter(manager, async () => {
-            await manager.lock('state rm');
-            const state = await manager.read();
-            const key = Address.parse(address).toString();
+        const manager = getStateManager(files, options.lockTimeout);
+        code = await underLock(manager, 'state rm', async () => {
+          const state = await manager.read();
+          const key = Address.parse(address).toString();
 
-            if (!Object.hasOwn(state.resources, key) && !(state.deposed && Object.hasOwn(state.deposed, key))) throw new Error(`Resource not found in state: ${address}`);
+          if (!Object.hasOwn(state.resources, key) && !(state.deposed && Object.hasOwn(state.deposed, key))) throw new Error(`Resource not found in state: ${address}`);
 
-            console.log(styleText('yellow', `Removing ${key}...`));
-            delete state.resources[key];
-            forgetDeposed(state, key);
-            forgetDependencies(state, [Address.parse(key)]);
+          console.log(styleText('yellow', `Removing ${key}...`));
+          delete state.resources[key];
+          forgetDeposed(state, key);
+          forgetDependencies(state, [Address.parse(key)]);
 
-            await manager.write(state);
-            console.log(styleText('green', 'Successfully removed resource.'));
-            return 0;
-          })
-        );
+          await manager.write(state);
+          console.log(styleText('green', 'Successfully removed resource.'));
+          return 0;
+        });
       } catch (error) {
         console.error(styleText('red', 'Error removing resource:'), describeError(error, files));
         code = 1;

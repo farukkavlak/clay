@@ -92,6 +92,11 @@ one file per module. `docs/TASKS.md` has the full list.
 | `clay state mv <a> <b>`  | Renames a resource in state, so the next plan does not recreate it                                                               |
 | `clay state rm <addr>`   | Forgets a resource, and its deposed objects, without destroying them                                                             |
 
+`init`, `plan`, `apply`, `state mv` and `state rm` take the state lock, and stop at once
+when another run holds it. `--lock-timeout <seconds>` makes them wait: the command says
+who holds the lock and tries again, 1 second later, then twice as long each time up to 16,
+until the time is gone. Ctrl-C while it waits exits at once.
+
 A saved plan carries the configuration it was made from and the state it was planned
 against. `apply` runs that configuration, not the one on disk now, and refuses the plan
 if the state has changed since.

@@ -313,6 +313,21 @@ describe('the backend init remembers', () => {
       expect(await exists('.clay')).toBe(false);
     });
 
+    it('has its old lock taken as a step the caller can stop', async () => {
+      await new StateManager(old()).write(holding('a'));
+      const stopped = new Error('stopped at the lock');
+      const steps: boolean[] = [];
+
+      const adopting = adoptBackend(other(), previous(), dir, unasked, async () => {
+        steps.push(await exists('clay.state.json.lock'));
+        throw stopped;
+      });
+
+      await expect(adopting).rejects.toBe(stopped);
+      expect(steps).toEqual([false]);
+      expect(await exists('other.json')).toBe(false);
+    });
+
     it('is refused, before anything is asked, where the new place holds another state', async () => {
       await new StateManager(old()).write(holding('a'));
       await new StateManager(other()).write(holding('b'));

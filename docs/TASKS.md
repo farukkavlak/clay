@@ -1058,7 +1058,9 @@ Terraform has it since backends replaced `-state`.
 - [x] The HTTP backend takes a CA certificate and a client certificate for TLS
 - [x] `init` offers to move the state when the block names a different backend than the
       one in use
-- [ ] An S3 backend, with the lock a second run has to wait for; an Azure Blob backend
+- [x] A run waits for a lock another run holds, for as long as `--lock-timeout` says
+- [ ] An S3 backend
+- [ ] An Azure Blob backend
 
 ### Safety
 

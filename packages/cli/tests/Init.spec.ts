@@ -28,7 +28,7 @@ describe('CLI: init command', () => {
 
     await createInitCommand().parseAsync(['node', 'clay', 'init']);
 
-    expect(StateManager).toHaveBeenCalledWith(backend);
+    expect(StateManager).toHaveBeenCalledWith(backend, expect.objectContaining({ seconds: 0 }));
     expect(writeIfAbsentMock).toHaveBeenCalledWith({ version: STATE_VERSION, serial: 0, resources: {} });
   });
 
