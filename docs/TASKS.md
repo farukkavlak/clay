@@ -1259,6 +1259,19 @@ Nothing here changes what Clay does. Each is a place the next change has to work
 - [x] No lint rule caps the length of a file, so the files above grew unnoticed
 - [x] No lint rule keeps the order of the `orchestrator` folders the README gives, so an
       import the wrong way goes unnoticed
+- [x] The `Orchestrator` class lives in `orchestrator/src/index.ts`, the file that names
+      what the package gives
+- [ ] `expressions/references` imports from `expressions`, which imports it back: four
+      resolvers sit below `ReferenceResolver`, which calls them. The folder rule checks only
+      the top folders, so it lets this through
+- [ ] `parser` has an import cycle in `ast`, `body` and `reference`, and `state` one in
+      `httpTls` and `httpRequest`; nothing stops a new cycle between files
+- [ ] `LocalProvider` names its resources in a list and again in a map, so a new one goes
+      in two places
+- [ ] The README says what each package does, but not how to add a backend, a resource or
+      a provider, nor how the packages inside `state` and `parser` are laid out
+- [ ] `PlanRunner`, `ReferenceResolver`, `DesiredStateBuilder` and `ActionExecutor` run
+      past 400 lines each; the lint cap of 350 counts no blank line or comment
 - [ ] Workspace packages are not `"private": true`, so `npm publish -ws` would publish them;
       four of eight have a `lint` script
 - [ ] CI runs Node 22.15 only, the lowest `engines` allows, and not the newest

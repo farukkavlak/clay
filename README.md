@@ -189,8 +189,9 @@ the same value.
 | `cli`            | The `clay` command                                             |
 | `provider-local` | `local_file`, `random_string`, `null_resource`, `command_exec` |
 
-Inside `orchestrator/src`, a folder imports only from the folders above it. `index.ts` is
-the way in; the other files beside the folders are shared by all:
+Inside `orchestrator/src`, a folder imports only from the folders above it.
+`Orchestrator.ts` holds the engine and `index.ts` names what the package gives; the other
+files beside the folders are shared by all:
 
 | Folder        | Does                                                         |
 | ------------- | ------------------------------------------------------------ |

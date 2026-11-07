@@ -17,10 +17,10 @@ function importsOnly(files: string[], forbidden: string[]): Linter.Config {
   return { files, rules: { 'no-restricted-imports': ['error', { patterns: [{ group: forbidden.map((folder) => `**/${folder}/*`), message }] }] } };
 }
 
-/** The files beside the folders are shared by all, so they import none; `index.ts` is the way in. */
+/** The files beside the folders are shared by all, so they import none; `Orchestrator.ts` holds the engine, which needs them all. */
 const folderOrder: Linter.Config[] = [
   ...FOLDERS.slice(0, -1).map((folder, index) => importsOnly([`${ORCHESTRATOR}/${folder}/**/*.ts`], FOLDERS.slice(index + 1))),
-  { ...importsOnly([`${ORCHESTRATOR}/*.ts`], FOLDERS), ignores: [`${ORCHESTRATOR}/index.ts`] },
+  { ...importsOnly([`${ORCHESTRATOR}/*.ts`], FOLDERS), ignores: [`${ORCHESTRATOR}/index.ts`, `${ORCHESTRATOR}/Orchestrator.ts`] },
 ];
 
 export default [
