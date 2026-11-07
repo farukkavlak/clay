@@ -1,15 +1,15 @@
 import { Address, AttributePath, InstanceKey, Schema, sensitiveUnder, State, UNKNOWN } from '@clay/contracts';
 import { Position, ResourceReference, SelfReference, spellReference, Step } from '@clay/parser';
 
-import { Instances, Repetition } from '../../instances/Instances';
-import { blockKey, Context, moduleOf } from '../../keys';
-import { placed } from '../../place';
-import { Planned, PlannedInstance } from '../../values/Planned';
-import { Versions } from '../../values/Versions';
-import { TypeMismatch, typedValues } from '../../values/typed';
-import { objectOf, sensitiveOf, Value, valueOf, withSensitive } from '../../values/Value';
-import { everyType, noAttribute, readInstance, readSelf, SELF_OUTSIDE } from './instance';
-import { UnresolvedReferenceError } from '../UnresolvedReferenceError';
+import { Instances, Repetition } from '../instances/Instances';
+import { blockKey, Context, moduleOf } from '../keys';
+import { placed } from '../place';
+import { Planned, PlannedInstance } from '../values/Planned';
+import { Versions } from '../values/Versions';
+import { TypeMismatch, typedValues } from '../values/typed';
+import { objectOf, sensitiveOf, Value, valueOf, withSensitive } from '../values/Value';
+import { everyType, noAttribute, readInstance, readSelf, SELF_OUTSIDE } from './references/instance';
+import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 
 /** A name only the apply sets is unknown; any other unplanned name is null. Names outside the schema were refused earlier. */
 function plannedAttribute(instance: PlannedInstance, name: string): unknown {

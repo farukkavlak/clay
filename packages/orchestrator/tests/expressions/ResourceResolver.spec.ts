@@ -2,13 +2,13 @@ import { Address, Schema, State, STATE_VERSION, types, UNKNOWN } from '@clay/con
 import { parseReference, ResourceReference } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
-import { Instances } from '../../../src/instances/Instances';
-import { Planned } from '../../../src/values/Planned';
-import { Versions } from '../../../src/values/Versions';
-import { ResourceResolver } from '../../../src/expressions/references/ResourceResolver';
-import { UnresolvedReferenceError } from '../../../src/expressions/UnresolvedReferenceError';
-import { valueOf } from '../../../src/values/Value';
-import { steps } from '../../ast';
+import { Instances } from '../../src/instances/Instances';
+import { Planned } from '../../src/values/Planned';
+import { Versions } from '../../src/values/Versions';
+import { ResourceResolver } from '../../src/expressions/ResourceResolver';
+import { UnresolvedReferenceError } from '../../src/expressions/UnresolvedReferenceError';
+import { valueOf } from '../../src/values/Value';
+import { steps } from '../ast';
 
 const versions = new Versions();
 

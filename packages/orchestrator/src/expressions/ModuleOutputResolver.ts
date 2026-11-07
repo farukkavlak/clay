@@ -1,16 +1,16 @@
 import { InstanceKey, ModuleAddress, Type } from '@clay/contracts';
 import { ModuleOutputReference, Position, spellReference, Step } from '@clay/parser';
 
-import { Repetition } from '../../instances/Instances';
-import { callKey, Context, moduleOf, scopeOf } from '../../keys';
-import { ModuleInstances } from '../../instances/ModuleInstances';
-import { placed } from '../../place';
-import { ScopeManager } from '../../config/ScopeManager';
-import { convertedLater, joinedLater, laterOf, unjoined, Unjoinable } from '../../values/unify';
-import { mayBeSensitive, objectOf, tupleOf, Value } from '../../values/Value';
-import { Versions } from '../../values/Versions';
-import { everyOf, outputsType, readCall } from './instance';
-import { UnresolvedReferenceError } from '../UnresolvedReferenceError';
+import { Repetition } from '../instances/Instances';
+import { callKey, Context, moduleOf, scopeOf } from '../keys';
+import { ModuleInstances } from '../instances/ModuleInstances';
+import { placed } from '../place';
+import { ScopeManager } from '../config/ScopeManager';
+import { convertedLater, joinedLater, laterOf, unjoined, Unjoinable } from '../values/unify';
+import { mayBeSensitive, objectOf, tupleOf, Value } from '../values/Value';
+import { Versions } from '../values/Versions';
+import { everyOf, outputsType, readCall } from './references/instance';
+import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 
 /** Every instance of a module call, as built from its keys, until one of its outputs is written. */
 interface EveryRead {

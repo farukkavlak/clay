@@ -1,12 +1,12 @@
 import { InstanceKey, Schema, Type } from '@clay/contracts';
 import { DataReference, Position, Step } from '@clay/parser';
 
-import { Instances, Repetition } from '../../instances/Instances';
-import { Context, dataSourceAddress, dataSourceKey, moduleOf, scopeOf } from '../../keys';
-import { objectOf, sensitiveOf, Value, valueOf, withSensitive } from '../../values/Value';
-import { Versions } from '../../values/Versions';
-import { everyType, readInstance } from './instance';
-import { UnresolvedReferenceError } from '../UnresolvedReferenceError';
+import { Instances, Repetition } from '../instances/Instances';
+import { Context, dataSourceAddress, dataSourceKey, moduleOf, scopeOf } from '../keys';
+import { objectOf, sensitiveOf, Value, valueOf, withSensitive } from '../values/Value';
+import { Versions } from '../values/Versions';
+import { everyType, readInstance } from './references/instance';
+import { UnresolvedReferenceError } from './UnresolvedReferenceError';
 
 /** Every instance of a block, as built from its keys, until one of its instances is read again. */
 interface EveryRead {

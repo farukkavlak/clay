@@ -1,13 +1,13 @@
 import { ModuleAddress, State } from '@clay/contracts';
 import { AttributeValue, VariableReference } from '@clay/parser';
-import { SchemaMismatch } from '../../values/conformValues';
-import { givenTo } from '../../values/declared';
-import { Context, contextIn, moduleOf, scopeOf } from '../../keys';
-import { withPlace } from '../../place';
-import { ScopeManager, VariableValue } from '../../config/ScopeManager';
-import { RuleReader, validate, ValidationFailed } from '../validations';
-import { Value } from '../../values/Value';
-import { unknownOf, UnresolvedReferenceError } from '../UnresolvedReferenceError';
+import { SchemaMismatch } from '../values/conformValues';
+import { givenTo } from '../values/declared';
+import { Context, contextIn, moduleOf, scopeOf } from '../keys';
+import { withPlace } from '../place';
+import { ScopeManager, VariableValue } from '../config/ScopeManager';
+import { RuleReader, validate, ValidationFailed } from './validations';
+import { Value } from '../values/Value';
+import { unknownOf, UnresolvedReferenceError } from './UnresolvedReferenceError';
 
 export class VariableResolver {
   constructor(

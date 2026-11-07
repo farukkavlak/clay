@@ -2,12 +2,12 @@ import { Address, ExactNumber, ModuleAddress, types } from '@clay/contracts';
 import { ModuleOutputReference, parseReference, Step } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
-import { ModuleInstances } from '../../../src/instances/ModuleInstances';
-import { ModuleOutputResolver } from '../../../src/expressions/references/ModuleOutputResolver';
-import { ScopeManager } from '../../../src/config/ScopeManager';
-import { Versions } from '../../../src/values/Versions';
-import { Value, valueOf } from '../../../src/values/Value';
-import { steps } from '../../ast';
+import { ModuleInstances } from '../../src/instances/ModuleInstances';
+import { ModuleOutputResolver } from '../../src/expressions/ModuleOutputResolver';
+import { ScopeManager } from '../../src/config/ScopeManager';
+import { Versions } from '../../src/values/Versions';
+import { Value, valueOf } from '../../src/values/Value';
+import { steps } from '../ast';
 
 const record = (url: string, port: unknown) => ({ url, port });
 

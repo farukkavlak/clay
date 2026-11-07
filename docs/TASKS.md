@@ -1261,7 +1261,7 @@ Nothing here changes what Clay does. Each is a place the next change has to work
       import the wrong way goes unnoticed
 - [x] The `Orchestrator` class lives in `orchestrator/src/index.ts`, the file that names
       what the package gives
-- [ ] `expressions/references` imports from `expressions`, which imports it back: four
+- [x] `expressions/references` imports from `expressions`, which imports it back: four
       resolvers sit below `ReferenceResolver`, which calls them. The folder rule checks only
       the top folders, so it lets this through
 - [ ] `parser` has an import cycle in `ast`, `body` and `reference`, and `state` one in

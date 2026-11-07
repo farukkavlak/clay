@@ -2,16 +2,16 @@ import { Address, ModuleAddress, Schema, types } from '@clay/contracts';
 import { DataReference, parseReference } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
-import { Instances } from '../../../src/instances/Instances';
-import { DataInstance } from '../../../src/keys';
-import { DataSourceReader } from '../../../src/plan/DataSourceReader';
-import { Limit } from '../../../src/providers/Limit';
-import { ProviderRegistry } from '../../../src/providers/ProviderRegistry';
-import { DEFAULT_PARALLELISM } from '../../../src/run/parallelism';
-import { Value, valueOf } from '../../../src/values/Value';
-import { Versions } from '../../../src/values/Versions';
-import { DataSourceResolver } from '../../../src/expressions/references/DataSourceResolver';
-import { steps } from '../../ast';
+import { Instances } from '../../src/instances/Instances';
+import { DataInstance } from '../../src/keys';
+import { DataSourceReader } from '../../src/plan/DataSourceReader';
+import { Limit } from '../../src/providers/Limit';
+import { ProviderRegistry } from '../../src/providers/ProviderRegistry';
+import { DEFAULT_PARALLELISM } from '../../src/run/parallelism';
+import { Value, valueOf } from '../../src/values/Value';
+import { Versions } from '../../src/values/Versions';
+import { DataSourceResolver } from '../../src/expressions/DataSourceResolver';
+import { steps } from '../ast';
 
 const ref = (spelled: string) => parseReference(steps(...spelled.split('.'))) as DataReference;
 
