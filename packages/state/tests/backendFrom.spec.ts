@@ -118,7 +118,7 @@ describe('backendFrom', () => {
 
     it.each([
       ['a space', 'GE T', 'is "GE T", which is no HTTP method'],
-      ['a forbidden one', 'trace', 'is "trace", which a request cannot be sent with'],
+      ['a forbidden one', 'trace', 'is "trace", which opens a tunnel or echoes the request, and keeps no state'],
     ])('refuses a method with %s, at the value', (_title, method, message) => {
       const error = errorOf(http(`${ADDRESSES}\n    lock_method = "${method}"`));
 

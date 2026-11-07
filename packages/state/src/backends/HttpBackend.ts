@@ -6,6 +6,7 @@ import { LockInfo, lockInfoFrom, StateLocked } from '../lockInfo';
 import { BackendChoice, StateBackend } from '../StateBackend';
 import { parseState, serializeState } from '../stateFile';
 import { authorization, Credentials, PASSWORD, USERNAME } from './httpCredentials';
+import { NoAnswer, Outgoing, Reply, tryOnce } from './httpRequest';
 import { askedWait, backoff, passing, Retry } from './httpRetry';
 
 export interface HttpSettings {
@@ -19,15 +20,6 @@ export interface HttpSettings {
   readonly retry: Retry;
 }
 
-/** What one try was answered. */
-interface Reply {
-  readonly status: number;
-  readonly body: string;
-  /** Where a redirect points. */
-  readonly location: string | null;
-  readonly retryAfter: string | null;
-}
-
 interface Answer extends Reply {
   /** The last of them gave this answer. */
   readonly tries: number;
@@ -35,57 +27,12 @@ interface Answer extends Reply {
 
 export type Sleep = (ms: number) => Promise<void>;
 
-/** A request the server gave no answer to, or no whole one, so whether it acted is not known. */
-export class NoAnswer extends Error {
-  constructor(message: string, cause: unknown) {
-    super(message, { cause });
-    this.name = 'NoAnswer';
-  }
-}
-
-interface Outgoing {
-  readonly method: string;
-  readonly body?: string;
-  readonly headers: Readonly<Record<string, string>>;
-}
-
 const GET: Outgoing = { method: 'GET', headers: {} };
 
 /** The body goes with a digest, so a server can refuse one cut short on the way. */
 function withBody(method: string, body: string): Outgoing {
   const digest = createHash('md5').update(body, 'utf8').digest('base64');
   return { method, body, headers: { 'Content-Type': 'application/json', 'Content-MD5': digest } };
-}
-
-/** fetch throws a TypeError for a connection that failed, with the reason as its cause, and the signal's reason for a timeout. */
-function noAnswer(error: unknown, what: string, timeout: number): NoAnswer {
-  if (error instanceof DOMException && error.name === 'TimeoutError') return new NoAnswer(`${what} (timed out after ${timeout}s)`, error);
-  if (!(error instanceof TypeError)) throw error;
-
-  const { code, message } = (error.cause ?? error) as NodeJS.ErrnoException;
-  return new NoAnswer(`${what} (${code ?? message})`, error);
-}
-
-/**
- * No redirect is followed: fetch would send a POST on as a GET, and a 200 for that would count as written or locked.
- * The body is read apart, so one cut off after the status is not taken for no answer.
- */
-async function tryOnce(url: URL, request: Outgoing, timeout: number): Promise<Reply | NoAnswer> {
-  const { method } = request;
-  const signal = AbortSignal.timeout(timeout * 1000);
-  let response: Response;
-  try {
-    response = await fetch(url, { ...request, redirect: 'manual', signal });
-  } catch (error) {
-    return noAnswer(error, `${method} ${url.href} got no answer`, timeout);
-  }
-
-  const { headers } = response;
-  try {
-    return { status: response.status, body: await response.text(), location: headers.get('location'), retryAfter: headers.get('retry-after') };
-  } catch (error) {
-    return noAnswer(error, `${method} ${url.href} answered ${response.status}, but the body was cut off`, timeout);
-  }
 }
 
 /** Undefined where the request is not tried again: the tries are used up, another would be answered the same, or the server asks for a longer wait than the longest. */

@@ -8,7 +8,7 @@ import { LockNotReleased } from '../lockInfo';
 import { BackendChoice, StateBackend } from '../StateBackend';
 import { StateManager } from '../StateManager';
 import { build } from './build';
-import { NoAnswer } from './HttpBackend';
+import { NoAnswer } from './httpRequest';
 import { LocalBackend } from './LocalBackend';
 import { Environment, recordSettings, unwritten } from './settings';
 

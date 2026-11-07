@@ -12,6 +12,9 @@ export interface Received {
   /** Whether `Content-MD5` matched the body. */
   readonly digestMatches: boolean;
   readonly authorization: string | undefined;
+  /** `Content-Length`, which a server may need to take a body at all. */
+  readonly length: string | undefined;
+  readonly userAgent: string | undefined;
 }
 
 interface Answer {
@@ -84,8 +87,8 @@ export class HttpStateServer {
     const body = await read(request);
     const method = request.method!;
     const digest = request.headers['content-md5'];
-    const { authorization } = request.headers;
-    this.received.push({ method, path: url.pathname, id: url.searchParams.get('ID'), body, digestMatches: digest === digestOf(body), authorization });
+    const { authorization, 'content-length': length, 'user-agent': userAgent } = request.headers;
+    this.received.push({ method, path: url.pathname, id: url.searchParams.get('ID'), body, digestMatches: digest === digestOf(body), authorization, length, userAgent });
 
     const key = `${method} ${url.pathname}`;
     const override = this.overrides.get(key)?.shift();
