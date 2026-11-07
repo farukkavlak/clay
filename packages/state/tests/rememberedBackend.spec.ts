@@ -10,7 +10,9 @@ import { backendAt } from './backendAt';
 describe('the backend init remembers', () => {
   let dir: string;
 
-  const record = (where: string) => fs.writeFile(path.join(dir, '.clay', 'backend.json'), JSON.stringify({ type: 'http', where }), 'utf8');
+  const recordPath = () => path.join(dir, '.clay', 'backend.json');
+  const write = (content: unknown) => fs.writeFile(recordPath(), JSON.stringify(content), 'utf8');
+  const recorded = async (): Promise<unknown> => JSON.parse(await fs.readFile(recordPath(), 'utf8'));
 
   beforeEach(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-remembered-'));
@@ -35,6 +37,29 @@ describe('the backend init remembers', () => {
     expect(() => checkBackend(new LocalBackend(dir), dir)).toThrow('keeps its state in "other.json"');
   });
 
+  it('records every setting, and nothing else', async () => {
+    await adoptBackend(new LocalBackend(dir, 'other.json'), dir);
+
+    expect(await recorded()).toEqual({ type: 'local', settings: { path: 'other.json' } });
+  });
+
+  it.each([
+    ['no JSON', 'nope'],
+    ['the place alone, as an older init wrote it', { type: 'local', where: 'other.json' }],
+    ['a key beside the type and the settings', { type: 'local', settings: {}, where: 'other.json' }],
+    ['settings that are no object', { type: 'local', settings: ['other.json'] }],
+    ['a setting that is no string', { type: 'local', settings: { path: 1 } }],
+    ['an empty setting', { type: 'local', settings: { path: '' } }],
+    ['a setting the backend does not take', { type: 'local', settings: { path: 'other.json', mode: 'x' } }],
+    ['configuration as the state', { type: 'local', settings: { path: 'main.clay' } }],
+    ['a type Clay does not have', { type: 's3', settings: {} }],
+  ])('is refused where the record holds %s', async (_title, content) => {
+    await fs.mkdir(path.join(dir, '.clay'));
+    await (typeof content === 'string' ? fs.writeFile(recordPath(), content, 'utf8') : write(content));
+
+    expect(() => checkBackend(new LocalBackend(dir), dir)).toThrow(`${recordPath()} is not what \`clay init\` writes; remove it and run \`clay init\``);
+  });
+
   it('passes on a record it cannot read, rather than taking it as no record', async () => {
     await fs.mkdir(path.join(dir, '.clay', 'backend.json'), { recursive: true });
 
@@ -49,6 +74,7 @@ describe('the backend init remembers', () => {
     let server: HttpStateServer;
 
     const backendOn = (name: string) => backendAt(server.url, {}, name);
+    const record = (settings: Record<string, string>) => write({ type: 'http', settings: { ...backendOn('state').choice.settings, ...settings } });
 
     beforeEach(async () => {
       server = await HttpStateServer.start();
@@ -66,9 +92,33 @@ describe('the backend init remembers', () => {
       expect(() => checkBackend(backendOn('other'), dir)).toThrow(`keeps its state in "${server.url}/state" (http), and the configuration names "${server.url}/other" (http)`);
     });
 
+    it('is built again with the settings the record holds', async () => {
+      await adoptBackend(backendAt(server.url, { lock: 'POST' }), dir);
+
+      expect(() => checkBackend(backendOn('state'), dir)).toThrow(
+        'lock_method of backend "http" is "LOCK" in the configuration, and "POST" where `clay init` took it; run `clay init`'
+      );
+    });
+
+    it('is refused where the record leaves out an address the backend needs', async () => {
+      await write({ type: 'http', settings: { address: `${server.url}/state` } });
+
+      expect(() => checkBackend(backendOn('state'), dir)).toThrow('is not what `clay init` writes');
+    });
+
+    it('takes other settings for the same place while the server holds a state', async () => {
+      server.state = '{}';
+      await adoptBackend(backendOn('state'), dir);
+
+      await adoptBackend(backendAt(server.url, { lock: 'POST' }), dir);
+
+      expect(await recorded()).toMatchObject({ settings: { lock_method: 'POST' } });
+      expect(() => checkBackend(backendAt(server.url, { lock: 'POST' }), dir)).not.toThrow();
+    });
+
     it('is not left for another place while the server holds a state', async () => {
       server.state = '{}';
-      await record(`${server.url}/state`);
+      await record({});
 
       await expect(adoptBackend(new LocalBackend(dir), dir)).rejects.toThrow(
         `The state in "${server.url}/state" would be left behind, as the configuration names "clay.state.json"; move it there by hand, or remove it, and run \`clay init\` again`
@@ -76,7 +126,7 @@ describe('the backend init remembers', () => {
     });
 
     it('is left for another place once the server holds none', async () => {
-      await record(`${server.url}/state`);
+      await record({});
 
       await adoptBackend(new LocalBackend(dir), dir);
 
@@ -89,7 +139,7 @@ describe('the backend init remembers', () => {
       ['another scheme', 'file:///state'],
       ['credentials', 'https://me:secret@state.example/s'],
     ])('is refused where the record names %s', async (_title, where) => {
-      await record(where);
+      await record({ address: where });
 
       expect(() => checkBackend(new LocalBackend(dir), dir)).toThrow('is not what `clay init` writes');
     });
@@ -98,7 +148,7 @@ describe('the backend init remembers', () => {
       const gone = await HttpStateServer.start();
       const { url } = gone;
       await gone.stop();
-      await record(`${url}/state`);
+      await record({ address: `${url}/state` });
 
       await expect(adoptBackend(new LocalBackend(dir), dir)).rejects.toThrow(
         `GET ${url}/state got no answer (ECONNREFUSED), so whether a state is left there is not known. If that server is gone for good, remove ${path.join(dir, '.clay', 'backend.json')} and run \`clay init\` again`

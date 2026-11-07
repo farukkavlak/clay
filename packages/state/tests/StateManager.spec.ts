@@ -16,7 +16,7 @@ const slow = (log: string[], failing: number[] = []): StateBackend => {
 
   return {
     location: 'slow',
-    choice: { type: 'slow', where: 'slow' },
+    choice: { type: 'slow', where: 'slow', settings: {} },
     check: () => Promise.resolve(),
     exists: () => Promise.resolve(true),
     read: async () => emptyState(),
@@ -37,6 +37,27 @@ const slow = (log: string[], failing: number[] = []): StateBackend => {
     },
   };
 };
+
+/** A backend whose first lock is taken once `take` is called, any later one at once, and which notes every lock and unlock. */
+function gated(calls: string[]) {
+  let take: (() => void) | undefined;
+  const backend: StateBackend = {
+    ...slow([]),
+    lock: async (info) => {
+      calls.push(`lock ${info.operation}`);
+      if (take !== undefined) return;
+
+      await new Promise<void>((resolve) => {
+        take = resolve;
+      });
+    },
+    unlock: async () => {
+      calls.push('unlock');
+    },
+  };
+
+  return { backend, take: () => take?.() };
+}
 
 const holding = (name: string): State => ({ version: STATE_VERSION, serial: 0, resources: { [`rt.${name}`]: { resourceType: 'rt', name, attributes: {} } } });
 
@@ -248,6 +269,24 @@ describe('StateManager', () => {
       } finally {
         await fs.chmod(tmpDir, 0o700);
       }
+    });
+  });
+
+  describe('a run stopped at once', () => {
+    it('releases the lock it was taking, and takes none for work that goes on after it', async () => {
+      const calls: string[] = [];
+      const { backend, take } = gated(calls);
+      const manager = new StateManager(backend);
+
+      const locking = manager.lock('apply');
+      const stopping = manager.stop();
+      take();
+      await locking;
+      await stopping;
+
+      await expect(manager.whileLocked('plan', async () => 'planned')).rejects.toThrow('This run is stopping, so it takes no lock');
+      expect(calls).toEqual(['lock apply', 'unlock']);
+      expect(manager.held).toBe(false);
     });
   });
 

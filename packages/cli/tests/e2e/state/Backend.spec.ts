@@ -263,8 +263,9 @@ describe('a state kept where a backend block says', () => {
     it.each([
       ['no JSON', 'nope'],
       ['no object', 'null'],
-      ['a type Clay does not have', '{"type":"s3","where":"x"}'],
-      ['no place', '{"type":"local"}'],
+      ['a type Clay does not have', '{"type":"s3","settings":{}}'],
+      ['no settings', '{"type":"local"}'],
+      ['a setting the backend does not take', '{"type":"local","settings":{"path":"s.json","mode":"x"}}'],
     ])('refuses a record holding %s, in init too', async (_title, record) => {
       await fs.mkdir(path.join(dir, '.clay'));
       await write('.clay/backend.json', record);

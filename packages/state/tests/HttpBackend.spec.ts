@@ -25,9 +25,22 @@ describe('a state kept on an HTTP server', () => {
     await server.stop();
   });
 
-  it('is named by its address', () => {
-    expect(backendOn().location).toBe(`${server.url}/state`);
-    expect(backendOn().choice).toEqual({ type: 'http', where: `${server.url}/state` });
+  it('is named by its address, and chosen with every setting it runs on', () => {
+    const backend = backendOn({ update: 'PUT', lock: 'POST', unlock: 'DELETE' });
+
+    expect(backend.location).toBe(`${server.url}/state`);
+    expect(backend.choice).toEqual({
+      type: 'http',
+      where: `${server.url}/state`,
+      settings: {
+        address: `${server.url}/state`,
+        update_method: 'PUT',
+        lock_address: `${server.url}/lock`,
+        lock_method: 'POST',
+        unlock_address: `${server.url}/lock`,
+        unlock_method: 'DELETE',
+      },
+    });
   });
 
   it.each([

@@ -7,6 +7,8 @@ export interface BackendChoice {
   readonly type: string;
   /** The same wherever the workspace is moved to. */
   readonly where: string;
+  /** Every setting the backend runs on, with the defaults filled in, so `init` can build it again. */
+  readonly settings: Readonly<Record<string, string>>;
 }
 
 export interface StateBackend {
