@@ -1,4 +1,4 @@
-import { Step } from '../src/reference';
+import { Step } from '../src/ast';
 
 /** A string is a step after a dot, a number an index; a string key in brackets is passed as { key }. */
 export const steps = (...parts: (string | number | Step)[]): Step[] =>

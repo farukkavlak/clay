@@ -1,5 +1,5 @@
-import { VariableBlock } from '../ast';
-import { Block, Label } from '../body';
+import { Label, VariableBlock } from '../ast';
+import { Block } from '../body';
 import { checkConstant } from '../checkConstant';
 import { ConfigError } from '../ConfigError';
 import { typedBodyOf, TypedRules } from './typedBody';

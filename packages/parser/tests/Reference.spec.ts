@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { ExactNumber } from '@clay/contracts';
 
 import { ConfigError } from '../src/ConfigError';
-import { parseReference, spellReference, Step, stepKey } from '../src/reference';
+import { Step } from '../src/ast';
+import { parseReference, spellReference, stepKey } from '../src/reference';
 import { steps } from './steps';
 
 const position = { file: 'main.clay', line: 1, column: 1 };

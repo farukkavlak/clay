@@ -1,6 +1,6 @@
-import { AttributeValue, ReferenceNode } from '../ast';
+import { AttributeValue, ReferenceNode, Step } from '../ast';
 import { ConfigError } from '../ConfigError';
-import { ParsedReference, parseReference, spellReference, Step } from '../reference';
+import { ParsedReference, parseReference, spellReference } from '../reference';
 
 const WAITED_FOR = new Set<ParsedReference['kind']>(['resource', 'data', 'variable', 'local', 'module']);
 const WAITS_FOR = 'depends_on is a list of resources, data sources, variables, locals, modules and their outputs, as in [local_file.a]';

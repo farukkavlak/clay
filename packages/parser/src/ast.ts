@@ -1,11 +1,18 @@
 import { Address, ExactNumber, ModuleAddress, Type } from '@clay/contracts';
-import type { Label } from './body';
 import { Position } from './Position';
-import { spellReference, spellSteps, Step } from './reference';
 
 interface Node {
   position: Position;
 }
+
+/** A label is written in quotes, and `position` is at its quote. */
+export interface Label {
+  value: string;
+  position: Position;
+}
+
+/** `index` is read where the reference is, and `spelled` is how it was written. */
+export type Step = { name: string } | { key: string | number } | { index: AttributeValue; spelled: string };
 
 export type ReferenceNode = Node & { type: 'Reference'; value: Step[] };
 
@@ -245,25 +252,4 @@ export function namedIn(value: AttributeValue): (ReferenceNode | CallNode)[] {
 
 export function callsIn(value: AttributeValue): CallNode[] {
   return namedIn(value).filter((node) => node.type === 'Call');
-}
-
-/** For messages: `var.names[0]`, `length(...)`. */
-export function spellNamed(node: ReferenceNode | CallNode | BoundNode): string {
-  return node.type === 'Call' ? `${node.name}(...)` : spellReference(node.value);
-}
-
-function isNamed(value: AttributeValue): value is ReferenceNode | CallNode | BoundNode {
-  return value.type === 'Reference' || value.type === 'Call' || value.type === 'Bound';
-}
-
-/** How a value with a name is spelled, with the steps read into it; none for one without. */
-export function nameOf(value: AttributeValue): string | undefined {
-  if (value.type === 'Index') return isNamed(value.value) ? `${spellNamed(value.value)}${spellSteps(value.path)}` : undefined;
-
-  return isNamed(value) ? spellNamed(value) : undefined;
-}
-
-/** For messages: an index with no name is `...`, and the error points where it is written. */
-export function spellIndex(value: AttributeValue): string {
-  return nameOf(value) ?? '...';
 }

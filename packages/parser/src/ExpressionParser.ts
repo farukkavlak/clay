@@ -1,12 +1,12 @@
 import { ExactNumber, NumberError, RESERVED_TYPES } from '@clay/contracts';
 
-import { AttributeValue, BinaryOperator, BoundNode, CallNode, ForNode, ReferenceNode, spellIndex, TemplatePart } from './ast';
+import { AttributeValue, BinaryOperator, BoundNode, CallNode, ForNode, ReferenceNode, Step, TemplatePart } from './ast';
 import { checkKey } from './checkKey';
 import { ConfigError } from './ConfigError';
 import { readEscapes } from './escapes';
 import { flushed } from './heredoc';
 import { Position } from './Position';
-import { Step } from './reference';
+import { spellIndex } from './reference';
 import { Token, TokenType } from './tokens';
 import { TokenStream } from './TokenStream';
 

@@ -1264,7 +1264,7 @@ Nothing here changes what Clay does. Each is a place the next change has to work
 - [x] `expressions/references` imports from `expressions`, which imports it back: four
       resolvers sit below `ReferenceResolver`, which calls them. The folder rule checks only
       the top folders, so it lets this through
-- [ ] `parser` has an import cycle in `ast`, `body` and `reference`, and `state` one in
+- [x] `parser` has an import cycle in `ast`, `body` and `reference`, and `state` one in
       `httpTls` and `httpRequest`; nothing stops a new cycle between files
 - [ ] `LocalProvider` names its resources in a list and again in a map, so a new one goes
       in two places

@@ -1,4 +1,4 @@
-import { AttributeValue } from './ast';
+import { AttributeValue, Label } from './ast';
 import { Position } from './Position';
 
 /** What a block holds, before anything knows which blocks there are: attributes and blocks, in the order written. */
@@ -8,12 +8,6 @@ export interface Attribute {
   type: 'Attribute';
   name: string;
   value: AttributeValue;
-  position: Position;
-}
-
-/** A label is written in quotes, and `position` is at its quote. */
-export interface Label {
-  value: string;
   position: Position;
 }
 

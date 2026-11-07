@@ -1,5 +1,6 @@
-import { AttributeValue, namedIn, spellNamed } from './ast';
+import { AttributeValue, namedIn } from './ast';
 import { ConfigError } from './ConfigError';
+import { spellNamed } from './reference';
 
 export function checkConstant(value: AttributeValue, what: string): void {
   const [named] = namedIn(value);

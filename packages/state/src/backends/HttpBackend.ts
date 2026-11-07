@@ -6,9 +6,9 @@ import { LockInfo, lockInfoFrom, StateLocked } from '../lockInfo';
 import { BackendChoice, StateBackend } from '../StateBackend';
 import { parseState, serializeState } from '../stateFile';
 import { authorization, Credentials, PASSWORD, USERNAME } from './httpCredentials';
-import { NoAnswer, Outgoing, Reply, Roots, Tls, trusted, tryOnce } from './httpRequest';
+import { ClientCertificate, NoAnswer, Outgoing, Reply, Roots, Tls, trusted, tryOnce } from './httpRequest';
 import { askedWait, backoff, passing, Retry } from './httpRetry';
-import { CaFile, ClientCertificate } from './httpTls';
+import { CaFile } from './httpTls';
 
 export interface HttpSettings {
   readonly address: URL;

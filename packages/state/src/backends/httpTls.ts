@@ -2,17 +2,11 @@ import { createPrivateKey, KeyObject, X509Certificate } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { Roots } from './httpRequest';
+import { ClientCertificate, Roots } from './httpRequest';
 import { Environment, Settings, variable } from './settings';
 
 export const CLIENT_CERTIFICATE = 'CLAY_HTTP_CLIENT_CERTIFICATE';
 export const CLIENT_KEY = 'CLAY_HTTP_CLIENT_KEY';
-
-/** What the client shows a server that asks who it is, both as PEM. */
-export interface ClientCertificate {
-  readonly cert: string;
-  readonly key: string;
-}
 
 /** The CAs a file holds, with the name it was given by, which `init` remembers. */
 export interface CaFile {

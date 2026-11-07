@@ -1,6 +1,7 @@
 import { isName, NAME_RULE, RESERVED_TYPES } from '@clay/contracts';
 
-import { Header, Label } from '../body';
+import { Label } from '../ast';
+import { Header } from '../body';
 import { ConfigError } from '../ConfigError';
 
 export interface LabelRule {

@@ -2,8 +2,6 @@ import { ClientRequest, IncomingMessage, request as plainRequest } from 'node:ht
 import { request as tlsRequest } from 'node:https';
 import { getCACertificates, TLSSocket } from 'node:tls';
 
-import { ClientCertificate } from './httpTls';
-
 export interface Outgoing {
   readonly method: string;
   readonly body?: string;
@@ -33,6 +31,12 @@ export class HandshakeFailed extends Error {
     super(message, { cause });
     this.name = 'HandshakeFailed';
   }
+}
+
+/** What the client shows a server that asks who it is, both as PEM. */
+export interface ClientCertificate {
+  readonly cert: string;
+  readonly key: string;
 }
 
 /** The CAs an https request trusts, asked for at its first request. */

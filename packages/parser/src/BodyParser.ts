@@ -1,4 +1,5 @@
-import { Attribute, Block, Body, Header, Inside, Label, Schema } from './body';
+import { Label } from './ast';
+import { Attribute, Block, Body, Header, Inside, Schema } from './body';
 import { ExpressionParser } from './ExpressionParser';
 import { Token, TokenType } from './tokens';
 import { TokenStream } from './TokenStream';

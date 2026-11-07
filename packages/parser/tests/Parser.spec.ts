@@ -1,11 +1,11 @@
 import { ExactNumber, types } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { BoundNode, CallNode, callsIn, DataBlock, ModuleBlock, namedIn, OutputBlock, ReferenceNode, ResourceBlock, spellIndex, spellNamed, VariableBlock } from '../src/ast';
+import { BoundNode, CallNode, callsIn, DataBlock, ModuleBlock, namedIn, OutputBlock, ReferenceNode, ResourceBlock, Step, VariableBlock } from '../src/ast';
 import { ConfigError } from '../src/ConfigError';
 import { Lexer } from '../src/Lexer';
 import { parseModule, Parser } from '../src/Parser';
-import { Step } from '../src/reference';
+import { spellIndex, spellNamed } from '../src/reference';
 import { steps } from './steps';
 
 function makeParser(input: string, file: string = 'main.clay'): Parser {
