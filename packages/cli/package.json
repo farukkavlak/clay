@@ -2,7 +2,7 @@
   "name": "@clay/cli",
   "version": "0.1.0",
   "engines": {
-    "node": ">=22.13"
+    "node": ">=22.15"
   },
   "main": "dist/index.js",
   "bin": {

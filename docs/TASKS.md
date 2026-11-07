@@ -1054,6 +1054,7 @@ Terraform has it since backends replaced `-state`.
       the configuration, which is checked in
 - [x] The HTTP backend retries a request that got no answer or a 5xx, and gives up on one
       that hangs after a time it names
+- [x] The HTTP backend trusts the CAs of the system store, beside the ones Node brings
 - [ ] The HTTP backend takes a CA certificate and a client certificate for TLS
 - [x] `init` offers to move the state when the block names a different backend than the
       one in use
@@ -1258,7 +1259,7 @@ Nothing here changes what Clay does. Each is a place the next change has to work
       import the wrong way goes unnoticed
 - [ ] Workspace packages are not `"private": true`, so `npm publish -ws` would publish them;
       four of eight have a `lint` script
-- [ ] CI runs Node 22.13 only, the lowest `engines` allows, and not the newest
+- [ ] CI runs Node 22.15 only, the lowest `engines` allows, and not the newest
 
 ### Test health
 
