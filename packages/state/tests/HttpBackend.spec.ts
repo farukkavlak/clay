@@ -81,6 +81,26 @@ describe('a state kept on an HTTP server', () => {
     expect(await backend.read()).toEqual(stateWith(3));
   });
 
+  it('says how long a body is in bytes, not in characters', async () => {
+    const state = { ...emptyState(), resources: { 'local_file.a': { ...resource, attributes: { path: 'ç.txt' } } } };
+
+    await backendOn().write(state);
+
+    expect(server.received[0].length).toBe(String(Buffer.byteLength(serializeState(state), 'utf8')));
+  });
+
+  it('names itself on every request', async () => {
+    await runAll(backendOn());
+
+    expect(server.received.map(({ userAgent }) => userAgent)).toEqual(['clay', 'clay', 'clay', 'clay']);
+  });
+
+  it('reads a state that starts with a byte order mark', async () => {
+    server.state = `\uFEFF${serializeState(stateWith(3))}`;
+
+    expect(await backendOn().read()).toEqual(stateWith(3));
+  });
+
   it('names the lock it holds on every write, and none once released', async () => {
     const backend = backendOn();
     const info = newLockInfo('apply');
@@ -225,7 +245,7 @@ describe('a state kept on an HTTP server', () => {
 
     const refusal = backendOn().lock(info);
 
-    await expect(refusal).rejects.toThrow(`LOCK ${server.url}/lock answered 200, but the body was cut off`);
+    await expect(refusal).rejects.toThrow(`LOCK ${server.url}/lock answered 200, but the body was cut off (ECONNRESET)`);
     await expect(refusal).rejects.toThrow(`The server may hold lock ${info.id} all the same; if it does, send UNLOCK to ${server.url}/lock with what the lock holds`);
   });
 
@@ -243,7 +263,7 @@ describe('a state kept on an HTTP server', () => {
   it('says a read cut off is no answer, not no state', async () => {
     server.override('GET /state', { status: 200, cut: true });
 
-    await expect(backendOn().read()).rejects.toThrow(`GET ${server.url}/state answered 200, but the body was cut off`);
+    await expect(backendOn().read()).rejects.toThrow(`GET ${server.url}/state answered 200, but the body was cut off (ECONNRESET)`);
   });
 
   it('takes no lock the server failed to take', async () => {

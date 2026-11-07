@@ -11,7 +11,7 @@ const TAKES = ['address', 'update_method', 'lock_address', 'lock_method', 'unloc
 
 /** A token, as a request line spells a method. */
 const METHOD = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
-/** fetch sends none of these. */
+/** CONNECT opens a tunnel, and TRACE and TRACK echo the request back: none of them keeps a state. */
 const FORBIDDEN = new Set(['CONNECT', 'TRACE', 'TRACK']);
 
 function parsed(settings: Settings, value: string, name: string): URL {
@@ -47,7 +47,7 @@ function methodOf(settings: Settings, name: string, fallback: string): string {
   if (value === undefined) return fallback;
 
   if (!METHOD.test(value)) settings.refuse(`${name} of backend "http" is "${value}", which is no HTTP method`, name);
-  if (FORBIDDEN.has(value.toUpperCase())) settings.refuse(`${name} of backend "http" is "${value}", which a request cannot be sent with`, name);
+  if (FORBIDDEN.has(value.toUpperCase())) settings.refuse(`${name} of backend "http" is "${value}", which opens a tunnel or echoes the request, and keeps no state`, name);
 
   return value;
 }
