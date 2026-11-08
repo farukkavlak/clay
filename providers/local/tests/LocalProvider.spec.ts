@@ -4,7 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LocalProvider } from '../src/index';
+import { LocalFileDataSource } from '../src/dataSources/LocalFileDataSource';
+import { CommandExecResource, LocalFileResource, LocalProvider, NullResource, RandomStringResource } from '../src/index';
 
 /** Whether the directory finds a file by a name in another case. */
 async function ignoresCase(dir: string): Promise<boolean> {
@@ -324,9 +325,17 @@ describe('LocalProvider', () => {
     });
   });
 
-  describe('Resources', () => {
-    it('should expose local_file as supported resource', () => {
-      expect(provider.resources).toContain('local_file');
+  describe('the types it makes', () => {
+    it('lists the resource types it makes', () => {
+      expect(provider.resources).toEqual(['local_file', 'random_string', 'null_resource', 'command_exec']);
+    });
+
+    it('answers each type it lists with the handler of that type', async () => {
+      const handlers = [new LocalFileResource(), new RandomStringResource(), new NullResource(), new CommandExecResource()];
+      const schemas = await Promise.all(provider.resources.map((type) => provider.getSchema(type)));
+
+      expect(schemas).toEqual(await Promise.all(handlers.map((handler) => handler.getSchema())));
+      expect(await provider.getDataSourceSchema('local_file')).toEqual(await new LocalFileDataSource().getSchema());
     });
   });
 

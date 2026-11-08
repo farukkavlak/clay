@@ -7,18 +7,15 @@ import { NullResource } from './resources/NullResource';
 import { RandomStringResource } from './resources/RandomStringResource';
 
 export class LocalProvider implements Provider {
-  readonly resources = ['local_file', 'random_string', 'null_resource', 'command_exec'];
-  readonly dataSources = ['local_file'];
-  private handlers: Map<string, ResourceHandler> = new Map();
-  private dataHandlers: Map<string, DataSourceHandler> = new Map();
-
-  constructor() {
-    this.handlers.set('local_file', new LocalFileResource());
-    this.handlers.set('random_string', new RandomStringResource());
-    this.handlers.set('null_resource', new NullResource());
-    this.handlers.set('command_exec', new CommandExecResource());
-    this.dataHandlers.set('local_file', new LocalFileDataSource());
-  }
+  private readonly handlers = new Map<string, ResourceHandler>([
+    ['local_file', new LocalFileResource()],
+    ['random_string', new RandomStringResource()],
+    ['null_resource', new NullResource()],
+    ['command_exec', new CommandExecResource()],
+  ]);
+  private readonly dataHandlers = new Map<string, DataSourceHandler>([['local_file', new LocalFileDataSource()]]);
+  readonly resources = [...this.handlers.keys()];
+  readonly dataSources = [...this.dataHandlers.keys()];
 
   private handler(type: string): ResourceHandler {
     const handler = this.handlers.get(type);
