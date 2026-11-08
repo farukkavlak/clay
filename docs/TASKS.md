@@ -1086,6 +1086,9 @@ Terraform has it since backends replaced `-state`.
 - [x] An unlock that failed after the work was done was reported as the work failing.
       The CLI now says what the work did, then "The lock could not be released: <reason>",
       and exits 1
+- [x] An S3 unlock took a refused delete's status as the lock's state. RustFS answers 412
+      to a retried delete whose lock is gone, so a released lock was called another run's,
+      and AWS's 409 was an error. It now reads the lock again and decides from what is there
 - [ ] Every command now takes and releases the lock itself, so the engine's own locking
       (`Orchestrator.plan`, `runPlan` without a held lock, `writeIfAbsent`) is reached
       only from tests. Drop it and have the engine require a held lock, or keep it as the

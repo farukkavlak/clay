@@ -32,8 +32,11 @@ interface Refusal {
   readonly code: string;
 }
 
-/** An answer of its own for the next request a test names: `hang` never answers, `lost` acts and answers nothing, `raw` is no S3 error. */
-type Override = Refusal | { readonly hang: true } | { readonly lost: true } | { readonly raw: number; readonly body: string };
+/**
+ * An answer of its own for the next request a test names: `hang` never answers, `lost` acts and answers nothing, `raw` is no S3 error,
+ * and `before` runs ahead of the request, which is then served as any other.
+ */
+type Override = Refusal | { readonly hang: true } | { readonly lost: true } | { readonly raw: number; readonly body: string } | { readonly before: () => void };
 
 const read = async (request: IncomingMessage): Promise<string> => {
   const chunks: Buffer[] = [];
@@ -59,7 +62,7 @@ function reply(response: ServerResponse, done: Done | Refusal): void {
 }
 
 /** A hung request is never answered. */
-function answerInstead(response: ServerResponse, override: Exclude<Override, { lost: true }>): void {
+function answerInstead(response: ServerResponse, override: Exclude<Override, { lost: true } | { before: () => void }>): void {
   if ('status' in override) refuse(response, override);
   else if ('raw' in override) {
     response.writeHead(override.raw, { 'content-type': 'text/html' });
@@ -123,7 +126,11 @@ export class S3StateServer {
     const region = /Credential=[^/]+\/[^/]+\/([^/]+)\//.exec(header(request, 'authorization') ?? '')?.[1];
     this.received.push({ method, path: url.pathname, ifMatch: header(request, 'if-match'), ifNoneMatch: header(request, 'if-none-match'), body, region });
 
-    const override = this.overrides.get(`${method} ${url.pathname}`)?.shift();
+    let override = this.overrides.get(`${method} ${url.pathname}`)?.shift();
+    if (override !== undefined && 'before' in override) {
+      override.before();
+      override = undefined;
+    }
     if (override !== undefined && !('lost' in override)) {
       answerInstead(response, override);
       return;

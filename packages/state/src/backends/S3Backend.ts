@@ -144,25 +144,30 @@ export class S3Backend implements StateBackend {
     }
   }
 
-  /**
-   * A lock already gone is released. The delete names the version read, so a lock another run took in between stays, where the server
-   * keeps to `If-Match`.
-   */
+  /** Servers answer a delete the lock changed under with 404, 409 or 412 alike, so the lock read again decides. */
   async unlock(id: string): Promise<void> {
-    const stored = await this.stored(this.lockKey);
-    if (stored === undefined) return;
+    const refused = await this.releaseOwn(id);
+    if (refused === undefined) return;
 
-    const notOurs = new Error(`${this.lockLocation} holds a lock this run did not take, so it is left in place`);
-    if (lockInfoFrom(stored.text)?.id !== id) throw notOurs;
+    const again = await this.releaseOwn(id);
+    if (again !== undefined) throw this.unexpected('DeleteObject', this.lockLocation, again);
+  }
+
+  /** Undefined where the lock is gone now, or the refusal of a delete the lock may have changed under. */
+  private async releaseOwn(id: string): Promise<S3ServiceException | undefined> {
+    const stored = await this.stored(this.lockKey);
+    if (stored === undefined) return undefined;
+    if (lockInfoFrom(stored.text)?.id !== id) throw new Error(`${this.lockLocation} holds a lock this run did not take, so it is left in place`);
 
     const outcome = await this.send('DeleteObject', this.lockLocation, (sdk, client) =>
       client.send(new sdk.DeleteObjectCommand({ Bucket: this.settings.bucket, Key: this.lockKey, IfMatch: stored.etag }))
     );
-    if (!outcome.refused) return;
+    if (!outcome.refused) return undefined;
 
-    if (statusOf(outcome.refused) === 412) throw notOurs;
-    // A lock that is missing now was deleted by a try before this one.
-    if (!isMissing(outcome.refused)) throw this.unexpected('DeleteObject', this.lockLocation, outcome.refused);
+    const status = statusOf(outcome.refused);
+    if (!isMissing(outcome.refused) && status !== 409 && status !== 412) throw this.unexpected('DeleteObject', this.lockLocation, outcome.refused);
+
+    return outcome.refused;
   }
 
   /** Undefined where no object is, or an empty one. */

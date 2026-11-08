@@ -279,21 +279,49 @@ describe('a state kept in S3', () => {
 
     it('is left in place where another run took it between the read and the delete', async () => {
       const info = newLockInfo('apply');
+      const other = newLockInfo('plan');
       await backendOn().lock(info);
-      server.override('DELETE /bucket/env/state.json.lock', { status: 412, code: 'PreconditionFailed' });
+      server.override('DELETE /bucket/env/state.json.lock', { before: () => server.put('bucket/env/state.json.lock', JSON.stringify(other)) });
 
       await expect(backendOn().unlock(info.id)).rejects.toThrow('holds a lock this run did not take, so it is left in place');
+      expect(JSON.parse(server.text('bucket/env/state.json.lock')!)).toEqual(other);
     });
 
-    it('counts as released where a try before the last deleted it', async () => {
+    it.each([
+      ['404, as AWS does', []],
+      ['412, as RustFS does', [{ status: 412, code: 'PreconditionFailed' }]],
+    ])('counts as released where a try before the last deleted it, and the next is answered %s', async (_name, next) => {
       const info = newLockInfo('apply');
       await backendOn().lock(info);
-      server.override('DELETE /bucket/env/state.json.lock', { status: 404, code: 'NoSuchKey' });
+      server.override('DELETE /bucket/env/state.json.lock', { lost: true }, ...next);
+      server.received.length = 0;
+
+      await backendOn({ timeout: 5, attempts: 2 }).unlock(info.id);
+
+      expect(server.text('bucket/env/state.json.lock')).toBeUndefined();
+      expect(sent()).toEqual(['GET /bucket/env/state.json.lock', 'DELETE /bucket/env/state.json.lock', 'DELETE /bucket/env/state.json.lock', 'GET /bucket/env/state.json.lock']);
+    });
+
+    it('is deleted again where a request on it at the same time made S3 answer 409', async () => {
+      const info = newLockInfo('apply');
+      await backendOn().lock(info);
+      server.override('DELETE /bucket/env/state.json.lock', { status: 409, code: 'ConditionalRequestConflict' });
       server.received.length = 0;
 
       await backendOn().unlock(info.id);
 
-      expect(sent()).toEqual(['GET /bucket/env/state.json.lock', 'DELETE /bucket/env/state.json.lock']);
+      expect(server.text('bucket/env/state.json.lock')).toBeUndefined();
+      expect(sent()).toEqual(['GET /bucket/env/state.json.lock', 'DELETE /bucket/env/state.json.lock', 'GET /bucket/env/state.json.lock', 'DELETE /bucket/env/state.json.lock']);
+    });
+
+    it('names what S3 answered where the delete is refused twice and the lock is still there', async () => {
+      const info = newLockInfo('apply');
+      await backendOn().lock(info);
+      const conflict = { status: 409, code: 'ConditionalRequestConflict' };
+      server.override('DELETE /bucket/env/state.json.lock', conflict, conflict);
+
+      await expect(backendOn().unlock(info.id)).rejects.toThrow(`DeleteObject s3://bucket/env/state.json.lock at ${server.url}/ answered 409 ConditionalRequestConflict`);
+      expect(JSON.parse(server.text('bucket/env/state.json.lock')!)).toEqual(info);
     });
 
     it('names what S3 answered to a delete it refused', async () => {
