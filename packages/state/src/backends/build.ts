@@ -1,6 +1,7 @@
 import { StateBackend } from '../StateBackend';
 import { httpFrom } from './httpFrom';
 import { LocalBackend } from './LocalBackend';
+import { s3From } from './s3From';
 import { checkNames, Environment, Settings } from './settings';
 
 function localFrom(settings: Settings, workingDir: string): StateBackend {
@@ -17,6 +18,7 @@ function localFrom(settings: Settings, workingDir: string): StateBackend {
 const BACKENDS = new Map<string, (settings: Settings, workingDir: string, env: Environment) => StateBackend>([
   ['local', localFrom],
   ['http', httpFrom],
+  ['s3', s3From],
 ]);
 
 export function build(settings: Settings, workingDir: string, env: Environment): StateBackend {

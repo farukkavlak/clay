@@ -504,8 +504,8 @@ clay {
 }
 ```
 
-Every value in the block is a string or a number written out, since the state has to be
-found before anything has a value.
+Every value in the block is a string, a number, `true` or `false` written out, since the
+state has to be found before anything has a value.
 
 `local` keeps the state in a file. `path` is relative to the root, or absolute. It cannot be
 empty or end in `.clay`. With no block, or no `path`, the state is `clay.state.json` next to
@@ -576,6 +576,45 @@ as unset. A password needs a username; a username alone is sent with an empty pa
 401 names the two variables, and no message prints their values. A password or a username
 the variables cannot hold stops every command on an `http` backend, `validate` too.
 They go to every address the block names, over `http` as well as `https`.
+
+`s3` keeps the state as one object in an S3 bucket:
+
+```
+clay {
+  backend "s3" {
+    bucket = "acme-state"
+    key    = "prod/clay.state.json"
+    region = "eu-west-1"
+  }
+}
+```
+
+- `bucket` and `key` are required. A bucket name holds no `/`. A key does not start or
+  end with `/`, and holds no `//`.
+- `region` is required, or `AWS_REGION` or `AWS_DEFAULT_REGION` in the environment. A
+  region from the environment is read again on each command, and `init` does not
+  remember it.
+- `endpoint` names a server other than AWS that speaks S3, such as MinIO, by an `http`
+  or `https` URL. `use_path_style = true` puts the bucket in the path instead of the host
+  name, as most such servers want.
+
+The lock is a second object, `<key>.lock`, written only where none is
+(`If-None-Match: *`). When another run holds it, the error names that run and the object
+to remove. To release it, Clay reads the lock, checks its id, and deletes it only if it is
+still the version it read (`If-Match`). AWS keeps to `If-Match`. A server that ignores it,
+or sends no ETag, deletes the lock anyway, so a lock another run took between the read and
+the delete is lost.
+
+Credentials come from where the AWS CLI finds them: `AWS_ACCESS_KEY_ID` and
+`AWS_SECRET_ACCESS_KEY` (with `AWS_SESSION_TOKEN`), a profile in `~/.aws`, or the role of
+the machine. The block refuses `access_key`, `secret_key` and `token`. Clay needs
+`s3:GetObject` and `s3:PutObject` on the key and the lock, `s3:DeleteObject` on the lock,
+and `s3:ListBucket` on the bucket: without it, AWS answers 403 for an object that does not
+exist yet, and `init` cannot tell it from a refusal.
+
+A request that gets no answer, a 5xx or a throttling error is sent up to three times in
+all, and one try may take 30 seconds. S3 keeps no journal, so each write sends the state
+whole.
 
 A root module holds one backend across its files, and a module none. Every command reads
 the block, so a syntax error in a root file stops `output` and `state` too. A saved plan

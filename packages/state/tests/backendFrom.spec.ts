@@ -3,6 +3,8 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { backendFrom, HttpBackend, LocalBackend } from '../src';
+import { Environment } from '../src/backends/settings';
+import { S3Backend } from '../src/backends/S3Backend';
 
 const dir = path.resolve('/workspace');
 
@@ -10,9 +12,13 @@ const blockOf = (body: string, type = 'local') => parseModule([{ file: 'main.cla
 
 const http = (body: string) => blockOf(body, 'http');
 
-const errorOf = (block: BackendBlock): ConfigError => {
+const s3 = (body: string) => blockOf(body, 's3');
+
+const choiceOf = (body: string, env: Environment = {}) => (backendFrom(s3(body), dir, env) as S3Backend).choice;
+
+const errorOf = (block: BackendBlock, env: Environment = {}): ConfigError => {
   try {
-    backendFrom(block, dir, {});
+    backendFrom(block, dir, env);
   } catch (error) {
     if (error instanceof ConfigError) return error;
 
@@ -68,10 +74,10 @@ describe('backendFrom', () => {
     expect(error.position).toMatchObject({ line: 3, column: 14 });
   });
 
-  it.each(['s3', 'toString'])('refuses the type %s at its label', (type) => {
+  it.each(['gcs', 'toString'])('refuses the type %s at its label', (type) => {
     const error = errorOf(blockOf('', type));
 
-    expect(error.message).toBe(`Clay has no backend "${type}"; it has "local", "http"`);
+    expect(error.message).toBe(`Clay has no backend "${type}"; it has "local", "http", "s3"`);
     expect(error.position).toMatchObject({ line: 2, column: 11 });
   });
 
@@ -165,6 +171,95 @@ describe('backendFrom', () => {
       expect(error.message).toBe(`${name} of backend "http" is read from ${variable}, never from the configuration, which is checked in`);
       expect(error.message).not.toContain('secret');
       expect(error.position).toMatchObject({ line: 5, column: 16 });
+    });
+  });
+
+  describe('of type s3', () => {
+    const PLACE = 'bucket = "b"\n    key = "env/state.json"\n    region = "eu-west-1"';
+
+    it('keeps the state at its key in the bucket', () => {
+      const backend = backendFrom(s3(PLACE), dir, {});
+
+      expect(backend).toBeInstanceOf(S3Backend);
+      expect(backend.location).toBe('s3://b/env/state.json');
+      expect(backend.choice.settings).toEqual({ bucket: 'b', key: 'env/state.json', region: 'eu-west-1', use_path_style: false });
+    });
+
+    it('takes an endpoint and the bucket in the path, for a server other than AWS', () => {
+      const choice = choiceOf(`${PLACE}\n    endpoint = "http://127.0.0.1:9000"\n    use_path_style = true`);
+
+      expect(choice.where).toBe('s3://b/env/state.json at http://127.0.0.1:9000/');
+      expect(choice.settings).toMatchObject({ endpoint: 'http://127.0.0.1:9000/', use_path_style: true });
+    });
+
+    it.each([
+      ['AWS_REGION', { AWS_REGION: 'us-east-2', AWS_DEFAULT_REGION: 'us-west-1' }],
+      ['AWS_DEFAULT_REGION', { AWS_REGION: '', AWS_DEFAULT_REGION: 'us-west-1' }],
+    ])('does not record a region from %s', (_name, env) => {
+      const backend = backendFrom(s3('bucket = "b"\n    key = "k"'), dir, env) as S3Backend;
+
+      expect(backend.choice.settings).toEqual({ bucket: 'b', key: 'k', use_path_style: false });
+    });
+
+    it('refuses a block with no region where the environment has none, at its label', () => {
+      const error = errorOf(s3('bucket = "b"\n    key = "k"'), { AWS_REGION: '' });
+
+      expect(error.message).toBe('backend "s3" needs "region", or AWS_REGION or AWS_DEFAULT_REGION in the environment');
+      expect(error.position).toMatchObject({ line: 2, column: 11 });
+    });
+
+    it('refuses a region from the environment that is no region, naming the variable, at the label', () => {
+      const error = errorOf(s3('bucket = "b"\n    key = "k"'), { AWS_REGION: 'eu west' });
+
+      expect(error.message).toBe('AWS_REGION is "eu west", which is no region');
+      expect(error.position).toMatchObject({ line: 2, column: 11 });
+    });
+
+    it.each([
+      ['bucket', 'key = "k"\n    region = "eu-west-1"'],
+      ['key', 'bucket = "b"\n    region = "eu-west-1"'],
+    ])('refuses a block with no %s, at its label', (name, body) => {
+      const error = errorOf(s3(body));
+
+      expect(error.message).toBe(`backend "s3" needs "${name}"`);
+      expect(error.position).toMatchObject({ line: 2, column: 11 });
+    });
+
+    it.each([
+      ['a bucket with a slash', 'bucket = "b/c"', 'bucket of backend "s3" is "b/c", and a bucket name holds no "/"'],
+      ['a key starting with a slash', 'key = "/k"', 'key of backend "s3" is "/k", which must not start or end with "/"'],
+      ['a key ending with a slash', 'key = "k/"', 'key of backend "s3" is "k/", which must not start or end with "/"'],
+      ['a key with an empty part', 'key = "a//k"', 'key of backend "s3" is "a//k", which must not hold "//"'],
+      ['a region that is no region', 'region = "EU_WEST"', 'region of backend "s3" is "EU_WEST", which is no region'],
+      ['an endpoint that is no URL', 'endpoint = "s3.local"', 'endpoint of backend "s3" is "s3.local", which is not a URL'],
+      ['an endpoint of another scheme', 'endpoint = "ftp://s3.local"', 'endpoint of backend "s3" is "ftp://s3.local", and only http and https are taken'],
+      ['an endpoint with credentials', 'endpoint = "https://me:secret@s3.local"', 'endpoint of backend "s3" holds credentials, which would be printed wherever the address is'],
+      ['a path style that is no boolean', 'use_path_style = "yes"', 'use_path_style of backend "s3" is true or false written out'],
+    ])('refuses %s, at the value', (_title, line, message) => {
+      const [name] = line.split(' ');
+      const others = PLACE.split('\n    ').filter((setting) => !setting.startsWith(`${name} `));
+      const error = errorOf(s3([line, ...others].join('\n    ')));
+
+      expect(error.message).toBe(message);
+      expect(error.position).toMatchObject({ line: 3, column: name.length + 8 });
+    });
+
+    it.each([
+      ['access_key', 'AWS_ACCESS_KEY_ID'],
+      ['secret_key', 'AWS_SECRET_ACCESS_KEY'],
+      ['token', 'AWS_SESSION_TOKEN'],
+    ])('refuses %s in the block, naming where it is read from, at the value', (name, variable) => {
+      const error = errorOf(s3(`${PLACE}\n    ${name} = "secret"`));
+
+      expect(error.message).toBe(`${name} of backend "s3" is read from ${variable}, a profile or a role, never from the configuration, which is checked in`);
+      expect(error.position).toMatchObject({ line: 6, column: name.length + 8 });
+    });
+
+    it('refuses an attribute it does not take, naming those it does', () => {
+      const error = errorOf(s3(`${PLACE}\n    profile = "work"`));
+
+      expect(error.message).toBe('backend "s3" takes only "bucket", "key", "region", "endpoint", "use_path_style", not "profile"');
+      expect(error.position).toMatchObject({ line: 6, column: 15 });
     });
   });
 });

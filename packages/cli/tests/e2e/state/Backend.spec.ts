@@ -114,13 +114,13 @@ describe('a state kept where a backend block says', () => {
     ['state mv', ['state', 'mv', 'local_file.f', 'local_file.g'], 'Error moving resource:'],
     ['state rm', ['state', 'rm', 'local_file.f'], 'Error removing resource:'],
   ])('refuses a backend Clay does not have in %s, quoting its line', async (_title, args, start) => {
-    await write('main.clay', 'clay {\n  backend "s3" {}\n}\n');
+    await write('main.clay', 'clay {\n  backend "gcs" {}\n}\n');
 
     const printed = await refusal(...args);
 
-    expect(printed).toContain(`${start} Clay has no backend "s3"; it has "local"`);
+    expect(printed).toContain(`${start} Clay has no backend "gcs"; it has "local", "http", "s3"`);
     expect(printed).toContain('on main.clay line 2');
-    expect(printed).toContain('2:   backend "s3" {}');
+    expect(printed).toContain('2:   backend "gcs" {}');
   });
 
   it('stops a state command at a syntax error in a root file, since the block may be anywhere in them', async () => {
