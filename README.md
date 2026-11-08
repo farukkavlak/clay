@@ -275,14 +275,23 @@ each block means.
 npm ci
 npm run build
 npm test
+npm run test:s3
 npm run lint
 npm run type:check
 npm run format
 ```
 
 A commit runs eslint and a prettier check on the staged files; CI runs the format check,
-lint, type check, build and tests on every push and pull request. `docs/TASKS.md` lists
-what comes next.
+lint, type check, build and tests on every push and pull request. `npm run test:s3` runs
+the tests that need a real S3 server, at `CLAY_S3_ENDPOINT` with the keys in
+`CLAY_S3_ACCESS_KEY` and `CLAY_S3_SECRET_KEY`. CI starts RustFS for them; locally:
+
+```sh
+docker run -d -p 9000:9000 -e RUSTFS_ACCESS_KEY=clay-test -e RUSTFS_SECRET_KEY=clay-test-secret rustfs/rustfs:1.0.0
+CLAY_S3_ENDPOINT=http://127.0.0.1:9000 CLAY_S3_ACCESS_KEY=clay-test CLAY_S3_SECRET_KEY=clay-test-secret npm run test:s3
+```
+
+`docs/TASKS.md` lists what comes next.
 
 ## License
 

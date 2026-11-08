@@ -594,16 +594,16 @@ clay {
 - `region` is required, or `AWS_REGION` or `AWS_DEFAULT_REGION` in the environment. A
   region from the environment is read again on each command, and `init` does not
   remember it.
-- `endpoint` names a server other than AWS that speaks S3, such as MinIO, by an `http`
+- `endpoint` names a server other than AWS that speaks S3, such as RustFS, by an `http`
   or `https` URL. `use_path_style = true` puts the bucket in the path instead of the host
   name, as most such servers want.
 
 The lock is a second object, `<key>.lock`, written only where none is
 (`If-None-Match: *`). When another run holds it, the error names that run and the object
 to remove. To release it, Clay reads the lock, checks its id, and deletes it only if it is
-still the version it read (`If-Match`). AWS keeps to `If-Match`. A server that ignores it,
-or sends no ETag, deletes the lock anyway, so a lock another run took between the read and
-the delete is lost.
+still the version it read (`If-Match`). AWS and RustFS keep to `If-Match`. A server that
+ignores it, or sends no ETag, deletes the lock anyway, so a lock another run took between
+the read and the delete is lost.
 
 Credentials come from where the AWS CLI finds them: `AWS_ACCESS_KEY_ID` and
 `AWS_SECRET_ACCESS_KEY` (with `AWS_SESSION_TOKEN`), a profile in `~/.aws`, or the role of

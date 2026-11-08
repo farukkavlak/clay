@@ -1060,6 +1060,7 @@ Terraform has it since backends replaced `-state`.
       one in use
 - [x] A run waits for a lock another run holds, for as long as `--lock-timeout` says
 - [x] An S3 backend, with the lock an object beside the state, written only where none is
+- [x] CI runs the S3 backend tests against a real S3 server (RustFS) as well as the fake one
 - [ ] An Azure Blob backend
 
 ### Safety
