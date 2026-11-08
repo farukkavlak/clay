@@ -63,18 +63,17 @@ describe('a state kept in S3', () => {
     expect(server.received).toMatchObject([{ method: 'GET', path: '/bucket/k', region: 'ap-south-2' }]);
   });
 
-  it('puts the bucket in the host name where the path style is off', async () => {
-    const backend = new S3Backend(
-      { bucket: 'bucket', key: 'k', region: 'eu-west-1', regionInBlock: true, endpoint: new URL(server.url.replace('127.0.0.1', 'localhost')), pathStyle: false },
-      ONCE
-    );
+  it.each([
+    [false, 'bucket.s3.invalid'],
+    [true, 's3.invalid'],
+  ])('with the path style %s, asks the host %s', async (pathStyle, host) => {
+    // .invalid never resolves, on any system, so the host asked is read from the error.
+    const backend = new S3Backend({ bucket: 'bucket', key: 'k', region: 'eu-west-1', regionInBlock: true, endpoint: new URL('http://s3.invalid:9000'), pathStyle }, ONCE);
 
-    // bucket.localhost reaches the server only where the system resolves it, and then with the key alone in the path.
-    await backend.read().catch((error: unknown) => {
-      if (!(error instanceof NoAnswer)) throw error;
-    });
+    const failed: unknown = await backend.read().catch((error: unknown) => error);
 
-    expect(sent()).not.toContain('GET /bucket/k');
+    expect(failed).toBeInstanceOf(NoAnswer);
+    expect((failed as NoAnswer).cause).toMatchObject({ hostname: host });
   });
 
   it('reads no object, or an empty one, as no state', async () => {
