@@ -7,12 +7,19 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    strategy:
+      # Each version's result is seen, not only the first to fail.
+      fail-fast: false
+      matrix:
+        # The lowest version engines allows and the newest stable one.
+        node: ['22.15.0', '*']
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          # The lowest version engines allows, so what breaks there is seen here.
-          node-version: '22.15'
+          node-version: ${{ matrix.node }}
+          # From the release list, not the runner's cache; `latest` picks a prerelease.
+          check-latest: true
           cache: npm
       - run: npm ci
       - run: npm run format:check

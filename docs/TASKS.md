@@ -1274,7 +1274,7 @@ Nothing here changes what Clay does. Each is a place the next change has to work
       past 400 lines each; the lint cap of 350 counts no blank line or comment
 - [x] Workspace packages are not `"private": true`, so `npm publish -ws` would publish them;
       four of eight have a `lint` script
-- [ ] CI runs Node 22.15 only, the lowest `engines` allows, and not the newest
+- [x] CI runs Node 22.15 only, the lowest `engines` allows, and not the newest
 
 ### Test health
 
