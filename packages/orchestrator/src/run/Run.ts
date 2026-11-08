@@ -7,6 +7,7 @@ import { DataSourceReader } from '../plan/DataSourceReader';
 import { DependencyGraphBuilder } from '../graph/DependencyGraphBuilder';
 import { DesiredStateBuilder } from '../plan/DesiredStateBuilder';
 import { ModuleLoader } from '../config/ModuleLoader';
+import { ApplyVisitor } from './ApplyVisitor';
 import { PlanRunner } from './PlanRunner';
 import { ResourcePlanner } from '../plan/ResourcePlanner';
 import { WrittenCheck } from '../checks/WrittenCheck';
@@ -83,11 +84,8 @@ export function newRun(stateManager: StateManager, { providers, provisioners }: 
     runner: new PlanRunner(
       stateManager,
       new ActionExecutor(providers, provisioning, resolver, resourcePlanner, new SameObjects(providers, limit), versions, limit),
-      scopes,
-      resolver,
-      instances,
-      modules,
-      reader
+      new ApplyVisitor(scopes, resolver, instances, modules, reader),
+      instances
     ),
     modules,
   };
