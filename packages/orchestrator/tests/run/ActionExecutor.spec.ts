@@ -3,6 +3,7 @@ import { PlanAction } from '@clay/planner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActionExecutor, Written } from '../../src/run/ActionExecutor';
+import { ProvisionerRunner } from '../../src/run/ProvisionerRunner';
 import { ResourcePlanner } from '../../src/plan/ResourcePlanner';
 import { ModuleInstances } from '../../src/instances/ModuleInstances';
 import { Planned } from '../../src/values/Planned';
@@ -130,7 +131,7 @@ describe('ActionExecutor', () => {
     limit = new Watched(DEFAULT_PARALLELISM);
     executor = new ActionExecutor(
       providers,
-      new Provisioning(new ProvisionerRegistry(), limit),
+      new ProvisionerRunner(new Provisioning(new ProvisionerRegistry(), limit), resolver),
       resolver,
       new ResourcePlanner(providers, limit),
       new SameObjects(providers, limit),

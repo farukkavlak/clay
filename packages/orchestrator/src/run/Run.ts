@@ -5,10 +5,13 @@ import { ActionExecutor } from './ActionExecutor';
 import { ConfigLoader } from './ConfigLoader';
 import { DataSourceReader } from '../plan/DataSourceReader';
 import { DependencyGraphBuilder } from '../graph/DependencyGraphBuilder';
+import { DataPlanner } from '../plan/DataPlanner';
 import { DesiredStateBuilder } from '../plan/DesiredStateBuilder';
+import { PlanReader } from '../plan/PlanReader';
 import { ModuleLoader } from '../config/ModuleLoader';
 import { ApplyVisitor } from './ApplyVisitor';
 import { PlanRunner } from './PlanRunner';
+import { ProvisionerRunner } from './ProvisionerRunner';
 import { ResourcePlanner } from '../plan/ResourcePlanner';
 import { WrittenCheck } from '../checks/WrittenCheck';
 import { ConfigFiles } from '../config/ConfigFiles';
@@ -61,6 +64,7 @@ export function newRun(stateManager: StateManager, { providers, provisioners }: 
   const resourcePlanner = new ResourcePlanner(providers, limit);
   const provisioning = new Provisioning(provisioners, limit);
   const reader = new DataSourceReader(providers, dataSchemas, dataSources, versions, limit);
+  const planReader = new PlanReader(resolver, instances);
 
   return {
     loader: new ConfigLoader(
@@ -80,10 +84,22 @@ export function newRun(stateManager: StateManager, { providers, provisioners }: 
     ),
     graphBuilder,
     writtenCheck: new WrittenCheck(resolver, scopes, schemas, dataSchemas, provisionerSchemas, providers, provisioners, limit),
-    desiredStateBuilder: new DesiredStateBuilder(scopes, resolver, graphBuilder, instances, modules, planned, resourcePlanner, provisioning, reader, versions),
+    desiredStateBuilder: new DesiredStateBuilder(
+      scopes,
+      resolver,
+      graphBuilder,
+      instances,
+      modules,
+      planned,
+      resourcePlanner,
+      provisioning,
+      new DataPlanner(graphBuilder, instances, modules, planned, reader, planReader),
+      planReader,
+      versions
+    ),
     runner: new PlanRunner(
       stateManager,
-      new ActionExecutor(providers, provisioning, resolver, resourcePlanner, new SameObjects(providers, limit), versions, limit),
+      new ActionExecutor(providers, new ProvisionerRunner(provisioning, resolver), resolver, resourcePlanner, new SameObjects(providers, limit), versions, limit),
       new ApplyVisitor(scopes, resolver, instances, modules, reader),
       instances
     ),

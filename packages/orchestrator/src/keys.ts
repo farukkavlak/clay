@@ -106,6 +106,14 @@ export function instanceKeyOf(context: Context): InstanceKey | undefined {
   return context instanceof Address || context instanceof DataInstance ? context.key : undefined;
 }
 
+/** `module.a` for `module.a.module.b` and `module.a.module.c`. */
+export function sharedModule(one: ModuleAddress, other: ModuleAddress): ModuleAddress {
+  let depth = 0;
+  while (depth < one.path.length && depth < other.path.length && one.path[depth].name === other.path[depth].name) depth += 1;
+
+  return new ModuleAddress(one.path.slice(0, depth));
+}
+
 /** `module.a[1]` for `module.a[1].module.b[0]` and `module.a`. */
 export function enclosing(instance: ModuleAddress, module: ModuleAddress): ModuleAddress {
   return new ModuleAddress(instance.path.slice(0, module.path.length));

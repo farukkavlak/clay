@@ -1270,8 +1270,8 @@ Nothing here changes what Clay does. Each is a place the next change has to work
       in two places
 - [x] The README says what each package does, but not how to add a backend, a resource or
       a provider, nor how the packages inside `state` and `parser` are laid out
-- [ ] `ReferenceResolver`, `DesiredStateBuilder` and `ActionExecutor` run past 400 lines
-      each; the lint cap of 350 counts no blank line or comment
+- [x] `PlanRunner`, `ReferenceResolver`, `DesiredStateBuilder` and `ActionExecutor` run
+      past 400 lines each; the lint cap of 350 counts no blank line or comment
 - [ ] Workspace packages are not `"private": true`, so `npm publish -ws` would publish them;
       four of eight have a `lint` script
 - [ ] CI runs Node 22.15 only, the lowest `engines` allows, and not the newest

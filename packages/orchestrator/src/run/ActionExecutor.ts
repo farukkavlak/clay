@@ -1,5 +1,5 @@
-import { Address, AttributePath, DeposedObject, DestroyProvisioner, Provider, Resource, Schema, State, touchesSensitive } from '@clay/contracts';
-import { AttributeValue, ProvisionerBlock, ResourceBlock, spell } from '@clay/parser';
+import { Address, AttributePath, DeposedObject, Provider, Resource, Schema, State, touchesSensitive } from '@clay/contracts';
+import { AttributeValue, ResourceBlock, spell } from '@clay/parser';
 import { offApply, offFinal, offPlan, PlanAction } from '@clay/planner';
 
 import { conformValues } from '../values/conformValues';
@@ -7,8 +7,6 @@ import { keepPrior } from '../plan/ignoredChanges';
 import { checkNesting, heldBy, hidingReason, inconsistent, tooDeep } from '../providers/providerResult';
 import { Limit } from '../providers/Limit';
 import { ProviderRegistry } from '../providers/ProviderRegistry';
-import { keptFor, ProvisionerConfig, ProvisionerFailed, Provisioning } from '../providers/Provisioning';
-import { tryAt } from '../place';
 import { SameObjects } from '../checks/sameObject';
 import { ReferenceResolver } from '../expressions/ReferenceResolver';
 import { shown } from '../shown';
@@ -16,6 +14,7 @@ import { TypeMismatch, typedValues } from '../values/typed';
 import { plainOf, sensitiveAmong, Value } from '../values/Value';
 import { Versions } from '../values/Versions';
 import { Ignoring, ResourcePlan, ResourcePlanner } from '../plan/ResourcePlanner';
+import { ProvisionerPrint, ProvisionerRunner } from './ProvisionerRunner';
 
 /** As state holds it, which is how the provider finds it. */
 function held(action: PlanAction, state: State): Resource {
@@ -66,29 +65,8 @@ function protect(resource: Resource, { preventDestroy }: PlanAction): void {
   else delete resource.preventDestroy;
 }
 
-/** Where a provisioner runs: the object, and the block that makes it. */
-interface Provisioned {
-  address: Address;
-  declaration: string;
-  print?: ProvisionerPrint;
-}
-
-function taint(state: State, address: Address): void {
-  state.resources[address.toString()].tainted = true;
-}
-
-const destroyTime = (provisioner: ProvisionerBlock) => provisioner.when === 'destroy';
-
-/** What a provisioner that failed under on_failure = continue prints. */
-function goesOn(error: ProvisionerFailed): string {
-  return `${error.message}, and the apply goes on as on_failure = continue says`;
-}
-
 /** The expressions of a resource block, as the configuration gives them. */
 export type Written = Record<string, AttributeValue>;
-
-/** Where each line a provisioner prints goes, with the provisioner's type. */
-export type ProvisionerPrint = (provisioner: string, line: string) => void;
 
 /** What an action runs with beside the plan. */
 export interface Running {
@@ -102,7 +80,7 @@ export interface Running {
 export class ActionExecutor {
   constructor(
     private providers: ProviderRegistry,
-    private provisioning: Provisioning,
+    private provisioners: ProvisionerRunner,
     private resolver: ReferenceResolver,
     private planner: ResourcePlanner,
     private sameObjects: SameObjects,
@@ -271,79 +249,7 @@ export class ActionExecutor {
     protect(currentState.resources[key], action);
     this.wrote(action);
     this.holdToPlan(action.resourceType, sending, created, attributes);
-    if (resource) await this.provision({ address: contextAddress, declaration: spell(resource), print }, resource, currentState);
-  }
-
-  /**
-   * What runs before a destroy is kept first. Then the rest run in the order written. One that fails, or a value of either refused now,
-   * leaves the object tainted, so the next plan replaces it, and the rest do not run; one with on_failure = continue fails alone.
-   */
-  private async provision(on: Provisioned, resource: ResourceBlock, currentState: State): Promise<void> {
-    try {
-      await this.keepForDestroy(on.address, resource, currentState);
-    } catch (error) {
-      taint(currentState, on.address);
-      throw error;
-    }
-
-    for (const provisioner of resource.provisioners?.filter((one) => !destroyTime(one)) ?? [])
-      try {
-        await this.runProvisioner(provisioner, on, currentState);
-      } catch (error) {
-        if (error instanceof ProvisionerFailed && provisioner.onFailure === 'continue') {
-          on.print?.(provisioner.provisionerType.value, goesOn(error));
-          continue;
-        }
-        taint(currentState, on.address);
-        throw error;
-      }
-  }
-
-  private async runProvisioner(provisioner: ProvisionerBlock, on: Provisioned, currentState: State): Promise<void> {
-    const checked = await this.checkProvisioner(provisioner, on, currentState);
-    const type = provisioner.provisionerType.value;
-    await this.provisioning.run(type, checked, (line) => on.print?.(type, line));
-  }
-
-  /** Resolved now, as the resource's own values are, and checked again now that every value is known. */
-  private async checkProvisioner(provisioner: ProvisionerBlock, { address, declaration }: Provisioned, currentState: State): Promise<ProvisionerConfig> {
-    const given = Object.fromEntries(
-      Object.entries(provisioner.attributes).map(([name, value]) => [
-        name,
-        tryAt(value.position, declaration, address, () => this.resolver.resolveValue(value, currentState, address)),
-      ])
-    );
-    return this.provisioning.check(provisioner, given, declaration, address);
-  }
-
-  /**
-   * Resolved with the object as state now holds it and kept beside it, so they run before it is destroyed, even once the block is gone.
-   * Those the last apply kept go first, so a value refused now leaves none read from other values, and the next plan keeps them again.
-   */
-  private async keepForDestroy(address: Address, resource: ResourceBlock | undefined, currentState: State): Promise<void> {
-    if (!resource) return;
-
-    const object = currentState.resources[address.toString()];
-    delete object.destroyProvisioners;
-    const on = { address, declaration: spell(resource) };
-    const provisioners: DestroyProvisioner[] = [];
-    for (const provisioner of resource.provisioners?.filter(destroyTime) ?? []) provisioners.push(keptFor(provisioner, await this.checkProvisioner(provisioner, on, currentState)));
-
-    if (provisioners.length > 0) object.destroyProvisioners = provisioners;
-    else delete object.destroyProvisioners;
-  }
-
-  /** In the order written. One that fails keeps the object, unless on_failure = continue. A tainted object was never fully made, so none run on it. */
-  private async runBeforeDestroy({ destroyProvisioners = [], tainted }: Pick<Resource, 'destroyProvisioners' | 'tainted'>, print: ProvisionerPrint | undefined): Promise<void> {
-    if (tainted) return;
-
-    for (const { type, config, sensitive = [], onFailure } of destroyProvisioners)
-      try {
-        await this.provisioning.run(type, { config, sensitive }, (line) => print?.(type, line));
-      } catch (error) {
-        if (!(error instanceof ProvisionerFailed && onFailure === 'continue')) throw error;
-        print?.(type, goesOn(error));
-      }
+    if (resource) await this.provisioners.provision({ address: contextAddress, declaration: spell(resource), print }, resource, currentState);
   }
 
   async executeUpdate(action: PlanAction, written: Written | undefined, provider: Provider, currentState: State, { resource }: Running = {}): Promise<void> {
@@ -359,7 +265,7 @@ export class ActionExecutor {
     mark(currentResource, sending.sensitive);
     protect(currentResource, action);
     this.wrote(action);
-    await this.keepForDestroy(Address.of(action), resource, currentState);
+    await this.provisioners.keepForDestroy(Address.of(action), resource, currentState);
     this.holdToPlan(action.resourceType, sending, updated, currentResource.attributes);
   }
 
@@ -371,7 +277,7 @@ export class ActionExecutor {
     mark(object, action.sensitive ?? []);
     protect(object, action);
     this.wrote(action);
-    await this.keepForDestroy(Address.of(action), resource, currentState);
+    await this.provisioners.keepForDestroy(Address.of(action), resource, currentState);
   }
 
   /** One at a time, oldest first, each after what it kept to run before its destroy, and gone from state once destroyed, so a failure leaves the rest to the next run. */
@@ -383,7 +289,7 @@ export class ActionExecutor {
 
     while (objects.length > 0) {
       const [object] = objects;
-      await this.runBeforeDestroy(object, print);
+      await this.provisioners.runBeforeDestroy(object, print);
       await hidingReason(action.resourceType, object.sensitive ?? [], () => this.limit.run(() => provider.delete(action.resourceType, object.attributes)), 'to destroy');
       objects.shift();
     }
@@ -399,7 +305,7 @@ export class ActionExecutor {
 
   async executeDelete(action: PlanAction, provider: Provider, currentState: State, print?: ProvisionerPrint): Promise<void> {
     const object = held(action, currentState);
-    await this.runBeforeDestroy(object, print);
+    await this.provisioners.runBeforeDestroy(object, print);
     const { attributes, sensitive = [] } = object;
     await hidingReason(action.resourceType, sensitive, () => this.limit.run(() => provider.delete(action.resourceType, attributes)), 'to destroy');
     delete currentState.resources[Address.of(action).toString()];

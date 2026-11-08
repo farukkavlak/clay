@@ -1,25 +1,22 @@
 import { Address, AttributePath, DestroyProvisioner, ModuleAddress, Output, Resource, samePaths, Schema, State } from '@clay/contracts';
 import { Graph } from '@clay/graph';
-import { AttributeValue, DataBlock, ResourceBlock, spell, Statement } from '@clay/parser';
+import { AttributeValue, ResourceBlock, spell } from '@clay/parser';
 import { DesiredResource, hasChanges } from '@clay/planner';
 
 import { writtenAt } from '../values/conformValues';
-import { countFrom } from '../instances/count';
 import { givenTo, outputAs } from '../values/declared';
-import { eachFrom } from '../instances/forEach';
 import { ignoredPaths } from './ignoredChanges';
 import { Instances } from '../instances/Instances';
-import { Context, contextIn, DataInstance, enclosing, scopeOf } from '../keys';
+import { Context, contextIn, DataInstance, enclosing, scopeOf, sharedModule } from '../keys';
 import { ModuleInstances } from '../instances/ModuleInstances';
-import { NotKnownYet } from '../instances/NotKnownYet';
 import { Planned } from '../values/Planned';
 import { tryAt, withPlace } from '../place';
 import { ReferenceResolver } from '../expressions/ReferenceResolver';
-import { unknownOf, UnresolvedReferenceError } from '../expressions/UnresolvedReferenceError';
 import { ScopeManager } from '../config/ScopeManager';
 import { validate } from '../expressions/validations';
 import { carried, outputOf, sensitiveAmong, Value } from '../values/Value';
-import { DataSourceReader } from './DataSourceReader';
+import { DataPlanner, DataRead } from './DataPlanner';
+import { PlanReader, Walk } from './PlanReader';
 import { DependencyGraphBuilder, GraphNode, LocalNode, OutputNode, ValueNode } from '../graph/DependencyGraphBuilder';
 import { LoadedResource } from '../config/ModuleLoader';
 import { inOrder } from '../providers/Limit';
@@ -45,12 +42,6 @@ export interface DesiredState {
   readAtApply: string[];
 }
 
-/** What a data source instance read, or nothing where it waits for the apply. */
-interface DataRead {
-  at: DataInstance;
-  read?: Record<string, Value>;
-}
-
 /** What planning one node found, kept until every node is planned so the plan lists it in the graph's order. */
 interface Found {
   resources?: ConfiguredResource[];
@@ -58,31 +49,8 @@ interface Found {
   output?: [string, Output];
 }
 
-/** A plan reads the data sources it can and refuses a count or for_each only an apply knows; a check reads none and accepts one. */
-export type Walk = 'plan' | 'check';
-
-/** Undefined where only an apply knows it. */
-function orLater<T>(parse: (value: Value) => T): (value: Value) => T | undefined {
-  return (value): T | undefined => {
-    try {
-      return parse(value);
-    } catch (error) {
-      if (!(error instanceof NotKnownYet)) throw error;
-      return undefined;
-    }
-  };
-}
-
 function changes(current: Resource | undefined, { after, replace }: ResourcePlan): boolean {
   return !current || replace || hasChanges(current.attributes, after);
-}
-
-/** `module.a` for `module.a.module.b` and `module.a.module.c`. */
-function sharedModule(one: ModuleAddress, other: ModuleAddress): ModuleAddress {
-  let depth = 0;
-  while (depth < one.path.length && depth < other.path.length && one.path[depth].name === other.path[depth].name) depth += 1;
-
-  return new ModuleAddress(one.path.slice(0, depth));
 }
 
 /**
@@ -117,7 +85,8 @@ export class DesiredStateBuilder {
     private planned: Planned,
     private resourcePlanner: ResourcePlanner,
     private provisioning: Provisioning,
-    private reader: DataSourceReader,
+    private data: DataPlanner,
+    private reads: PlanReader,
     private versions: Versions
   ) {}
 
@@ -163,7 +132,7 @@ export class DesiredStateBuilder {
         return { resources: await this.planResource(key, byKey.get(key)!, graph, state) };
       }
       case 'data': {
-        return { reads: await this.planData(key, node, graph, state) };
+        return { reads: await this.data.plan(key, node, graph, state, this.walk) };
       }
       case 'output': {
         // A module's own output never reaches the plan, so only the root's one instance gives one.
@@ -196,28 +165,6 @@ export class DesiredStateBuilder {
     return desired;
   }
 
-  /** Each module instance reads its own, and waits for the apply on its own. A check reads none. */
-  private async planData(key: string, { module, block }: Extract<GraphNode, { kind: 'data' }>, graph: Graph<GraphNode>, state: State): Promise<DataRead[]> {
-    const blocks = this.graphBuilder.resourceDependencies(graph, key);
-    const reads = await inOrder(this.modules.of(module).map((instance) => this.readIn(block, blocks, instance, state)));
-
-    return reads.flat();
-  }
-
-  private async readIn(block: DataBlock, blocks: string[], instance: ModuleAddress, state: State): Promise<DataRead[]> {
-    const waits = this.walk === 'check' || this.waitsForApply(blocks, instance);
-
-    return inOrder(this.dataInstances(block, instance, state).map((at) => this.readData(block, at, state, waits)));
-  }
-
-  private async readData(block: DataBlock, at: DataInstance, state: State, waits: boolean): Promise<DataRead> {
-    const inputs = this.resolveInputs(block, state, at);
-    if (!waits) return { at, read: await this.reader.read(block, inputs, at) };
-
-    await this.reader.defer(block, inputs, at);
-    return { at };
-  }
-
   private recordRead(desired: DesiredState, at: DataInstance, read: Record<string, Value>): void {
     const address = at.toString();
     desired.dataSources[address] = carried(read);
@@ -226,43 +173,8 @@ export class DesiredStateBuilder {
     if (sensitive.length > 0) desired.dataSensitive[address] = sensitive;
   }
 
-  /** Its count or for_each is read in its module instance before any instance exists. */
-  private dataInstances(block: DataBlock, module: ModuleAddress, state: State): DataInstance[] {
-    const at = new DataInstance(module, block.dataSourceType, block.name);
-    if (!block.count && !block.forEach) return [at];
-
-    this.setKeys(at.block, block, at, state);
-    return at.instances(this.instances.keysOf(at.block) ?? []);
-  }
-
-  /** Left unset where only an apply knows them: the block makes no instance, and what reads it is not known yet. */
-  private setKeys(key: string, block: ResourceBlock | DataBlock, context: Context, state: State): void {
-    const count = block.count && this.readAt(block.count, block, context, state, countFrom);
-    const each = block.forEach && this.readAt(block.forEach, block, context, state, eachFrom);
-
-    if (count !== undefined) this.instances.setCount(key, count);
-    if (each !== undefined) this.instances.setEach(key, each);
-  }
-
-  /**
-   * Read now, it would see the world before the apply changes a resource it reads, even through a variable, a local or an output.
-   * A value not known yet comes only from such a change, so its inputs are known whenever it is read now.
-   */
-  private waitsForApply(blocks: string[], module: ModuleAddress): boolean {
-    return this.instancesOf(blocks, module).some((instance) => this.planned.get(instance)?.changes === true);
-  }
-
-  /** One value at a time, so an error points at the value, not the block. */
-  private resolveInputs(block: DataBlock, state: State, at: DataInstance): Record<string, Value> {
-    const declaration = spell(block);
-
-    return Object.fromEntries(
-      Object.entries(block.attributes).map(([name, value]) => [name, tryAt(value.position, declaration, at, () => this.resolveOrUnknown(value, state, at))])
-    );
-  }
-
   private planCall({ module, block }: Extract<GraphNode, { kind: 'module' }>, state: State): void {
-    this.modules.expandCall(module, block, (value, parse, caller) => this.readAt(value, block, caller, state, parse));
+    this.modules.expandCall(module, block, (value, parse, caller) => this.reads.readAt(this.walk, value, block, caller, state, parse));
   }
 
   private async planResource(key: string, loaded: LoadedResource, graph: Graph<GraphNode>, state: State): Promise<ConfiguredResource[]> {
@@ -280,20 +192,13 @@ export class DesiredStateBuilder {
     const key = address.toString();
     if (!block.count && !block.forEach) return [await this.planInstance(address, block, dependencies, state)];
 
-    this.setKeys(key, block, address, state);
+    this.reads.setKeys(this.walk, key, block, address, state);
 
     return inOrder(
       (this.instances.keysOf(key) ?? []).map(async (instance) =>
         this.planInstance(new Address(address.module, address.resourceType, address.name, instance), block, dependencies, state)
       )
     );
-  }
-
-  /** For count and for_each, read before any instance exists. Undefined where only an apply knows it and a check reads it. */
-  private readAt<T>(value: AttributeValue, block: Statement, context: Context, state: State, read: (value: Value) => T): T | undefined {
-    const parse = this.walk === 'check' ? orLater(read) : read;
-
-    return tryAt(value.position, spell(block), context, () => parse(this.resolveOrUnknown(value, state, context)));
   }
 
   private async planInstance(address: Address, block: ResourceBlock, dependencies: string[], state: State): Promise<ConfiguredResource> {
@@ -355,27 +260,6 @@ export class DesiredStateBuilder {
     this.versions.changed(address.withoutKey().toString());
   }
 
-  /** Only instances in the reader's own module instance: `module.a[0]` reads from `module.a[0]`, never `module.a[1]`. */
-  private instancesOf(blocks: string[], reader: ModuleAddress): string[] {
-    return blocks.flatMap((block) => {
-      const { module, resourceType, name } = Address.parse(block);
-      const shared = sharedModule(module, reader.withoutKeys());
-      const readerIn = enclosing(reader, shared).toString();
-
-      return this.modules
-        .of(module)
-        .filter((instance) => enclosing(instance, shared).toString() === readerIn)
-        .flatMap((instance) => this.instancesIn(new Address(instance, resourceType, name)));
-    });
-  }
-
-  private instancesIn(block: Address): string[] {
-    const keys = this.instances.keysOf(block.toString());
-    if (keys === undefined) return [block.toString()];
-
-    return keys.map((key) => new Address(block.module, block.resourceType, block.name, key).toString());
-  }
-
   private planValue(node: Extract<GraphNode, { kind: 'variable' | 'local' }>, instance: ModuleAddress, state: State): void {
     if (node.kind === 'variable') this.planVariable(node, instance, state);
     else this.planLocal(node, instance, state);
@@ -421,7 +305,7 @@ export class DesiredStateBuilder {
     for (const provisioner of block.provisioners ?? []) {
       if (!creates && provisioner.when !== 'destroy') continue;
       const given = Object.fromEntries(
-        Object.entries(provisioner.attributes).map(([name, value]) => [name, tryAt(value.position, declaration, address, () => this.resolveOrUnknown(value, state, address))])
+        Object.entries(provisioner.attributes).map(([name, value]) => [name, tryAt(value.position, declaration, address, () => this.reads.resolveOrUnknown(value, state, address))])
       );
       const checked = await this.provisioning.check(provisioner, given, declaration, address);
       if (provisioner.when === 'destroy') kept.push(keptFor(provisioner, checked));
@@ -434,22 +318,14 @@ export class DesiredStateBuilder {
     const resolved: Record<string, Value> = {};
     const declaration = spell(block);
 
-    for (const [key, value] of Object.entries(block.attributes)) resolved[key] = tryAt(value.position, declaration, context, () => this.resolveOrUnknown(value, state, context));
+    for (const [key, value] of Object.entries(block.attributes))
+      resolved[key] = tryAt(value.position, declaration, context, () => this.reads.resolveOrUnknown(value, state, context));
 
     return resolved;
   }
 
   private resolveNode(node: ValueNode, value: AttributeValue, instance: ModuleAddress, state: State): Value {
     const context = contextIn(node.context, instance);
-    return tryAt(node.position, node.declaration, context, () => this.resolveOrUnknown(value, state, context));
-  }
-
-  private resolveOrUnknown(value: AttributeValue, state: State, context: Context): Value {
-    try {
-      return this.resolver.resolveValue(value, state, context);
-    } catch (error) {
-      if (!(error instanceof UnresolvedReferenceError)) throw error;
-      return unknownOf(error);
-    }
+    return tryAt(node.position, node.declaration, context, () => this.reads.resolveOrUnknown(value, state, context));
   }
 }
