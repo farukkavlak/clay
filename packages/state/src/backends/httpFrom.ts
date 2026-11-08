@@ -21,7 +21,7 @@ function parsed(settings: Settings, value: string, name: string): URL {
   try {
     return new URL(value);
   } catch (error) {
-    if (error instanceof TypeError) settings.refuse(`${name} of backend "http" is "${value}", which is not a URL`, name);
+    if (error instanceof TypeError) settings.refuse(`${name} of backend "${settings.type}" is "${value}", which is not a URL`, name);
 
     throw error;
   }
@@ -36,11 +36,11 @@ export function urlProblem(url: URL): 'scheme' | 'credentials' | undefined {
 }
 
 /** The value is left out of the refusal of credentials, which would print them. */
-function urlOf(settings: Settings, value: string, name: string): URL {
+export function urlOf(settings: Settings, value: string, name: string): URL {
   const url = parsed(settings, value, name);
   const problem = urlProblem(url);
-  if (problem === 'scheme') settings.refuse(`${name} of backend "http" is "${value}", and only http and https are taken`, name);
-  if (problem === 'credentials') settings.refuse(`${name} of backend "http" holds credentials, which would be printed wherever the address is`, name);
+  if (problem === 'scheme') settings.refuse(`${name} of backend "${settings.type}" is "${value}", and only http and https are taken`, name);
+  if (problem === 'credentials') settings.refuse(`${name} of backend "${settings.type}" holds credentials, which would be printed wherever the address is`, name);
 
   return url;
 }

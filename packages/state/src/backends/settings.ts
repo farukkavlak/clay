@@ -12,6 +12,8 @@ export interface Settings {
   text(name: string): string | undefined;
   /** Undefined where none is given. */
   number(name: string): ExactNumber | undefined;
+  /** Undefined where none is given. */
+  flag(name: string): boolean | undefined;
   /** Refuses the value of `name`, or the backend as a whole. */
   refuse(problem: string, name?: string): never;
   /** Stops at a value `init` may have written, which names something gone or wrong since. */
@@ -41,6 +43,14 @@ function numberOf({ backendType, attributes }: BackendBlock, name: string): Exac
   return at.value;
 }
 
+function flagOf({ backendType, attributes }: BackendBlock, name: string): boolean | undefined {
+  const at = attributes[name];
+  if (at === undefined) return undefined;
+  if (at.type !== 'Boolean') throw new ConfigError(`${name} of backend "${backendType.value}" is true or false written out`, at.position);
+
+  return at.value;
+}
+
 export function blockSettings(block: BackendBlock): Settings {
   const refuse = (problem: string, name?: string): never => {
     throw new ConfigError(problem, (name === undefined ? undefined : block.attributes[name])?.position ?? block.backendType.position);
@@ -51,6 +61,7 @@ export function blockSettings(block: BackendBlock): Settings {
     names: Object.keys(block.attributes),
     text: (name) => textOf(block, name),
     number: (name) => numberOf(block, name),
+    flag: (name) => flagOf(block, name),
     refuse,
     cannotUse: refuse,
   };
@@ -65,12 +76,14 @@ export function recordSettings(type: string, values: Readonly<Record<string, unk
   };
   const textIn = (value: unknown): string => (typeof value === 'string' && value !== '' ? value : refuse());
   const numberIn = (value: unknown): ExactNumber => (Number.isSafeInteger(value) ? ExactNumber.parse(String(value)) : refuse());
+  const flagIn = (value: unknown): boolean => (typeof value === 'boolean' ? value : refuse());
 
   return {
     type,
     names: Object.keys(values),
     text: (name) => (Object.hasOwn(values, name) ? textIn(values[name]) : undefined),
     number: (name) => (Object.hasOwn(values, name) ? numberIn(values[name]) : undefined),
+    flag: (name) => (Object.hasOwn(values, name) ? flagIn(values[name]) : undefined),
     refuse,
     cannotUse: (problem) => {
       throw new Error(problem);

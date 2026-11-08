@@ -1059,7 +1059,7 @@ Terraform has it since backends replaced `-state`.
 - [x] `init` offers to move the state when the block names a different backend than the
       one in use
 - [x] A run waits for a lock another run holds, for as long as `--lock-timeout` says
-- [ ] An S3 backend
+- [x] An S3 backend, with the lock an object beside the state, written only where none is
 - [ ] An Azure Blob backend
 
 ### Safety
@@ -1133,6 +1133,8 @@ by resource type, and no `provider` block exists yet.
       and a read error hides it, and a provider configured by a `provider` block would be
       asked to read before it is configured
 - [ ] Loading a provider from a package instead of a hard-coded import
+- [ ] A provider can supply a state backend, so the code for one cloud's storage lives
+      beside the provider for that cloud, and the engine keeps fewer backends of its own
 - [ ] A provider is told where the run is. Each reads `process.cwd()` for itself, so a
       relative path means whatever the shell was in
 - [ ] `null_resource` acts on its `triggers`. A change to them plans an update and the

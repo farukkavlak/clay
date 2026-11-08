@@ -68,10 +68,10 @@ async function leftBehind(before: StateBackend, workingDir: string): Promise<boo
 
 const isSame = (a: BackendChoice, b: BackendChoice) => a.type === b.type && a.where === b.where;
 
-function spelled(value: string | number | undefined): string {
+function spelled(value: string | number | boolean | undefined): string {
   if (value === undefined) return 'unset';
 
-  return typeof value === 'number' ? String(value) : `"${value}"`;
+  return typeof value === 'string' ? `"${value}"` : String(value);
 }
 
 /** The first setting the configuration gives otherwise than `init` took it, for the same place. */

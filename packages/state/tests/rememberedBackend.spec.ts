@@ -5,7 +5,9 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { HttpStateServer } from '../../../tests/httpStateServer';
+import { S3StateServer } from '../../../tests/s3StateServer';
 import { adoptBackend, Approve, checkBackend, LocalBackend, LockNotReleased, newLockInfo, rememberedBackend, serializeState, StateLocked, StateManager } from '../src';
+import { S3Backend } from '../src/backends/S3Backend';
 import { backendAt, ONCE } from './backendAt';
 
 /** For a call that must not ask. */
@@ -259,6 +261,66 @@ describe('the backend init remembers', () => {
         `GET ${url}/state failed the TLS handshake (UNABLE_TO_VERIFY_LEAF_SIGNATURE); name the CA that signed its certificate in ca_certificate of the backend block. Whether a state is left there is not known; if that server is gone for good, remove ${path.join(dir, '.clay', 'backend.json')} and run \`clay init\` again`
       );
       await untrusted.stop();
+    });
+  });
+
+  describe('in S3', () => {
+    let server: S3StateServer;
+
+    const backendOn = (key: string, endpoint = server.url, pathStyle = true) =>
+      new S3Backend({ bucket: 'bucket', key, region: 'eu-west-1', regionInBlock: true, endpoint: new URL(endpoint), pathStyle }, { timeout: 5, attempts: 1 });
+    const record = (settings: Record<string, unknown>) => write({ type: 's3', settings: { ...backendOn('state').choice.settings, ...settings } });
+
+    beforeEach(async () => {
+      vi.stubEnv('AWS_ACCESS_KEY_ID', 'test-key');
+      vi.stubEnv('AWS_SECRET_ACCESS_KEY', 'test-secret');
+      server = await S3StateServer.start();
+      await fs.mkdir(path.join(dir, '.clay'));
+    });
+
+    afterEach(async () => {
+      vi.unstubAllEnvs();
+      await server.stop();
+    });
+
+    it('is remembered by its bucket, its key and its endpoint', async () => {
+      await adoptBackend(backendOn('state'), previous(), dir, unasked);
+
+      expect(() => checkBackend(backendOn('state'), dir, {})).not.toThrow();
+      expect(() => checkBackend(backendOn('state', 'http://127.0.0.1:1'), dir, {})).toThrow(
+        `keeps its state in "s3://bucket/state at ${server.url}/" (s3), and the configuration names "s3://bucket/state at http://127.0.0.1:1/" (s3)`
+      );
+    });
+
+    it('is built again with the path style the record holds', async () => {
+      await adoptBackend(backendOn('state'), previous(), dir, unasked);
+
+      expect(() => checkBackend(backendOn('state', server.url, false), dir, {})).toThrow(
+        'use_path_style of backend "s3" is false in the configuration, and true where `clay init` took it; run `clay init`'
+      );
+    });
+
+    it('is refused where the record holds a path style that is no boolean', async () => {
+      await record({ use_path_style: 'true' });
+
+      expect(() => checkBackend(new LocalBackend(dir), dir, {})).toThrow('is not what `clay init` writes');
+    });
+
+    it('takes a file state into the bucket', async () => {
+      await fs.writeFile(path.join(dir, 'clay.state.json'), serializeState(holding('a')), 'utf8');
+
+      expect(await adoptBackend(backendOn('state'), previous(), dir, yes)).toMatchObject({ moved: { copied: true } });
+
+      expect(server.text('bucket/state')).toBe(serializeState(holding('a')));
+      expect(server.text('bucket/state.lock')).toBeUndefined();
+    });
+
+    it('names the way out where the old endpoint gives no answer', async () => {
+      await record({ endpoint: 'http://127.0.0.1:1/' });
+
+      await expect(adoptBackend(new LocalBackend(dir), previous(), dir, unasked)).rejects.toThrow(
+        `GetObject s3://bucket/state at http://127.0.0.1:1/ got no answer (ECONNREFUSED) after 3 tries. Whether a state is left there is not known; if that server is gone for good, remove ${recordPath()} and run \`clay init\` again`
+      );
     });
   });
 
