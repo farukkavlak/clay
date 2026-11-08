@@ -2,17 +2,33 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+
+# A newer push to a pull request cancels its older run; each run on main has a group of its own.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
 
 jobs:
   check:
+    name: Node ${{ matrix.label }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       # Each version's result is seen, not only the first to fail.
       fail-fast: false
       matrix:
         # The lowest version engines allows and the newest stable one.
-        node: ['22.15.0', '*']
+        # The label names the job, which the ruleset requires, so it stays when the version changes.
+        include:
+          - node: '22.15.0'
+            label: lowest
+          - node: '*'
+            label: newest
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -21,9 +37,15 @@ jobs:
           # From the release list, not the runner's cache; `latest` picks a prerelease.
           check-latest: true
           cache: npm
-      - run: npm ci
-      - run: npm run format:check
-      - run: npm run lint
-      - run: npm run type:check
-      - run: npm run build
-      - run: npm test
+      - name: Install
+        run: npm ci
+      - name: Format
+        run: npm run format:check
+      - name: Lint
+        run: npm run lint
+      - name: Type check
+        run: npm run type:check
+      - name: Build
+        run: npm run build
+      - name: Test
+        run: npm test
