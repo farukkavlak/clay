@@ -205,6 +205,70 @@ files beside the folders are shared by all:
 | `checks`      | Refuses a configuration or a plan before anything runs       |
 | `run`         | Wires one run together, loads it and applies the plan        |
 
+The main files in `state/src`:
+
+| File              | Does                                                                      |
+| ----------------- | ------------------------------------------------------------------------- |
+| `StateManager.ts` | Locks the state, reads it and writes it                                   |
+| `StateBackend.ts` | The interface every backend implements                                    |
+| `stateFile.ts`    | Parses, checks and serializes a state                                     |
+| `journal.ts`      | Writes journal lines and replays them over the state                      |
+| `entries.ts`      | Moves resources and cleans up dependencies, for `state mv` and `state rm` |
+| `lockInfo.ts`     | Who holds a lock, and the lock errors                                     |
+| `lockWait.ts`     | The wait for a held lock: timeout and retry delays                        |
+| `backends`        | The backends, built from the `backend` block or from `.clay/backend.json` |
+
+The main files in `parser/src`. A file is parsed in two steps: first the syntax, then what
+each block means.
+
+| File                  | Does                                                                             |
+| --------------------- | -------------------------------------------------------------------------------- |
+| `Lexer.ts`            | Turns source text into tokens                                                    |
+| `tokens.ts`           | The token types                                                                  |
+| `TokenStream.ts`      | Steps through the tokens                                                         |
+| `BodyParser.ts`       | Parses attributes and blocks, without knowing the block types                    |
+| `body.ts`             | The types `BodyParser` returns                                                   |
+| `ExpressionParser.ts` | Parses expressions                                                               |
+| `blocks`              | Checks and decodes each block type: `resource`, `variable`, `moved` and the rest |
+| `ast.ts`              | The AST types                                                                    |
+| `reference.ts`        | Parses references like `var.name` and prints them back                           |
+| `Parser.ts`           | Runs both steps, and checks what must hold across a module's files               |
+
+## Adding to Clay
+
+### A backend
+
+1. Write a class in `packages/state/src/backends` that implements `StateBackend`. `lock`
+   throws `StateLocked` when another run holds the lock. `unlock(id)` releases only the
+   lock with that id. `choice.settings` lists every setting, defaults included, because
+   `init` saves it and builds the backend again from it.
+2. Write a function `(settings, workingDir, env)` that returns the backend. Check the
+   setting names with `checkNames`, and reject a bad value with
+   `settings.refuse(problem, name)` so the error shows its line. Read secrets from `env`,
+   not from the block: the block is copied into `.clay/backend.json` and into saved plans.
+3. Add the function to `BACKENDS` in `build.ts`.
+4. Add unit tests in `packages/state/tests` and end-to-end tests in
+   `packages/cli/tests/e2e/state`. Document the settings under Backend in
+   `docs/LANGUAGE.md`.
+
+### A resource
+
+1. Write a class in `providers/local/src/resources` that implements `ResourceHandler`. A
+   data source implements `DataSourceHandler` and goes in `dataSources`.
+2. Add it to the `handlers` map in `providers/local/src/index.ts`, or to `dataHandlers`
+   for a data source. The provider's type list comes from these maps.
+3. Add tests in `providers/local/tests` and end-to-end tests in `packages/cli/tests/e2e`.
+   Add a row to the Resources table above.
+
+### A provider
+
+1. Write a package that implements `Provider` from `@clay/contracts`. Its `resources` and
+   `dataSources` list the types it handles.
+2. Register it in `newOrchestrator` in `packages/cli/src/engine.ts`, and add the package to
+   the dependencies in `packages/cli/package.json`. If two providers list the same type,
+   Clay stops with an error.
+3. Add a row for the package to the Packages table above.
+
 ## Develop
 
 ```sh

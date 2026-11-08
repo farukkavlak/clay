@@ -1268,7 +1268,7 @@ Nothing here changes what Clay does. Each is a place the next change has to work
       `httpTls` and `httpRequest`; nothing stops a new cycle between files
 - [x] `LocalProvider` names its resources in a list and again in a map, so a new one goes
       in two places
-- [ ] The README says what each package does, but not how to add a backend, a resource or
+- [x] The README says what each package does, but not how to add a backend, a resource or
       a provider, nor how the packages inside `state` and `parser` are laid out
 - [ ] `PlanRunner`, `ReferenceResolver`, `DesiredStateBuilder` and `ActionExecutor` run
       past 400 lines each; the lint cap of 350 counts no blank line or comment
