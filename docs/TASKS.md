@@ -1061,7 +1061,11 @@ Terraform has it since backends replaced `-state`.
 - [x] A run waits for a lock another run holds, for as long as `--lock-timeout` says
 - [x] An S3 backend, with the lock an object beside the state, written only where none is
 - [x] CI runs the S3 backend tests against a real S3 server (RustFS) as well as the fake one
-- [ ] An Azure Blob backend
+- [x] An Azure Blob backend, with an account key or a SAS token from the environment, and
+      the lock a blob beside the state, written only where none is
+- [ ] The Azure backend signs in with Entra ID (`az login`, a managed identity, OIDC in
+      CI), which many accounts require once shared keys are turned off
+- [ ] CI runs the Azure backend tests against Azurite as well as the fake server
 
 ### Safety
 
@@ -1090,6 +1094,8 @@ Terraform has it since backends replaced `-state`.
 - [x] An S3 unlock took a refused delete's status as the lock's state. RustFS answers 412
       to a retried delete whose lock is gone, so a released lock was called another run's,
       and AWS's 409 was an error. It now reads the lock again and decides from what is there
+- [x] An S3 key of 1020 to 1024 bytes was taken, but its lock, `<key>.lock`, is longer than
+      S3 holds, so no run could take the lock. A key is now 1019 bytes at most, in UTF-8
 - [ ] Every command now takes and releases the lock itself, so the engine's own locking
       (`Orchestrator.plan`, `runPlan` without a held lock, `writeIfAbsent`) is reached
       only from tests. Drop it and have the engine require a held lock, or keep it as the

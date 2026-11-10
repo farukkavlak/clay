@@ -590,7 +590,8 @@ clay {
 ```
 
 - `bucket` and `key` are required. A bucket name holds no `/`. A key does not start or
-  end with `/`, and holds no `//`.
+  end with `/`, and holds no `//`. It is at most 1019 bytes in UTF-8, so the lock's name
+  (the key plus `.lock`) fits in S3's limit of 1024 bytes.
 - `region` is required, or `AWS_REGION` or `AWS_DEFAULT_REGION` in the environment. A
   region from the environment is read again on each command, and `init` does not
   remember it.
@@ -615,6 +616,43 @@ exist yet, and `init` cannot tell it from a refusal.
 A request that gets no answer, a 5xx or a throttling error is sent up to three times in
 all, and one try may take 30 seconds. S3 keeps no journal, so each write sends the state
 whole.
+
+`azure` keeps the state as one blob in an Azure Storage container:
+
+```
+clay {
+  backend "azure" {
+    storage_account_name = "acmestate"
+    container_name       = "state"
+    key                  = "prod/clay.state.json"
+  }
+}
+```
+
+- `storage_account_name`, `container_name` and `key` are required. An account name is 3
+  to 24 lowercase letters and digits. A container name is 3 to 63 lowercase letters,
+  digits and single hyphens between them. A key is at most 1019 characters, so the lock's
+  name (the key plus `.lock`) fits in Azure's limit of 1024. It does not start or end with
+  `/`, does not end with `.`, and holds no `//`, no `.` part and no `..` part.
+- `endpoint` names a server other than Azure that speaks the Blob API, such as Azurite,
+  or another Azure cloud, by an `http` or `https` URL. Azurite takes the account in its
+  path: `http://127.0.0.1:10000/devstoreaccount1`. Without it, the account's own address
+  is used: `https://<account>.blob.core.windows.net`.
+
+The lock is a second blob, `<key>.lock`, written only where none is
+(`If-None-Match: *`). When another run holds it, the error names that run and the blob to
+delete. To release it, Clay reads the lock, checks its id, and deletes it only if it is
+still the version it read (`If-Match`).
+
+Credentials come from the environment, by the names the `az` CLI uses:
+`AZURE_STORAGE_KEY` holds an account key, or `AZURE_STORAGE_SAS_TOKEN` a SAS token,
+with or without its leading `?`. Setting both stops every command on the backend. The block
+refuses `access_key` and `sas_token`. A SAS token needs read, create, write and delete on
+the container.
+
+A request that gets no answer, a 429 or a 5xx other than 501 is sent up to three times in
+all. The wait before the second try is one second, and it doubles after each try. One try
+may take 30 seconds. Azure keeps no journal here, so each write sends the state whole.
 
 A root module holds one backend across its files, and a module none. Every command reads
 the block, so a syntax error in a root file stops `output` and `state` too. A saved plan

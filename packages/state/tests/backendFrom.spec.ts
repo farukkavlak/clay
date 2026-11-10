@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { backendFrom, HttpBackend, LocalBackend } from '../src';
 import { Environment } from '../src/backends/settings';
+import { AzureBackend } from '../src/backends/AzureBackend';
 import { S3Backend } from '../src/backends/S3Backend';
 
 const dir = path.resolve('/workspace');
@@ -13,6 +14,8 @@ const blockOf = (body: string, type = 'local') => parseModule([{ file: 'main.cla
 const http = (body: string) => blockOf(body, 'http');
 
 const s3 = (body: string) => blockOf(body, 's3');
+
+const azure = (body: string) => blockOf(body, 'azure');
 
 const choiceOf = (body: string, env: Environment = {}) => (backendFrom(s3(body), dir, env) as S3Backend).choice;
 
@@ -77,7 +80,7 @@ describe('backendFrom', () => {
   it.each(['gcs', 'toString'])('refuses the type %s at its label', (type) => {
     const error = errorOf(blockOf('', type));
 
-    expect(error.message).toBe(`Clay has no backend "${type}"; it has "local", "http", "s3"`);
+    expect(error.message).toBe(`Clay has no backend "${type}"; it has "local", "http", "s3", "azure"`);
     expect(error.position).toMatchObject({ line: 2, column: 11 });
   });
 
@@ -230,6 +233,8 @@ describe('backendFrom', () => {
       ['a key starting with a slash', 'key = "/k"', 'key of backend "s3" is "/k", which must not start or end with "/"'],
       ['a key ending with a slash', 'key = "k/"', 'key of backend "s3" is "k/", which must not start or end with "/"'],
       ['a key with an empty part', 'key = "a//k"', 'key of backend "s3" is "a//k", which must not hold "//"'],
+      ['a key too long for its lock', `key = "${'k'.repeat(1020)}"`, 'key of backend "s3" is 1020 bytes long, and 1019 at most leaves room for ".lock"'],
+      ['a key too long for its lock in UTF-8', `key = "${'ü'.repeat(510)}"`, 'key of backend "s3" is 1020 bytes long, and 1019 at most leaves room for ".lock"'],
       ['a region that is no region', 'region = "EU_WEST"', 'region of backend "s3" is "EU_WEST", which is no region'],
       ['an endpoint that is no URL', 'endpoint = "s3.local"', 'endpoint of backend "s3" is "s3.local", which is not a URL'],
       ['an endpoint of another scheme', 'endpoint = "ftp://s3.local"', 'endpoint of backend "s3" is "ftp://s3.local", and only http and https are taken'],
@@ -255,11 +260,136 @@ describe('backendFrom', () => {
       expect(error.position).toMatchObject({ line: 6, column: name.length + 8 });
     });
 
+    it('takes the longest key S3 holds with its lock', () => {
+      expect(choiceOf(PLACE.replace('key = "env/state.json"', `key = "${'k'.repeat(1019)}"`)).settings).toMatchObject({ key: 'k'.repeat(1019) });
+    });
+
     it('refuses an attribute it does not take, naming those it does', () => {
       const error = errorOf(s3(`${PLACE}\n    profile = "work"`));
 
       expect(error.message).toBe('backend "s3" takes only "bucket", "key", "region", "endpoint", "use_path_style", not "profile"');
       expect(error.position).toMatchObject({ line: 6, column: 15 });
+    });
+  });
+
+  describe('of type azure', () => {
+    const PLACE = 'storage_account_name = "acme"\n    container_name = "state"\n    key = "env/state.json"';
+    const KEY = Buffer.from('key').toString('base64');
+
+    /** The error a command on the block stops with, where the environment holds what it cannot take. */
+    const envErrorOf = (env: Environment): Error => {
+      try {
+        backendFrom(azure(PLACE), dir, env);
+      } catch (error) {
+        if (error instanceof Error) return error;
+
+        throw error;
+      }
+
+      throw new Error('Expected the environment to be refused');
+    };
+
+    it('keeps the state at its key in the container of the account', () => {
+      const backend = backendFrom(azure(PLACE), dir, { AZURE_STORAGE_KEY: KEY });
+
+      expect(backend).toBeInstanceOf(AzureBackend);
+      expect(backend.location).toBe('https://acme.blob.core.windows.net/state/env/state.json');
+      expect(backend.choice.settings).toEqual({ storage_account_name: 'acme', container_name: 'state', key: 'env/state.json' });
+    });
+
+    it('takes an endpoint, for a server other than Azure', () => {
+      const backend = backendFrom(azure(`${PLACE}\n    endpoint = "http://127.0.0.1:10000/acme/"`), dir, {});
+
+      expect(backend.location).toBe('http://127.0.0.1:10000/acme/state/env/state.json');
+      expect(backend.choice.settings).toMatchObject({ endpoint: 'http://127.0.0.1:10000/acme/' });
+    });
+
+    it.each([
+      ['storage_account_name', 'container_name = "state"\n    key = "k"'],
+      ['container_name', 'storage_account_name = "acme"\n    key = "k"'],
+      ['key', 'storage_account_name = "acme"\n    container_name = "state"'],
+    ])('refuses a block with no %s, at its label', (name, body) => {
+      const error = errorOf(azure(body));
+
+      expect(error.message).toBe(`backend "azure" needs "${name}"`);
+      expect(error.position).toMatchObject({ line: 2, column: 11 });
+    });
+
+    const ACCOUNT = 'an account name is 3 to 24 lowercase letters and digits';
+    const CONTAINER = 'a container name is 3 to 63 lowercase letters, digits and single hyphens between them';
+
+    it.each([
+      ['an account name with a capital', 'storage_account_name = "Acme"', `storage_account_name of backend "azure" is "Acme", and ${ACCOUNT}`],
+      ['an account name with a hyphen', 'storage_account_name = "ac-me"', `storage_account_name of backend "azure" is "ac-me", and ${ACCOUNT}`],
+      ['an account name too short', 'storage_account_name = "ac"', `storage_account_name of backend "azure" is "ac", and ${ACCOUNT}`],
+      ['an account name too long', `storage_account_name = "${'a'.repeat(25)}"`, `storage_account_name of backend "azure" is "${'a'.repeat(25)}", and ${ACCOUNT}`],
+      ['a container name with a capital', 'container_name = "State"', `container_name of backend "azure" is "State", and ${CONTAINER}`],
+      ['a container name with two hyphens', 'container_name = "st--ate"', `container_name of backend "azure" is "st--ate", and ${CONTAINER}`],
+      ['a container name ending with a hyphen', 'container_name = "state-"', `container_name of backend "azure" is "state-", and ${CONTAINER}`],
+      ['a container name too short', 'container_name = "st"', `container_name of backend "azure" is "st", and ${CONTAINER}`],
+      ['a container name too long', `container_name = "${'s'.repeat(64)}"`, `container_name of backend "azure" is "${'s'.repeat(64)}", and ${CONTAINER}`],
+      ['a key starting with a slash', 'key = "/k"', 'key of backend "azure" is "/k", which must not start or end with "/"'],
+      ['a key ending with a slash', 'key = "k/"', 'key of backend "azure" is "k/", which must not start or end with "/"'],
+      ['a key with an empty part', 'key = "a//k"', 'key of backend "azure" is "a//k", which must not hold "//"'],
+      ['a key with a ".." part', 'key = "a/../k"', 'key of backend "azure" is "a/../k", which must not hold a "." or ".." part'],
+      ['a key that is ".."', 'key = ".."', 'key of backend "azure" is "..", which must not hold a "." or ".." part'],
+      ['a key with a "." part', 'key = "a/./k"', 'key of backend "azure" is "a/./k", which must not hold a "." or ".." part'],
+      ['a key ending with a dot', 'key = "state."', 'key of backend "azure" is "state.", which must not end with "."'],
+      ['a key too long for its lock', `key = "${'k'.repeat(1020)}"`, 'key of backend "azure" is 1020 characters long, and 1019 at most leaves room for ".lock"'],
+      ['an endpoint that is no URL', 'endpoint = "blob.local"', 'endpoint of backend "azure" is "blob.local", which is not a URL'],
+      [
+        'an endpoint with credentials',
+        'endpoint = "https://me:secret@blob.local"',
+        'endpoint of backend "azure" holds credentials, which would be printed wherever the address is',
+      ],
+      [
+        'an endpoint with a SAS token',
+        'endpoint = "https://blob.local/acme?sig=secret"',
+        'endpoint of backend "azure" holds a query or a fragment; a SAS token is read from AZURE_STORAGE_SAS_TOKEN',
+      ],
+    ])('refuses %s, at the value', (_title, line, message) => {
+      const [name] = line.split(' ');
+      const others = PLACE.split('\n    ').filter((setting) => !setting.startsWith(`${name} `));
+      const error = errorOf(azure([line, ...others].join('\n    ')));
+
+      expect(error.message).toBe(message);
+      expect(error.position).toMatchObject({ line: 3, column: name.length + 8 });
+    });
+
+    it('takes the longest names Azure takes', () => {
+      const body = `storage_account_name = "${'a'.repeat(24)}"\n    container_name = "${'s'.repeat(63)}"\n    key = "${'k'.repeat(1019)}"`;
+
+      expect(backendFrom(azure(body), dir, {}).choice.settings).toMatchObject({ storage_account_name: 'a'.repeat(24), container_name: 's'.repeat(63) });
+    });
+
+    it.each([
+      ['access_key', 'AZURE_STORAGE_KEY'],
+      ['sas_token', 'AZURE_STORAGE_SAS_TOKEN'],
+    ])('refuses %s in the block, naming where it is read from, at the value', (name, variable) => {
+      const error = errorOf(azure(`${PLACE}\n    ${name} = "secret"`));
+
+      expect(error.message).toBe(`${name} of backend "azure" is read from ${variable}, never from the configuration, which is checked in`);
+      expect(error.position).toMatchObject({ line: 6, column: name.length + 8 });
+    });
+
+    it('refuses an attribute it does not take, naming those it does', () => {
+      const error = errorOf(azure(`${PLACE}\n    use_msi = true`));
+
+      expect(error.message).toBe('backend "azure" takes only "storage_account_name", "container_name", "key", "endpoint", not "use_msi"');
+      expect(error.position).toMatchObject({ line: 6, column: 15 });
+    });
+
+    it('refuses both a key and a SAS token in the environment', () => {
+      expect(envErrorOf({ AZURE_STORAGE_KEY: KEY, AZURE_STORAGE_SAS_TOKEN: 'sig=x' }).message).toBe(
+        'AZURE_STORAGE_KEY and AZURE_STORAGE_SAS_TOKEN are both set; backend "azure" takes one of them'
+      );
+    });
+
+    it.each([
+      ['a character base64 does not have', 'not a key!'],
+      ['a length base64 does not have', 'a2V5a'],
+    ])('refuses a key with %s, and does not print it', (_title, key) => {
+      expect(envErrorOf({ AZURE_STORAGE_KEY: key }).message).toBe('AZURE_STORAGE_KEY is not base64, as an account key is');
     });
   });
 });
