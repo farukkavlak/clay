@@ -65,6 +65,9 @@ a configuration means or how the state file is written.
 - `backend "s3"` keeps the state in an S3 bucket, or on a server that speaks S3, with a
   lock object beside it. Credentials come from the environment, a profile or a role,
   never from the block.
+- `backend "azure"` keeps the state in an Azure Storage container, or on a server that
+  speaks the Blob API, with a lock blob beside it. An account key or a SAS token comes
+  from the environment, never from the block.
 - `clay init` takes the state lock while it writes the first state, on every backend, so
   a lock left behind stops it
 - `--lock-timeout <seconds>` on `init`, `plan`, `apply`, `state mv` and `state rm` waits

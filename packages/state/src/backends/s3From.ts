@@ -9,6 +9,9 @@ const SECRETS = new Map([
 ]);
 const TAKES = ['bucket', 'key', 'region', 'endpoint', 'use_path_style'];
 
+/** A key holds 1024 bytes in UTF-8, and the lock's is the key and ".lock". */
+const LONGEST_KEY = 1024 - '.lock'.length;
+
 /** A region is part of a host name. */
 const REGION = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -37,6 +40,8 @@ function bucketOf(settings: Settings): string {
 /** S3 lists a key ending in "/" as a folder, and one with an empty part names another object than the path it reads as. */
 function keyOf(settings: Settings): string {
   const key = required(settings, 'key');
+  const bytes = Buffer.byteLength(key, 'utf8');
+  if (bytes > LONGEST_KEY) settings.refuse(`key of backend "s3" is ${bytes} bytes long, and ${LONGEST_KEY} at most leaves room for ".lock"`, 'key');
   if (key.startsWith('/') || key.endsWith('/')) settings.refuse(`key of backend "s3" is "${key}", which must not start or end with "/"`, 'key');
   if (key.includes('//')) settings.refuse(`key of backend "s3" is "${key}", which must not hold "//"`, 'key');
 

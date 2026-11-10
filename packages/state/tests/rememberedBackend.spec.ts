@@ -4,9 +4,11 @@ import * as os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AzureStateServer } from '../../../tests/azureStateServer';
 import { HttpStateServer } from '../../../tests/httpStateServer';
 import { S3StateServer } from '../../../tests/s3StateServer';
 import { adoptBackend, Approve, checkBackend, LocalBackend, LockNotReleased, newLockInfo, rememberedBackend, serializeState, StateLocked, StateManager } from '../src';
+import { AzureBackend } from '../src/backends/AzureBackend';
 import { S3Backend } from '../src/backends/S3Backend';
 import { backendAt, ONCE } from './backendAt';
 
@@ -320,6 +322,58 @@ describe('the backend init remembers', () => {
 
       await expect(adoptBackend(new LocalBackend(dir), previous(), dir, unasked)).rejects.toThrow(
         `GetObject s3://bucket/state at http://127.0.0.1:1/ got no answer (ECONNREFUSED) after 3 tries. Whether a state is left there is not known; if that server is gone for good, remove ${recordPath()} and run \`clay init\` again`
+      );
+    });
+  });
+
+  describe('in Azure', () => {
+    let server: AzureStateServer;
+    const env = { AZURE_STORAGE_KEY: Buffer.from('test-key').toString('base64') };
+
+    const backendOn = (key: string, endpoint = server.url) =>
+      new AzureBackend(
+        { account: server.account, container: 'state', key, endpoint: new URL(endpoint), credential: { accountKey: env.AZURE_STORAGE_KEY } },
+        { timeout: 5, attempts: 1, wait: 0 }
+      );
+    const record = (settings: Record<string, unknown>) => write({ type: 'azure', settings: { ...backendOn('state').choice.settings, ...settings } });
+    const previousIn = () => {
+      const backend = rememberedBackend(dir, env);
+      return { backend, manager: new StateManager(backend) };
+    };
+
+    beforeEach(async () => {
+      server = await AzureStateServer.start();
+      await fs.mkdir(path.join(dir, '.clay'));
+    });
+
+    afterEach(async () => {
+      await server.stop();
+    });
+
+    it('is remembered by its account, its container, its key and its endpoint', async () => {
+      await adoptBackend(backendOn('state'), previousIn(), dir, unasked);
+
+      expect(await recorded()).toEqual({ type: 'azure', settings: { storage_account_name: server.account, container_name: 'state', key: 'state', endpoint: server.url } });
+      expect(() => checkBackend(backendOn('state'), dir, env)).not.toThrow();
+      expect(() => checkBackend(backendOn('other'), dir, env)).toThrow(
+        `keeps its state in "${server.url}/state/state" (azure), and the configuration names "${server.url}/state/other" (azure)`
+      );
+    });
+
+    it('takes a file state into the container', async () => {
+      await fs.writeFile(path.join(dir, 'clay.state.json'), serializeState(holding('a')), 'utf8');
+
+      expect(await adoptBackend(backendOn('state'), previousIn(), dir, yes)).toMatchObject({ moved: { copied: true } });
+
+      expect(server.text('state/state')).toBe(serializeState(holding('a')));
+      expect(server.text('state/state.lock')).toBeUndefined();
+    });
+
+    it('names the way out where the old endpoint gives no answer', async () => {
+      await record({ endpoint: `http://127.0.0.1:1/${server.account}` });
+
+      await expect(adoptBackend(new LocalBackend(dir), previousIn(), dir, unasked)).rejects.toThrow(
+        `GetBlob http://127.0.0.1:1/${server.account}/state/state got no answer (ECONNREFUSED) after 3 tries. Whether a state is left there is not known; if that server is gone for good, remove ${recordPath()} and run \`clay init\` again`
       );
     });
   });

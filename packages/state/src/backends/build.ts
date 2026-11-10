@@ -1,4 +1,5 @@
 import { StateBackend } from '../StateBackend';
+import { azureFrom } from './azureFrom';
 import { httpFrom } from './httpFrom';
 import { LocalBackend } from './LocalBackend';
 import { s3From } from './s3From';
@@ -19,6 +20,7 @@ const BACKENDS = new Map<string, (settings: Settings, workingDir: string, env: E
   ['local', localFrom],
   ['http', httpFrom],
   ['s3', s3From],
+  ['azure', azureFrom],
 ]);
 
 export function build(settings: Settings, workingDir: string, env: Environment): StateBackend {
