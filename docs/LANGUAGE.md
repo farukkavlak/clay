@@ -642,7 +642,7 @@ clay {
 The lock is a second blob, `<key>.lock`, written only where none is
 (`If-None-Match: *`). When another run holds it, the error names that run and the blob to
 delete. To release it, Clay reads the lock, checks its id, and deletes it only if it is
-still the version it read (`If-Match`).
+still the version it read (`If-Match`). Azure and Azurite keep to both headers.
 
 Credentials come from the environment, by the names the `az` CLI uses:
 `AZURE_STORAGE_KEY` holds an account key, or `AZURE_STORAGE_SAS_TOKEN` a SAS token,

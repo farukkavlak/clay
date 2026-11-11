@@ -42,8 +42,15 @@ jobs:
       CLAY_S3_ENDPOINT: http://127.0.0.1:9000
       CLAY_S3_ACCESS_KEY: clay-test
       CLAY_S3_SECRET_KEY: clay-test-secret
+      # Azurite's well-known account and key, published and the same in every copy of it.
+      CLAY_AZURE_ENDPOINT: http://127.0.0.1:10000/devstoreaccount1
+      CLAY_AZURE_ACCOUNT: devstoreaccount1
+      CLAY_AZURE_KEY: Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==
     steps:
       - uses: actions/checkout@v5
+      # A service takes no arguments, and Azurite refuses the SDK's newer API version without one.
+      - name: Start Azurite
+        run: docker run -d -p 10000:10000 mcr.microsoft.com/azure-storage/azurite:3.37.0 azurite-blob --blobHost 0.0.0.0 --skipApiVersionCheck
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node }}
@@ -66,3 +73,8 @@ jobs:
         run: |
           timeout 60 sh -c 'until curl -sf "$CLAY_S3_ENDPOINT/health" > /dev/null; do sleep 1; done'
           npm run test:s3
+      - name: Test against Azure
+        # Any answer means it is up; Azurite has no health path, so no -f.
+        run: |
+          timeout 60 sh -c 'until curl -s -o /dev/null "$CLAY_AZURE_ENDPOINT"; do sleep 1; done'
+          npm run test:azure

@@ -24,6 +24,7 @@
     "lint": "eslint . --max-warnings 0",
     "test": "npm run test --workspaces --if-present && vitest run --dir tests && vitest run --config vitest.timing.config.mts",
     "test:s3": "vitest run --config vitest.s3.config.mts",
+    "test:azure": "vitest run --config vitest.azure.config.mts",
     "type:check": "tsc --noEmit",
     "prepare": "husky"
   },

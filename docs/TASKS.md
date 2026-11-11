@@ -1065,7 +1065,7 @@ Terraform has it since backends replaced `-state`.
       the lock a blob beside the state, written only where none is
 - [ ] The Azure backend signs in with Entra ID (`az login`, a managed identity, OIDC in
       CI), which many accounts require once shared keys are turned off
-- [ ] CI runs the Azure backend tests against Azurite as well as the fake server
+- [x] CI runs the Azure backend tests against Azurite as well as the fake server
 
 ### Safety
 
