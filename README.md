@@ -276,6 +276,7 @@ npm ci
 npm run build
 npm test
 npm run test:s3
+npm run test:azure
 npm run lint
 npm run type:check
 npm run format
@@ -289,6 +290,15 @@ the tests that need a real S3 server, at `CLAY_S3_ENDPOINT` with the keys in
 ```sh
 docker run -d -p 9000:9000 -e RUSTFS_ACCESS_KEY=clay-test -e RUSTFS_SECRET_KEY=clay-test-secret rustfs/rustfs:1.0.0
 CLAY_S3_ENDPOINT=http://127.0.0.1:9000 CLAY_S3_ACCESS_KEY=clay-test CLAY_S3_SECRET_KEY=clay-test-secret npm run test:s3
+```
+
+`npm run test:azure` runs the tests that need a real Azure Blob server, at
+`CLAY_AZURE_ENDPOINT` with the account in `CLAY_AZURE_ACCOUNT` and its key in
+`CLAY_AZURE_KEY`. CI starts Azurite for them; locally, with Azurite's own account and key:
+
+```sh
+docker run -d -p 10000:10000 mcr.microsoft.com/azure-storage/azurite:3.37.0 azurite-blob --blobHost 0.0.0.0 --skipApiVersionCheck
+CLAY_AZURE_ENDPOINT=http://127.0.0.1:10000/devstoreaccount1 CLAY_AZURE_ACCOUNT=devstoreaccount1 CLAY_AZURE_KEY=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw== npm run test:azure
 ```
 
 `docs/TASKS.md` lists what comes next.
