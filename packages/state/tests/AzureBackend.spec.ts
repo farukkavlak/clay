@@ -18,8 +18,8 @@ const KEY: AzureCredential = { accountKey: Buffer.from('test-key').toString('bas
 describe('a state kept in Azure Blob storage', () => {
   let server: AzureStateServer;
 
-  const backendOn = (limits: AzureLimits = ONCE, credential: AzureCredential | null = KEY, container = 'state') =>
-    new AzureBackend({ account: server.account, container, key: 'env/state.json', endpoint: new URL(server.url), credential: credential ?? undefined }, limits);
+  const backendOn = (limits: AzureLimits = ONCE, credential: AzureCredential = KEY, container = 'state') =>
+    new AzureBackend({ account: server.account, container, key: 'env/state.json', endpoint: new URL(server.url), credential }, limits);
 
   const at = () => `${server.url}/state/env/state.json`;
   const lockAt = () => `${at()}.lock`;
@@ -161,11 +161,6 @@ describe('a state kept in Azure Blob storage', () => {
     server.override('GET /state/env/state.json', { hang: true });
 
     expect(await backendOn({ timeout: 1, attempts: 2, wait: 0 }).read()).toEqual(stateWith(2));
-  });
-
-  it('says where to give credentials, where none are, and sends nothing', async () => {
-    await expect(backendOn(ONCE, null).read()).rejects.toThrow(`GetBlob ${at()} found no Azure credentials; give them in AZURE_STORAGE_KEY or AZURE_STORAGE_SAS_TOKEN`);
-    expect(server.received).toEqual([]);
   });
 
   describe('its lock', () => {

@@ -15,8 +15,8 @@ type Sdk = typeof import('@azure/storage-blob', { with: { 'resolution-mode': 'im
 export const ACCOUNT_KEY = 'AZURE_STORAGE_KEY';
 export const SAS_TOKEN = 'AZURE_STORAGE_SAS_TOKEN';
 
-/** A shared key signs each request; a SAS token is sent with each. */
-export type AzureCredential = { readonly accountKey: string } | { readonly sasToken: string };
+/** A shared key signs each request, a SAS token is sent with each, and Entra ID gives a token for the identity the machine is signed in as. */
+export type AzureCredential = { readonly accountKey: string } | { readonly sasToken: string } | { readonly entraId: true };
 
 export interface AzureSettings {
   readonly account: string;
@@ -24,8 +24,7 @@ export interface AzureSettings {
   readonly key: string;
   /** Unset for Azure itself. */
   readonly endpoint?: URL;
-  /** Undefined where the environment holds none, which the first request then says. */
-  readonly credential: AzureCredential | undefined;
+  readonly credential: AzureCredential;
 }
 
 /** How long a try may take and how often a request is sent in all, and the wait before the second try, doubled after each. */
@@ -60,6 +59,11 @@ interface Connection {
 /** Azure answers a write where a blob is with 409, and a server that keeps to the header alone with 412. */
 const isTaken = (refused: RestError) => refused.code === 'BlobAlreadyExists' || refused.code === 'ConditionNotMet';
 
+/** The errors Entra ID signs in with, which come before any request is sent. */
+const SIGN_IN = new Set(['AggregateAuthenticationError', 'AuthenticationError', 'CredentialUnavailableError']);
+
+const isSignIn = (error: unknown): error is Error => error instanceof Error && SIGN_IN.has(error.name);
+
 /** Only a missing blob is no state; a missing container is an error. */
 const isMissing = (refused: RestError) => refused.code === 'BlobNotFound';
 
@@ -68,13 +72,16 @@ const triedOf = (tried: number) => (tried > 1 ? ` after ${tried} tries` : '');
 /** Azure's own address, or the endpoint's, with no "/" at the end. */
 const baseOf = ({ account, endpoint }: AzureSettings) => (endpoint === undefined ? `https://${account}.blob.core.windows.net` : endpoint.href.replace(/\/$/, ''));
 
-/** The SDK sends a request once, as each try is timed here. */
-function containerOf(sdk: Sdk, settings: AzureSettings, credential: AzureCredential): ContainerClient {
+/** The SDK sends a request once, as each try is timed here. Entra ID is loaded only where it signs in. */
+async function containerOf(sdk: Sdk, settings: AzureSettings): Promise<ContainerClient> {
+  const { credential } = settings;
   const url = `${baseOf(settings)}/${settings.container}`;
   const options = { retryOptions: { maxTries: 1 } };
   if ('accountKey' in credential) return new sdk.ContainerClient(url, new sdk.StorageSharedKeyCredential(settings.account, credential.accountKey), options);
+  if ('sasToken' in credential) return new sdk.ContainerClient(`${url}?${credential.sasToken}`, new sdk.AnonymousCredential(), options);
 
-  return new sdk.ContainerClient(`${url}?${credential.sasToken}`, new sdk.AnonymousCredential(), options);
+  const { DefaultAzureCredential } = await import('@azure/identity');
+  return new sdk.ContainerClient(url, new DefaultAzureCredential(), options);
 }
 
 /** The state is one blob, and its lock another beside it, written only where none is. */
@@ -211,9 +218,9 @@ export class AzureBackend implements StateBackend {
 
   /** No answer, a 429 or a 5xx is tried again; an error Azure answered at the last try is handed back, and no answer is thrown. */
   private async send<T>(operation: string, at: string, request: Request<T>): Promise<Outcome<T>> {
-    const connection = await this.connected(operation, at);
+    const connection = await this.connected();
     for (let tried = 1; ; tried += 1) {
-      const attempt = await this.attempt(connection, request, tried);
+      const attempt = await this.attempt(connection, request, tried, `${operation} ${at}`);
       const passes = 'lost' in attempt || (attempt.refused !== undefined && passing(attempt.refused.statusCode ?? 0));
       if (!passes || tried === this.limits.attempts) {
         if ('lost' in attempt) throw new NoAnswer(`${operation} ${at} got no answer (${attempt.lost})${triedOf(tried)}`, attempt.cause);
@@ -226,12 +233,16 @@ export class AzureBackend implements StateBackend {
   }
 
   /** The SDK answers a refusal with a status, and a request that got no answer with none. */
-  private async attempt<T>({ sdk, container }: Connection, request: Request<T>, tried: number): Promise<Attempt<T>> {
+  private async attempt<T>({ sdk, container }: Connection, request: Request<T>, tried: number, asked: string): Promise<Attempt<T>> {
     const abortSignal = AbortSignal.timeout(this.limits.timeout * 1000);
     try {
       return { output: await request(container, abortSignal) };
     } catch (error) {
       if (abortSignal.aborted) return { lost: `timed out after ${this.limits.timeout}s`, cause: error };
+      if (isSignIn(error))
+        throw new Error(`${asked} could not sign in with Entra ID, which is used where neither ${ACCOUNT_KEY} nor ${SAS_TOKEN} is set:\n${error.message}`, {
+          cause: error,
+        });
       if (!(error instanceof sdk.RestError)) throw error;
 
       return error.statusCode === undefined ? { lost: error.code ?? error.message, cause: error } : { refused: error, tried };
@@ -239,16 +250,18 @@ export class AzureBackend implements StateBackend {
   }
 
   /** The SDK is loaded by the first request, so a run with no Azure backend never loads it. */
-  private async connected(operation: string, at: string): Promise<Connection> {
-    const { credential } = this.settings;
-    if (credential === undefined) throw new Error(`${operation} ${at} found no Azure credentials; give them in ${ACCOUNT_KEY} or ${SAS_TOKEN}`);
-
-    this.connection ??= import('@azure/storage-blob').then((sdk) => ({ sdk, container: containerOf(sdk, this.settings, credential) }));
+  private async connected(): Promise<Connection> {
+    this.connection ??= import('@azure/storage-blob').then(async (sdk) => ({ sdk, container: await containerOf(sdk, this.settings) }));
     return this.connection;
   }
 
+  /** Azure refuses an identity with no data role as it refuses a SAS token without the permission. */
   private unexpected(operation: string, at: string, { refused, tried }: Refused): Error {
     const message = refused.message.replaceAll('\n', ' ');
-    return new Error(`${operation} ${at} answered ${refused.statusCode} ${refused.code ?? 'with no code'}${triedOf(tried)}: ${message}`, { cause: refused });
+    const role =
+      'entraId' in this.settings.credential && refused.code === 'AuthorizationPermissionMismatch'
+        ? `; the signed-in identity needs a data role on the container, such as Storage Blob Data Contributor`
+        : '';
+    return new Error(`${operation} ${at} answered ${refused.statusCode} ${refused.code ?? 'with no code'}${triedOf(tried)}: ${message}${role}`, { cause: refused });
   }
 }

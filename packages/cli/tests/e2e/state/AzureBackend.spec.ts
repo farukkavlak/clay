@@ -108,11 +108,14 @@ describe('a state kept in Azure Blob storage', () => {
     expect(server.received.map(({ signed }) => signed)).toEqual(server.received.map(() => 'sas'));
   });
 
-  it('is refused where no credentials are found, naming where to give them', async () => {
+  it('is refused over http where no key or token is given, as Entra ID signs in over https alone', async () => {
     const { code, stderr } = await run({}, 'init');
 
     expect(code).toBe(1);
-    expect(stderr).toContain('found no Azure credentials; give them in AZURE_STORAGE_KEY or AZURE_STORAGE_SAS_TOKEN');
+    expect(stderr).toContain(
+      'endpoint of backend "azure" is http, and an Entra ID token is sent over https alone; over http, give a key in AZURE_STORAGE_KEY or a token in AZURE_STORAGE_SAS_TOKEN'
+    );
+    expect(stderr).toContain('on main.clay line 6');
     expect(server.received).toEqual([]);
     expect(await exists('.clay')).toBe(false);
   });
@@ -125,6 +128,16 @@ describe('a state kept in Azure Blob storage', () => {
     expect(code).toBe(1);
     expect(stderr).toContain(`GetBlob ${server.url}/state/env/state.json answered 403 AuthenticationFailed`);
     expect(await exists('.clay')).toBe(false);
+  });
+
+  it('names no data role where Azure refuses a key, which has none', async () => {
+    server.override('GET /state/env/state.json', { status: 403, code: 'AuthorizationPermissionMismatch' });
+
+    const { code, stderr } = await clayWith('init');
+
+    expect(code).toBe(1);
+    expect(stderr).toContain(`GetBlob ${server.url}/state/env/state.json answered 403 AuthorizationPermissionMismatch`);
+    expect(stderr).not.toContain('data role');
   });
 
   it('takes a local state into the container with init --yes', async () => {
@@ -141,5 +154,78 @@ describe('a state kept in Azure Blob storage', () => {
     expect(server.text('state/env/state.json.lock')).toBeUndefined();
     const plan = await clayWith('plan');
     expect(plan.stdout).toContain('No changes');
+  });
+
+  describe('signed in with Entra ID', () => {
+    const TOKEN = 'entra-test-token';
+    const testCa = path.join(__dirname, '../../../../../tests/tls/ca.pem');
+    let tls: AzureStateServer;
+    let bin: string;
+
+    /** An `az` that writes down what it was asked and answers with a token, or fails as it does before `az login`. */
+    const fakeAz = (signedIn: boolean) => {
+      const answer = signedIn
+        ? `echo '{"accessToken": "${TOKEN}", "expires_on": ${Math.floor(Date.now() / 1000) + 3600}, "tokenType": "Bearer"}'`
+        : `echo "ERROR: Please run 'az login' to setup account." >&2\nexit 1`;
+      return fs.writeFile(path.join(bin, 'az'), `#!/bin/sh\necho "$@" >> "${path.join(bin, 'asked')}"\n${answer}\n`, { mode: 0o755 });
+    };
+
+    /** Entra ID tries the az CLI alone, so no identity of the machine the tests run on is asked. */
+    const runSignedIn = (...args: string[]) =>
+      run({ AZURE_TOKEN_CREDENTIALS: 'AzureCliCredential', NODE_EXTRA_CA_CERTS: testCa, PATH: `${bin}${path.delimiter}${process.env.PATH}` }, ...args);
+
+    beforeEach(async () => {
+      tls = await AzureStateServer.start({ tls: true });
+      bin = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-azure-az-'));
+      await fs.writeFile(
+        path.join(dir, 'main.clay'),
+        `clay {\n  backend "azure" {\n    storage_account_name = "${tls.account}"\n    container_name       = "state"\n    key                  = "env/state.json"\n    endpoint             = "${tls.url}"\n  }\n}\n${FILE}`,
+        'utf8'
+      );
+    });
+
+    afterEach(async () => {
+      await tls.stop();
+      await fs.rm(bin, { recursive: true, force: true });
+    });
+
+    it('sends the token az gives for Azure Storage, where no key or SAS token is set', async () => {
+      await fakeAz(true);
+
+      await runSignedIn('init');
+      const { code, stdout } = await runSignedIn('apply', '--yes');
+
+      expect(code).toBe(0);
+      expect(stdout).toContain('Apply complete! Resources: 1 added');
+      expect(Object.keys((JSON.parse(tls.text('state/env/state.json')!) as { resources: object }).resources)).toEqual(['local_file.f']);
+      expect(tls.received.length).toBeGreaterThan(0);
+      expect(tls.received.map(({ signed, token }) => `${signed} ${token}`)).toEqual(tls.received.map(() => `entra ${TOKEN}`));
+      expect(await fs.readFile(path.join(bin, 'asked'), 'utf8')).toContain('--resource https://storage.azure.com');
+    });
+
+    it('says why Entra ID could not sign in, and sends nothing', async () => {
+      await fakeAz(false);
+
+      const { code, stderr } = await runSignedIn('init');
+
+      expect(code).toBe(1);
+      expect(stderr).toContain(
+        `GetBlob ${tls.url}/state/env/state.json could not sign in with Entra ID, which is used where neither AZURE_STORAGE_KEY nor AZURE_STORAGE_SAS_TOKEN is set:`
+      );
+      expect(stderr).toContain("Please run 'az login'");
+      expect(tls.received).toEqual([]);
+      expect(await exists('.clay')).toBe(false);
+    });
+
+    it('names the data role an identity Azure refuses needs', async () => {
+      await fakeAz(true);
+      tls.override('GET /state/env/state.json', { status: 403, code: 'AuthorizationPermissionMismatch' });
+
+      const { code, stderr } = await runSignedIn('init');
+
+      expect(code).toBe(1);
+      expect(stderr).toContain(`GetBlob ${tls.url}/state/env/state.json answered 403 AuthorizationPermissionMismatch`);
+      expect(stderr).toContain('the signed-in identity needs a data role on the container, such as Storage Blob Data Contributor');
+    });
   });
 });

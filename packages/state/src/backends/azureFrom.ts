@@ -72,26 +72,36 @@ function endpointOf(settings: Settings): URL | undefined {
   return url;
 }
 
-/** The key or the token, from the environment alone: the configuration is checked in. */
-function credentialFrom(env: Environment): AzureCredential | undefined {
+/** The key or the token, from the environment alone: the configuration is checked in. Without either, Entra ID signs in. */
+function credentialFrom(env: Environment): AzureCredential {
   const accountKey = variable(env, ACCOUNT_KEY);
   const sasToken = variable(env, SAS_TOKEN);
   if (accountKey !== undefined && sasToken !== undefined) throw new Error(`${ACCOUNT_KEY} and ${SAS_TOKEN} are both set; backend "azure" takes one of them`);
   if (accountKey !== undefined && (!BASE64.test(accountKey) || accountKey.length % 4 !== 0)) throw new Error(`${ACCOUNT_KEY} is not base64, as an account key is`);
   if (accountKey !== undefined) return { accountKey };
 
-  return sasToken === undefined ? undefined : { sasToken: sasToken.replace(/^\?/, '') };
+  return sasToken === undefined ? { entraId: true } : { sasToken: sasToken.replace(/^\?/, '') };
+}
+
+/** The SDK sends an Entra ID token over https alone. */
+function checkSignedOver(settings: Settings, endpoint: URL | undefined, credential: AzureCredential): void {
+  if (endpoint?.protocol === 'http:' && 'entraId' in credential)
+    settings.refuse(
+      `endpoint of backend "azure" is http, and an Entra ID token is sent over https alone; over http, give a key in ${ACCOUNT_KEY} or a token in ${SAS_TOKEN}`,
+      'endpoint'
+    );
 }
 
 export function azureFrom(settings: Settings, _workingDir: string, env: Environment): AzureBackend {
   checkNoSecrets(settings);
   checkNames(settings, TAKES);
 
-  return new AzureBackend({
-    account: accountOf(settings),
-    container: containerOf(settings),
-    key: keyOf(settings),
-    endpoint: endpointOf(settings),
-    credential: credentialFrom(env),
-  });
+  const account = accountOf(settings);
+  const container = containerOf(settings);
+  const key = keyOf(settings);
+  const endpoint = endpointOf(settings);
+  const credential = credentialFrom(env);
+  checkSignedOver(settings, endpoint, credential);
+
+  return new AzureBackend({ account, container, key, endpoint, credential });
 }
