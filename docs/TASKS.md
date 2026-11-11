@@ -1096,10 +1096,9 @@ Terraform has it since backends replaced `-state`.
       and AWS's 409 was an error. It now reads the lock again and decides from what is there
 - [x] An S3 key of 1020 to 1024 bytes was taken, but its lock, `<key>.lock`, is longer than
       S3 holds, so no run could take the lock. A key is now 1019 bytes at most, in UTF-8
-- [ ] Every command now takes and releases the lock itself, so the engine's own locking
-      (`Orchestrator.plan`, `runPlan` without a held lock, `writeIfAbsent`) is reached
-      only from tests. Drop it and have the engine require a held lock, or keep it as the
-      library's way to run
+- [x] Every command takes and releases the lock itself, so the engine's own locking was
+      reached only from tests. A plan, a run and every write through the state manager now
+      refuse to start when the caller holds no lock, and take none of their own
 - [ ] The state is renamed into place, and the journal appended to, without an fsync, so
       a power loss may leave either empty on a file system that reorders writes
 

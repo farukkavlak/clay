@@ -45,6 +45,7 @@ export class StateManager {
     if (!append) return this.write(state);
 
     return this.inTurn(async () => {
+      this.requireLock('A write');
       if (this.journalBroken) {
         await this.save(state);
         return;
@@ -75,6 +76,7 @@ export class StateManager {
    * Writes this Clay's version, since the state may now hold what an older one cannot read.
    */
   private async save(state: State): Promise<void> {
+    this.requireLock('A write');
     const serial = state.serial + 1;
     state.version = STATE_VERSION;
     await this.backend.write({ version: state.version, serial, outputs: state.outputs, resources: state.resources, deposed: state.deposed });
@@ -85,7 +87,8 @@ export class StateManager {
 
   /** Under the lock, so a backend that cannot check and write in one step has no run write in between. */
   async writeIfAbsent(state: State): Promise<boolean> {
-    return this.whileLocked('init', () => this.backend.writeIfAbsent(state));
+    this.requireLock('A write');
+    return this.backend.writeIfAbsent(state);
   }
 
   /** `operation` names the command, so a run the lock stops can say what holds it. */
@@ -169,21 +172,9 @@ export class StateManager {
     return this.lockId !== undefined;
   }
 
-  /**
-   * Runs `work` under the lock and releases it however `work` ends, keeping its failure. A lock this manager already holds is its
-   * caller's to release.
-   */
-  async whileLocked<T>(operation: string, work: () => Promise<T>): Promise<T> {
-    if (this.held) return work();
-
-    await this.lock(operation);
-    try {
-      return await work();
-    } catch (error) {
-      return await this.unlockAfter(error);
-    } finally {
-      await this.unlock();
-    }
+  /** Refuses work on the state that the caller has not taken the lock for. */
+  requireLock(what: string): void {
+    if (!this.held) throw new Error(`${what} needs the state lock, and none is held`);
   }
 
   /** For a `catch`: releases the lock and throws `failure` again, beside the unlock's own error if that fails too. */

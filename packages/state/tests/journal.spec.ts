@@ -27,6 +27,7 @@ describe('the journal', () => {
   beforeEach(async () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-journal-'));
     manager = new StateManager(new LocalBackend(tmpDir));
+    await manager.lock('apply');
     state = emptyState();
     state.resources['rt.a'] = resource('a');
     await manager.write(state);
@@ -138,6 +139,7 @@ describe('the journal', () => {
       await manager.record(state, 'rt.b');
       const stopped = structuredClone(state);
 
+      await manager.unlock();
       await manager.lock('apply');
       await manager.write(emptyState());
 
@@ -231,7 +233,9 @@ describe('the journal', () => {
       };
       state.resources['rt.b'] = resource('b');
 
-      await new StateManager(whole).record(state, 'rt.b');
+      const wholeManager = new StateManager(whole);
+      await wholeManager.lock('apply');
+      await wholeManager.record(state, 'rt.b');
 
       expect(written.map((given) => Object.keys(given.resources))).toEqual([['rt.a', 'rt.b']]);
     });

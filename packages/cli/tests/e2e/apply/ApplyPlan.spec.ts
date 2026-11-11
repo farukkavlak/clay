@@ -1,5 +1,5 @@
 import { Output, types } from '@clay/contracts';
-import { LocalBackend, newLockInfo } from '@clay/state';
+import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -510,72 +510,5 @@ describe('apply and plan against real files', () => {
     for await (const event of start(orchestrator, secondFails())) events.push('action' in event ? `${event.type} ${event.action.name}` : event.type);
 
     expect(events).toEqual(['planned', 'started a', 'applied a', 'started b', 'failed b']);
-  });
-
-  const lockFile = () => path.join(dir, 'clay.state.json.lock');
-
-  it('refuses a second run while one holds the state', async () => {
-    const first = start(orchestrator, fileConfig('hello'));
-    await first.next();
-
-    await expect(apply(newOrchestrator(), fileConfig('hello'))).rejects.toThrow(
-      `State is locked by apply of ${os.userInfo().username} on ${os.hostname()}, pid ${process.pid}, since `
-    );
-
-    await first.return(undefined);
-  });
-
-  it('releases the lock when a run finishes', async () => {
-    await apply(orchestrator, fileConfig('hello'));
-
-    await expect(fs.access(lockFile())).rejects.toThrow();
-  });
-
-  it('releases the lock when a run fails', async () => {
-    await expect(apply(orchestrator, secondFails())).rejects.toThrow();
-
-    await expect(fs.access(lockFile())).rejects.toThrow();
-  });
-
-  it("leaves the lock of a run that took it once this run's was removed", async () => {
-    const run = start(orchestrator, fileConfig('hello'));
-    await run.next();
-    const other = newLockInfo('apply');
-    await fs.writeFile(lockFile(), JSON.stringify(other));
-
-    await expect(run.return(undefined)).rejects.toThrow(`${lockFile()} holds a lock this run did not take, so it is left in place`);
-
-    expect(JSON.parse(await fs.readFile(lockFile(), 'utf8'))).toEqual(other);
-  });
-
-  it('fails with what stopped the run, and releases the lock', async () => {
-    const run = start(orchestrator, fileConfig('hello'));
-    await run.next();
-
-    await expect(run.throw(new Error('stopped'))).rejects.toThrow('stopped');
-
-    await expect(fs.access(lockFile())).rejects.toThrow();
-  });
-
-  it('keeps what stopped the run beside an unlock that fails too', async () => {
-    const run = start(orchestrator, fileConfig('hello'));
-    await run.next();
-    await fs.writeFile(lockFile(), JSON.stringify(newLockInfo('apply')));
-
-    const thrown: unknown = await run.throw(new Error('stopped')).catch((error: unknown) => error);
-
-    expect(thrown).toBeInstanceOf(AggregateError);
-    const messages = ((thrown as AggregateError).errors as Error[]).map((error) => error.message);
-    expect(messages).toEqual(['stopped', `${lockFile()} holds a lock this run did not take, so it is left in place`]);
-  });
-
-  it('holds the lock while running and releases it when the caller stops reading', async () => {
-    const run = start(orchestrator, fileConfig('hello'));
-    await run.next();
-    await expect(fs.access(lockFile())).resolves.toBeUndefined();
-
-    await run.return(undefined);
-
-    await expect(fs.access(lockFile())).rejects.toThrow();
   });
 });

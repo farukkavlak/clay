@@ -10,6 +10,7 @@ import { DiskFiles, InMemoryFiles, Orchestrator, RunEvent, RunOptions } from '..
 export class TestEngine {
   constructor(
     private engine: Orchestrator,
+    private manager: StateManager,
     private write: (config: string) => Promise<void>
   ) {}
 
@@ -19,7 +20,7 @@ export class TestEngine {
 
   async plan(config: string, options?: { refresh?: boolean }): Promise<Plan> {
     await this.write(config);
-    return this.engine.plan(options);
+    return this.locked('plan', () => this.engine.plan(options));
   }
 
   async validate(config: string): Promise<void> {
@@ -29,18 +30,44 @@ export class TestEngine {
 
   async *runPlan(saved: Plan, config: string, options?: RunOptions): AsyncGenerator<RunEvent> {
     await this.write(config);
-    yield* this.engine.runPlan(saved, options);
+    if (this.manager.held) {
+      yield* this.engine.runPlan(saved, options);
+      return;
+    }
+
+    await this.manager.lock('apply');
+    try {
+      yield* this.engine.runPlan(saved, options);
+    } catch (error) {
+      await this.manager.unlockAfter(error);
+    } finally {
+      await this.manager.unlock();
+    }
+  }
+
+  /** As a command runs it: under a lock taken for the call, unless the test holds one. */
+  private async locked<T>(operation: string, work: () => Promise<T>): Promise<T> {
+    if (this.manager.held) return work();
+
+    await this.manager.lock(operation);
+    try {
+      return await work();
+    } catch (error) {
+      return await this.manager.unlockAfter(error);
+    } finally {
+      await this.manager.unlock();
+    }
   }
 }
 
 /** An engine reading `files`, which main.clay is put into. */
 export function engineOn(stateManager: StateManager, files: Record<string, string> = {}): TestEngine {
-  return new TestEngine(Orchestrator.create(stateManager, new InMemoryFiles(files)), async (config) => {
+  return new TestEngine(Orchestrator.create(stateManager, new InMemoryFiles(files)), stateManager, async (config) => {
     files['main.clay'] = config;
   });
 }
 
 /** An engine reading the files in `dir`. */
 export function engineIn(stateManager: StateManager, dir: string): TestEngine {
-  return new TestEngine(Orchestrator.create(stateManager, new DiskFiles(dir)), (config) => fs.writeFile(path.join(dir, 'main.clay'), config, 'utf8'));
+  return new TestEngine(Orchestrator.create(stateManager, new DiskFiles(dir)), stateManager, (config) => fs.writeFile(path.join(dir, 'main.clay'), config, 'utf8'));
 }

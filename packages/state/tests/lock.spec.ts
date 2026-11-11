@@ -3,7 +3,6 @@ import * as fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import { emptyState } from '@clay/contracts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocalBackend } from '../src/backends/LocalBackend';
@@ -30,17 +29,6 @@ describe('the state lock', () => {
   afterEach(async () => {
     vi.restoreAllMocks();
     await fs.rm(dir, { recursive: true, force: true });
-  });
-
-  it('is taken by the first state init writes, and released', async () => {
-    await leave(holder());
-
-    await expect(manager.writeIfAbsent(emptyState())).rejects.toThrow('State is locked by state rm');
-    await expect(fs.access(path.join(dir, 'clay.state.json'))).rejects.toThrow('ENOENT');
-
-    await fs.rm(lockPath());
-    expect(await manager.writeIfAbsent(emptyState())).toBe(true);
-    await expect(fs.access(lockPath())).rejects.toThrow('ENOENT');
   });
 
   it('says which run took it, where, and when', async () => {
@@ -245,72 +233,6 @@ describe('the state lock', () => {
       await manager.unlock();
 
       await expect(fs.access(lockPath())).rejects.toThrow(/ENOENT/);
-    });
-  });
-
-  describe('held for a piece of work', () => {
-    const other = holder({ operation: 'apply' });
-
-    it('is taken for the work, named for it, and released once the work is done', async () => {
-      const seen = await manager.whileLocked('plan', async () => {
-        const { operation } = await held();
-        return operation;
-      });
-
-      expect(seen).toBe('plan');
-      await expect(fs.access(lockPath())).rejects.toThrow(/ENOENT/);
-    });
-
-    it('is released when the work fails, and the failure is thrown', async () => {
-      const failure = new Error('the plan failed');
-
-      await expect(manager.whileLocked('plan', () => Promise.reject(failure))).rejects.toBe(failure);
-      await expect(fs.access(lockPath())).rejects.toThrow(/ENOENT/);
-    });
-
-    it('keeps the failure of the work beside an unlock that fails too', async () => {
-      const failure = new Error('the plan failed');
-
-      const thrown: unknown = await manager
-        .whileLocked('plan', async () => {
-          await leave(other);
-          throw failure;
-        })
-        .catch((error: unknown) => error);
-
-      expect(thrown).toBeInstanceOf(AggregateError);
-      expect((thrown as AggregateError).errors[0]).toBe(failure);
-    });
-
-    it('runs no work while another run holds it', async () => {
-      await leave(holder());
-      let ran = false;
-
-      await expect(
-        manager.whileLocked('plan', async () => {
-          ran = true;
-        })
-      ).rejects.toThrow('State is locked by state rm');
-      expect(ran).toBe(false);
-    });
-
-    it('runs under the lock the manager already holds, and leaves it held', async () => {
-      await manager.lock('apply');
-
-      const seen = await manager.whileLocked('plan', held);
-
-      expect(seen.operation).toBe('apply');
-      expect(manager.held).toBe(true);
-      expect(await held()).toEqual(seen);
-    });
-
-    it('leaves the lock the manager already holds when the work fails', async () => {
-      await manager.lock('apply');
-      const failure = new Error('the plan failed');
-
-      await expect(manager.whileLocked('plan', () => Promise.reject(failure))).rejects.toBe(failure);
-      expect(manager.held).toBe(true);
-      expect(await held()).toMatchObject({ operation: 'apply' });
     });
   });
 

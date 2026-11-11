@@ -16,6 +16,7 @@ export const clay = path.resolve(__dirname, '../../bin/clay.js');
 export class TestEngine {
   constructor(
     private engine: Orchestrator,
+    private manager: StateManager,
     private write: (config: string) => Promise<void>
   ) {}
 
@@ -25,7 +26,7 @@ export class TestEngine {
 
   async plan(config: string, options?: PlanOptions): Promise<Plan> {
     await this.write(config);
-    return this.engine.plan(options);
+    return this.locked('plan', () => this.engine.plan(options));
   }
 
   async validate(config: string): Promise<void> {
@@ -35,18 +36,45 @@ export class TestEngine {
 
   async *runPlan(saved: Plan, config: string, options?: RunOptions): AsyncGenerator<RunEvent> {
     await this.write(config);
-    yield* this.engine.runPlan(saved, options);
+    if (this.manager.held) {
+      yield* this.engine.runPlan(saved, options);
+      return;
+    }
+
+    await this.manager.lock('apply');
+    try {
+      yield* this.engine.runPlan(saved, options);
+    } catch (error) {
+      await this.manager.unlockAfter(error);
+    } finally {
+      await this.manager.unlock();
+    }
+  }
+
+  /** As a command runs it: under a lock taken for the call, unless the test holds one. */
+  private async locked<T>(operation: string, work: () => Promise<T>): Promise<T> {
+    if (this.manager.held) return work();
+
+    await this.manager.lock(operation);
+    try {
+      return await work();
+    } catch (error) {
+      return await this.manager.unlockAfter(error);
+    } finally {
+      await this.manager.unlock();
+    }
   }
 }
 
-/** `engine`, driven with each configuration written to main.clay in `dir`. */
-export function engineIn(dir: string, engine: Orchestrator): TestEngine {
-  return new TestEngine(engine, (config) => fs.writeFile(path.join(dir, 'main.clay'), config, 'utf8'));
+/** An engine on the state and the files in `dir`, driven with each configuration written to main.clay there. */
+export function engineIn(dir: string): TestEngine {
+  const manager = new StateManager(new LocalBackend(dir));
+  return new TestEngine(Orchestrator.create(manager, new DiskFiles(dir)), manager, (config) => fs.writeFile(path.join(dir, 'main.clay'), config, 'utf8'));
 }
 
 /** An engine on the state and the files in `dir`, with the providers given, or the local one where none is. */
 export function orchestratorIn(dir: string, ...providers: Provider[]): TestEngine {
-  const engine = engineIn(dir, Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir)));
+  const engine = engineIn(dir);
   for (const provider of providers.length > 0 ? providers : [new LocalProvider()]) engine.registerProvider(provider);
   return engine;
 }

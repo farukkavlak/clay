@@ -1,5 +1,5 @@
 import { STATE_VERSION } from '@clay/contracts';
-import { LocalBackend } from '@clay/state';
+import { LocalBackend, newLockInfo } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -55,5 +55,20 @@ describe('init against real files', () => {
 
     expect(await new LocalBackend(dir).read()).toEqual(stateWithResource);
     expect(vi.mocked(console.log).mock.calls.flat().join('\n')).toContain('Kept the state already here');
+  });
+
+  it('writes no state while another run holds the lock, and leaves that lock', async () => {
+    const lock = JSON.stringify({ ...newLockInfo('apply'), host: 'elsewhere' });
+    await fs.writeFile(path.join(dir, 'clay.state.json.lock'), lock);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // init exits the process when it fails, which would take the test runner with it.
+    vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
+
+    await init();
+
+    expect(process.exit).toHaveBeenCalledWith(1);
+    expect(vi.mocked(console.error).mock.calls.flat().join('\n')).toContain('State is locked by apply');
+    expect(await fs.readdir(dir)).toEqual(['clay.state.json.lock']);
+    expect(await fs.readFile(path.join(dir, 'clay.state.json.lock'), 'utf8')).toBe(lock);
   });
 });
