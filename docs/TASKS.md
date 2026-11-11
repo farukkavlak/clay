@@ -1063,8 +1063,10 @@ Terraform has it since backends replaced `-state`.
 - [x] CI runs the S3 backend tests against a real S3 server (RustFS) as well as the fake one
 - [x] An Azure Blob backend, with an account key or a SAS token from the environment, and
       the lock a blob beside the state, written only where none is
-- [ ] The Azure backend signs in with Entra ID (`az login`, a managed identity, OIDC in
+- [x] The Azure backend signs in with Entra ID (`az login`, a managed identity, OIDC in
       CI), which many accounts require once shared keys are turned off
+- [ ] The Azure backend takes the OIDC token of the CI itself, as Terraform's `use_oidc`
+      does, so a job needs no `az` and runs past the hour an `azure/login` token lasts
 - [x] CI runs the Azure backend tests against Azurite as well as the fake server
 
 ### Safety

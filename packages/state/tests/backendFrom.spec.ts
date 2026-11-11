@@ -298,10 +298,30 @@ describe('backendFrom', () => {
     });
 
     it('takes an endpoint, for a server other than Azure', () => {
-      const backend = backendFrom(azure(`${PLACE}\n    endpoint = "http://127.0.0.1:10000/acme/"`), dir, {});
+      const backend = backendFrom(azure(`${PLACE}\n    endpoint = "http://127.0.0.1:10000/acme/"`), dir, { AZURE_STORAGE_KEY: KEY });
 
       expect(backend.location).toBe('http://127.0.0.1:10000/acme/state/env/state.json');
       expect(backend.choice.settings).toMatchObject({ endpoint: 'http://127.0.0.1:10000/acme/' });
+    });
+
+    it.each([
+      ['an account key', { AZURE_STORAGE_KEY: KEY }],
+      ['a SAS token', { AZURE_STORAGE_SAS_TOKEN: 'sv=2024-11-04&sig=c2ln' }],
+    ])('takes an http endpoint with %s', (_title, env) => {
+      expect(backendFrom(azure(`${PLACE}\n    endpoint = "http://127.0.0.1:10000/acme"`), dir, env).location).toBe('http://127.0.0.1:10000/acme/state/env/state.json');
+    });
+
+    it('takes an https endpoint with neither, as Entra ID signs in', () => {
+      expect(backendFrom(azure(`${PLACE}\n    endpoint = "https://blob.local/acme"`), dir, {}).location).toBe('https://blob.local/acme/state/env/state.json');
+    });
+
+    it('refuses an http endpoint with neither, at the endpoint, as an Entra ID token is sent over https alone', () => {
+      const error = errorOf(azure(`${PLACE}\n    endpoint = "http://127.0.0.1:10000/acme"`));
+
+      expect(error.message).toBe(
+        'endpoint of backend "azure" is http, and an Entra ID token is sent over https alone; over http, give a key in AZURE_STORAGE_KEY or a token in AZURE_STORAGE_SAS_TOKEN'
+      );
+      expect(error.position).toMatchObject({ line: 6, column: 16 });
     });
 
     it.each([

@@ -1,7 +1,10 @@
 import { createHash } from 'node:crypto';
 import { once } from 'node:events';
+import { readFileSync } from 'node:fs';
 import { createServer, IncomingMessage, Server, ServerResponse } from 'node:http';
+import { createServer as createTlsServer } from 'node:https';
 import { AddressInfo } from 'node:net';
+import path from 'node:path';
 
 export interface AzureReceived {
   readonly method: string;
@@ -10,8 +13,10 @@ export interface AzureReceived {
   readonly ifMatch: string | undefined;
   readonly ifNoneMatch: string | undefined;
   readonly body: string;
-  /** `key` for a request signed with a shared key, `sas` for one that carries a SAS token. */
-  readonly signed: 'key' | 'sas' | undefined;
+  /** `key` for a request signed with a shared key, `sas` for one that carries a SAS token, `entra` for one with a bearer token. */
+  readonly signed: 'key' | 'sas' | 'entra' | undefined;
+  /** The bearer token the request carries. */
+  readonly token: string | undefined;
 }
 
 interface Stored {
@@ -77,9 +82,14 @@ function answerInstead(response: ServerResponse, override: Exclude<Override, { l
 
 const header = (request: IncomingMessage, name: string) => request.headers[name] as string | undefined;
 
+const certificate = (file: string) => readFileSync(path.join(__dirname, 'tls', file));
+
+const tokenOf = (request: IncomingMessage) => /^Bearer (.+)$/.exec(header(request, 'authorization') ?? '')?.[1];
+
 /** A SAS token holds at least its version and its signature. */
 function signedOf(request: IncomingMessage, url: URL, account: string): AzureReceived['signed'] {
   if ((header(request, 'authorization') ?? '').startsWith(`SharedKey ${account}:`)) return 'key';
+  if (tokenOf(request) !== undefined) return 'entra';
 
   return url.searchParams.has('sv') && url.searchParams.has('sig') ? 'sas' : undefined;
 }
@@ -94,15 +104,17 @@ export class AzureStateServer {
   private overrides = new Map<string, Override[]>();
   private server: Server;
 
-  private constructor(
-    readonly account: string,
-    private readonly containers: ReadonlySet<string>
-  ) {
-    this.server = createServer(this.answer.bind(this));
+  readonly account = 'clayaccount';
+  private readonly containers = new Set(['state']);
+
+  private constructor(private readonly tls: boolean) {
+    const listener = this.answer.bind(this);
+    this.server = tls ? createTlsServer({ key: certificate('server.key'), cert: certificate('server.pem') }, listener) : createServer(listener);
   }
 
-  static async start(account = 'clayaccount', ...containers: string[]): Promise<AzureStateServer> {
-    const server = new AzureStateServer(account, new Set(containers.length === 0 ? ['state'] : containers));
+  /** Over TLS, the server shows the certificate the test CA signed for 127.0.0.1, as a bearer token is sent over https alone. */
+  static async start({ tls = false }: { readonly tls?: boolean } = {}): Promise<AzureStateServer> {
+    const server = new AzureStateServer(tls);
     server.server.listen(0, '127.0.0.1');
     await once(server.server, 'listening');
     return server;
@@ -110,7 +122,7 @@ export class AzureStateServer {
 
   /** The endpoint a backend names, the account in its path. */
   get url(): string {
-    return `http://127.0.0.1:${(this.server.address() as AddressInfo).port}/${this.account}`;
+    return `${this.tls ? 'https' : 'http'}://127.0.0.1:${(this.server.address() as AddressInfo).port}/${this.account}`;
   }
 
   /** The text of the blob at `path`, as `container/blob`. */
@@ -139,7 +151,7 @@ export class AzureStateServer {
     const body = await read(request);
     const path = url.pathname.slice(this.account.length + 1);
     const signed = signedOf(request, url, this.account);
-    this.received.push({ method, path, ifMatch: header(request, 'if-match'), ifNoneMatch: header(request, 'if-none-match'), body, signed });
+    this.received.push({ method, path, ifMatch: header(request, 'if-match'), ifNoneMatch: header(request, 'if-none-match'), body, signed, token: tokenOf(request) });
 
     let override = this.overrides.get(`${method} ${path}`)?.shift();
     if (override !== undefined && 'before' in override) {

@@ -650,6 +650,40 @@ with or without its leading `?`. Setting both stops every command on the backend
 refuses `access_key` and `sas_token`. A SAS token needs read, create, write and delete on
 the container.
 
+With neither set, Clay signs in with Entra ID. This works on an account where shared keys
+are turned off. It tries, in this order:
+
+1. A service principal: `AZURE_TENANT_ID`, `AZURE_CLIENT_ID` and `AZURE_CLIENT_SECRET`,
+   or `AZURE_CLIENT_CERTIFICATE_PATH` in place of the secret
+2. AKS workload identity
+3. A managed identity, on an Azure VM, App Service or container
+4. `az login`, then `Connect-AzAccount` in PowerShell, then `azd auth login`
+
+`AZURE_TOKEN_CREDENTIALS` limits it to one of these, such as `AzureCliCredential` or
+`ManagedIdentityCredential`. The identity needs a data role on the container or the
+account, such as Storage Blob Data Contributor. A role like Owner or Contributor is not
+enough. An Entra ID token is sent over `https` only, so an `http` endpoint needs a key or
+a SAS token.
+
+In GitHub Actions, sign in with `azure/login` before Clay runs. Clay then uses the
+`az login` it leaves:
+
+```yaml
+permissions:
+  id-token: write
+  contents: read
+steps:
+  - uses: azure/login@v3
+    with:
+      client-id: ${{ secrets.AZURE_CLIENT_ID }}
+      tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+      subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  - run: clay apply --yes
+```
+
+The token this sign-in gives a service principal lasts one hour by default, so a job
+that runs longer after the step fails.
+
 A request that gets no answer, a 429 or a 5xx other than 501 is sent up to three times in
 all. The wait before the second try is one second, and it doubles after each try. One try
 may take 30 seconds. Azure keeps no journal here, so each write sends the state whole.
