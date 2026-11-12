@@ -7,7 +7,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AzureStateServer } from '../../../tests/azureStateServer';
 import { HttpStateServer } from '../../../tests/httpStateServer';
 import { S3StateServer } from '../../../tests/s3StateServer';
-import { adoptBackend, Approve, checkBackend, LocalBackend, LockNotReleased, newLockInfo, rememberedBackend, serializeState, StateLocked, StateManager } from '../src';
+import {
+  adoptBackend,
+  Approve,
+  checkBackend,
+  LocalBackend,
+  LockNotReleased,
+  newLockInfo,
+  rememberedBackend,
+  serializeState,
+  StateBackend,
+  StateLocked,
+  StateManager,
+} from '../src';
 import { AzureBackend } from '../src/backends/AzureBackend';
 import { S3Backend } from '../src/backends/S3Backend';
 import { backendAt, ONCE } from './backendAt';
@@ -19,6 +31,14 @@ const unasked: Approve = () => {
 const yes: Approve = async () => true;
 
 const holding = (name: string, serial = 3): State => ({ ...emptyState(), serial, resources: { [`rt.${name}`]: { resourceType: 'rt', name, attributes: {} } } });
+
+/** Writes `state` to `backend` as a run does, under a lock released after it. */
+async function written(backend: StateBackend, state: State): Promise<void> {
+  const manager = new StateManager(backend);
+  await manager.lock('apply');
+  await manager.write(state);
+  await manager.unlock();
+}
 
 describe('the backend init remembers', () => {
   let dir: string;
@@ -162,7 +182,7 @@ describe('the backend init remembers', () => {
     });
 
     it('takes a file state to the server', async () => {
-      await new StateManager(new LocalBackend(dir)).write(holding('a', 2));
+      await written(new LocalBackend(dir), holding('a', 2));
 
       await adoptBackend(backendOn('state'), previous(), dir, yes);
 
@@ -208,7 +228,7 @@ describe('the backend init remembers', () => {
     it('keeps the refusal beside a lock it could not release', async () => {
       server.state = serializeState(holding('a'));
       await record({});
-      await new StateManager(new LocalBackend(dir)).write(holding('b'));
+      await written(new LocalBackend(dir), holding('b'));
       server.override('UNLOCK /lock', { status: 500 });
 
       const refused = adoptBackend(new LocalBackend(dir), previous(), dir, unasked);
@@ -382,9 +402,11 @@ describe('the backend init remembers', () => {
     it('is moved once asked, with what its journal holds, and the old one is kept', async () => {
       const manager = new StateManager(old());
       const state = holding('a');
+      await manager.lock('apply');
       await manager.write(state);
       state.resources['rt.b'] = { resourceType: 'rt', name: 'b', attributes: {} };
       await manager.record(state, 'rt.b');
+      await manager.unlock();
       const approve = vi.fn(yes);
 
       expect(await adoptBackend(other(), previous(), dir, approve)).toEqual({ moved: { from: old().choice, copied: true } });
@@ -397,7 +419,7 @@ describe('the backend init remembers', () => {
     });
 
     it('is asked about under the lock of the old place, which is then released', async () => {
-      await new StateManager(old()).write(holding('a'));
+      await written(old(), holding('a'));
       let lockedWhileAsked = false;
 
       await adoptBackend(other(), previous(), dir, async () => {
@@ -410,7 +432,7 @@ describe('the backend init remembers', () => {
     });
 
     it('is left where it is, with nothing written, when the answer is no', async () => {
-      await new StateManager(old()).write(holding('a'));
+      await written(old(), holding('a'));
 
       await expect(adoptBackend(other(), previous(), dir, async () => false)).rejects.toThrow('The state was not moved, and nothing changed');
 
@@ -420,7 +442,7 @@ describe('the backend init remembers', () => {
     });
 
     it('is not moved while another run holds the old lock', async () => {
-      await new StateManager(old()).write(holding('a'));
+      await written(old(), holding('a'));
       await old().lock(newLockInfo('apply'));
 
       await expect(adoptBackend(other(), previous(), dir, unasked)).rejects.toThrow(StateLocked);
@@ -430,7 +452,7 @@ describe('the backend init remembers', () => {
     });
 
     it('has its old lock taken as a step the caller can stop', async () => {
-      await new StateManager(old()).write(holding('a'));
+      await written(old(), holding('a'));
       const stopped = new Error('stopped at the lock');
       const steps: boolean[] = [];
 
@@ -445,8 +467,8 @@ describe('the backend init remembers', () => {
     });
 
     it('is refused, before anything is asked, where the new place holds another state', async () => {
-      await new StateManager(old()).write(holding('a'));
-      await new StateManager(other()).write(holding('b'));
+      await written(old(), holding('a'));
+      await written(other(), holding('b'));
 
       await expect(adoptBackend(other(), previous(), dir, unasked)).rejects.toThrow(
         '"clay.state.json" and "other.json" both hold a state, and they differ; remove the one you do not want, and run `clay init` again'
@@ -458,7 +480,7 @@ describe('the backend init remembers', () => {
     });
 
     it('is taken as it is, without asking, where the new place holds the same state', async () => {
-      await new StateManager(old()).write(holding('a'));
+      await written(old(), holding('a'));
       await adoptBackend(other(), previous(), dir, yes);
       await fs.rm(path.join(dir, '.clay'), { recursive: true });
 

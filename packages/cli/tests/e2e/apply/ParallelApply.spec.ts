@@ -75,12 +75,11 @@ describe('resources an apply runs together', () => {
       expect(await held()).toEqual([]);
     });
 
-    it.each([0, -1, 2.5, Number.NaN])('refuses %s before anything is made or locked', async (parallelism) => {
+    it.each([0, -1, 2.5, Number.NaN])('refuses %s before anything is made', async (parallelism) => {
       await expect(runWith(blocks('a'), parallelism)).rejects.toThrow(`parallelism is a whole number from 1, not ${parallelism}`);
 
       expect(provider.most).toBe(0);
       expect(await held()).toEqual([]);
-      await expect(fs.access(path.join(dir, 'clay.state.json.lock'))).rejects.toThrow();
     });
   });
 

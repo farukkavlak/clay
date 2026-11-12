@@ -3,9 +3,9 @@ import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { RunEvent } from '../src/index';
+import { InMemoryFiles, Orchestrator, RunEvent } from '../src/index';
 import { engineOn } from './engine';
 
 const config = `output "name" {
@@ -58,13 +58,22 @@ describe('a plan and a run under a lock the caller holds', () => {
     expect(await lockOperation()).toBe('apply');
   });
 
-  it('takes and releases a lock of its own when the caller holds none', async () => {
-    const engine = engineOn(manager);
+  it('refuses a plan when the caller holds none, and takes none of its own', async () => {
+    const engine = Orchestrator.create(manager, new InMemoryFiles({ 'main.clay': config }));
 
-    const plan = await engine.plan(config);
-    await drain(engine.runPlan(plan, config));
-
-    expect(manager.held).toBe(false);
+    await expect(engine.plan()).rejects.toThrow('A plan needs the state lock, and none is held');
     await expect(fs.access(lockPath())).rejects.toThrow(/ENOENT/);
+  });
+
+  it('refuses a run when the caller holds none, before it reads the state', async () => {
+    const engine = Orchestrator.create(manager, new InMemoryFiles({ 'main.clay': config }));
+    await manager.lock('plan');
+    const plan = await engine.plan();
+    await manager.unlock();
+    const read = vi.spyOn(manager, 'read');
+
+    await expect(drain(engine.runPlan(plan))).rejects.toThrow('A run needs the state lock, and none is held');
+    expect(read).not.toHaveBeenCalled();
+    await expect(fs.readdir(dir)).resolves.toEqual([]);
   });
 });

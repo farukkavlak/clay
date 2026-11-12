@@ -108,6 +108,16 @@ describe('an apply and the state lock while it asks', () => {
     expect(await exists('clay.state.json.lock')).toBe(false);
   });
 
+  it('releases the lock and exits 1 when the run fails', async () => {
+    await fs.writeFile(file('main.clay'), 'resource "command_exec" "made" {\n  command = "exit 3"\n}\n', 'utf8');
+
+    const { code, stderr } = await run('apply', '--yes');
+
+    expect(code).toBe(1);
+    expect(stderr).toContain('Apply failed: command_exec.made: Command failed: exit 3');
+    expect(await exists('clay.state.json.lock')).toBe(false);
+  });
+
   it('releases the lock and exits 1 when the answer is no', async () => {
     const { child, ended } = await atTheQuestion();
 

@@ -25,6 +25,15 @@ async function runAll(backend: StateBackend): Promise<void> {
 
 const stateWith = (serial: number) => ({ ...emptyState(), serial, resources: { 'local_file.a': resource } });
 
+/** As init runs: under the lock it takes, released once the state is there. */
+async function initialized(backend: StateBackend): Promise<boolean> {
+  const manager = new StateManager(backend);
+  await manager.lock('init');
+  const wrote = await manager.writeIfAbsent(emptyState());
+  await manager.unlock();
+  return wrote;
+}
+
 describe('a state kept on an HTTP server', () => {
   let server: HttpStateServer;
 
@@ -296,8 +305,8 @@ describe('a state kept on an HTTP server', () => {
   });
 
   describe('as init starts it', () => {
-    it('writes an empty state under the lock', async () => {
-      expect(await new StateManager(backendOn()).writeIfAbsent(emptyState())).toBe(true);
+    it('writes an empty state under the lock init holds', async () => {
+      expect(await initialized(backendOn())).toBe(true);
 
       expect(sent()).toEqual(['LOCK /lock', 'GET /state', 'POST /state', 'UNLOCK /lock']);
       expect(server.received[2].id).toBe(JSON.parse(server.received[0].body).id);
@@ -308,18 +317,10 @@ describe('a state kept on an HTTP server', () => {
     it('keeps the state the server holds', async () => {
       server.state = serializeState(stateWith(4));
 
-      expect(await new StateManager(backendOn()).writeIfAbsent(emptyState())).toBe(false);
+      expect(await initialized(backendOn())).toBe(false);
 
       expect(sent()).toEqual(['LOCK /lock', 'GET /state', 'UNLOCK /lock']);
       expect(server.state).toBe(serializeState(stateWith(4)));
-    });
-
-    it('writes nothing while another run holds the lock', async () => {
-      await backendOn().lock(newLockInfo('apply'));
-
-      await expect(new StateManager(backendOn()).writeIfAbsent(emptyState())).rejects.toThrow('State is locked by apply');
-
-      expect(server.state).toBeUndefined();
     });
   });
 });

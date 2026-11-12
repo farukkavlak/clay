@@ -103,6 +103,7 @@ describe('StateManager', () => {
       },
     };
 
+    await stateManager.lock('apply');
     await stateManager.write(mockState);
 
     const fileContent = await fs.readFile(path.join(tmpDir, 'test.state.json'));
@@ -120,6 +121,7 @@ describe('StateManager', () => {
       deposed: { 'mock_resource.test_a': [{ attributes: { filename: 'old.txt' }, sensitive: [['filename']], dependencies: ['mock_resource.b'] }] },
     };
 
+    await stateManager.lock('apply');
     await stateManager.write(withDeposed);
 
     const fileContent = await fs.readFile(path.join(tmpDir, 'test.state.json'));
@@ -130,6 +132,7 @@ describe('StateManager', () => {
   it('counts every write in the serial, on disk and in the state it was given', async () => {
     const state: State = { version: STATE_VERSION, serial: 0, resources: {} };
 
+    await stateManager.lock('apply');
     await stateManager.write(state);
     await stateManager.write(state);
 
@@ -142,6 +145,7 @@ describe('StateManager', () => {
     it('go one after another, each with its own serial', async () => {
       const log: string[] = [];
       const manager = new StateManager(slow(log));
+      await manager.lock('apply');
       const state = emptyState();
 
       await Promise.all([manager.write(state), manager.write(state), manager.write(state)]);
@@ -151,6 +155,7 @@ describe('StateManager', () => {
 
     it('keep 20 writes started together whole', async () => {
       const manager = new StateManager(new LocalBackend(tmpDir, 'test.state.json'));
+      await manager.lock('apply');
       const state = emptyState();
       const writes: Promise<void>[] = [];
 
@@ -167,6 +172,7 @@ describe('StateManager', () => {
 
     it('write the state as it is when their turn comes', async () => {
       const manager = new StateManager(new LocalBackend(tmpDir, 'test.state.json'));
+      await manager.lock('apply');
       const state = emptyState();
 
       const writes = [manager.write(state), manager.write(state)];
@@ -180,6 +186,7 @@ describe('StateManager', () => {
     it('reach the backend after one before them failed, at the serial it did not reach', async () => {
       const log: string[] = [];
       const manager = new StateManager(slow(log, [1]));
+      await manager.lock('apply');
       const state = emptyState();
 
       const [first, second] = await Promise.allSettled([manager.write(state), manager.write(state)]);
@@ -195,6 +202,7 @@ describe('StateManager', () => {
   it('writes the version of this Clay, whatever version the state was read at', async () => {
     const state: State = { version: STATE_VERSION - 1, serial: 0, resources: {} };
 
+    await stateManager.lock('apply');
     await stateManager.write(state);
 
     const stored = await stateManager.read();
@@ -204,6 +212,10 @@ describe('StateManager', () => {
 
   describe('writeIfAbsent', () => {
     const empty: State = { version: STATE_VERSION, serial: 0, resources: {} };
+
+    beforeEach(async () => {
+      await stateManager.lock('init');
+    });
 
     it('should write the state when none is stored yet', async () => {
       expect(await stateManager.writeIfAbsent(empty)).toBe(true);
@@ -218,10 +230,15 @@ describe('StateManager', () => {
       expect(await stateManager.read()).toEqual(stored);
     });
 
+    // A directory that cannot be written makes the write fail with EACCES.
     it('should throw when the state cannot be written at all', async () => {
-      const missingDir = new StateManager(new LocalBackend(path.join(tmpDir, 'missing'), 'test.state.json'));
+      await fs.chmod(tmpDir, 0o500);
 
-      await expect(missingDir.writeIfAbsent(empty)).rejects.toThrow();
+      try {
+        await expect(stateManager.writeIfAbsent(empty)).rejects.toThrow(/EACCES/);
+      } finally {
+        await fs.chmod(tmpDir, 0o700);
+      }
     });
   });
 
@@ -284,9 +301,36 @@ describe('StateManager', () => {
       await locking;
       await stopping;
 
-      await expect(manager.whileLocked('plan', async () => 'planned')).rejects.toThrow('This run is stopping, so it takes no lock');
+      await expect(manager.lock('plan')).rejects.toThrow('This run is stopping, so it takes no lock');
       expect(calls).toEqual(['lock apply', 'unlock']);
       expect(manager.held).toBe(false);
+    });
+  });
+
+  describe('a write without the lock', () => {
+    const refused = 'A write needs the state lock, and none is held';
+
+    it('is refused, and nothing is written', async () => {
+      await expect(stateManager.write(holding('a'))).rejects.toThrow(refused);
+      expect(await fs.readdir(tmpDir)).toEqual([]);
+    });
+
+    it('is refused as a line of the journal too', async () => {
+      await expect(stateManager.record(holding('a'), 'rt.a')).rejects.toThrow(refused);
+      expect(await fs.readdir(tmpDir)).toEqual([]);
+    });
+
+    it('is refused where none is stored yet', async () => {
+      await expect(stateManager.writeIfAbsent(holding('a'))).rejects.toThrow(refused);
+      expect(await fs.readdir(tmpDir)).toEqual([]);
+    });
+
+    it('is refused once the lock is released', async () => {
+      const written = holding('a');
+      await run(written);
+
+      await expect(stateManager.write(holding('b'))).rejects.toThrow(refused);
+      expect(await stateManager.read()).toEqual(written);
     });
   });
 
@@ -350,6 +394,7 @@ describe('StateManager', () => {
   describe('a write that fails halfway', () => {
     it('leaves the state that was there, whole', async () => {
       const before: State = { version: STATE_VERSION, serial: 0, resources: { 'mock_resource.a': { resourceType: 'mock_resource', name: 'a', attributes: {} } } };
+      await stateManager.lock('apply');
       await stateManager.write(before);
 
       // A directory at the temp path makes the write fail before the state file is touched.
@@ -360,7 +405,7 @@ describe('StateManager', () => {
     });
 
     it('leaves nothing beside the state file when it succeeds', async () => {
-      await stateManager.write({ version: STATE_VERSION, serial: 0, resources: {} });
+      await run({ version: STATE_VERSION, serial: 0, resources: {} });
 
       expect(await fs.readdir(tmpDir)).toEqual(['test.state.json']);
     });

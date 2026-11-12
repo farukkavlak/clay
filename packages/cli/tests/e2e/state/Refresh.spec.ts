@@ -1,6 +1,5 @@
-import { DiskFiles, Orchestrator } from '@clay/orchestrator';
 import { changedOutside } from '@clay/planner';
-import { LocalBackend, StateManager } from '@clay/state';
+import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -90,7 +89,7 @@ describe('a plan that reads each resource back first', () => {
 
   // The plan carries each type's schema, so a resource in state needs its provider even without a refresh.
   it('refuses a resource in state that no provider handles, when told not to read', async () => {
-    const engine = engineIn(dir, Orchestrator.create(new StateManager(new LocalBackend(dir)), new DiskFiles(dir)));
+    const engine = engineIn(dir);
 
     await expect(engine.plan('', { refresh: false })).rejects.toThrow('No provider handles "local_file"');
   });
