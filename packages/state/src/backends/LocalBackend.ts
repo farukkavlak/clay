@@ -8,6 +8,7 @@ import { emptyState, State } from '@clay/contracts';
 import { LockInfo, lockInfoFrom, StateLocked } from '../lockInfo';
 import { BackendChoice, StateBackend } from '../StateBackend';
 import { Journal, parseState, serializeState } from '../stateFile';
+import { appendSynced, syncDir, writeSynced } from './durable';
 
 /** Undefined where nothing is there, or a file stands in the way of the path. */
 async function statOf(target: string): Promise<Stats | undefined> {
@@ -25,8 +26,9 @@ async function statOf(target: string): Promise<Stats | undefined> {
 async function createFilled(target: string, content: string): Promise<boolean> {
   const filling = `${target}.${randomUUID()}`;
   try {
-    await fs.writeFile(filling, content, 'utf8');
+    await writeSynced(filling, content);
     await fs.link(filling, target);
+    await syncDir(path.dirname(target));
     return true;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false;
@@ -43,6 +45,7 @@ export class LocalBackend implements StateBackend {
   private lockFilePath: string;
   private journalPath: string;
   private backedUp = false;
+  private journalNamed = false;
 
   constructor(workingDir: string, filename: string = 'clay.state.json') {
     this.filePath = path.resolve(workingDir, filename);
@@ -99,26 +102,30 @@ export class LocalBackend implements StateBackend {
 
     // Rename is atomic, so a run killed mid-write leaves the old state whole.
     const tmpPath = `${this.filePath}.tmp`;
-    await fs.writeFile(tmpPath, serializeState(state), 'utf8');
+    await writeSynced(tmpPath, serializeState(state));
     await fs.rename(tmpPath, this.filePath);
+    // A journal removed before the rename is on disk would leave the old state without what the run recorded.
+    await syncDir(path.dirname(this.filePath));
     // Its lines are in the state now; a run stopped before this point leaves lines of an older serial, which are skipped.
     await fs.rm(this.journalPath, { force: true });
+    this.journalNamed = false;
   }
 
   /** As it is read, so what a stopped run left in the journal is in the backup too. */
   private async copyBefore(): Promise<void> {
     const journal = await this.readJournal();
-    if (!journal) {
-      await fs.copyFile(this.filePath, `${this.filePath}.bak`);
-      return;
-    }
-
-    const content = await fs.readFile(this.filePath, 'utf8');
-    await fs.writeFile(`${this.filePath}.bak`, serializeState(parseState(content, this.filePath, journal)), 'utf8');
+    const content = await fs.readFile(this.filePath);
+    // Its name is flushed with the directory once the state is renamed.
+    await writeSynced(`${this.filePath}.bak`, journal ? serializeState(parseState(content.toString('utf8'), this.filePath, journal)) : content);
   }
 
   async append(line: string): Promise<void> {
-    await fs.appendFile(this.journalPath, line, 'utf8');
+    await appendSynced(this.journalPath, line);
+    if (this.journalNamed) return;
+
+    // The first line makes the journal, whose name is the directory's; the next ones only grow it.
+    await syncDir(path.dirname(this.journalPath));
+    this.journalNamed = true;
   }
 
   private async readJournal(): Promise<Journal | undefined> {
@@ -183,5 +190,7 @@ export class LocalBackend implements StateBackend {
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
+    // A removal lost to a power loss would stop the next run on a lock no run holds.
+    await syncDir(path.dirname(this.lockFilePath));
   }
 }

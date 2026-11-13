@@ -993,6 +993,9 @@ Measured with the local provider; a remote provider makes the sequential calls c
 - [x] `Graph.dependenciesOf` scans every node's edges on each call, and the plan calls it for
       every resource, so a plan of 4000 blocks spends 1.8 of its 2.4 seconds there. The graph
       can keep the reverse edges
+- [ ] A local state flushes each journal line to disk on its own, so 1000 pairs of
+      `null_resource` apply in 5.5 to 6.5 seconds, not 1.0 to 1.3 without the flush. Lines
+      of actions that finish while one is flushed could wait for it and share the next one
 
 ### Lifecycle
 
@@ -1099,8 +1102,9 @@ Terraform has it since backends replaced `-state`.
 - [x] Every command takes and releases the lock itself, so the engine's own locking was
       reached only from tests. A plan, a run and every write through the state manager now
       refuse to start when the caller holds no lock, and take none of their own
-- [ ] The state is renamed into place, and the journal appended to, without an fsync, so
-      a power loss may leave either empty on a file system that reorders writes
+- [x] The state is renamed into place, and the journal appended to, without an fsync, so
+      a power loss may leave either empty on a file system that reorders writes. Every
+      local write is now flushed, and its directory too, before the journal is removed
 
 ### Format
 

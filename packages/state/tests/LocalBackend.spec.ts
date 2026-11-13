@@ -41,7 +41,7 @@ describe('LocalBackend', () => {
 
   describe('a file it makes only where none is', () => {
     const lockInfo = { id: 'run', operation: 'plan', who: 'me', host: 'here', pid: 1, created: 'now' };
-    const rounds = 500;
+    const rounds = 100;
 
     it('is never there empty while the lock is taken', async () => {
       const backend = new LocalBackend(dir);

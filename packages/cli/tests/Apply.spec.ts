@@ -4,6 +4,7 @@ import { PLAN_FILE_VERSION } from '@clay/planner';
 import fs from 'node:fs/promises';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { openNothing } from './openNothing';
 import { createApplyCommand } from '../src/commands/apply';
 import { confirm } from '../src/confirm';
 
@@ -35,6 +36,7 @@ const doneWith = (outputs: Record<string, Output>) =>
 describe('CLI: apply command', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    openNothing();
   });
 
   describe('Config-based apply', () => {

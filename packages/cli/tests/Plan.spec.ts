@@ -4,6 +4,7 @@ import { stripVTControlCharacters } from 'node:util';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createPlanCommand } from '../src/commands/plan';
+import { openNothing } from './openNothing';
 
 vi.mock('node:fs/promises');
 // Address is a plain value type the commands print with, so it stays real.
@@ -25,6 +26,7 @@ const text = (value: string) => ({ value, type: types.string });
 describe('CLI: plan command', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    openNothing();
   });
 
   // The planner lists every resource, so a plan with nothing to do is all NO_OP, not empty.

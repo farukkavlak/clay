@@ -90,6 +90,8 @@ a configuration means or how the state file is written.
 - The state file holds its resources in address order, not in the order an apply
   finished them, so which one an error names never depends on timing
 - A state or plan file that is not valid is refused and says what is wrong
+- A local state, its journal, its backup, its lock and the record of the backend are
+  flushed to disk, so a power loss leaves none of them empty and loses no journal line
 - Ctrl-C during an apply starts nothing new, waits for what runs, saves it and releases
   the lock; a second Ctrl-C exits at once
 - A run the lock stops names the command, user, machine, pid and time of the run that
