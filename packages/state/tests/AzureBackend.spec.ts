@@ -181,8 +181,14 @@ describe('a state kept in Azure Blob storage', () => {
 
       await expect(taken).rejects.toThrow(StateLocked);
       await expect(taken).rejects.toThrow(`State is locked by plan of ${holder.who} on ${holder.host}`);
-      await expect(taken).rejects.toThrow(`delete ${lockAt()}`);
+      await expect(taken).rejects.toThrow(`If that run is gone, run clay force-unlock ${holder.id}`);
       expect(JSON.parse(server.text('state/env/state.json.lock')!)).toEqual(holder);
+    });
+
+    it('says to delete a lock that names no run', async () => {
+      server.put('state/env/state.json.lock', 'locked');
+
+      await expect(backendOn().lock(newLockInfo('apply'))).rejects.toThrow(`State is locked by a run that left no word of who it is. If that run is gone, delete ${lockAt()}`);
     });
 
     it('is refused where a server answers 412 to a blob being there', async () => {
@@ -218,7 +224,7 @@ describe('a state kept in Azure Blob storage', () => {
       server.override('PUT /state/env/state.json.lock', { lost: true });
 
       await expect(backendOn().lock(info)).rejects.toThrow(
-        `PutBlob ${lockAt()} got no answer (ECONNRESET). Azure may hold lock ${info.id} all the same; if it does, delete ${lockAt()}`
+        `PutBlob ${lockAt()} got no answer (ECONNRESET). Azure may hold lock ${info.id} all the same; if it does, run clay force-unlock ${info.id}`
       );
     });
 
@@ -299,6 +305,36 @@ describe('a state kept in Azure Blob storage', () => {
       server.override('DELETE /state/env/state.json.lock', { status: 403, code: 'AuthorizationPermissionMismatch' });
 
       await expect(backendOn().unlock(info.id)).rejects.toThrow(`DeleteBlob ${lockAt()} answered 403 AuthorizationPermissionMismatch`);
+    });
+  });
+
+  describe('its lock forced open', () => {
+    it('is released for a run that is gone', async () => {
+      const gone = newLockInfo('apply');
+      await backendOn().lock(gone);
+
+      await backendOn().forceUnlock(gone.id);
+
+      expect(server.text('state/env/state.json.lock')).toBeUndefined();
+    });
+
+    it('is left in place where it has another id', async () => {
+      const other = newLockInfo('plan');
+      await backendOn().lock(other);
+
+      await expect(backendOn().forceUnlock('another')).rejects.toThrow(`${lockAt()} holds lock ${other.id}, not another, so it is left in place`);
+      expect(JSON.parse(server.text('state/env/state.json.lock')!)).toEqual(other);
+    });
+
+    it('is left in place where it names no run', async () => {
+      server.put('state/env/state.json.lock', 'locked');
+
+      await expect(backendOn().forceUnlock('another')).rejects.toThrow(`${lockAt()} holds a lock that names no run, not another, so it is left in place`);
+      expect(server.text('state/env/state.json.lock')).toBe('locked');
+    });
+
+    it('says no lock is held where none is', async () => {
+      await expect(backendOn().forceUnlock('another')).rejects.toThrow(`No lock is held at ${lockAt()}`);
     });
   });
 });

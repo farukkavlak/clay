@@ -73,6 +73,8 @@ a configuration means or how the state file is written.
   a lock left behind stops it
 - `--lock-timeout <seconds>` on `init`, `plan`, `apply`, `state mv` and `state rm` waits
   for a lock another run holds, on every backend, and says who holds it
+- `clay force-unlock <id>` releases the lock of a run that died, by its id, on every
+  backend. The locked error names the id. A lock with another id is left in place
 - `clay init` moves the state to the place the block names, once asked or with `--yes`,
   and leaves the old one as it was
 - `apply --parallelism`: each action runs once what it reads is done, with ten provider

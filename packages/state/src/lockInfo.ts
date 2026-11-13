@@ -66,22 +66,32 @@ function runsHere(pid: number): boolean {
   }
 }
 
-function lockedMessage(holder: LockInfo | undefined, howToFree: string): string {
-  if (!holder) return `State is locked by a run that left no word of who it is. If that run is gone, ${howToFree}`;
+/** What to run to release lock `id`, which its run left behind. */
+export const forceUnlockWith = (id: string) => `run clay force-unlock ${id}`;
 
-  const { operation, who, host, pid, created } = holder;
+function lockedMessage(holder: LockInfo | undefined, unnamed: string): string {
+  if (!holder) return `State is locked by a run that left no word of who it is. If that run is gone, ${unnamed}`;
+
+  const { id, operation, who, host, pid, created } = holder;
   const by = `State is locked by ${operation} of ${who} on ${host}, pid ${pid}, since ${created}`;
-  if (host === os.hostname() && !runsHere(pid)) return `${by}. No process ${pid} runs on this machine, so that run looks gone. If it is, ${howToFree}`;
+  if (host === os.hostname() && !runsHere(pid)) return `${by}. No process ${pid} runs on this machine, so that run looks gone. If it is, ${forceUnlockWith(id)}`;
 
-  return `${by}. If that run is gone, ${howToFree}`;
+  return `${by}. If that run is gone, ${forceUnlockWith(id)}`;
 }
 
-/** `howToFree` says how this backend releases a lock its run left behind. */
+/** `unnamed` says how this backend releases a lock that names no run, which `clay force-unlock` cannot name either. */
 export class StateLocked extends Error {
-  constructor(holder: LockInfo | undefined, howToFree: string) {
-    super(lockedMessage(holder, howToFree));
+  constructor(holder: LockInfo | undefined, unnamed: string) {
+    super(lockedMessage(holder, unnamed));
     this.name = 'StateLocked';
   }
+}
+
+export const noLockAt = (location: string) => new Error(`No lock is held at ${location}`);
+
+export function otherLockAt(location: string, holder: LockInfo | undefined, id: string): Error {
+  const held = holder ? `lock ${holder.id}` : 'a lock that names no run';
+  return new Error(`${location} holds ${held}, not ${id}, so it is left in place`);
 }
 
 /** A release that failed, so the lock may still be held; the backend's error is its cause. */

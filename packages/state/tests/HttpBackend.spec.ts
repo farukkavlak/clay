@@ -161,13 +161,15 @@ describe('a state kept on an HTTP server', () => {
 
     await expect(refusal).rejects.toThrow(StateLocked);
     await expect(refusal).rejects.toThrow(`State is locked by plan of ${holder.who} on ${holder.host}, pid ${holder.pid}`);
-    await expect(refusal).rejects.toThrow(`send UNLOCK to ${server.url}/lock with what the lock holds`);
+    await expect(refusal).rejects.toThrow(`If that run is gone, run clay force-unlock ${holder.id}`);
   });
 
   it('is locked by a run it cannot name where the server sends no lock it can read', async () => {
     server.lock = 'not a lock';
 
-    await expect(backendOn().lock(newLockInfo('apply'))).rejects.toThrow('State is locked by a run that left no word of who it is');
+    await expect(backendOn().lock(newLockInfo('apply'))).rejects.toThrow(
+      `State is locked by a run that left no word of who it is. If that run is gone, send UNLOCK to ${server.url}/lock with what the lock holds`
+    );
   });
 
   it('holds the lock for the run that took it, so another is refused', async () => {
@@ -259,7 +261,7 @@ describe('a state kept on an HTTP server', () => {
     const refusal = backendOn().lock(info);
 
     await expect(refusal).rejects.toThrow(`LOCK ${server.url}/lock answered 200, but the body was cut off (ECONNRESET)`);
-    await expect(refusal).rejects.toThrow(`The server may hold lock ${info.id} all the same; if it does, send UNLOCK to ${server.url}/lock with what the lock holds`);
+    await expect(refusal).rejects.toThrow(`The server may hold lock ${info.id} all the same; if it does, run clay force-unlock ${info.id}`);
   });
 
   it('says the server may hold a lock it gave no answer to', async () => {
@@ -269,7 +271,7 @@ describe('a state kept on an HTTP server', () => {
     const info = newLockInfo('apply');
 
     await expect(backendAt(url).lock(info)).rejects.toThrow(
-      `LOCK ${url}/lock got no answer (ECONNREFUSED). The server may hold lock ${info.id} all the same; if it does, send UNLOCK to ${url}/lock with what the lock holds`
+      `LOCK ${url}/lock got no answer (ECONNREFUSED). The server may hold lock ${info.id} all the same; if it does, run clay force-unlock ${info.id}`
     );
   });
 
@@ -321,6 +323,62 @@ describe('a state kept on an HTTP server', () => {
 
       expect(sent()).toEqual(['LOCK /lock', 'GET /state', 'UNLOCK /lock']);
       expect(server.state).toBe(serializeState(stateWith(4)));
+    });
+  });
+
+  describe('a lock forced open', () => {
+    it('is released with the body the server names it by', async () => {
+      const gone = newLockInfo('apply');
+      server.lock = JSON.stringify(gone);
+
+      await backendOn().forceUnlock(gone.id);
+
+      expect(server.lock).toBeUndefined();
+      expect(server.received.map(({ method }) => method)).toEqual(['LOCK', 'UNLOCK']);
+    });
+
+    it('is left in place where it has another id', async () => {
+      const other = JSON.stringify(newLockInfo('plan'));
+      server.lock = other;
+
+      await expect(backendOn().forceUnlock('another')).rejects.toThrow(`${server.url}/lock holds lock ${JSON.parse(other).id}, not another, so it is left in place`);
+      expect(server.lock).toBe(other);
+      expect(sent()).toEqual(['LOCK /lock']);
+    });
+
+    it('is left in place where the server names no run', async () => {
+      server.lock = 'locked';
+
+      await expect(backendOn().forceUnlock('another')).rejects.toThrow(`${server.url}/lock holds a lock that names no run, not another, so it is left in place`);
+      expect(server.lock).toBe('locked');
+    });
+
+    it('says no lock is held where the server gives the one asked for, and releases that again', async () => {
+      await expect(backendOn().forceUnlock('another')).rejects.toThrow(`No lock is held at ${server.url}/lock`);
+      expect(server.lock).toBeUndefined();
+      expect(sent()).toEqual(['LOCK /lock', 'UNLOCK /lock']);
+    });
+
+    it('names the lock it took to ask where it cannot release that one', async () => {
+      server.override('UNLOCK /lock', { status: 500 });
+
+      const thrown: unknown = await backendOn()
+        .forceUnlock('another')
+        .catch((error: unknown) => error);
+
+      const asked = JSON.parse(server.lock!) as { id: string; operation: string };
+      expect(asked.operation).toBe('force-unlock');
+      expect((thrown as Error).message).toBe(
+        `No lock was held at ${server.url}/lock, and the one taken to ask could not be released (UNLOCK ${server.url}/lock answered 500); if it is still held, run clay force-unlock ${asked.id}`
+      );
+    });
+
+    it('names what the server answered to a release it refused', async () => {
+      const gone = newLockInfo('apply');
+      server.lock = JSON.stringify(gone);
+      server.override('UNLOCK /lock', { status: 403 });
+
+      await expect(backendOn().forceUnlock(gone.id)).rejects.toThrow(`UNLOCK ${server.url}/lock answered 403`);
     });
   });
 });
@@ -469,9 +527,7 @@ describe('a request the HTTP server fails', () => {
     const info = newLockInfo('apply');
 
     await expect(backendWith({ ...TWICE, max: 1 }).lock(info)).rejects.toThrow(
-      new Error(
-        `LOCK ${server.url}/lock answered 503 after 2 tries. The server may hold lock ${info.id} all the same; if it does, send UNLOCK to ${server.url}/lock with what the lock holds`
-      )
+      new Error(`LOCK ${server.url}/lock answered 503 after 2 tries. The server may hold lock ${info.id} all the same; if it does, run clay force-unlock ${info.id}`)
     );
     expect(JSON.parse(server.lock!)).toEqual(info);
   });

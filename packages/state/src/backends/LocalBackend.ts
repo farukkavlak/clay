@@ -5,7 +5,7 @@ import path from 'node:path';
 
 import { emptyState, State } from '@clay/contracts';
 
-import { LockInfo, lockInfoFrom, StateLocked } from '../lockInfo';
+import { LockInfo, lockInfoFrom, noLockAt, otherLockAt, StateLocked } from '../lockInfo';
 import { BackendChoice, StateBackend } from '../StateBackend';
 import { Journal, parseState, serializeState } from '../stateFile';
 import { appendSynced, syncDir, writeSynced } from './durable';
@@ -181,9 +181,21 @@ export class LocalBackend implements StateBackend {
 
   /** A lock already gone is released. One with another id is another run's, taken once this run's was removed. */
   async unlock(id: string): Promise<void> {
+    await this.release(id, () => new Error(`${this.lockFilePath} holds a lock this run did not take, so it is left in place`));
+  }
+
+  async forceUnlock(id: string): Promise<void> {
+    const found = await this.release(id, (holder) => otherLockAt(this.lockFilePath, holder, id));
+    if (!found) throw noLockAt(this.lockFilePath);
+  }
+
+  /** False where no lock was there to release. */
+  private async release(id: string, other: (holder: LockInfo | undefined) => Error): Promise<boolean> {
     const text = await this.lockText();
-    if (text === undefined) return;
-    if (lockInfoFrom(text)?.id !== id) throw new Error(`${this.lockFilePath} holds a lock this run did not take, so it is left in place`);
+    if (text === undefined) return false;
+
+    const holder = lockInfoFrom(text);
+    if (holder?.id !== id) throw other(holder);
 
     try {
       await fs.unlink(this.lockFilePath);
@@ -192,5 +204,6 @@ export class LocalBackend implements StateBackend {
     }
     // A removal lost to a power loss would stop the next run on a lock no run holds.
     await syncDir(path.dirname(this.lockFilePath));
+    return true;
   }
 }

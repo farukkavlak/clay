@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { createRequire } from 'node:module';
 
 import { createApplyCommand } from './commands/apply';
+import { createForceUnlockCommand } from './commands/forceUnlock';
 import { createInitCommand } from './commands/init';
 import { createOutputCommand } from './commands/output';
 import { createPlanCommand } from './commands/plan';
@@ -22,6 +23,7 @@ program.addCommand(createApplyCommand());
 program.addCommand(createOutputCommand());
 program.addCommand(createValidateCommand());
 program.addCommand(createStateCommand());
+program.addCommand(createForceUnlockCommand());
 
 // Commander quotes what was typed, and a command added whole keeps no setting of the program's.
 function printableErrors(command: Command): void {

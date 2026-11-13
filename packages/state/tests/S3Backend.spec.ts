@@ -188,8 +188,16 @@ describe('a state kept in S3', () => {
 
       await expect(taken).rejects.toThrow(StateLocked);
       await expect(taken).rejects.toThrow(`State is locked by plan of ${holder.who} on ${holder.host}`);
-      await expect(taken).rejects.toThrow(`remove s3://bucket/env/state.json.lock at ${server.url}/`);
+      await expect(taken).rejects.toThrow(`If that run is gone, run clay force-unlock ${holder.id}`);
       expect(JSON.parse(server.text('bucket/env/state.json.lock')!)).toEqual(holder);
+    });
+
+    it('says to remove a lock that names no run', async () => {
+      server.put('bucket/env/state.json.lock', 'locked');
+
+      await expect(backendOn().lock(newLockInfo('apply'))).rejects.toThrow(
+        `State is locked by a run that left no word of who it is. If that run is gone, remove s3://bucket/env/state.json.lock at ${server.url}/`
+      );
     });
 
     it('is tried once more where the lock it was refused for is gone when read', async () => {
@@ -235,7 +243,7 @@ describe('a state kept in S3', () => {
       server.override('PUT /bucket/env/state.json.lock', { lost: true });
 
       await expect(backendOn().lock(info)).rejects.toThrow(
-        `PutObject s3://bucket/env/state.json.lock at ${server.url}/ got no answer (ECONNRESET). S3 may hold lock ${info.id} all the same; if it does, remove s3://bucket/env/state.json.lock at ${server.url}/`
+        `PutObject s3://bucket/env/state.json.lock at ${server.url}/ got no answer (ECONNRESET). S3 may hold lock ${info.id} all the same; if it does, run clay force-unlock ${info.id}`
       );
     });
 
@@ -330,6 +338,40 @@ describe('a state kept in S3', () => {
       server.override('DELETE /bucket/env/state.json.lock', { status: 403, code: 'AccessDenied' });
 
       await expect(backendOn().unlock(info.id)).rejects.toThrow(`DeleteObject s3://bucket/env/state.json.lock at ${server.url}/ answered 403 AccessDenied`);
+    });
+  });
+
+  describe('its lock forced open', () => {
+    it('is released for a run that is gone', async () => {
+      const gone = newLockInfo('apply');
+      await backendOn().lock(gone);
+
+      await backendOn().forceUnlock(gone.id);
+
+      expect(server.text('bucket/env/state.json.lock')).toBeUndefined();
+    });
+
+    it('is left in place where it has another id', async () => {
+      const other = newLockInfo('plan');
+      await backendOn().lock(other);
+
+      await expect(backendOn().forceUnlock('another')).rejects.toThrow(
+        `s3://bucket/env/state.json.lock at ${server.url}/ holds lock ${other.id}, not another, so it is left in place`
+      );
+      expect(JSON.parse(server.text('bucket/env/state.json.lock')!)).toEqual(other);
+    });
+
+    it('is left in place where it names no run', async () => {
+      server.put('bucket/env/state.json.lock', 'locked');
+
+      await expect(backendOn().forceUnlock('another')).rejects.toThrow(
+        `s3://bucket/env/state.json.lock at ${server.url}/ holds a lock that names no run, not another, so it is left in place`
+      );
+      expect(server.text('bucket/env/state.json.lock')).toBe('locked');
+    });
+
+    it('says no lock is held where none is', async () => {
+      await expect(backendOn().forceUnlock('another')).rejects.toThrow(`No lock is held at s3://bucket/env/state.json.lock at ${server.url}/`);
     });
   });
 });

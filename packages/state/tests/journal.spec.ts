@@ -305,6 +305,7 @@ describe('the journal', () => {
         writeIfAbsent: () => Promise.resolve(true),
         lock: () => Promise.resolve(),
         unlock: () => Promise.resolve(),
+        forceUnlock: () => Promise.resolve(),
         write: async (given) => {
           written.push(structuredClone(given));
         },

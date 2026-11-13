@@ -23,6 +23,7 @@ const slow = (log: string[], failing: number[] = []): StateBackend => {
     writeIfAbsent: () => Promise.resolve(true),
     lock: () => Promise.resolve(),
     unlock: () => Promise.resolve(),
+    forceUnlock: () => Promise.resolve(),
     write: async (state) => {
       const call = ++calls;
       log.push(`start ${state.serial}`);
@@ -54,6 +55,7 @@ function gated(calls: string[]) {
     unlock: async () => {
       calls.push('unlock');
     },
+    forceUnlock: () => Promise.resolve(),
   };
 
   return { backend, take: () => take?.() };
