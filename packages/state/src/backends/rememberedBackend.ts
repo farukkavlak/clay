@@ -1,6 +1,7 @@
 import { isRecord } from '@clay/contracts';
 import { ConfigError, Position } from '@clay/parser';
 import * as fs from 'node:fs';
+import * as fsp from 'node:fs/promises';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 
@@ -8,6 +9,7 @@ import { LockNotReleased } from '../lockInfo';
 import { BackendChoice, StateBackend } from '../StateBackend';
 import { StateManager } from '../StateManager';
 import { build } from './build';
+import { syncDir, writeSynced } from './durable';
 import { HandshakeFailed, NoAnswer } from './httpRequest';
 import { LocalBackend } from './LocalBackend';
 import { Environment, recordSettings, unwritten } from './settings';
@@ -116,12 +118,16 @@ export interface Adopted {
   readonly lockLeft?: LockNotReleased;
 }
 
-function writeRecord(choice: BackendChoice, workingDir: string): void {
+async function writeRecord(choice: BackendChoice, workingDir: string): Promise<void> {
   const record = recordOf(workingDir);
-  fs.mkdirSync(path.dirname(record), { recursive: true });
+  const holder = path.dirname(record);
+  // A record lost to a power loss would turn the next run to an empty local state.
+  const made = await fsp.mkdir(holder, { recursive: true });
+  if (made !== undefined) await syncDir(path.dirname(made));
   // Rename is atomic, so a stopped init leaves the old record whole.
-  fs.writeFileSync(`${record}.tmp`, `${JSON.stringify({ type: choice.type, settings: choice.settings })}\n`, 'utf8');
-  fs.renameSync(`${record}.tmp`, record);
+  await writeSynced(`${record}.tmp`, `${JSON.stringify({ type: choice.type, settings: choice.settings })}\n`);
+  await fsp.rename(`${record}.tmp`, record);
+  await syncDir(holder);
 }
 
 /** What `init` took before, and the manager that locks it while the state moves. */
@@ -168,7 +174,7 @@ async function moveState(backend: StateBackend, previous: Previous, workingDir: 
   let outcome: 'copied' | 'same' | 'gone';
   try {
     outcome = await copyState(before, backend, approve);
-    writeRecord(backend.choice, workingDir);
+    await writeRecord(backend.choice, workingDir);
   } catch (error) {
     return await old.unlockAfter(error);
   }
@@ -194,6 +200,6 @@ export async function adoptBackend(backend: StateBackend, previous: Previous, wo
 
   if (!isSame(before.choice, backend.choice) && (await leftBehind(before, workingDir))) return moveState(backend, previous, workingDir, approve, stoppable);
 
-  writeRecord(backend.choice, workingDir);
+  await writeRecord(backend.choice, workingDir);
   return {};
 }
