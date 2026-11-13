@@ -107,6 +107,18 @@ describe('Orchestrator', () => {
 
       expect(() => orchestrator.registerProvider(reader())).toThrow('Provider for data source type "mock_data" already registered');
     });
+
+    it('refuses a provider that lists a type as importable that it does not make', () => {
+      const importer = Object.assign(new MockProvider(), { resources: ['made'], importable: ['other'], importResource: async () => null });
+
+      expect(() => engineOn(new StateManager(new LocalBackend(tmpDir))).registerProvider(importer)).toThrow('A provider lists "other" as importable, but does not make it');
+    });
+
+    it('refuses a provider that lists a type as importable but cannot import', () => {
+      const importer = Object.assign(new MockProvider(), { resources: ['made'], importable: ['made'] });
+
+      expect(() => engineOn(new StateManager(new LocalBackend(tmpDir))).registerProvider(importer)).toThrow('A provider lists "made" as importable, but has no importResource');
+    });
   });
 
   describe('CREATE Operations', () => {

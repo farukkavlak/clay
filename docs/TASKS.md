@@ -1111,7 +1111,11 @@ Terraform has it since backends replaced `-state`.
 
 - [x] `clay force-unlock <id>`: a run that dies leaves its lock behind; the error names
       its id, and this releases that lock on any backend, and no other
-- [ ] `clay import <address> <id>`: take over a resource that exists but is not in state
+- [x] `import` blocks take over a resource that exists but is not in state. The plan
+      shows the import and what it changes, so it is approved like any change, where a
+      `clay import` command would write state unseen
+- [ ] An `import` block in a root module may name a resource inside a module, take an id
+      from an expression known at plan, and take `for_each`
 - [ ] A provider can name what identifies a resource apart from its values, for `import`
       and for finding it again. Terraform 1.12's resource identity
 - [ ] `clay state pull`: print the state as JSON, for a script or a backup

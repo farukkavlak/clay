@@ -8,7 +8,7 @@ import { Instances, repetitionOfKey } from '../instances/Instances';
 import { blockKey, dataSourceKey, scopeOf } from '../keys';
 import { withPlace } from '../place';
 
-export type Approved = Pick<Plan, 'actions' | 'outputs' | 'dataSources' | 'dataSensitive' | 'readAtApply'>;
+export type Approved = Pick<Plan, 'actions' | 'imported' | 'outputs' | 'dataSources' | 'dataSensitive' | 'readAtApply'>;
 
 /** What a root output comes to: what the plan shows, or what state holds for one the plan leaves as it is. */
 export interface PlannedOutput {

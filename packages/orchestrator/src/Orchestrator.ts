@@ -9,6 +9,7 @@ import { GraphNode } from './graph/DependencyGraphBuilder';
 import { DesiredState } from './plan/DesiredStateBuilder';
 import { Walk } from './plan/PlanReader';
 import { applyMoves, checkMovedAway, copyForMoves, copyResources, Moves, movesIn } from './plan/moves';
+import { checkImports, Imports, importsIn } from './plan/imports';
 import { checkRead, heldBy, hidingReason } from './providers/providerResult';
 import { checkAttributes } from './checks/checkAttributes';
 import { checkPreventDestroy } from './checks/preventDestroy';
@@ -68,9 +69,16 @@ export class Orchestrator {
     // Planning applies the moves to a copy; the plan keeps the resources at their old addresses.
     const currentState = copyForMoves(prior);
     const moves = new Moves();
-    const { resources: desiredResources, outputs, dataSources, dataSensitive, readAtApply, graph } = await this.resolveAndCheck(currentState, 'plan', moves, limit);
+    const imports = new Imports(this.providers, limit, (key, resource) => this.readBack(key, resource));
+    const { resources: desiredResources, outputs, dataSources, dataSensitive, readAtApply, graph } = await this.resolveAndCheck(currentState, 'plan', moves, limit, imports);
 
-    const actions = plan(desiredResources, currentState, (address) => moves.originOf(address));
+    imports.adopt(currentState, desiredResources);
+    const actions = plan(
+      desiredResources,
+      currentState,
+      (address) => moves.originOf(address),
+      (address) => imports.idOf(address)
+    );
     checkPreventDestroy(actions, desiredResources, currentState.resources);
     await checkSameObjects(actions, desiredResources, currentState, this.providers, limit);
     checkApplyOrder(graph, actions, currentState, desiredResources);
@@ -83,6 +91,7 @@ export class Orchestrator {
       outputs: outputChanges(currentState.outputs ?? {}, outputs),
       prevRun: prevRun.resources,
       prior: prior.resources,
+      imported: imports.imported(currentState),
       schemas: await this.schemasOf(types, limit),
       dataSources,
       ...(Object.keys(dataSensitive).length > 0 && { dataSensitive }),
@@ -147,8 +156,8 @@ export class Orchestrator {
     }
   }
 
-  /** Applies every move to `state` before anything reads it, and records each in `moves`. */
-  private async resolveAndCheck(state: State, walk: Walk, moves: Moves, limit: Limit): Promise<DesiredState & { graph: Graph<GraphNode> }> {
+  /** Applies every move, then every import where `imports` is given, to `state` before anything reads it, and records each. */
+  private async resolveAndCheck(state: State, walk: Walk, moves: Moves, limit: Limit, imports?: Imports): Promise<DesiredState & { graph: Graph<GraphNode> }> {
     const { loader, graphBuilder, writtenCheck, desiredStateBuilder, modules } = this.newRun(limit);
     const { loadedResources, loadedModules, schemas } = await loader.load();
 
@@ -156,10 +165,14 @@ export class Orchestrator {
     checkAttributes(loadedResources, schemas);
     await writtenCheck.check(loadedResources, loadedModules, graph);
     const moved = movesIn(loadedModules);
+    const importing = importsIn(loadedModules);
+    checkImports(importing, loadedResources, this.providers);
     applyMoves(moved, state, moves);
+    await imports?.importAll(importing, state);
     const desired = await desiredStateBuilder.build(loadedResources, graph, state, schemas, walk, moves);
     const declared = loadedModules.flatMap(({ address }) => (address.isRoot() ? [] : modules.of(address)));
     checkMovedAway(moved, desired.resources, declared);
+    imports?.checkPlanned(desired.resources);
     return { ...desired, graph };
   }
 }

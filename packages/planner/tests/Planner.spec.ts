@@ -372,7 +372,7 @@ describe('Planner', () => {
     it('should serialize plan correctly', () => {
       const actions: PlanAction[] = [];
       const files = { 'main.clay': 'resource "test" {}', 'm/main.clay': 'output "x" { value = "y" }' };
-      const serialized = JSON.parse(serializePlan({ serial: 0, actions, outputs: {}, prevRun: {}, prior: {}, schemas: {}, dataSources: {}, readAtApply: [] }, files));
+      const serialized = JSON.parse(serializePlan({ serial: 0, actions, outputs: {}, prevRun: {}, prior: {}, imported: {}, schemas: {}, dataSources: {}, readAtApply: [] }, files));
 
       expect(serialized.version).toBe(PLAN_FILE_VERSION);
       expect(serialized.actions).toEqual(actions);
@@ -390,6 +390,7 @@ describe('Planner', () => {
         outputs: {},
         prevRun: {},
         prior: {},
+        imported: {},
         schemas: {},
         dataSources: {},
         readAtApply: [],
@@ -421,6 +422,7 @@ describe('Planner', () => {
         outputs: {},
         prevRun: {},
         prior: {},
+        imported: {},
         schemas: {},
         dataSources: {},
         readAtApply: [],

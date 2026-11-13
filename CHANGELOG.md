@@ -75,6 +75,9 @@ a configuration means or how the state file is written.
   for a lock another run holds, on every backend, and says who holds it
 - `clay force-unlock <id>` releases the lock of a run that died, by its id, on every
   backend. The locked error names the id. A lock with another id is left in place
+- `import` blocks take over an object that exists but is not in state, as a file by its
+  path. The plan shows the import and any change it brings, and the apply makes both.
+  `local_file` is the one type that can be imported
 - `clay init` moves the state to the place the block names, once asked or with `--yes`,
   and leaves the old one as it was
 - `apply --parallelism`: each action runs once what it reads is done, with ten provider

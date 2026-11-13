@@ -64,11 +64,13 @@ export function actionLine(action: PlanAction, planned: boolean): string {
   const address = Address.of(action).toString() + (action.deposed ? ' (deposed object)' : '');
   const will = planned ? 'will be ' : '';
   const type = shownType(action);
+  const imported = action.importedFrom === undefined ? undefined : `imported from ${jsonText(action.importedFrom)}`;
+  if (type === 'NO_OP' && imported) return `  ${styleText('cyan', '<-')} ${address} ${will}${imported}`;
   if (type === 'NO_OP') return `  ${styleText('cyan', '>')} ${address} ${will}moved from ${action.movedFrom}`;
 
   const moved = action.movedFrom ? `, moved from ${action.movedFrom}` : '';
   const first = action.createBeforeDestroy ? ', the new one created first' : '';
-  return `  ${actionSymbol(type)} ${address} ${will}${pastTense(type)}${first}${moved}`;
+  return `  ${actionSymbol(type)} ${address} ${will}${pastTense(type)}${first}${moved}${imported ? `, ${imported}` : ''}`;
 }
 
 function without(members: unknown[], others: unknown[]): unknown[] {
@@ -129,12 +131,18 @@ function displayTaint({ type }: PlanAction, prior: Resource | undefined): void {
   if (type === 'REPLACE' && prior?.tainted) console.log('      tainted, so it is replaced');
 }
 
+/** The plan holds a moved resource where it was before the move, and an imported one apart. */
+function priorOf(action: PlanAction, plan: Plan): Resource | undefined {
+  const address = Address.of(action).toString();
+
+  return action.importedFrom === undefined ? plan.prior[action.movedFrom ?? address] : plan.imported[address];
+}
+
 function displayAction(action: PlanAction, plan: Plan): void {
   console.log(actionLine(action, true));
   if (shownType(action) !== 'UPDATE' && action.type !== 'REPLACE') return;
 
-  // The plan holds a moved resource where it was before the move.
-  const prior = plan.prior[action.movedFrom ?? Address.of(action).toString()];
+  const prior = priorOf(action, plan);
   const before = prior?.sensitive ?? [];
   const after = action.sensitive ?? [];
   displayTaint(action, prior);
@@ -199,12 +207,13 @@ function displaySummary(actions: PlanAction[]): void {
   const count = (type: PlanAction['type']) => actions.filter((action) => shownType(action) === type).length;
   const replaced = count('REPLACE');
   const moved = actions.filter((action) => action.movedFrom).length;
+  const imported = actions.filter((action) => action.importedFrom !== undefined).length;
   // One delete of an address destroys all its deposed objects, so a replace that made the new one first adds none beside one already planned.
   const planned = new Set(actions.filter((action) => action.deposed).map((action) => Address.of(action).toString()));
   const destroyed =
     count('DELETE') + actions.filter((action) => shownType(action) === 'REPLACE' && !(action.createBeforeDestroy && planned.has(Address.of(action).toString()))).length;
 
-  const summary = `${count('CREATE') + replaced} to add, ${count('UPDATE')} to change, ${destroyed} to destroy${moved > 0 ? `, ${moved} to move` : ''}`;
+  const summary = `${count('CREATE') + replaced} to add, ${count('UPDATE')} to change, ${destroyed} to destroy${moved > 0 ? `, ${moved} to move` : ''}${imported > 0 ? `, ${imported} to import` : ''}`;
   console.log(styleText('bold', `\nPlan: ${summary}.`));
 }
 

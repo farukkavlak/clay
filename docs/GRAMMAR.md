@@ -68,7 +68,7 @@ same way, a line at a time, until its closing line; one still open at the end is
 where it opens.
 
 There are no keywords. `resource`, `data`, `variable`, `locals`, `output`, `module`,
-`moved` and `clay` start a block only at the top level; anywhere else they are ordinary identifiers, so
+`moved`, `import` and `clay` start a block only at the top level; anywhere else they are ordinary identifiers, so
 `data = "x"` inside a block is an attribute. `for` right after `[` or `{`, and `in` after
 its names, start a for expression; `[for.a.id]` is still a list holding a reference, and
 `{ for = 1 }` a map with a key named `for`.
@@ -92,7 +92,8 @@ the file.
 A file is a sequence of blocks. Two blocks of the same kind and name in one file are an
 error. A resource is named by its type and name together, so `resource "a" "x"` and
 `resource "b" "x"` are different resources. A `moved` block has no name, and a file may
-hold any number of them.
+hold any number of them. An `import` block has none either, and is named by its `to`: two
+to one address are an error, across the files of a module too.
 
 ```
 resource "type" "name" { attributes }
@@ -102,6 +103,7 @@ locals { attributes }
 output "name" { value = value }
 module "name" { attributes }
 moved { from = address to = address }
+import { to = address id = string }
 clay { backend "type" { attributes } }
 ```
 
@@ -142,6 +144,7 @@ What the engine reads from each:
 | `output`   | `value`; `type`, read below; `sensitive`, which hides the value of a root output wherever it is printed; `description`, checked and dropped; `depends_on`             |
 | `module`   | `source`, a literal string naming a directory relative to the file; `count` or `for_each`, and `depends_on`; every other attribute is an input                        |
 | `moved`    | `from` and `to`, each a resource or module address written out                                                                                                        |
+| `import`   | `to`, a resource address written out, and `id`, a string written out                                                                                                  |
 | `clay`     | one `backend` block, with one label, its type; its attributes are constants, and what each type takes is checked by the backend                                       |
 
 A resource, a data source or a module with both `count` and `for_each` is refused where
@@ -182,6 +185,13 @@ reference or a call. A data source, a value that is not a reference and a path i
 attribute are refused where they are written. `from` and `to` the same address is refused
 at the block; a `to` of another type, or a module on one side and a resource on the other,
 at `to`.
+
+`import` takes `to` and `id`, both, and nothing else. `to` is a resource of the root
+module written out, `local_file.a`, `local_file.a[0]` or `local_file.a["web"]`, with a key
+as `moved` takes one. A module, a resource inside one, a data source, a value that is not
+a reference and a path into an attribute are refused at `to`. `id` is a string written
+out, with no `${`: a reference, a template, a number and an empty string are refused at
+`id`.
 
 ## Values
 

@@ -185,6 +185,20 @@ export class LocalFileResource implements ResourceHandler {
     });
   }
 
+  // A relative path resolves where Clay runs, as a create's does. The path is the id until a plan sets its own.
+  async importResource(id: string): Promise<Record<string, unknown> | null> {
+    const file = path.resolve(id);
+    const entry = await fs.stat(file).catch((error: unknown) => {
+      if (missing(error)) return null;
+
+      throw error;
+    });
+    if (entry === null) return null;
+    if (!entry.isFile()) throw new Error(`${file} is not a file`);
+
+    return { id: file, path: file };
+  }
+
   // The id once there is one, since a delete removes that; before it, the path a create writes.
   async identify(values: Record<string, unknown>): Promise<Identity | undefined> {
     const file = typeof values.id === 'string' ? values.id : values.path;

@@ -56,6 +56,9 @@ export interface Provider {
   /** A type may also be a resource type, as a file is both written and read. */
   readonly dataSources: string[];
 
+  /** Resource types `importResource` takes; left out where none is. */
+  readonly importable?: string[];
+
   getSchema(type: string): Promise<Schema>;
 
   /** Throws on invalid inputs. An input may be UNKNOWN until apply, and is checked then. */
@@ -83,6 +86,9 @@ export interface Provider {
 
   /** The real thing the values name; undefined until the values say. */
   identify?(type: string, values: Record<string, unknown>): Promise<Identity | undefined>;
+
+  /** What `read` needs to find the object `id` names, or `null` when there is none. Only for a type in `importable`. */
+  importResource?(type: string, id: string): Promise<Record<string, unknown> | null>;
 }
 
 /** The real thing an object is, as a file. */
@@ -111,6 +117,8 @@ export interface ResourceHandler {
   delete(prior: Record<string, unknown>): Promise<void>;
 
   identify?(values: Record<string, unknown>): Promise<Identity | undefined>;
+
+  importResource?(id: string): Promise<Record<string, unknown> | null>;
 }
 
 export interface DataSourceHandler {

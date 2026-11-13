@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { growth, LINEAR } from '../../../tests/growth';
 import { parsePlanFile, Plan, serializePlan } from '../src/index';
 
-const emptyPlan: Plan = { serial: 0, actions: [], outputs: {}, prevRun: {}, prior: {}, schemas: { x: {} }, dataSources: {}, readAtApply: [] };
+const emptyPlan: Plan = { serial: 0, actions: [], outputs: {}, prevRun: {}, prior: {}, imported: {}, schemas: { x: {} }, dataSources: {}, readAtApply: [] };
 
 /** A plan file whose one change holds `size` values not known yet. */
 const unknownMembers = (size: number) => {

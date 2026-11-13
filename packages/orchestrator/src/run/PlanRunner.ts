@@ -8,7 +8,8 @@ import { GraphNode } from '../graph/DependencyGraphBuilder';
 import { Instances } from '../instances/Instances';
 import { blockKey } from '../keys';
 import { ApplyNode, applyGraph } from '../plan/applyGraph';
-import { checkMovedFrom, movesIn, plannedMoves } from '../plan/moves';
+import { checkMovedFrom, copyResources, movesIn, plannedMoves } from '../plan/moves';
+import { checkImportedFrom, importsIn } from '../plan/imports';
 import { ActionExecutor, Running } from './ActionExecutor';
 import { Applying, ApplyVisitor, groupBy } from './ApplyVisitor';
 import { LoadedConfig } from './ConfigLoader';
@@ -43,12 +44,15 @@ export class PlanRunner {
     checkOutputsMatch(outputs, config.mainProgram);
     const checked = { outputs, named: dataNamed(saved, graph) };
     checkMovedFrom(actions, movesIn(config.loadedModules), state);
+    checkImportedFrom(actions, importsIn(config.loadedModules));
     // Every move first, as the plan made them, so each entry and every dependency on it is at its new address.
     moveResources(state, plannedMoves(actions));
+    // Then every import, at the address the moves left free.
+    Object.assign(state.resources, copyResources(saved.imported));
     this.executor.expect(actions, state);
 
     const order = applyGraph(graph, actions, state);
-    // The refreshed resources and the moves, which no action records.
+    // The refreshed resources, the moves and the imports, which no action records.
     await this.stateManager.write(state);
 
     // Set before the last whole write, so one that fails is not tried again.

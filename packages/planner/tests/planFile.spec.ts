@@ -6,7 +6,7 @@ import { parsePlanFile, Plan, serializePlan } from '../src/index';
 // Empty schemas: these tests are about the file, not the schemas.
 const schemas = { null_resource: {}, x: {} };
 
-const emptyPlan: Plan = { serial: 0, actions: [], outputs: {}, prevRun: {}, prior: {}, schemas, dataSources: {}, readAtApply: [] };
+const emptyPlan: Plan = { serial: 0, actions: [], outputs: {}, prevRun: {}, prior: {}, imported: {}, schemas, dataSources: {}, readAtApply: [] };
 
 const aPlanFile = (plan: Plan = emptyPlan) => serializePlan(plan, { 'main.clay': '', 'm/main.clay': '' });
 
@@ -38,6 +38,7 @@ describe('reading a plan file', () => {
       serial: 0,
       prevRun: {},
       prior: {},
+      imported: {},
       schemas,
       dataSources: {},
       readAtApply: [],
@@ -67,6 +68,7 @@ describe('reading a plan file', () => {
       serial: 0,
       prevRun: {},
       prior: {},
+      imported: {},
       schemas,
       dataSources: {},
       readAtApply: [],
@@ -98,6 +100,7 @@ describe('reading a plan file', () => {
       outputs: { tags: { old: undefined, new: { value: tags, type: types.dynamic } } },
       prevRun: {},
       prior: {},
+      imported: {},
       schemas,
       dataSources: {},
       readAtApply: [],
@@ -145,6 +148,7 @@ describe('reading a plan file', () => {
       outputs: JSON.parse('{"__proto__": {"old": {"value": "a", "type": {"kind": "string"}}, "new": {"value": "b", "type": {"kind": "string"}}}}'),
       prevRun: {},
       prior: {},
+      imported: {},
       schemas,
       dataSources: {},
       readAtApply: [],
@@ -169,6 +173,7 @@ describe('reading a plan file', () => {
       serial: 0,
       prevRun: {},
       prior: {},
+      imported: {},
       schemas,
       dataSources: {},
       readAtApply: [],
@@ -193,6 +198,7 @@ describe('reading a plan file', () => {
       outputs: {},
       prevRun: {},
       prior: {},
+      imported: {},
       schemas,
       dataSources: {},
       readAtApply: [],
@@ -244,6 +250,7 @@ describe('reading a plan file', () => {
       serial: 0,
       prevRun: {},
       prior: {},
+      imported: {},
       schemas,
       dataSources: {},
       readAtApply: [],
@@ -266,6 +273,55 @@ describe('reading a plan file', () => {
       'module.m[0].null_resource.e[0]',
       'module.n.null_resource.g[1]',
     ]);
+  });
+
+  describe('an import', () => {
+    const object = { resourceType: 'null_resource', name: 'a', attributes: { id: 'x' } };
+    const theObject = { 'null_resource.a': object };
+    const importing = (action: Record<string, unknown>, imported: Record<string, unknown> = theObject) => ({
+      ...fields(),
+      actions: [{ resourceType: 'null_resource', name: 'a', ...action }],
+      imported,
+    });
+
+    it('reads the object it imports back with the action that imports it', () => {
+      const plan: Plan = { ...emptyPlan, actions: [{ type: 'NO_OP', resourceType: 'null_resource', name: 'a', importedFrom: 'x' }], imported: { 'null_resource.a': object } };
+      const read = parsePlanFile(aPlanFile(plan), 'tfplan.json');
+
+      expect([read.actions[0].importedFrom, read.imported]).toEqual(['x', { 'null_resource.a': object }]);
+    });
+
+    it.each([
+      ['an id that is no string', { type: 'NO_OP', importedFrom: 1 }],
+      ['an empty id', { type: 'NO_OP', importedFrom: '' }],
+      ['a create', { type: 'CREATE', importedFrom: 'x', planned: {}, after: {} }],
+      ['a delete', { type: 'DELETE', importedFrom: 'x' }],
+      ['an action that also moves', { type: 'NO_OP', importedFrom: 'x', movedFrom: 'null_resource.b' }],
+    ])('refuses %s', (_, action) => {
+      expect(read(importing(action))).toThrow(/^tfplan\.json is not a plan file$/);
+    });
+
+    it('refuses an import with no object', () => {
+      expect(read(importing({ type: 'NO_OP', importedFrom: 'x' }, {}))).toThrow('tfplan.json is not a plan file: it imports null_resource.a but holds no object for it');
+    });
+
+    it('refuses an object no action imports', () => {
+      expect(read(importing({ type: 'NO_OP' }))).toThrow('tfplan.json is not a plan file: it holds an imported object for null_resource.a but no action imports it');
+    });
+
+    it('refuses imported objects that are not resources', () => {
+      expect(read(importing({ type: 'NO_OP', importedFrom: 'x' }, { 'null_resource.a': { name: 'a' } }))).toThrow(
+        'tfplan.json is not a plan file: "null_resource.a" is not a resource'
+      );
+      expect(read({ ...fields(), imported: undefined })).toThrow('tfplan.json is not a plan file: its imported resources are not a record');
+    });
+
+    it('refuses an imported type that has no schema', () => {
+      const pool = { resourceType: 'pool', name: 'a', attributes: {} };
+      expect(read({ ...fields(), actions: [{ type: 'NO_OP', resourceType: 'null_resource', name: 'a' }], imported: { 'pool.a': pool } })).toThrow(
+        'tfplan.json is not a plan file: it has no schema for pool'
+      );
+    });
   });
 
   it('names an instance key that is not whole', () => {

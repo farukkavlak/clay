@@ -37,14 +37,27 @@ function keptChanges(desired: DesiredResource, current: Resource): Pick<PlanActi
 /** Where the state held what is now at an address, if a move took it there. */
 export type MovedFrom = (address: string) => string | undefined;
 
-function processExistingResource(actions: PlanAction[], desired: DesiredResource, currentResource: Resource, moved?: string) {
+/** The id the object at an address was imported by, if this plan imported it. */
+export type ImportedFrom = (address: string) => string | undefined;
+
+/** How an existing object came to its address in this plan: a move, an import, or neither. */
+type Origin = Pick<PlanAction, 'movedFrom' | 'importedFrom'>;
+
+function originOf(key: string, movedFrom?: MovedFrom, importedFrom?: ImportedFrom): Origin {
+  const moved = movedFrom?.(key);
+  const imported = importedFrom?.(key);
+
+  return { ...(moved && { movedFrom: moved }), ...(imported && { importedFrom: imported }) };
+}
+
+function processExistingResource(actions: PlanAction[], desired: DesiredResource, currentResource: Resource, origin: Origin) {
   const changes = calculateDiff(currentResource.attributes, desired.after);
 
   if (!changes && !desired.replace) {
     actions.push({
       type: 'NO_OP',
       ...desired.address.fields(),
-      ...(moved && { movedFrom: moved }),
+      ...origin,
       ...marked(desired),
       ...protectedBy(desired),
       ...keptChanges(desired, currentResource),
@@ -56,7 +69,7 @@ function processExistingResource(actions: PlanAction[], desired: DesiredResource
   actions.push({
     type: desired.replace ? 'REPLACE' : 'UPDATE',
     ...desired.address.fields(),
-    ...(moved && { movedFrom: moved }),
+    ...origin,
     planned: desired.attributes,
     after: desired.after,
     ...carriedOver(desired),
@@ -69,8 +82,8 @@ function deleteOf(resource: Resource, moved: string | undefined): PlanAction {
   return { type: 'DELETE', ...Address.of(resource).fields(), ...(moved && { movedFrom: moved }) };
 }
 
-/** `currentState` already has every move applied, each of which `movedFrom` knows. */
-export function plan(desiredResources: DesiredResource[], currentState: State, movedFrom?: MovedFrom): PlanAction[] {
+/** `currentState` already has every move and import applied, each of which `movedFrom` or `importedFrom` knows. */
+export function plan(desiredResources: DesiredResource[], currentState: State, movedFrom?: MovedFrom, importedFrom?: ImportedFrom): PlanAction[] {
   const actions: PlanAction[] = [];
   const currentMap = new Map<string, Resource>(Object.entries(currentState.resources));
   const desiredMap = new Map<string, DesiredResource>();
@@ -79,7 +92,7 @@ export function plan(desiredResources: DesiredResource[], currentState: State, m
 
   for (const [key, desired] of desiredMap.entries()) {
     const currentResource = currentMap.get(key);
-    if (currentResource) processExistingResource(actions, desired, currentResource, movedFrom?.(key));
+    if (currentResource) processExistingResource(actions, desired, currentResource, originOf(key, movedFrom, importedFrom));
     else
       actions.push({
         type: 'CREATE',

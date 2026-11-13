@@ -80,6 +80,14 @@ function isMovedFrom(action: Record<string, unknown>): boolean {
   return typeof movedFrom === 'string' && isAddress(movedFrom) && Address.parse(movedFrom).resourceType === action.resourceType && movedFrom !== addressOf(action).toString();
 }
 
+/** Only an object the plan keeps comes in by an import, and one that was moved was already in state. */
+function isImportedFrom(action: Record<string, unknown>): boolean {
+  const { importedFrom } = action;
+  if (importedFrom === undefined) return true;
+
+  return typeof importedFrom === 'string' && importedFrom !== '' && action.type !== 'CREATE' && action.type !== 'DELETE' && action.movedFrom === undefined;
+}
+
 const SENDS_VALUES = new Set<ActionType>(['CREATE', 'UPDATE', 'REPLACE']);
 
 /** Create, update and replace carry `planned` and `after`; other actions carry neither. Any may carry which parts are sensitive. */
@@ -138,7 +146,13 @@ function isActionAt(action: Record<string, unknown>): boolean {
 
 function isAction(action: unknown): boolean {
   return (
-    isRecord(action) && isActionAt(action) && isMovedFrom(action) && isStateOnly(action) && (action.changes === undefined || isChanges(action.changes)) && carriesValues(action)
+    isRecord(action) &&
+    isActionAt(action) &&
+    isMovedFrom(action) &&
+    isImportedFrom(action) &&
+    isStateOnly(action) &&
+    (action.changes === undefined || isChanges(action.changes)) &&
+    carriesValues(action)
   );
 }
 
@@ -195,9 +209,18 @@ export function validatePlanFile(planFile: unknown): planFile is PlanFile {
 
 /** Without its type's schema, a resource's sets could not be shown as sets. */
 export function checkSchemasCover(plan: Plan, say: (problem: string) => never): void {
-  const types = [...plan.actions, ...Object.values(plan.prevRun), ...Object.values(plan.prior)].map((held) => held.resourceType);
+  const types = [...plan.actions, ...Object.values(plan.prevRun), ...Object.values(plan.prior), ...Object.values(plan.imported)].map((held) => held.resourceType);
   const missing = types.find((type) => !Object.hasOwn(plan.schemas, type));
   if (missing !== undefined) say(`it has no schema for ${missing}`);
+}
+
+/** Each imported object has the action that imports it, and each such action its object. */
+export function checkImported({ actions, imported }: Plan, say: (problem: string) => never): void {
+  const importing = actions.filter((action) => action.importedFrom !== undefined).map((action) => Address.of(action).toString());
+  for (const address of importing) if (!Object.hasOwn(imported, address)) say(`it imports ${address} but holds no object for it`);
+
+  const acted = new Set(importing);
+  for (const address of Object.keys(imported)) if (!acted.has(address)) say(`it holds an imported object for ${address} but no action imports it`);
 }
 
 /** Checked here, so a wrong address fails at the file and not deep in the apply. */

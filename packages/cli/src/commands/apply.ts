@@ -25,8 +25,10 @@ function summarize(applied: PlanAction[], forgotten: number): string {
   // A replace that made the new object first destroys the old one in a delete of its own, which counts there.
   const destroyedWithReplace = applied.filter((action) => shownType(action) === 'REPLACE' && !action.createBeforeDestroy).length;
   const moved = applied.filter((action) => action.movedFrom).length;
+  const imported = applied.filter((action) => action.importedFrom !== undefined).length;
+  const extra = [moved > 0 && `${moved} moved`, imported > 0 && `${imported} imported`, forgotten > 0 && `${forgotten} forgotten`].filter((part) => part !== false);
 
-  return `${count('CREATE') + replaced} added, ${count('UPDATE')} changed, ${count('DELETE') + destroyedWithReplace} destroyed${moved > 0 ? `, ${moved} moved` : ''}${forgotten > 0 ? `, ${forgotten} forgotten` : ''}`;
+  return [`${count('CREATE') + replaced} added, ${count('UPDATE')} changed, ${count('DELETE') + destroyedWithReplace} destroyed`, ...extra].join(', ');
 }
 
 /** Resources deleted outside Clay that apply drops from state without an action. */

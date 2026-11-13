@@ -5,6 +5,7 @@ import { ConfigError } from '../ConfigError';
 import { attributesOnly, refuseBlock } from './attributes';
 import { checkBackendArgument, checkClayHeader, decodeClay, refuseClayArgument } from './decodeClay';
 import { decodeData } from './decodeData';
+import { checkImportArgument, decodeImport } from './decodeImport';
 import { decodeModule } from './decodeModule';
 import { checkMovedArgument, decodeMoved } from './decodeMoved';
 import { decodeOutput, outputRules } from './decodeOutput';
@@ -51,6 +52,7 @@ const KINDS = new Map<string, Kind>([
   ['module', { labels: named('module'), opening: "Expect '{' after module name.", decode: (block, labels) => [decodeModule(block, labels)] }],
   ['locals', { labels: [], opening: "Expect '{' after 'locals'.", decode: decodeLocals }],
   ['moved', { labels: [], opening: "Expect '{' after 'moved'.", decode: (block) => [decodeMoved(block)] }],
+  ['import', { labels: [], opening: "Expect '{' after 'import'.", decode: (block) => [decodeImport(block)] }],
   ['clay', { labels: [], opening: "Expect '{' after 'clay'.", decode: decodeClay }],
 ]);
 
@@ -114,6 +116,14 @@ function checkNew({ name, position }: Attribute, { block, before }: Inside): voi
   checkKey(Object.fromEntries(attributesOnly(before).map((item) => [item.name, true])), { value: name, position });
 }
 
+/** The blocks whose arguments are checked by name alone, apart from what else the block holds. */
+const ARGUMENTS = new Map<string, (attribute: Attribute) => unknown>([
+  ['clay', refuseClayArgument],
+  ['lifecycle', lifecycleArgument],
+  ['moved', checkMovedArgument],
+  ['import', checkImportArgument],
+]);
+
 /** What each kind of block takes, checked as each part of it is read. */
 export const SCHEMA: Schema = {
   header(header, opened, inside) {
@@ -126,21 +136,15 @@ export const SCHEMA: Schema = {
 
     const { name } = inside.block;
     const rules = typedRules(inside.block);
+    const check = ARGUMENTS.get(name);
+    if (check) {
+      check(attribute);
+      return;
+    }
+
     switch (name) {
-      case 'clay': {
-        refuseClayArgument(attribute);
-        break;
-      }
       case 'backend': {
         checkBackendArgument(attribute, inside.block);
-        break;
-      }
-      case 'lifecycle': {
-        lifecycleArgument(attribute);
-        break;
-      }
-      case 'moved': {
-        checkMovedArgument(attribute);
         break;
       }
       case 'provisioner': {
