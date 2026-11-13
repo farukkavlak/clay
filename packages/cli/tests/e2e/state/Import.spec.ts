@@ -12,6 +12,7 @@ import { start } from '../start';
 
 const imported = (to: string, id: string) => `import {\n to = ${to}\n id = "${id}"\n}\n`;
 const importedBy = (to: string, id: string) => `import {\n to = ${to}\n id = ${id}\n}\n`;
+const moduleCall = (head = '', n = '"x"') => `module "m" {\n source = "./m"\n n = ${n}\n ${head}\n}\n`;
 
 const lineAndColumn = (config: string, needle: string) => {
   const { line, column } = placeOf(config, needle);
@@ -279,6 +280,8 @@ describe('an import block', () => {
     return [error.message, [error.position.line, error.position.column]];
   };
 
+  const inModule = (to: string, file = '${var.n}') => `variable "n" {}\nresource "local_file" "${to}" {\n path = "${dir}/${file}.txt"\n content = "kept"\n}\n`;
+
   describe('with for_each', () => {
     beforeEach(async () => {
       for (const name of ['x', 'y']) await fs.writeFile(path.join(dir, `${name}.txt`), 'kept', 'utf8');
@@ -398,6 +401,118 @@ describe('an import block', () => {
         'each.value is only known inside a resource, a data source or a module call that has for_each',
         lineAndColumn(config, 'each.value\n}'),
       ]);
+    });
+  });
+
+  describe('to a resource in a module', () => {
+    beforeEach(async () => {
+      await fs.mkdir(path.join(dir, 'm', 'b'), { recursive: true });
+      await fs.writeFile(path.join(dir, 'm', 'main.clay'), inModule('a') + 'module "b" {\n source = "./b"\n n = var.n\n}\n', 'utf8');
+      await fs.writeFile(path.join(dir, 'm', 'b', 'main.clay'), inModule('c', '${var.n}-b'), 'utf8');
+      for (const name of ['x', 'y']) await fs.writeFile(path.join(dir, `${name}.txt`), 'kept', 'utf8');
+    });
+
+    it('takes over a file at an address written out, keeps its module in state, and imports nothing after', async () => {
+      const config = moduleCall() + imported('module.m.local_file.a', path.join(dir, 'x.txt'));
+
+      expect(await planned(config)).toEqual([
+        ['NO_OP', 'module.m.local_file.a', path.join(dir, 'x.txt')],
+        ['CREATE', 'module.m.module.b.local_file.c', undefined],
+      ]);
+      await apply(config);
+      const resources = await held();
+      expect(resources['module.m.local_file.a']).toMatchObject({ modulePath: [{ name: 'm' }], resourceType: 'local_file', name: 'a', attributes: { id: path.join(dir, 'x.txt') } });
+      const again = await planned(config);
+      expect(again.find(([, address]) => address === 'module.m.local_file.a')).toEqual(['NO_OP', 'module.m.local_file.a', undefined]);
+    });
+
+    it('takes over a file two modules deep, in an instance of the outer one', async () => {
+      const inner = path.join(dir, 'y-b.txt');
+      await fs.writeFile(inner, 'kept', 'utf8');
+      const config = moduleCall('count = 1', '"y"') + imported('module.m[0].module.b.local_file.c', inner);
+      const actions = await planned(config);
+
+      expect(actions.find(([, address]) => address === 'module.m[0].module.b.local_file.c')).toEqual(['NO_OP', 'module.m[0].module.b.local_file.c', inner]);
+    });
+
+    it('imports each item to the module instance its key names, and applies the plan that shows them', async () => {
+      const config = moduleCall('for_each = toset(["x", "y"])', 'each.key') + each('{ x = "x", y = "y" }', 'module.m[each.key].local_file.a');
+
+      const actions = await planned(config);
+      expect(actions.filter((action) => action[2] !== undefined)).toEqual([
+        ['NO_OP', 'module.m["x"].local_file.a', path.join(dir, 'x.txt')],
+        ['NO_OP', 'module.m["y"].local_file.a', path.join(dir, 'y.txt')],
+      ]);
+      await apply(config);
+      const resources = await held();
+      expect(resources['module.m["y"].local_file.a']).toMatchObject({ modulePath: [{ name: 'm', key: 'y' }], attributes: { id: path.join(dir, 'y.txt') } });
+    });
+
+    it('applies the plan of a for_each to a module instance written out', async () => {
+      await apply(moduleCall('count = 1') + each('["x"]', 'module.m[0].local_file.a'));
+      const resources = await held();
+
+      expect(resources['module.m[0].local_file.a']).toMatchObject({ modulePath: [{ name: 'm', key: 0 }], attributes: { id: path.join(dir, 'x.txt') } });
+    });
+
+    it('makes the resource in a module instance wait for what its id reads', async () => {
+      const pointer = path.join(dir, 'pointer.txt');
+      await fs.writeFile(pointer, path.join(dir, 'x.txt'), 'utf8');
+      const config = `data "local_file" "p" {\n path = "${pointer}"\n}\n` + moduleCall('count = 1') + importedBy('module.m[0].local_file.a', 'data.local_file.p.content');
+      const actions = await planned(config);
+
+      expect(actions.find(([, address]) => address === 'module.m[0].local_file.a')).toEqual(['NO_OP', 'module.m[0].local_file.a', path.join(dir, 'x.txt')]);
+    });
+
+    it.each([
+      ['a module the root does not call', () => imported('module.n.local_file.a', 'x'), 'import to module.n.local_file.a, but the root module calls no module "n"'],
+      [
+        'a module the module does not call',
+        () => moduleCall() + imported('module.m.module.z.local_file.c', 'x'),
+        'import to module.m.module.z.local_file.c, but module.m calls no module "z"',
+      ],
+      [
+        'a resource the module does not declare',
+        () => moduleCall() + imported('module.m.local_file.z', 'x'),
+        'import to module.m.local_file.z, but module.m declares no resource "local_file" "z"',
+      ],
+      [
+        'a module key of the wrong kind',
+        () => moduleCall('count = 1') + imported('module.m["x"].local_file.a', 'x'),
+        'import to module.m["x"].local_file.a, but module "m" has count, so an instance is named by a number, as in [0]',
+      ],
+      [
+        'a module key where the call has none',
+        () => moduleCall() + imported('module.m[0].local_file.a', 'x'),
+        'import to module.m[0].local_file.a, but module "m" has neither count nor for_each, so it takes no key',
+      ],
+      [
+        'no key where the call has for_each, under a key read from each',
+        () => moduleCall('for_each = toset(["x"])', 'each.key') + each('["x"]', 'module.m.module.b[each.key].local_file.c'),
+        'import to module.m.module.b[each.key].local_file.c, but module "m" has for_each, so an instance is named by a string, as in ["a"]',
+      ],
+    ])('refuses %s at the block in validate', async (_, make, message) => {
+      const config = make();
+
+      expect(await refusedWhere(config, 'validate')).toEqual([message, lineAndColumn(config, 'import {')]);
+    });
+
+    it.each([
+      [
+        'a module key read from each of the wrong kind',
+        () => moduleCall('count = 1') + each('["x"]', 'module.m[each.key].local_file.a'),
+        'import to module.m["x"].local_file.a, but module "m" has count, so an instance is named by a number, as in [0]',
+      ],
+      [
+        'a module instance the configuration does not make',
+        () => moduleCall('count = 1') + imported('module.m[1].local_file.a', path.join(dir, 'x.txt')),
+        'import to module.m[1].local_file.a, but the configuration makes no such instance',
+      ],
+    ])('refuses %s at the block in plan', async (_, make, message) => {
+      const config = make();
+
+      expect(await refusedWhere(config)).toEqual([message, lineAndColumn(config, 'import {')]);
+      expect(await held()).toEqual({});
     });
   });
 

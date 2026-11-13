@@ -1,4 +1,4 @@
-import { Address, ExactNumber, ModuleAddress, Type } from '@clay/contracts';
+import { Address, ExactNumber, InstanceKey, ModuleAddress, spellKey, Type } from '@clay/contracts';
 import { Position } from './Position';
 
 interface Node {
@@ -197,22 +197,34 @@ export interface LocalBlock extends Node {
  */
 export type MovedBlock = Node & { type: 'Moved' } & ({ kind: 'resource'; from: Address; to: Address } | { kind: 'module'; from: ModuleAddress; to: ModuleAddress });
 
-/** `[each.key]`: read for each item of a for_each, from `each` alone. */
+/** `[each.key]`: read for each item of a for_each, from `each` alone. `part` is the module call it keys, counted from the root, or the resource past the last. */
 export interface ImportKey {
+  part: number;
   value: AttributeValue;
   spelled: string;
 }
 
 /**
  * The real object `id` names becomes `to`, unless the state already holds `to`. `id` is read at plan, as the walk reaches `to`.
- * With `forEach`, once for each item; `to` then has no key where `key` is given.
+ * With `forEach`, once for each item; `to` then has no key at a part one of `keys` reads.
  */
 export interface ImportBlock extends Node {
   type: 'Import';
   to: Address;
-  key?: ImportKey;
+  keys: ImportKey[];
   forEach?: AttributeValue;
   id: AttributeValue;
+}
+
+/** `to` as written, a key read from `each` as it is spelled. */
+function spellImportTo({ to, keys }: ImportBlock): string {
+  const keyAt = (part: number, written: InstanceKey | undefined) => {
+    const read = keys.find((key) => key.part === part);
+    return read ? `[${read.spelled}]` : spellKey(written);
+  };
+  const modules = to.module.path.map(({ name, key }, part) => `module.${name}${keyAt(part, key)}.`).join('');
+
+  return `${modules}${to.resourceType}.${to.name}${keyAt(to.module.path.length, to.key)}`;
 }
 
 /** Where the state lives, from the `clay` block of the root module. */
@@ -231,7 +243,7 @@ export function spell(statement: Statement): string {
   if (statement.type === 'Resource') return `resource "${statement.resourceType}" "${statement.name}"`;
   if (statement.type === 'Data') return `data "${statement.dataSourceType}" "${statement.name}"`;
   if (statement.type === 'Moved') return `moved from ${statement.from}`;
-  if (statement.type === 'Import') return `import to ${statement.to}${statement.key ? `[${statement.key.spelled}]` : ''}`;
+  if (statement.type === 'Import') return `import to ${spellImportTo(statement)}`;
   if (statement.type === 'Backend') return 'a backend';
   return `${statement.type.toLowerCase()} "${statement.name}"`;
 }

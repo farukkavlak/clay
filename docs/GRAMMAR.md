@@ -188,12 +188,13 @@ at the block; a `to` of another type, or a module on one side and a resource on 
 at `to`.
 
 `import` takes `to` and `id`, both, and `for_each`, and nothing else. `to` is a resource
-of the root module written out, `local_file.a`, `local_file.a[0]` or `local_file.a["web"]`,
-with a key as `moved` takes one. With `for_each`, the key may read `each` and nothing
-else, as in `local_file.a[each.key]`. A key that reads anything else is refused at what
-it reads, and a key that reads `each` with no `for_each` is refused at `to`. A module, a
-resource inside one, a data source, a value that is not a reference and a path into an
-attribute are refused at `to`. `id` is any expression; what its value must be is checked
+written out, `local_file.a`, `local_file.a[0]`, `local_file.a["web"]` or
+`module.app[0].local_file.a`, each key as `moved` takes one. With `for_each`, any key may
+read `each` and nothing else, as in `module.app[each.key].local_file.a`. A key that reads
+anything else is refused at what it reads, and a key that reads `each` with no `for_each`
+is refused at `to`. A module call alone, a data source, a value that is not a reference, a
+path into an attribute, and a key after another key, after `module` or after a type are
+refused at `to`. `id` is any expression; what its value must be is checked
 at plan.
 
 ## Values

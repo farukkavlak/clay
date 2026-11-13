@@ -5,7 +5,7 @@ import { AttributeValue, callsIn, DataBlock, ModuleBlock, Position, ReferenceNod
 import { Instances, Repetition } from '../instances/Instances';
 import { Declared, declaredOf } from '../values/declared';
 import { functionCalled } from '../expressions/functions';
-import { callKey, Context, dataSourceAddress, dataSourceKey, localKey, ModuleCall, outputKey, scopeOf, variableKey } from '../keys';
+import { blockKey, callKey, Context, dataSourceAddress, dataSourceKey, localKey, ModuleCall, outputKey, scopeOf, variableKey } from '../keys';
 import { ModuleInstances } from '../instances/ModuleInstances';
 import { placed, tryAt, withPlace } from '../place';
 import { COUNT_INDEX_OUTSIDE, eachOutside, readCall, readInstance, SELF_OUTSIDE } from '../expressions/references/instance';
@@ -212,13 +212,13 @@ export class DependencyGraphBuilder {
     if (!address.isRoot()) return;
 
     for (const block of program) {
-      if (block.type !== 'Import' || !graph.hasNode(block.to.withoutKey().toString())) continue;
+      if (block.type !== 'Import' || !graph.hasNode(blockKey(block.to))) continue;
 
-      const dependent = { key: block.to.withoutKey().toString(), declaration: spell(block), context: address };
+      const dependent = { key: blockKey(block.to), declaration: spell(block), context: address };
       const each = block.forEach ? ('for_each' as const) : undefined;
       const read: [AttributeValue | undefined, Repetition | undefined][] = [
         [block.forEach, undefined],
-        [block.key?.value, each],
+        ...block.keys.map(({ value }): [AttributeValue, Repetition | undefined] => [value, each]),
         [block.id, each],
       ];
       for (const [value, repetition] of read)

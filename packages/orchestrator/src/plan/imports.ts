@@ -2,11 +2,12 @@ import { Address, ModuleAddress, Resource, State } from '@clay/contracts';
 import { ImportBlock, spell } from '@clay/parser';
 import { DesiredResource, PlanAction } from '@clay/planner';
 
-import { LoadedModule, LoadedResource } from '../config/ModuleLoader';
+import { Loaded, LoadedModule } from '../config/ModuleLoader';
+import { blockKey } from '../keys';
 import { withPlace } from '../place';
 import { Limit } from '../providers/Limit';
 import { ProviderRegistry } from '../providers/ProviderRegistry';
-import { checkKey, ImportTarget, refuseImport } from './importTargets';
+import { checkKeys, ImportTarget, ImportTo, refuseImport } from './importTargets';
 
 /** The import blocks of the root module. One elsewhere is refused: a module others call cannot know what each caller has. */
 export function importsIn(modules: LoadedModule[]): ImportBlock[] {
@@ -23,23 +24,50 @@ export function importsIn(modules: LoadedModule[]): ImportBlock[] {
 /** As written, `local_file.a[each.key]` where the key is read. */
 const spelledTo = (block: ImportBlock) => spell(block).slice('import to '.length);
 
-/**
- * Before any value is known: `to` names a block of the root module that the provider can import, with a key of the kind its instances have.
- * A key read from `each` is checked as the plan reads it.
- */
-export function checkImports(imports: ImportBlock[], resources: LoadedResource[], providers: ProviderRegistry): void {
-  for (const block of imports) {
-    const { to } = block;
-    const target = resources.find(({ address }) => address.module.isRoot() && address.resourceType === to.resourceType && address.name === to.name);
-    if (!target) throw refuseImport(block, `import to ${spelledTo(block)}, but the root module declares no resource "${to.resourceType}" "${to.name}"`);
-    if (!providers.importable(to.resourceType)) throw refuseImport(block, `import to ${spelledTo(block)}, but ${to.resourceType} cannot be imported`);
-    if (!block.key) checkKey(block, to, target.block);
+const declarer = (module: ModuleAddress) => (module.isRoot() ? 'the root module' : module.toString());
+
+/** Each module call `to` goes through, then its resource, or a refusal naming the first that is not declared. */
+function pathOf(block: ImportBlock, { resources, modules }: Loaded): ImportTo['path'] {
+  const path: ImportTo['path'] = [];
+  let module = ModuleAddress.root;
+
+  for (const { name } of block.to.module.path) {
+    const program = modules.find(({ address }) => address.toString() === module.toString())?.program ?? [];
+    const call = program.find((statement) => statement.type === 'Module' && statement.name === name);
+    if (call?.type !== 'Module') throw refuseImport(block, `import to ${spelledTo(block)}, but ${declarer(module)} calls no module "${name}"`);
+    path.push(call);
+    module = module.child(name);
   }
+
+  const { resourceType, name } = block.to;
+  const resource = resources.find(({ address }) => address.toString() === blockKey(block.to));
+  if (!resource) throw refuseImport(block, `import to ${spelledTo(block)}, but ${declarer(module)} declares no resource "${resourceType}" "${name}"`);
+
+  return [...path, resource.block];
+}
+
+/**
+ * Before any value is known: `to` names a resource the provider can import, through module calls that are declared, with a key of the
+ * kind each part's instances have. A key read from `each` is checked as the plan reads it.
+ */
+export function checkImports(imports: ImportBlock[], loaded: Loaded, providers: ProviderRegistry): ImportTo[] {
+  return imports.map((block) => {
+    const to = { block, path: pathOf(block, loaded) };
+    if (!providers.importable(block.to.resourceType)) throw refuseImport(block, `import to ${spelledTo(block)}, but ${block.to.resourceType} cannot be imported`);
+    checkKeys(to, block.to, false, spelledTo(block));
+
+    return to;
+  });
 }
 
 /** Without a key or module path left undefined, as the state holds a resource. */
-function fieldsOf(address: Address): Pick<Resource, 'resourceType' | 'name' | 'key'> {
-  return { resourceType: address.resourceType, name: address.name, ...(address.key !== undefined && { key: address.key }) };
+function fieldsOf(address: Address): Pick<Resource, 'modulePath' | 'resourceType' | 'name' | 'key'> {
+  return {
+    ...(!address.module.isRoot() && { modulePath: address.module.path }),
+    resourceType: address.resourceType,
+    name: address.name,
+    ...(address.key !== undefined && { key: address.key }),
+  };
 }
 
 /** Reads the object as a refresh does, so it comes back in the form state holds. */
@@ -49,7 +77,7 @@ export type ReadBack = (key: string, resource: Resource) => Promise<Record<strin
 export class Imports {
   private readonly ids = new Map<string, string>();
   private readonly needed = new Map<string, ImportTarget>();
-  private blocks: ImportBlock[] = [];
+  private imports: ImportTo[] = [];
 
   constructor(
     private readonly providers: ProviderRegistry,
@@ -57,13 +85,13 @@ export class Imports {
     private readonly readBack: ReadBack
   ) {}
 
-  take(blocks: ImportBlock[]): void {
-    this.blocks = blocks;
+  take(imports: ImportTo[]): void {
+    this.imports = imports;
   }
 
-  /** The blocks that import to a root resource; read as the walk reaches it, since a for_each may read what is planned before it. */
-  blocksTo(resource: Address): ImportBlock[] {
-    return resource.module.isRoot() ? this.blocks.filter(({ to }) => to.withoutKey().toString() === resource.toString()) : [];
+  /** The imports to a resource, in every instance of its module; read as the walk reaches it, since a for_each may read what is planned before it. */
+  importsTo(resource: Address): ImportTo[] {
+    return this.imports.filter(({ block }) => blockKey(block.to) === resource.toString());
   }
 
   /**
@@ -147,13 +175,13 @@ export class Imports {
  */
 export function checkImportedFrom(actions: PlanAction[], imports: ImportBlock[]): void {
   const exact = new Set(imports.filter((block) => !block.forEach).map((block) => block.to.toString()));
-  const anyOf = new Set(imports.filter((block) => block.forEach).map((block) => block.to.withoutKey().toString()));
+  const anyOf = new Set(imports.filter((block) => block.forEach).map((block) => blockKey(block.to)));
 
   for (const { importedFrom, ...action } of actions) {
     if (importedFrom === undefined) continue;
 
     const address = Address.of(action);
-    if (!exact.has(address.toString()) && !anyOf.has(address.withoutKey().toString()))
+    if (!exact.has(address.toString()) && !anyOf.has(blockKey(address)))
       throw new Error(`The saved plan imports ${address.toString()} from "${importedFrom}", which the configuration does not. Plan again.`);
   }
 }

@@ -1,5 +1,5 @@
 import { Address, ExactNumber, InstanceKey, isUnknown, ModuleAddress } from '@clay/contracts';
-import { AttributeValue, ImportBlock, ResourceBlock, spell } from '@clay/parser';
+import { AttributeValue, ImportBlock, ModuleBlock, ResourceBlock, spell } from '@clay/parser';
 
 import { eachFrom } from '../instances/forEach';
 import { NotKnownYet } from '../instances/NotKnownYet';
@@ -21,8 +21,14 @@ export type ReadImport = <T>(value: AttributeValue, block: ImportBlock, context:
 
 export const refuseImport = (block: ImportBlock, message: string) => withPlace(new Error(message), block.position, spell(block), ModuleAddress.root);
 
+/** An import block, and what its `to` names: each module call on the way, counted from the root, then the resource. */
+export interface ImportTo {
+  block: ImportBlock;
+  path: (ModuleBlock | ResourceBlock)[];
+}
+
 /** What a key of the block's instances is; a block with neither has one instance and no key. */
-function keyKind(block: ResourceBlock): 'number' | 'string' | undefined {
+function keyKind(block: ModuleBlock | ResourceBlock): 'number' | 'string' | undefined {
   if (block.count) return 'number';
 
   return block.forEach ? 'string' : undefined;
@@ -36,10 +42,16 @@ function keyName(kind: 'number' | 'string' | undefined): string {
 
 const kindOf = (key: InstanceKey | undefined) => (key === undefined ? undefined : typeof key === 'number' ? 'number' : 'string');
 
-/** `to` with a key of the kind the instances of `resource` have. */
-export function checkKey(block: ImportBlock, to: Address, resource: ResourceBlock): void {
-  const kind = keyKind(resource);
-  if (kindOf(to.key) !== kind) throw refuseImport(block, `import to ${to}, but ${spell(resource)} has ${keyName(kind)}`);
+/** Each key of `to` of the kind the instances of its part have; before the plan, a part whose key is read is left to it. */
+export function checkKeys({ block, path }: ImportTo, to: Address, read: boolean, named: string): void {
+  const keys = [...to.module.path.map(({ key }) => key), to.key];
+
+  for (const [part, declared] of path.entries()) {
+    if (!read && block.keys.some((key) => key.part === part)) continue;
+
+    const kind = keyKind(declared);
+    if (kindOf(keys[part]) !== kind) throw refuseImport(block, `import to ${named}, but ${spell(declared)} has ${keyName(kind)}`);
+  }
 }
 
 /** How a message names the value: of the block, or of one item of its for_each. */
@@ -76,6 +88,22 @@ function keyFrom(value: Value, item: ImportItem): InstanceKey {
   return index;
 }
 
+/** `to` with each key read for `item`, or undefined where one is not known yet. */
+function addressFor(block: ImportBlock, item: ImportItem, read: ReadImport): Address | undefined {
+  const keys = new Map<number, InstanceKey>();
+  for (const { part, value } of block.keys) {
+    const key = read(value, block, item, (read) => keyFrom(read, item));
+    if (key === undefined) return undefined;
+    keys.set(part, key);
+  }
+
+  const { module, resourceType, name, key } = block.to;
+  const keyAt = (part: number, written: InstanceKey | undefined) => (keys.has(part) ? keys.get(part) : written);
+  const at = module.path.reduce((caller, step, part) => caller.child(step.name, keyAt(part, step.key)), ModuleAddress.root);
+
+  return new Address(at, resourceType, name, keyAt(module.path.length, key));
+}
+
 /** One for each item of the block's for_each, or the block's own `to` where it has none. */
 function targetsOfBlock(block: ImportBlock, read: ReadImport, instances: Instances): ImportTarget[] {
   if (!block.forEach) return [{ block, address: block.to }];
@@ -88,23 +116,22 @@ function targetsOfBlock(block: ImportBlock, read: ReadImport, instances: Instanc
   instances.setEach(at, items);
   return [...items.keys()].flatMap((key) => {
     const item = new ImportItem(at, key);
-    if (!block.key) return [{ block, address: block.to, item }];
-
-    const instance = read(block.key.value, block, item, (read) => keyFrom(read, item));
-    return instance === undefined ? [] : [{ block, address: new Address(ModuleAddress.root, block.to.resourceType, block.to.name, instance), item }];
+    const address = addressFor(block, item, read);
+    return address === undefined ? [] : [{ block, address, item }];
   });
 }
 
-/** Every address the blocks take an object to in `resource`, each once; a key read from `each` is checked against the resource here. */
-export function targetsOf(blocks: ImportBlock[], resource: ResourceBlock, read: ReadImport, instances: Instances): ImportTarget[] {
+/** Every address the imports to one resource take an object to, each once; a key read from `each` is checked here. */
+export function targetsOf(imports: ImportTo[], read: ReadImport, instances: Instances): ImportTarget[] {
   const targets = new Map<string, ImportTarget>();
 
-  for (const target of blocks.flatMap((block) => targetsOfBlock(block, read, instances))) {
-    const key = target.address.toString();
-    if (target.block.key) checkKey(target.block, target.address, resource);
-    if (targets.has(key)) throw refuseImport(target.block, `two imports go to ${key}, and one object goes to each address`);
-    targets.set(key, target);
-  }
+  for (const to of imports)
+    for (const target of targetsOfBlock(to.block, read, instances)) {
+      const key = target.address.toString();
+      if (to.block.keys.length > 0) checkKeys(to, target.address, true, key);
+      if (targets.has(key)) throw refuseImport(target.block, `two imports go to ${key}, and one object goes to each address`);
+      targets.set(key, target);
+    }
 
   return [...targets.values()];
 }

@@ -168,9 +168,9 @@ export class Orchestrator {
     await writtenCheck.check(loadedResources, loadedModules, graph);
     const moved = movesIn(loadedModules);
     const importing = importsIn(loadedModules);
-    checkImports(importing, loadedResources, this.providers);
+    const importsTo = checkImports(importing, { resources: loadedResources, modules: loadedModules }, this.providers);
     applyMoves(moved, state, moves);
-    imports.take(importing);
+    imports.take(importsTo);
     const desired = await desiredStateBuilder.build(loadedResources, graph, state, schemas, walk, moves, imports);
     const declared = loadedModules.flatMap(({ address }) => (address.isRoot() ? [] : modules.of(address)));
     checkMovedAway(moved, desired.resources, declared);

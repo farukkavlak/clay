@@ -195,7 +195,7 @@ export class DesiredStateBuilder {
   private async planResource(key: string, loaded: LoadedResource, graph: Graph<GraphNode>, state: State): Promise<ConfiguredResource[]> {
     const { address, block } = loaded;
     const blocks = this.graphBuilder.resourceDependencies(graph, key);
-    this.needImports(address, block, state);
+    this.needImports(address, state);
 
     const planned = await inOrder(
       this.modules.of(address.module).map(async (module) => this.planBlock(new Address(module, address.resourceType, address.name), block, dependenciesOf(blocks, module), state))
@@ -258,13 +258,13 @@ export class DesiredStateBuilder {
   }
 
   /** Before any instance of the resource is planned, so each finds whether an import goes to it. */
-  private needImports(resource: Address, block: ResourceBlock, state: State): void {
-    const blocks = this.imports?.blocksTo(resource) ?? [];
-    if (blocks.length === 0) return;
+  private needImports(resource: Address, state: State): void {
+    const importsTo = this.imports?.importsTo(resource) ?? [];
+    if (importsTo.length === 0) return;
 
     const read = <T>(value: AttributeValue, importing: ImportBlock, context: Context, parse: (value: Value) => T) =>
       this.reads.readAt(this.walk, value, importing, context, state, parse);
-    this.imports!.need(targetsOf(blocks, block, read, this.instances), state);
+    this.imports!.need(targetsOf(importsTo, read, this.instances), state);
   }
 
   /** Nothing to ignore in what does not exist yet, or in what is replaced because it is tainted. */
