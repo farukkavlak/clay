@@ -1,6 +1,6 @@
 import { AttributePath, ExactNumber, isRecord, isUnknown, NestingError, NumberError, readPaths, readResources, UNKNOWN, unknownPaths } from '@clay/contracts';
 
-import { checkDataAddresses, checkSchemasCover, validatePlanFile } from './checkPlanFile';
+import { checkDataAddresses, checkImported, checkSchemasCover, validatePlanFile } from './checkPlanFile';
 import { Changes, Plan, PLAN_FILE_VERSION, PlanAction, PlanFile } from './Plan';
 
 function withoutUnknown(value: unknown): unknown {
@@ -65,6 +65,7 @@ export function serializePlan(plan: Plan, files: Record<string, string>): string
     outputs: saveChanges(plan.outputs),
     prevRun: plan.prevRun,
     prior: plan.prior,
+    imported: plan.imported,
     schemas: plan.schemas,
     dataSources: plan.dataSources,
     dataSensitive: plan.dataSensitive,
@@ -146,7 +147,9 @@ export function parsePlanFile(content: string, source: string): PlanFile {
   };
   readResources(parsed.prevRun, 'its prevRun resources', say);
   readResources(parsed.prior, 'its prior resources', say);
+  readResources(parsed.imported, 'its imported resources', say);
   checkSchemasCover(parsed, say);
+  checkImported(parsed, say);
   checkDataAddresses(parsed, say);
 
   return {

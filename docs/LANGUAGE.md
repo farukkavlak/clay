@@ -463,6 +463,47 @@ change of a module's keys and a move inside that module both apply.
 An implicit move, from adding or removing `count`, follows a `moved` block: the block
 moves first, then the count moves what it moved.
 
+## Import
+
+An `import` block takes over an object that exists but is not in state, so the plan does
+not create it again over what is there:
+
+```
+import {
+  to = local_file.a
+  id = "/srv/app.conf"
+}
+```
+
+`to` needs a `resource` block of its own. The plan asks the provider for the object `id`
+names, reads it as a refresh does, and plans the block against it. It shows the import,
+`<- local_file.a will be imported from "/srv/app.conf"`, or beside the change it brings,
+`~ local_file.a will be updated, imported from "/srv/app.conf"`. The apply puts the object
+in state, after any move and before any action, and then makes the change. The object
+takes the marks and dependencies of its block.
+
+What an id is depends on the type. For `local_file` it is the path, and a relative one is
+read where Clay runs. `random_string`, `null_resource` and `command_exec` exist only in
+state, so there is nothing to take over, and they cannot be imported.
+
+Keep the block after the apply: a state that holds `to` imports nothing, whatever the id.
+Nor does one that holds what adding or removing `count` moves to `to`, as `local_file.a`
+for `local_file.a[0]`; the plan moves it instead.
+To take over another object at the same address, remove the one in state first with
+`clay state rm`.
+
+Refused, at the block:
+
+- a block in a module another module calls; only the root module imports
+- `to` with no `resource` block, or with a key that does not fit it: a number for
+  `count`, a string for `for_each`, none for neither
+- `to` an instance the configuration does not make, as `[1]` with `count = 1`
+- a type its provider cannot import
+- an id that finds nothing, or something the type is not, as a directory for a file
+- an object another address in the plan holds too, as two blocks for one file
+
+A saved plan imports only what the import blocks it carries say, by the same id.
+
 ## Data sources
 
 A data source reads something that already exists. `data "local_file" "f" { path = "x" }`

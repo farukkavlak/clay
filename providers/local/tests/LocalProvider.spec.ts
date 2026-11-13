@@ -325,6 +325,56 @@ describe('LocalProvider', () => {
     });
   });
 
+  describe('IMPORT', () => {
+    it('imports a file by its path, which a read then fills in', async () => {
+      const filePath = path.join(tmpDir, 'kept.txt');
+      await fs.writeFile(filePath, 'made by hand', 'utf8');
+
+      const found = await provider.importResource('local_file', filePath);
+
+      expect(found).toEqual({ id: filePath, path: filePath });
+      expect(await provider.read('local_file', found!)).toEqual({ id: filePath, path: filePath, content: 'made by hand' });
+    });
+
+    it('resolves a relative path where it runs, as a create does', async () => {
+      await fs.writeFile(path.join(tmpDir, 'here.txt'), '', 'utf8');
+      vi.spyOn(process, 'cwd').mockReturnValue(tmpDir);
+
+      expect(await provider.importResource('local_file', 'here.txt')).toEqual({ id: path.join(tmpDir, 'here.txt'), path: path.join(tmpDir, 'here.txt') });
+    });
+
+    it.each([
+      ['no file at the path', 'gone.txt'],
+      ['a path that runs through a file', 'file.txt/inside.txt'],
+    ])('finds nothing at %s', async (_, name) => {
+      await fs.writeFile(path.join(tmpDir, 'file.txt'), '', 'utf8');
+
+      expect(await provider.importResource('local_file', path.join(tmpDir, name))).toBeNull();
+    });
+
+    it('still fails as the system says when the path cannot be looked at', async () => {
+      const shut = path.join(tmpDir, 'shut');
+      await fs.mkdir(shut, { mode: 0o000 });
+      try {
+        await expect(provider.importResource('local_file', path.join(shut, 'a.txt'))).rejects.toMatchObject({ code: 'EACCES' });
+      } finally {
+        await fs.chmod(shut, 0o700);
+      }
+    });
+
+    it('refuses a directory, which is not a file', async () => {
+      await expect(provider.importResource('local_file', tmpDir)).rejects.toThrow(`${tmpDir} is not a file`);
+    });
+
+    it('lists local_file alone as importable, since the others exist only in state', () => {
+      expect(provider.importable).toEqual(['local_file']);
+    });
+
+    it('refuses a type it cannot import', async () => {
+      await expect(provider.importResource('random_string', 'x')).rejects.toThrow('random_string cannot be imported');
+    });
+  });
+
   describe('the types it makes', () => {
     it('lists the resource types it makes', () => {
       expect(provider.resources).toEqual(['local_file', 'random_string', 'null_resource', 'command_exec']);

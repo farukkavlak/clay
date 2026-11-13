@@ -197,6 +197,13 @@ export interface LocalBlock extends Node {
  */
 export type MovedBlock = Node & { type: 'Moved' } & ({ kind: 'resource'; from: Address; to: Address } | { kind: 'module'; from: ModuleAddress; to: ModuleAddress });
 
+/** The real object `id` names becomes `to`, unless the state already holds `to`. */
+export interface ImportBlock extends Node {
+  type: 'Import';
+  to: Address;
+  id: string;
+}
+
 /** Where the state lives, from the `clay` block of the root module. */
 export interface BackendBlock extends Node {
   type: 'Backend';
@@ -205,14 +212,15 @@ export interface BackendBlock extends Node {
   attributes: Record<string, AttributeValue>;
 }
 
-export type Statement = ResourceBlock | VariableBlock | OutputBlock | DataBlock | ModuleBlock | LocalBlock | MovedBlock | BackendBlock;
+export type Statement = ResourceBlock | VariableBlock | OutputBlock | DataBlock | ModuleBlock | LocalBlock | MovedBlock | ImportBlock | BackendBlock;
 export type Program = Statement[];
 
-/** `resource "local_file" "a"`, `module "m"`, `moved from local_file.a`. */
+/** `resource "local_file" "a"`, `module "m"`, `moved from local_file.a`, `import to local_file.a`. */
 export function spell(statement: Statement): string {
   if (statement.type === 'Resource') return `resource "${statement.resourceType}" "${statement.name}"`;
   if (statement.type === 'Data') return `data "${statement.dataSourceType}" "${statement.name}"`;
   if (statement.type === 'Moved') return `moved from ${statement.from}`;
+  if (statement.type === 'Import') return `import to ${statement.to}`;
   if (statement.type === 'Backend') return 'a backend';
   return `${statement.type.toLowerCase()} "${statement.name}"`;
 }

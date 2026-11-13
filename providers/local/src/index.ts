@@ -6,6 +6,8 @@ import { LocalFileResource } from './resources/LocalFileResource';
 import { NullResource } from './resources/NullResource';
 import { RandomStringResource } from './resources/RandomStringResource';
 
+const importableIn = (handlers: Map<string, ResourceHandler>) => [...handlers].flatMap(([type, handler]) => (handler.importResource ? [type] : []));
+
 export class LocalProvider implements Provider {
   private readonly handlers = new Map<string, ResourceHandler>([
     ['local_file', new LocalFileResource()],
@@ -16,6 +18,7 @@ export class LocalProvider implements Provider {
   private readonly dataHandlers = new Map<string, DataSourceHandler>([['local_file', new LocalFileDataSource()]]);
   readonly resources = [...this.handlers.keys()];
   readonly dataSources = [...this.dataHandlers.keys()];
+  readonly importable = importableIn(this.handlers);
 
   private handler(type: string): ResourceHandler {
     const handler = this.handlers.get(type);
@@ -61,6 +64,13 @@ export class LocalProvider implements Provider {
 
   async identify(type: string, values: Record<string, unknown>): Promise<Identity | undefined> {
     return await this.handler(type).identify?.(values);
+  }
+
+  async importResource(type: string, id: string): Promise<Record<string, unknown> | null> {
+    const handler = this.handler(type);
+    if (!handler.importResource) throw new Error(`${type} cannot be imported`);
+
+    return await handler.importResource(id);
   }
 
   async getDataSourceSchema(type: string): Promise<Schema> {

@@ -34,6 +34,8 @@ export interface PlanAction {
   key?: InstanceKey;
   /** Its state address before a moved block, or a count that came or went, moved it; the move runs before the action. */
   movedFrom?: string;
+  /** On a no-op, an update or a replace: the id this plan imported its object by. The import runs before the action. */
+  importedFrom?: string;
   /** Apply resolves the attributes again and checks each known value against these. */
   planned?: Record<string, unknown>;
   /** As the provider planned it after apply. */
@@ -63,9 +65,9 @@ export function keptChange(action: PlanAction): boolean {
   return action.marksChange === true || action.protectionChange === true || action.provisionersChange === true;
 }
 
-/** A move, or a change of what state keeps beside the values, changes state though the values stay. */
+/** A move, an import, or a change of what state keeps beside the values, changes state though the values stay. */
 export function changesState(action: PlanAction): boolean {
-  return action.type !== 'NO_OP' || action.movedFrom !== undefined || keptChange(action);
+  return action.type !== 'NO_OP' || action.movedFrom !== undefined || action.importedFrom !== undefined || keptChange(action);
 }
 
 export interface Plan {
@@ -76,6 +78,8 @@ export interface Plan {
   prevRun: Record<string, Resource>;
   /** Resources after refresh, which the actions run against; one that no longer exists is left out. */
   prior: Record<string, Resource>;
+  /** Objects the plan imports, by the address each is imported to, after any move; the apply puts them in state before any action. */
+  imported: Record<string, Resource>;
   /** Lets a saved plan tell sets from lists without the provider. */
   schemas: Record<string, Schema>;
   /** What each data source read at plan gave, by address, so the apply reads none of them again. */
@@ -87,7 +91,7 @@ export interface Plan {
 }
 
 /** Bump on any change to the file's shape after a release, so an older plan file is refused instead of misread. */
-export const PLAN_FILE_VERSION = '35.0';
+export const PLAN_FILE_VERSION = '36.0';
 
 export interface PlanFile extends Plan {
   version: string;

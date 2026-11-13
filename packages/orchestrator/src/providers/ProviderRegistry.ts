@@ -6,7 +6,13 @@ export class ProviderRegistry {
   private providers: Map<string, Provider> = new Map();
   private readers: Map<string, Provider> = new Map();
 
+  /** An importable type the provider does not make, or one with no way to import it, is a fault in the provider. */
   register(provider: Provider): void {
+    for (const type of provider.importable ?? []) {
+      if (!provider.resources.includes(type)) throw new Error(`A provider lists "${type}" as importable, but does not make it`);
+      if (!provider.importResource) throw new Error(`A provider lists "${type}" as importable, but has no importResource`);
+    }
+
     for (const resourceType of provider.resources) {
       if (this.providers.has(resourceType)) throw new Error(`Provider for resource type "${resourceType}" already registered`);
 
@@ -33,6 +39,11 @@ export class ProviderRegistry {
     if (!provider) throw new Error(`No provider handles "${type}"`);
 
     return provider;
+  }
+
+  /** Whether a block of the type may be imported, asked before any provider is called. */
+  importable(type: string): boolean {
+    return this.get(type).importable?.includes(type) === true;
   }
 
   async schema(type: string): Promise<Schema> {
