@@ -93,7 +93,8 @@ A file is a sequence of blocks. Two blocks of the same kind and name in one file
 error. A resource is named by its type and name together, so `resource "a" "x"` and
 `resource "b" "x"` are different resources. A `moved` block has no name, and a file may
 hold any number of them. An `import` block has none either, and is named by its `to`: two
-to one address are an error, across the files of a module too.
+to one address are an error, across the files of a module too. Blocks with `for_each`
+are told apart by the plan, which reads their addresses.
 
 ```
 resource "type" "name" { attributes }
@@ -103,7 +104,7 @@ locals { attributes }
 output "name" { value = value }
 module "name" { attributes }
 moved { from = address to = address }
-import { to = address id = expression }
+import { for_each = expression to = address id = expression }
 clay { backend "type" { attributes } }
 ```
 
@@ -144,7 +145,7 @@ What the engine reads from each:
 | `output`   | `value`; `type`, read below; `sensitive`, which hides the value of a root output wherever it is printed; `description`, checked and dropped; `depends_on`             |
 | `module`   | `source`, a literal string naming a directory relative to the file; `count` or `for_each`, and `depends_on`; every other attribute is an input                        |
 | `moved`    | `from` and `to`, each a resource or module address written out                                                                                                        |
-| `import`   | `to`, a resource address written out, and `id`, an expression                                                                                                         |
+| `import`   | `to`, a resource address written out, `id`, an expression, and optionally `for_each`                                                                                  |
 | `clay`     | one `backend` block, with one label, its type; its attributes are constants, and what each type takes is checked by the backend                                       |
 
 A resource, a data source or a module with both `count` and `for_each` is refused where
@@ -186,11 +187,14 @@ attribute are refused where they are written. `from` and `to` the same address i
 at the block; a `to` of another type, or a module on one side and a resource on the other,
 at `to`.
 
-`import` takes `to` and `id`, both, and nothing else. `to` is a resource of the root
-module written out, `local_file.a`, `local_file.a[0]` or `local_file.a["web"]`, with a key
-as `moved` takes one. A module, a resource inside one, a data source, a value that is not
-a reference and a path into an attribute are refused at `to`. `id` is any expression;
-what its value must be is checked at plan.
+`import` takes `to` and `id`, both, and `for_each`, and nothing else. `to` is a resource
+of the root module written out, `local_file.a`, `local_file.a[0]` or `local_file.a["web"]`,
+with a key as `moved` takes one. With `for_each`, the key may read `each` and nothing
+else, as in `local_file.a[each.key]`. A key that reads anything else is refused at what
+it reads, and a key that reads `each` with no `for_each` is refused at `to`. A module, a
+resource inside one, a data source, a value that is not a reference and a path into an
+attribute are refused at `to`. `id` is any expression; what its value must be is checked
+at plan.
 
 ## Values
 

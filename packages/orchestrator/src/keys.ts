@@ -1,4 +1,5 @@
 import { Address, InstanceKey, ModuleAddress, spellKey } from '@clay/contracts';
+import { Position } from '@clay/parser';
 
 /**
  * Dependency graph keys. They are built here and never parsed.
@@ -85,11 +86,25 @@ export class ModuleCall {
   }
 }
 
-/** A resource instance, a data source instance, a module (its variables, locals and outputs), or a module call. */
-export type Context = Address | DataInstance | ModuleAddress | ModuleCall;
+/** An import block has no name, so it is keyed by where it is written. */
+export function importKey({ file, line, column }: Position): string {
+  return `import:${file}:${line}:${column}`;
+}
+
+/** One item of an import block's for_each, which `each` reads; an import is in the root module. */
+export class ImportItem {
+  constructor(
+    public readonly block: string,
+    public readonly key: string
+  ) {}
+}
+
+/** A resource instance, a data source instance, a module (its variables, locals and outputs), a module call, or an item an import reads. */
+export type Context = Address | DataInstance | ModuleAddress | ModuleCall | ImportItem;
 
 export function moduleOf(context: Context): ModuleAddress {
   if (context instanceof Address || context instanceof DataInstance) return context.module;
+  if (context instanceof ImportItem) return ModuleAddress.root;
 
   return context instanceof ModuleCall ? context.caller : context;
 }
@@ -102,6 +117,7 @@ export function scopeOf(context: Context): string {
 /** Undefined for a module's own values, which belong to no instance. */
 export function instanceKeyOf(context: Context): InstanceKey | undefined {
   if (context instanceof ModuleCall) return context.instance.path.at(-1)?.key;
+  if (context instanceof ImportItem) return context.key;
 
   return context instanceof Address || context instanceof DataInstance ? context.key : undefined;
 }

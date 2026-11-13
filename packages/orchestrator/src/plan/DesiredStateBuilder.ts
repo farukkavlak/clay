@@ -21,7 +21,8 @@ import { DependencyGraphBuilder, GraphNode, LocalNode, OutputNode, ValueNode } f
 import { LoadedResource } from '../config/ModuleLoader';
 import { inOrder } from '../providers/Limit';
 import { Moves } from './moves';
-import { idFrom, Imports } from './imports';
+import { Imports } from './imports';
+import { idFrom, ImportTarget, targetsOf } from './importTargets';
 import { Versions } from '../values/Versions';
 import { Ignoring, ResourcePlan, ResourcePlanner } from './ResourcePlanner';
 import { keptFor, Provisioning } from '../providers/Provisioning';
@@ -194,6 +195,7 @@ export class DesiredStateBuilder {
   private async planResource(key: string, loaded: LoadedResource, graph: Graph<GraphNode>, state: State): Promise<ConfiguredResource[]> {
     const { address, block } = loaded;
     const blocks = this.graphBuilder.resourceDependencies(graph, key);
+    this.needImports(address, block, state);
 
     const planned = await inOrder(
       this.modules.of(address.module).map(async (module) => this.planBlock(new Address(module, address.resourceType, address.name), block, dependenciesOf(blocks, module), state))
@@ -249,9 +251,20 @@ export class DesiredStateBuilder {
   }
 
   /** The id is read here, after everything it reads; a check reads it as far as it is known, and imports nothing. */
-  private async importIn(block: ImportBlock, state: State): Promise<void> {
-    const id = this.reads.readAt(this.walk, block.id, block, ModuleAddress.root, state, idFrom);
-    if (id !== undefined && this.walk === 'plan') await this.imports!.importBy(block, id, state);
+  private async importIn(target: ImportTarget, state: State): Promise<void> {
+    const { block, item } = target;
+    const id = this.reads.readAt(this.walk, block.id, block, item ?? ModuleAddress.root, state, (value) => idFrom(value, item));
+    if (id !== undefined && this.walk === 'plan') await this.imports!.importBy(target, id, state);
+  }
+
+  /** Before any instance of the resource is planned, so each finds whether an import goes to it. */
+  private needImports(resource: Address, block: ResourceBlock, state: State): void {
+    const blocks = this.imports?.blocksTo(resource) ?? [];
+    if (blocks.length === 0) return;
+
+    const read = <T>(value: AttributeValue, importing: ImportBlock, context: Context, parse: (value: Value) => T) =>
+      this.reads.readAt(this.walk, value, importing, context, state, parse);
+    this.imports!.need(targetsOf(blocks, block, read, this.instances), state);
   }
 
   /** Nothing to ignore in what does not exist yet, or in what is replaced because it is tainted. */

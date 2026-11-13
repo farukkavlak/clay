@@ -38,12 +38,15 @@ export interface ModuleFile {
   content: string;
 }
 
-/** A duplicate would silently replace the first. Moves are told apart where every module's are read together. */
+/**
+ * A duplicate would silently replace the first. Moves are told apart where every module's are read together, and imports with for_each
+ * where the plan reads the addresses they give.
+ */
 function checkDeclaredOnce(program: Program): void {
   const declared = new Map<string, Position>();
 
   for (const statement of program) {
-    if (statement.type === 'Moved') continue;
+    if (statement.type === 'Moved' || (statement.type === 'Import' && statement.forEach)) continue;
 
     const label = spell(statement);
     const first = declared.get(label);

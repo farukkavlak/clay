@@ -23,7 +23,7 @@ import {
 
 import { Instances } from '../instances/Instances';
 import { functionCalled } from './functions';
-import { Context, DataInstance, instanceKeyOf, ModuleCall, moduleOf, scopeOf } from '../keys';
+import { Context, DataInstance, ImportItem, instanceKeyOf, ModuleCall, moduleOf, scopeOf } from '../keys';
 import { tryAt } from '../place';
 import { ModuleInstances } from '../instances/ModuleInstances';
 import { checkBoolean } from './operators';
@@ -246,7 +246,7 @@ export class ReferenceResolver {
 
   private eachValue(where: Context, key: string): Value | undefined {
     if (where instanceof ModuleCall) return this.modules.eachValue(where.call, key);
-    if (where instanceof DataInstance) return this.instances.eachValue(where.block, key);
+    if (where instanceof DataInstance || where instanceof ImportItem) return this.instances.eachValue(where.block, key);
     if (where instanceof Address) return this.instances.eachValue(where.withoutKey().toString(), key);
 
     return undefined;

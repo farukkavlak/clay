@@ -205,18 +205,24 @@ export class DependencyGraphBuilder {
   }
 
   /**
-   * The resource an import goes to waits for what its id reads, which is read as the walk reaches it. An import outside the root module,
-   * or to a resource that is not declared, is refused once the graph is built.
+   * The resource an import goes to waits for what its for_each and id read, which are read as the walk reaches it; `each` is read in
+   * the id and the key. An import outside the root module, or to a resource that is not declared, is refused once the graph is built.
    */
   private addImportDependencies({ address, program }: LoadedModule, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
     if (!address.isRoot()) return;
 
     for (const block of program) {
-      if (block.type !== 'Import') continue;
+      if (block.type !== 'Import' || !graph.hasNode(block.to.withoutKey().toString())) continue;
 
-      const key = block.to.withoutKey().toString();
-      const dependent = { key, declaration: spell(block), context: address };
-      if (graph.hasNode(key)) tryAt(block.id.position, dependent.declaration, address, () => this.addDependencies(block.id, graph, dependent, moduleScopes));
+      const dependent = { key: block.to.withoutKey().toString(), declaration: spell(block), context: address };
+      const each = block.forEach ? ('for_each' as const) : undefined;
+      const read: [AttributeValue | undefined, Repetition | undefined][] = [
+        [block.forEach, undefined],
+        [block.key?.value, each],
+        [block.id, each],
+      ];
+      for (const [value, repetition] of read)
+        if (value) tryAt(value.position, dependent.declaration, address, () => this.addDependencies(value, graph, dependent, moduleScopes, repetition));
     }
   }
 

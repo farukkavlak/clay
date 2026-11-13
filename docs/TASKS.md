@@ -1116,8 +1116,9 @@ Terraform has it since backends replaced `-state`.
       `clay import` command would write state unseen
 - [x] An `import` block takes its id from any expression known at plan, read as the walk
       reaches `to`
-- [ ] An `import` block in a root module may name a resource inside a module, and take
-      `for_each`
+- [x] An `import` block takes `for_each`, one import for each item, with a key of `to`
+      read from `each`
+- [ ] An `import` block in a root module may name a resource inside a module
 - [ ] A provider can name what identifies a resource apart from its values, for `import`
       and for finding it again. Terraform 1.12's resource identity
 - [ ] `clay state pull`: print the state as JSON, for a script or a backup

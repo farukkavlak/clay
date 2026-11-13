@@ -197,10 +197,21 @@ export interface LocalBlock extends Node {
  */
 export type MovedBlock = Node & { type: 'Moved' } & ({ kind: 'resource'; from: Address; to: Address } | { kind: 'module'; from: ModuleAddress; to: ModuleAddress });
 
-/** The real object `id` names becomes `to`, unless the state already holds `to`. `id` is read at plan, as the walk reaches `to`. */
+/** `[each.key]`: read for each item of a for_each, from `each` alone. */
+export interface ImportKey {
+  value: AttributeValue;
+  spelled: string;
+}
+
+/**
+ * The real object `id` names becomes `to`, unless the state already holds `to`. `id` is read at plan, as the walk reaches `to`.
+ * With `forEach`, once for each item; `to` then has no key where `key` is given.
+ */
 export interface ImportBlock extends Node {
   type: 'Import';
   to: Address;
+  key?: ImportKey;
+  forEach?: AttributeValue;
   id: AttributeValue;
 }
 
@@ -220,7 +231,7 @@ export function spell(statement: Statement): string {
   if (statement.type === 'Resource') return `resource "${statement.resourceType}" "${statement.name}"`;
   if (statement.type === 'Data') return `data "${statement.dataSourceType}" "${statement.name}"`;
   if (statement.type === 'Moved') return `moved from ${statement.from}`;
-  if (statement.type === 'Import') return `import to ${statement.to}`;
+  if (statement.type === 'Import') return `import to ${statement.to}${statement.key ? `[${statement.key.spelled}]` : ''}`;
   if (statement.type === 'Backend') return 'a backend';
   return `${statement.type.toLowerCase()} "${statement.name}"`;
 }

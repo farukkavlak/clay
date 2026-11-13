@@ -13,6 +13,11 @@ import { start } from '../start';
 const imported = (to: string, id: string) => `import {\n to = ${to}\n id = "${id}"\n}\n`;
 const importedBy = (to: string, id: string) => `import {\n to = ${to}\n id = ${id}\n}\n`;
 
+const lineAndColumn = (config: string, needle: string) => {
+  const { line, column } = placeOf(config, needle);
+  return [line, column];
+};
+
 describe('an import block', () => {
   let dir: string;
   let file: string;
@@ -261,6 +266,139 @@ describe('an import block', () => {
     const config = resource('a') + importedBy('local_file.a', id);
 
     expect(await refusedAt(config, id, 'validate')).toEqual([message, placeOf(config, ` id = ${id}\n`).line, ' id = '.length]);
+  });
+
+  const files = (names: string[], head = 'for_each = toset(NAMES)') =>
+    `resource "local_file" "c" {\n ${head.replace('NAMES', JSON.stringify(names))}\n path = "${dir}/\${each.key}.txt"\n content = "kept"\n}\n`;
+  const each = (forEach: string, to = 'local_file.c[each.key]', id = `"${dir}/\${each.value}.txt"`) => `import {\n for_each = ${forEach}\n to = ${to}\n id = ${id}\n}\n`;
+
+  /** The message, and the line and column it is at. */
+  const refusedWhere = async (config: string, run: 'plan' | 'validate' = 'plan') => {
+    const engine = orchestratorIn(dir);
+    const error = await errorOf(() => (run === 'plan' ? engine.plan(config) : engine.validate(config)));
+    return [error.message, [error.position.line, error.position.column]];
+  };
+
+  describe('with for_each', () => {
+    beforeEach(async () => {
+      for (const name of ['x', 'y']) await fs.writeFile(path.join(dir, `${name}.txt`), 'kept', 'utf8');
+    });
+
+    it('imports each item of a map to the instance its key names, and nothing once the state holds them', async () => {
+      const config = files(['x', 'y']) + each('{ x = "x", y = "y" }');
+
+      expect(await planned(config)).toEqual([
+        ['NO_OP', 'local_file.c["x"]', path.join(dir, 'x.txt')],
+        ['NO_OP', 'local_file.c["y"]', path.join(dir, 'y.txt')],
+      ]);
+      await apply(config);
+      expect(Object.keys(await held())).toEqual(['local_file.c["x"]', 'local_file.c["y"]']);
+      expect(await planned(config)).toEqual([
+        ['NO_OP', 'local_file.c["x"]', undefined],
+        ['NO_OP', 'local_file.c["y"]', undefined],
+      ]);
+    });
+
+    it('reads a list of strings as a resource reads one: each string is the key and the value', async () => {
+      expect(await planned(files(['x']) + each('["x"]'))).toEqual([['NO_OP', 'local_file.c["x"]', path.join(dir, 'x.txt')]]);
+    });
+
+    it('takes a number key to an instance of a counted resource', async () => {
+      const config =
+        `resource "local_file" "n" {\n count = 1\n path = "${dir}/x.txt"\n content = "kept"\n}\n` + each('{ first = 0 }', 'local_file.n[each.value]', `"${dir}/x.txt"`);
+
+      expect(await planned(config)).toEqual([['NO_OP', 'local_file.n[0]', path.join(dir, 'x.txt')]]);
+    });
+
+    it('reads a for_each that reads what another resource is planned to hold', async () => {
+      const config = `resource "local_file" "p" {\n path = "${dir}/p.txt"\n content = "x"\n}\n` + files(['x']) + each('{ x = local_file.p.content }');
+      const actions = await planned(config);
+
+      expect(actions.find(([, address]) => address === 'local_file.c["x"]')).toEqual(['NO_OP', 'local_file.c["x"]', path.join(dir, 'x.txt')]);
+    });
+
+    it.each([
+      ['only the apply makes', '{ x = random_string.r.result }', 'import "to" key for each.key "x" must be known when planning: it reads a value only an apply makes'],
+      ['is sensitive', '{ x = sensitive("x") }', 'import "to" key for each.key "x" is sensitive, and it shows in an address'],
+      ['is a bool', '{ x = true }', 'import "to" key for each.key "x" is a string or a whole number, not a boolean'],
+      ['is a number below 0', '{ x = -1 }', 'import "to" key for each.key "x" is a string or a whole number from 0, not -1'],
+      ['is not a whole number', '{ x = 1.5 }', 'import "to" key for each.key "x": 1.5 is not a whole number'],
+    ])('refuses a key that %s at the key', async (_, forEach, message) => {
+      const config = 'resource "random_string" "r" {\n length = 8\n}\n' + files(['x']) + each(forEach, 'local_file.c[each.value]');
+
+      expect(await refusedWhere(config)).toEqual([message, lineAndColumn(config, 'each.value]')]);
+      expect(await held()).toEqual({});
+    });
+
+    it.each([
+      ['two items', () => files(['x']) + each('{ a = "x", b = "x" }', 'local_file.c[each.value]'), 'import {\n for_each'],
+      ['a block with for_each and one without', () => files(['x']) + imported('local_file.c["x"]', path.join(dir, 'x.txt')) + each('["x"]'), 'import {\n for_each'],
+    ])('refuses %s that go to one address at the block', async (_, make, needle) => {
+      const config = make();
+      expect(await refusedWhere(config)).toEqual(['two imports go to local_file.c["x"], and one object goes to each address', lineAndColumn(config, needle)]);
+    });
+
+    it.each([
+      [
+        'a key of the wrong kind',
+        () => `resource "local_file" "c" {\n count = 1\n path = "${dir}/x.txt"\n content = "kept"\n}\n` + each('["x"]'),
+        'import to local_file.c["x"], but resource "local_file" "c" has count, so an instance is named by a number, as in [0]',
+      ],
+      ['an instance the configuration does not make', () => files(['x']) + each('["y"]'), 'import to local_file.c["y"], but the configuration makes no such instance'],
+      [
+        'items with no key in to, which all go to one address',
+        () => files(['x']) + each('["x", "y"]', 'local_file.c["x"]'),
+        'two imports go to local_file.c["x"], and one object goes to each address',
+      ],
+    ])('refuses %s at the block', async (_, make, message) => {
+      const config = make();
+      expect(await refusedWhere(config)).toEqual([message, lineAndColumn(config, 'import {\n for_each')]);
+    });
+
+    it.each([
+      ['a sensitive key', 'toset([sensitive("x")])', 'for_each is sensitive: a key shows in an address, so it cannot be hidden'],
+      [
+        'a value only the apply makes',
+        'toset([random_string.r.result])',
+        'for_each must be known when planning: a member reads a value only an apply makes, and a set names its instances by its members',
+      ],
+      ['a string', '"x"', 'for_each is a map, or a list or a set of strings, not a string'],
+    ])('refuses a for_each with %s at the for_each', async (_, forEach, message) => {
+      const config = 'resource "random_string" "r" {\n length = 8\n}\n' + files(['x']) + each(forEach);
+
+      expect(await refusedWhere(config)).toEqual([message, lineAndColumn(config, forEach + '\n to')]);
+    });
+
+    it('refuses a saved plan that imports an instance where the configuration imports to the resource with no for_each', async () => {
+      const engine = orchestratorIn(dir);
+      const plan = await engine.plan(files(['x']) + each('["x"]'));
+      const run = async () => {
+        for await (const event of engine.runPlan(plan, files(['x']) + imported('local_file.c', path.join(dir, 'x.txt')))) if (event.type === 'failed') throw event.error;
+      };
+
+      await expect(run()).rejects.toThrow(`The saved plan imports local_file.c["x"] from "${path.join(dir, 'x.txt')}", which the configuration does not. Plan again.`);
+    });
+
+    it('names the item an id is refused for', async () => {
+      const config = files(['x']) + each('{ x = "" }', 'local_file.c[each.key]', 'each.value');
+
+      expect(await refusedWhere(config)).toEqual(['import "id" for each.key "x" must not be empty', lineAndColumn(config, 'each.value\n}')]);
+    });
+
+    it('takes a for_each in validate that only the plan can read, and asks no provider', async () => {
+      const config = `data "local_file" "p" {\n path = "${file}"\n}\n` + files(['x']) + each('toset([data.local_file.p.content])', 'local_file.c[each.key]', '"/no/such"');
+
+      await expect(orchestratorIn(dir).validate(config)).resolves.toBeUndefined();
+    });
+
+    it('refuses each in an import with no for_each at the reference', async () => {
+      const config = files(['x']) + imported('local_file.c["x"]', 'x').replace('"x"\n}', 'each.value\n}');
+
+      expect(await refusedWhere(config, 'validate')).toEqual([
+        'each.value is only known inside a resource, a data source or a module call that has for_each',
+        lineAndColumn(config, 'each.value\n}'),
+      ]);
+    });
   });
 
   it('refuses a type that cannot be imported in validate too, before any provider is asked', async () => {

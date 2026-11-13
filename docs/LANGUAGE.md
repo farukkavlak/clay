@@ -501,6 +501,24 @@ The plan shows the id, so it must be a string that is not empty, known at plan a
 sensitive. A saved plan imports by the id it showed, even if what the id reads has changed
 since.
 
+`for_each` imports one object for each item, as a resource's `for_each` makes one
+instance for each: a map, or a list or a set of strings, where each string is both the key
+and the value. The key of `to` reads `each`, and so may the id:
+
+```
+import {
+  for_each = { web = "/srv/web.conf", db = "/srv/db.conf" }
+  to       = local_file.conf[each.key]
+  id       = each.value
+}
+```
+
+The key of `to` reads only `each`, so the resource is known before any value is. It must
+be a string or a whole number from 0, known at plan and not sensitive, since it shows in
+the address. The items of a for_each with no key in `to` all go to that one address.
+Each plan reads `for_each` and the key, even once the state holds every object, since
+they say which addresses the block names; the id is read only for an object to import.
+
 Keep the block after the apply: a state that holds `to` imports nothing, whatever the id.
 Nor does one that holds what adding or removing `count` moves to `to`, as `local_file.a`
 for `local_file.a[0]`; the plan moves it instead.
@@ -508,8 +526,10 @@ To take over another object at the same address, remove the one in state first w
 `clay state rm`.
 
 Refused at the id: a value only an apply makes, a sensitive value, a value that is not a
-string, and an empty string. `validate` refuses what it can already tell of the id, and
-asks no provider.
+string, and an empty string. Refused at the key of `to`: a value only an apply makes, a
+sensitive value, and a value that is not a string or a whole number from 0. Refused at
+`for_each`: what a resource's `for_each` refuses. `validate` refuses what it can already
+tell of the id, and asks no provider.
 
 Refused, at the block:
 
@@ -520,8 +540,10 @@ Refused, at the block:
 - a type its provider cannot import
 - an id that finds nothing, or something the type is not, as a directory for a file
 - an object another address in the plan holds too, as two blocks for one file
+- two imports to one address, from two blocks or two items of one `for_each`
 
-A saved plan imports only where the configuration still has an import block for it.
+A saved plan imports only where the configuration still has an import block for it. A
+block with `for_each` covers every instance of its resource, since only the plan reads which.
 
 ## Data sources
 
