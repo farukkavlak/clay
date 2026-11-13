@@ -21,6 +21,7 @@ import { DependencyGraphBuilder, GraphNode, LocalNode, OutputNode, ValueNode } f
 import { LoadedResource } from '../config/ModuleLoader';
 import { inOrder } from '../providers/Limit';
 import { Moves } from './moves';
+import { Imports } from './imports';
 import { Versions } from '../values/Versions';
 import { Ignoring, ResourcePlan, ResourcePlanner } from './ResourcePlanner';
 import { keptFor, Provisioning } from '../providers/Provisioning';
@@ -75,6 +76,7 @@ export class DesiredStateBuilder {
   private createsFirst = new Set<ResourceBlock>();
   private walk: Walk = 'plan';
   private moves = new Moves();
+  private imports?: Imports;
 
   constructor(
     private scopeManager: ScopeManager,
@@ -105,11 +107,23 @@ export class DesiredStateBuilder {
     return new Set(loadedResources.filter(({ uniqueId }) => found.has(uniqueId)).map(({ block }) => block));
   }
 
-  /** Applies count moves to `state`, a copy the plan never writes, records each in `moves`, and plans the actions against it. */
-  async build(loadedResources: LoadedResource[], graph: Graph<GraphNode>, state: State, schemas: Map<string, Schema>, walk: Walk, moves: Moves): Promise<DesiredState> {
+  /**
+   * Applies count moves, and imports where `imports` is given, to `state`, a copy the plan never writes, records each in `moves` or
+   * `imports`, and plans the actions against it.
+   */
+  async build(
+    loadedResources: LoadedResource[],
+    graph: Graph<GraphNode>,
+    state: State,
+    schemas: Map<string, Schema>,
+    walk: Walk,
+    moves: Moves,
+    imports?: Imports
+  ): Promise<DesiredState> {
     this.planned.begin();
     this.schemas = schemas;
     this.moves = moves;
+    this.imports = imports;
     this.walk = walk;
     this.createsFirst = this.createFirst(loadedResources, graph);
     const byKey = new Map(loadedResources.map((r) => [r.address.toString(), r]));
@@ -202,8 +216,7 @@ export class DesiredStateBuilder {
   }
 
   private async planInstance(address: Address, block: ResourceBlock, dependencies: string[], state: State): Promise<ConfiguredResource> {
-    tryAt(block.position, spell(block), address, () => this.moveIn(address, state));
-    const current = state.resources[address.toString()];
+    const current = await this.currentAt(address, block, state);
     const ignoring = this.ignoringIn(block, current);
     const change = await this.askProvider(address, block, current, this.resolveForPlan(block, state, address), ignoring);
     const values = changes(current, change);
@@ -224,6 +237,14 @@ export class DesiredStateBuilder {
       ...(this.createsFirst.has(block) && { createBeforeDestroy: true as const }),
       ...kept,
     };
+  }
+
+  /** What the state holds at the instance once a count that came or went has moved it there, or an import block has taken it over. */
+  private async currentAt(address: Address, block: ResourceBlock, state: State): Promise<Resource | undefined> {
+    tryAt(block.position, spell(block), address, () => this.moveIn(address, state));
+    await this.imports?.importAt(address, state);
+
+    return state.resources[address.toString()];
   }
 
   /** Nothing to ignore in what does not exist yet, or in what is replaced because it is tainted. */

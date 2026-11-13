@@ -168,10 +168,10 @@ describe('an import block', () => {
     expect(await held()).toEqual({});
   });
 
-  it('names the first import that finds nothing, in the order written', async () => {
+  it('names the first import that finds nothing in the order the resources are planned, as any other refusal', async () => {
     const config = resource('a') + resource('b', 'kept', '', path.join(dir, 'g.txt')) + imported('local_file.b', '/no/b.txt') + imported('local_file.a', '/no/a.txt');
 
-    expect(await refusal(config)).toEqual(['import to local_file.b found no local_file with the id "/no/b.txt"', placeOf(config, 'import {').line]);
+    expect(await refusal(config)).toEqual(['import to local_file.a found no local_file with the id "/no/a.txt"', placeOf(config, imported('local_file.a', '/no/a.txt')).line]);
   });
 
   it('refuses a type that cannot be imported in validate too, before any provider is asked', async () => {

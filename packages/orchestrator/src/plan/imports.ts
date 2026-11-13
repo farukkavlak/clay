@@ -4,7 +4,7 @@ import { DesiredResource, PlanAction } from '@clay/planner';
 
 import { LoadedModule, LoadedResource } from '../config/ModuleLoader';
 import { withPlace } from '../place';
-import { inOrder, Limit } from '../providers/Limit';
+import { Limit } from '../providers/Limit';
 import { ProviderRegistry } from '../providers/ProviderRegistry';
 
 const refuse = (block: ImportBlock, message: string) => withPlace(new Error(message), block.position, spell(block), ModuleAddress.root);
@@ -60,7 +60,7 @@ export type ReadBack = (key: string, resource: Resource) => Promise<Record<strin
 /** Each address an object was imported to, and the id it was imported by. */
 export class Imports {
   private readonly ids = new Map<string, string>();
-  private readonly blocks = new Map<string, ImportBlock>();
+  private needed = new Map<string, ImportBlock>();
 
   constructor(
     private readonly providers: ProviderRegistry,
@@ -68,20 +68,20 @@ export class Imports {
     private readonly readBack: ReadBack
   ) {}
 
-  /**
-   * Into `state`, after the moves, so `to` is skipped where the state already holds it, or holds what a count that came or went
-   * moves to it. Asked all at once; the first refusal in order is the one given.
-   */
-  async importAll(imports: ImportBlock[], state: State): Promise<void> {
+  /** After the moves, so `to` is skipped where the state already holds it, or holds what a count that came or went moves to it. */
+  need(imports: ImportBlock[], state: State): void {
     const needed = imports.filter(({ to }) => ![to, ...to.countCounterparts()].some((held) => Object.hasOwn(state.resources, held.toString())));
-    const found = await inOrder(needed.map(async (block) => [block, await this.importOne(block)] as const));
+    this.needed = new Map(needed.map((block) => [block.to.toString(), block]));
+  }
 
-    for (const [block, resource] of found) {
-      const key = block.to.toString();
-      state.resources[key] = resource;
-      this.ids.set(key, block.id);
-      this.blocks.set(key, block);
-    }
+  /** Into `state` as the walk reaches the instance, so the instance is planned against what was imported. */
+  async importAt(address: Address, state: State): Promise<void> {
+    const key = address.toString();
+    const block = this.needed.get(key);
+    if (!block) return;
+
+    state.resources[key] = await this.importOne(block);
+    this.ids.set(key, block.id);
   }
 
   private async importOne(block: ImportBlock): Promise<Resource> {
@@ -110,7 +110,7 @@ export class Imports {
   /** Every import is to an instance the configuration makes; one it does not make would be left in state with nothing to plan it. */
   checkPlanned(desired: { address: Address }[]): void {
     const made = new Set(desired.map(({ address }) => address.toString()));
-    for (const [key, block] of this.blocks) if (!made.has(key)) throw refuse(block, `import to ${key}, but the configuration makes no such instance`);
+    for (const [key, block] of this.needed) if (!made.has(key)) throw refuse(block, `import to ${key}, but the configuration makes no such instance`);
   }
 
   /**

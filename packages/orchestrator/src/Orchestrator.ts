@@ -156,7 +156,7 @@ export class Orchestrator {
     }
   }
 
-  /** Applies every move, then every import where `imports` is given, to `state` before anything reads it, and records each. */
+  /** Applies every move to `state` before anything reads it, and each import where `imports` is given as the walk reaches its instance. */
   private async resolveAndCheck(state: State, walk: Walk, moves: Moves, limit: Limit, imports?: Imports): Promise<DesiredState & { graph: Graph<GraphNode> }> {
     const { loader, graphBuilder, writtenCheck, desiredStateBuilder, modules } = this.newRun(limit);
     const { loadedResources, loadedModules, schemas } = await loader.load();
@@ -168,8 +168,8 @@ export class Orchestrator {
     const importing = importsIn(loadedModules);
     checkImports(importing, loadedResources, this.providers);
     applyMoves(moved, state, moves);
-    await imports?.importAll(importing, state);
-    const desired = await desiredStateBuilder.build(loadedResources, graph, state, schemas, walk, moves);
+    imports?.need(importing, state);
+    const desired = await desiredStateBuilder.build(loadedResources, graph, state, schemas, walk, moves, imports);
     const declared = loadedModules.flatMap(({ address }) => (address.isRoot() ? [] : modules.of(address)));
     checkMovedAway(moved, desired.resources, declared);
     imports?.checkPlanned(desired.resources);
