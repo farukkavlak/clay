@@ -7,11 +7,20 @@ import { StateBackend } from './StateBackend';
 
 const isAbort = (error: unknown) => error instanceof Error && error.name === 'AbortError';
 
+/** Records waiting for one turn; the turn takes their lines when it comes. */
+interface Gathering {
+  state: State;
+  keys: string[];
+  turn: Promise<void>;
+}
+
 export class StateManager {
   private backend: StateBackend;
   private writing: Promise<void> = Promise.resolve();
   /** Set by an append that failed, which may have left part of a line; the next line would follow it. */
   private journalBroken = false;
+  /** Open to more records until its turn comes or a whole write is asked for. */
+  private gathering: Gathering | undefined;
   private lockId: string | undefined;
   private taking: Promise<void> = Promise.resolve();
   /** Set by `stop`, after which no lock is taken. */
@@ -33,34 +42,49 @@ export class StateManager {
 
   /** One at a time in the order asked, since a backend writes through one temp file; a failed write does not stop later ones. */
   write(state: State): Promise<void> {
+    this.gathering = undefined;
     return this.inTurn(() => this.save(state));
   }
 
   /**
    * Saves what `key` holds, after an action that changed no other address. The line is taken when its turn comes and counts in the serial
-   * as a write does. A backend without a journal, or one an append failed on, is written whole.
+   * as a write does. Records of the same state that wait for one turn share it, so their lines reach the disk in one flush.
+   * A backend without a journal, or one an append failed on, is written whole.
    */
   record(state: State, key: string): Promise<void> {
     const append = this.backend.append?.bind(this.backend);
     if (!append) return this.write(state);
 
-    return this.inTurn(async () => {
-      this.requireLock('A write');
-      if (this.journalBroken) {
-        await this.save(state);
-        return;
-      }
+    const open = this.gathering;
+    if (open?.state === state) {
+      open.keys.push(key);
+      return open.turn;
+    }
 
-      const serial = state.serial + 1;
-      try {
-        await append(journalLine(state, key, serial));
-      } catch (error) {
-        this.journalBroken = true;
-        throw error;
-      }
-      // eslint-disable-next-line require-atomic-updates -- the queue runs one turn at a time, and the serial moves only once the line is in place
-      state.serial = serial;
-    });
+    const keys = [key];
+    const turn = this.inTurn(() => this.appendAll(append, state, keys));
+    this.gathering = { state, keys, turn };
+
+    return turn;
+  }
+
+  private async appendAll(append: (lines: string) => Promise<void>, state: State, keys: string[]): Promise<void> {
+    // The lines are taken now, so a record asked for from here on waits for the next turn.
+    if (this.gathering?.keys === keys) this.gathering = undefined;
+    this.requireLock('A write');
+    if (this.journalBroken) {
+      await this.save(state);
+      return;
+    }
+
+    const lines = keys.map((key, index) => journalLine(state, key, state.serial + 1 + index));
+    try {
+      await append(lines.join(''));
+    } catch (error) {
+      this.journalBroken = true;
+      throw error;
+    }
+    state.serial += keys.length;
   }
 
   private inTurn(save: () => Promise<void>): Promise<void> {

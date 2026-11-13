@@ -119,8 +119,8 @@ export class LocalBackend implements StateBackend {
     await writeSynced(`${this.filePath}.bak`, journal ? serializeState(parseState(content.toString('utf8'), this.filePath, journal)) : content);
   }
 
-  async append(line: string): Promise<void> {
-    await appendSynced(this.journalPath, line);
+  async append(lines: string): Promise<void> {
+    await appendSynced(this.journalPath, lines);
     if (this.journalNamed) return;
 
     // The first line makes the journal, whose name is the directory's; the next ones only grow it.

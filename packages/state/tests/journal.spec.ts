@@ -3,7 +3,7 @@ import * as os from 'node:os';
 import path from 'node:path';
 
 import { emptyState, Resource, State, STATE_VERSION } from '@clay/contracts';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocalBackend } from '../src/backends/LocalBackend';
 import { StateBackend } from '../src/StateBackend';
@@ -11,8 +11,18 @@ import { StateManager } from '../src/StateManager';
 
 const resource = (name: string, content = name): Resource => ({ resourceType: 'rt', name, attributes: { content } });
 
+/** The serials each append to the backend carried, one list per append. */
+const appended = (spy: { mock: { calls: string[][] } }) =>
+  spy.mock.calls.map(([lines]) =>
+    lines
+      .split('\n')
+      .filter((line) => line !== '')
+      .map((line) => (JSON.parse(line) as { serial: number }).serial)
+  );
+
 describe('the journal', () => {
   let tmpDir: string;
+  let backend: LocalBackend;
   let manager: StateManager;
   let state: State;
 
@@ -26,7 +36,8 @@ describe('the journal', () => {
 
   beforeEach(async () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-journal-'));
-    manager = new StateManager(new LocalBackend(tmpDir));
+    backend = new LocalBackend(tmpDir);
+    manager = new StateManager(backend);
     await manager.lock('apply');
     state = emptyState();
     state.resources['rt.a'] = resource('a');
@@ -117,6 +128,73 @@ describe('the journal', () => {
       await Promise.all([writing, recording]);
 
       expect(await heldKeys()).toEqual(['rt.a', 'rt.b', 'rt.c']);
+    });
+  });
+
+  describe('records started together', () => {
+    it('reach the backend as one append, each line at its own serial', async () => {
+      const spy = vi.spyOn(backend, 'append');
+      state.resources['rt.b'] = resource('b');
+
+      await Promise.all([manager.record(state, 'rt.a'), manager.record(state, 'rt.b'), manager.record(state, 'rt.a')]);
+
+      expect(appended(spy)).toEqual([[2, 3, 4]]);
+      expect(state.serial).toBe(4);
+      expect(await manager.read()).toEqual(state);
+    });
+
+    it('are not joined by one asked for once their turn has come', async () => {
+      const spy = vi.spyOn(backend, 'append');
+      state.resources['rt.b'] = resource('b');
+      const first = manager.record(state, 'rt.a');
+      await new Promise((resolve) => {
+        setImmediate(resolve);
+      });
+
+      await Promise.all([first, manager.record(state, 'rt.b')]);
+
+      expect(appended(spy)).toEqual([[2], [3]]);
+      expect(await manager.read()).toEqual(state);
+    });
+
+    it('are not joined by one asked for after a whole write', async () => {
+      const spy = vi.spyOn(backend, 'append');
+      state.resources['rt.b'] = resource('b');
+
+      await Promise.all([manager.record(state, 'rt.a'), manager.write(state), manager.record(state, 'rt.b')]);
+
+      expect(appended(spy)).toEqual([[2], [4]]);
+      expect(await manager.read()).toEqual(state);
+    });
+
+    it('are not joined by one for another state', async () => {
+      const spy = vi.spyOn(backend, 'append');
+      const other = structuredClone(state);
+
+      await Promise.all([manager.record(state, 'rt.a'), manager.record(other, 'rt.a'), manager.record(state, 'rt.a')]);
+
+      expect(appended(spy)).toEqual([[2], [2], [3]]);
+      expect([state.serial, other.serial]).toEqual([3, 2]);
+    });
+
+    it.skipIf(process.getuid?.() === 0)('all fail when their append fails, and the next is written whole', async () => {
+      await fs.writeFile(journalPath(), '');
+      await fs.chmod(journalPath(), 0o444);
+      state.resources['rt.b'] = resource('b');
+
+      const recorded = await Promise.allSettled([manager.record(state, 'rt.a'), manager.record(state, 'rt.b')]);
+
+      expect(recorded).toMatchObject([
+        { status: 'rejected', reason: { code: 'EACCES' } },
+        { status: 'rejected', reason: { code: 'EACCES' } },
+      ]);
+      expect(state.serial).toBe(1);
+
+      await manager.record(state, 'rt.b');
+
+      const written = JSON.parse(await fs.readFile(statePath(), 'utf8')) as State;
+      expect(Object.keys(written.resources)).toEqual(['rt.a', 'rt.b']);
+      expect(written.serial).toBe(2);
     });
   });
 
