@@ -1,7 +1,7 @@
 import type { S3Client, S3ServiceException } from '@aws-sdk/client-s3';
 import { emptyState, State } from '@clay/contracts';
 
-import { LockInfo, lockInfoFrom, StateLocked } from '../lockInfo';
+import { forceUnlockWith, LockInfo, lockInfoFrom, noLockAt, otherLockAt, StateLocked } from '../lockInfo';
 import { BackendChoice, StateBackend } from '../StateBackend';
 import { parseState, serializeState } from '../stateFile';
 import { NoAnswer } from './httpRequest';
@@ -109,17 +109,16 @@ export class S3Backend implements StateBackend {
 
   /** A lock released between the refusal and the read is tried once more. */
   async lock(info: LockInfo): Promise<void> {
-    const free = `remove ${this.lockLocation}`;
-    let held = await this.heldBy(info, free);
-    if (held === 'gone') held = await this.heldBy(info, free);
+    let held = await this.heldBy(info);
+    if (held === 'gone') held = await this.heldBy(info);
     if (held === 'taken') return;
 
-    throw new StateLocked(held === 'gone' ? undefined : held, free);
+    throw new StateLocked(held === 'gone' ? undefined : held, `remove ${this.lockLocation}`);
   }
 
   /** A try the SDK sent again, after the answer to one S3 took was lost, finds the lock held by this run's own id. */
-  private async heldBy(info: LockInfo, free: string): Promise<'taken' | 'gone' | LockInfo | undefined> {
-    const outcome = await this.putLock(info, free);
+  private async heldBy(info: LockInfo): Promise<'taken' | 'gone' | LockInfo | undefined> {
+    const outcome = await this.putLock(info);
     if (!outcome.refused) return 'taken';
 
     // 409 is another request taking the same lock at the same time.
@@ -134,35 +133,48 @@ export class S3Backend implements StateBackend {
   }
 
   /** A lock request with no answer may have been taken all the same, and no run would release it. */
-  private async putLock(info: LockInfo, free: string): Promise<Outcome<unknown>> {
+  private async putLock(info: LockInfo): Promise<Outcome<unknown>> {
     try {
       return await this.put(this.lockKey, JSON.stringify(info), true);
     } catch (error) {
-      if (error instanceof NoAnswer) throw new Error(`${error.message}. S3 may hold lock ${info.id} all the same; if it does, ${free}`, { cause: error });
+      if (error instanceof NoAnswer) throw new Error(`${error.message}. S3 may hold lock ${info.id} all the same; if it does, ${forceUnlockWith(info.id)}`, { cause: error });
 
       throw error;
     }
   }
 
-  /** Servers answer a delete the lock changed under with 404, 409 or 412 alike, so the lock read again decides. */
   async unlock(id: string): Promise<void> {
-    const refused = await this.releaseOwn(id);
-    if (refused === undefined) return;
-
-    const again = await this.releaseOwn(id);
-    if (again !== undefined) throw this.unexpected('DeleteObject', this.lockLocation, again);
+    await this.release(id, () => new Error(`${this.lockLocation} holds a lock this run did not take, so it is left in place`));
   }
 
-  /** Undefined where the lock is gone now, or the refusal of a delete the lock may have changed under. */
-  private async releaseOwn(id: string): Promise<S3ServiceException | undefined> {
+  async forceUnlock(id: string): Promise<void> {
+    const found = await this.release(id, (holder) => otherLockAt(this.lockLocation, holder, id));
+    if (!found) throw noLockAt(this.lockLocation);
+  }
+
+  /** Servers answer a delete the lock changed under with 404, 409 or 412 alike, so the lock read again decides. */
+  private async release(id: string, other: (holder: LockInfo | undefined) => Error): Promise<boolean> {
+    const first = await this.deleteHeldBy(id, other);
+    if (first === 'none') return false;
+    if (first === 'deleted') return true;
+
+    const again = await this.deleteHeldBy(id, other);
+    if (again !== 'none' && again !== 'deleted') throw this.unexpected('DeleteObject', this.lockLocation, again);
+    return true;
+  }
+
+  /** The refusal of a delete the lock may have changed under, or what was there to delete. */
+  private async deleteHeldBy(id: string, other: (holder: LockInfo | undefined) => Error): Promise<'none' | 'deleted' | S3ServiceException> {
     const stored = await this.stored(this.lockKey);
-    if (stored === undefined) return undefined;
-    if (lockInfoFrom(stored.text)?.id !== id) throw new Error(`${this.lockLocation} holds a lock this run did not take, so it is left in place`);
+    if (stored === undefined) return 'none';
+
+    const holder = lockInfoFrom(stored.text);
+    if (holder?.id !== id) throw other(holder);
 
     const outcome = await this.send('DeleteObject', this.lockLocation, (sdk, client) =>
       client.send(new sdk.DeleteObjectCommand({ Bucket: this.settings.bucket, Key: this.lockKey, IfMatch: stored.etag }))
     );
-    if (!outcome.refused) return undefined;
+    if (!outcome.refused) return 'deleted';
 
     const status = statusOf(outcome.refused);
     if (!isMissing(outcome.refused) && status !== 409 && status !== 412) throw this.unexpected('DeleteObject', this.lockLocation, outcome.refused);

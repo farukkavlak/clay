@@ -94,7 +94,7 @@ describe('a command that waits for the lock', () => {
     await fs.rm(file('clay.state.json.lock'));
 
     const { stdout, stderr } = await ended;
-    expect(stderr).toContain(`${HELD}. If that run is gone, remove ${file('clay.state.json.lock')}\nWaiting up to 30s for it to be released...`);
+    expect(stderr).toContain(`${HELD}. If that run is gone, run clay force-unlock held-by-another-run\nWaiting up to 30s for it to be released...`);
     expect(stdout + stderr).toContain(done);
     expect(await exists('clay.state.json.lock')).toBe(false);
   });

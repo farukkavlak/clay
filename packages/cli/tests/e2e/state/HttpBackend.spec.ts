@@ -168,7 +168,7 @@ describe('a state kept on an HTTP server', () => {
 
     expect(code).toBe(1);
     expect(stderr).toContain(`State is locked by apply of ${holder.who} on elsewhere, pid ${holder.pid}`);
-    expect(stderr).toContain(`send UNLOCK to ${server.url}/lock with what the lock holds`);
+    expect(stderr).toContain(`If that run is gone, run clay force-unlock ${holder.id}`);
     expect(stateOnServer().resources).toEqual({});
     expect(server.lock).toBe(JSON.stringify(holder));
     expect(await exists('f.txt')).toBe(false);

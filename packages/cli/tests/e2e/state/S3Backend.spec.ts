@@ -96,6 +96,17 @@ describe('a state kept in S3', () => {
     expect(await exists('clay.state.json')).toBe(false);
   });
 
+  it('releases the lock a run that died left, with force-unlock', async () => {
+    await clayWith('init');
+    const holder = { ...newLockInfo('apply'), host: 'elsewhere' };
+    server.put('bucket/env/state.json.lock', JSON.stringify(holder));
+
+    const { code } = await clayWith('force-unlock', holder.id);
+
+    expect(code).toBe(0);
+    expect(server.text('bucket/env/state.json.lock')).toBeUndefined();
+  });
+
   it('refuses a run while another holds the lock, naming how to free it, and writes nothing', async () => {
     await clayWith('init');
     const holder = { ...newLockInfo('apply'), host: 'elsewhere' };
@@ -105,7 +116,7 @@ describe('a state kept in S3', () => {
 
     expect(code).toBe(1);
     expect(stderr).toContain(`State is locked by apply of ${holder.who} on elsewhere, pid ${holder.pid}`);
-    expect(stderr).toContain(`remove s3://bucket/env/state.json.lock at ${server.url}/`);
+    expect(stderr).toContain(`If that run is gone, run clay force-unlock ${holder.id}`);
     expect(stateInBucket().resources).toEqual({});
     expect(server.text('bucket/env/state.json.lock')).toBe(JSON.stringify(holder));
     expect(await exists('f.txt')).toBe(false);

@@ -75,7 +75,7 @@ describe('the state lock', () => {
     await leave(live);
 
     await expect(manager.lock('apply')).rejects.toThrow(
-      `State is locked by state rm of ${live.who} on ${live.host}, pid ${process.pid}, since 2026-11-06T10:00:00.000Z. If that run is gone, remove ${lockPath()}`
+      `State is locked by state rm of ${live.who} on ${live.host}, pid ${process.pid}, since 2026-11-06T10:00:00.000Z. If that run is gone, run clay force-unlock ${live.id}`
     );
   });
 
@@ -85,14 +85,14 @@ describe('the state lock', () => {
     await leave(gone);
 
     await expect(manager.lock('apply')).rejects.toThrow(
-      `State is locked by state rm of ${gone.who} on ${gone.host}, pid ${pid}, since 2026-11-06T10:00:00.000Z. No process ${pid} runs on this machine, so that run looks gone. If it is, remove ${lockPath()}`
+      `State is locked by state rm of ${gone.who} on ${gone.host}, pid ${pid}, since 2026-11-06T10:00:00.000Z. No process ${pid} runs on this machine, so that run looks gone. If it is, run clay force-unlock ${gone.id}`
     );
   });
 
   it('cannot tell whether a run on another machine is gone', async () => {
     await leave(holder({ host: 'elsewhere', pid: gonePid() }));
 
-    await expect(manager.lock('apply')).rejects.toThrow(/on elsewhere, .*\. If that run is gone, remove /);
+    await expect(manager.lock('apply')).rejects.toThrow(/on elsewhere, .*\. If that run is gone, run clay force-unlock /);
   });
 
   it("takes a process of another user's as running", async () => {
@@ -101,7 +101,7 @@ describe('the state lock', () => {
     });
     await leave(holder({ pid: gonePid() }));
 
-    await expect(manager.lock('apply')).rejects.toThrow(/\. If that run is gone, remove /);
+    await expect(manager.lock('apply')).rejects.toThrow(/\. If that run is gone, run clay force-unlock /);
   });
 
   it('passes on any other failure to look for the process', async () => {
@@ -257,5 +257,35 @@ describe('the state lock', () => {
     await fs.mkdir(lockPath());
 
     await expect(manager.lock('apply')).rejects.toThrow(`The lock ${lockPath()} cannot be read (EISDIR)`);
+  });
+
+  describe('forced open', () => {
+    it('removes the lock of a run that is gone', async () => {
+      const gone = holder();
+      await leave(gone);
+
+      await new LocalBackend(dir).forceUnlock(gone.id);
+
+      await expect(fs.access(lockPath())).rejects.toThrow(/ENOENT/);
+    });
+
+    it('leaves a lock with another id in place', async () => {
+      const other = holder();
+      await leave(other);
+
+      await expect(new LocalBackend(dir).forceUnlock('another')).rejects.toThrow(`${lockPath()} holds lock ${other.id}, not another, so it is left in place`);
+      expect(await held()).toEqual(other);
+    });
+
+    it('leaves a lock that names no run in place', async () => {
+      await fs.writeFile(lockPath(), 'locked');
+
+      await expect(new LocalBackend(dir).forceUnlock('another')).rejects.toThrow(`${lockPath()} holds a lock that names no run, not another, so it is left in place`);
+      expect(await fs.readFile(lockPath(), 'utf8')).toBe('locked');
+    });
+
+    it('says no lock is held where none is', async () => {
+      await expect(new LocalBackend(dir).forceUnlock('another')).rejects.toThrow(`No lock is held at ${lockPath()}`);
+    });
   });
 });

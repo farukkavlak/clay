@@ -2,7 +2,7 @@ import { emptyState, State } from '@clay/contracts';
 import { createHash } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 
-import { LockInfo, lockInfoFrom, StateLocked } from '../lockInfo';
+import { forceUnlockWith, LockInfo, lockInfoFrom, newLockInfo, noLockAt, otherLockAt, StateLocked } from '../lockInfo';
 import { BackendChoice, StateBackend } from '../StateBackend';
 import { parseState, serializeState } from '../stateFile';
 import { authorization, Credentials, PASSWORD, USERNAME } from './httpCredentials';
@@ -73,10 +73,13 @@ function settled(reply: Reply | NoAnswer, tries: number): Answer {
   return { ...reply, tries };
 }
 
-const mayHold = (id: string, free: string) => `The server may hold lock ${id} all the same; if it does, ${free}`;
+const mayHold = (id: string) => `The server may hold lock ${id} all the same; if it does, ${forceUnlockWith(id)}`;
 
 /** What a write, a lock or an unlock the server took answers. */
 const DONE = new Set([200, 201, 204]);
+
+/** Where the server holds a lock already. */
+const isLocked = (answer: Answer) => answer.status === 409 || answer.status === 423;
 
 /** The state is one document at one address. A server with no journal gets it whole on every write. */
 export class HttpBackend implements StateBackend {
@@ -150,32 +153,40 @@ export class HttpBackend implements StateBackend {
   }
 
   async lock(info: LockInfo): Promise<void> {
-    const { lockAddress, lockMethod, unlockAddress, unlockMethod } = this.settings;
-    const body = JSON.stringify(info);
-    const free = `send ${unlockMethod} to ${unlockAddress.href} with what the lock holds`;
+    const { unlockAddress, unlockMethod } = this.settings;
 
-    const answer = await this.asked(this.send(lockAddress, withBody(lockMethod, body)), info.id, free);
+    const answer = await this.lockAsked(info);
+    if (answer !== 'taken') throw new StateLocked(lockInfoFrom(answer.body), `send ${unlockMethod} to ${unlockAddress.href} with what the lock holds`);
+  }
+
+  /** The answer of a server that holds another lock, which names it in the body. */
+  private async lockAsked(info: LockInfo): Promise<'taken' | Answer> {
+    const { lockAddress, lockMethod } = this.settings;
+    const body = JSON.stringify(info);
+
+    const answer = await this.asked(this.send(lockAddress, withBody(lockMethod, body)), info.id);
     if (!DONE.has(answer.status) && !this.ownLock(answer, info.id)) {
-      if (answer.status === 409 || answer.status === 423) throw new StateLocked(lockInfoFrom(answer.body), free);
+      if (isLocked(answer)) return answer;
 
       const error = this.unexpected(lockMethod, lockAddress, answer);
-      throw answer.tries === 1 ? error : new Error(`${error.message}. ${mayHold(info.id, free)}`);
+      throw answer.tries === 1 ? error : new Error(`${error.message}. ${mayHold(info.id)}`);
     }
 
     this.held = { id: info.id, body };
+    return 'taken';
   }
 
   /** A try the server took, and whose answer was lost, has the lock held by this run's own id when the next try comes. */
   private ownLock(answer: Answer, id: string): boolean {
-    return (answer.status === 409 || answer.status === 423) && lockInfoFrom(answer.body)?.id === id;
+    return isLocked(answer) && lockInfoFrom(answer.body)?.id === id;
   }
 
   /** A lock request with no whole answer may have been taken all the same, and no run would release it. */
-  private async asked(sent: Promise<Answer>, id: string, free: string): Promise<Answer> {
+  private async asked(sent: Promise<Answer>, id: string): Promise<Answer> {
     try {
       return await sent;
     } catch (error) {
-      if (error instanceof NoAnswer) throw new Error(`${error.message}. ${mayHold(id, free)}`, { cause: error });
+      if (error instanceof NoAnswer) throw new Error(`${error.message}. ${mayHold(id)}`, { cause: error });
 
       throw error;
     }
@@ -183,18 +194,50 @@ export class HttpBackend implements StateBackend {
 
   /** Sends back what the lock was taken with, as a server that keeps it compares the two. */
   async unlock(id: string): Promise<void> {
-    const { unlockAddress, unlockMethod } = this.settings;
-    if (this.held?.id !== id) throw new Error(`This run holds no lock ${id} on ${unlockAddress.href}, so it releases none`);
+    if (this.held?.id !== id) throw new Error(`This run holds no lock ${id} on ${this.settings.unlockAddress.href}, so it releases none`);
 
-    const answer = await this.send(unlockAddress, withBody(unlockMethod, this.held.body));
-    if (!DONE.has(answer.status)) {
-      const error = this.unexpected(unlockMethod, unlockAddress, answer);
-      if (answer.tries === 1) throw error;
+    await this.release(id, this.held.body);
+    this.held = undefined;
+  }
 
-      throw new Error(`${error.message}. A try before it may have released lock ${id} all the same`);
+  /** The server names only the lock it holds, in its answer to a lock it refuses, so one is asked for. One it gives is released again. */
+  async forceUnlock(id: string): Promise<void> {
+    const { lockAddress } = this.settings;
+    const asking = newLockInfo('force-unlock');
+
+    const answer = await this.lockAsked(asking);
+    if (answer === 'taken') {
+      await this.releaseAsked(asking.id);
+      throw noLockAt(lockAddress.href);
     }
 
-    this.held = undefined;
+    const holder = lockInfoFrom(answer.body);
+    if (holder?.id !== id) throw otherLockAt(lockAddress.href, holder, id);
+
+    await this.release(id, answer.body);
+  }
+
+  private async releaseAsked(id: string): Promise<void> {
+    try {
+      await this.unlock(id);
+    } catch (error) {
+      // Whatever stopped the release, the lock taken to ask may still be held.
+      const why = error instanceof Error ? error.message : String(error);
+      const left = `the one taken to ask could not be released (${why}); if it is still held, ${forceUnlockWith(id)}`;
+      throw new Error(`No lock was held at ${this.settings.lockAddress.href}, and ${left}`, { cause: error });
+    }
+  }
+
+  private async release(id: string, body: string): Promise<void> {
+    const { unlockAddress, unlockMethod } = this.settings;
+
+    const answer = await this.send(unlockAddress, withBody(unlockMethod, body));
+    if (DONE.has(answer.status)) return;
+
+    const error = this.unexpected(unlockMethod, unlockAddress, answer);
+    if (answer.tries === 1) throw error;
+
+    throw new Error(`${error.message}. A try before it may have released lock ${id} all the same`);
   }
 
   /** The body of a 200, or undefined where the server holds no state, which 204, 404 and an empty body all say. */

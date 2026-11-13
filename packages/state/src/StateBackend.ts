@@ -39,4 +39,7 @@ export interface StateBackend {
 
   /** Releases the lock taken with `id`, and no other. */
   unlock(id: string): Promise<void>;
+
+  /** Releases lock `id` whatever run took it, for one that is gone. Throws where no lock is held, or another one. */
+  forceUnlock(id: string): Promise<void>;
 }

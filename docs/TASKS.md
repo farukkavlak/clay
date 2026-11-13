@@ -1107,16 +1107,10 @@ Terraform has it since backends replaced `-state`.
       a power loss may leave either empty on a file system that reorders writes. Every
       local write is now flushed, and its directory too, before the journal is removed
 
-### Format
-
-- [ ] A state a newer Clay wrote is refused, which is right, but an older one has no way
-      forward either. Each version needs an upgrade step that reads the one before, the
-      way Terraform's `states/statefile` upgrades on read
-
 ### Commands
 
-- [ ] `clay force-unlock`: a run that dies leaves its lock behind, and the error names
-      the file; this removes it, the way Terraform's does
+- [x] `clay force-unlock <id>`: a run that dies leaves its lock behind; the error names
+      its id, and this releases that lock on any backend, and no other
 - [ ] `clay import <address> <id>`: take over a resource that exists but is not in state
 - [ ] A provider can name what identifies a resource apart from its values, for `import`
       and for finding it again. Terraform 1.12's resource identity
@@ -1361,6 +1355,9 @@ Ideas that need the sections above first.
 - Cost estimation: a provider says what a resource costs, the plan sums the change
 - A language server: completion, go to definition, hover; a VS Code extension on top
 - Benchmarks on large configurations, and fuzzing the parser and the state reader
+- Once Clay has users, each `STATE_VERSION` bump comes with an upgrade step that reads the
+  version before, the way Terraform's `states/statefile` upgrades on read. Until then an
+  older state is refused
 - The Azure backend takes the OIDC token of the CI itself, as Terraform's `use_oidc` does,
   so a job needs no `az` and runs past the hour an `azure/login` token lasts
 

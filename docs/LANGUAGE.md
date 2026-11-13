@@ -529,6 +529,8 @@ clay {
   another run holds it, and its body names that run.
 - `unlock_method` (`UNLOCK`) sends the same body to `unlock_address`, which is
   `lock_address` where none is given. A lock or an unlock counts on 200, 201 or 204.
+  `clay force-unlock` first sends a lock to learn which one the server holds, then sends
+  back the body the server named. A lock it is given where none was held, it releases.
 
 No redirect is followed. Followed, a `POST` would go on as a `GET`, and its 200 would
 count as written. An address names where the server answers.
@@ -600,8 +602,9 @@ clay {
   name, as most such servers want.
 
 The lock is a second object, `<key>.lock`, written only where none is
-(`If-None-Match: *`). When another run holds it, the error names that run and the object
-to remove. To release it, Clay reads the lock, checks its id, and deletes it only if it is
+(`If-None-Match: *`). When another run holds it, the error names that run and the
+`clay force-unlock` command with its id, or the object to remove where the lock names no
+run. To release it, Clay reads the lock, checks its id, and deletes it only if it is
 still the version it read (`If-Match`). AWS and RustFS keep to `If-Match`. A server that
 ignores it, or sends no ETag, deletes the lock anyway, so a lock another run took between
 the read and the delete is lost.
@@ -640,8 +643,9 @@ clay {
   is used: `https://<account>.blob.core.windows.net`.
 
 The lock is a second blob, `<key>.lock`, written only where none is
-(`If-None-Match: *`). When another run holds it, the error names that run and the blob to
-delete. To release it, Clay reads the lock, checks its id, and deletes it only if it is
+(`If-None-Match: *`). When another run holds it, the error names that run and the
+`clay force-unlock` command with its id, or the blob to delete where the lock names no
+run. To release it, Clay reads the lock, checks its id, and deletes it only if it is
 still the version it read (`If-Match`). Azure and Azurite keep to both headers.
 
 Credentials come from the environment, by the names the `az` CLI uses:

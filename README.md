@@ -91,11 +91,13 @@ one file per module. `docs/TASKS.md` has the full list.
 | `clay state show <addr>` | Prints one resource as it is in state, and each deposed object under it                                                          |
 | `clay state mv <a> <b>`  | Renames a resource in state, so the next plan does not recreate it                                                               |
 | `clay state rm <addr>`   | Forgets a resource, and its deposed objects, without destroying them                                                             |
+| `clay force-unlock <id>` | Releases the lock of a run that died, by its id; a lock with another id stays                                                    |
 
 `init`, `plan`, `apply`, `state mv` and `state rm` take the state lock, and stop at once
 when another run holds it. `--lock-timeout <seconds>` makes them wait: the command says
 who holds the lock and tries again, 1 second later, then twice as long each time up to 16,
-until the time is gone. Ctrl-C while it waits exits at once.
+until the time is gone. Ctrl-C while it waits exits at once. A run that dies keeps the
+lock; the error names its id, and `clay force-unlock <id>` releases it.
 
 A saved plan carries the configuration it was made from and the state it was planned
 against. `apply` runs that configuration, not the one on disk now, and refuses the plan
@@ -240,7 +242,8 @@ each block means.
 
 1. Write a class in `packages/state/src/backends` that implements `StateBackend`. `lock`
    throws `StateLocked` when another run holds the lock. `unlock(id)` releases only the
-   lock with that id. `choice.settings` lists every setting, defaults included, because
+   lock with that id that this run took, and `forceUnlock(id)` the lock with that id
+   whatever run took it. `choice.settings` lists every setting, defaults included, because
    `init` saves it and builds the backend again from it.
 2. Write a function `(settings, workingDir, env)` that returns the backend. Check the
    setting names with `checkNames`, and reject a bad value with
