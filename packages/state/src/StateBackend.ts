@@ -28,8 +28,8 @@ export interface StateBackend {
   /** Replaces the state and every line appended since. */
   write(state: State): Promise<void>;
 
-  /** Adds a line of the journal over the state last written; a backend without one is written whole instead. */
-  append?(line: string): Promise<void>;
+  /** Adds lines of the journal, each ending in a newline, over the state last written; a backend without one is written whole instead. */
+  append?(lines: string): Promise<void>;
 
   /** Called under the lock. */
   writeIfAbsent(state: State): Promise<boolean>;

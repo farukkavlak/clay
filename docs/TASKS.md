@@ -993,9 +993,10 @@ Measured with the local provider; a remote provider makes the sequential calls c
 - [x] `Graph.dependenciesOf` scans every node's edges on each call, and the plan calls it for
       every resource, so a plan of 4000 blocks spends 1.8 of its 2.4 seconds there. The graph
       can keep the reverse edges
-- [ ] A local state flushes each journal line to disk on its own, so 1000 pairs of
-      `null_resource` apply in 5.5 to 6.5 seconds, not 1.0 to 1.3 without the flush. Lines
-      of actions that finish while one is flushed could wait for it and share the next one
+- [x] A local state flushed each journal line to disk on its own, so 1000 pairs of
+      `null_resource` applied in 6.1 to 6.4 seconds, not 1.0 to 1.3 without the flush. The
+      lines of actions that finish while one is flushed now wait for it and share the next
+      flush: 1.4 to 1.5 seconds
 
 ### Lifecycle
 
