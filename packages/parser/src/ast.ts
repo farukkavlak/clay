@@ -197,11 +197,11 @@ export interface LocalBlock extends Node {
  */
 export type MovedBlock = Node & { type: 'Moved' } & ({ kind: 'resource'; from: Address; to: Address } | { kind: 'module'; from: ModuleAddress; to: ModuleAddress });
 
-/** The real object `id` names becomes `to`, unless the state already holds `to`. */
+/** The real object `id` names becomes `to`, unless the state already holds `to`. `id` is read at plan, as the walk reaches `to`. */
 export interface ImportBlock extends Node {
   type: 'Import';
   to: Address;
-  id: string;
+  id: AttributeValue;
 }
 
 /** Where the state lives, from the `clay` block of the root module. */

@@ -135,6 +135,7 @@ export class DependencyGraphBuilder {
     for (const [key, node] of graph.entries()) this.addNodeDependencies(key, node, graph, moduleScopes);
     for (const resource of loadedResources) this.addResourceDependencies(resource, graph, moduleScopes);
     for (const loaded of loadedModules) this.addRuleDependencies(loaded, graph, moduleScopes);
+    for (const loaded of loadedModules) this.addImportDependencies(loaded, graph, moduleScopes);
     for (const [key, node] of graph.entries()) if (!node.module.isRoot()) graph.addEdge(callKey(node.module), key);
 
     this.refuseCycle(graph);
@@ -200,6 +201,22 @@ export class DependencyGraphBuilder {
       const dependent = { key, declaration: spell(variable), context: address, given: key };
       for (const { condition, errorMessage } of variable.validations ?? [])
         for (const value of [condition, errorMessage]) tryAt(value.position, dependent.declaration, address, () => this.addDependencies(value, graph, dependent, moduleScopes));
+    }
+  }
+
+  /**
+   * The resource an import goes to waits for what its id reads, which is read as the walk reaches it. An import outside the root module,
+   * or to a resource that is not declared, is refused once the graph is built.
+   */
+  private addImportDependencies({ address, program }: LoadedModule, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
+    if (!address.isRoot()) return;
+
+    for (const block of program) {
+      if (block.type !== 'Import') continue;
+
+      const key = block.to.withoutKey().toString();
+      const dependent = { key, declaration: spell(block), context: address };
+      if (graph.hasNode(key)) tryAt(block.id.position, dependent.declaration, address, () => this.addDependencies(block.id, graph, dependent, moduleScopes));
     }
   }
 

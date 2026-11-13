@@ -106,7 +106,9 @@ export class Orchestrator {
 
   /** Plans against an empty state and reads no data source, so what a resource or a data source gives is unknown and everything else is checked. */
   async validate(): Promise<void> {
-    await this.resolveAndCheck(emptyState(), 'check', new Moves(), new Limit(DEFAULT_PARALLELISM));
+    const limit = new Limit(DEFAULT_PARALLELISM);
+    const imports = new Imports(this.providers, limit, (key, resource) => this.readBack(key, resource));
+    await this.resolveAndCheck(emptyState(), 'check', new Moves(), limit, imports);
   }
 
   /**
@@ -156,8 +158,8 @@ export class Orchestrator {
     }
   }
 
-  /** Applies every move to `state` before anything reads it, and each import where `imports` is given as the walk reaches its instance. */
-  private async resolveAndCheck(state: State, walk: Walk, moves: Moves, limit: Limit, imports?: Imports): Promise<DesiredState & { graph: Graph<GraphNode> }> {
+  /** Applies every move to `state` before anything reads it, and each import as the walk reaches its instance; a check only reads the ids. */
+  private async resolveAndCheck(state: State, walk: Walk, moves: Moves, limit: Limit, imports: Imports): Promise<DesiredState & { graph: Graph<GraphNode> }> {
     const { loader, graphBuilder, writtenCheck, desiredStateBuilder, modules } = this.newRun(limit);
     const { loadedResources, loadedModules, schemas } = await loader.load();
 
@@ -168,11 +170,12 @@ export class Orchestrator {
     const importing = importsIn(loadedModules);
     checkImports(importing, loadedResources, this.providers);
     applyMoves(moved, state, moves);
-    imports?.need(importing, state);
+    imports.need(importing, state);
     const desired = await desiredStateBuilder.build(loadedResources, graph, state, schemas, walk, moves, imports);
     const declared = loadedModules.flatMap(({ address }) => (address.isRoot() ? [] : modules.of(address)));
     checkMovedAway(moved, desired.resources, declared);
-    imports?.checkPlanned(desired.resources);
+    // A check may not know a count or for_each, so it makes no instance of the block.
+    if (walk === 'plan') imports.checkPlanned(desired.resources);
     return { ...desired, graph };
   }
 }

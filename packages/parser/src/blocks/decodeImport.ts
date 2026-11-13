@@ -24,16 +24,9 @@ function targetOf(value: AttributeValue): Address {
   return address.module.isRoot() ? address : refuse();
 }
 
-function idOf(value: AttributeValue): string {
-  if (value.type !== 'String') throw new ConfigError('import "id" is a string written out, as in "/tmp/a.txt"', value.position);
-  if (value.value === '') throw new ConfigError('import "id" must not be empty', value.position);
-
-  return value.value;
-}
-
 export function decodeImport(block: Block): ImportBlock {
   const { to, id } = attributesIn(block.body);
   if (to === undefined || id === undefined) throw new ConfigError(`import needs ${to ? 'an "id"' : 'a "to"'}`, block.position);
 
-  return { type: 'Import', to: targetOf(to), id: idOf(id), position: block.position };
+  return { type: 'Import', to: targetOf(to), id, position: block.position };
 }

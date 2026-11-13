@@ -486,11 +486,30 @@ What an id is depends on the type. For `local_file` it is the path, and a relati
 read where Clay runs. `random_string`, `null_resource` and `command_exec` exist only in
 state, so there is nothing to take over, and they cannot be imported.
 
+The id may read any value known at plan: a variable, a local, a data source, or what
+another resource is planned to hold. It is read as the plan reaches `to`, and `to` waits
+for what it reads, as it waits for its own values:
+
+```
+import {
+  to = local_file.a
+  id = "${var.dir}/app.conf"
+}
+```
+
+The plan shows the id, so it must be a string that is not empty, known at plan and not
+sensitive. A saved plan imports by the id it showed, even if what the id reads has changed
+since.
+
 Keep the block after the apply: a state that holds `to` imports nothing, whatever the id.
 Nor does one that holds what adding or removing `count` moves to `to`, as `local_file.a`
 for `local_file.a[0]`; the plan moves it instead.
 To take over another object at the same address, remove the one in state first with
 `clay state rm`.
+
+Refused at the id: a value only an apply makes, a sensitive value, a value that is not a
+string, and an empty string. `validate` refuses what it can already tell of the id, and
+asks no provider.
 
 Refused, at the block:
 
@@ -502,7 +521,7 @@ Refused, at the block:
 - an id that finds nothing, or something the type is not, as a directory for a file
 - an object another address in the plan holds too, as two blocks for one file
 
-A saved plan imports only what the import blocks it carries say, by the same id.
+A saved plan imports only where the configuration still has an import block for it.
 
 ## Data sources
 

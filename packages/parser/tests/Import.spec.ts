@@ -26,7 +26,18 @@ describe('Parser - import block', () => {
   ])('reads %s as the address and the id as written', (_, to) => {
     const [block] = parse(imported(to)) as ImportBlock[];
 
-    expect([block.type, block.to.toString(), block.id, block.position.line]).toEqual(['Import', to, '/tmp/a.txt', 1]);
+    expect([block.type, block.to.toString(), block.id, block.position.line]).toEqual([
+      'Import',
+      to,
+      { type: 'String', value: '/tmp/a.txt', position: expect.objectContaining({ line: 3, column: 8 }) },
+      1,
+    ]);
+  });
+
+  it('keeps an id read from a value as the expression, for the plan to read', () => {
+    const [block] = parse(imported('local_file.a', 'var.id')) as ImportBlock[];
+
+    expect(block.id.type).toBe('Reference');
   });
 
   it('refuses two imports to one address, across files', () => {
@@ -52,10 +63,6 @@ describe('Parser - import block', () => {
     ['a resource in a module', imported('module.m.local_file.a'), 'import "to" is a resource of the root module or an instance of one', [2, 8]],
     ['a data source', imported('data.local_file.a'), 'import "to" is a resource of the root module or an instance of one', [2, 8]],
     ['a path into an attribute', imported('local_file.a.path'), 'import "to" is a resource of the root module or an instance of one', [2, 8]],
-    ['an id read from a value', imported('local_file.a', 'var.id'), 'import "id" is a string written out, as in "/tmp/a.txt"', [3, 8]],
-    ['an id with a template', imported('local_file.a', '"/tmp/${var.name}"'), 'import "id" is a string written out, as in "/tmp/a.txt"', [3, 8]],
-    ['a number as the id', imported('local_file.a', '1'), 'import "id" is a string written out, as in "/tmp/a.txt"', [3, 8]],
-    ['an empty id', imported('local_file.a', '""'), 'import "id" must not be empty', [3, 8]],
   ])('refuses %s where it is written', (_, source, message, [line, column]) => {
     const error = errorOf(source);
 

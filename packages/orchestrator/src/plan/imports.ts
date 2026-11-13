@@ -1,11 +1,14 @@
-import { Address, InstanceKey, ModuleAddress, Resource, State } from '@clay/contracts';
+import { Address, InstanceKey, isUnknown, ModuleAddress, Resource, State } from '@clay/contracts';
 import { ImportBlock, ResourceBlock, spell } from '@clay/parser';
 import { DesiredResource, PlanAction } from '@clay/planner';
 
 import { LoadedModule, LoadedResource } from '../config/ModuleLoader';
+import { NotKnownYet } from '../instances/NotKnownYet';
 import { withPlace } from '../place';
 import { Limit } from '../providers/Limit';
 import { ProviderRegistry } from '../providers/ProviderRegistry';
+import { isSensitive } from '../values/sensitive';
+import { described, nullSource, Value } from '../values/Value';
 
 const refuse = (block: ImportBlock, message: string) => withPlace(new Error(message), block.position, spell(block), ModuleAddress.root);
 
@@ -49,6 +52,19 @@ export function checkImports(imports: ImportBlock[], resources: LoadedResource[]
   }
 }
 
+/** A string known at plan, and not sensitive, since the plan shows it. A value not known yet has its type, so one no apply can make a string is refused first. */
+export function idFrom(value: Value): string {
+  const { kind } = value.type;
+  const notAString = () => new Error(`import "id" is a string, not ${described(value)}${nullSource(value)}`);
+  if (kind !== 'string' && kind !== 'dynamic') throw notAString();
+  if (isSensitive(value)) throw new Error('import "id" is sensitive, and the plan shows it');
+  if (isUnknown(value.data)) throw new NotKnownYet('import "id" must be known when planning: it reads a value only an apply makes');
+  if (typeof value.data !== 'string') throw notAString();
+  if (value.data === '') throw new Error('import "id" must not be empty');
+
+  return value.data;
+}
+
 /** Without a key or module path left undefined, as the state holds a resource. */
 function fieldsOf(address: Address): Pick<Resource, 'resourceType' | 'name' | 'key'> {
   return { resourceType: address.resourceType, name: address.name, ...(address.key !== undefined && { key: address.key }) };
@@ -74,18 +90,20 @@ export class Imports {
     this.needed = new Map(needed.map((block) => [block.to.toString(), block]));
   }
 
-  /** Into `state` as the walk reaches the instance, so the instance is planned against what was imported. */
-  async importAt(address: Address, state: State): Promise<void> {
-    const key = address.toString();
-    const block = this.needed.get(key);
-    if (!block) return;
-
-    state.resources[key] = await this.importOne(block);
-    this.ids.set(key, block.id);
+  /** The block that imports to the instance, where the state does not hold it yet. */
+  neededAt(address: Address): ImportBlock | undefined {
+    return this.needed.get(address.toString());
   }
 
-  private async importOne(block: ImportBlock): Promise<Resource> {
-    const { to, id } = block;
+  /** Into `state` as the walk reaches the instance, so the instance is planned against what was imported. */
+  async importBy(block: ImportBlock, id: string, state: State): Promise<void> {
+    const key = block.to.toString();
+    state.resources[key] = await this.importOne(block, id);
+    this.ids.set(key, id);
+  }
+
+  private async importOne(block: ImportBlock, id: string): Promise<Resource> {
+    const { to } = block;
     const nothing = () => refuse(block, `import to ${to} found no ${to.resourceType} with the id "${id}"`);
     try {
       const provider = this.providers.get(to.resourceType);
@@ -138,14 +156,14 @@ export class Imports {
   }
 }
 
-/** A saved plan imports only what the configuration's import blocks say, by the same id. */
+/** A saved plan imports only where the configuration has an import block; the id is the one the plan read and showed. */
 export function checkImportedFrom(actions: PlanAction[], imports: ImportBlock[]): void {
-  const ids = new Map(imports.map((block) => [block.to.toString(), block.id]));
+  const targets = new Set(imports.map((block) => block.to.toString()));
 
   for (const { importedFrom, ...action } of actions) {
     if (importedFrom === undefined) continue;
 
     const address = Address.of(action).toString();
-    if (ids.get(address) !== importedFrom) throw new Error(`The saved plan imports ${address} from "${importedFrom}", which the configuration does not. Plan again.`);
+    if (!targets.has(address)) throw new Error(`The saved plan imports ${address} from "${importedFrom}", which the configuration does not. Plan again.`);
   }
 }

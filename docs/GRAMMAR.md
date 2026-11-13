@@ -103,7 +103,7 @@ locals { attributes }
 output "name" { value = value }
 module "name" { attributes }
 moved { from = address to = address }
-import { to = address id = string }
+import { to = address id = expression }
 clay { backend "type" { attributes } }
 ```
 
@@ -144,7 +144,7 @@ What the engine reads from each:
 | `output`   | `value`; `type`, read below; `sensitive`, which hides the value of a root output wherever it is printed; `description`, checked and dropped; `depends_on`             |
 | `module`   | `source`, a literal string naming a directory relative to the file; `count` or `for_each`, and `depends_on`; every other attribute is an input                        |
 | `moved`    | `from` and `to`, each a resource or module address written out                                                                                                        |
-| `import`   | `to`, a resource address written out, and `id`, a string written out                                                                                                  |
+| `import`   | `to`, a resource address written out, and `id`, an expression                                                                                                         |
 | `clay`     | one `backend` block, with one label, its type; its attributes are constants, and what each type takes is checked by the backend                                       |
 
 A resource, a data source or a module with both `count` and `for_each` is refused where
@@ -189,9 +189,8 @@ at `to`.
 `import` takes `to` and `id`, both, and nothing else. `to` is a resource of the root
 module written out, `local_file.a`, `local_file.a[0]` or `local_file.a["web"]`, with a key
 as `moved` takes one. A module, a resource inside one, a data source, a value that is not
-a reference and a path into an attribute are refused at `to`. `id` is a string written
-out, with no `${`: a reference, a template, a number and an empty string are refused at
-`id`.
+a reference and a path into an attribute are refused at `to`. `id` is any expression;
+what its value must be is checked at plan.
 
 ## Values
 

@@ -1,6 +1,6 @@
 import { Address, AttributePath, DestroyProvisioner, ModuleAddress, Output, Resource, samePaths, Schema, State } from '@clay/contracts';
 import { Graph } from '@clay/graph';
-import { AttributeValue, ResourceBlock, spell } from '@clay/parser';
+import { AttributeValue, ImportBlock, ResourceBlock, spell } from '@clay/parser';
 import { DesiredResource, hasChanges } from '@clay/planner';
 
 import { writtenAt } from '../values/conformValues';
@@ -21,7 +21,7 @@ import { DependencyGraphBuilder, GraphNode, LocalNode, OutputNode, ValueNode } f
 import { LoadedResource } from '../config/ModuleLoader';
 import { inOrder } from '../providers/Limit';
 import { Moves } from './moves';
-import { Imports } from './imports';
+import { idFrom, Imports } from './imports';
 import { Versions } from '../values/Versions';
 import { Ignoring, ResourcePlan, ResourcePlanner } from './ResourcePlanner';
 import { keptFor, Provisioning } from '../providers/Provisioning';
@@ -242,9 +242,16 @@ export class DesiredStateBuilder {
   /** What the state holds at the instance once a count that came or went has moved it there, or an import block has taken it over. */
   private async currentAt(address: Address, block: ResourceBlock, state: State): Promise<Resource | undefined> {
     tryAt(block.position, spell(block), address, () => this.moveIn(address, state));
-    await this.imports?.importAt(address, state);
+    const importing = this.imports?.neededAt(address);
+    if (importing) await this.importIn(importing, state);
 
     return state.resources[address.toString()];
+  }
+
+  /** The id is read here, after everything it reads; a check reads it as far as it is known, and imports nothing. */
+  private async importIn(block: ImportBlock, state: State): Promise<void> {
+    const id = this.reads.readAt(this.walk, block.id, block, ModuleAddress.root, state, idFrom);
+    if (id !== undefined && this.walk === 'plan') await this.imports!.importBy(block, id, state);
   }
 
   /** Nothing to ignore in what does not exist yet, or in what is replaced because it is tainted. */

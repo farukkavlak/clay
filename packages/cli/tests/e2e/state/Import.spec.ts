@@ -11,6 +11,7 @@ import { clayOutput, errorOf, orchestratorIn, placeOf } from '../helpers';
 import { start } from '../start';
 
 const imported = (to: string, id: string) => `import {\n to = ${to}\n id = "${id}"\n}\n`;
+const importedBy = (to: string, id: string) => `import {\n to = ${to}\n id = ${id}\n}\n`;
 
 describe('an import block', () => {
   let dir: string;
@@ -174,6 +175,94 @@ describe('an import block', () => {
     expect(await refusal(config)).toEqual(['import to local_file.a found no local_file with the id "/no/a.txt"', placeOf(config, imported('local_file.a', '/no/a.txt')).line]);
   });
 
+  it.each([
+    ['a variable', `variable "dir" {\n default = "DIR"\n}\n`, '"${var.dir}/f.txt"'],
+    ['a local', `locals {\n at = "DIR/f.txt"\n}\n`, 'local.at'],
+    ['a data source, read before the import', `data "local_file" "p" {\n path = "DIR/pointer.txt"\n}\n`, 'data.local_file.p.content'],
+    ['what another resource is planned to hold', `resource "local_file" "p" {\n path = "DIR/pointer.txt"\n content = "DIR/f.txt"\n}\n`, 'local_file.p.content'],
+  ])('reads the id from %s', async (_, head, id) => {
+    await fs.writeFile(path.join(dir, 'pointer.txt'), file, 'utf8');
+    const config = head.replaceAll('DIR', dir) + resource('a') + importedBy('local_file.a', id);
+
+    const actions = await planned(config);
+    expect(actions.find(([, address]) => address === 'local_file.a')).toEqual(['NO_OP', 'local_file.a', file]);
+  });
+
+  it('makes the resource wait for what its id reads, as any value of it', async () => {
+    const config =
+      `resource "local_file" "p" {\n path = "${path.join(dir, 'g.txt')}"\n content = "${file}"\n}\n` + resource('a') + importedBy('local_file.a', 'local_file.p.content');
+    const plan = await orchestratorIn(dir).plan(config);
+
+    expect(plan.actions.find((action) => action.name === 'a')?.dependencies).toEqual(['local_file.p']);
+  });
+
+  /** The message, and the line and column of the id's value. */
+  const refusedAt = async (config: string, id: string, run: 'plan' | 'validate' = 'plan') => {
+    const engine = orchestratorIn(dir);
+    const error = await errorOf(() => (run === 'plan' ? engine.plan(config) : engine.validate(config)));
+    const at = placeOf(config, ` id = ${id}\n`);
+    return [error.message, error.position.line, error.position.column - at.column];
+  };
+
+  it.each([
+    [
+      'a value only the apply makes',
+      'resource "random_string" "r" {\n length = 8\n}\n',
+      'random_string.r.result',
+      'import "id" must be known when planning: it reads a value only an apply makes',
+    ],
+    ['a sensitive value', '', 'sensitive("x")', 'import "id" is sensitive, and the plan shows it'],
+    [
+      'a sensitive variable in a template',
+      'variable "secret" {\n default = "x"\n sensitive = true\n}\n',
+      '"${var.secret}/f.txt"',
+      'import "id" is sensitive, and the plan shows it',
+    ],
+    ['a number', '', '1', 'import "id" is a string, not a number'],
+    ['null', '', 'null', 'import "id" is a string, not null'],
+    ['an empty string', '', '""', 'import "id" must not be empty'],
+  ])('refuses an id that is %s at the id', async (_, head, id, message) => {
+    const config = head + resource('a') + importedBy('local_file.a', id);
+
+    expect(await refusedAt(config, id)).toEqual([message, placeOf(config, ` id = ${id}\n`).line, ' id = '.length]);
+    expect(await held()).toEqual({});
+  });
+
+  it.each([
+    ['an empty string', '""', 'import "id" must not be empty'],
+    ['a number', '1', 'import "id" is a string, not a number'],
+  ])('refuses an id that is %s in validate too', async (_, id, message) => {
+    const config = resource('a') + importedBy('local_file.a', id);
+
+    expect(await refusedAt(config, id, 'validate')).toEqual([message, placeOf(config, ` id = ${id}\n`).line, ' id = '.length]);
+  });
+
+  it('asks no provider in validate, so an id that finds nothing passes it', async () => {
+    await expect(orchestratorIn(dir).validate(resource('a') + imported('local_file.a', '/no/such/file.txt'))).resolves.toBeUndefined();
+  });
+
+  it('takes an import to an instance in validate, where the count is not known yet', async () => {
+    const config = `data "local_file" "p" {\n path = "${file}"\n}\n` + resource('a', 'kept', 'count = length(data.local_file.p.content)') + imported('local_file.a[0]', file);
+
+    await expect(orchestratorIn(dir).validate(config)).resolves.toBeUndefined();
+  });
+
+  it('takes an id only the apply knows in validate, which plans nothing', async () => {
+    const config = 'resource "random_string" "r" {\n length = 8\n}\n' + resource('a') + importedBy('local_file.a', 'random_string.r.result');
+
+    await expect(orchestratorIn(dir).validate(config)).resolves.toBeUndefined();
+  });
+
+  it.each([
+    ['the resource it imports to', 'local_file.a.path', 'Dependency cycle detected: local_file.a -> local_file.a'],
+    ['count.index, which an import has none of', 'count.index', 'count.index is only known inside a resource, a data source or a module call that has count'],
+    ['a variable that is not declared', 'var.nope', 'variable "nope" is not defined'],
+  ])('refuses an id that reads %s at the reference, in validate too', async (_, id, message) => {
+    const config = resource('a') + importedBy('local_file.a', id);
+
+    expect(await refusedAt(config, id, 'validate')).toEqual([message, placeOf(config, ` id = ${id}\n`).line, ' id = '.length]);
+  });
+
   it('refuses a type that cannot be imported in validate too, before any provider is asked', async () => {
     const config = 'resource "null_resource" "a" {}\n' + imported('null_resource.a', 'x');
     const error = await errorOf(() => orchestratorIn(dir).validate(config));
@@ -202,17 +291,28 @@ describe('an import block', () => {
     expect(error.message).toContain(`local_file.b and local_file.a are both the file ${file}`);
   });
 
-  it('refuses a saved plan whose import the configuration no longer makes', async () => {
-    const other = path.join(dir, 'g.txt');
-    await fs.writeFile(other, 'kept', 'utf8');
+  it('refuses a saved plan whose import the configuration no longer has', async () => {
     const engine = orchestratorIn(dir);
     const plan = await engine.plan(resource('a') + imported('local_file.a', file));
 
     const run = async () => {
-      for await (const event of engine.runPlan(plan, resource('a') + imported('local_file.a', other))) if (event.type === 'failed') throw event.error;
+      for await (const event of engine.runPlan(plan, resource('a'))) if (event.type === 'failed') throw event.error;
     };
     await expect(run()).rejects.toThrow(`The saved plan imports local_file.a from "${file}", which the configuration does not. Plan again.`);
     expect(await held()).toEqual({});
+  });
+
+  it('applies a saved plan by the id it showed, though what the id reads has changed since', async () => {
+    const pointer = path.join(dir, 'pointer.txt');
+    await fs.writeFile(pointer, file, 'utf8');
+    const config = `data "local_file" "p" {\n path = "${pointer}"\n}\n` + resource('a') + importedBy('local_file.a', 'data.local_file.p.content');
+    const engine = orchestratorIn(dir);
+    const plan = await engine.plan(config);
+    await fs.writeFile(pointer, path.join(dir, 'g.txt'), 'utf8');
+
+    for await (const event of engine.runPlan(plan, config)) if (event.type === 'failed') throw event.error;
+    const resources = await held();
+    expect(resources['local_file.a'].attributes).toMatchObject({ id: file, path: file });
   });
 
   it('shows the import in the plan and counts it, and again after the apply', async () => {
