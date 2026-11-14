@@ -254,6 +254,23 @@ describe('clay workspace', () => {
     expect(await resourcesIn(devState)).toEqual([]);
   });
 
+  it('keeps init from moving the backend, so no workspace is left behind', async () => {
+    await run('apply', '--yes');
+    await run('workspace', 'new', 'dev');
+    await run('apply', '--yes');
+    await fs.writeFile(path.join(dir, 'main.clay'), `clay {\n  backend "local" {\n    path = "other.json"\n  }\n}\n${FILE}`, 'utf8');
+
+    expect(await run('init', '--yes')).toMatchObject({
+      code: 1,
+      stderr:
+        'Failed to initialize Clay in this directory: Workspaces other than the default one are kept with "clay.state.json" (local): "dev"; `clay init` moves only the default one, so keep this backend while they exist\n',
+    });
+    await expect(fs.readdir(path.join(dir, '.clay'))).resolves.toEqual(['workspace']);
+    await expect(fs.access(path.join(dir, 'other.json'))).rejects.toThrow('ENOENT');
+    expect(await resourcesIn('clay.state.json')).toEqual(['local_file.f']);
+    expect(await resourcesIn(devState)).toEqual(['local_file.f']);
+  });
+
   it('select runs the commands that follow on the workspace it names', async () => {
     await run('workspace', 'new', 'dev');
 

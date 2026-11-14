@@ -5,7 +5,7 @@ import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 
 import { LockNotReleased } from '../lockInfo';
-import { BackendChoice, StateBackend } from '../StateBackend';
+import { BackendChoice, DEFAULT_WORKSPACE, StateBackend } from '../StateBackend';
 import { StateManager } from '../StateManager';
 import { build } from './build';
 import { replaceSynced } from './durable';
@@ -182,6 +182,18 @@ async function moveState(backend: StateBackend, previous: Previous, workingDir: 
   }
 }
 
+/** `init` moves only the default workspace, so another one would be left at a place no run reads any more. */
+async function refuseWorkspacesLeft(before: StateBackend): Promise<void> {
+  const names = (await before.listWorkspaces?.()) ?? [DEFAULT_WORKSPACE];
+  const others = names.filter((name) => name !== DEFAULT_WORKSPACE);
+  if (others.length === 0) return;
+
+  const { where, type } = before.choice;
+  throw new Error(
+    `Workspaces other than the default one are kept with "${where}" (${type}): ${others.map((name) => `"${name}"`).join(', ')}; \`clay init\` moves only the default one, so keep this backend while they exist`
+  );
+}
+
 /**
  * Takes what the configuration names, and moves the state from the place `previous` holds once `approve` says so. Called under the lock
  * of `backend`; the lock of the old place is taken through `stoppable`.
@@ -190,7 +202,10 @@ export async function adoptBackend(backend: StateBackend, previous: Previous, wo
   const before = previous.backend;
   if (isDeepStrictEqual(before.choice, backend.choice)) return {};
 
-  if (!isSame(before.choice, backend.choice) && (await leftBehind(before, workingDir))) return moveState(backend, previous, workingDir, approve, stoppable);
+  if (!isSame(before.choice, backend.choice)) {
+    await refuseWorkspacesLeft(before);
+    if (await leftBehind(before, workingDir)) return moveState(backend, previous, workingDir, approve, stoppable);
+  }
 
   await writeRecord(backend.choice, workingDir);
   return {};

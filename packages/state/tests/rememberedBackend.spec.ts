@@ -52,6 +52,10 @@ describe('the backend init remembers', () => {
   };
   const old = () => new LocalBackend(dir);
   const other = () => new LocalBackend(dir, 'other.json');
+  const named = async (name: string) => {
+    await fs.mkdir(path.join(dir, 'clay.workspaces', name), { recursive: true });
+    await written(old().workspace(name), holding(name));
+  };
   const exists = (name: string) =>
     fs.access(path.join(dir, name)).then(
       () => true,
@@ -498,6 +502,42 @@ describe('the backend init remembers', () => {
 
       expect(await exists('.clay')).toBe(false);
       expect(await exists('clay.state.json.lock')).toBe(false);
+    });
+  });
+
+  describe('named workspaces at the old place', () => {
+    const refusal =
+      'Workspaces other than the default one are kept with "clay.state.json" (local): "dev", "pr-12"; `clay init` moves only the default one, so keep this backend while they exist';
+
+    it('keep the state where it is, before anything is asked or locked', async () => {
+      await written(old(), holding('a'));
+      await named('dev');
+      await named('pr-12');
+
+      await expect(adoptBackend(other(), previous(), dir, unasked)).rejects.toThrow(refusal);
+
+      expect(await exists('other.json')).toBe(false);
+      expect(await exists('.clay')).toBe(false);
+      expect(await exists('clay.state.json.lock')).toBe(false);
+    });
+
+    it('are named while another run holds the old lock, which is left to it', async () => {
+      await written(old(), holding('a'));
+      await named('dev');
+      await old().lock(newLockInfo('apply'));
+
+      await expect(adoptBackend(other(), previous(), dir, unasked)).rejects.toThrow('Workspaces other than the default one');
+
+      expect(await exists('clay.state.json.lock')).toBe(true);
+    });
+
+    it('keep the record where the default workspace has no state', async () => {
+      await named('dev');
+      await named('pr-12');
+
+      await expect(adoptBackend(other(), previous(), dir, unasked)).rejects.toThrow(refusal);
+
+      expect(await exists('.clay')).toBe(false);
     });
   });
 });
