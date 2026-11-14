@@ -100,6 +100,9 @@ a configuration means or how the state file is written.
   the values, and `apply plan.json` refuses `--var`
 - An environment variable `CLAY_VAR_<name>` gives a root variable a value, read as `--var`
   reads it. `--var` wins over it, and one for a name the root does not declare is not read
+- Variables files of `name = value` lines: `clay.clayvars` in the root is read on its own,
+  and `--var-file` reads another. Values are read in this order, a later one winning:
+  `CLAY_VAR_`, `clay.clayvars`, then `--var` and `--var-file` as given
 
 ### Fixed
 

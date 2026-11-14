@@ -16,10 +16,11 @@ interface Ran {
 /** The output the plan shows for `o`. */
 const shown = (stdout: string) => /\+ o = (.*)/.exec(stdout)?.[1];
 
-describe('values for root variables from --var and the environment', () => {
+describe('values for root variables from --var, variables files and the environment', () => {
   let dir: string;
 
   const configure = (config: string) => fs.writeFile(path.join(dir, 'main.clay'), config, 'utf8');
+  const write = (file: string, text: string) => fs.writeFile(path.join(dir, file), text, 'utf8');
 
   /** Runs with only `env` added to the environment, so a CLAY_VAR_ the test runner holds is not read. */
   const runIn = async (env: Record<string, string>, ...args: string[]): Promise<Ran> => {
@@ -115,7 +116,7 @@ describe('values for root variables from --var and the environment', () => {
   it('refuses a variable with no value, and says how to give one', async () => {
     await configure('variable "x" {}');
 
-    expect(await refused('plan')).toContain('variable "x" has no value; give it one with --var x=<value> or CLAY_VAR_x');
+    expect(await refused('plan')).toContain('variable "x" has no value; give it one with --var x=<value>, CLAY_VAR_x or clay.clayvars');
   });
 
   it('refuses a value for a variable the root does not declare', async () => {
@@ -271,7 +272,129 @@ describe('values for root variables from --var and the environment', () => {
 
   it('plans a destroy with a value given, which it does not read', async () => {
     await configure('variable "x" {}');
+    await write('clay.clayvars', 'x = [');
 
     expect(await ok('plan', '--destroy', '--var', 'y=1')).toContain('No changes');
+  });
+
+  it('takes the values a --var-file holds, each as a value written in the configuration', async () => {
+    await configure('variable "region" {\n  type = string\n}\nvariable "ports" {\n  type = list(number)\n}\noutput "o" { value = [var.region, var.ports] }');
+    await write('prod.clayvars', 'region = "eu"\nports  = [80, 443]\n');
+
+    expect(shown(await ok('plan', '--var-file', 'prod.clayvars'))).toBe('["eu",[80,443]]');
+  });
+
+  it('reads clay.clayvars on its own, over CLAY_VAR_', async () => {
+    await configure('variable "x" {}\noutput "o" { value = var.x }');
+    await write('clay.clayvars', 'x = "file"');
+
+    expect(shown(await okIn({ CLAY_VAR_x: 'env' }, 'plan'))).toBe('"file"');
+  });
+
+  it.each([
+    ['--var-file after --var', ['--var', 'x=flag', '--var-file', 'f.clayvars'], '"file"'],
+    ['--var after --var-file', ['--var-file', 'f.clayvars', '--var', 'x=flag'], '"flag"'],
+    ['--var-file over clay.clayvars', ['--var-file', 'f.clayvars'], '"file"'],
+  ])('takes the value of %s', async (_, args, value) => {
+    await configure('variable "x" {}\noutput "o" { value = var.x }');
+    await write('clay.clayvars', 'x = "auto"');
+    await write('f.clayvars', 'x = "file"');
+
+    expect(shown(await ok('plan', ...args))).toBe(value);
+  });
+
+  it('applies with the values a file holds', async () => {
+    const target = path.join(dir, 'a.txt');
+    await configure(`variable "x" {}\nresource "local_file" "a" {\n  path    = "${target}"\n  content = var.x\n}`);
+    await write('clay.clayvars', 'x = "hello"');
+
+    await ok('apply', '-y');
+
+    expect(await fs.readFile(target, 'utf8')).toBe('hello');
+  });
+
+  it('keeps the files a plan read in the saved plan, and reads them no more', async () => {
+    const target = path.join(dir, 'a.txt');
+    await configure(`variable "x" {}\nvariable "y" {}\nresource "local_file" "a" {\n  path    = "${target}"\n  content = "\${var.x}\${var.y}"\n}`);
+    await write('clay.clayvars', 'x = "a"');
+    await write('f.clayvars', 'y = "b"');
+
+    await ok('plan', '--var-file', 'f.clayvars', '--out', 'plan.json');
+    await write('clay.clayvars', 'x = "later"');
+    await write('f.clayvars', 'y = "later"');
+    await ok('apply', 'plan.json');
+
+    expect(await fs.readFile(target, 'utf8')).toBe('ab');
+  });
+
+  it('refuses a --var-file for a saved plan, which keeps its own', async () => {
+    await configure('variable "x" {}\noutput "o" { value = var.x }');
+    await write('f.clayvars', 'x = "a"');
+    await ok('plan', '--var-file', 'f.clayvars', '--out', 'plan.json');
+
+    expect(await refused('apply', 'plan.json', '--var-file', 'nope.clayvars')).toContain('--var-file is for a plan: a saved plan is applied with the values it was made with');
+  });
+
+  it('refuses a --var-file that does not exist', async () => {
+    await configure('variable "x" { default = "d" }');
+
+    expect(await refused('plan', '--var-file', 'nope.clayvars')).toContain('Planning failed: nope.clayvars not found');
+  });
+
+  it.each([
+    ['--var-file', ['--var-file', 'd']],
+    ['clay.clayvars', []],
+  ])('refuses a %s it cannot read, and exits 1', async (_, args) => {
+    await configure('variable "x" { default = "d" }');
+    await fs.mkdir(path.join(dir, args.length > 0 ? 'd' : 'clay.clayvars'));
+
+    expect(await refused('plan', ...args)).toContain('Planning failed: EISDIR');
+  });
+
+  it('refuses a name given twice in a file', async () => {
+    await configure('variable "x" {}');
+    await write('f.clayvars', 'x = "a"\nx = "b"');
+
+    const stderr = await refused('apply', '-y', '--var-file', 'f.clayvars');
+
+    expect(stderr).toContain('"x" is given twice, first on line 1');
+    expect(stderr).toContain('on f.clayvars line 2:');
+  });
+
+  it('refuses a name in a file the root does not declare, where it is written', async () => {
+    await configure('variable "x" { default = "d" }');
+    await write('f.clayvars', 'x = "a"\ny = "b"');
+
+    const stderr = await refused('plan', '--var-file', 'f.clayvars');
+
+    expect(stderr).toContain('"y" is given a value, but the root module does not declare it as a variable');
+    expect(stderr).toContain('on f.clayvars line 2:\n\n  2: y = "b"');
+  });
+
+  it('refuses a value in a file that reads a name, as a default does', async () => {
+    await configure('variable "x" {}');
+    await write('clay.clayvars', 'x = eu');
+
+    const stderr = await refused('plan');
+
+    expect(stderr).toContain('A value in a variables file is a constant, so it cannot hold eu');
+    expect(stderr).toContain('on clay.clayvars line 1:');
+  });
+
+  it('refuses a value in a file that does not fit the type, and shows the line', async () => {
+    await configure('variable "port" {\n  type = number\n}\noutput "o" { value = var.port }');
+    await write('f.clayvars', 'port = "five"');
+
+    const stderr = await refusedIn({}, 'apply', '-y', '--var-file', 'f.clayvars');
+
+    expect(stderr).toContain('"five" is not a number');
+    expect(stderr).toContain('on f.clayvars line 1, in variable "port":\n\n  1: port = "five"');
+  });
+
+  it('reads a file whole, so a mistake in it is refused though a later value replaces the line', async () => {
+    await configure('variable "x" {\n  type = list(number)\n}');
+    await write('f.clayvars', 'x = [1');
+
+    expect(await refused('plan', '--var-file', 'f.clayvars', '--var', 'x=[2]')).toContain('on f.clayvars line 1');
   });
 });

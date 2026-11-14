@@ -70,11 +70,20 @@ export function changesState(action: PlanAction): boolean {
   return action.type !== 'NO_OP' || action.movedFrom !== undefined || action.importedFrom !== undefined || keptChange(action);
 }
 
-/** A value given to a root variable from outside the configuration, as it was written there. */
-export interface VariableInput {
-  /** `var` from `--var`, `env` from a `CLAY_VAR_` environment variable. */
+/** Values given to root variables from outside the configuration, as they were written there. */
+export type VariableInput = NamedInput | FileInput;
+
+/** One value: `var` from `--var`, `env` from a `CLAY_VAR_` environment variable. */
+export interface NamedInput {
   from: 'var' | 'env';
   name: string;
+  text: string;
+}
+
+/** A variables file, whole: `clay.clayvars` or one given with `--var-file`. */
+export interface FileInput {
+  from: 'file';
+  file: string;
   text: string;
 }
 
@@ -98,12 +107,12 @@ export interface Plan {
   readAtApply: string[];
   /** Planned for a root module that declares nothing, so the apply runs against none either. */
   destroy?: true;
-  /** What the environment and `--var` gave the root's variables, in order, so the apply reads the values the plan read. Left out where nothing was given. */
+  /** What the environment, variables files and `--var` gave the root's variables, in order, so the apply reads the values the plan read. Left out where nothing was given. */
   variables?: VariableInput[];
 }
 
 /** Bump on any change to the file's shape after a release, so an older plan file is refused instead of misread. */
-export const PLAN_FILE_VERSION = '38.0';
+export const PLAN_FILE_VERSION = '39.0';
 
 export interface PlanFile extends Plan {
   version: string;

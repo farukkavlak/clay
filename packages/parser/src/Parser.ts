@@ -1,11 +1,12 @@
 import { AttributeValue, Program, spell } from './ast';
+import { Attribute } from './body';
 import { decodeBlock, SCHEMA } from './blocks/schema';
 import { BodyParser } from './BodyParser';
 import { ConfigError } from './ConfigError';
 import { ExpressionParser } from './ExpressionParser';
 import { Lexer } from './Lexer';
 import { Position } from './Position';
-import { Token } from './tokens';
+import { Token, TokenType } from './tokens';
 import { TokenStream } from './TokenStream';
 
 /** Reads a file in two steps, as HCL does: the attributes and blocks as written, then what each block means. */
@@ -81,4 +82,21 @@ export function parseExpression(text: string, file: string): AttributeValue {
   if (!stream.isAtEnd()) stream.error('Expect the value to end here.');
 
   return value;
+}
+
+/** A file of `name = value` lines, as a variables file is; a name written twice is refused, so no value is silently replaced. */
+export function parseValues(text: string, file: string): Attribute[] {
+  const stream = new TokenStream(new Lexer(text, file).tokenize());
+  const expressions = new ExpressionParser(stream);
+  const values = new Map<string, Attribute>();
+
+  while (!stream.isAtEnd()) {
+    const name = stream.consume(TokenType.Identifier, 'Expect a variable name.');
+    stream.consume(TokenType.Assign, "Expect '=' after the variable name: a variables file holds only name = value.");
+    const first = values.get(name.value);
+    if (first) throw new ConfigError(`"${name.value}" is given twice, first on line ${first.position.line}`, name.position);
+
+    values.set(name.value, { type: 'Attribute', name: name.value, value: expressions.parseValue(), position: name.position });
+  }
+  return [...values.values()];
 }

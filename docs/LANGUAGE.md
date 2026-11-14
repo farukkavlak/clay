@@ -25,7 +25,7 @@ A variable with no `default` must be given a value. In a module the call gives i
 root module, `validate` takes it as unknown, of the type it names, and checks the rest;
 `plan` and `apply` take it from `--var`.
 
-## Values from the command line
+## Values from outside the configuration
 
 `--var name=value` gives a root variable a value, in place of its default. `plan` and
 `apply` take it:
@@ -41,21 +41,37 @@ configuration, `[80, 443]` or `{ name = "web" }`. Such a value is a constant, as
 is, so it reads no variable and calls no function. The text after the first `=` is the
 value, so it may hold `=` too.
 
-When one name is given twice, the last value wins and the ones before it are not read. A
-name the root module does not declare as a variable is refused. An error in a value names
-the flag, `on --var ports line 1`, and shows the value. A value given to a sensitive
-variable is sensitive, as its default would be.
-
 An environment variable `CLAY_VAR_<name>` gives a value too, read the same way:
 `CLAY_VAR_region=eu clay plan`. The name after `CLAY_VAR_` is read as written, so
-`CLAY_VAR_Region` is another variable. `--var` wins over it. The environment may hold
-values for other configurations, so one for a name the root does not declare is not read.
-An error in it names it, `on CLAY_VAR_region line 1`.
+`CLAY_VAR_Region` is another variable. The environment may hold values for other
+configurations, so one for a name the root does not declare is not read.
 
-A saved plan keeps the values it was planned with, and `apply` runs with them; it reads
-no `CLAY_VAR_` and refuses `--var`. The plan file holds each value as it was given, a
-sensitive one too, so keep it as safe as the state. `plan --destroy` reads no variable, so it takes a
-value given and does not read it.
+A variables file holds `name = value` lines, each value written as in the configuration:
+
+```
+region = "eu"
+ports  = [80, 443]
+```
+
+`clay.clayvars` in the root module's directory is read on its own. `--var-file prod.clayvars`
+reads another. A file holds no block, gives a name once, and each value is a constant. A
+mistake anywhere in a file is refused, even on a line a later value replaces.
+
+The values are read in this order, and a later value for a name wins:
+
+1. `CLAY_VAR_<name>`
+2. `clay.clayvars`
+3. `--var` and `--var-file`, in the order they are given
+
+A `--var` or `CLAY_VAR_` value that a later one replaces is not read. A name the root module does not declare is
+refused when `--var` or a file gives it. An error names where the value came from, `on
+--var ports line 1`, `on CLAY_VAR_region line 1` or `on prod.clayvars line 2`, and shows
+it. A value given to a sensitive variable is sensitive, as its default would be.
+
+A saved plan keeps the values it was planned with, and `apply` runs with them; it reads no
+`CLAY_VAR_` and no file, and refuses `--var` and `--var-file`. The plan file holds each
+value as it was given, a sensitive one too, so keep it as safe as the state.
+`plan --destroy` reads no variable, so it takes a value given and does not read it.
 
 ## Count and for_each
 

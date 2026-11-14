@@ -439,7 +439,10 @@ describe('Planner', () => {
       ['a name that is not one', [{ from: 'var', name: 'a b', text: '80' }], false],
       ['a text that is not a string', [{ from: 'var', name: 'port', text: 80 }], false],
       ['no source', [{ name: 'port', text: '80' }], false],
-      ['a source that is not one', [{ from: 'file', name: 'port', text: '80' }], false],
+      ['a variables file and its text', [{ from: 'file', file: 'prod.clayvars', text: 'port = 80' }], true],
+      ['a file with no path', [{ from: 'file', name: 'port', text: '80' }], false],
+      ['a file with no text', [{ from: 'file', file: 'prod.clayvars' }], false],
+      ['a source that is not one', [{ from: 'flag', name: 'port', text: '80' }], false],
     ])('takes as the values given to variables %s', (_, variables, valid) => {
       const planFile = {
         version: PLAN_FILE_VERSION,

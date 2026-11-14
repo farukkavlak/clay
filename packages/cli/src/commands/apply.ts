@@ -16,7 +16,7 @@ import { parallelismOption } from '../parallelismOption';
 import { printable } from '../printable';
 import { refreshOption } from '../refreshOption';
 import { givenFiles } from '../givenFiles';
-import { givenInputs, varOption } from '../varOption';
+import { givenInputs, varFlagOf, varOptions } from '../varOptions';
 import { releasedAfter } from '../released';
 import { stateFile } from '../stateFile';
 
@@ -197,13 +197,15 @@ async function executeApplyFromPlan(cwd: string, planFile: PlanFile, files: Conf
 }
 
 export function createApplyCommand() {
+  const [varOption, varFileOption] = varOptions();
   return new Command('apply')
     .description('Create or update infrastructure')
     .option('-y, --yes', 'Approve changes automatically')
     .addOption(refreshOption())
     .addOption(parallelismOption())
     .addOption(lockTimeoutOption())
-    .addOption(varOption())
+    .addOption(varOption)
+    .addOption(varFileOption)
     .argument('[plan-file]', 'Plan file to apply (optional)')
     .action(async (planFileArg: string | undefined, options) => {
       const cwd = process.cwd();
@@ -215,14 +217,15 @@ export function createApplyCommand() {
         if (planFileArg && !planFileArg.startsWith('-')) {
           // The saved plan already chose whether to refresh.
           if (options.refresh !== undefined) throw new Error('--refresh is for a plan: a saved plan is applied as it was made');
-          if (options.var !== undefined) throw new Error('--var is for a plan: a saved plan is applied with the values it was made with');
+          const varFlag = varFlagOf(options);
+          if (varFlag) throw new Error(`${varFlag} is for a plan: a saved plan is applied with the values it was made with`);
           const planData = await readPlanFile(planFileArg, files);
 
           const planFiles = new InMemoryFiles(planData.files);
           files = givenFiles(planFiles, planData.variables);
           code = await executeApplyFromPlan(cwd, planData, planFiles, { parallelism: options.parallelism, lockTimeout: options.lockTimeout });
         } else {
-          const variables = givenInputs(options.var);
+          const variables = await givenInputs(cwd, options);
           files = givenFiles(recording, variables);
           code = await applyFromDisk(cwd, recording, {
             yes: options.yes ?? false,

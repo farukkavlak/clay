@@ -1122,9 +1122,8 @@ Terraform has it since backends replaced `-state`.
 - [x] `clay state pull`: print the state as JSON, for a script or a backup
 - [x] `clay destroy`, and `plan -destroy`: today the only way to remove everything is to
       empty every `.clay` file
-- [ ] A root variable takes a value from outside the configuration: `-var`, a variables
-      file and the environment. `validate` already takes one with no value as unknown, and
-      `--var` gives one
+- [x] A root variable takes a value from outside the configuration: `-var`, a variables
+      file and the environment
 - [ ] Workspaces: `clay workspace new | select | list`, one state per workspace
 - [ ] `plan -detailed-exitcode`, so a script can tell no changes from changes; `plan` exits
       0 either way

@@ -1,5 +1,5 @@
-import { AttributeValue, checkConstant, parseExpression, Statement, VariableBlock } from '@clay/parser';
-import { VariableInput } from '@clay/planner';
+import { AttributeValue, checkConstant, ConfigError, parseExpression, parseValues, Statement, VariableBlock } from '@clay/parser';
+import { NamedInput, VariableInput } from '@clay/planner';
 
 const ENV_PREFIX = 'CLAY_VAR_';
 
@@ -10,13 +10,16 @@ export function envInputs(env: Readonly<Record<string, string | undefined>>): Va
   );
 }
 
-/** Where a value given from outside is placed, as a file would be, so an error in it names the flag or the environment variable. */
-export const givenAt = ({ from, name }: Pick<VariableInput, 'from' | 'name'>): string => (from === 'env' ? `${ENV_PREFIX}${name}` : `--var ${name}`);
+/** Where a value given from outside is placed, as a file would be, so an error in it names the flag, the environment variable or the file. */
+export function givenAt(input: VariableInput): string {
+  if (input.from === 'file') return input.file;
+  return input.from === 'env' ? `${ENV_PREFIX}${input.name}` : `--var ${input.name}`;
+}
 
 /** A shell gives text, so a variable that takes a string, a number or a bool, or names no type, reads it as written. */
 const PLAIN = new Set(['string', 'number', 'bool']);
 
-function written(input: VariableInput, variable: VariableBlock): AttributeValue {
+function written(input: NamedInput, variable: VariableBlock): AttributeValue {
   const file = givenAt(input);
   if (!variable.valueType || PLAIN.has(variable.valueType.kind)) return { type: 'String', value: input.text, position: { file, line: 1, column: 1 } };
 
@@ -25,13 +28,32 @@ function written(input: VariableInput, variable: VariableBlock): AttributeValue 
   return value;
 }
 
-/** The last value for each name, so one place names the value an error is in. */
-function lastOfEach(inputs: readonly VariableInput[]): VariableInput[] {
-  return [...new Map(inputs.map((input) => [input.name, input])).values()];
+/** One value for a name, read only if no later one replaces it. */
+interface Given {
+  name: string;
+  read: () => AttributeValue;
 }
 
 function variablesOf(program: Statement[]): Map<string, VariableBlock> {
   return new Map(program.flatMap((stmt) => (stmt.type === 'Variable' ? [[stmt.name, stmt] as const] : [])));
+}
+
+/** A file is read whole, so a mistake in it is refused even where a later value replaces the line it is on. */
+function fromFile(file: string, text: string, declared: Map<string, VariableBlock>): Given[] {
+  return parseValues(text, file).map(({ name, value, position }) => {
+    if (!declared.has(name)) throw new ConfigError(`"${name}" is given a value, but the root module does not declare it as a variable`, position);
+
+    checkConstant(value, 'A value in a variables file');
+    return { name, read: () => value };
+  });
+}
+
+function fromInput(input: VariableInput, declared: Map<string, VariableBlock>): Given[] {
+  if (input.from === 'file') return fromFile(input.file, input.text, declared);
+
+  const variable = declared.get(input.name);
+  if (!variable) throw new Error(`--var gives a value to "${input.name}", which the root module does not declare as a variable`);
+  return [{ name: input.name, read: () => written(input, variable) }];
 }
 
 /** The environment may hold values for other configurations, so one for a name the root does not declare is not read. */
@@ -43,15 +65,10 @@ export function inputsFor(program: Statement[], inputs: readonly VariableInput[]
 /** A later value for a name replaces an earlier one, which is then never read. */
 function givenValues(inputs: readonly VariableInput[], program: Statement[]): Map<string, AttributeValue> {
   const declared = variablesOf(program);
-  const values = new Map<string, AttributeValue>();
+  const given = inputsFor(program, inputs).flatMap((input) => fromInput(input, declared));
+  const last = new Map(given.map(({ name, read }) => [name, read]));
 
-  for (const input of lastOfEach(inputsFor(program, inputs))) {
-    const variable = declared.get(input.name);
-    if (!variable) throw new Error(`--var gives a value to "${input.name}", which the root module does not declare as a variable`);
-
-    values.set(input.name, written(input, variable));
-  }
-  return values;
+  return new Map([...last].map(([name, read]) => [name, read()]));
 }
 
 /** A value given from outside stands where the default is written, so everything that reads the variable reads it. */

@@ -184,16 +184,16 @@ function isAddresses(addresses: unknown): boolean {
   return Array.isArray(addresses) && addresses.every((address) => typeof address === 'string');
 }
 
-/** Each names a variable as the configuration would; whether the root declares it is checked when the apply loads it. */
-function isVariableInputs(inputs: unknown): boolean {
-  if (inputs === undefined) return true;
+/** A value names a variable as the configuration would, and a file is read whole; whether the root declares a name is checked when the apply loads it. */
+function isVariableInput(input: unknown): boolean {
+  if (!isRecord(input) || typeof input.text !== 'string') return false;
+  if (input.from === 'file') return typeof input.file === 'string';
 
-  return (
-    Array.isArray(inputs) &&
-    inputs.every(
-      (input) => isRecord(input) && (input.from === 'var' || input.from === 'env') && typeof input.name === 'string' && isName(input.name) && typeof input.text === 'string'
-    )
-  );
+  return (input.from === 'var' || input.from === 'env') && typeof input.name === 'string' && isName(input.name);
+}
+
+function isVariableInputs(inputs: unknown): boolean {
+  return inputs === undefined || (Array.isArray(inputs) && inputs.every((input) => isVariableInput(input)));
 }
 
 /** Resources are checked separately, the same way state's are. */

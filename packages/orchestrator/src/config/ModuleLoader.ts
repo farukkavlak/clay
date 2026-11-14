@@ -23,7 +23,7 @@ export interface RootValues {
 /** A module's caller gives its variables their values; only the root's come from outside. */
 function noValue(variable: VariableBlock, address: ModuleAddress): ConfigError {
   const scope = scopeOf(address);
-  const hint = address.isRoot() ? `; give it one with --var ${variable.name}=<value> or CLAY_VAR_${variable.name}` : '';
+  const hint = address.isRoot() ? `; give it one with --var ${variable.name}=<value>, CLAY_VAR_${variable.name} or clay.clayvars` : '';
 
   return new ConfigError(`variable "${variable.name}" has no value${hint}`, variable.position, { block: spell(variable), module: scope || undefined });
 }

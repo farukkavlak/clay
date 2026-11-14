@@ -1,5 +1,5 @@
 import { DiskFiles, PlanOptions, RecordingFiles } from '@clay/orchestrator';
-import { serializePlan } from '@clay/planner';
+import { serializePlan, VariableInput } from '@clay/planner';
 import { StateManager } from '@clay/state';
 import { Command } from 'commander';
 import fs from 'node:fs/promises';
@@ -15,7 +15,7 @@ import { lockTimeoutOption, lockWait } from '../lockTimeoutOption';
 import { parallelismOption } from '../parallelismOption';
 import { refreshOption } from '../refreshOption';
 import { givenFiles } from '../givenFiles';
-import { givenInputs, varOption } from '../varOption';
+import { givenInputs, varOptions } from '../varOptions';
 import { releasedAfter } from '../released';
 
 /** Returns the exit code. */
@@ -41,6 +41,7 @@ async function executePlan(cwd: string, files: RecordingFiles, options: PlanOpti
 }
 
 export function createPlanCommand() {
+  const [varOption, varFileOption] = varOptions();
   return new Command('plan')
     .description('Show changes required by the current configuration')
     .option('--out <file>', 'Save plan to file')
@@ -48,14 +49,16 @@ export function createPlanCommand() {
     .addOption(refreshOption())
     .addOption(parallelismOption())
     .addOption(lockTimeoutOption())
-    .addOption(varOption())
+    .addOption(varOption)
+    .addOption(varFileOption)
     .action(async (options) => {
       const cwd = process.cwd();
       const files = new RecordingFiles(new DiskFiles(cwd));
 
-      const variables = givenInputs(options.var);
+      let variables: VariableInput[] = [];
       let code: number;
       try {
+        variables = await givenInputs(cwd, options);
         code = await executePlan(
           cwd,
           files,
