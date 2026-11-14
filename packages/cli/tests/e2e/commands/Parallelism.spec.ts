@@ -49,7 +49,7 @@ describe('--parallelism', () => {
     await run(createPlanCommand, ['--parallelism', '4']);
     await run(createApplyCommand, ['-y', '--parallelism', '3']);
 
-    expect(plan.mock.calls).toEqual([[{ refresh: true, parallelism: 4 }], [{ refresh: true, parallelism: 3 }]]);
+    expect(plan.mock.calls).toEqual([[{ refresh: true, parallelism: 4, destroy: false }], [{ refresh: true, parallelism: 3, destroy: false }]]);
   });
 
   it('leaves the engine its own number when none is given', async () => {

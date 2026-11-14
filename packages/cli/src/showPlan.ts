@@ -219,7 +219,7 @@ function displaySummary(actions: PlanAction[]): void {
 
 export function displayPlan(plan: Plan): void {
   if (changesNothing(plan)) {
-    console.log(styleText('green', 'No changes. Your infrastructure matches the configuration.'));
+    console.log(styleText('green', plan.destroy ? 'No changes. The state holds nothing to destroy.' : 'No changes. Your infrastructure matches the configuration.'));
     return;
   }
 

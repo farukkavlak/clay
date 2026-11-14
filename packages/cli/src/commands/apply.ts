@@ -87,22 +87,25 @@ async function collect(events: AsyncGenerator<RunEvent>): Promise<Ran> {
   return ran;
 }
 
+/** How the messages name the run. */
+const doing = (plan: Plan) => (plan.destroy ? 'Destroy' : 'Apply');
+
 /** Returns the exit code, so the caller exits once the lock is released. */
-async function runAndReport(start: (signal: AbortSignal) => AsyncGenerator<RunEvent>, forgotten: number): Promise<number> {
+async function runAndReport(start: (signal: AbortSignal) => AsyncGenerator<RunEvent>, plan: Plan): Promise<number> {
   console.log(styleText('blue', '\napplying...'));
 
   const { applied, failures, outputs, interrupted } = await interruptible(async (signal) => ({ ...(await collect(start(signal))), interrupted: signal.aborted }));
   // A run that finished before the interrupt reached it is complete.
   if (interrupted && outputs === undefined) {
     printFailures(failures);
-    console.error(styleText('yellow', 'Apply interrupted. What finished is in the state; plan again to see what is left.'));
+    console.error(styleText('yellow', `${doing(plan)} interrupted. What finished is in the state; plan again to see what is left.`));
     return INTERRUPTED;
   }
 
   const failed = failuresError(failures);
   if (failed) throw failed;
 
-  console.log(styleText('green', `\nApply complete! Resources: ${summarize(applied, forgotten)}.`));
+  console.log(styleText('green', `\n${doing(plan)} complete! Resources: ${summarize(applied, forgotten(plan))}.`));
 
   if (outputs !== undefined && Object.keys(outputs).length > 0) {
     console.log(styleText('cyan', '\nOutputs:'));
@@ -123,20 +126,21 @@ interface RunFlags {
 interface ApplyOptions extends RunFlags {
   yes: boolean;
   refresh: boolean;
+  destroy: boolean;
 }
 
 /**
  * Holds one lock from the plan to the end of the run, so a second run is refused before it asks anything. Ctrl-C before the run starts
  * releases it and exits at once. Returns the exit code.
  */
-async function applyFromDisk(cwd: string, recording: RecordingFiles, options: ApplyOptions): Promise<number> {
+export async function applyFromDisk(cwd: string, recording: RecordingFiles, options: ApplyOptions): Promise<number> {
   const manager = new StateManager(stateFile(cwd, recording), lockWait(options.lockTimeout));
 
   return releasedAfter(manager, async () => {
     console.log(styleText('blue', 'Calculating plan...'));
     const plan = await stoppedAtOnce([manager], async () => {
-      await manager.lock('apply');
-      return newOrchestrator(cwd, recording, manager).plan({ refresh: options.refresh, parallelism: options.parallelism });
+      await manager.lock(options.destroy ? 'destroy' : 'apply');
+      return newOrchestrator(cwd, recording, manager).plan({ refresh: options.refresh, parallelism: options.parallelism, destroy: options.destroy });
     });
     // What the plan read, so the run does not read files changed while the question was open.
     const files = new InMemoryFiles(recording.snapshot());
@@ -145,11 +149,11 @@ async function applyFromDisk(cwd: string, recording: RecordingFiles, options: Ap
     if (changesNothing(plan)) return 0;
 
     if (!(await stoppedAtOnce([manager], () => confirmApply(options.yes)))) {
-      console.error(styleText('yellow', 'Apply cancelled.'));
+      console.error(styleText('yellow', `${doing(plan)} cancelled.`));
       return 1;
     }
 
-    return runAndReport((signal) => newOrchestrator(cwd, files, manager).runPlan(plan, { parallelism: options.parallelism, signal }), forgotten(plan));
+    return runAndReport((signal) => newOrchestrator(cwd, files, manager).runPlan(plan, { parallelism: options.parallelism, signal }), plan);
   });
 }
 
@@ -184,7 +188,7 @@ async function executeApplyFromPlan(cwd: string, planFile: PlanFile, files: Conf
 
   return releasedAfter(manager, async () => {
     await stoppedAtOnce([manager], () => manager.lock('apply'));
-    return runAndReport((signal) => newOrchestrator(cwd, files, manager).runPlan(planFile, { parallelism, signal }), forgotten(planFile));
+    return runAndReport((signal) => newOrchestrator(cwd, files, manager).runPlan(planFile, { parallelism, signal }), planFile);
   });
 }
 
@@ -214,6 +218,7 @@ export function createApplyCommand() {
           code = await applyFromDisk(cwd, recording, {
             yes: options.yes ?? false,
             refresh: options.refresh ?? true,
+            destroy: false,
             parallelism: options.parallelism,
             lockTimeout: options.lockTimeout,
           });

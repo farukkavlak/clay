@@ -1120,7 +1120,7 @@ Terraform has it since backends replaced `-state`.
       read from `each`
 - [x] An `import` block in a root module may name a resource inside a module
 - [x] `clay state pull`: print the state as JSON, for a script or a backup
-- [ ] `clay destroy`, and `plan -destroy`: today the only way to remove everything is to
+- [x] `clay destroy`, and `plan -destroy`: today the only way to remove everything is to
       empty every `.clay` file
 - [ ] A root variable takes a value from outside the configuration: `-var`, a variables
       file and the environment. Today one with no default is refused even by `validate`
@@ -1140,7 +1140,9 @@ by resource type, and no `provider` block exists yet.
       `State`), so a provider written elsewhere would depend on the engine's own types.
       This comes before a provider can be loaded from a package
 - [ ] Provider instances with configuration: `provider "aws" { region = "..." }`, and
-      aliases for a second instance of the same provider
+      aliases for a second instance of the same provider. Once they exist, a destroy works
+      out only the `provider` blocks and what they read; today it reads no value from the
+      configuration
 - [ ] A plan refreshes after the configuration loads, as Terraform does. It reads every
       resource first today, so a mistake in `main.clay` is reported only after every read
       and a read error hides it, and a provider configured by a `provider` block would be

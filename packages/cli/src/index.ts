@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { createRequire } from 'node:module';
 
 import { createApplyCommand } from './commands/apply';
+import { createDestroyCommand } from './commands/destroy';
 import { createForceUnlockCommand } from './commands/forceUnlock';
 import { createInitCommand } from './commands/init';
 import { createOutputCommand } from './commands/output';
@@ -20,6 +21,7 @@ program.name('clay').description('Infrastructure as Code for local resources').v
 program.addCommand(createInitCommand());
 program.addCommand(createPlanCommand());
 program.addCommand(createApplyCommand());
+program.addCommand(createDestroyCommand());
 program.addCommand(createOutputCommand());
 program.addCommand(createValidateCommand());
 program.addCommand(createStateCommand());

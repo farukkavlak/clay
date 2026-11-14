@@ -45,11 +45,12 @@ export class ModuleLoader {
     private scopeManager: ScopeManager
   ) {}
 
-  async loadModuleTree(): Promise<Loaded & { root: Statement[] }> {
+  /** `root` stands in for the root module's files, which are then not read. */
+  async loadModuleTree(root?: Statement[]): Promise<Loaded & { root: Statement[] }> {
     const loaded: Loaded = { resources: [], modules: [] };
     this.contents.clear();
 
-    const rootProgram = this.parseConfig('.');
+    const rootProgram = root ?? this.parseConfig('.');
     if (rootProgram === undefined) throw new Error('no .clay file in the directory');
 
     const parentAddress = ModuleAddress.root;

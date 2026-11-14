@@ -88,6 +88,8 @@ export interface Plan {
   dataSensitive?: Record<string, AttributePath[]>;
   /** Data sources the apply reads, after what they read has changed. */
   readAtApply: string[];
+  /** Planned for a root module that declares nothing, so the apply runs against none either. */
+  destroy?: true;
 }
 
 /** Bump on any change to the file's shape after a release, so an older plan file is refused instead of misread. */

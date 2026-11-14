@@ -1,5 +1,6 @@
 import { emptyState, Provider, Provisioner, Resource, Schema, State } from '@clay/contracts';
 import { Graph } from '@clay/graph';
+import { Statement } from '@clay/parser';
 import { outputChanges, plan, Plan } from '@clay/planner';
 import { StateManager } from '@clay/state';
 
@@ -28,7 +29,12 @@ export interface PlanOptions {
   refresh?: boolean;
   /** How many calls to providers run at once. */
   parallelism?: number;
+  /** Plans for a root module that declares nothing, so every object in state is destroyed. */
+  destroy?: boolean;
 }
+
+/** A destroy reads no value from the configuration, so a variable it lacks or a value it cannot work out does not stop it. */
+const rootOf = (destroy: boolean | undefined) => (destroy ? [] : undefined);
 
 export interface RunOptions {
   /** How many actions run at once. */
@@ -60,7 +66,7 @@ export class Orchestrator {
   }
 
   /** Under the state lock the caller holds, so no run writes while it reads. A plan never writes state, even what the refresh read. */
-  async plan({ refresh = true, parallelism = DEFAULT_PARALLELISM }: PlanOptions = {}): Promise<Plan> {
+  async plan({ refresh = true, parallelism = DEFAULT_PARALLELISM, destroy = false }: PlanOptions = {}): Promise<Plan> {
     checkParallelism(parallelism);
     this.stateManager.requireLock('A plan');
     const limit = new Limit(parallelism);
@@ -70,7 +76,14 @@ export class Orchestrator {
     const currentState = copyForMoves(prior);
     const moves = new Moves();
     const imports = new Imports(this.providers, limit, (key, resource) => this.readBack(key, resource));
-    const { resources: desiredResources, outputs, dataSources, dataSensitive, readAtApply, graph } = await this.resolveAndCheck(currentState, 'plan', moves, limit, imports);
+    const {
+      resources: desiredResources,
+      outputs,
+      dataSources,
+      dataSensitive,
+      readAtApply,
+      graph,
+    } = await this.resolveAndCheck(currentState, 'plan', moves, limit, imports, rootOf(destroy));
 
     imports.adopt(currentState, desiredResources);
     const actions = plan(
@@ -96,6 +109,7 @@ export class Orchestrator {
       dataSources,
       ...(Object.keys(dataSensitive).length > 0 && { dataSensitive }),
       readAtApply,
+      ...(destroy && { destroy: true }),
     };
   }
 
@@ -124,7 +138,7 @@ export class Orchestrator {
     state.resources = copyResources(saved.prior);
 
     const { loader, graphBuilder, runner } = this.newRun(new Limit(parallelism));
-    const config = await loader.load();
+    const config = await loader.load(rootOf(saved.destroy));
     const graph = graphBuilder.buildExecutionGraph(config.loadedResources, config.loadedModules);
     yield* runner.run(saved, config, graph, state, { parallelism, signal });
   }
@@ -159,9 +173,9 @@ export class Orchestrator {
   }
 
   /** Applies every move to `state` before anything reads it, and each import as the walk reaches its instance; a check only reads the ids. */
-  private async resolveAndCheck(state: State, walk: Walk, moves: Moves, limit: Limit, imports: Imports): Promise<DesiredState & { graph: Graph<GraphNode> }> {
+  private async resolveAndCheck(state: State, walk: Walk, moves: Moves, limit: Limit, imports: Imports, root?: Statement[]): Promise<DesiredState & { graph: Graph<GraphNode> }> {
     const { loader, graphBuilder, writtenCheck, desiredStateBuilder, modules } = this.newRun(limit);
-    const { loadedResources, loadedModules, schemas } = await loader.load();
+    const { loadedResources, loadedModules, schemas } = await loader.load(root);
 
     const graph = graphBuilder.buildExecutionGraph(loadedResources, loadedModules);
     checkAttributes(loadedResources, schemas);

@@ -32,6 +32,16 @@ describe('reading a plan file', () => {
     expect(parsePlanFile(written, 'tfplan.json')).toEqual(JSON.parse(written));
   });
 
+  // The apply reads it to run against a root module that declares nothing.
+  it('reads a destroy plan back as one, and leaves the flag out of any other', () => {
+    expect(parsePlanFile(aPlanFile({ ...emptyPlan, destroy: true }), 'tfplan.json').destroy).toBe(true);
+    expect(fields()).not.toHaveProperty('destroy');
+  });
+
+  it('refuses a destroy flag that is not true', () => {
+    expect(read({ ...fields(), destroy: 'yes' })).toThrow('tfplan.json is not a plan file');
+  });
+
   // UNKNOWN has no JSON form, so it must come back as UNKNOWN, not as its placeholder.
   it('reads a value that is not known yet back as one, in an action and in an output', () => {
     const plan: Plan = {
