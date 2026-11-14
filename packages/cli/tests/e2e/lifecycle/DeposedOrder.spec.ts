@@ -80,6 +80,7 @@ describe('destroying a deposed object', () => {
     const state: State = {
       version: STATE_VERSION,
       serial: 0,
+      lineage: 'lineage',
       resources: { 'rec.b': { resourceType: 'rec', name: 'b', attributes: { name: 'b' }, dependencies: ['rec.a'] } },
       deposed: { 'rec.a': [{ attributes: { name: 'a-old' } }] },
     };
@@ -94,6 +95,7 @@ describe('destroying a deposed object', () => {
     const state: State = {
       version: STATE_VERSION,
       serial: 0,
+      lineage: 'lineage',
       resources: { 'rec.b': { resourceType: 'rec', name: 'b', attributes: { name: 'b' } } },
       deposed: {
         'rec.a': [{ attributes: { name: 'a-old' }, dependencies: ['rec.b', 'rec.c'] }],
@@ -112,6 +114,7 @@ describe('destroying a deposed object', () => {
     const state: State = {
       version: STATE_VERSION,
       serial: 0,
+      lineage: 'lineage',
       resources: { 'rec.a': { resourceType: 'rec', name: 'a', attributes: { name: 'a' }, dependencies: ['rec.b'] } },
       deposed: { 'rec.b': [{ attributes: { name: 'b-old' }, dependencies: ['rec.a'] }] },
     };
@@ -126,6 +129,7 @@ describe('destroying a deposed object', () => {
     const state: State = {
       version: STATE_VERSION,
       serial: 0,
+      lineage: 'lineage',
       resources: {
         'rec.a': { resourceType: 'rec', name: 'a', attributes: { name: 'a' } },
         'rec.b': { resourceType: 'rec', name: 'b', attributes: { name: 'b' }, dependencies: ['rec.a'] },

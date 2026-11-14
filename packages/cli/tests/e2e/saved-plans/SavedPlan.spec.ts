@@ -9,6 +9,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createApplyCommand } from '../../../src/commands/apply';
+import { createInitCommand } from '../../../src/commands/init';
 import { createPlanCommand } from '../../../src/commands/plan';
 import { orchestratorIn } from '../helpers';
 import { start } from '../start';
@@ -206,6 +207,59 @@ describe('a plan saved to a file', () => {
     }
 
     expect(await fs.readFile(path.join(applied, 'c.txt'), 'utf8')).toBe('hi');
+  });
+
+  // init writes its state at serial 0, as the plan saw none, so only the lineage tells them apart.
+  it('made with no state written yet, is refused once init has written one', async () => {
+    await fs.writeFile(path.join(dir, 'main.clay'), 'resource "local_file" "a" { path = "c.txt" content = "hi" }', 'utf8');
+
+    const cwd = process.cwd();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const failed = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
+
+    try {
+      process.chdir(dir);
+      await createPlanCommand().parseAsync(['node', 'clay', '--out', 'plan.json']);
+      await createInitCommand().parseAsync(['node', 'clay']);
+      await createApplyCommand().parseAsync(['node', 'clay', 'plan.json']);
+      expect(failed.mock.calls.flat().join(' ')).toContain('The state has changed since the plan was made. Plan again.');
+      expect(exit).toHaveBeenCalledWith(1);
+    } finally {
+      vi.restoreAllMocks();
+      process.chdir(cwd);
+    }
+
+    await expect(fs.access(path.join(dir, 'c.txt'))).rejects.toThrow();
+  });
+
+  // Both states are new, so their serials match and only what each state is tells them apart.
+  it('is refused in a directory whose state it was not made from', async () => {
+    const [planned, applied] = [path.join(dir, 'planned'), path.join(dir, 'applied')];
+    await fs.mkdir(planned);
+    await fs.mkdir(applied);
+    await fs.writeFile(path.join(planned, 'main.clay'), 'resource "local_file" "a" { path = "c.txt" content = "hi" }', 'utf8');
+
+    const cwd = process.cwd();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const failed = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
+
+    try {
+      process.chdir(planned);
+      await createInitCommand().parseAsync(['node', 'clay']);
+      await createPlanCommand().parseAsync(['node', 'clay', '--out', 'plan.json']);
+      process.chdir(applied);
+      await createInitCommand().parseAsync(['node', 'clay']);
+      await createApplyCommand().parseAsync(['node', 'clay', path.join(planned, 'plan.json')]);
+      expect(failed.mock.calls.flat().join(' ')).toContain('The plan was made against another state. Plan again.');
+      expect(exit).toHaveBeenCalledWith(1);
+    } finally {
+      vi.restoreAllMocks();
+      process.chdir(cwd);
+    }
+
+    await expect(fs.access(path.join(applied, 'c.txt'))).rejects.toThrow();
   });
 
   it('carries its modules, so a module edited or removed later changes nothing', async () => {
@@ -433,7 +487,17 @@ describe('a plan saved to a file', () => {
     expect(() => parsePlanFile(JSON.stringify(plan), 'plan.json')).toThrow(/^plan\.json is not a plan file$/);
   });
 
-  it('is refused once another run has written the state', async () => {
+  it('is refused once another run has written the state it was made against', async () => {
+    await drain(start(newOrchestrator(), fileConfig('first')));
+    const saved = await save(fileConfig('planned'));
+
+    await drain(start(newOrchestrator(), fileConfig('changed')));
+
+    await expect(drain(newOrchestrator().runPlan(saved, fileConfig('planned')))).rejects.toThrow('The state has changed since the plan was made');
+    expect(await fs.readFile(path.join(dir, 'a.txt'), 'utf8')).toBe('changed');
+  });
+
+  it('made with no state written yet, is refused once another run has written one', async () => {
     const saved = await save(fileConfig('planned'));
 
     await drain(start(newOrchestrator(), fileConfig('changed')));

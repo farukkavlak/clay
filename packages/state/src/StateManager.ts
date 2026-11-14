@@ -1,4 +1,5 @@
 import { State, STATE_VERSION } from '@clay/contracts';
+import { randomUUID } from 'node:crypto';
 
 import { journalLine } from './journal';
 import { LockInfo, LockNotReleased, newLockInfo, StateLocked } from './lockInfo';
@@ -98,12 +99,14 @@ export class StateManager {
    * Copies known fields only, so a key from an older version is dropped; a new state field goes here too.
    * Bumps the serial on the given state once the write is in place, so the caller keeps writing from the serial on disk.
    * Writes this Clay's version, since the state may now hold what an older one cannot read.
+   * Gives a state written for the first time its lineage, which the given state keeps for the writes after.
    */
   private async save(state: State): Promise<void> {
     this.requireLock('A write');
     const serial = state.serial + 1;
     state.version = STATE_VERSION;
-    await this.backend.write({ version: state.version, serial, outputs: state.outputs, resources: state.resources, deposed: state.deposed });
+    state.lineage ??= randomUUID();
+    await this.backend.write({ version: state.version, serial, lineage: state.lineage, outputs: state.outputs, resources: state.resources, deposed: state.deposed });
     // eslint-disable-next-line require-atomic-updates -- the queue runs one turn at a time, and the serial moves only once the write is in place
     state.serial = serial;
     this.journalBroken = false;
@@ -112,7 +115,7 @@ export class StateManager {
   /** Under the lock, so a backend that cannot check and write in one step has no run write in between. */
   async writeIfAbsent(state: State): Promise<boolean> {
     this.requireLock('A write');
-    return this.backend.writeIfAbsent(state);
+    return this.backend.writeIfAbsent({ ...state, lineage: state.lineage ?? randomUUID() });
   }
 
   /** `operation` names the command, so a run the lock stops can say what holds it. */

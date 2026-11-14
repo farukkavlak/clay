@@ -7,7 +7,7 @@ import { AzureBackend, AzureCredential, AzureLimits } from '../src/backends/Azur
 import { NoAnswer } from '../src/backends/httpRequest';
 
 const resource = { resourceType: 'local_file', name: 'a', attributes: { path: 'a.txt' } };
-const stateWith = (serial: number) => ({ ...emptyState(), serial, resources: { 'local_file.a': resource } });
+const stateWith = (serial: number) => ({ ...emptyState(), lineage: 'lineage', serial, resources: { 'local_file.a': resource } });
 
 /** One try, so a test of one failing answer sees it. */
 const ONCE: AzureLimits = { timeout: 5, attempts: 1, wait: 0 };

@@ -17,6 +17,7 @@ describe('init against real files', () => {
   const stateWithResource = {
     version: STATE_VERSION,
     serial: 0,
+    lineage: 'lineage',
     resources: { 'local_file.a': { id: 'a.txt', resourceType: 'local_file', name: 'a', attributes: { content: 'hello' } } },
   };
 
@@ -36,7 +37,7 @@ describe('init against real files', () => {
   it('starts an empty state in a new workspace and leaves nothing else behind', async () => {
     await init();
 
-    expect(await new LocalBackend(dir).read()).toEqual({ version: STATE_VERSION, serial: 0, resources: {} });
+    expect(await new LocalBackend(dir).read()).toEqual({ version: STATE_VERSION, serial: 0, lineage: expect.stringMatching(/^[0-9a-f-]{36}$/), resources: {} });
     expect(await fs.readdir(dir)).toEqual(['clay.state.json']);
   });
 

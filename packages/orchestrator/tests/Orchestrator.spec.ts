@@ -308,7 +308,7 @@ describe('Orchestrator', () => {
     // The provider finds the resource by its attributes, with or without an id.
     it('asks the provider for each resource with what state holds', async () => {
       const resource = { resourceType: 'mock_resource', name: 'a', attributes: { value: 'x' } };
-      await new LocalBackend(tmpDir).write({ ...emptyState(), resources: { 'mock_resource.a': resource } });
+      await new LocalBackend(tmpDir).write({ ...emptyState(), lineage: 'lineage', resources: { 'mock_resource.a': resource } });
       const read = vi.spyOn(mockProvider, 'read');
 
       const { actions } = await orchestrator.plan('resource "mock_resource" "a" { value = "x" }');

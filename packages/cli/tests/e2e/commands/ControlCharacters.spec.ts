@@ -192,7 +192,11 @@ describe('a control character in what the CLI prints to stdout', () => {
 
   it('quotes an attribute name with a control character in it, in state show', async () => {
     const resource = { resourceType: 'null_resource', name: 'm', attributes: { ['x\u007F']: 'v' } };
-    await fs.writeFile(path.join(dir, 'clay.state.json'), JSON.stringify({ version: STATE_VERSION, serial: 0, resources: { 'null_resource.m': resource } }), 'utf8');
+    await fs.writeFile(
+      path.join(dir, 'clay.state.json'),
+      JSON.stringify({ version: STATE_VERSION, serial: 0, lineage: 'lineage', resources: { 'null_resource.m': resource } }),
+      'utf8'
+    );
 
     const printed = await succeeding('state', 'show', 'null_resource.m');
 

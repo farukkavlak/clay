@@ -236,7 +236,7 @@ describe('TLS settings of the http backend', () => {
       });
 
       it('takes it from a plain http server to one that asks for the certificate', async () => {
-        plain.state = serializeState({ ...emptyState(), serial: 4 });
+        plain.state = serializeState({ ...emptyState(), lineage: 'lineage', serial: 4 });
         await remember(dir, backendFrom(blockOf(linesFor(plain.url)), dir, CLIENT));
 
         await adopt(dir, build(CLIENT, 'ca_certificate = "certs/ca.pem"'));
@@ -245,7 +245,7 @@ describe('TLS settings of the http backend', () => {
       });
 
       it('takes it back to the plain http server', async () => {
-        server.state = serializeState({ ...emptyState(), serial: 4 });
+        server.state = serializeState({ ...emptyState(), lineage: 'lineage', serial: 4 });
         await remember(dir, build(CLIENT, 'ca_certificate = "certs/ca.pem"'));
 
         await adopt(dir, backendFrom(blockOf(linesFor(plain.url)), dir, CLIENT));

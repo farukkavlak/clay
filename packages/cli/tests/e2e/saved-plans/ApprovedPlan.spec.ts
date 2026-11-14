@@ -77,7 +77,7 @@ describe('the plan apply showed', () => {
     await fs.writeFile(path.join(dir, 'main.clay'), fileConfig('mine'), 'utf8');
     // Written by hand, past the lock: the state moves on and another lock takes the place of this run's.
     const question = vi.fn(async () => {
-      await fs.writeFile(path.join(dir, 'clay.state.json'), JSON.stringify({ ...emptyState(), serial: 5 }), 'utf8');
+      await fs.writeFile(path.join(dir, 'clay.state.json'), JSON.stringify({ ...emptyState(), lineage: 'lineage', serial: 5 }), 'utf8');
       await fs.writeFile(path.join(dir, 'clay.state.json.lock'), JSON.stringify(newLockInfo('state rm')), 'utf8');
       return 'yes';
     });

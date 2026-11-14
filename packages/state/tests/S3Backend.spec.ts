@@ -8,7 +8,7 @@ import { NoAnswer } from '../src/backends/httpRequest';
 import { S3Backend, S3Limits } from '../src/backends/S3Backend';
 
 const resource = { resourceType: 'local_file', name: 'a', attributes: { path: 'a.txt' } };
-const stateWith = (serial: number) => ({ ...emptyState(), serial, resources: { 'local_file.a': resource } });
+const stateWith = (serial: number) => ({ ...emptyState(), lineage: 'lineage', serial, resources: { 'local_file.a': resource } });
 
 /** One try, so a test of one failing answer sees it. */
 const ONCE: S3Limits = { timeout: 5, attempts: 1 };

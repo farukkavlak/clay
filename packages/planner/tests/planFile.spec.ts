@@ -38,6 +38,18 @@ describe('reading a plan file', () => {
     expect(fields()).not.toHaveProperty('destroy');
   });
 
+  it('reads back the lineage of the state it was made against, and leaves it out of a plan made with none', () => {
+    expect(parsePlanFile(aPlanFile({ ...emptyPlan, lineage: 'abc' }), 'tfplan.json').lineage).toBe('abc');
+    expect(fields()).not.toHaveProperty('lineage');
+  });
+
+  it.each([
+    ['empty', ''],
+    ['a number', 7],
+  ])('refuses a lineage that is %s', (_, lineage) => {
+    expect(read({ ...fields(), lineage })).toThrow(/^tfplan\.json is not a plan file$/);
+  });
+
   it('refuses a destroy flag that is not true', () => {
     expect(read({ ...fields(), destroy: 'yes' })).toThrow('tfplan.json is not a plan file');
   });

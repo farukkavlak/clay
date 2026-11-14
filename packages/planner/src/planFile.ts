@@ -61,6 +61,7 @@ export function serializePlan(plan: Plan, files: Record<string, string>): string
     timestamp: new Date().toISOString(),
     files,
     serial: plan.serial,
+    lineage: plan.lineage,
     actions: plan.actions.map((action) => saveAction(action)),
     outputs: saveChanges(plan.outputs),
     prevRun: plan.prevRun,

@@ -25,7 +25,7 @@ describe('the CAs an https request trusts', () => {
 
   it('are the ones the backend is given', async () => {
     server = await HttpStateServer.start({ tls: true });
-    server.state = serializeState({ ...emptyState(), serial: 3 });
+    server.state = serializeState({ ...emptyState(), lineage: 'lineage', serial: 3 });
     const testCa = readFileSync(path.join(__dirname, '../../../tests/tls/ca.pem'), 'utf8');
 
     await expect(backendAt(server.url, {}, 'state', undefined, undefined, () => [testCa]).read()).resolves.toMatchObject({ serial: 3 });

@@ -143,6 +143,9 @@ a configuration means or how the state file is written.
   quote no sensitive value
 - `command_exec` refuses an empty `cwd` and names one that is not a directory, instead of
   running in Clay's directory or failing with `spawn /bin/sh ENOENT`
+- A saved plan is applied only to the state it was made against. Each state gets a
+  lineage at its first write and keeps it. Before, a plan made in another directory was
+  applied to any state with the same serial
 
 ## 0.1.0 - 2026-09-21
 

@@ -23,7 +23,7 @@ async function runAll(backend: StateBackend): Promise<void> {
   await backend.unlock(info.id);
 }
 
-const stateWith = (serial: number) => ({ ...emptyState(), serial, resources: { 'local_file.a': resource } });
+const stateWith = (serial: number) => ({ ...emptyState(), lineage: 'lineage', serial, resources: { 'local_file.a': resource } });
 
 /** As init runs: under the lock it takes, released once the state is there. */
 async function initialized(backend: StateBackend): Promise<boolean> {
@@ -95,7 +95,7 @@ describe('a state kept on an HTTP server', () => {
   });
 
   it('says how long a body is in bytes, not in characters', async () => {
-    const state = { ...emptyState(), resources: { 'local_file.a': { ...resource, attributes: { path: 'ç.txt' } } } };
+    const state = { ...emptyState(), lineage: 'lineage', resources: { 'local_file.a': { ...resource, attributes: { path: 'ç.txt' } } } };
 
     await backendOn().write(state);
 

@@ -30,7 +30,7 @@ const unasked: Approve = () => {
 };
 const yes: Approve = async () => true;
 
-const holding = (name: string, serial = 3): State => ({ ...emptyState(), serial, resources: { [`rt.${name}`]: { resourceType: 'rt', name, attributes: {} } } });
+const holding = (name: string, serial = 3): State => ({ ...emptyState(), lineage: 'lineage', serial, resources: { [`rt.${name}`]: { resourceType: 'rt', name, attributes: {} } } });
 
 /** Writes `state` to `backend` as a run does, under a lock released after it. */
 async function written(backend: StateBackend, state: State): Promise<void> {

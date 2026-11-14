@@ -60,6 +60,8 @@ export interface State {
   version: number;
   /** Bumped on each write. A saved plan records it, so a state written after the plan is caught. */
   serial: number;
+  /** Given once, at the first write, and kept from then on, so a saved plan is applied to no other state. Unset where no state was written yet. */
+  lineage?: string;
   /** Root outputs from the last run. */
   outputs?: Record<string, Output>;
   resources: Record<string, Resource>;
@@ -68,7 +70,7 @@ export interface State {
 }
 
 /** Bump on any change to the shape after a release. A higher version was written by a newer Clay and is refused. */
-export const STATE_VERSION = 10;
+export const STATE_VERSION = 11;
 
 export function emptyState(): State {
   return { version: STATE_VERSION, serial: 0, resources: {} };

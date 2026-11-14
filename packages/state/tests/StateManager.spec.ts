@@ -9,6 +9,8 @@ import { LocalBackend } from '../src/backends/LocalBackend';
 import { StateBackend } from '../src/StateBackend';
 import { StateManager } from '../src/StateManager';
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
 /** A backend that takes a moment to write and notes when two writes overlap. */
 const slow = (log: string[], failing: number[] = []): StateBackend => {
   let running = 0;
@@ -131,6 +133,28 @@ describe('StateManager', () => {
     expect(await stateManager.read()).toEqual(withDeposed);
   });
 
+  it('gives a state its lineage at the first write, and keeps it in every write after', async () => {
+    const state: State = { version: STATE_VERSION, serial: 0, resources: {} };
+
+    await stateManager.lock('apply');
+    await stateManager.write(state);
+    const first = await stateManager.read();
+    await stateManager.write(state);
+    const second = await stateManager.read();
+
+    expect(first.lineage).toMatch(UUID);
+    expect(state.lineage).toBe(first.lineage);
+    expect(second.lineage).toBe(first.lineage);
+  });
+
+  it('keeps the lineage the state was read with', async () => {
+    await stateManager.lock('apply');
+    await stateManager.write({ version: STATE_VERSION, serial: 4, lineage: 'kept', resources: {} });
+
+    const stored = await stateManager.read();
+    expect(stored.lineage).toBe('kept');
+  });
+
   it('counts every write in the serial, on disk and in the state it was given', async () => {
     const state: State = { version: STATE_VERSION, serial: 0, resources: {} };
 
@@ -219,9 +243,15 @@ describe('StateManager', () => {
       await stateManager.lock('init');
     });
 
-    it('should write the state when none is stored yet', async () => {
+    it('should write the state when none is stored yet, with a lineage of its own', async () => {
       expect(await stateManager.writeIfAbsent(empty)).toBe(true);
-      expect(await stateManager.read()).toEqual(empty);
+      expect(await stateManager.read()).toEqual({ ...empty, lineage: expect.stringMatching(UUID) });
+    });
+
+    it('should keep the lineage the state already has', async () => {
+      expect(await stateManager.writeIfAbsent({ ...empty, lineage: 'kept' })).toBe(true);
+      const stored = await stateManager.read();
+      expect(stored.lineage).toBe('kept');
     });
 
     it('should keep the stored state and say it wrote nothing', async () => {

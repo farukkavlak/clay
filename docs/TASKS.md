@@ -473,6 +473,10 @@ change each.
 - [x] An object not known yet given to a variable whose type has an `optional` attribute is
       refused for lacking it: `variable "v" requires "b" in v` with
       `v = cond ? { a = "x" } : { a = "y" }` and `type = object({ a = string, b = optional(string, "d") })`
+- [x] A saved plan was held to the state's serial alone, so a plan made in one directory
+      was applied to the state of another with the same serial: two directories after
+      `init`, both at serial 0. A state now gets a lineage at its first write, the plan
+      records it, and `apply` refuses another one, as Terraform does
 
 ## 1. Language
 

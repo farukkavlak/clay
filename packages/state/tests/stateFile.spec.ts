@@ -13,14 +13,18 @@ const read = (content: unknown) => () => parseState(typeof content === 'string' 
 describe('reading a state file', () => {
   // The file, its resources, the resource and its attributes are four levels around the value.
   it('reads a file nested 500 levels deep, and refuses one more', () => {
-    const state = (levels: number) => ({ ...emptyState(), resources: { 'local_file.a': { resourceType: 'local_file', name: 'a', attributes: { content: nested(levels - 4) } } } });
+    const state = (levels: number) => ({
+      ...emptyState(),
+      lineage: 'lineage',
+      resources: { 'local_file.a': { resourceType: 'local_file', name: 'a', attributes: { content: nested(levels - 4) } } },
+    });
 
     expect(parseState(JSON.stringify(state(500)), 'clay.state.json').resources['local_file.a'].attributes.content).toEqual(nested(496));
     expect(read(state(501))).toThrow('clay.state.json is not valid state: it is nested more than 500 levels deep');
   });
 
   it('reads back what it wrote', () => {
-    const state = { ...emptyState(), serial: 3, resources: { 'local_file.a': { resourceType: 'local_file', name: 'a', attributes: { path: 'a.txt' } } } };
+    const state = { ...emptyState(), lineage: 'lineage', serial: 3, resources: { 'local_file.a': { resourceType: 'local_file', name: 'a', attributes: { path: 'a.txt' } } } };
 
     expect(parseState(serializeState(state), 'clay.state.json')).toEqual(state);
   });
@@ -28,7 +32,7 @@ describe('reading a state file', () => {
   // `state pull` prints this text, so a value in it cannot drive the terminal.
   it('escapes a control character in a value and reads the value back', () => {
     const content = 'a\u009B2Jb\u202Ec\u007F';
-    const state = { ...emptyState(), resources: { 'local_file.a': { resourceType: 'local_file', name: 'a', attributes: { content } } } };
+    const state = { ...emptyState(), lineage: 'lineage', resources: { 'local_file.a': { resourceType: 'local_file', name: 'a', attributes: { content } } } };
 
     const text = serializeState(state);
 
@@ -53,7 +57,7 @@ describe('reading a state file', () => {
   });
 
   it('reads the resources the journal adds in address order', () => {
-    const file = { ...emptyState(), resources: { 'b.x': resource('b', 'x') } };
+    const file = { ...emptyState(), lineage: 'lineage', resources: { 'b.x': resource('b', 'x') } };
     const after = { ...file, resources: { ...file.resources, 'a.x': resource('a', 'x') } };
 
     const state = parseState(serializeState(file), 'clay.state.json', { content: journalLine(after, 'a.x', 1), source: 'clay.state.json.journal' });
@@ -63,7 +67,7 @@ describe('reading a state file', () => {
 
   // Counters are plain numbers; values stay exact.
   it('reads its counters as numbers and every value exactly', () => {
-    const text = `{"version": ${STATE_VERSION}, "serial": 3, "resources": {"null_resource.a": {"resourceType": "null_resource", "name": "a", "attributes": {"id": 12345678901234567890}}}}`;
+    const text = `{"version": ${STATE_VERSION}, "serial": 3, "lineage": "lineage", "resources": {"null_resource.a": {"resourceType": "null_resource", "name": "a", "attributes": {"id": 12345678901234567890}}}}`;
 
     const state = parseState(text, 'clay.state.json');
 
@@ -76,7 +80,7 @@ describe('reading a state file', () => {
     ['a number', 'local_file.a[0]', '0', 0],
     ['a string', 'local_file.a["blog"]', '"blog"', 'blog'],
   ])('reads an instance key that is %s', (_, address, written, key) => {
-    const text = `{"version": ${STATE_VERSION}, "serial": 0, "resources": {${JSON.stringify(address)}: {"resourceType": "local_file", "name": "a", "key": ${written}, "attributes": {}}}}`;
+    const text = `{"version": ${STATE_VERSION}, "serial": 0, "lineage": "lineage", "resources": {${JSON.stringify(address)}: {"resourceType": "local_file", "name": "a", "key": ${written}, "attributes": {}}}}`;
 
     expect(parseState(text, 'clay.state.json').resources[address].key).toBe(key);
   });
@@ -85,13 +89,13 @@ describe('reading a state file', () => {
     ['a number', 'module.m[0].local_file.a', '0', 0],
     ['a string', 'module.m["blog"].local_file.a', '"blog"', 'blog'],
   ])('reads a module key that is %s', (_, address, written, key) => {
-    const text = `{"version": ${STATE_VERSION}, "serial": 0, "resources": {${JSON.stringify(address)}: {"resourceType": "local_file", "name": "a", "modulePath": [{"name": "m", "key": ${written}}], "attributes": {}}}}`;
+    const text = `{"version": ${STATE_VERSION}, "serial": 0, "lineage": "lineage", "resources": {${JSON.stringify(address)}: {"resourceType": "local_file", "name": "a", "modulePath": [{"name": "m", "key": ${written}}], "attributes": {}}}}`;
 
     expect(parseState(text, 'clay.state.json').resources[address].modulePath).toEqual([{ name: 'm', key }]);
   });
 
   it('names a module key that is not whole', () => {
-    const text = `{"version": ${STATE_VERSION}, "serial": 0, "resources": {"module.m[0].local_file.a": {"resourceType": "local_file", "name": "a", "modulePath": [{"name": "m", "key": 1.5}], "attributes": {}}}}`;
+    const text = `{"version": ${STATE_VERSION}, "serial": 0, "lineage": "lineage", "resources": {"module.m[0].local_file.a": {"resourceType": "local_file", "name": "a", "modulePath": [{"name": "m", "key": 1.5}], "attributes": {}}}}`;
 
     expect(read(text)).toThrow('clay.state.json is not valid state: a module key of "module.m[0].local_file.a": 1.5 is not a whole number');
   });
@@ -102,7 +106,7 @@ describe('reading a state file', () => {
     ['9007199254740992', 'is outside the range'],
     ['true', 'is not a key: a key is a whole number or a string'],
   ])('refuses an instance key of %s', (written, problem) => {
-    const text = `{"version": ${STATE_VERSION}, "serial": 0, "resources": {"local_file.a[0]": {"resourceType": "local_file", "name": "a", "key": ${written}, "attributes": {}}}}`;
+    const text = `{"version": ${STATE_VERSION}, "serial": 0, "lineage": "lineage", "resources": {"local_file.a[0]": {"resourceType": "local_file", "name": "a", "key": ${written}, "attributes": {}}}}`;
 
     expect(read(text)).toThrow(`clay.state.json is not valid state: the key of "local_file.a[0]"`);
     expect(read(text)).toThrow(problem);
@@ -115,13 +119,13 @@ describe('reading a state file', () => {
     ['another module instance', 'module.m[0].local_file.a', { resourceType: 'local_file', name: 'a', modulePath: [{ name: 'm', key: 1 }] }, 'module.m[1].local_file.a'],
     ['a key', 'local_file.a', { resourceType: 'local_file', name: 'a', key: 0 }, 'local_file.a[0]'],
   ])('refuses an entry filed under an address other than its own, by %s', (_, address, entry, held) => {
-    const content = { version: STATE_VERSION, serial: 0, resources: { [address]: { ...entry, attributes: {} } } };
+    const content = { version: STATE_VERSION, serial: 0, lineage: 'lineage', resources: { [address]: { ...entry, attributes: {} } } };
 
     expect(read(content)).toThrow(`clay.state.json is not valid state: "${address}" holds ${held}`);
   });
 
   it('names a number out of range, rather than calling the file something other than JSON', () => {
-    expect(read(`{"version": ${STATE_VERSION}, "serial": 0, "resources": {}, "outputs": {"o": 1e5000}}`)).toThrow(
+    expect(read(`{"version": ${STATE_VERSION}, "serial": 0, "lineage": "lineage", "resources": {}, "outputs": {"o": 1e5000}}`)).toThrow(
       'clay.state.json is not valid state: "1e5000" is out of range: a number reaches at most 1000 places either side of the point'
     );
   });
@@ -139,20 +143,23 @@ describe('reading a state file', () => {
     ['nothing at all', {}],
     ['a version that is not a number', { version: '1', serial: 0, resources: {} }],
     ['no serial', { version: STATE_VERSION, resources: {} }],
-    ['resources that are not a record', { version: STATE_VERSION, serial: 0, resources: 'oops' }],
-    ['a resource that is not an object', { version: STATE_VERSION, serial: 0, resources: { 'local_file.a': 'oops' } }],
-    ['a resource with no type', { version: STATE_VERSION, serial: 0, resources: { 'local_file.a': { name: 'a', attributes: {} } } }],
-    ['a resource with no name', { version: STATE_VERSION, serial: 0, resources: { 'local_file.a': { resourceType: 'local_file', attributes: {} } } }],
-    ['a resource with no attributes', { version: STATE_VERSION, serial: 0, resources: { 'local_file.a': { resourceType: 'local_file', name: 'a' } } }],
+    ['resources that are not a record', { version: STATE_VERSION, serial: 0, lineage: 'lineage', resources: 'oops' }],
+    ['a resource that is not an object', { version: STATE_VERSION, serial: 0, lineage: 'lineage', resources: { 'local_file.a': 'oops' } }],
+    ['a resource with no type', { version: STATE_VERSION, serial: 0, lineage: 'lineage', resources: { 'local_file.a': { name: 'a', attributes: {} } } }],
+    ['a resource with no name', { version: STATE_VERSION, serial: 0, lineage: 'lineage', resources: { 'local_file.a': { resourceType: 'local_file', attributes: {} } } }],
+    ['a resource with no attributes', { version: STATE_VERSION, serial: 0, lineage: 'lineage', resources: { 'local_file.a': { resourceType: 'local_file', name: 'a' } } }],
     // An ExactNumber is an object, but not a record.
-    ['attributes that are a number', { version: STATE_VERSION, serial: 0, resources: { 'local_file.a': { resourceType: 'local_file', name: 'a', attributes: 5 } } }],
-    ['outputs that are a number', { version: STATE_VERSION, serial: 0, outputs: 5, resources: {} }],
+    [
+      'attributes that are a number',
+      { version: STATE_VERSION, serial: 0, lineage: 'lineage', resources: { 'local_file.a': { resourceType: 'local_file', name: 'a', attributes: 5 } } },
+    ],
+    ['outputs that are a number', { version: STATE_VERSION, serial: 0, lineage: 'lineage', outputs: 5, resources: {} }],
     ['a serial that is not whole', { version: STATE_VERSION, serial: 1.5, resources: {} }],
     [
       'dependencies that are not a list',
-      { version: STATE_VERSION, serial: 0, resources: { 'local_file.a': { resourceType: 'local_file', name: 'a', attributes: {}, dependencies: 'b' } } },
+      { version: STATE_VERSION, serial: 0, lineage: 'lineage', resources: { 'local_file.a': { resourceType: 'local_file', name: 'a', attributes: {}, dependencies: 'b' } } },
     ],
-    ['outputs that are not a record', { version: STATE_VERSION, serial: 0, outputs: 'oops', resources: {} }],
+    ['outputs that are not a record', { version: STATE_VERSION, serial: 0, lineage: 'lineage', outputs: 'oops', resources: {} }],
   ])('refuses %s', (_, content) => {
     expect(read(content)).toThrow(/clay\.state\.json is not valid state/);
   });
@@ -164,7 +171,7 @@ describe('reading a state file', () => {
     ['a type that is none', { value: 'hello', type: { kind: 'text' } }],
     ['sensitive and not by `true`', { value: 'hello', type: { kind: 'string' }, sensitive: 'yes' }],
   ])('refuses an output that is %s', (_, output) => {
-    const content = { version: STATE_VERSION, serial: 0, resources: {}, outputs: { o: output } };
+    const content = { version: STATE_VERSION, serial: 0, lineage: 'lineage', resources: {}, outputs: { o: output } };
 
     expect(read(content)).toThrow('clay.state.json is not valid state: its output "o" is not a value with its type, or its sensitive is not true');
   });
@@ -172,7 +179,7 @@ describe('reading a state file', () => {
   it('reads an output of null, which is a value', () => {
     const outputs = { o: { value: null, type: { kind: 'dynamic' } } };
 
-    expect(read({ version: STATE_VERSION, serial: 0, resources: {}, outputs })().outputs).toEqual(outputs);
+    expect(read({ version: STATE_VERSION, serial: 0, lineage: 'lineage', resources: {}, outputs })().outputs).toEqual(outputs);
   });
 
   // A later check would also refuse the entry, so the test pins the message.
@@ -182,9 +189,17 @@ describe('reading a state file', () => {
     ['a list of bare names', 'module.m.local_file.a', ['m']],
     ['a module key that is no key', 'module.m[-1].local_file.a', [{ name: 'm', key: -1 }]],
   ])('refuses a module path that is %s', (_, address, modulePath) => {
-    const content = { version: STATE_VERSION, serial: 0, resources: { [address]: { resourceType: 'local_file', name: 'a', modulePath, attributes: {} } } };
+    const content = { version: STATE_VERSION, serial: 0, lineage: 'lineage', resources: { [address]: { resourceType: 'local_file', name: 'a', modulePath, attributes: {} } } };
 
     expect(read(content)).toThrow(`clay.state.json is not valid state: "${address}" is not a resource`);
+  });
+
+  it.each([
+    ['left out', undefined],
+    ['empty', ''],
+    ['a number', 7],
+  ])('refuses a lineage %s, since a written state always has one', (_, lineage) => {
+    expect(read({ version: STATE_VERSION, serial: 0, lineage, resources: {} })).toThrow('clay.state.json is not valid state: its lineage is not a string, or is empty');
   });
 
   it('refuses a state a newer Clay wrote, since it cannot know what changed', () => {
@@ -203,6 +218,6 @@ describe('reading a state file', () => {
   it('keeps a resource attribute it has no opinion about', () => {
     const resources = { 'module.m.local_file.a': { id: 'x', resourceType: 'local_file', name: 'a', modulePath: [{ name: 'm' }], attributes: {}, dependencies: ['local_file.b'] } };
 
-    expect(parseState(JSON.stringify({ version: STATE_VERSION, serial: 0, resources }), 'f').resources).toEqual(resources);
+    expect(parseState(JSON.stringify({ version: STATE_VERSION, serial: 0, lineage: 'lineage', resources }), 'f').resources).toEqual(resources);
   });
 });

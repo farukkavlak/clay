@@ -27,9 +27,10 @@ function checkVersion(state: unknown, source: string, say: Say): asserts state i
 function check(state: unknown, say: Say): asserts state is State {
   if (!isRecord(state)) say('it is not an object');
 
-  const { serial, outputs, resources, deposed } = state;
+  const { serial, lineage, outputs, resources, deposed } = state;
 
   if (typeof serial !== 'number') say('its serial is not a number');
+  if (typeof lineage !== 'string' || lineage === '') say('its lineage is not a string, or is empty');
   if (outputs !== undefined) checkOutputs(outputs, say);
   readResources(resources, 'its resources', say);
   readDeposed(deposed, say);

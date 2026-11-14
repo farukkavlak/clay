@@ -50,7 +50,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   };
 });
 
-const holding = (serial: number): State => ({ ...emptyState(), serial });
+const holding = (serial: number): State => ({ ...emptyState(), lineage: 'lineage', serial });
 
 describe('a local write a power loss cannot undo', () => {
   let dir: string;
@@ -69,7 +69,7 @@ describe('a local write a power loss cannot undo', () => {
   async function leftByAStoppedRun(): Promise<void> {
     const backend = new LocalBackend(dir);
     await backend.write(holding(1));
-    await backend.append('{"serial":2,"key":"rt.a","resource":null,"deposed":null}\n');
+    await backend.append('{"serial":2,"lineage":"lineage","key":"rt.a","resource":null,"deposed":null}\n');
     seen.steps.length = 0;
   }
 

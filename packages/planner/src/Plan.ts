@@ -89,6 +89,8 @@ export interface FileInput {
 
 export interface Plan {
   serial: number;
+  /** The lineage of the state planned against; unset where no state was written yet. */
+  lineage?: string;
   actions: PlanAction[];
   outputs: OutputChanges;
   /** Resources as state held them before refresh. */
@@ -112,7 +114,7 @@ export interface Plan {
 }
 
 /** Bump on any change to the file's shape after a release, so an older plan file is refused instead of misread. */
-export const PLAN_FILE_VERSION = '39.0';
+export const PLAN_FILE_VERSION = '40.0';
 
 export interface PlanFile extends Plan {
   version: string;

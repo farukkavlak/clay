@@ -269,7 +269,12 @@ describe('an error about a resource, given a sensitive value', () => {
     });
 
     it('hides the reason of an update', async () => {
-      const state: State = { version: STATE_VERSION, serial: 0, resources: { 'throwing.a': { resourceType: 'throwing', name: 'a', attributes: { label: 'start' } } } };
+      const state: State = {
+        version: STATE_VERSION,
+        serial: 0,
+        lineage: 'lineage',
+        resources: { 'throwing.a': { resourceType: 'throwing', name: 'a', attributes: { label: 'start' } } },
+      };
       await new LocalBackend(dir).write(state);
 
       const failures = await failureOf(secretIn('throwing'));
@@ -280,7 +285,7 @@ describe('an error about a resource, given a sensitive value', () => {
 
     it('hides the reason of an update from what the state holds sensitive', async () => {
       const resource = { resourceType: 'throwing', name: 'a', attributes: { label: 'hunter2' }, sensitive: [['label']] };
-      await new LocalBackend(dir).write({ version: STATE_VERSION, serial: 0, resources: { 'throwing.a': resource } });
+      await new LocalBackend(dir).write({ version: STATE_VERSION, serial: 0, lineage: 'lineage', resources: { 'throwing.a': resource } });
 
       const failures = await failureOf('resource "throwing" "a" { label = "start" }');
 
@@ -301,6 +306,7 @@ describe('an error about a resource, given a sensitive value', () => {
       const state: State = {
         version: STATE_VERSION,
         serial: 0,
+        lineage: 'lineage',
         resources: {},
         deposed: { 'holding.a': [{ attributes: { label: 'hunter2' }, sensitive: [['label']] }] },
       };
@@ -371,6 +377,7 @@ describe('an error about a resource, given a sensitive value', () => {
       const state: State = {
         version: STATE_VERSION,
         serial: 0,
+        lineage: 'lineage',
         resources: {},
         deposed: { 'holding.a': [{ attributes: { label: 'hunter2' }, sensitive: [['label']] }] },
       };

@@ -180,6 +180,11 @@ function isDataSensitive(dataSensitive: unknown): boolean {
   return dataSensitive === undefined || (isRecord(dataSensitive) && Object.values(dataSensitive).every((paths) => isAttributePaths(paths)));
 }
 
+/** Left out where the plan was made with no state written yet. */
+function isLineage(lineage: unknown): boolean {
+  return lineage === undefined || (typeof lineage === 'string' && lineage !== '');
+}
+
 function isAddresses(addresses: unknown): boolean {
   return Array.isArray(addresses) && addresses.every((address) => typeof address === 'string');
 }
@@ -220,7 +225,7 @@ export function validatePlanFile(planFile: unknown): planFile is PlanFile {
   if (!planFile || typeof planFile !== 'object') return false;
 
   const pf = planFile as Partial<PlanFile>;
-  return pf.version === PLAN_FILE_VERSION && isTimestamp(pf.timestamp) && isConfigFiles(pf.files) && isPlan(pf) && isVariableInputs(pf.variables);
+  return pf.version === PLAN_FILE_VERSION && isTimestamp(pf.timestamp) && isConfigFiles(pf.files) && isPlan(pf) && isLineage(pf.lineage) && isVariableInputs(pf.variables);
 }
 
 /** Without its type's schema, a resource's sets could not be shown as sets. */

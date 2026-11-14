@@ -92,7 +92,7 @@ describe('clay state pull', () => {
   it('prints a sensitive value as it is, and a control character in a value escaped', async () => {
     const content = 'secret\u009B2J';
     const resource = { resourceType: 'null_resource', name: 'a', attributes: { content }, sensitive: [['content']] };
-    await new LocalBackend(dir).write({ ...emptyState(), resources: { 'null_resource.a': resource } });
+    await new LocalBackend(dir).write({ ...emptyState(), lineage: 'lineage', resources: { 'null_resource.a': resource } });
 
     const pulled = await run('state', 'pull');
 

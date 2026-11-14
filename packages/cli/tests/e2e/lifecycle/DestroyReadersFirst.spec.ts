@@ -145,6 +145,7 @@ describe('replacing a resource that something reads', () => {
     const state: State = {
       version: STATE_VERSION,
       serial: 0,
+      lineage: 'lineage',
       resources: { 'rec.a': { resourceType: 'rec', name: 'a', attributes: { name: 'a1', uses: null, note: null } } },
       deposed: { 'rec.b': [{ attributes: { name: 'b-old', uses: 'a1', note: null }, dependencies: ['rec.a'] }] },
     };
@@ -239,6 +240,7 @@ describe('replacing a resource that something reads', () => {
     const state: State = {
       version: STATE_VERSION,
       serial: 0,
+      lineage: 'lineage',
       resources: {
         'rec.a': { resourceType: 'rec', name: 'a', attributes: { name: 'a1', uses: null, note: null } },
         'rec.b': { resourceType: 'rec', name: 'b', attributes: { name: 'b1' } },

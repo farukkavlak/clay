@@ -38,167 +38,171 @@ describe('a state file that is not valid state', () => {
   });
 
   it.each([
-    ['resources that are not a record', `{"version":${STATE_VERSION},"serial":0,"resources":"oops"}`, 'its resources are not a record'],
-    ['outputs that are not a record', `{"version":${STATE_VERSION},"serial":0,"outputs":"oops","resources":{}}`, 'its outputs are not a record'],
+    ['resources that are not a record', `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":"oops"}`, 'its resources are not a record'],
+    ['outputs that are not a record', `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","outputs":"oops","resources":{}}`, 'its outputs are not a record'],
     [
       'a resource with no attributes',
-      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a"}}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{"local_file.a":{"resourceType":"local_file","name":"a"}}}`,
       '"local_file.a" is not a resource',
     ],
     [
       'a resource whose sensitive parts are not steps',
-      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"sensitive":"content"}}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"sensitive":"content"}}}`,
       '"local_file.a" is not a resource',
     ],
-    ['deposed objects that are not a record', `{"version":${STATE_VERSION},"serial":0,"resources":{},"deposed":"oops"}`, 'its deposed objects are not a record'],
+    [
+      'deposed objects that are not a record',
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{},"deposed":"oops"}`,
+      'its deposed objects are not a record',
+    ],
     [
       'deposed objects under something that is not an address',
-      `{"version":${STATE_VERSION},"serial":0,"resources":{},"deposed":{"nope":[{"attributes":{}}]}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{},"deposed":{"nope":[{"attributes":{}}]}}`,
       '"nope" is not the address of a resource, so it cannot hold deposed objects',
     ],
     [
       'an empty list of deposed objects',
-      `{"version":${STATE_VERSION},"serial":0,"resources":{},"deposed":{"local_file.a":[]}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{},"deposed":{"local_file.a":[]}}`,
       'the deposed objects of "local_file.a" are not a list with an object in it',
     ],
     [
       'a deposed object with no attributes',
-      `{"version":${STATE_VERSION},"serial":0,"resources":{},"deposed":{"local_file.a":[{}]}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{},"deposed":{"local_file.a":[{}]}}`,
       'a deposed object of "local_file.a" has no attributes',
     ],
     [
       'a deposed object whose dependencies are not a list',
-      `{"version":${STATE_VERSION},"serial":0,"resources":{},"deposed":{"local_file.a":[{"attributes":{},"dependencies":"x"}]}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{},"deposed":{"local_file.a":[{"attributes":{},"dependencies":"x"}]}}`,
       'a deposed object of "local_file.a" has no attributes, or its sensitive, dependencies or destroy provisioners',
     ],
     [
       'a deposed object with a dependency that is not an address',
-      `{"version":${STATE_VERSION},"serial":0,"resources":{},"deposed":{"local_file.a":[{"attributes":{},"dependencies":[42]}]}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{},"deposed":{"local_file.a":[{"attributes":{},"dependencies":[42]}]}}`,
       'a deposed object of "local_file.a" has no attributes, or its sensitive, dependencies or destroy provisioners',
     ],
     [
       'a resource with a dependency that is a number',
-      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"dependencies":[42]}}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"dependencies":[42]}}}`,
       '"local_file.a" is not a resource',
     ],
     [
       'a resource with a dependency that is not an address',
-      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"dependencies":["nothing"]}}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"dependencies":["nothing"]}}}`,
       '"local_file.a" is not a resource',
     ],
     [
       'a deposed object whose sensitive parts are not steps',
-      `{"version":${STATE_VERSION},"serial":0,"resources":{},"deposed":{"local_file.a":[{"attributes":{},"sensitive":"content"}]}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{},"deposed":{"local_file.a":[{"attributes":{},"sensitive":"content"}]}}`,
       'a deposed object of "local_file.a" has no attributes, or its sensitive, dependencies or destroy provisioners',
     ],
     [
       'a deposed object with a sensitive index that is not whole',
-      `{"version":${STATE_VERSION},"serial":0,"resources":{},"deposed":{"local_file.a":[{"attributes":{},"sensitive":[["content",1.5]]}]}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{},"deposed":{"local_file.a":[{"attributes":{},"sensitive":[["content",1.5]]}]}}`,
       'a sensitive index of a deposed object of "local_file.a": 1.5 is not a whole number',
     ],
     [
       'a deposed object whose destroy provisioners are not a list',
-      `{"version":${STATE_VERSION},"serial":0,"resources":{},"deposed":{"local_file.a":[{"attributes":{},"destroyProvisioners":{}}]}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{},"deposed":{"local_file.a":[{"attributes":{},"destroyProvisioners":{}}]}}`,
       'a deposed object of "local_file.a" has no attributes, or its sensitive, dependencies or destroy provisioners are not what they should be',
     ],
     [
       'a destroy provisioner of a deposed object with a sensitive index that is not whole',
-      `{"version":${STATE_VERSION},"serial":0,"resources":{},"deposed":{"local_file.a":[{"attributes":{},"destroyProvisioners":[{"type":"local-exec","config":{},"sensitive":[["environment",1.5]]}]}]}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{},"deposed":{"local_file.a":[{"attributes":{},"destroyProvisioners":[{"type":"local-exec","config":{},"sensitive":[["environment",1.5]]}]}]}}`,
       'a sensitive index of a provisioner of a deposed object of "local_file.a": 1.5 is not a whole number',
     ],
     [
       'a resource whose prevent_destroy is not true',
-      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"preventDestroy":false}}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"preventDestroy":false}}}`,
       '"local_file.a" is not a resource',
     ],
     [
       'a resource whose tainted is not true',
-      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"tainted":false}}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"tainted":false}}}`,
       '"local_file.a" is not a resource',
     ],
     [
       'a resource whose destroy provisioners are not a list',
-      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"destroyProvisioners":{}}}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"destroyProvisioners":{}}}}`,
       '"local_file.a" is not a resource',
     ],
     [
       'a destroy provisioner whose type is not a string',
-      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"destroyProvisioners":[{"type":1,"config":{}}]}}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"destroyProvisioners":[{"type":1,"config":{}}]}}}`,
       '"local_file.a" is not a resource',
     ],
     [
       'a destroy provisioner whose config is not a record',
-      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"destroyProvisioners":[{"type":"local-exec","config":"echo"}]}}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"destroyProvisioners":[{"type":"local-exec","config":"echo"}]}}}`,
       '"local_file.a" is not a resource',
     ],
     [
       'a destroy provisioner whose sensitive is not a list of paths',
-      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"destroyProvisioners":[{"type":"local-exec","config":{},"sensitive":"command"}]}}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"destroyProvisioners":[{"type":"local-exec","config":{},"sensitive":"command"}]}}}`,
       '"local_file.a" is not a resource',
     ],
     [
       'a destroy provisioner with no config',
-      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"destroyProvisioners":[{"type":"local-exec"}]}}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"destroyProvisioners":[{"type":"local-exec"}]}}}`,
       '"local_file.a" is not a resource',
     ],
     [
       'a destroy provisioner whose on_failure is not continue',
-      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"destroyProvisioners":[{"type":"local-exec","config":{},"onFailure":"fail"}]}}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"destroyProvisioners":[{"type":"local-exec","config":{},"onFailure":"fail"}]}}}`,
       '"local_file.a" is not a resource',
     ],
     [
       'a destroy provisioner with a sensitive index that is not whole',
-      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"destroyProvisioners":[{"type":"local-exec","config":{},"sensitive":[["environment",1.5]]}]}}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"destroyProvisioners":[{"type":"local-exec","config":{},"sensitive":[["environment",1.5]]}]}}}`,
       'a sensitive index of a provisioner of "local_file.a": 1.5 is not a whole number',
     ],
     [
       'a resource with a sensitive index that is not whole',
-      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"sensitive":[["content",1.5]]}}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"sensitive":[["content",1.5]]}}}`,
       'a sensitive index of "local_file.a": 1.5 is not a whole number',
     ],
     [
       'a resource filed under another address',
-      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"b","attributes":{}}}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{"local_file.a":{"resourceType":"local_file","name":"b","attributes":{}}}}`,
       '"local_file.a" holds local_file.b',
     ],
     [
       'a resource at an address no configuration can spell',
-      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a b":{"resourceType":"local_file","name":"a b","attributes":{}}}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{"local_file.a b":{"resourceType":"local_file","name":"a b","attributes":{}}}}`,
       '"local_file.a b" is not the address of a resource: "a b" is not a name',
     ],
     [
       'a resource whose key holds a control character raw',
-      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a[\\"x\\u007fy\\"]":{"resourceType":"local_file","name":"a","key":"x\\u007fy","attributes":{}}}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{"local_file.a[\\"x\\u007fy\\"]":{"resourceType":"local_file","name":"a","key":"x\\u007fy","attributes":{}}}}`,
       String.raw`a key is written as ["x\u007fy"]`,
     ],
     [
       'deposed objects under an address no configuration can spell',
-      `{"version":${STATE_VERSION},"serial":0,"resources":{},"deposed":{"local_file.5":[{"attributes":{}}]}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{},"deposed":{"local_file.5":[{"attributes":{}}]}}`,
       '"local_file.5" is not the address of a resource, so it cannot hold deposed objects',
     ],
     [
       'a resource with a dependency on one instance, where a dependency names a block',
-      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"dependencies":["local_file.b[0]"]}}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"dependencies":["local_file.b[0]"]}}}`,
       '"local_file.a" is not a resource',
     ],
     [
       'a deposed object with a dependency on one instance',
-      `{"version":${STATE_VERSION},"serial":0,"resources":{},"deposed":{"local_file.a":[{"attributes":{},"dependencies":["local_file.b[\\"x\\"]"]}]}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{},"deposed":{"local_file.a":[{"attributes":{},"dependencies":["local_file.b[\\"x\\"]"]}]}}`,
       'a deposed object of "local_file.a" has no attributes, or its sensitive, dependencies or destroy provisioners',
     ],
     [
       'a dependency no configuration can spell',
-      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"dependencies":["var.x"]}}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{},"dependencies":["var.x"]}}}`,
       '"local_file.a" is not a resource',
     ],
     [
       'an output no configuration can declare',
-      `{"version":${STATE_VERSION},"serial":0,"outputs":{"a b":{"value":"x","type":{"kind":"string"}}},"resources":{}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","outputs":{"a b":{"value":"x","type":{"kind":"string"}}},"resources":{}}`,
       'its output "a b" has a name no configuration can declare',
     ],
     [
       'a value nested deeper than any state Clay writes',
-      `{"version":${STATE_VERSION},"serial":0,"resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{"content":${'['.repeat(20_000)}${']'.repeat(20_000)}}}}}`,
+      `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{"local_file.a":{"resourceType":"local_file","name":"a","attributes":{"content":${'['.repeat(20_000)}${']'.repeat(20_000)}}}}}`,
       'it is nested more than 500 levels deep',
     ],
     ['no version at all', '{}', 'its version is not a number'],
@@ -212,6 +216,6 @@ describe('a state file that is not valid state', () => {
   });
 
   it('refuses a state a newer Clay wrote', async () => {
-    expect(await planWith('{"version":99,"serial":0,"resources":{}}')).toContain('was written by a newer Clay, version 99');
+    expect(await planWith('{"version":99,"serial":0,"lineage":"lineage","resources":{}}')).toContain('was written by a newer Clay, version 99');
   });
 });

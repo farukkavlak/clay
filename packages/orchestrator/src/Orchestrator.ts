@@ -62,6 +62,12 @@ export interface RunOptions {
   signal?: AbortSignal;
 }
 
+/** A plan made with no state written yet is held to none being written since. */
+function checkSameState(state: State, saved: Plan): void {
+  if (saved.lineage !== undefined && state.lineage !== saved.lineage) throw new Error('The plan was made against another state. Plan again.');
+  if (state.lineage !== saved.lineage || state.serial !== saved.serial) throw new Error('The state has changed since the plan was made. Plan again.');
+}
+
 export class Orchestrator {
   constructor(
     private stateManager: StateManager,
@@ -120,6 +126,7 @@ export class Orchestrator {
 
     return {
       serial: prevRun.serial,
+      lineage: prevRun.lineage,
       actions,
       outputs: outputChanges(currentState.outputs ?? {}, outputs),
       prevRun: prevRun.resources,
@@ -150,14 +157,14 @@ export class Orchestrator {
   }
 
   /**
-   * Under the state lock the caller holds, from the plan to the end of the run. A state written since the plan was made is refused, since
-   * the approved plan no longer matches it.
+   * Under the state lock the caller holds, from the plan to the end of the run. A state written since the plan was made, or another state, is
+   * refused, since the approved plan no longer matches it.
    */
   async *runPlan(saved: Plan, { parallelism = DEFAULT_PARALLELISM, signal }: RunOptions = {}): AsyncGenerator<RunEvent> {
     checkParallelism(parallelism);
     this.stateManager.requireLock('A run');
     const state = await this.stateManager.read();
-    if (state.serial !== saved.serial) throw new Error('The state has changed since the plan was made. Plan again.');
+    checkSameState(state, saved);
     // The actions were planned against the refreshed resources, so they run on those.
     state.resources = copyResources(saved.prior);
 
