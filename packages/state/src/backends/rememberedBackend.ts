@@ -90,7 +90,7 @@ export function checkBackend(backend: StateBackend, workingDir: string, env: Env
   const now = backend.choice;
   const message = isSame(before, now)
     ? changed(before, now)
-    : `This workspace keeps its state in "${before.where}" (${before.type}), and the configuration names "${now.where}" (${now.type}); run \`clay init\``;
+    : `This directory keeps its state in "${before.where}" (${before.type}), and the configuration names "${now.where}" (${now.type}); run \`clay init\``;
   if (message === undefined) return;
 
   throw position ? new ConfigError(message, position) : new Error(message);

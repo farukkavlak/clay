@@ -104,7 +104,7 @@ describe('a state kept where a backend block says', () => {
   });
 
   it.each([
-    ['init', ['init'], 'Failed to initialize workspace:'],
+    ['init', ['init'], 'Failed to initialize Clay in this directory:'],
     ['plan', ['plan'], 'Planning failed:'],
     ['validate', ['validate'], 'Validation failed:'],
     ['apply', ['apply', '--yes'], 'Apply failed:'],
@@ -151,7 +151,7 @@ describe('a state kept where a backend block says', () => {
   });
 
   describe('remembered by init', () => {
-    const CHANGED = 'This workspace keeps its state in';
+    const CHANGED = 'This directory keeps its state in';
 
     it.each([
       ['plan', ['plan']],
@@ -341,7 +341,7 @@ describe('a state kept where a backend block says', () => {
       for (const command of ['plan', 'init']) expect(await refusal(command)).toContain(`backend.json is not what \`clay init\` writes; remove it and run \`clay init\``);
     });
 
-    it('stays with the workspace when it moves', async () => {
+    it('stays with the directory when it moves', async () => {
       await clayOutput(dir, 'init');
       await clayOutput(dir, 'apply', '--yes');
       const moved = `${dir}-moved`;

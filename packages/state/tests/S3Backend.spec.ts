@@ -58,7 +58,7 @@ describe('a state kept in S3', () => {
       { file: 'main.clay', content: `clay {\n  backend "s3" {\n    bucket = "bucket"\n    key = "k"\n    endpoint = "${server.url}"\n    use_path_style = true\n  }\n}` },
     ])[0] as BackendBlock;
 
-    await backendFrom(block, '/workspace', env).read();
+    await backendFrom(block, '/project', env).read();
 
     expect(server.received).toMatchObject([{ method: 'GET', path: '/bucket/k', region: 'ap-south-2' }]);
   });

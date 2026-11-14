@@ -51,20 +51,20 @@ async function initialize(backend: StateBackend, cwd: string, options: InitOptio
 
 export function createInitCommand() {
   return new Command('init')
-    .description('Initialize a new Clay workspace')
+    .description('Initialize Clay in this directory')
     .option('-y, --yes', 'Move a state to the backend the configuration names without asking')
     .addOption(lockTimeoutOption())
     .action(async (options: { yes?: boolean; lockTimeout?: number }) => {
       const cwd = process.cwd();
       const files = new RecordingFiles(new DiskFiles(cwd));
 
-      console.log(styleText('blue', 'Initializing Clay workspace...'));
+      console.log(styleText('blue', 'Initializing Clay in this directory...'));
 
       let code: number;
       try {
         code = await initialize(namedBackend(cwd, files), cwd, { yes: options.yes ?? false, lockTimeout: options.lockTimeout });
       } catch (error: unknown) {
-        console.error(styleText('red', 'Failed to initialize workspace:'), describeError(error, files));
+        console.error(styleText('red', 'Failed to initialize Clay in this directory:'), describeError(error, files));
         code = 1;
       }
       if (code !== 0) process.exit(code);

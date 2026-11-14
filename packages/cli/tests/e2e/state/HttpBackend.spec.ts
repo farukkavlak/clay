@@ -66,7 +66,7 @@ describe('a state kept on an HTTP server', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
-  it('is started on the server by init, and nothing in the workspace', async () => {
+  it('is started on the server by init, and nothing in the directory', async () => {
     expect(await clayOutput(dir, 'init')).toContain('Created an empty state');
 
     expect(stateOnServer()).toMatchObject({ serial: 0, resources: {} });

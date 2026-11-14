@@ -5,7 +5,7 @@ import { LockInfo } from './lockInfo';
 /** What `init` remembers, so a later command can tell the configuration has moved the state. */
 export interface BackendChoice {
   readonly type: string;
-  /** The same wherever the workspace is moved to. */
+  /** The same wherever the directory is moved to. */
   readonly where: string;
   /** Every setting the backend runs on, with the defaults filled in, so `init` can build it again. */
   readonly settings: Readonly<Record<string, string | number | boolean>>;

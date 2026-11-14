@@ -7,7 +7,7 @@ import { Environment } from '../src/backends/settings';
 import { AzureBackend } from '../src/backends/AzureBackend';
 import { S3Backend } from '../src/backends/S3Backend';
 
-const dir = path.resolve('/workspace');
+const dir = path.resolve('/project');
 
 const blockOf = (body: string, type = 'local') => parseModule([{ file: 'main.clay', content: `clay {\n  backend "${type}" {\n    ${body}\n  }\n}` }])[0] as BackendBlock;
 

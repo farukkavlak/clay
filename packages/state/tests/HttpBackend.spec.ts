@@ -668,7 +668,7 @@ describe('a TLS handshake that fails', () => {
 describe('the http block', () => {
   let server: HttpStateServer;
 
-  const backendWith = (env: Record<string, string>) => backendFrom(blockOf(`address = "${server.url}/state"\nlock_address = "${server.url}/lock"`), '/workspace', env);
+  const backendWith = (env: Record<string, string>) => backendFrom(blockOf(`address = "${server.url}/state"\nlock_address = "${server.url}/lock"`), '/project', env);
 
   beforeEach(async () => {
     server = await HttpStateServer.start();
@@ -679,7 +679,7 @@ describe('the http block', () => {
   });
 
   it('releases the lock at the lock address where no unlock address is given', async () => {
-    const backend = backendFrom(blockOf(`address = "${server.url}/state"\nlock_address = "${server.url}/lock"`), '/workspace', {});
+    const backend = backendFrom(blockOf(`address = "${server.url}/state"\nlock_address = "${server.url}/lock"`), '/project', {});
     const info = newLockInfo('apply');
 
     await backend.lock(info);
@@ -703,7 +703,7 @@ describe('the http block', () => {
           'unlock_method = "DELETE"',
         ].join('\n')
       ),
-      '/workspace',
+      '/project',
       {}
     );
     const info = newLockInfo('apply');

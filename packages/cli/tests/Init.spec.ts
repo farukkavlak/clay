@@ -48,7 +48,7 @@ describe('CLI: init command', () => {
 
     await createInitCommand().parseAsync(['node', 'clay', 'init']);
 
-    expect(consoleSpy).toHaveBeenCalledWith('Failed to initialize workspace:', 'Permission denied');
+    expect(consoleSpy).toHaveBeenCalledWith('Failed to initialize Clay in this directory:', 'Permission denied');
     expect(exitSpy).toHaveBeenCalledWith(1);
 
     exitSpy.mockRestore();
@@ -71,7 +71,7 @@ describe('CLI: init command', () => {
 
     await createInitCommand().parseAsync(['node', 'clay', 'init']);
 
-    expect(consoleSpy).toHaveBeenCalledWith('Failed to initialize workspace:', 'String error');
+    expect(consoleSpy).toHaveBeenCalledWith('Failed to initialize Clay in this directory:', 'String error');
     expect(exitSpy).toHaveBeenCalledWith(1);
 
     exitSpy.mockRestore();

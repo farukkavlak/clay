@@ -34,7 +34,7 @@ describe('init against real files', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
-  it('starts an empty state in a new workspace and leaves nothing else behind', async () => {
+  it('starts an empty state in a new directory and leaves nothing else behind', async () => {
     await init();
 
     expect(await new LocalBackend(dir).read()).toEqual({ version: STATE_VERSION, serial: 0, lineage: expect.stringMatching(/^[0-9a-f-]{36}$/), resources: {} });

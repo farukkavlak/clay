@@ -91,12 +91,12 @@ describe('a control character in what the CLI prints', () => {
   });
 
   // Root writes where the mode says it cannot.
-  it.skipIf(process.getuid?.() === 0)('shows an escape in the path of a workspace it cannot write as a character of its own', async () => {
+  it.skipIf(process.getuid?.() === 0)('shows an escape in the path of a directory it cannot write as a character of its own', async () => {
     await fs.chmod(dir, 0o555);
 
     const printed = await failing('init').finally(() => fs.chmod(dir, 0o755));
 
-    expect(printed).toContain('Failed to initialize workspace');
+    expect(printed).toContain('Failed to initialize Clay in this directory');
     expect(printed).toContain('\u241B');
     expect(printed).not.toContain(ESCAPE);
   });

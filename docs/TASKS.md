@@ -1046,7 +1046,7 @@ run as a step of another resource instead.
 ### Backends
 
 The state is always the file `clay.state.json` next to the configuration. Where it lives
-should be the workspace's choice, written once and read by every command, the way
+should be the directory's choice, written once and read by every command, the way
 Terraform has it since backends replaced `-state`.
 
 - [x] A `clay { backend "local" { path = "..." } }` block in the configuration

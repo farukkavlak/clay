@@ -56,7 +56,7 @@ describe('a state kept in Azure Blob storage', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
-  it('is started in the container by init, and nothing in the workspace', async () => {
+  it('is started in the container by init, and nothing in the directory', async () => {
     const { code, stdout } = await clayWith('init');
 
     expect(code).toBe(0);

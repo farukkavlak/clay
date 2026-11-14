@@ -67,7 +67,7 @@ describe('a state kept in S3', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
-  it('is started in the bucket by init, and nothing in the workspace', async () => {
+  it('is started in the bucket by init, and nothing in the directory', async () => {
     const { code, stdout } = await clayWith('init');
 
     expect(code).toBe(0);
