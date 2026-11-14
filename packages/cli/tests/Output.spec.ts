@@ -9,6 +9,8 @@ vi.mock('@clay/state', () => {
   return {
     backendFrom: vi.fn(() => ({ location: '/tmp/clay.state.json', exists: vi.fn() })),
     checkBackend: vi.fn(),
+    selectedWorkspace: vi.fn(() => 'default'),
+    workspaceBackend: vi.fn(async (backend: unknown) => backend),
     StateManager: vi.fn().mockImplementation(function () {
       return {
         read: vi.fn().mockResolvedValue(emptyState()),

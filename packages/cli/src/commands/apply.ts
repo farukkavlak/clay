@@ -137,14 +137,14 @@ interface ApplyOptions extends RunFlags {
  * releases it and exits at once. Returns the exit code.
  */
 export async function applyFromDisk(cwd: string, recording: RecordingFiles, options: ApplyOptions): Promise<number> {
-  const manager = new StateManager(stateFile(cwd, recording), lockWait(options.lockTimeout));
+  const manager = new StateManager(await stateFile(cwd, recording), lockWait(options.lockTimeout));
 
   return releasedAfter(manager, async () => {
     console.log(styleText('blue', 'Calculating plan...'));
     const plan = await stoppedAtOnce([manager], async () => {
       await manager.lock(options.destroy ? 'destroy' : 'apply');
       const { refresh, parallelism, destroy, variables } = options;
-      return newOrchestrator(cwd, recording, manager).plan({ refresh, parallelism, destroy, variables });
+      return newOrchestrator(recording, manager).plan({ refresh, parallelism, destroy, variables });
     });
     // What the plan read, so the run does not read files changed while the question was open.
     const files = new InMemoryFiles(recording.snapshot());
@@ -157,7 +157,7 @@ export async function applyFromDisk(cwd: string, recording: RecordingFiles, opti
       return 1;
     }
 
-    return runAndReport((signal) => newOrchestrator(cwd, files, manager).runPlan(plan, { parallelism: options.parallelism, signal }), plan);
+    return runAndReport((signal) => newOrchestrator(files, manager).runPlan(plan, { parallelism: options.parallelism, signal }), plan);
   });
 }
 
@@ -182,7 +182,7 @@ async function readPlanFile(planFileArg: string, files: ConfigFiles): Promise<Pl
 
 async function executeApplyFromPlan(cwd: string, planFile: PlanFile, files: ConfigFiles, options: RunFlags): Promise<number> {
   const { parallelism } = options;
-  const manager = new StateManager(stateFile(cwd, files), lockWait(options.lockTimeout));
+  const manager = new StateManager(await stateFile(cwd, files), lockWait(options.lockTimeout));
 
   console.log(styleText('blue', 'Applying from saved plan...'));
   console.log(styleText('gray', `Plan created: ${planFile.timestamp}`));
@@ -192,7 +192,7 @@ async function executeApplyFromPlan(cwd: string, planFile: PlanFile, files: Conf
 
   return releasedAfter(manager, async () => {
     await stoppedAtOnce([manager], () => manager.lock('apply'));
-    return runAndReport((signal) => newOrchestrator(cwd, files, manager).runPlan(planFile, { parallelism, signal }), planFile);
+    return runAndReport((signal) => newOrchestrator(files, manager).runPlan(planFile, { parallelism, signal }), planFile);
   });
 }
 

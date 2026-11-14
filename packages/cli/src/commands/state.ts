@@ -31,8 +31,8 @@ function forgetDeposed(state: State, key: string): void {
 
 const configHere = () => new RecordingFiles(new DiskFiles(process.cwd()));
 
-function getStateManager(files: RecordingFiles, lockTimeout?: number): StateManager {
-  return new StateManager(stateFile(process.cwd(), files), lockWait(lockTimeout));
+async function getStateManager(files: RecordingFiles, lockTimeout?: number): Promise<StateManager> {
+  return new StateManager(await stateFile(process.cwd(), files), lockWait(lockTimeout));
 }
 
 /** Ctrl-C while the lock is awaited exits at once; once it is held, the change and the release are let finish. */
@@ -72,7 +72,7 @@ export function createStateCommand(): Command {
     .action(async () => {
       const files = configHere();
       try {
-        const backend = stateFile(process.cwd(), files);
+        const backend = await stateFile(process.cwd(), files);
         const state = await new StateManager(backend).read();
 
         const deposed = inAddressOrder(state.deposed ?? {});
@@ -96,7 +96,7 @@ export function createStateCommand(): Command {
     .action(async (address) => {
       const files = configHere();
       try {
-        const manager = getStateManager(files);
+        const manager = await getStateManager(files);
         const state = await manager.read();
         const resource = findResource(state, address);
         const parsed = Address.parse(address);
@@ -129,7 +129,7 @@ export function createStateCommand(): Command {
     .action(async () => {
       const files = configHere();
       try {
-        const backend = stateFile(process.cwd(), files);
+        const backend = await stateFile(process.cwd(), files);
         if (!(await backend.exists())) {
           console.error(styleText('yellow', printable(`No state found at ${backend.location}`)));
           return;
@@ -152,7 +152,7 @@ export function createStateCommand(): Command {
       const files = configHere();
       let code: number;
       try {
-        const manager = getStateManager(files, options.lockTimeout);
+        const manager = await getStateManager(files, options.lockTimeout);
         code = await underLock(manager, 'state mv', async () => {
           const state = await manager.read();
 
@@ -184,7 +184,7 @@ export function createStateCommand(): Command {
       const files = configHere();
       let code: number;
       try {
-        const manager = getStateManager(files, options.lockTimeout);
+        const manager = await getStateManager(files, options.lockTimeout);
         code = await underLock(manager, 'state rm', async () => {
           const state = await manager.read();
           const key = Address.parse(address).toString();

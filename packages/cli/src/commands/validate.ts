@@ -8,7 +8,7 @@ import { describeError } from '../describeError';
 import { namedBackend } from '../stateFile';
 
 async function executeValidate(cwd: string, files: ConfigFiles): Promise<void> {
-  await newOrchestrator(cwd, files, new StateManager(namedBackend(cwd, files))).validate();
+  await newOrchestrator(files, new StateManager(namedBackend(cwd, files))).validate();
 }
 
 export function createValidateCommand(): Command {

@@ -20,8 +20,8 @@ import { releasedAfter } from '../released';
 
 /** Returns the exit code. */
 async function executePlan(cwd: string, files: RecordingFiles, options: PlanOptions, lockTimeout: number | undefined, outFile?: string): Promise<number> {
-  const manager = new StateManager(stateFile(cwd, files), lockWait(lockTimeout));
-  const orchestrator = newOrchestrator(cwd, files, manager);
+  const manager = new StateManager(await stateFile(cwd, files), lockWait(lockTimeout));
+  const orchestrator = newOrchestrator(files, manager);
 
   console.log(styleText('blue', 'Planning...'));
 

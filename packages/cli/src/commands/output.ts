@@ -35,7 +35,7 @@ export function createOutputCommand(): Command {
       const files = new RecordingFiles(new DiskFiles(cwd));
 
       try {
-        const backend = stateFile(cwd, files);
+        const backend = await stateFile(cwd, files);
         if (!(await backend.exists())) {
           if (options.json) displayOutputs({}, true);
           else console.log(styleText('yellow', `No state found at ${printable(backend.location)}`));

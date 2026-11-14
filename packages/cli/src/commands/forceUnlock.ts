@@ -13,7 +13,7 @@ export function createForceUnlockCommand(): Command {
     .action(async (id: string) => {
       const files = new RecordingFiles(new DiskFiles(process.cwd()));
       try {
-        const backend = stateFile(process.cwd(), files);
+        const backend = await stateFile(process.cwd(), files);
         await backend.forceUnlock(id);
         console.log(styleText('green', printable(`Released lock ${id} on ${backend.location}`)));
       } catch (error) {
