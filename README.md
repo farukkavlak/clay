@@ -75,9 +75,6 @@ On top of these:
 
 `docs/LANGUAGE.md` says what each of these does, and `docs/GRAMMAR.md` how it is written.
 
-Not there yet: values for root variables from a file or the environment. `docs/TASKS.md`
-has the full list.
-
 ## Commands
 
 | Command                                                         | Does                                                                                                                                                                                                                         |
