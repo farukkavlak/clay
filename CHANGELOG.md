@@ -103,6 +103,10 @@ a configuration means or how the state file is written.
 - Variables files of `name = value` lines: `clay.clayvars` in the root is read on its own,
   and `--var-file` reads another. Values are read in this order, a later one winning:
   `CLAY_VAR_`, `clay.clayvars`, then `--var` and `--var-file` as given
+- Workspaces with the `local` backend: `clay workspace new | select | show | list`. Each
+  keeps a state of its own in `clay.workspaces/<name>/`, and `.clay/workspace` selects
+  one. `plan`, `apply` and `destroy` name a workspace other than `default`. `clay init`
+  refuses to move the backend while workspaces other than `default` exist
 
 ### Fixed
 

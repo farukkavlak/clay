@@ -40,6 +40,9 @@ clay apply       # creates them, after a yes
 clay output      # file = "./hello-abc123.txt"
 ```
 
+Keep `clay.state.json*`, `clay.workspaces/` and `.clay/` out of version control. A state
+can hold secrets, and `.clay/` belongs to one checkout.
+
 Edit `content`, run `plan` again, and it shows an update to the one file. Change `path`
 and it shows a replacement, since the provider marks `path` as a value that cannot change
 in place.
@@ -91,12 +94,17 @@ On top of these:
 | `clay state mv <a> <b>`                                         | Renames a resource in state, so the next plan does not recreate it                                                                                                                                                           |
 | `clay state rm <addr>`                                          | Forgets a resource, and its deposed objects, without destroying them                                                                                                                                                         |
 | `clay force-unlock <id>`                                        | Releases the lock of a run that died, by its id; a lock with another id stays                                                                                                                                                |
+| `clay workspace new <name>`                                     | Makes a workspace with an empty state, and selects it                                                                                                                                                                        |
+| `clay workspace select <name>`                                  | Runs the commands that follow on a workspace that exists                                                                                                                                                                     |
+| `clay workspace show`                                           | Prints the selected workspace                                                                                                                                                                                                |
+| `clay workspace list`                                           | Lists the workspaces, with `*` before the selected one                                                                                                                                                                       |
 
-`init`, `plan`, `apply`, `destroy`, `state mv` and `state rm` take the state lock, and
-stop at once when another run holds it. `--lock-timeout <seconds>` makes them wait: the
-command says who holds the lock and tries again, 1 second later, then twice as long each
-time up to 16, until the time is gone. Ctrl-C while it waits exits at once. A run that
-dies keeps the lock; the error names its id, and `clay force-unlock <id>` releases it.
+`init`, `plan`, `apply`, `destroy`, `state mv`, `state rm` and `workspace new` take the
+state lock, and stop at once when another run holds it. `--lock-timeout <seconds>` makes
+them wait: the command says who holds the lock and tries again, 1 second later, then twice
+as long each time up to 16, until the time is gone. Ctrl-C while it waits exits at once. A
+run that dies keeps the lock; the error names its id, and `clay force-unlock <id>` releases
+it.
 
 A saved plan carries the configuration it was made from and the state it was planned
 against. `apply` runs that configuration, not the one on disk now, and refuses the plan

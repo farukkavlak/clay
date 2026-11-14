@@ -864,6 +864,37 @@ same one, as an `init` stopped after the copy leaves it, `init` takes it as it i
 `.journal` with no state beside it is refused, and `init` names it to remove. Two
 addresses on one server that share a lock address are moved under that one lock.
 
+## Workspaces
+
+A workspace is a copy of one configuration with a state of its own, in the same backend.
+Use one for a feature branch or a short-lived copy to try a change on. It does not keep
+`prod` apart from `dev`: every workspace uses the same backend and the same credentials.
+Give each environment its own root module, and share code between them with modules.
+
+The `default` workspace always exists, and its state is where it would be without
+workspaces. `clay workspace new <name>` makes a workspace with an empty state and selects
+it. `select` selects one that exists, `show` prints the selected one and `list` lists them
+all, with `*` before the selected one. Where the backend keeps one state, `list` shows
+`default` alone.
+
+The selected name is kept in `.clay/workspace`, and with no such file it is `default`.
+`plan`, `apply`, `destroy`, `output`, `state` and `force-unlock` run on the selected
+workspace. `init` and `validate` do not read the selection. A selected named workspace
+that has no state is refused, so a typo never starts from an empty state.
+
+A name is lowercase letters, digits and `-`, 1 to 63 of them, starting and ending with a
+letter or a digit.
+
+`local` keeps a workspace in `clay.workspaces/<name>/`, in the directory of the default
+state, under the file name the default state has. `new` makes that folder. `http`, `s3`
+and `azure` keep one state, and refuse a workspace other than `default`.
+
+`plan`, `apply` and `destroy` name a workspace other than `default` in what they print
+first, and in the question before an apply.
+
+`clay init` moves only the state of `default`. Where the backend block names another
+place and other workspaces exist, it refuses and changes nothing.
+
 ## Saved plans
 
 A saved plan carries the configuration it was made from, the values given with `--var`,

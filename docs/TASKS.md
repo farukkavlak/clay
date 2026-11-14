@@ -1128,7 +1128,7 @@ Terraform has it since backends replaced `-state`.
       empty every `.clay` file
 - [x] A root variable takes a value from outside the configuration: `-var`, a variables
       file and the environment
-- [ ] Workspaces: `clay workspace new | select | list`, one state per workspace
+- [x] Workspaces: `clay workspace new | select | list`, one state per workspace
 - [ ] `plan -detailed-exitcode`, so a script can tell no changes from changes; `plan` exits
       0 either way
 - [ ] The plan lists what a resource to create holds, and names the attribute that forces a
