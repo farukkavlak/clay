@@ -188,7 +188,12 @@ function isAddresses(addresses: unknown): boolean {
 function isVariableInputs(inputs: unknown): boolean {
   if (inputs === undefined) return true;
 
-  return Array.isArray(inputs) && inputs.every((input) => isRecord(input) && typeof input.name === 'string' && isName(input.name) && typeof input.text === 'string');
+  return (
+    Array.isArray(inputs) &&
+    inputs.every(
+      (input) => isRecord(input) && (input.from === 'var' || input.from === 'env') && typeof input.name === 'string' && isName(input.name) && typeof input.text === 'string'
+    )
+  );
 }
 
 /** Resources are checked separately, the same way state's are. */

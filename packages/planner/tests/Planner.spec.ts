@@ -1,7 +1,7 @@
 import { Address, isUnknown, ModuleAddress, Output, State, STATE_VERSION, types, UNKNOWN } from '@clay/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { DesiredResource, hasChanges, outputChanges, plan, PLAN_FILE_VERSION, PlanAction, serializePlan, validatePlanFile } from '../src/index';
+import { DesiredResource, hasChanges, outputChanges, plan, PLAN_FILE_VERSION, PlanAction, serializePlan, validatePlanFile, VariableInput } from '../src/index';
 
 const text = (value: string): Output => ({ value, type: types.string });
 
@@ -433,10 +433,13 @@ describe('Planner', () => {
 
     it.each([
       ['none', undefined, true],
-      ['a name and its text', [{ name: 'port', text: '80' }], true],
+      ['a name and its text from --var', [{ from: 'var', name: 'port', text: '80' }], true],
+      ['a name and its text from the environment', [{ from: 'env', name: 'port', text: '80' }], true],
       ['an object, not a list', { port: '80' }, false],
-      ['a name that is not one', [{ name: 'a b', text: '80' }], false],
-      ['a text that is not a string', [{ name: 'port', text: 80 }], false],
+      ['a name that is not one', [{ from: 'var', name: 'a b', text: '80' }], false],
+      ['a text that is not a string', [{ from: 'var', name: 'port', text: 80 }], false],
+      ['no source', [{ name: 'port', text: '80' }], false],
+      ['a source that is not one', [{ from: 'file', name: 'port', text: '80' }], false],
     ])('takes as the values given to variables %s', (_, variables, valid) => {
       const planFile = {
         version: PLAN_FILE_VERSION,
@@ -458,9 +461,9 @@ describe('Planner', () => {
     });
 
     it('saves the values given to variables, in order', () => {
-      const variables = [
-        { name: 'port', text: '80' },
-        { name: 'port', text: '81' },
+      const variables: VariableInput[] = [
+        { from: 'env', name: 'port', text: '80' },
+        { from: 'var', name: 'port', text: '81' },
       ];
       const plan = { serial: 0, actions: [], outputs: {}, prevRun: {}, prior: {}, imported: {}, schemas: {}, dataSources: {}, readAtApply: [], variables };
 

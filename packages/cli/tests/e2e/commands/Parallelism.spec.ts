@@ -25,6 +25,8 @@ describe('--parallelism', () => {
     process.chdir(dir);
     printed = [];
     const record = (...args: unknown[]) => printed.push(args.join(' '));
+    // The commands read the environment, so a CLAY_VAR_ the test runner holds would reach the plan.
+    for (const key of Object.keys(process.env)) if (key.startsWith('CLAY_VAR_')) vi.stubEnv(key, undefined);
     vi.spyOn(console, 'log').mockImplementation(record);
     vi.spyOn(console, 'error').mockImplementation(record);
     vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
@@ -33,6 +35,7 @@ describe('--parallelism', () => {
 
   afterEach(async () => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
     process.chdir(cwd);
     await fs.rm(dir, { recursive: true, force: true });
   });
@@ -49,7 +52,7 @@ describe('--parallelism', () => {
     await run(createPlanCommand, ['--parallelism', '4']);
     await run(createApplyCommand, ['-y', '--parallelism', '3']);
 
-    expect(plan.mock.calls).toEqual([[{ refresh: true, parallelism: 4, destroy: false }], [{ refresh: true, parallelism: 3, destroy: false }]]);
+    expect(plan.mock.calls).toEqual([[{ refresh: true, parallelism: 4, destroy: false, variables: [] }], [{ refresh: true, parallelism: 3, destroy: false, variables: [] }]]);
   });
 
   it('leaves the engine its own number when none is given', async () => {

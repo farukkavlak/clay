@@ -1,18 +1,27 @@
 import { AttributeValue, checkConstant, parseExpression, Statement, VariableBlock } from '@clay/parser';
 import { VariableInput } from '@clay/planner';
 
-/** Where a value given with `--var` is placed, as a file would be, so an error in it names the flag. */
-export const givenAt = (name: string): string => `--var ${name}`;
+const ENV_PREFIX = 'CLAY_VAR_';
+
+/** Every `CLAY_VAR_<name>` in `env`, as given; whether the root declares the name is checked when it is read. */
+export function envInputs(env: Readonly<Record<string, string | undefined>>): VariableInput[] {
+  return Object.entries(env).flatMap(([key, text]) =>
+    key.startsWith(ENV_PREFIX) && text !== undefined ? [{ from: 'env' as const, name: key.slice(ENV_PREFIX.length), text }] : []
+  );
+}
+
+/** Where a value given from outside is placed, as a file would be, so an error in it names the flag or the environment variable. */
+export const givenAt = ({ from, name }: Pick<VariableInput, 'from' | 'name'>): string => (from === 'env' ? `${ENV_PREFIX}${name}` : `--var ${name}`);
 
 /** A shell gives text, so a variable that takes a string, a number or a bool, or names no type, reads it as written. */
 const PLAIN = new Set(['string', 'number', 'bool']);
 
-function written({ name, text }: VariableInput, variable: VariableBlock): AttributeValue {
-  const file = givenAt(name);
-  if (!variable.valueType || PLAIN.has(variable.valueType.kind)) return { type: 'String', value: text, position: { file, line: 1, column: 1 } };
+function written(input: VariableInput, variable: VariableBlock): AttributeValue {
+  const file = givenAt(input);
+  if (!variable.valueType || PLAIN.has(variable.valueType.kind)) return { type: 'String', value: input.text, position: { file, line: 1, column: 1 } };
 
-  const value = parseExpression(text, file);
-  checkConstant(value, 'A value given with --var');
+  const value = parseExpression(input.text, file);
+  checkConstant(value, `A value given with ${input.from === 'env' ? file : '--var'}`);
   return value;
 }
 
@@ -21,12 +30,22 @@ function lastOfEach(inputs: readonly VariableInput[]): VariableInput[] {
   return [...new Map(inputs.map((input) => [input.name, input])).values()];
 }
 
+function variablesOf(program: Statement[]): Map<string, VariableBlock> {
+  return new Map(program.flatMap((stmt) => (stmt.type === 'Variable' ? [[stmt.name, stmt] as const] : [])));
+}
+
+/** The environment may hold values for other configurations, so one for a name the root does not declare is not read. */
+export function inputsFor(program: Statement[], inputs: readonly VariableInput[]): VariableInput[] {
+  const declared = variablesOf(program);
+  return inputs.filter((input) => input.from !== 'env' || declared.has(input.name));
+}
+
 /** A later value for a name replaces an earlier one, which is then never read. */
 function givenValues(inputs: readonly VariableInput[], program: Statement[]): Map<string, AttributeValue> {
-  const declared = new Map(program.flatMap((stmt) => (stmt.type === 'Variable' ? [[stmt.name, stmt] as const] : [])));
+  const declared = variablesOf(program);
   const values = new Map<string, AttributeValue>();
 
-  for (const input of lastOfEach(inputs)) {
+  for (const input of lastOfEach(inputsFor(program, inputs))) {
     const variable = declared.get(input.name);
     if (!variable) throw new Error(`--var gives a value to "${input.name}", which the root module does not declare as a variable`);
 

@@ -72,6 +72,8 @@ export function changesState(action: PlanAction): boolean {
 
 /** A value given to a root variable from outside the configuration, as it was written there. */
 export interface VariableInput {
+  /** `var` from `--var`, `env` from a `CLAY_VAR_` environment variable. */
+  from: 'var' | 'env';
   name: string;
   text: string;
 }
@@ -96,12 +98,12 @@ export interface Plan {
   readAtApply: string[];
   /** Planned for a root module that declares nothing, so the apply runs against none either. */
   destroy?: true;
-  /** What `--var` gave, in order, so the apply reads the values the plan read. Left out where nothing was given. */
+  /** What the environment and `--var` gave the root's variables, in order, so the apply reads the values the plan read. Left out where nothing was given. */
   variables?: VariableInput[];
 }
 
 /** Bump on any change to the file's shape after a release, so an older plan file is refused instead of misread. */
-export const PLAN_FILE_VERSION = '37.0';
+export const PLAN_FILE_VERSION = '38.0';
 
 export interface PlanFile extends Plan {
   version: string;

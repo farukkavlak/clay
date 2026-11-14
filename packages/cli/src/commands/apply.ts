@@ -16,7 +16,7 @@ import { parallelismOption } from '../parallelismOption';
 import { printable } from '../printable';
 import { refreshOption } from '../refreshOption';
 import { givenFiles } from '../givenFiles';
-import { varOption } from '../varOption';
+import { givenInputs, varOption } from '../varOption';
 import { releasedAfter } from '../released';
 import { stateFile } from '../stateFile';
 
@@ -222,14 +222,15 @@ export function createApplyCommand() {
           files = givenFiles(planFiles, planData.variables);
           code = await executeApplyFromPlan(cwd, planData, planFiles, { parallelism: options.parallelism, lockTimeout: options.lockTimeout });
         } else {
-          files = givenFiles(recording, options.var);
+          const variables = givenInputs(options.var);
+          files = givenFiles(recording, variables);
           code = await applyFromDisk(cwd, recording, {
             yes: options.yes ?? false,
             refresh: options.refresh ?? true,
             destroy: false,
             parallelism: options.parallelism,
             lockTimeout: options.lockTimeout,
-            variables: options.var,
+            variables,
           });
         }
       } catch (error: unknown) {

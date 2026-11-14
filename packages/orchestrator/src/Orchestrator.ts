@@ -16,6 +16,7 @@ import { checkAttributes } from './checks/checkAttributes';
 import { checkPreventDestroy } from './checks/preventDestroy';
 import { checkSameObjects } from './checks/sameObject';
 import { ConfigFiles } from './config/ConfigFiles';
+import { inputsFor } from './config/givenValues';
 import { RootValues } from './config/ModuleLoader';
 import { ProviderRegistry } from './providers/ProviderRegistry';
 import { ProvisionerRegistry } from './providers/ProvisionerRegistry';
@@ -48,8 +49,11 @@ interface Source {
  */
 const sourceOf = (destroy: boolean | undefined, variables: VariableInput[] = []): Source => (destroy ? { root: [] } : { values: { inputs: variables } });
 
-/** Kept in the plan, so the apply reads the values the plan read. */
-const keptInputs = (destroy: boolean, variables: VariableInput[]) => (!destroy && variables.length > 0 ? { variables } : {});
+/** Kept in the plan, so the apply reads the values the plan read, and no other value the environment held. */
+function keptInputs(destroy: boolean, root: Statement[], given: VariableInput[]): { variables?: VariableInput[] } {
+  const variables = destroy ? [] : inputsFor(root, given);
+  return variables.length > 0 ? { variables } : {};
+}
 
 export interface RunOptions {
   /** How many actions run at once. */
@@ -98,6 +102,7 @@ export class Orchestrator {
       dataSensitive,
       readAtApply,
       graph,
+      root,
     } = await this.resolveAndCheck(currentState, 'plan', moves, limit, imports, sourceOf(destroy, variables));
 
     imports.adopt(currentState, desiredResources);
@@ -125,7 +130,7 @@ export class Orchestrator {
       ...(Object.keys(dataSensitive).length > 0 && { dataSensitive }),
       readAtApply,
       ...(destroy && { destroy: true }),
-      ...keptInputs(destroy, variables),
+      ...keptInputs(destroy, root, variables),
     };
   }
 
@@ -200,9 +205,9 @@ export class Orchestrator {
     limit: Limit,
     imports: Imports,
     { root, values }: Source
-  ): Promise<DesiredState & { graph: Graph<GraphNode> }> {
+  ): Promise<DesiredState & { graph: Graph<GraphNode>; root: Statement[] }> {
     const { loader, graphBuilder, writtenCheck, desiredStateBuilder, modules } = this.newRun(limit);
-    const { loadedResources, loadedModules, schemas } = await loader.load(root, values);
+    const { mainProgram, loadedResources, loadedModules, schemas } = await loader.load(root, values);
 
     const graph = graphBuilder.buildExecutionGraph(loadedResources, loadedModules);
     checkAttributes(loadedResources, schemas);
@@ -217,6 +222,6 @@ export class Orchestrator {
     checkMovedAway(moved, desired.resources, declared);
     // A check may not know a count or for_each, so it makes no instance of the block.
     if (walk === 'plan') imports.checkPlanned(desired.resources);
-    return { ...desired, graph };
+    return { ...desired, graph, root: mainProgram };
   }
 }

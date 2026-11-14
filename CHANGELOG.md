@@ -98,6 +98,8 @@ a configuration means or how the state file is written.
 - `plan --var name=value` and `apply --var` give a root variable a value. A string, number
   or bool, or a variable with no type, reads the text as it is; other types read it as a constant. A saved plan keeps
   the values, and `apply plan.json` refuses `--var`
+- An environment variable `CLAY_VAR_<name>` gives a root variable a value, read as `--var`
+  reads it. `--var` wins over it, and one for a name the root does not declare is not read
 
 ### Fixed
 

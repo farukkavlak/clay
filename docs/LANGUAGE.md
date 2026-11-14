@@ -46,9 +46,16 @@ name the root module does not declare as a variable is refused. An error in a va
 the flag, `on --var ports line 1`, and shows the value. A value given to a sensitive
 variable is sensitive, as its default would be.
 
-A saved plan keeps the values it was planned with, and `apply` runs with them. Giving
-`--var` to `apply plan.json` is refused. `plan --destroy` reads no variable, so it takes
-a value given and does not read it.
+An environment variable `CLAY_VAR_<name>` gives a value too, read the same way:
+`CLAY_VAR_region=eu clay plan`. The name after `CLAY_VAR_` is read as written, so
+`CLAY_VAR_Region` is another variable. `--var` wins over it. The environment may hold
+values for other configurations, so one for a name the root does not declare is not read.
+An error in it names it, `on CLAY_VAR_region line 1`.
+
+A saved plan keeps the values it was planned with, and `apply` runs with them; it reads
+no `CLAY_VAR_` and refuses `--var`. The plan file holds each value as it was given, a
+sensitive one too, so keep it as safe as the state. `plan --destroy` reads no variable, so it takes a
+value given and does not read it.
 
 ## Count and for_each
 

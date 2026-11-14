@@ -15,7 +15,7 @@ import { lockTimeoutOption, lockWait } from '../lockTimeoutOption';
 import { parallelismOption } from '../parallelismOption';
 import { refreshOption } from '../refreshOption';
 import { givenFiles } from '../givenFiles';
-import { varOption } from '../varOption';
+import { givenInputs, varOption } from '../varOption';
 import { releasedAfter } from '../released';
 
 /** Returns the exit code. */
@@ -53,17 +53,18 @@ export function createPlanCommand() {
       const cwd = process.cwd();
       const files = new RecordingFiles(new DiskFiles(cwd));
 
+      const variables = givenInputs(options.var);
       let code: number;
       try {
         code = await executePlan(
           cwd,
           files,
-          { refresh: options.refresh ?? true, parallelism: options.parallelism, destroy: options.destroy ?? false, variables: options.var },
+          { refresh: options.refresh ?? true, parallelism: options.parallelism, destroy: options.destroy ?? false, variables },
           options.lockTimeout,
           options.out
         );
       } catch (error: unknown) {
-        console.error(styleText('red', 'Planning failed:'), describeError(error, givenFiles(files, options.var)));
+        console.error(styleText('red', 'Planning failed:'), describeError(error, givenFiles(files, variables)));
         code = 1;
       }
       if (code !== 0) process.exit(code);

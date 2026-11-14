@@ -65,7 +65,7 @@ describe('what plan refuses before anything runs', () => {
     const config = 'variable "unused" {}';
 
     await expect(newOrchestrator().plan(config)).rejects.toMatchObject({
-      message: 'variable "unused" has no value; give it one with --var unused=<value>',
+      message: 'variable "unused" has no value; give it one with --var unused=<value> or CLAY_VAR_unused',
       position: { file: 'main.clay', line: 1, column: 1 },
       block: 'variable "unused"',
     });
