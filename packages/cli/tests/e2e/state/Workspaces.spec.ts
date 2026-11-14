@@ -1,6 +1,7 @@
 import { emptyState } from '@clay/contracts';
 import { serializeState } from '@clay/state';
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import { once } from 'node:events';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -24,6 +25,17 @@ describe('a workspace selected in .clay/workspace', () => {
     }
 
     throw new Error('Expected the command to fail');
+  };
+
+  /** Runs the command with `answer` as its whole input, for a question it may ask. */
+  const answered = async (answer: string, ...args: string[]): Promise<{ code: number | null; stdout: string }> => {
+    const child = spawn('node', [clay, ...args], { cwd: dir });
+    let stdout = '';
+    child.stdout.on('data', (chunk: Buffer) => (stdout += chunk.toString()));
+    child.stdin.end(answer);
+    const [code] = await once(child, 'exit');
+
+    return { code: code as number | null, stdout: stripVTControlCharacters(stdout) };
   };
 
   const select = async (content: string) => {
@@ -114,6 +126,50 @@ describe('a workspace selected in .clay/workspace', () => {
     await select('../dev\n');
 
     expect(await clayOutput(dir, 'validate')).toContain('valid');
+  });
+
+  it.each([
+    ['plan', 'Planning in workspace "dev"...'],
+    ['apply', 'Calculating plan in workspace "dev"...'],
+    ['destroy', 'Calculating plan in workspace "dev"...'],
+  ])('is named where %s starts', async (command, header) => {
+    await makeDev();
+    await select('dev\n');
+
+    const { stdout } = await answered('no\n', command);
+
+    expect(stdout.split('\n')[0]).toBe(header);
+  });
+
+  it('is named where a saved plan is applied', async () => {
+    await makeDev();
+    await select('dev\n');
+    await clayOutput(dir, 'plan', '--out', 'saved.plan');
+
+    expect(await clayOutput(dir, 'apply', 'saved.plan')).toMatch(/^Applying from saved plan in workspace "dev"\.\.\.\n/);
+  });
+
+  it.each([['apply'], ['destroy']])('is named in the question %s asks, and "no" changes nothing', async (command) => {
+    await makeDev();
+    await select('dev\n');
+    if (command === 'destroy') await clayOutput(dir, 'apply', '--yes');
+    const before = await devResources();
+
+    const { code, stdout } = await answered('no\n', command);
+
+    expect(stdout).toContain('Do you want to perform these actions in workspace "dev"?');
+    expect(code).toBe(1);
+    expect(await devResources()).toEqual(before);
+  });
+
+  it.each([
+    ['plan', 'Planning...'],
+    ['apply', 'Calculating plan...'],
+  ])('is not named where %s runs on the default workspace', async (command, header) => {
+    const { stdout } = await answered('no\n', command);
+
+    expect(stdout.split('\n')[0]).toBe(header);
+    expect(stdout).not.toContain('workspace');
   });
 });
 

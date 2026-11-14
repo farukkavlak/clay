@@ -8,7 +8,7 @@ import { styleText } from 'node:util';
 import { newOrchestrator } from '../engine';
 import { describeError } from '../describeError';
 import { stoppedAtOnce } from '../interruptible';
-import { stateFile } from '../stateFile';
+import { inWorkspace, selectedState } from '../stateFile';
 import { printable } from '../printable';
 import { displayPlan } from '../showPlan';
 import { lockTimeoutOption, lockWait } from '../lockTimeoutOption';
@@ -20,10 +20,11 @@ import { releasedAfter } from '../released';
 
 /** Returns the exit code. */
 async function executePlan(cwd: string, files: RecordingFiles, options: PlanOptions, lockTimeout: number | undefined, outFile?: string): Promise<number> {
-  const manager = new StateManager(await stateFile(cwd, files), lockWait(lockTimeout));
+  const { workspace, backend } = await selectedState(cwd, files);
+  const manager = new StateManager(backend, lockWait(lockTimeout));
   const orchestrator = newOrchestrator(files, manager);
 
-  console.log(styleText('blue', 'Planning...'));
+  console.log(styleText('blue', `Planning${inWorkspace(workspace)}...`));
 
   return releasedAfter(manager, async () => {
     const planned = await stoppedAtOnce([manager], async () => {

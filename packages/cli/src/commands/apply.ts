@@ -18,7 +18,7 @@ import { refreshOption } from '../refreshOption';
 import { givenFiles } from '../givenFiles';
 import { givenInputs, varFlagOf, varOptions } from '../varOptions';
 import { releasedAfter } from '../released';
-import { stateFile } from '../stateFile';
+import { inWorkspace, selectedState } from '../stateFile';
 
 /** Counts as the plan summary does: a replace is one add and one destroy. */
 function summarize(applied: PlanAction[], forgotten: number): string {
@@ -116,8 +116,8 @@ async function runAndReport(start: (signal: AbortSignal) => AsyncGenerator<RunEv
   return 0;
 }
 
-async function confirmApply(autoConfirm: boolean): Promise<boolean> {
-  return autoConfirm || confirm('Do you want to perform these actions?');
+async function confirmApply(autoConfirm: boolean, workspace: string): Promise<boolean> {
+  return autoConfirm || confirm(`Do you want to perform these actions${inWorkspace(workspace)}?`);
 }
 
 interface RunFlags {
@@ -137,10 +137,11 @@ interface ApplyOptions extends RunFlags {
  * releases it and exits at once. Returns the exit code.
  */
 export async function applyFromDisk(cwd: string, recording: RecordingFiles, options: ApplyOptions): Promise<number> {
-  const manager = new StateManager(await stateFile(cwd, recording), lockWait(options.lockTimeout));
+  const { workspace, backend } = await selectedState(cwd, recording);
+  const manager = new StateManager(backend, lockWait(options.lockTimeout));
 
   return releasedAfter(manager, async () => {
-    console.log(styleText('blue', 'Calculating plan...'));
+    console.log(styleText('blue', `Calculating plan${inWorkspace(workspace)}...`));
     const plan = await stoppedAtOnce([manager], async () => {
       await manager.lock(options.destroy ? 'destroy' : 'apply');
       const { refresh, parallelism, destroy, variables } = options;
@@ -152,7 +153,7 @@ export async function applyFromDisk(cwd: string, recording: RecordingFiles, opti
     displayPlan(plan);
     if (changesNothing(plan)) return 0;
 
-    if (!(await stoppedAtOnce([manager], () => confirmApply(options.yes)))) {
+    if (!(await stoppedAtOnce([manager], () => confirmApply(options.yes, workspace)))) {
       console.error(styleText('yellow', `${doing(plan)} cancelled.`));
       return 1;
     }
@@ -182,9 +183,10 @@ async function readPlanFile(planFileArg: string, files: ConfigFiles): Promise<Pl
 
 async function executeApplyFromPlan(cwd: string, planFile: PlanFile, files: ConfigFiles, options: RunFlags): Promise<number> {
   const { parallelism } = options;
-  const manager = new StateManager(await stateFile(cwd, files), lockWait(options.lockTimeout));
+  const { workspace, backend } = await selectedState(cwd, files);
+  const manager = new StateManager(backend, lockWait(options.lockTimeout));
 
-  console.log(styleText('blue', 'Applying from saved plan...'));
+  console.log(styleText('blue', `Applying from saved plan${inWorkspace(workspace)}...`));
   console.log(styleText('gray', `Plan created: ${planFile.timestamp}`));
 
   displayPlan(planFile);
