@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { growth, LINEAR } from '../../../../tests/growth';
+import { growth, LINEAR, repeated } from '../../../../tests/growth';
 import { streamed } from '../../src/run/streamed';
 
 /** How long reading `size` events takes, all emitted before the reader comes. */
@@ -14,6 +14,6 @@ async function emitted(size: number): Promise<number> {
 
 describe('streamed', () => {
   it('gives events emitted at once in time that grows with them', async () => {
-    expect(await growth(8000, emitted)).toBeLessThan(LINEAR);
+    expect(await growth(8000, repeated(emitted, 10))).toBeLessThan(LINEAR);
   });
 });

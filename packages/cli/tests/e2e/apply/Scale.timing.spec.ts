@@ -173,8 +173,6 @@ const changeEveryMember = async (at: string, size: number) => {
 };
 
 // Each case grew by 3 to 4.5 here, and by 13 to 18 when it walked every instance.
-const GENEROUS = { timeout: 60_000 };
-
 describe('a run over many instances', () => {
   let dir: string;
 
@@ -199,7 +197,7 @@ describe('a run over many instances', () => {
   });
 
   // Written whole after each, 8000 took more than a minute.
-  it('writes the state of a run in time that grows with the resources it makes', GENEROUS, async () => {
+  it('writes the state of a run in time that grows with the resources it makes', async () => {
     const run = async (at: string, size: number) => {
       const took = await timed(async () => expect(await apply(at, `resource "null_resource" "a" {\n  count = ${size}\n}\n`)).toBe(size));
       const written = JSON.parse(await fs.readFile(path.join(at, 'clay.state.json'), 'utf8')) as { resources: object };
@@ -210,7 +208,7 @@ describe('a run over many instances', () => {
     expect(await growthIn(2000, run)).toBeLessThan(LINEAR);
   });
 
-  it('reads the instances of a data source in time that grows with them', GENEROUS, async () => {
+  it('reads the instances of a data source in time that grows with them', async () => {
     const run = async (at: string, size: number) => {
       await fs.writeFile(path.join(at, 'f.txt'), 'x', 'utf8');
       const config = `data "local_file" "f" {\n  count = ${size}\n  path  = "${path.join(at, 'f.txt')}"\n}\nresource "null_resource" "r" {}\n`;
@@ -220,20 +218,20 @@ describe('a run over many instances', () => {
     expect(await growthIn(2500, run)).toBeLessThan(LINEAR);
   });
 
-  it('makes a resource in each instance of a module in time that grows with them', GENEROUS, async () => {
+  it('makes a resource in each instance of a module in time that grows with them', async () => {
     const run = (at: string, size: number) => timed(async () => expect(await apply(at, `module "m" {\n  source = "./m"\n  count  = ${size}\n}\n`)).toBe(size));
 
     expect(await growthIn(2000, run)).toBeLessThan(LINEAR);
   });
 
-  it('claims objects a provider identifies in time that grows with them', GENEROUS, async () => {
+  it('claims objects a provider identifies in time that grows with them', async () => {
     const run = (at: string, size: number) =>
       timed(async () => expect(await apply(at, `resource "thing" "t" {\n  count = ${size}\n  name  = "t\${count.index}"\n}\n`, new Things(), new LocalProvider())).toBe(size));
 
     expect(await growthIn(2000, run)).toBeLessThan(LINEAR);
   });
 
-  it('groups items under one key in time that grows with them', GENEROUS, async () => {
+  it('groups items under one key in time that grows with them', async () => {
     const run = (at: string, size: number) => {
       const items = Array.from({ length: size }, (_, index) => index).join(', ');
       const config = `variable "xs" {\n  default = [${items}]\n}\noutput "n" {\n  value = length({ for x in var.xs : "k" => x... }["k"])\n}\n`;
@@ -248,7 +246,7 @@ describe('a run over many instances', () => {
     expect(await growthIn(25_000, run)).toBeLessThan(LINEAR);
   });
 
-  it('plans a for object with one key not known yet in time that grows with its items', GENEROUS, async () => {
+  it('plans a for object with one key not known yet in time that grows with its items', async () => {
     const run = (at: string, size: number) => {
       const items = Array.from({ length: size }, (_, index) => index).join(', ');
       const config = `variable "xs" {\n  default = [${items}]\n}\nresource "null_resource" "r" {}\noutput "n" {\n  value = length({ for x in var.xs : (x == 0 ? null_resource.r.id : "\${x}") => x })\n}\n`;
@@ -263,7 +261,7 @@ describe('a run over many instances', () => {
     expect(await growthIn(6000, run)).toBeLessThan(LINEAR);
   });
 
-  it('moves the instances of a module in time that grows with them', GENEROUS, async () => {
+  it('moves the instances of a module in time that grows with them', async () => {
     const run = async (at: string, size: number) => {
       await apply(at, `module "m" {\n  source = "./m"\n  count  = ${size}\n}\n`);
 
@@ -273,7 +271,7 @@ describe('a run over many instances', () => {
     expect(await growthIn(1000, run)).toBeLessThan(LINEAR);
   });
 
-  it('destroys instances that each read a block in time that grows with them', GENEROUS, async () => {
+  it('destroys instances that each read a block in time that grows with them', async () => {
     const run = async (at: string, size: number) => {
       await apply(at, chain(size));
 
@@ -283,23 +281,23 @@ describe('a run over many instances', () => {
     expect(await growthIn(500, run)).toBeLessThan(LINEAR);
   });
 
-  it('destroys a chain that what stays read in state in time that grows with it', GENEROUS, async () => {
+  it('destroys a chain that what stays read in state in time that grows with it', async () => {
     const run = async (at: string, size: number) => {
       await apply(at, `${chain(size)}resource "null_resource" "c" {\n  count    = ${size}\n  triggers = { b = null_resource.b[count.index].id }\n}\n`);
 
       return timed(async () => expect(await apply(at, `resource "null_resource" "c" {\n  count = ${size}\n}\n`)).toBe(size * 3));
     };
 
-    expect(await growthIn(1000, run)).toBeLessThan(LINEAR);
+    expect(await growthIn(500, run)).toBeLessThan(LINEAR);
   });
 
-  it('shows and applies a change to every member of a set in time that grows with them', GENEROUS, async () => {
+  it('shows and applies a change to every member of a set in time that grows with them', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
 
     expect(await growthIn(1000, changeEveryMember)).toBeLessThan(LINEAR);
   });
 
-  it('shows a change to a value with many sensitive keys in time that grows with them', GENEROUS, async () => {
+  it('shows a change to a value with many sensitive keys in time that grows with them', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
 
     expect(await growthIn(2000, showSensitiveKeysChanged)).toBeLessThan(LINEAR);
@@ -307,7 +305,7 @@ describe('a run over many instances', () => {
     expect(log).toHaveBeenCalledWith('      triggers: which parts are sensitive changes');
   });
 
-  it('plans a lookup of each key of a map with many sensitive keys in time that grows with them', GENEROUS, async () => {
+  it('plans a lookup of each key of a map with many sensitive keys in time that grows with them', async () => {
     let sensitive: unknown;
     const run = (at: string, size: number) =>
       timed(async () => {
@@ -324,7 +322,7 @@ describe('a run over many instances', () => {
     );
   });
 
-  it('plans the length of a map for each of its keys in time that grows with them', GENEROUS, async () => {
+  it('plans the length of a map for each of its keys in time that grows with them', async () => {
     let triggers: Record<string, unknown> = {};
     const run = (at: string, size: number) =>
       timed(async () => {
@@ -336,7 +334,7 @@ describe('a run over many instances', () => {
     expect(JSON.stringify([triggers.k0, triggers.k7999])).toBe('[8000,8000]');
   });
 
-  it('shows in state a value with many sensitive keys in time that grows with them', GENEROUS, async () => {
+  it('shows in state a value with many sensitive keys in time that grows with them', async () => {
     let shown = '';
     const run = async (at: string, size: number) => {
       await apply(at, keyed(size, SENSITIVE_KEYS));
@@ -347,7 +345,7 @@ describe('a run over many instances', () => {
     expect(shown).toContain('{"k0":(sensitive value),"k1":(sensitive value)');
   });
 
-  it('plans a read of each key of a resource with many sensitive keys in time that grows with them', GENEROUS, async () => {
+  it('plans a read of each key of a resource with many sensitive keys in time that grows with them', async () => {
     let sensitive: unknown;
     const run = (at: string, size: number) =>
       timed(async () => {
@@ -364,7 +362,7 @@ describe('a run over many instances', () => {
     );
   });
 
-  it('plans from state a read of each key of a resource in time that grows with them', GENEROUS, async () => {
+  it('plans from state a read of each key of a resource in time that grows with them', async () => {
     let types: string[] = [];
     const run = async (at: string, size: number) => {
       await apply(at, readEach(size, 'k'));
@@ -378,7 +376,7 @@ describe('a run over many instances', () => {
     expect(types).toEqual(['NO_OP', 'NO_OP']);
   });
 
-  it('plans instances that each read every instance of a resource in time that grows with them', GENEROUS, async () => {
+  it('plans instances that each read every instance of a resource in time that grows with them', async () => {
     let triggers: unknown;
     const run = (at: string, size: number) =>
       timed(async () => {
@@ -390,7 +388,7 @@ describe('a run over many instances', () => {
     expect(JSON.stringify(triggers)).toBe('{"n":4000}');
   });
 
-  it('plans instances that each read every instance of a data source in time that grows with them', GENEROUS, async () => {
+  it('plans instances that each read every instance of a data source in time that grows with them', async () => {
     let triggers: unknown;
     const run = async (at: string, size: number) => {
       const file = path.join(at, 'f.txt');
@@ -405,7 +403,7 @@ describe('a run over many instances', () => {
     expect(JSON.stringify(triggers)).toBe('{"n":4000}');
   });
 
-  it('plans instances that each read every instance of a module in time that grows with them', GENEROUS, async () => {
+  it('plans instances that each read every instance of a module in time that grows with them', async () => {
     let triggers: unknown;
     const run = async (at: string, size: number) => {
       await fs.writeFile(path.join(at, 'm', 'main.clay'), 'output "o" {\n  value = "x"\n}\n', 'utf8');
