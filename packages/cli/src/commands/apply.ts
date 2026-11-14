@@ -1,6 +1,6 @@
 import { Address, jsonText, Output, SENSITIVE } from '@clay/contracts';
 import { ConfigFiles, DiskFiles, InMemoryFiles, RecordingFiles, RunEvent } from '@clay/orchestrator';
-import { changedOutside, parsePlanFile, Plan, PlanAction, PlanFile } from '@clay/planner';
+import { changedOutside, parsePlanFile, Plan, PlanAction, PlanFile, VariableInput } from '@clay/planner';
 import { StateManager } from '@clay/state';
 import { Command } from 'commander';
 import fs from 'node:fs/promises';
@@ -15,6 +15,8 @@ import { lockTimeoutOption, lockWait } from '../lockTimeoutOption';
 import { parallelismOption } from '../parallelismOption';
 import { printable } from '../printable';
 import { refreshOption } from '../refreshOption';
+import { givenFiles } from '../givenFiles';
+import { varOption } from '../varOption';
 import { releasedAfter } from '../released';
 import { stateFile } from '../stateFile';
 
@@ -127,6 +129,7 @@ interface ApplyOptions extends RunFlags {
   yes: boolean;
   refresh: boolean;
   destroy: boolean;
+  variables?: VariableInput[];
 }
 
 /**
@@ -140,7 +143,8 @@ export async function applyFromDisk(cwd: string, recording: RecordingFiles, opti
     console.log(styleText('blue', 'Calculating plan...'));
     const plan = await stoppedAtOnce([manager], async () => {
       await manager.lock(options.destroy ? 'destroy' : 'apply');
-      return newOrchestrator(cwd, recording, manager).plan({ refresh: options.refresh, parallelism: options.parallelism, destroy: options.destroy });
+      const { refresh, parallelism, destroy, variables } = options;
+      return newOrchestrator(cwd, recording, manager).plan({ refresh, parallelism, destroy, variables });
     });
     // What the plan read, so the run does not read files changed while the question was open.
     const files = new InMemoryFiles(recording.snapshot());
@@ -199,6 +203,7 @@ export function createApplyCommand() {
     .addOption(refreshOption())
     .addOption(parallelismOption())
     .addOption(lockTimeoutOption())
+    .addOption(varOption())
     .argument('[plan-file]', 'Plan file to apply (optional)')
     .action(async (planFileArg: string | undefined, options) => {
       const cwd = process.cwd();
@@ -210,18 +215,23 @@ export function createApplyCommand() {
         if (planFileArg && !planFileArg.startsWith('-')) {
           // The saved plan already chose whether to refresh.
           if (options.refresh !== undefined) throw new Error('--refresh is for a plan: a saved plan is applied as it was made');
+          if (options.var !== undefined) throw new Error('--var is for a plan: a saved plan is applied with the values it was made with');
           const planData = await readPlanFile(planFileArg, files);
 
-          files = new InMemoryFiles(planData.files);
-          code = await executeApplyFromPlan(cwd, planData, files, { parallelism: options.parallelism, lockTimeout: options.lockTimeout });
-        } else
+          const planFiles = new InMemoryFiles(planData.files);
+          files = givenFiles(planFiles, planData.variables);
+          code = await executeApplyFromPlan(cwd, planData, planFiles, { parallelism: options.parallelism, lockTimeout: options.lockTimeout });
+        } else {
+          files = givenFiles(recording, options.var);
           code = await applyFromDisk(cwd, recording, {
             yes: options.yes ?? false,
             refresh: options.refresh ?? true,
             destroy: false,
             parallelism: options.parallelism,
             lockTimeout: options.lockTimeout,
+            variables: options.var,
           });
+        }
       } catch (error: unknown) {
         console.error(styleText('red', 'Apply failed:'), describeError(error, files));
         code = 1;

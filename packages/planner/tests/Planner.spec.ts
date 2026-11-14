@@ -431,6 +431,42 @@ describe('Planner', () => {
       expect(validatePlanFile(planFile)).toBe(valid);
     });
 
+    it.each([
+      ['none', undefined, true],
+      ['a name and its text', [{ name: 'port', text: '80' }], true],
+      ['an object, not a list', { port: '80' }, false],
+      ['a name that is not one', [{ name: 'a b', text: '80' }], false],
+      ['a text that is not a string', [{ name: 'port', text: 80 }], false],
+    ])('takes as the values given to variables %s', (_, variables, valid) => {
+      const planFile = {
+        version: PLAN_FILE_VERSION,
+        timestamp: new Date().toISOString(),
+        files: { 'main.clay': '' },
+        serial: 0,
+        actions: [],
+        outputs: {},
+        prevRun: {},
+        prior: {},
+        imported: {},
+        schemas: {},
+        dataSources: {},
+        readAtApply: [],
+        variables,
+      };
+
+      expect(validatePlanFile(planFile)).toBe(valid);
+    });
+
+    it('saves the values given to variables, in order', () => {
+      const variables = [
+        { name: 'port', text: '80' },
+        { name: 'port', text: '81' },
+      ];
+      const plan = { serial: 0, actions: [], outputs: {}, prevRun: {}, prior: {}, imported: {}, schemas: {}, dataSources: {}, readAtApply: [], variables };
+
+      expect(JSON.parse(serializePlan(plan, { 'main.clay': '' })).variables).toEqual(variables);
+    });
+
     it('should reject a plan file without the state serial it was made from', () => {
       const planFile = { version: PLAN_FILE_VERSION, timestamp: new Date().toISOString(), files: { 'main.clay': '' }, actions: [] };
 

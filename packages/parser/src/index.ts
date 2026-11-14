@@ -5,3 +5,4 @@ export * from './Parser';
 export * from './ConfigError';
 export * from './Position';
 export * from './reference';
+export * from './checkConstant';

@@ -1,4 +1,4 @@
-import { Program, spell } from './ast';
+import { AttributeValue, Program, spell } from './ast';
 import { decodeBlock, SCHEMA } from './blocks/schema';
 import { BodyParser } from './BodyParser';
 import { ConfigError } from './ConfigError';
@@ -72,4 +72,13 @@ export function parseModule(files: ModuleFile[]): Program {
   checkDeclaredOnce(program);
   checkForNames(program, forNames);
   return program;
+}
+
+/** A value written on its own, as one given from outside the configuration is; anything after it is refused. */
+export function parseExpression(text: string, file: string): AttributeValue {
+  const stream = new TokenStream(new Lexer(text, file).tokenize());
+  const value = new ExpressionParser(stream).parseValue();
+  if (!stream.isAtEnd()) stream.error('Expect the value to end here.');
+
+  return value;
 }

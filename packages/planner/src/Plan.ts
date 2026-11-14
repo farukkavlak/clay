@@ -70,6 +70,12 @@ export function changesState(action: PlanAction): boolean {
   return action.type !== 'NO_OP' || action.movedFrom !== undefined || action.importedFrom !== undefined || keptChange(action);
 }
 
+/** A value given to a root variable from outside the configuration, as it was written there. */
+export interface VariableInput {
+  name: string;
+  text: string;
+}
+
 export interface Plan {
   serial: number;
   actions: PlanAction[];
@@ -90,10 +96,12 @@ export interface Plan {
   readAtApply: string[];
   /** Planned for a root module that declares nothing, so the apply runs against none either. */
   destroy?: true;
+  /** What `--var` gave, in order, so the apply reads the values the plan read. Left out where nothing was given. */
+  variables?: VariableInput[];
 }
 
 /** Bump on any change to the file's shape after a release, so an older plan file is refused instead of misread. */
-export const PLAN_FILE_VERSION = '36.0';
+export const PLAN_FILE_VERSION = '37.0';
 
 export interface PlanFile extends Plan {
   version: string;

@@ -23,7 +23,32 @@ default: `object({ port = optional(number, 80) })`.
 
 A variable with no `default` must be given a value. In a module the call gives it. In the
 root module, `validate` takes it as unknown, of the type it names, and checks the rest;
-`plan` refuses it.
+`plan` and `apply` take it from `--var`.
+
+## Values from the command line
+
+`--var name=value` gives a root variable a value, in place of its default. `plan` and
+`apply` take it:
+
+```
+clay plan --var region=eu --var 'ports=[80, 443]'
+```
+
+A variable that takes a string, a number or a bool, or names no type, reads the text as
+it is: `--var region=eu` is the string `"eu"`, and `--var port=80` gives the number 80 to
+a variable of type `number`. Any other type reads the text as a value written in the
+configuration, `[80, 443]` or `{ name = "web" }`. Such a value is a constant, as a default
+is, so it reads no variable and calls no function. The text after the first `=` is the
+value, so it may hold `=` too.
+
+When one name is given twice, the last value wins and the ones before it are not read. A
+name the root module does not declare as a variable is refused. An error in a value names
+the flag, `on --var ports line 1`, and shows the value. A value given to a sensitive
+variable is sensitive, as its default would be.
+
+A saved plan keeps the values it was planned with, and `apply` runs with them. Giving
+`--var` to `apply plan.json` is refused. `plan --destroy` reads no variable, so it takes
+a value given and does not read it.
 
 ## Count and for_each
 
@@ -818,9 +843,9 @@ addresses on one server that share a lock address are moved under that one lock.
 
 ## Saved plans
 
-A saved plan carries the configuration it was made from, the state it was planned
-against, what the refresh read, what each data source read at plan gave and which ones the
-apply reads. `apply` runs that configuration, not the one on disk now, against what the
+A saved plan carries the configuration it was made from, the values given with `--var`,
+the state it was planned against, what the refresh read, what each data source read at
+plan gave and which ones the apply reads. `apply` runs that configuration, not the one on disk now, against what the
 refresh read, and refuses the plan if the state has changed since. Each resource is given
 what its block in that configuration says. A field of the wrong kind in the file is
 refused before anything runs.

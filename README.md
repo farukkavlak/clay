@@ -75,25 +75,25 @@ On top of these:
 
 `docs/LANGUAGE.md` says what each of these does, and `docs/GRAMMAR.md` how it is written.
 
-Not there yet: `destroy`, values for root variables from the command line, and more than
-one file per module. `docs/TASKS.md` has the full list.
+Not there yet: values for root variables from a file or the environment. `docs/TASKS.md`
+has the full list.
 
 ## Commands
 
-| Command                              | Does                                                                                                                             |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
-| `clay init [-y]`                     | Takes the backend the configuration names; moves a state left at the old place, or creates an empty one; `-y` skips the question |
-| `clay validate`                      | Resolves references and checks values with the schema and the provider; reads no state and no data source                        |
-| `clay plan [--destroy] [--out file]` | Shows what `apply` would do; `--destroy` plans to destroy every object in state; `--out` saves the plan with its configuration   |
-| `clay apply [plan] [-y]`             | Runs the plan it shows, or a saved one; `-y` skips the question                                                                  |
-| `clay destroy [-y]`                  | Destroys every object in state, each before what it reads; of the configuration it reads only the backend block                  |
-| `clay output [--json]`               | Prints the root outputs from the last apply; `--json` gives each with its type, a sensitive one too                              |
-| `clay state list`                    | Lists the resources in state, and `<addr> (deposed)` for an address that holds deposed objects                                   |
-| `clay state show <addr>`             | Prints one resource as it is in state, and each deposed object under it                                                          |
-| `clay state pull`                    | Prints the state as JSON, for a script or a backup; with no state, prints nothing and exits 0                                    |
-| `clay state mv <a> <b>`              | Renames a resource in state, so the next plan does not recreate it                                                               |
-| `clay state rm <addr>`               | Forgets a resource, and its deposed objects, without destroying them                                                             |
-| `clay force-unlock <id>`             | Releases the lock of a run that died, by its id; a lock with another id stays                                                    |
+| Command                                          | Does                                                                                                                                                                             |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `clay init [-y]`                                 | Takes the backend the configuration names; moves a state left at the old place, or creates an empty one; `-y` skips the question                                                 |
+| `clay validate`                                  | Resolves references and checks values with the schema and the provider; reads no state and no data source                                                                        |
+| `clay plan [--destroy] [--var n=v] [--out file]` | Shows what `apply` would do; `--destroy` plans to destroy every object in state; `--var` gives a root variable a value; `--out` saves the plan with its configuration and values |
+| `clay apply [plan] [--var n=v] [-y]`             | Runs the plan it shows, or a saved one with the values it was made with; `-y` skips the question                                                                                 |
+| `clay destroy [-y]`                              | Destroys every object in state, each before what it reads; of the configuration it reads only the backend block                                                                  |
+| `clay output [--json]`                           | Prints the root outputs from the last apply; `--json` gives each with its type, a sensitive one too                                                                              |
+| `clay state list`                                | Lists the resources in state, and `<addr> (deposed)` for an address that holds deposed objects                                                                                   |
+| `clay state show <addr>`                         | Prints one resource as it is in state, and each deposed object under it                                                                                                          |
+| `clay state pull`                                | Prints the state as JSON, for a script or a backup; with no state, prints nothing and exits 0                                                                                    |
+| `clay state mv <a> <b>`                          | Renames a resource in state, so the next plan does not recreate it                                                                                                               |
+| `clay state rm <addr>`                           | Forgets a resource, and its deposed objects, without destroying them                                                                                                             |
+| `clay force-unlock <id>`                         | Releases the lock of a run that died, by its id; a lock with another id stays                                                                                                    |
 
 `init`, `plan`, `apply`, `destroy`, `state mv` and `state rm` take the state lock, and
 stop at once when another run holds it. `--lock-timeout <seconds>` makes them wait: the

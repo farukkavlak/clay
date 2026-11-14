@@ -1,8 +1,10 @@
 import { Address, ModuleAddress, Type, types } from '@clay/contracts';
+import { VariableInput } from '@clay/planner';
 import { ConfigError, ModuleBlock, ModuleFile, OutputBlock, parseModule, ResourceBlock, Statement, spell, VariableBlock } from '@clay/parser';
 import path from 'node:path';
 
 import { ConfigFiles, moduleFiles } from './ConfigFiles';
+import { withGiven } from './givenValues';
 import { required } from '../values/declared';
 import { blockKey, callKey, DataInstance, dataSourceKey, ModuleCall, scopeOf } from '../keys';
 import { ScopeManager } from './ScopeManager';
@@ -11,8 +13,20 @@ function validationsOf(variable: VariableBlock) {
   return variable.validations && { validations: { rules: variable.validations, declaration: spell(variable) } };
 }
 
-/** What a root variable with no value does: a check takes it as unknown, and anything else refuses it. */
-export type Unset = 'refuse' | 'unknown';
+/** What the root module's variables are given from outside the configuration. */
+export interface RootValues {
+  inputs?: readonly VariableInput[];
+  /** What a root variable with no value does: a check takes it as unknown, and anything else refuses it. */
+  unset?: 'refuse' | 'unknown';
+}
+
+/** A module's caller gives its variables their values; only the root's come from outside. */
+function noValue(variable: VariableBlock, address: ModuleAddress): ConfigError {
+  const scope = scopeOf(address);
+  const hint = address.isRoot() ? `; give it one with --var ${variable.name}=<value>` : '';
+
+  return new ConfigError(`variable "${variable.name}" has no value${hint}`, variable.position, { block: spell(variable), module: scope || undefined });
+}
 
 export interface LoadedResource {
   uniqueId: string;
@@ -49,12 +63,13 @@ export class ModuleLoader {
   ) {}
 
   /** `root` stands in for the root module's files, which are then not read. */
-  async loadModuleTree(root?: Statement[], unset?: Unset): Promise<Loaded & { root: Statement[] }> {
+  async loadModuleTree(root?: Statement[], { inputs = [], unset }: RootValues = {}): Promise<Loaded & { root: Statement[] }> {
     const loaded: Loaded = { resources: [], modules: [] };
     this.contents.clear();
 
-    const rootProgram = root ?? this.parseConfig('.');
-    if (rootProgram === undefined) throw new Error('no .clay file in the directory');
+    const written = root ?? this.parseConfig('.');
+    if (written === undefined) throw new Error('no .clay file in the directory');
+    const rootProgram = withGiven(written, inputs);
 
     const parentAddress = ModuleAddress.root;
     loaded.modules.push({ address: parentAddress, program: rootProgram });
@@ -168,15 +183,14 @@ export class ModuleLoader {
     }
   }
 
-  private declareVariables(program: Statement[], address: ModuleAddress, unset: Unset = 'refuse'): void {
+  private declareVariables(program: Statement[], address: ModuleAddress, unset: RootValues['unset'] = 'refuse'): void {
     const scope = scopeOf(address);
 
     // A variable with an input or a default is not missing.
     for (const stmt of program) {
       if (stmt.type !== 'Variable' || this.scopeManager.getVariable(scope, stmt.name)) continue;
       const value = stmt.attributes.default;
-      if (value === undefined && unset === 'refuse')
-        throw new ConfigError(`variable "${stmt.name}" has no value`, stmt.position, { block: spell(stmt), module: scope || undefined });
+      if (value === undefined && unset === 'refuse') throw noValue(stmt, address);
 
       this.scopeManager.setVariable(scope, stmt.name, {
         value,

@@ -184,6 +184,13 @@ function isAddresses(addresses: unknown): boolean {
   return Array.isArray(addresses) && addresses.every((address) => typeof address === 'string');
 }
 
+/** Each names a variable as the configuration would; whether the root declares it is checked when the apply loads it. */
+function isVariableInputs(inputs: unknown): boolean {
+  if (inputs === undefined) return true;
+
+  return Array.isArray(inputs) && inputs.every((input) => isRecord(input) && typeof input.name === 'string' && isName(input.name) && typeof input.text === 'string');
+}
+
 /** Resources are checked separately, the same way state's are. */
 function isPlan(plan: Partial<Plan>): plan is Plan {
   return (
@@ -208,7 +215,7 @@ export function validatePlanFile(planFile: unknown): planFile is PlanFile {
   if (!planFile || typeof planFile !== 'object') return false;
 
   const pf = planFile as Partial<PlanFile>;
-  return pf.version === PLAN_FILE_VERSION && isTimestamp(pf.timestamp) && isConfigFiles(pf.files) && isPlan(pf);
+  return pf.version === PLAN_FILE_VERSION && isTimestamp(pf.timestamp) && isConfigFiles(pf.files) && isPlan(pf) && isVariableInputs(pf.variables);
 }
 
 /** Without its type's schema, a resource's sets could not be shown as sets. */

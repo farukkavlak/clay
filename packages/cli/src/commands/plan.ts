@@ -14,6 +14,8 @@ import { displayPlan } from '../showPlan';
 import { lockTimeoutOption, lockWait } from '../lockTimeoutOption';
 import { parallelismOption } from '../parallelismOption';
 import { refreshOption } from '../refreshOption';
+import { givenFiles } from '../givenFiles';
+import { varOption } from '../varOption';
 import { releasedAfter } from '../released';
 
 /** Returns the exit code. */
@@ -46,6 +48,7 @@ export function createPlanCommand() {
     .addOption(refreshOption())
     .addOption(parallelismOption())
     .addOption(lockTimeoutOption())
+    .addOption(varOption())
     .action(async (options) => {
       const cwd = process.cwd();
       const files = new RecordingFiles(new DiskFiles(cwd));
@@ -55,12 +58,12 @@ export function createPlanCommand() {
         code = await executePlan(
           cwd,
           files,
-          { refresh: options.refresh ?? true, parallelism: options.parallelism, destroy: options.destroy ?? false },
+          { refresh: options.refresh ?? true, parallelism: options.parallelism, destroy: options.destroy ?? false, variables: options.var },
           options.lockTimeout,
           options.out
         );
       } catch (error: unknown) {
-        console.error(styleText('red', 'Planning failed:'), describeError(error, files));
+        console.error(styleText('red', 'Planning failed:'), describeError(error, givenFiles(files, options.var)));
         code = 1;
       }
       if (code !== 0) process.exit(code);

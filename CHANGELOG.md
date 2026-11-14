@@ -95,6 +95,9 @@ a configuration means or how the state file is written.
   graph, so a block starts once what it reads is planned
 - `validate` takes a root variable with no value as unknown, of the type it names, so it
   checks a configuration that needs values from outside
+- `plan --var name=value` and `apply --var` give a root variable a value. A string, number
+  or bool, or a variable with no type, reads the text as it is; other types read it as a constant. A saved plan keeps
+  the values, and `apply plan.json` refuses `--var`
 
 ### Fixed
 
