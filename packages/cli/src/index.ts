@@ -9,6 +9,7 @@ import { createOutputCommand } from './commands/output';
 import { createPlanCommand } from './commands/plan';
 import { createStateCommand } from './commands/state';
 import { createValidateCommand } from './commands/validate';
+import { createWorkspaceCommand } from './commands/workspace';
 import { printable } from './printable';
 
 // Read from package.json so the version lives in one place.
@@ -26,6 +27,7 @@ program.addCommand(createOutputCommand());
 program.addCommand(createValidateCommand());
 program.addCommand(createStateCommand());
 program.addCommand(createForceUnlockCommand());
+program.addCommand(createWorkspaceCommand());
 
 // Commander quotes what was typed, and a command added whole keeps no setting of the program's.
 function printableErrors(command: Command): void {

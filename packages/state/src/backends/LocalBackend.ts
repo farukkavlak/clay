@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Stats } from 'node:fs';
+import { Dirent, Stats } from 'node:fs';
 import * as fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -8,6 +8,7 @@ import { emptyState, State } from '@clay/contracts';
 import { LockInfo, lockInfoFrom, noLockAt, otherLockAt, StateLocked } from '../lockInfo';
 import { BackendChoice, DEFAULT_WORKSPACE, StateBackend } from '../StateBackend';
 import { Journal, parseState, serializeState } from '../stateFile';
+import { isWorkspaceName } from './workspaces';
 import { appendSynced, syncDir, writeSynced } from './durable';
 
 /** Undefined where nothing is there, or a file stands in the way of the path. */
@@ -39,16 +40,31 @@ async function createFilled(target: string, content: string): Promise<boolean> {
   }
 }
 
+const workspacesOf = (defaultPath: string) => path.join(path.dirname(defaultPath), 'clay.workspaces');
+
 /** Next to the default state, so they stay in the folder a `path` setting chooses. */
 function workspacePath(defaultPath: string, workspace: string): string {
   if (workspace === DEFAULT_WORKSPACE) return defaultPath;
 
-  return path.join(path.dirname(defaultPath), 'clay.workspaces', workspace, path.basename(defaultPath));
+  return path.join(workspacesOf(defaultPath), workspace, path.basename(defaultPath));
+}
+
+/** Nothing where the folder of workspaces is missing, or a file stands in its place. */
+async function entriesOf(folder: string): Promise<Dirent[]> {
+  try {
+    return await fs.readdir(folder, { withFileTypes: true });
+  } catch (error) {
+    const { code } = error as NodeJS.ErrnoException;
+    if (code === 'ENOENT' || code === 'ENOTDIR') return [];
+
+    throw error;
+  }
 }
 
 export class LocalBackend implements StateBackend {
   readonly choice: BackendChoice;
   private readonly workingDir: string;
+  private readonly defaultPath: string;
   private filePath: string;
   private lockFilePath: string;
   private journalPath: string;
@@ -58,6 +74,7 @@ export class LocalBackend implements StateBackend {
   constructor(workingDir: string, filename: string = 'clay.state.json', workspace: string = DEFAULT_WORKSPACE) {
     const defaultPath = path.resolve(workingDir, filename);
     this.workingDir = workingDir;
+    this.defaultPath = defaultPath;
     this.filePath = workspacePath(defaultPath, workspace);
     this.lockFilePath = `${this.filePath}.lock`;
     this.journalPath = `${this.filePath}.journal`;
@@ -67,6 +84,33 @@ export class LocalBackend implements StateBackend {
 
   workspace(name: string): LocalBackend {
     return new LocalBackend(this.workingDir, this.choice.where, name);
+  }
+
+  /** A folder that holds no state of the default's file name is not a workspace, so a stopped `workspace new` leaves none. */
+  async listWorkspaces(): Promise<string[]> {
+    const named: string[] = [];
+    for (const entry of await entriesOf(workspacesOf(this.defaultPath))) if (await this.isWorkspace(entry)) named.push(entry.name);
+
+    return [DEFAULT_WORKSPACE, ...named.sort()];
+  }
+
+  private async isWorkspace(entry: Dirent): Promise<boolean> {
+    if (!entry.isDirectory() || entry.name === DEFAULT_WORKSPACE || !isWorkspaceName(entry.name)) return false;
+
+    return this.workspace(entry.name).exists();
+  }
+
+  /** The folder of a named workspace is Clay's own, unlike the one a `path` setting names, so it is made here. */
+  async prepare(): Promise<void> {
+    if (this.filePath === this.defaultPath) return;
+
+    const folder = path.dirname(this.filePath);
+    const made = await fs.mkdir(folder, { recursive: true });
+    if (made === undefined) return;
+
+    // Each folder made is named in the one that holds it.
+    await syncDir(path.dirname(made));
+    if (made !== folder) await syncDir(path.dirname(folder));
   }
 
   get location(): string {

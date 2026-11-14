@@ -48,4 +48,10 @@ export interface StateBackend {
 
   /** The backend of workspace `name`, the same whichever workspace it is called on. Absent where the backend keeps a single state. */
   workspace?(name: string): StateBackend;
+
+  /** The workspaces whose state exists, `default` first and always. Present wherever `workspace` is. */
+  listWorkspaces?(): Promise<string[]>;
+
+  /** Makes the place the state of a new workspace goes in, where one must be made. */
+  prepare?(): Promise<void>;
 }

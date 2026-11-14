@@ -1,7 +1,6 @@
 import { isRecord } from '@clay/contracts';
 import { ConfigError, Position } from '@clay/parser';
 import * as fs from 'node:fs';
-import * as fsp from 'node:fs/promises';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 
@@ -9,7 +8,7 @@ import { LockNotReleased } from '../lockInfo';
 import { BackendChoice, StateBackend } from '../StateBackend';
 import { StateManager } from '../StateManager';
 import { build } from './build';
-import { syncDir, writeSynced } from './durable';
+import { replaceSynced } from './durable';
 import { HandshakeFailed, NoAnswer } from './httpRequest';
 import { LocalBackend } from './LocalBackend';
 import { Environment, recordSettings, unwritten } from './settings';
@@ -119,15 +118,8 @@ export interface Adopted {
 }
 
 async function writeRecord(choice: BackendChoice, workingDir: string): Promise<void> {
-  const record = recordOf(workingDir);
-  const holder = path.dirname(record);
   // A record lost to a power loss would turn the next run to an empty local state.
-  const made = await fsp.mkdir(holder, { recursive: true });
-  if (made !== undefined) await syncDir(path.dirname(made));
-  // Rename is atomic, so a stopped init leaves the old record whole.
-  await writeSynced(`${record}.tmp`, `${JSON.stringify({ type: choice.type, settings: choice.settings })}\n`);
-  await fsp.rename(`${record}.tmp`, record);
-  await syncDir(holder);
+  await replaceSynced(recordOf(workingDir), `${JSON.stringify({ type: choice.type, settings: choice.settings })}\n`);
 }
 
 /** What `init` took before, and the manager that locks it while the state moves. */

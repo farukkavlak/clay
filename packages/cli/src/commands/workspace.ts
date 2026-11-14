@@ -1,0 +1,97 @@
+import { emptyState } from '@clay/contracts';
+import { ConfigFiles, DiskFiles, RecordingFiles } from '@clay/orchestrator';
+import { checkWorkspaceName, DEFAULT_WORKSPACE, namedWorkspace, selectedWorkspace, selectWorkspace, StateManager, workspaceBackend } from '@clay/state';
+import { Command } from 'commander';
+import { styleText } from 'node:util';
+
+import { describeError } from '../describeError';
+import { stoppedAtOnce } from '../interruptible';
+import { lockTimeoutOption, lockWait } from '../lockTimeoutOption';
+import { releasedAfter } from '../released';
+import { checkedBackend } from '../stateFile';
+
+const GIVEN = 'the command line';
+
+/** Runs `work` on the configuration in this directory, and exits 1 with what went wrong. */
+function inThisDirectory(failure: string, work: (cwd: string, files: ConfigFiles) => Promise<number>): () => Promise<void> {
+  return async () => {
+    const cwd = process.cwd();
+    const files = new RecordingFiles(new DiskFiles(cwd));
+    let code: number;
+    try {
+      code = await work(cwd, files);
+    } catch (error) {
+      console.error(styleText('red', failure), describeError(error, files));
+      code = 1;
+    }
+    if (code !== 0) process.exit(code);
+  };
+}
+
+/** Under the lock of the new workspace, so of two made at once with one name, one is refused. */
+async function newWorkspace(cwd: string, files: ConfigFiles, name: string, lockTimeout?: number): Promise<number> {
+  if (name === DEFAULT_WORKSPACE) throw new Error(`Workspace "${name}" exists already`);
+
+  const backend = checkedBackend(cwd, files);
+  await backend.check();
+  const named = namedWorkspace(backend, name);
+  await named.prepare?.();
+  const manager = new StateManager(named, lockWait(lockTimeout));
+
+  return releasedAfter(manager, async () => {
+    await stoppedAtOnce([manager], () => manager.lock('workspace new'));
+    if (!(await manager.writeIfAbsent(emptyState()))) throw new Error(`Workspace "${name}" exists already`);
+
+    await selectWorkspace(cwd, name);
+    console.log(styleText('green', `✓ Created and selected workspace "${name}"`));
+    return 0;
+  });
+}
+
+async function select(cwd: string, files: ConfigFiles, name: string): Promise<number> {
+  await workspaceBackend(checkedBackend(cwd, files), name);
+  await selectWorkspace(cwd, name);
+  console.log(styleText('green', `✓ Selected workspace "${name}"`));
+  return 0;
+}
+
+async function list(cwd: string, files: ConfigFiles): Promise<number> {
+  const backend = checkedBackend(cwd, files);
+  const selected = selectedWorkspace(cwd);
+  const names = backend.listWorkspaces ? await backend.listWorkspaces() : [DEFAULT_WORKSPACE];
+  for (const name of names) console.log(name === selected ? `* ${name}` : `  ${name}`);
+  return 0;
+}
+
+export function createWorkspaceCommand(): Command {
+  const command = new Command('workspace').description('Keep copies of this configuration, each with a state of its own');
+
+  command
+    .command('new')
+    .description('Make a workspace with an empty state, and select it')
+    .argument('<name>', 'The name of the workspace')
+    .addOption(lockTimeoutOption())
+    .action((name: string, options: { lockTimeout?: number }) =>
+      inThisDirectory('Failed to make the workspace:', (cwd, files) => newWorkspace(cwd, files, checkWorkspaceName(name, GIVEN), options.lockTimeout))()
+    );
+
+  command
+    .command('select')
+    .description('Run the commands that follow on a workspace')
+    .argument('<name>', 'The name of the workspace')
+    .action((name: string) => inThisDirectory('Failed to select the workspace:', (cwd, files) => select(cwd, files, checkWorkspaceName(name, GIVEN)))());
+
+  command
+    .command('show')
+    .description('Print the selected workspace')
+    .action(
+      inThisDirectory('Failed to read the selected workspace:', async (cwd) => {
+        console.log(selectedWorkspace(cwd));
+        return 0;
+      })
+    );
+
+  command.command('list').description('List the workspaces, marking the selected one').action(inThisDirectory('Failed to list the workspaces:', list));
+
+  return command;
+}

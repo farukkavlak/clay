@@ -1,4 +1,6 @@
+import { randomUUID } from 'node:crypto';
 import * as fs from 'node:fs/promises';
+import path from 'node:path';
 
 async function writeFlushed(target: string, content: string | Uint8Array, flag: 'w' | 'a'): Promise<void> {
   const handle = await fs.open(target, flag);
@@ -26,4 +28,20 @@ export async function syncDir(dir: string): Promise<void> {
   } finally {
     await handle.close();
   }
+}
+
+/** Written whole or not at all, in a folder made where it is missing, so a power loss never leaves a file cut short. */
+export async function replaceSynced(target: string, content: string): Promise<void> {
+  const holder = path.dirname(target);
+  const made = await fs.mkdir(holder, { recursive: true });
+  if (made !== undefined) await syncDir(path.dirname(made));
+  // A name of its own, as no lock keeps two writers of the file apart.
+  const filling = `${target}.${randomUUID()}`;
+  try {
+    await writeSynced(filling, content);
+    await fs.rename(filling, target);
+  } finally {
+    await fs.rm(filling, { force: true });
+  }
+  await syncDir(holder);
 }

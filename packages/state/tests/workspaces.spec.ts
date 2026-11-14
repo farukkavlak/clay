@@ -5,7 +5,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { LocalBackend } from '../src/backends/LocalBackend';
-import { checkWorkspaceName, selectedWorkspace, workspaceBackend } from '../src/workspaces';
+import { checkWorkspaceName, namedWorkspace, selectedWorkspace, selectWorkspace, workspaceBackend } from '../src/backends/workspaces';
 import { backendAt } from './backendAt';
 
 describe('a workspace name', () => {
@@ -60,6 +60,28 @@ describe('the selected workspace', () => {
     expect(() => selectedWorkspace(dir)).toThrow(`Workspace name "dev\\n" in ${path.join(dir, '.clay', 'workspace')} is not valid`);
   });
 
+  it('is the one last selected, in a .clay folder made for it', async () => {
+    await selectWorkspace(dir, 'dev');
+    await selectWorkspace(dir, 'test');
+
+    expect(selectedWorkspace(dir)).toBe('test');
+    await expect(fs.readdir(path.join(dir, '.clay'))).resolves.toEqual(['workspace']);
+  });
+
+  it('is one whole name where two are selected at once', async () => {
+    for (let round = 0; round < 50; round++) await Promise.all([selectWorkspace(dir, 'dev'), selectWorkspace(dir, 'test')]);
+
+    expect(['dev', 'test']).toContain(selectedWorkspace(dir));
+    await expect(fs.readdir(path.join(dir, '.clay'))).resolves.toEqual(['workspace']);
+  });
+
+  it('leaves nothing beside the file where it cannot be replaced', async () => {
+    await fs.mkdir(path.join(dir, '.clay', 'workspace', 'inside'), { recursive: true });
+
+    await expect(selectWorkspace(dir, 'dev')).rejects.toThrow('EISDIR');
+    await expect(fs.readdir(path.join(dir, '.clay'))).resolves.toEqual(['workspace']);
+  });
+
   it('is not guessed where the file cannot be read', async () => {
     await fs.mkdir(path.join(dir, '.clay', 'workspace'), { recursive: true });
 
@@ -97,12 +119,20 @@ describe('the backend of a workspace', () => {
   it('is refused for a named workspace with no state, rather than started empty', async () => {
     await new LocalBackend(dir).write(emptyState());
 
-    await expect(workspaceBackend(new LocalBackend(dir), 'dev')).rejects.toThrow('Workspace "dev" does not exist');
+    await expect(workspaceBackend(new LocalBackend(dir), 'dev')).rejects.toThrow('Workspace "dev" does not exist; run `clay workspace new dev` to make it');
   });
 
   it('is refused for a named workspace where the backend keeps one state', async () => {
     const backend = backendAt('http://127.0.0.1:1');
 
     await expect(workspaceBackend(backend, 'dev')).rejects.toThrow('Backend "http" keeps one state, so workspace "dev" cannot be used');
+  });
+
+  it('is built for a named workspace with no state yet, which a new one is', () => {
+    expect(namedWorkspace(new LocalBackend(dir), 'dev').location).toBe(path.join(dir, 'clay.workspaces', 'dev', 'clay.state.json'));
+  });
+
+  it('is refused for a new workspace where the backend keeps one state', () => {
+    expect(() => namedWorkspace(backendAt('http://127.0.0.1:1'), 'dev')).toThrow('Backend "http" keeps one state, so workspace "dev" cannot be used');
   });
 });

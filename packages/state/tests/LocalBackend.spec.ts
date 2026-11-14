@@ -10,6 +10,12 @@ import { emptySeen } from './emptySeen';
 describe('LocalBackend', () => {
   let dir: string;
 
+  /** A state file, empty, as a listing finds it. */
+  const made = async (folder: string, file = 'clay.state.json') => {
+    await fs.mkdir(path.join(dir, folder), { recursive: true });
+    await fs.writeFile(path.join(dir, folder, file), '', 'utf8');
+  };
+
   beforeEach(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-local-backend-'));
   });
@@ -99,6 +105,76 @@ describe('LocalBackend', () => {
         'clay.state.json.journal',
         'clay.state.json.lock',
       ]);
+    });
+
+    it('has its folder made by prepare, so its state can be written', async () => {
+      const backend = new LocalBackend(dir).workspace('dev');
+      await backend.prepare();
+
+      await expect(backend.writeIfAbsent({ ...emptyState(), lineage: 'dev' })).resolves.toBe(true);
+    });
+
+    it('is prepared again with nothing changed', async () => {
+      const backend = new LocalBackend(dir).workspace('dev');
+      await backend.prepare();
+      await backend.write({ ...emptyState(), lineage: 'dev' });
+      await backend.prepare();
+
+      await expect(fs.readdir(path.join(dir, 'clay.workspaces', 'dev'))).resolves.toEqual(['clay.state.json']);
+    });
+
+    it('makes no folder the default state does not have', async () => {
+      await new LocalBackend(dir, 'kept/app.json').prepare();
+
+      await expect(fs.readdir(dir)).resolves.toEqual([]);
+    });
+  });
+
+  describe('its workspaces', () => {
+    it('are the default one alone where none is made', async () => {
+      await expect(new LocalBackend(dir).listWorkspaces()).resolves.toEqual(['default']);
+    });
+
+    it('are the default one and each named one with a state, in order of name', async () => {
+      await made('clay.workspaces/test');
+      await made('clay.workspaces/dev');
+
+      await expect(new LocalBackend(dir).listWorkspaces()).resolves.toEqual(['default', 'dev', 'test']);
+    });
+
+    it('are the same whichever workspace is asked', async () => {
+      await made('clay.workspaces/dev');
+
+      await expect(new LocalBackend(dir).workspace('dev').listWorkspaces()).resolves.toEqual(['default', 'dev']);
+    });
+
+    it('leave out a folder with no state, or a state of another file name', async () => {
+      await fs.mkdir(path.join(dir, 'clay.workspaces', 'empty'), { recursive: true });
+      await made('clay.workspaces/other', 'other.json');
+
+      await expect(new LocalBackend(dir).listWorkspaces()).resolves.toEqual(['default']);
+    });
+
+    it('leave out what no workspace can be named, and a file in place of a folder', async () => {
+      await made('clay.workspaces/Dev');
+      await made('clay.workspaces/default');
+      await made('.');
+      await fs.writeFile(path.join(dir, 'clay.workspaces', 'file'), '', 'utf8');
+
+      await expect(new LocalBackend(dir).listWorkspaces()).resolves.toEqual(['default']);
+    });
+
+    it('are found beside a state a path setting places', async () => {
+      await made('kept/clay.workspaces/dev', 'app.json');
+      await made('clay.workspaces/other', 'app.json');
+
+      await expect(new LocalBackend(dir, 'kept/app.json').listWorkspaces()).resolves.toEqual(['default', 'dev']);
+    });
+
+    it('are the default one alone where a file stands in place of their folder', async () => {
+      await fs.writeFile(path.join(dir, 'clay.workspaces'), '', 'utf8');
+
+      await expect(new LocalBackend(dir).listWorkspaces()).resolves.toEqual(['default']);
     });
   });
 

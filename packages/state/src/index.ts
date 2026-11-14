@@ -9,4 +9,4 @@ export type { Retry } from './backends/httpRetry';
 export * from './backends/backendFrom';
 export * from './backends/rememberedBackend';
 export * from './entries';
-export * from './workspaces';
+export * from './backends/workspaces';

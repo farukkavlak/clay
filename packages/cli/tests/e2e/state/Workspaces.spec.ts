@@ -7,6 +7,7 @@ import path from 'node:path';
 import { promisify, stripVTControlCharacters } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { HttpStateServer } from '../../../../../tests/httpStateServer';
 import { clay, clayOutput } from '../helpers';
 
 const FILE = 'resource "local_file" "f" {\n  path    = "f.txt"\n  content = "x"\n}\noutput "o" {\n  value = local_file.f.content\n}\n';
@@ -113,5 +114,168 @@ describe('a workspace selected in .clay/workspace', () => {
     await select('../dev\n');
 
     expect(await clayOutput(dir, 'validate')).toContain('valid');
+  });
+});
+
+describe('clay workspace', () => {
+  let dir: string;
+
+  const run = async (...args: string[]): Promise<{ code: number; stdout: string; stderr: string }> => {
+    try {
+      const { stdout, stderr } = await promisify(execFile)('node', [clay, ...args], { cwd: dir });
+      return { code: 0, stdout: stripVTControlCharacters(stdout), stderr: stripVTControlCharacters(stderr) };
+    } catch (error) {
+      const failed = error as { code: number; stdout: string; stderr: string };
+      return { code: failed.code, stdout: stripVTControlCharacters(failed.stdout), stderr: stripVTControlCharacters(failed.stderr) };
+    }
+  };
+  const read = (name: string) => fs.readFile(path.join(dir, name), 'utf8');
+  const resourcesIn = async (name: string) => Object.keys((JSON.parse(await read(name)) as { resources: Record<string, unknown> }).resources);
+  const devState = path.join('clay.workspaces', 'dev', 'clay.state.json');
+
+  beforeEach(async () => {
+    dir = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'clay-workspace-command-')));
+    await fs.writeFile(path.join(dir, 'main.clay'), FILE, 'utf8');
+  });
+
+  afterEach(async () => {
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it('new makes a workspace with an empty state and selects it, so a run goes there', async () => {
+    expect(await run('workspace', 'new', 'dev')).toEqual({ code: 0, stdout: '✓ Created and selected workspace "dev"\n', stderr: '' });
+    expect(await read(path.join('.clay', 'workspace'))).toBe('dev\n');
+    expect(await resourcesIn(devState)).toEqual([]);
+
+    await run('apply', '--yes');
+
+    expect(await resourcesIn(devState)).toEqual(['local_file.f']);
+    await expect(fs.access(path.join(dir, 'clay.state.json'))).rejects.toThrow('ENOENT');
+  });
+
+  it('new refuses a workspace that exists, leaving its state and the selection as they were', async () => {
+    await run('workspace', 'new', 'dev');
+    await run('apply', '--yes');
+    await run('workspace', 'select', 'default');
+
+    expect(await run('workspace', 'new', 'dev')).toEqual({ code: 1, stdout: '', stderr: 'Failed to make the workspace: Workspace "dev" exists already\n' });
+    expect(await resourcesIn(devState)).toEqual(['local_file.f']);
+    expect(await read(path.join('.clay', 'workspace'))).toBe('default\n');
+    await expect(fs.readdir(path.join(dir, 'clay.workspaces', 'dev'))).resolves.toEqual(['clay.state.json', 'clay.state.json.bak']);
+  });
+
+  it('new refuses the default workspace, which always exists', async () => {
+    expect(await run('workspace', 'new', 'default')).toMatchObject({ code: 1, stderr: 'Failed to make the workspace: Workspace "default" exists already\n' });
+    await expect(fs.readdir(dir)).resolves.toEqual(['main.clay']);
+  });
+
+  it('new refuses a name no workspace can have, before anything is made', async () => {
+    const { code, stderr } = await run('workspace', 'new', '../dev');
+
+    expect(code).toBe(1);
+    expect(stderr).toContain('Workspace name "../dev" in the command line is not valid');
+    await expect(fs.readdir(dir)).resolves.toEqual(['main.clay']);
+    await expect(fs.readdir(path.dirname(dir))).resolves.not.toContain('dev');
+  });
+
+  it('new makes no folder the state a backend block places has not got', async () => {
+    await fs.writeFile(path.join(dir, 'main.clay'), `clay {\n  backend "local" {\n    path = "kept/app.json"\n  }\n}\n${FILE}`, 'utf8');
+    await fs.mkdir(path.join(dir, 'kept'));
+    await run('init');
+    await fs.rm(path.join(dir, 'kept'), { recursive: true });
+
+    const { code, stderr } = await run('workspace', 'new', 'dev');
+
+    expect(code).toBe(1);
+    expect(stderr).toContain(`${path.join(dir, 'kept')} is not a directory`);
+    await expect(fs.access(path.join(dir, 'kept'))).rejects.toThrow('ENOENT');
+  });
+
+  it('new makes one of two workspaces made at once with one name', async () => {
+    const both = await Promise.all([run('workspace', 'new', 'dev'), run('workspace', 'new', 'dev')]);
+
+    expect(both.map(({ code }) => code).sort()).toEqual([0, 1]);
+    expect(await resourcesIn(devState)).toEqual([]);
+  });
+
+  it('select runs the commands that follow on the workspace it names', async () => {
+    await run('workspace', 'new', 'dev');
+
+    expect(await run('workspace', 'select', 'default')).toEqual({ code: 0, stdout: '✓ Selected workspace "default"\n', stderr: '' });
+    await run('apply', '--yes');
+
+    expect(await resourcesIn('clay.state.json')).toEqual(['local_file.f']);
+    expect(await resourcesIn(devState)).toEqual([]);
+  });
+
+  it('select refuses a workspace that does not exist, and keeps the one selected', async () => {
+    await run('workspace', 'new', 'dev');
+
+    expect(await run('workspace', 'select', 'test')).toEqual({
+      code: 1,
+      stdout: '',
+      stderr: 'Failed to select the workspace: Workspace "test" does not exist; run `clay workspace new test` to make it\n',
+    });
+    expect(await read(path.join('.clay', 'workspace'))).toBe('dev\n');
+  });
+
+  it('show prints the selected workspace, the default one where none is selected', async () => {
+    expect(await run('workspace', 'show')).toEqual({ code: 0, stdout: 'default\n', stderr: '' });
+    await run('workspace', 'new', 'dev');
+    expect(await run('workspace', 'show')).toEqual({ code: 0, stdout: 'dev\n', stderr: '' });
+  });
+
+  it('show refuses a selection no workspace can be named', async () => {
+    await fs.mkdir(path.join(dir, '.clay'));
+    await fs.writeFile(path.join(dir, '.clay', 'workspace'), 'Dev\n', 'utf8');
+
+    expect(await run('workspace', 'show')).toMatchObject({ code: 1, stdout: '' });
+  });
+
+  it('list names every workspace and marks the selected one', async () => {
+    expect(await run('workspace', 'list')).toEqual({ code: 0, stdout: '* default\n', stderr: '' });
+    await run('workspace', 'new', 'test');
+    await run('workspace', 'new', 'dev');
+
+    expect(await run('workspace', 'list')).toEqual({ code: 0, stdout: '  default\n* dev\n  test\n', stderr: '' });
+  });
+});
+
+describe('clay workspace on a backend that keeps one state', () => {
+  let dir: string;
+  let server: HttpStateServer;
+
+  beforeEach(async () => {
+    dir = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'clay-workspace-http-')));
+    server = await HttpStateServer.start();
+    await fs.writeFile(
+      path.join(dir, 'main.clay'),
+      `clay {\n  backend "http" {\n    address      = "${server.url}/state"\n    lock_address = "${server.url}/lock"\n  }\n}\n${FILE}`,
+      'utf8'
+    );
+    await clayOutput(dir, 'init');
+  });
+
+  afterEach(async () => {
+    await server.stop();
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it('lists the default workspace alone', async () => {
+    expect(await clayOutput(dir, 'workspace', 'list')).toBe('* default\n');
+  });
+
+  it('refuses a new workspace, and makes nothing', async () => {
+    const before = server.state;
+    let stderr = '';
+    try {
+      await promisify(execFile)('node', [clay, 'workspace', 'new', 'dev'], { cwd: dir });
+    } catch (error) {
+      stderr = stripVTControlCharacters((error as { stderr: string }).stderr);
+    }
+
+    expect(stderr).toBe('Failed to make the workspace: Backend "http" keeps one state, so workspace "dev" cannot be used\n');
+    expect(server.state).toBe(before);
+    await expect(fs.access(path.join(dir, '.clay', 'workspace'))).rejects.toThrow('ENOENT');
   });
 });
