@@ -6,7 +6,7 @@ import path from 'node:path';
 import { emptyState, State } from '@clay/contracts';
 
 import { LockInfo, lockInfoFrom, noLockAt, otherLockAt, StateLocked } from '../lockInfo';
-import { BackendChoice, StateBackend } from '../StateBackend';
+import { BackendChoice, DEFAULT_WORKSPACE, StateBackend } from '../StateBackend';
 import { Journal, parseState, serializeState } from '../stateFile';
 import { appendSynced, syncDir, writeSynced } from './durable';
 
@@ -39,20 +39,34 @@ async function createFilled(target: string, content: string): Promise<boolean> {
   }
 }
 
+/** Next to the default state, so they stay in the folder a `path` setting chooses. */
+function workspacePath(defaultPath: string, workspace: string): string {
+  if (workspace === DEFAULT_WORKSPACE) return defaultPath;
+
+  return path.join(path.dirname(defaultPath), 'clay.workspaces', workspace, path.basename(defaultPath));
+}
+
 export class LocalBackend implements StateBackend {
   readonly choice: BackendChoice;
+  private readonly workingDir: string;
   private filePath: string;
   private lockFilePath: string;
   private journalPath: string;
   private backedUp = false;
   private journalNamed = false;
 
-  constructor(workingDir: string, filename: string = 'clay.state.json') {
-    this.filePath = path.resolve(workingDir, filename);
+  constructor(workingDir: string, filename: string = 'clay.state.json', workspace: string = DEFAULT_WORKSPACE) {
+    const defaultPath = path.resolve(workingDir, filename);
+    this.workingDir = workingDir;
+    this.filePath = workspacePath(defaultPath, workspace);
     this.lockFilePath = `${this.filePath}.lock`;
     this.journalPath = `${this.filePath}.journal`;
-    const where = path.relative(workingDir, this.filePath);
+    const where = path.relative(workingDir, defaultPath);
     this.choice = { type: 'local', where, settings: { path: where } };
+  }
+
+  workspace(name: string): LocalBackend {
+    return new LocalBackend(this.workingDir, this.choice.where, name);
   }
 
   get location(): string {

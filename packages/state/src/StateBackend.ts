@@ -2,6 +2,9 @@ import { State } from '@clay/contracts';
 
 import { LockInfo } from './lockInfo';
 
+/** Kept where the state was before workspaces, so a configuration that names none goes on as it did. */
+export const DEFAULT_WORKSPACE = 'default';
+
 /** What `init` remembers, so a later command can tell the configuration has moved the state. */
 export interface BackendChoice {
   readonly type: string;
@@ -42,4 +45,7 @@ export interface StateBackend {
 
   /** Releases lock `id` whatever run took it, for one that is gone. Throws where no lock is held, or another one. */
   forceUnlock(id: string): Promise<void>;
+
+  /** The backend of workspace `name`, the same whichever workspace it is called on. Absent where the backend keeps a single state. */
+  workspace?(name: string): StateBackend;
 }
