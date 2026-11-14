@@ -23,3 +23,12 @@ export async function growth(size: number, measure: (size: number) => number | P
 
   return Math.min(...large) / Math.min(...small);
 }
+
+/** Sums `measure` run `times` at one size, so a short measure is long enough that noise does not decide the ratio. */
+export function repeated(measure: (size: number) => number | Promise<number>, times: number): (size: number) => Promise<number> {
+  return async (size) => {
+    let total = 0;
+    for (let time = 0; time < times; time++) total += await measure(size);
+    return total;
+  };
+}

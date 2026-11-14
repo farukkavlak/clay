@@ -10,6 +10,8 @@ export default defineConfig({
     include: ['**/*.timing.spec.ts'],
     exclude: configDefaults.exclude,
     fileParallelism: false,
+    // Each test does its work many times over at two sizes, and a busy machine takes several times as long as CI.
+    testTimeout: 120_000,
     execArgv: [
       // So each measure starts on a clean heap.
       '--expose-gc',
