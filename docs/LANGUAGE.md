@@ -21,6 +21,10 @@ type. An output may name its type the same way, and gives its value as that type
 caller knows it before a plan. An attribute of an object type can be optional, with a
 default: `object({ port = optional(number, 80) })`.
 
+A variable with no `default` must be given a value. In a module the call gives it. In the
+root module, `validate` takes it as unknown, of the type it names, and checks the rest;
+`plan` refuses it.
+
 ## Count and for_each
 
 A resource with `count = 3` makes three instances, `type.name[0]` to `type.name[2]`, and

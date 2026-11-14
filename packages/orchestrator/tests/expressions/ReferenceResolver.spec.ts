@@ -82,7 +82,7 @@ describe('ReferenceResolver', () => {
 
   it('joins a template into text', () => {
     const scopes = new ScopeManager(versions);
-    scopes.setVariable('', 'my_var', { value: str('var_value'), context: ModuleAddress.root, block: 'variable "my_var"' });
+    scopes.setVariable('', 'my_var', { value: str('var_value'), position, context: ModuleAddress.root, block: 'variable "my_var"' });
 
     expect(resolverWith(scopes).resolveValue(template('Var: ', reference('var', 'my_var'), ', Res: ', reference('resource', 'test', 'val')), state, context)).toEqual(
       valueOf(types.string, 'Var: var_value, Res: resolved')
@@ -91,7 +91,7 @@ describe('ReferenceResolver', () => {
 
   it('gives a template of one reference as the value itself, type and all', () => {
     const scopes = new ScopeManager(versions);
-    scopes.setVariable('', 'n', { value: num('8'), context: ModuleAddress.root, block: 'variable "n"' });
+    scopes.setVariable('', 'n', { value: num('8'), position, context: ModuleAddress.root, block: 'variable "n"' });
 
     expect(resolverWith(scopes).resolveValue(template(reference('var', 'n')), state, context)).toEqual(valueOf(types.number, ExactNumber.parse('8')));
   });
@@ -107,7 +107,7 @@ describe('ReferenceResolver', () => {
     ['null', { type: 'Null', position } as AttributeValue, 'var.x is null and cannot be joined into a string'],
   ])('refuses to join %s into text', (_, value, message) => {
     const scopes = new ScopeManager(versions);
-    scopes.setVariable('', 'x', { value, context: ModuleAddress.root, block: 'variable "x"' });
+    scopes.setVariable('', 'x', { value, position, context: ModuleAddress.root, block: 'variable "x"' });
 
     expect(() => resolverWith(scopes).resolveValue(template('a ', reference('var', 'x')), state, context)).toThrow(new ConfigError(message, position));
   });
@@ -438,7 +438,7 @@ describe('ReferenceResolver', () => {
 
     it('reads an input in the instance of the calling module it sits in', () => {
       const scopes = new ScopeManager(versions);
-      scopes.setVariable('module.a.module.b', 'x', { value: reference('module', 'c', 'out'), context: ModuleAddress.root.child('a'), block: 'variable "x"' });
+      scopes.setVariable('module.a.module.b', 'x', { value: reference('module', 'c', 'out'), position, context: ModuleAddress.root.child('a'), block: 'variable "x"' });
       scopes.setOutput(ModuleAddress.root.child('a', 1).child('c'), 'out', valueOf(types.string, 'from a[1]'));
       scopes.setOutput(ModuleAddress.root.child('a').child('c'), 'out', valueOf(types.string, 'from a'));
 

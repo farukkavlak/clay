@@ -118,7 +118,10 @@ export class Orchestrator {
     return Object.fromEntries(await inOrder(unique.map(async (type) => [type, await limit.run(() => this.providers.schema(type))] as const)));
   }
 
-  /** Plans against an empty state and reads no data source, so what a resource or a data source gives is unknown and everything else is checked. */
+  /**
+   * Plans against an empty state and reads no data source, so what a resource or a data source gives is unknown and everything else is checked.
+   * A root variable with no value is unknown too, since only a plan is given one.
+   */
   async validate(): Promise<void> {
     const limit = new Limit(DEFAULT_PARALLELISM);
     const imports = new Imports(this.providers, limit, (key, resource) => this.readBack(key, resource));
@@ -175,7 +178,7 @@ export class Orchestrator {
   /** Applies every move to `state` before anything reads it, and each import as the walk reaches its instance; a check only reads the ids. */
   private async resolveAndCheck(state: State, walk: Walk, moves: Moves, limit: Limit, imports: Imports, root?: Statement[]): Promise<DesiredState & { graph: Graph<GraphNode> }> {
     const { loader, graphBuilder, writtenCheck, desiredStateBuilder, modules } = this.newRun(limit);
-    const { loadedResources, loadedModules, schemas } = await loader.load(root);
+    const { loadedResources, loadedModules, schemas } = await loader.load(root, walk === 'check' ? 'unknown' : 'refuse');
 
     const graph = graphBuilder.buildExecutionGraph(loadedResources, loadedModules);
     checkAttributes(loadedResources, schemas);

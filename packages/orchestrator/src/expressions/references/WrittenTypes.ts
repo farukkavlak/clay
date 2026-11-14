@@ -111,7 +111,8 @@ export class WrittenTypes {
     const { type = types.dynamic, sensitive, value, context, block } = variable;
     const held: Source['held'] = (read, readNode) => givenTo('variable', reference.name, read, variable, readNode);
 
-    return { type, sensitive: sensitive ? WHOLE : [], from: [{ value, context, declaration: block, held, at: [] }], path: reference.path };
+    const from = value ? [{ value, context, declaration: block, held, at: [] }] : [];
+    return { type, sensitive: sensitive ? WHOLE : [], from, path: reference.path };
   }
 
   /** `each.value` is one of the items of the for_each, not known which; the graph has already refused `each` outside a block with one. */

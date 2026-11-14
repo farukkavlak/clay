@@ -1,5 +1,5 @@
 import { ModuleAddress, Type } from '@clay/contracts';
-import { AttributeValue, DataBlock, LocalBlock, ModuleBlock, OutputBlock, ResourceBlock, TypeDefaults, Validation } from '@clay/parser';
+import { AttributeValue, DataBlock, LocalBlock, ModuleBlock, OutputBlock, Position, ResourceBlock, TypeDefaults, Validation } from '@clay/parser';
 
 import { callKey, Context, ModuleCall } from '../keys';
 import { Value } from '../values/Value';
@@ -7,7 +7,10 @@ import { Versions } from '../values/Versions';
 
 /** Resolved where it is written: an input in the call, a default in its own module. */
 export interface VariableValue {
-  value: AttributeValue;
+  /** Left out only where a check is given no value for a root variable, which is then unknown. */
+  value?: AttributeValue;
+  /** Where the value is written, or the variable's block where it has none. */
+  position: Position;
   context: ModuleAddress | ModuleCall;
   type?: Type;
   defaults?: TypeDefaults;

@@ -1123,7 +1123,7 @@ Terraform has it since backends replaced `-state`.
 - [x] `clay destroy`, and `plan -destroy`: today the only way to remove everything is to
       empty every `.clay` file
 - [ ] A root variable takes a value from outside the configuration: `-var`, a variables
-      file and the environment. Today one with no default is refused even by `validate`
+      file and the environment. `validate` already takes one with no value as unknown
 - [ ] Workspaces: `clay workspace new | select | list`, one state per workspace
 - [ ] `plan -detailed-exitcode`, so a script can tell no changes from changes; `plan` exits
       0 either way

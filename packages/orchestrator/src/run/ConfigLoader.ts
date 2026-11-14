@@ -14,7 +14,7 @@ import { Limit, taken } from '../providers/Limit';
 import { tryAt, withPlace } from '../place';
 import { ReferenceResolver } from '../expressions/ReferenceResolver';
 import { ScopeManager } from '../config/ScopeManager';
-import { LoadedModule, LoadedResource, ModuleLoader } from '../config/ModuleLoader';
+import { LoadedModule, LoadedResource, ModuleLoader, Unset } from '../config/ModuleLoader';
 
 /** The first item of each key, in the order they come. */
 function firstOfEach<T>(items: T[], keyOf: (item: T) => string): T[] {
@@ -50,8 +50,8 @@ export class ConfigLoader {
   ) {}
 
   /** `root` stands in for the root module's files, which are then not read. */
-  async load(root?: Statement[]): Promise<LoadedConfig> {
-    const { resources: loadedResources, modules: loadedModules, root: mainProgram } = await this.moduleLoader.loadModuleTree(root);
+  async load(root?: Statement[], unset?: Unset): Promise<LoadedConfig> {
+    const { resources: loadedResources, modules: loadedModules, root: mainProgram } = await this.moduleLoader.loadModuleTree(root, unset);
     this.checkDefaults(loadedModules);
 
     for (const { uniqueId, block } of loadedResources) {

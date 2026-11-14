@@ -93,6 +93,8 @@ a configuration means or how the state file is written.
   run is reported. `plan` takes it too, for the refresh, schemas, block checks, what
   each object is, the plan of each resource and each data source read. A plan walks the
   graph, so a block starts once what it reads is planned
+- `validate` takes a root variable with no value as unknown, of the type it names, so it
+  checks a configuration that needs values from outside
 
 ### Fixed
 

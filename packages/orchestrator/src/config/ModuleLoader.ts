@@ -11,6 +11,9 @@ function validationsOf(variable: VariableBlock) {
   return variable.validations && { validations: { rules: variable.validations, declaration: spell(variable) } };
 }
 
+/** What a root variable with no value does: a check takes it as unknown, and anything else refuses it. */
+export type Unset = 'refuse' | 'unknown';
+
 export interface LoadedResource {
   uniqueId: string;
   address: Address;
@@ -46,7 +49,7 @@ export class ModuleLoader {
   ) {}
 
   /** `root` stands in for the root module's files, which are then not read. */
-  async loadModuleTree(root?: Statement[]): Promise<Loaded & { root: Statement[] }> {
+  async loadModuleTree(root?: Statement[], unset?: Unset): Promise<Loaded & { root: Statement[] }> {
     const loaded: Loaded = { resources: [], modules: [] };
     this.contents.clear();
 
@@ -56,7 +59,7 @@ export class ModuleLoader {
     const parentAddress = ModuleAddress.root;
     loaded.modules.push({ address: parentAddress, program: rootProgram });
     this.scopeManager.setDirectory(scopeOf(parentAddress), '.');
-    this.declareVariables(rootProgram, parentAddress);
+    this.declareVariables(rootProgram, parentAddress, unset);
     this.declareLocals(rootProgram, parentAddress);
     this.declareBlocks(rootProgram, parentAddress);
 
@@ -134,6 +137,7 @@ export class ModuleLoader {
 
       this.scopeManager.setVariable(childScope, key, {
         value,
+        position: value.position,
         context: new ModuleCall(childAddress),
         type: variable.valueType,
         defaults: variable.defaults,
@@ -164,16 +168,19 @@ export class ModuleLoader {
     }
   }
 
-  private declareVariables(program: Statement[], address: ModuleAddress): void {
+  private declareVariables(program: Statement[], address: ModuleAddress, unset: Unset = 'refuse'): void {
     const scope = scopeOf(address);
 
     // A variable with an input or a default is not missing.
     for (const stmt of program) {
       if (stmt.type !== 'Variable' || this.scopeManager.getVariable(scope, stmt.name)) continue;
-      if (stmt.attributes.default === undefined) throw new ConfigError(`variable "${stmt.name}" has no value`, stmt.position, { block: spell(stmt), module: scope || undefined });
+      const value = stmt.attributes.default;
+      if (value === undefined && unset === 'refuse')
+        throw new ConfigError(`variable "${stmt.name}" has no value`, stmt.position, { block: spell(stmt), module: scope || undefined });
 
       this.scopeManager.setVariable(scope, stmt.name, {
-        value: stmt.attributes.default,
+        value,
+        position: value?.position ?? stmt.position,
         context: address,
         type: stmt.valueType,
         defaults: stmt.defaults,

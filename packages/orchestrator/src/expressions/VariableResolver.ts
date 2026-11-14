@@ -1,4 +1,4 @@
-import { ModuleAddress, State } from '@clay/contracts';
+import { ModuleAddress, State, types, UNKNOWN } from '@clay/contracts';
 import { AttributeValue, VariableReference } from '@clay/parser';
 import { SchemaMismatch } from '../values/conformValues';
 import { givenTo } from '../values/declared';
@@ -6,7 +6,7 @@ import { Context, contextIn, moduleOf, scopeOf } from '../keys';
 import { withPlace } from '../place';
 import { ScopeManager, VariableValue } from '../config/ScopeManager';
 import { RuleReader, validate, ValidationFailed } from './validations';
-import { Value } from '../values/Value';
+import { Value, valueOf } from '../values/Value';
 import { unknownOf, UnresolvedReferenceError } from './UnresolvedReferenceError';
 
 export class VariableResolver {
@@ -23,7 +23,8 @@ export class VariableResolver {
 
     const where = contextIn(declared.context, module);
     try {
-      return this.typed(reference.name, declared, this.referenceResolver.resolveValue(declared.value, state, where), { where, module }, state);
+      const written = declared.value ? this.referenceResolver.resolveValue(declared.value, state, where) : valueOf(types.dynamic, UNKNOWN);
+      return this.typed(reference.name, declared, written, { where, module }, state);
     } catch (error) {
       if (!(error instanceof UnresolvedReferenceError)) throw error;
       // The unknown takes the variable's type, and the reader checks the reference's steps against it.
@@ -41,7 +42,7 @@ export class VariableResolver {
       validate(name, declared, value, { module, state, reader: this.referenceResolver });
       return value;
     } catch (error) {
-      if (error instanceof SchemaMismatch || error instanceof ValidationFailed) throw withPlace(error, declared.value.position, declared.block, where);
+      if (error instanceof SchemaMismatch || error instanceof ValidationFailed) throw withPlace(error, declared.position, declared.block, where);
       throw error;
     }
   }

@@ -171,8 +171,35 @@ describe('validate against real files', () => {
     expect(output).toContain('content is an object, where local_file takes a string');
   });
 
-  it('refuses a variable with no value', async () => {
-    expect(await validate('variable "name" {}')).toContain('variable "name" has no value');
+  it('takes a root variable with no value as unknown, of the type it declares', async () => {
+    const output = await validate('variable "names" {\n  type = list(string)\n}\nresource "local_file" "a" {\n  path    = "a.txt"\n  content = var.names\n}');
+
+    expect(output).toContain('content is a list, where local_file takes a string');
+  });
+
+  it('accepts a root variable with no value that a count reads', async () => {
+    const output = await validate('variable "n" {\n  type = number\n}\nresource "local_file" "a" {\n  count   = var.n\n  path    = "a.txt"\n  content = "x"\n}');
+
+    expect(output).toContain('Configuration is valid.');
+  });
+
+  it('leaves the rules of a root variable with no value to the plan', async () => {
+    const output = await validate('variable "x" {\n  type = string\n  validation {\n    condition     = length(var.x) > 2\n    error_message = "too short"\n  }\n}');
+
+    expect(output).toContain('Configuration is valid.');
+  });
+
+  it('reads the default of a root variable that has one', async () => {
+    const output = await validate('variable "n" {\n  default = "x"\n}\nresource "local_file" "a" {\n  count   = var.n\n  path    = "a.txt"\n  content = "x"\n}');
+
+    expect(output).toContain('count is a whole number from 0, not a string');
+  });
+
+  it('refuses a variable in a module that its call gives no value', async () => {
+    await fs.mkdir(path.join(dir, 'm'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'm', 'main.clay'), 'variable "name" {}', 'utf8');
+
+    expect(await validate('module "m" { source = "./m" }')).toContain('variable "name" has no value');
   });
 
   it('refuses a value the provider will not take, and points at the block', async () => {
