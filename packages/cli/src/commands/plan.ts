@@ -42,6 +42,7 @@ export function createPlanCommand() {
   return new Command('plan')
     .description('Show changes required by the current configuration')
     .option('--out <file>', 'Save plan to file')
+    .option('--destroy', 'Plan to destroy every object in state')
     .addOption(refreshOption())
     .addOption(parallelismOption())
     .addOption(lockTimeoutOption())
@@ -51,7 +52,13 @@ export function createPlanCommand() {
 
       let code: number;
       try {
-        code = await executePlan(cwd, files, { refresh: options.refresh ?? true, parallelism: options.parallelism }, options.lockTimeout, options.out);
+        code = await executePlan(
+          cwd,
+          files,
+          { refresh: options.refresh ?? true, parallelism: options.parallelism, destroy: options.destroy ?? false },
+          options.lockTimeout,
+          options.out
+        );
       } catch (error: unknown) {
         console.error(styleText('red', 'Planning failed:'), describeError(error, files));
         code = 1;

@@ -180,6 +180,10 @@ function isDataSensitive(dataSensitive: unknown): boolean {
   return dataSensitive === undefined || (isRecord(dataSensitive) && Object.values(dataSensitive).every((paths) => isAttributePaths(paths)));
 }
 
+function isAddresses(addresses: unknown): boolean {
+  return Array.isArray(addresses) && addresses.every((address) => typeof address === 'string');
+}
+
 /** Resources are checked separately, the same way state's are. */
 function isPlan(plan: Partial<Plan>): plan is Plan {
   return (
@@ -190,8 +194,8 @@ function isPlan(plan: Partial<Plan>): plan is Plan {
     isSchemas(plan.schemas) &&
     isDataSources(plan.dataSources) &&
     isDataSensitive(plan.dataSensitive) &&
-    Array.isArray(plan.readAtApply) &&
-    plan.readAtApply.every((address) => typeof address === 'string')
+    isAddresses(plan.readAtApply) &&
+    (plan.destroy === undefined || plan.destroy === true)
   );
 }
 

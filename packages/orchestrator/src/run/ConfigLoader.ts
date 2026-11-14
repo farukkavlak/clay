@@ -49,8 +49,9 @@ export class ConfigLoader {
     private limit: Limit
   ) {}
 
-  async load(): Promise<LoadedConfig> {
-    const { resources: loadedResources, modules: loadedModules, root: mainProgram } = await this.moduleLoader.loadModuleTree();
+  /** `root` stands in for the root module's files, which are then not read. */
+  async load(root?: Statement[]): Promise<LoadedConfig> {
+    const { resources: loadedResources, modules: loadedModules, root: mainProgram } = await this.moduleLoader.loadModuleTree(root);
     this.checkDefaults(loadedModules);
 
     for (const { uniqueId, block } of loadedResources) {

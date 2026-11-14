@@ -70,6 +70,7 @@ export function serializePlan(plan: Plan, files: Record<string, string>): string
     dataSources: plan.dataSources,
     dataSensitive: plan.dataSensitive,
     readAtApply: plan.readAtApply,
+    destroy: plan.destroy,
   };
 
   return JSON.stringify(file, undefined, 2);
