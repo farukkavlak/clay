@@ -89,6 +89,7 @@ one file per module. `docs/TASKS.md` has the full list.
 | `clay output [--json]`   | Prints the root outputs from the last apply; `--json` gives each with its type, a sensitive one too                              |
 | `clay state list`        | Lists the resources in state, and `<addr> (deposed)` for an address that holds deposed objects                                   |
 | `clay state show <addr>` | Prints one resource as it is in state, and each deposed object under it                                                          |
+| `clay state pull`        | Prints the state as JSON, for a script or a backup; with no state, prints nothing and exits 0                                    |
 | `clay state mv <a> <b>`  | Renames a resource in state, so the next plan does not recreate it                                                               |
 | `clay state rm <addr>`   | Forgets a resource, and its deposed objects, without destroying them                                                             |
 | `clay force-unlock <id>` | Releases the lock of a run that died, by its id; a lock with another id stays                                                    |

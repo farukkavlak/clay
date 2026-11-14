@@ -1,6 +1,6 @@
 import { Address, inAddressOrder, Marks, Resource, State } from '@clay/contracts';
 import { DiskFiles, RecordingFiles } from '@clay/orchestrator';
-import { forgetDependencies, moveResource, StateBackend, StateManager } from '@clay/state';
+import { forgetDependencies, moveResource, serializeState, StateBackend, StateManager } from '@clay/state';
 import { Command } from 'commander';
 import { styleText } from 'node:util';
 
@@ -118,6 +118,26 @@ export function createStateCommand(): Command {
         }
       } catch (error) {
         console.error(styleText('red', 'Error showing resource:'), describeError(error, files));
+        process.exit(1);
+      }
+    });
+
+  // No state yet is not a failure: a script gets exit 0 and nothing on stdout, and exit 1 only for a real one.
+  command
+    .command('pull')
+    .description('Print the state as JSON')
+    .action(async () => {
+      const files = configHere();
+      try {
+        const backend = stateFile(process.cwd(), files);
+        if (!(await backend.exists())) {
+          console.error(styleText('yellow', printable(`No state found at ${backend.location}`)));
+          return;
+        }
+
+        console.log(serializeState(await backend.read()));
+      } catch (error) {
+        console.error(styleText('red', 'Error reading state:'), describeError(error, files));
         process.exit(1);
       }
     });

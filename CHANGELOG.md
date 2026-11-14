@@ -75,6 +75,9 @@ a configuration means or how the state file is written.
   for a lock another run holds, on every backend, and says who holds it
 - `clay force-unlock <id>` releases the lock of a run that died, by its id, on every
   backend. The locked error names the id. A lock with another id is left in place
+- `clay state pull` prints the state as JSON, with what a stopped run left in the
+  journal, for a script or a backup. With no state it prints nothing and exits 0. The
+  state file escapes control characters in a value, so printing it cannot drive a terminal
 - `import` blocks take over an object that exists but is not in state, as a file by its
   path, or by any value known at plan, and one for each item of a `for_each`, to a
   resource in the root module or inside a module. The plan shows the import and any change

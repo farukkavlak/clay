@@ -1,4 +1,4 @@
-import { ExactNumber, inAddressOrder, isName, isOutput, isRecord, NestingError, NumberError, readDeposed, readResources, State, STATE_VERSION } from '@clay/contracts';
+import { ExactNumber, inAddressOrder, isName, isOutput, isRecord, jsonText, NestingError, NumberError, readDeposed, readResources, State, STATE_VERSION } from '@clay/contracts';
 
 import { replay } from './journal';
 
@@ -45,7 +45,7 @@ function inOrder(state: State): State {
 }
 
 export function serializeState(state: State): string {
-  return JSON.stringify(inOrder(state), null, 2);
+  return jsonText(inOrder(state), 2);
 }
 
 /** The state's counters are plain numbers; every other number is a value and stays exact. */

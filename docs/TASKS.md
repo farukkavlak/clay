@@ -1119,14 +1119,12 @@ Terraform has it since backends replaced `-state`.
 - [x] An `import` block takes `for_each`, one import for each item, with a key of `to`
       read from `each`
 - [x] An `import` block in a root module may name a resource inside a module
-- [ ] A provider can name what identifies a resource apart from its values, for `import`
-      and for finding it again. Terraform 1.12's resource identity
-- [ ] `clay state pull`: print the state as JSON, for a script or a backup
-- [ ] Workspaces: `clay workspace new | select | list`, one state per workspace
+- [x] `clay state pull`: print the state as JSON, for a script or a backup
 - [ ] `clay destroy`, and `plan -destroy`: today the only way to remove everything is to
       empty every `.clay` file
 - [ ] A root variable takes a value from outside the configuration: `-var`, a variables
       file and the environment. Today one with no default is refused even by `validate`
+- [ ] Workspaces: `clay workspace new | select | list`, one state per workspace
 - [ ] `plan -detailed-exitcode`, so a script can tell no changes from changes; `plan` exits
       0 either way
 - [ ] The plan lists what a resource to create holds, and names the attribute that forces a
@@ -1156,6 +1154,9 @@ by resource type, and no `provider` block exists yet.
       update does nothing
 - [ ] A first remote provider to prove the shape, small enough to keep tests real: an
       HTTP or GitHub provider before an AWS one
+- [ ] A provider can name what identifies a resource apart from its values, for `import`
+      and for finding it again, once a remote provider needs it. A file's path is already
+      its id. Terraform 1.12's resource identity
 - [ ] `local_file` takes two paths for two files in rare file system corners. An empty
       volume mounted under a directory with the other case rule is judged by that
       directory. `é` as one character and as `e` with an accent are two names, though

@@ -25,6 +25,18 @@ describe('reading a state file', () => {
     expect(parseState(serializeState(state), 'clay.state.json')).toEqual(state);
   });
 
+  // `state pull` prints this text, so a value in it cannot drive the terminal.
+  it('escapes a control character in a value and reads the value back', () => {
+    const content = 'a\u009B2Jb\u202Ec\u007F';
+    const state = { ...emptyState(), resources: { 'local_file.a': { resourceType: 'local_file', name: 'a', attributes: { content } } } };
+
+    const text = serializeState(state);
+
+    expect(text).toContain(String.raw`a\u009b2Jb\u202ec\u007f`);
+    expect(text).not.toMatch(/[\u007F-\u009F\u202E]/u);
+    expect(parseState(text, 'clay.state.json').resources['local_file.a'].attributes.content).toBe(content);
+  });
+
   // A run writes each resource as its action finishes, which is no order at all.
   it('writes the resources and the deposed objects in address order, whatever order they were held in', () => {
     const state = {
