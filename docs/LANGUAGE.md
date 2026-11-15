@@ -885,7 +885,8 @@ objects stay where they are with no state that tracks them.
 The selected name is kept in `.clay/workspace`, and with no such file it is `default`.
 `plan`, `apply`, `destroy`, `output`, `state` and `force-unlock` run on the selected
 workspace. `init` and `validate` do not read the selection. A selected named workspace
-that has no state is refused, so a typo never starts from an empty state.
+that has no state is refused, so a typo never starts from an empty state. So is one
+deleted while a run waited for its lock, which the run would write back.
 
 A name is lowercase letters, digits and `-`, 1 to 63 of them, starting and ending with a
 letter or a digit.

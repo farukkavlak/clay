@@ -53,8 +53,9 @@ describe('the backend init remembers', () => {
   const old = () => new LocalBackend(dir);
   const other = () => new LocalBackend(dir, 'other.json');
   const named = async (name: string) => {
-    await fs.mkdir(path.join(dir, 'clay.workspaces', name), { recursive: true });
-    await written(old().workspace(name), holding(name));
+    const backend = old().workspace(name);
+    await backend.prepare();
+    await written(backend, holding(name));
   };
   const exists = (name: string) =>
     fs.access(path.join(dir, name)).then(

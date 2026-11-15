@@ -146,6 +146,39 @@ describe('a command that waits for the lock', () => {
     expect(await lockHeld()).toEqual(holder);
   });
 
+  it.each([
+    ['its state', ['clay.state.json']],
+    ['its folder', []],
+  ])('refuses a workspace that loses %s while the run waits, and writes no state', async (_, kept) => {
+    await run('workspace', 'new', 'dev');
+    const devFolder = path.join('clay.workspaces', 'dev');
+    await leaveLock(path.join(devFolder, 'clay.state.json.lock'));
+    const { ended } = await waitingFor('apply', '--yes', '--lock-timeout', '10');
+
+    await fs.rm(file(path.join(devFolder, 'clay.state.json')));
+    await fs.rm(file(path.join(devFolder, 'clay.state.json.lock')));
+    if (kept.length === 0) await fs.rm(file(devFolder), { recursive: true });
+
+    const { code, stderr } = await ended;
+    expect(code).toBe(1);
+    expect(stderr).toContain('Workspace "dev" does not exist');
+    if (kept.length > 0) await expect(fs.readdir(file(devFolder))).resolves.toEqual([]);
+    else expect(await exists(devFolder)).toBe(false);
+  });
+
+  it('refuses to delete a workspace another run deleted while this one waited', async () => {
+    await run('workspace', 'new', 'dev');
+    await run('workspace', 'select', 'default');
+    const devFolder = path.join('clay.workspaces', 'dev');
+    await leaveLock(path.join(devFolder, 'clay.state.json.lock'));
+    const { ended } = await waitingFor('workspace', 'delete', 'dev', '--lock-timeout', '10');
+
+    await fs.rm(file(path.join(devFolder, 'clay.state.json')));
+    await fs.rm(file(path.join(devFolder, 'clay.state.json.lock')));
+
+    expect(await ended).toMatchObject({ code: 1, stderr: expect.stringContaining('Failed to delete the workspace: Workspace "dev" does not exist') });
+  });
+
   it.each([['-1'], ['1.5'], ['3601'], ['01'], ['ten']])('refuses --lock-timeout %s', async (value) => {
     const { code, stderr } = await run('plan', '--lock-timeout', value);
 

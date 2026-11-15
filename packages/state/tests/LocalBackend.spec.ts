@@ -89,10 +89,42 @@ describe('LocalBackend', () => {
 
     it('has a lock of its own', async () => {
       await fs.mkdir(path.join(dir, 'clay.workspaces', 'dev'), { recursive: true });
+      await new LocalBackend(dir).workspace('dev').write({ ...emptyState(), lineage: 'dev' });
       await new LocalBackend(dir).lock(lockInfo);
 
       await new LocalBackend(dir).workspace('dev').lock(lockInfo);
-      await expect(fs.readdir(path.join(dir, 'clay.workspaces', 'dev'))).resolves.toEqual(['clay.state.json.lock']);
+      await expect(fs.readdir(path.join(dir, 'clay.workspaces', 'dev'))).resolves.toEqual(['clay.state.json', 'clay.state.json.lock']);
+    });
+
+    it('refuses its lock once its state is gone, and leaves no lock', async () => {
+      await fs.mkdir(path.join(dir, 'clay.workspaces', 'dev'), { recursive: true });
+
+      await expect(new LocalBackend(dir).workspace('dev').lock(lockInfo)).rejects.toThrow('Workspace "dev" does not exist');
+      await expect(fs.readdir(path.join(dir, 'clay.workspaces', 'dev'))).resolves.toEqual([]);
+    });
+
+    it('refuses to read a state that is gone, rather than read it as empty', async () => {
+      await expect(new LocalBackend(dir).workspace('dev').read()).rejects.toThrow('Workspace "dev" does not exist');
+      await expect(new LocalBackend(dir).read()).resolves.toEqual(emptyState());
+    });
+
+    it('refuses its lock once its folder is gone, and makes none', async () => {
+      await expect(new LocalBackend(dir).workspace('dev').lock(lockInfo)).rejects.toThrow('Workspace "dev" does not exist');
+      await expect(fs.readdir(dir)).resolves.toEqual([]);
+    });
+
+    it('is locked with no state yet once prepared, as a new one is made', async () => {
+      const backend = new LocalBackend(dir).workspace('dev');
+      await backend.prepare();
+
+      await backend.lock(lockInfo);
+      await expect(backend.writeIfAbsent({ ...emptyState(), lineage: 'dev' })).resolves.toBe(true);
+    });
+
+    it('is the default one, locked with no state yet, which runs without one', async () => {
+      await new LocalBackend(dir).lock(lockInfo);
+
+      await expect(fs.readdir(dir)).resolves.toEqual(['clay.state.json.lock']);
     });
 
     it('writes and reads its own state', async () => {

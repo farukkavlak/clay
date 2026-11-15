@@ -81,13 +81,17 @@ export class LocalBackend implements NamedWorkspace {
   private filePath: string;
   private lockFilePath: string;
   private journalPath: string;
+  private readonly workspaceName: string;
   private backedUp = false;
   private journalNamed = false;
+  /** Set by `prepare`, as `workspace new` makes the workspace whose lock it then takes. */
+  private making = false;
 
   constructor(workingDir: string, filename: string = 'clay.state.json', workspace: string = DEFAULT_WORKSPACE) {
     const defaultPath = path.resolve(workingDir, filename);
     this.workingDir = workingDir;
     this.defaultPath = defaultPath;
+    this.workspaceName = workspace;
     this.filePath = workspacePath(defaultPath, workspace);
     this.lockFilePath = `${this.filePath}.lock`;
     this.journalPath = `${this.filePath}.journal`;
@@ -117,6 +121,7 @@ export class LocalBackend implements NamedWorkspace {
   async prepare(): Promise<void> {
     if (this.filePath === this.defaultPath) return;
 
+    this.making = true;
     const folder = path.dirname(this.filePath);
     const made = await fs.mkdir(folder, { recursive: true });
     if (made === undefined) return;
@@ -177,10 +182,10 @@ export class LocalBackend implements NamedWorkspace {
       const content = await fs.readFile(this.filePath);
       return parseState(content.toString('utf8'), this.filePath, await this.readJournal());
     } catch (error) {
-      const err = error as { code?: string };
-      if (err.code === 'ENOENT') return emptyState();
+      if ((error as { code?: string }).code !== 'ENOENT') throw error;
+      if (this.mustExist) throw this.missing();
 
-      throw error;
+      return emptyState();
     }
   }
 
@@ -242,11 +247,35 @@ export class LocalBackend implements NamedWorkspace {
     return createFilled(this.filePath, serializeState(state));
   }
 
+  /** A named workspace deleted while this run waited is refused, so the run never writes it back. */
   async lock(info: LockInfo): Promise<void> {
-    const taken = await createFilled(this.lockFilePath, JSON.stringify(info));
+    const taken = await this.lockCreated(info);
     if (!taken) throw new StateLocked(await this.holder(), `remove ${this.lockFilePath}`);
 
     this.backedUp = false;
+    if (!this.mustExist || (await this.exists())) return;
+
+    await this.unlock(info.id);
+    throw this.missing();
+  }
+
+  /** A named workspace has a state, but where `workspace new` is making it; the default one runs without. */
+  private get mustExist(): boolean {
+    return this.filePath !== this.defaultPath && !this.making;
+  }
+
+  private missing(): Error {
+    return new Error(`Workspace "${this.workspaceName}" does not exist`);
+  }
+
+  private async lockCreated(info: LockInfo): Promise<boolean> {
+    try {
+      return await createFilled(this.lockFilePath, JSON.stringify(info));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT' && this.mustExist) throw this.missing();
+
+      throw error;
+    }
   }
 
   /** A run that has just unlocked leaves no lock file. */

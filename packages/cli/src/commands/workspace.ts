@@ -61,8 +61,6 @@ const holdsObjects = ({ resources, deposed }: State) => Object.keys(resources).l
 
 async function deletedUnderLock(named: NamedWorkspace, manager: StateManager, name: string, force: boolean): Promise<number> {
   await stoppedAtOnce([manager], () => manager.lock('workspace delete'));
-  // Another run may have deleted it while this one waited for the lock.
-  if (!(await named.exists())) throw missing(name);
   if (!force && holdsObjects(await manager.read()))
     throw new Error(
       `Workspace "${name}" still has resources in its state; destroy them with \`clay destroy\` in that workspace first, or delete it with --force, which forgets them and leaves them in place`
