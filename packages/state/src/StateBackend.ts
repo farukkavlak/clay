@@ -47,11 +47,20 @@ export interface StateBackend {
   forceUnlock(id: string): Promise<void>;
 
   /** The backend of workspace `name`, the same whichever workspace it is called on. Absent where the backend keeps a single state. */
-  workspace?(name: string): StateBackend;
+  workspace?(name: string): NamedWorkspace;
 
   /** The workspaces whose state exists, `default` first and always. Present wherever `workspace` is. */
   listWorkspaces?(): Promise<string[]>;
 
   /** Makes the place the state of a new workspace goes in, where one must be made. */
   prepare?(): Promise<void>;
+}
+
+/** The backend of one workspace of a backend that keeps many. */
+export interface NamedWorkspace extends StateBackend {
+  /** Removes the state of a named workspace, called under its lock. */
+  remove(): Promise<void>;
+
+  /** Clears the place a removed state was kept, once its lock is released, and leaves what else is there. */
+  prune(): Promise<void>;
 }

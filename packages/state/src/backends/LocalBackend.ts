@@ -6,7 +6,7 @@ import path from 'node:path';
 import { emptyState, State } from '@clay/contracts';
 
 import { LockInfo, lockInfoFrom, noLockAt, otherLockAt, StateLocked } from '../lockInfo';
-import { BackendChoice, DEFAULT_WORKSPACE, StateBackend } from '../StateBackend';
+import { BackendChoice, DEFAULT_WORKSPACE, NamedWorkspace } from '../StateBackend';
 import { Journal, parseState, serializeState } from '../stateFile';
 import { isWorkspaceName } from './workspaces';
 import { appendSynced, syncDir, writeSynced } from './durable';
@@ -49,6 +49,19 @@ function workspacePath(defaultPath: string, workspace: string): string {
   return path.join(workspacesOf(defaultPath), workspace, path.basename(defaultPath));
 }
 
+/** False where something is in it, as another run may put there. */
+async function removedIfEmpty(folder: string): Promise<boolean> {
+  try {
+    await fs.rmdir(folder);
+    return true;
+  } catch (error) {
+    const { code } = error as NodeJS.ErrnoException;
+    if (code === 'ENOTEMPTY' || code === 'EEXIST') return false;
+
+    throw error;
+  }
+}
+
 /** Nothing where the folder of workspaces is missing, or a file stands in its place. */
 async function entriesOf(folder: string): Promise<Dirent[]> {
   try {
@@ -61,7 +74,7 @@ async function entriesOf(folder: string): Promise<Dirent[]> {
   }
 }
 
-export class LocalBackend implements StateBackend {
+export class LocalBackend implements NamedWorkspace {
   readonly choice: BackendChoice;
   private readonly workingDir: string;
   private readonly defaultPath: string;
@@ -111,6 +124,22 @@ export class LocalBackend implements StateBackend {
     // Each folder made is named in the one that holds it.
     await syncDir(path.dirname(made));
     if (made !== folder) await syncDir(path.dirname(folder));
+  }
+
+  /** The journal goes first, so a stopped removal never leaves lines a new state of this workspace would read. */
+  async remove(): Promise<void> {
+    if (this.filePath === this.defaultPath) throw new Error('The state of the default workspace is not removed');
+
+    for (const file of [this.journalPath, `${this.filePath}.bak`, this.filePath]) await fs.rm(file, { force: true });
+    await syncDir(path.dirname(this.filePath));
+  }
+
+  /** The folders are Clay's own, made by `prepare`; the one of the default state is not. */
+  async prune(): Promise<void> {
+    if (this.filePath === this.defaultPath) return;
+
+    const folder = path.dirname(this.filePath);
+    if (await removedIfEmpty(folder)) await removedIfEmpty(path.dirname(folder));
   }
 
   get location(): string {

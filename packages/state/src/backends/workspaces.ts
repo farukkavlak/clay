@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import path from 'node:path';
 
 import { replaceSynced } from './durable';
-import { DEFAULT_WORKSPACE, StateBackend } from '../StateBackend';
+import { DEFAULT_WORKSPACE, NamedWorkspace, StateBackend } from '../StateBackend';
 
 // A DNS label, since the name goes into paths and resource names; lowercase, as a macOS disk does not tell cases apart.
 const NAME = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
@@ -43,7 +43,7 @@ export async function selectWorkspace(workingDir: string, name: string): Promise
 }
 
 /** The backend of named workspace `name`, whether its state exists or not. */
-export function namedWorkspace(backend: StateBackend, name: string): StateBackend {
+export function namedWorkspace(backend: StateBackend, name: string): NamedWorkspace {
   if (backend.workspace === undefined) throw new Error(`Backend "${backend.choice.type}" keeps one state, so workspace "${name}" cannot be used`);
 
   return backend.workspace(name);

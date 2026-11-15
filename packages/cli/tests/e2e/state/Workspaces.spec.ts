@@ -312,6 +312,98 @@ describe('clay workspace', () => {
 
     expect(await run('workspace', 'list')).toEqual({ code: 0, stdout: '  default\n* dev\n  test\n', stderr: '' });
   });
+
+  it('delete removes a workspace with nothing in its state, and the folders it was in', async () => {
+    await run('workspace', 'new', 'dev');
+    await run('workspace', 'select', 'default');
+
+    expect(await run('workspace', 'delete', 'dev')).toEqual({ code: 0, stdout: '✓ Deleted workspace "dev"\n', stderr: '' });
+    await expect(fs.readdir(dir)).resolves.toEqual(['.clay', 'main.clay']);
+    expect(await run('workspace', 'list')).toMatchObject({ stdout: '* default\n' });
+  });
+
+  it('delete refuses a workspace whose state holds resources, and --force deletes it, leaving them', async () => {
+    await run('workspace', 'new', 'dev');
+    await run('apply', '--yes');
+    await run('workspace', 'select', 'default');
+
+    expect(await run('workspace', 'delete', 'dev')).toEqual({
+      code: 1,
+      stdout: '',
+      stderr:
+        'Failed to delete the workspace: Workspace "dev" still has resources in its state; destroy them with `clay destroy` in that workspace first, or delete it with --force, which forgets them and leaves them in place\n',
+    });
+    expect(await resourcesIn(devState)).toEqual(['local_file.f']);
+
+    expect(await run('workspace', 'delete', 'dev', '--force')).toMatchObject({ code: 0, stdout: '✓ Deleted workspace "dev"\n' });
+    await expect(fs.access(path.join(dir, 'clay.workspaces'))).rejects.toThrow('ENOENT');
+    expect(await read('f.txt')).toBe('x');
+  });
+
+  it('delete refuses a workspace whose state holds only deposed objects', async () => {
+    await run('workspace', 'new', 'dev');
+    await run('workspace', 'select', 'default');
+    const deposed = { 'local_file.f': [{ attributes: { path: 'f.txt', content: 'x' } }] };
+    await fs.writeFile(path.join(dir, devState), serializeState({ ...emptyState(), lineage: 'lineage', deposed }), 'utf8');
+
+    expect(await run('workspace', 'delete', 'dev')).toMatchObject({ code: 1, stderr: expect.stringContaining('Workspace "dev" still has resources in its state') });
+    expect(JSON.parse(await read(devState))).toMatchObject({ deposed });
+  });
+
+  it('delete --force removes a workspace whose state cannot be read', async () => {
+    await run('workspace', 'new', 'dev');
+    await run('workspace', 'select', 'default');
+    await fs.writeFile(path.join(dir, devState), '{ not json', 'utf8');
+
+    expect(await run('workspace', 'delete', 'dev')).toMatchObject({ code: 1 });
+    expect(await run('workspace', 'delete', 'dev', '--force')).toMatchObject({ code: 0, stdout: '✓ Deleted workspace "dev"\n' });
+    await expect(fs.access(path.join(dir, 'clay.workspaces'))).rejects.toThrow('ENOENT');
+  });
+
+  it('delete refuses the selected workspace, which every command that follows would miss', async () => {
+    await run('workspace', 'new', 'dev');
+
+    expect(await run('workspace', 'delete', 'dev')).toMatchObject({
+      code: 1,
+      stderr: 'Failed to delete the workspace: Workspace "dev" is selected; select another one before deleting it\n',
+    });
+    expect(await resourcesIn(devState)).toEqual([]);
+  });
+
+  it('delete refuses the default workspace, which always exists', async () => {
+    await run('apply', '--yes');
+
+    expect(await run('workspace', 'delete', 'default')).toMatchObject({
+      code: 1,
+      stderr: 'Failed to delete the workspace: Workspace "default" always exists, and cannot be deleted\n',
+    });
+    expect(await resourcesIn('clay.state.json')).toEqual(['local_file.f']);
+  });
+
+  it('delete refuses a workspace that does not exist, and makes nothing', async () => {
+    expect(await run('workspace', 'delete', 'dev')).toMatchObject({ code: 1, stderr: 'Failed to delete the workspace: Workspace "dev" does not exist\n' });
+    await expect(fs.readdir(dir)).resolves.toEqual(['main.clay']);
+  });
+
+  it('delete refuses a name no workspace can have, and makes nothing', async () => {
+    const { code, stderr } = await run('workspace', 'delete', '../dev');
+
+    expect(code).toBe(1);
+    expect(stderr).toContain('Workspace name "../dev" in the command line is not valid');
+    await expect(fs.readdir(dir)).resolves.toEqual(['main.clay']);
+  });
+
+  it('delete refuses a workspace another run holds the lock of, and keeps it', async () => {
+    await run('workspace', 'new', 'dev');
+    await run('workspace', 'select', 'default');
+    await fs.writeFile(path.join(dir, `${devState}.lock`), JSON.stringify({ id: 'other', operation: 'apply', who: 'me', host: 'here', pid: 1, created: 'now' }), 'utf8');
+
+    const { code, stderr } = await run('workspace', 'delete', 'dev');
+
+    expect(code).toBe(1);
+    expect(stderr).toContain('Failed to delete the workspace: State is locked by apply of me on here');
+    expect(await resourcesIn(devState)).toEqual([]);
+  });
 });
 
 describe('clay workspace on a backend that keeps one state', () => {
@@ -350,5 +442,18 @@ describe('clay workspace on a backend that keeps one state', () => {
     expect(stderr).toBe('Failed to make the workspace: Backend "http" keeps one state, so workspace "dev" cannot be used\n');
     expect(server.state).toBe(before);
     await expect(fs.access(path.join(dir, '.clay', 'workspace'))).rejects.toThrow('ENOENT');
+  });
+
+  it('refuses to delete a workspace, and changes nothing', async () => {
+    const before = server.state;
+    let stderr = '';
+    try {
+      await promisify(execFile)('node', [clay, 'workspace', 'delete', 'dev'], { cwd: dir });
+    } catch (error) {
+      stderr = stripVTControlCharacters((error as { stderr: string }).stderr);
+    }
+
+    expect(stderr).toBe('Failed to delete the workspace: Backend "http" keeps one state, so workspace "dev" cannot be used\n');
+    expect(server.state).toBe(before);
   });
 });

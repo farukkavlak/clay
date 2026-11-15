@@ -1,6 +1,6 @@
-import { emptyState } from '@clay/contracts';
+import { emptyState, State } from '@clay/contracts';
 import { ConfigFiles, DiskFiles, RecordingFiles } from '@clay/orchestrator';
-import { checkWorkspaceName, DEFAULT_WORKSPACE, namedWorkspace, selectedWorkspace, selectWorkspace, StateManager, workspaceBackend } from '@clay/state';
+import { checkWorkspaceName, DEFAULT_WORKSPACE, NamedWorkspace, namedWorkspace, selectedWorkspace, selectWorkspace, StateManager, workspaceBackend } from '@clay/state';
 import { Command } from 'commander';
 import { styleText } from 'node:util';
 
@@ -55,6 +55,37 @@ async function select(cwd: string, files: ConfigFiles, name: string): Promise<nu
   return 0;
 }
 
+const missing = (name: string) => new Error(`Workspace "${name}" does not exist`);
+
+const holdsObjects = ({ resources, deposed }: State) => Object.keys(resources).length > 0 || Object.keys(deposed ?? {}).length > 0;
+
+async function deletedUnderLock(named: NamedWorkspace, manager: StateManager, name: string, force: boolean): Promise<number> {
+  await stoppedAtOnce([manager], () => manager.lock('workspace delete'));
+  // Another run may have deleted it while this one waited for the lock.
+  if (!(await named.exists())) throw missing(name);
+  if (!force && holdsObjects(await manager.read()))
+    throw new Error(
+      `Workspace "${name}" still has resources in its state; destroy them with \`clay destroy\` in that workspace first, or delete it with --force, which forgets them and leaves them in place`
+    );
+
+  await named.remove();
+  console.log(styleText('green', `✓ Deleted workspace "${name}"`));
+  return 0;
+}
+
+async function deleteWorkspace(cwd: string, files: ConfigFiles, name: string, options: { force?: boolean; lockTimeout?: number }): Promise<number> {
+  if (name === DEFAULT_WORKSPACE) throw new Error(`Workspace "${name}" always exists, and cannot be deleted`);
+  if (name === selectedWorkspace(cwd)) throw new Error(`Workspace "${name}" is selected; select another one before deleting it`);
+
+  const named = namedWorkspace(checkedBackend(cwd, files), name);
+  if (!(await named.exists())) throw missing(name);
+  const manager = new StateManager(named, lockWait(options.lockTimeout));
+
+  const code = await releasedAfter(manager, () => deletedUnderLock(named, manager, name, options.force ?? false));
+  await named.prune();
+  return code;
+}
+
 async function list(cwd: string, files: ConfigFiles): Promise<number> {
   const backend = checkedBackend(cwd, files);
   const selected = selectedWorkspace(cwd);
@@ -89,6 +120,16 @@ export function createWorkspaceCommand(): Command {
         console.log(selectedWorkspace(cwd));
         return 0;
       })
+    );
+
+  command
+    .command('delete')
+    .description('Delete a workspace that has no resources in its state')
+    .argument('<name>', 'The name of the workspace')
+    .option('-f, --force', 'Delete it with its resources still in its state, which then no run manages')
+    .addOption(lockTimeoutOption())
+    .action((name: string, options: { force?: boolean; lockTimeout?: number }) =>
+      inThisDirectory('Failed to delete the workspace:', (cwd, files) => deleteWorkspace(cwd, files, checkWorkspaceName(name, GIVEN), options))()
     );
 
   command.command('list').description('List the workspaces, marking the selected one').action(inThisDirectory('Failed to list the workspaces:', list));

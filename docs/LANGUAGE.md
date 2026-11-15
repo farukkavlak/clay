@@ -877,6 +877,11 @@ it. `select` selects one that exists, `show` prints the selected one and `list` 
 all, with `*` before the selected one. Where the backend keeps one state, `list` shows
 `default` alone.
 
+`clay workspace delete <name>` removes a workspace and its state, under its lock. It
+refuses `default`, the selected workspace, and one whose state still holds resources or
+deposed objects: run `clay destroy` in it first. `--force` deletes it anyway, and those
+objects stay where they are with no state that tracks them.
+
 The selected name is kept in `.clay/workspace`, and with no such file it is `default`.
 `plan`, `apply`, `destroy`, `output`, `state` and `force-unlock` run on the selected
 workspace. `init` and `validate` do not read the selection. A selected named workspace

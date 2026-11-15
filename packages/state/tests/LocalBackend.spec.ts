@@ -16,6 +16,19 @@ describe('LocalBackend', () => {
     await fs.writeFile(path.join(dir, folder, file), '', 'utf8');
   };
 
+  /** The folder of workspace `dev`. */
+  const devFolder = () => path.join(dir, 'clay.workspaces', 'dev');
+  /** Workspace `dev` with a state, a backup, a journal and a held lock. */
+  const writtenDev = async () => {
+    const backend = new LocalBackend(dir).workspace('dev');
+    await backend.prepare();
+    await backend.write({ ...emptyState(), lineage: 'dev' });
+    await backend.append('line\n');
+    await fs.writeFile(`${backend.location}.bak`, 'before', 'utf8');
+    await fs.writeFile(`${backend.location}.lock`, 'held', 'utf8');
+    return backend;
+  };
+
   beforeEach(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-local-backend-'));
   });
@@ -127,6 +140,52 @@ describe('LocalBackend', () => {
       await new LocalBackend(dir, 'kept/app.json').prepare();
 
       await expect(fs.readdir(dir)).resolves.toEqual([]);
+    });
+  });
+
+  describe('a named workspace removed', () => {
+    it('loses its state, backup and journal, and keeps the lock it is removed under', async () => {
+      const backend = await writtenDev();
+      await expect(fs.readdir(devFolder())).resolves.toEqual(['clay.state.json', 'clay.state.json.bak', 'clay.state.json.journal', 'clay.state.json.lock']);
+
+      await backend.remove();
+
+      await expect(fs.readdir(devFolder())).resolves.toEqual(['clay.state.json.lock']);
+    });
+
+    it('has its folders pruned once the lock is released', async () => {
+      const backend = await writtenDev();
+      await backend.remove();
+      await fs.rm(`${backend.location}.lock`);
+
+      await backend.prune();
+
+      await expect(fs.readdir(dir)).resolves.toEqual([]);
+    });
+
+    it('leaves its folders to what is still in them', async () => {
+      const backend = await writtenDev();
+      await fs.mkdir(path.join(dir, 'clay.workspaces', 'test'));
+      await backend.remove();
+
+      await backend.prune();
+
+      await expect(fs.readdir(devFolder())).resolves.toEqual(['clay.state.json.lock']);
+      await fs.rm(`${backend.location}.lock`);
+      await backend.prune();
+      await expect(fs.readdir(path.join(dir, 'clay.workspaces'))).resolves.toEqual(['test']);
+    });
+
+    it('is never the default state, whose folder is not pruned', async () => {
+      const backend = new LocalBackend(dir, 'kept/app.json');
+      await fs.mkdir(path.join(dir, 'kept'));
+      await backend.write(emptyState());
+
+      await expect(backend.remove()).rejects.toThrow('The state of the default workspace is not removed');
+      await expect(backend.exists()).resolves.toBe(true);
+      await fs.rm(path.join(dir, 'kept', 'app.json'));
+      await backend.prune();
+      await expect(fs.readdir(dir)).resolves.toEqual(['kept']);
     });
   });
 
