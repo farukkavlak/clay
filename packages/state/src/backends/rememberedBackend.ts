@@ -4,13 +4,12 @@ import * as fs from 'node:fs';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 
-import { LockNotReleased } from '../lockInfo';
-import { BackendChoice, DEFAULT_WORKSPACE, StateBackend } from '../StateBackend';
-import { StateManager } from '../StateManager';
+import { BackendChoice, StateBackend } from '../StateBackend';
 import { build } from './build';
 import { replaceSynced } from './durable';
 import { HandshakeFailed, NoAnswer } from './httpRequest';
 import { LocalBackend } from './LocalBackend';
+import { Adopted, Approve, moveStates, namedWorkspaces, Previous, Stoppable, unstoppable } from './moveState';
 import { Environment, recordSettings, unwritten } from './settings';
 
 const recordOf = (workingDir: string) => path.join(workingDir, '.clay', 'backend.json');
@@ -95,116 +94,22 @@ export function checkBackend(backend: StateBackend, workingDir: string, env: Env
   throw position ? new ConfigError(message, position) : new Error(message);
 }
 
-/** Asked before a state is moved; only true moves it. */
-export type Approve = (question: string) => Promise<boolean>;
-
-/** Runs a step that Ctrl-C may end at once, as the CLI runs one that writes nothing. */
-export type Stoppable = <T>(step: () => Promise<T>) => Promise<T>;
-
-const unstoppable: Stoppable = (step) => step();
-
-/** A state `init` found at the place it took before. */
-export interface Moved {
-  readonly from: BackendChoice;
-  /** False where the new place held the same state already. */
-  readonly copied: boolean;
-}
-
-export interface Adopted {
-  /** Unset where the old place held no state. */
-  readonly moved?: Moved;
-  /** Set where the lock of the old place could not be released. */
-  readonly lockLeft?: LockNotReleased;
-}
-
 async function writeRecord(choice: BackendChoice, workingDir: string): Promise<void> {
   // A record lost to a power loss would turn the next run to an empty local state.
   await replaceSynced(recordOf(workingDir), `${JSON.stringify({ type: choice.type, settings: choice.settings })}\n`);
 }
 
-/** What `init` took before, and the manager that locks it while the state moves. */
-export interface Previous {
-  readonly backend: StateBackend;
-  readonly manager: StateManager;
-}
-
-/** Two places on one server may share a lock, which `init` holds already. */
-const sharedLock = (a: BackendChoice, b: BackendChoice) =>
-  a.type === b.type && a.settings.lock_address !== undefined && a.settings.lock_address === b.settings.lock_address && a.settings.lock_method === b.settings.lock_method;
-
-const journalAlone = ({ where }: BackendChoice) =>
-  new Error(`"${where}" has a journal and no state, so there is nothing to move; remove ${where}.journal and run \`clay init\` again`);
-
-/** Called under both locks. `gone` is a state another run removed since `init` looked. */
-async function copyState(before: StateBackend, backend: StateBackend, approve: Approve): Promise<'copied' | 'same' | 'gone'> {
-  if (!(await before.exists())) {
-    if (before instanceof LocalBackend) throw journalAlone(before.choice);
-    return 'gone';
-  }
-
-  const from = before.choice;
-  const to = backend.choice;
-  const state = await before.read();
-  if (await backend.exists()) {
-    // The same state is what an init stopped after the copy leaves.
-    if (isDeepStrictEqual(await backend.read(), state)) return 'same';
-
-    throw new Error(`"${from.where}" and "${to.where}" both hold a state, and they differ; remove the one you do not want, and run \`clay init\` again`);
-  }
-
-  if (!(await approve(`Move the state in "${from.where}" (${from.type}) to "${to.where}" (${to.type})?`))) throw new Error('The state was not moved, and nothing changed');
-
-  await backend.write(state);
-  return 'copied';
-}
-
-/** The record is written before the old lock is released, so no run takes the old place in between. */
-async function moveState(backend: StateBackend, previous: Previous, workingDir: string, approve: Approve, stoppable: Stoppable): Promise<Adopted> {
-  const { backend: before, manager: old } = previous;
-  if (!sharedLock(before.choice, backend.choice)) await stoppable(() => old.lock('init'));
-
-  let outcome: 'copied' | 'same' | 'gone';
-  try {
-    outcome = await copyState(before, backend, approve);
-    await writeRecord(backend.choice, workingDir);
-  } catch (error) {
-    return await old.unlockAfter(error);
-  }
-
-  const adopted = outcome === 'gone' ? {} : { moved: { from: before.choice, copied: outcome === 'copied' } };
-  try {
-    await old.unlock();
-    return adopted;
-  } catch (error) {
-    if (!(error instanceof LockNotReleased)) throw error;
-
-    return { ...adopted, lockLeft: error };
-  }
-}
-
-/** `init` moves only the default workspace, so another one would be left at a place no run reads any more. */
-async function refuseWorkspacesLeft(before: StateBackend): Promise<void> {
-  const names = (await before.listWorkspaces?.()) ?? [DEFAULT_WORKSPACE];
-  const others = names.filter((name) => name !== DEFAULT_WORKSPACE);
-  if (others.length === 0) return;
-
-  const { where, type } = before.choice;
-  throw new Error(
-    `Workspaces other than the default one are kept with "${where}" (${type}): ${others.map((name) => `"${name}"`).join(', ')}; \`clay init\` moves only the default one, so keep this backend while they exist`
-  );
-}
-
 /**
- * Takes what the configuration names, and moves the state from the place `previous` holds once `approve` says so. Called under the lock
- * of `backend`; the lock of the old place is taken through `stoppable`.
+ * Takes what the configuration names, and moves the state of every workspace from the place `previous` holds once `approve` says so.
+ * Called under the lock of `backend`; the other locks are taken through `stoppable`.
  */
 export async function adoptBackend(backend: StateBackend, previous: Previous, workingDir: string, approve: Approve, stoppable: Stoppable = unstoppable): Promise<Adopted> {
   const before = previous.backend;
   if (isDeepStrictEqual(before.choice, backend.choice)) return {};
 
   if (!isSame(before.choice, backend.choice)) {
-    await refuseWorkspacesLeft(before);
-    if (await leftBehind(before, workingDir)) return moveState(backend, previous, workingDir, approve, stoppable);
+    const named = await namedWorkspaces(before, backend);
+    if (named.length > 0 || (await leftBehind(before, workingDir))) return moveStates(named, backend, previous, approve, stoppable, () => writeRecord(backend.choice, workingDir));
   }
 
   await writeRecord(backend.choice, workingDir);

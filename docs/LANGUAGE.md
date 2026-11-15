@@ -898,8 +898,11 @@ and `azure` keep one state, and refuse a workspace other than `default`.
 `plan`, `apply` and `destroy` name a workspace other than `default` in what they print
 first, and in the question before an apply.
 
-`clay init` moves only the state of `default`. Where the backend block names another
-place and other workspaces exist, it refuses and changes nothing.
+`clay init` moves every workspace when the backend block names another place. It takes the
+lock of each one at both places and asks once, naming the workspaces it moves. It writes
+the named ones first, then `default`, then `.clay/backend.json`, so an `init` run again
+after a stop goes on where it was. A backend that keeps one state is refused while other
+workspaces exist; delete them first.
 
 ## Saved plans
 

@@ -145,7 +145,7 @@ describe('a local write a power loss cannot undo', () => {
   it('flushes the record of a backend, the directory it made for it, and the directory that holds it', async () => {
     const backend = rememberedBackend(dir, {});
 
-    await adoptBackend(new LocalBackend(dir, 'other.json'), { backend, manager: new StateManager(backend) }, dir, async () => true);
+    await adoptBackend(new LocalBackend(dir, 'other.json'), { backend, manage: (locked) => new StateManager(locked) }, dir, async () => true);
 
     expect(seen.steps).toEqual(['sync dir', 'sync backend.json.<id>', 'rename backend.json.<id> backend.json', 'rm backend.json.<id>', 'sync .clay']);
   });

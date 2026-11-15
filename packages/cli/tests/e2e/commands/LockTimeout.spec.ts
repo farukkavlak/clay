@@ -146,6 +146,23 @@ describe('a command that waits for the lock', () => {
     expect(await lockHeld()).toEqual(holder);
   });
 
+  it('init waits for the lock of a named workspace, and Ctrl-C there releases every lock it took', async () => {
+    await run('workspace', 'new', 'dev');
+    await fs.writeFile(file('main.clay'), 'clay {\n  backend "local" {\n    path = "new.json"\n  }\n}\n', 'utf8');
+    const devLock = path.join('clay.workspaces', 'dev', 'clay.state.json.lock');
+    await leaveLock(devLock);
+    const { ended } = await waitingFor('init', '--yes', '--lock-timeout', '60');
+    expect(await exists(path.join('clay.workspaces', 'dev', 'new.json.lock'))).toBe(true);
+
+    waiting!.kill('SIGINT');
+
+    const { code } = await ended;
+    expect(code).toBe(130);
+    expect(await exists('new.json.lock')).toBe(false);
+    expect(await exists(path.join('clay.workspaces', 'dev', 'new.json.lock'))).toBe(false);
+    expect(await lockHeld(devLock)).toEqual(holder);
+  });
+
   it.each([
     ['its state', ['clay.state.json']],
     ['its folder', []],

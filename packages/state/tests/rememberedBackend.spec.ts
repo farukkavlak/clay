@@ -48,7 +48,7 @@ describe('the backend init remembers', () => {
   const recorded = async (): Promise<unknown> => JSON.parse(await fs.readFile(recordPath(), 'utf8'));
   const previous = () => {
     const backend = rememberedBackend(dir, {});
-    return { backend, manager: new StateManager(backend) };
+    return { backend, manage: (locked: StateBackend) => new StateManager(locked) };
   };
   const old = () => new LocalBackend(dir);
   const other = () => new LocalBackend(dir, 'other.json');
@@ -178,7 +178,9 @@ describe('the backend init remembers', () => {
       server.state = serializeState(holding('a'));
       await record({});
 
-      expect(await adoptBackend(new LocalBackend(dir), previous(), dir, yes)).toMatchObject({ moved: { copied: true, from: { where: `${server.url}/state` } } });
+      expect(await adoptBackend(new LocalBackend(dir), previous(), dir, yes)).toMatchObject({
+        moved: { workspaces: [{ name: 'default', copied: true }], from: { where: `${server.url}/state` } },
+      });
 
       expect(await new LocalBackend(dir).read()).toEqual(holding('a'));
       expect(server.state).toBe(serializeState(holding('a')));
@@ -200,10 +202,10 @@ describe('the backend init remembers', () => {
       await record({});
       server.override('UNLOCK /lock', { status: 500 });
 
-      const { lockLeft } = await adoptBackend(new LocalBackend(dir), previous(), dir, yes);
+      const { locksLeft } = await adoptBackend(new LocalBackend(dir), previous(), dir, yes);
 
-      expect(lockLeft).toBeInstanceOf(LockNotReleased);
-      expect(lockLeft?.message).toContain(`UNLOCK ${server.url}/lock`);
+      expect(locksLeft).toEqual([expect.any(LockNotReleased)]);
+      expect(locksLeft?.[0].message).toContain(`UNLOCK ${server.url}/lock`);
       expect(await new LocalBackend(dir).read()).toEqual(holding('a'));
       expect(() => checkBackend(new LocalBackend(dir), dir, {})).not.toThrow();
     });
@@ -224,7 +226,7 @@ describe('the backend init remembers', () => {
       const backend = backendOn('other');
       await backend.lock(newLockInfo('init'));
 
-      expect(await adoptBackend(backend, previous(), dir, yes)).toEqual({ moved: { from: backendOn('state').choice, copied: true } });
+      expect(await adoptBackend(backend, previous(), dir, yes)).toEqual({ moved: { from: backendOn('state').choice, workspaces: [{ name: 'default', copied: true }] } });
 
       expect(JSON.parse(server.other!)).toEqual(holding('a'));
       expect(server.received.filter(({ method }) => method === 'LOCK')).toHaveLength(1);
@@ -260,6 +262,18 @@ describe('the backend init remembers', () => {
       await record({ address: where });
 
       expect(() => checkBackend(new LocalBackend(dir), dir, {})).toThrow('is not what `clay init` writes');
+    });
+
+    it('is refused as the place of named workspaces, before anything is locked', async () => {
+      await named('dev');
+
+      await expect(adoptBackend(backendOn('state'), previous(), dir, unasked)).rejects.toThrow(
+        'Workspaces other than the default one are kept with "clay.state.json" (local): "dev"; backend "http" keeps one state, so delete them with `clay workspace delete` or keep this backend'
+      );
+
+      expect(server.received).toEqual([]);
+      expect(await exists(path.join('.clay', 'backend.json'))).toBe(false);
+      expect(await exists(path.join('clay.workspaces', 'dev', 'clay.state.json.lock'))).toBe(false);
     });
 
     it('is refused where the record holds a password', async () => {
@@ -336,7 +350,7 @@ describe('the backend init remembers', () => {
     it('takes a file state into the bucket', async () => {
       await fs.writeFile(path.join(dir, 'clay.state.json'), serializeState(holding('a')), 'utf8');
 
-      expect(await adoptBackend(backendOn('state'), previous(), dir, yes)).toMatchObject({ moved: { copied: true } });
+      expect(await adoptBackend(backendOn('state'), previous(), dir, yes)).toMatchObject({ moved: { workspaces: [{ name: 'default', copied: true }] } });
 
       expect(server.text('bucket/state')).toBe(serializeState(holding('a')));
       expect(server.text('bucket/state.lock')).toBeUndefined();
@@ -363,7 +377,7 @@ describe('the backend init remembers', () => {
     const record = (settings: Record<string, unknown>) => write({ type: 'azure', settings: { ...backendOn('state').choice.settings, ...settings } });
     const previousIn = () => {
       const backend = rememberedBackend(dir, env);
-      return { backend, manager: new StateManager(backend) };
+      return { backend, manage: (locked: StateBackend) => new StateManager(locked) };
     };
 
     beforeEach(async () => {
@@ -388,7 +402,7 @@ describe('the backend init remembers', () => {
     it('takes a file state into the container', async () => {
       await fs.writeFile(path.join(dir, 'clay.state.json'), serializeState(holding('a')), 'utf8');
 
-      expect(await adoptBackend(backendOn('state'), previousIn(), dir, yes)).toMatchObject({ moved: { copied: true } });
+      expect(await adoptBackend(backendOn('state'), previousIn(), dir, yes)).toMatchObject({ moved: { workspaces: [{ name: 'default', copied: true }] } });
 
       expect(server.text('state/state')).toBe(serializeState(holding('a')));
       expect(server.text('state/state.lock')).toBeUndefined();
@@ -414,7 +428,7 @@ describe('the backend init remembers', () => {
       await manager.unlock();
       const approve = vi.fn(yes);
 
-      expect(await adoptBackend(other(), previous(), dir, approve)).toEqual({ moved: { from: old().choice, copied: true } });
+      expect(await adoptBackend(other(), previous(), dir, approve)).toEqual({ moved: { from: old().choice, workspaces: [{ name: 'default', copied: true }] } });
 
       expect(approve).toHaveBeenCalledWith('Move the state in "clay.state.json" (local) to "other.json" (local)?');
       expect(await other().read()).toEqual(state);
@@ -489,7 +503,7 @@ describe('the backend init remembers', () => {
       await adoptBackend(other(), previous(), dir, yes);
       await fs.rm(path.join(dir, '.clay'), { recursive: true });
 
-      expect(await adoptBackend(other(), previous(), dir, unasked)).toEqual({ moved: { from: old().choice, copied: false } });
+      expect(await adoptBackend(other(), previous(), dir, unasked)).toEqual({ moved: { from: old().choice, workspaces: [{ name: 'default', copied: false }] } });
 
       expect(() => checkBackend(other(), dir, {})).not.toThrow();
     });
@@ -507,38 +521,196 @@ describe('the backend init remembers', () => {
   });
 
   describe('named workspaces at the old place', () => {
-    const refusal =
-      'Workspaces other than the default one are kept with "clay.state.json" (local): "dev", "pr-12"; `clay init` moves only the default one, so keep this backend while they exist';
+    const elsewhere = () => new LocalBackend(dir, path.join('there', 'state.json'));
+    const devLock = path.join('clay.workspaces', 'dev', 'clay.state.json.lock');
+    const newDevLock = path.join('there', 'clay.workspaces', 'dev', 'state.json.lock');
+    /** A previous whose manager of the state at `where` fails to release its lock. */
+    const unlockFailsAt = (where: string) => ({
+      backend: rememberedBackend(dir, {}),
+      manage: (locked: StateBackend) =>
+        new StateManager(
+          locked.location === path.join(dir, where)
+            ? new Proxy(locked, {
+                get: (target, key, receiver) =>
+                  key === 'unlock'
+                    ? async () => {
+                        throw new Error('unlock failed');
+                      }
+                    : Reflect.get(target, key, receiver),
+              })
+            : locked
+        ),
+    });
 
-    it('keep the state where it is, before anything is asked or locked', async () => {
+    beforeEach(async () => {
+      await fs.mkdir(path.join(dir, 'there'));
+    });
+
+    it('are moved with the default one after one question, under every old lock, and the old states are kept', async () => {
       await written(old(), holding('a'));
       await named('dev');
       await named('pr-12');
+      const asked: string[] = [];
+      const approve: Approve = async (question) => {
+        asked.push(question, String(await exists(devLock)));
+        return true;
+      };
 
-      await expect(adoptBackend(other(), previous(), dir, unasked)).rejects.toThrow(refusal);
+      expect(await adoptBackend(elsewhere(), previous(), dir, approve)).toEqual({
+        moved: {
+          from: old().choice,
+          workspaces: [
+            { name: 'dev', copied: true },
+            { name: 'pr-12', copied: true },
+            { name: 'default', copied: true },
+          ],
+        },
+      });
 
-      expect(await exists('other.json')).toBe(false);
+      expect(asked).toEqual([`Move the states of workspaces "dev", "pr-12", "default" in "clay.state.json" (local) to "${path.join('there', 'state.json')}" (local)?`, 'true']);
+      expect(await elsewhere().workspace('dev').read()).toEqual(await old().workspace('dev').read());
+      expect(await elsewhere().workspace('pr-12').read()).toEqual(await old().workspace('pr-12').read());
+      expect(await elsewhere().read()).toEqual(await old().read());
+      expect(await elsewhere().listWorkspaces()).toEqual(['default', 'dev', 'pr-12']);
+      expect(await old().listWorkspaces()).toEqual(['default', 'dev', 'pr-12']);
+      expect(await exists(devLock)).toBe(false);
+      expect(await exists(path.join('there', 'clay.workspaces', 'dev', 'state.json.lock'))).toBe(false);
+      expect(() => checkBackend(elsewhere(), dir, {})).not.toThrow();
+    });
+
+    it('are moved where the default workspace has no state', async () => {
+      await named('dev');
+      const approve = vi.fn(yes);
+
+      expect(await adoptBackend(elsewhere(), previous(), dir, approve)).toEqual({ moved: { from: old().choice, workspaces: [{ name: 'dev', copied: true }] } });
+
+      expect(approve).toHaveBeenCalledWith(`Move the state of workspace "dev" in "clay.state.json" (local) to "${path.join('there', 'state.json')}" (local)?`);
+      expect(await elsewhere().exists()).toBe(false);
+      expect(() => checkBackend(elsewhere(), dir, {})).not.toThrow();
+    });
+
+    it('go on where a stopped init left them, and only the rest is asked about', async () => {
+      await written(old(), holding('a'));
+      await named('dev');
+      await named('pr-12');
+      const copy = elsewhere().workspace('dev');
+      await copy.prepare();
+      await copy.write(await old().workspace('dev').read());
+      const approve = vi.fn(yes);
+
+      const { moved } = await adoptBackend(elsewhere(), previous(), dir, approve);
+
+      expect(moved?.workspaces).toEqual([
+        { name: 'dev', copied: false },
+        { name: 'pr-12', copied: true },
+        { name: 'default', copied: true },
+      ]);
+
+      expect(approve).toHaveBeenCalledWith(expect.stringMatching(/^Move the states of workspaces "pr-12", "default" in /));
+    });
+
+    it('are refused, before anything is asked or written, where the new place holds another state of one', async () => {
+      await written(old(), holding('a'));
+      await named('dev');
+      await named('pr-12');
+      const taken = elsewhere().workspace('pr-12');
+      await taken.prepare();
+      await written(taken, holding('b'));
+
+      await expect(adoptBackend(elsewhere(), previous(), dir, unasked)).rejects.toThrow(
+        `"clay.state.json" and "${path.join('there', 'state.json')}" both hold a state of workspace "pr-12", and they differ; remove the one you do not want, and run \`clay init\` again`
+      );
+
+      expect(await elsewhere().listWorkspaces()).toEqual(['default', 'pr-12']);
+      expect(await exists(path.join('there', 'clay.workspaces', 'dev'))).toBe(false);
       expect(await exists('.clay')).toBe(false);
+      expect(await exists(devLock)).toBe(false);
       expect(await exists('clay.state.json.lock')).toBe(false);
     });
 
-    it('are named while another run holds the old lock, which is left to it', async () => {
-      await written(old(), holding('a'));
-      await named('dev');
-      await old().lock(newLockInfo('apply'));
-
-      await expect(adoptBackend(other(), previous(), dir, unasked)).rejects.toThrow('Workspaces other than the default one');
-
-      expect(await exists('clay.state.json.lock')).toBe(true);
-    });
-
-    it('keep the record where the default workspace has no state', async () => {
+    it('are left where they are, and the folders made for them cleared, when the answer is no', async () => {
       await named('dev');
       await named('pr-12');
 
-      await expect(adoptBackend(other(), previous(), dir, unasked)).rejects.toThrow(refusal);
+      await expect(adoptBackend(elsewhere(), previous(), dir, async () => false)).rejects.toThrow('The states were not moved, and nothing changed');
 
+      expect(await exists(path.join('there', 'clay.workspaces'))).toBe(false);
       expect(await exists('.clay')).toBe(false);
+      expect(await exists(devLock)).toBe(false);
+    });
+
+    it('are not moved while another run holds the lock of one, which is left to it', async () => {
+      await written(old(), holding('a'));
+      await named('dev');
+      await old().workspace('dev').lock(newLockInfo('apply'));
+
+      await expect(adoptBackend(elsewhere(), previous(), dir, unasked)).rejects.toThrow(StateLocked);
+
+      expect(await exists(devLock)).toBe(true);
+      expect(await exists(path.join('there', 'clay.workspaces'))).toBe(false);
+      expect(await exists('.clay')).toBe(false);
+    });
+
+    it('have their locks taken as steps the caller can stop, and the ones taken released', async () => {
+      await named('dev');
+      const stopped = new Error('stopped at the second lock');
+      let steps = 0;
+
+      const adopting = adoptBackend(elsewhere(), previous(), dir, unasked, async (step) => {
+        steps += 1;
+        if (steps === 2) throw stopped;
+        return step();
+      });
+
+      await expect(adopting).rejects.toBe(stopped);
+      expect(await exists(newDevLock)).toBe(false);
+      expect(await exists(path.join('there', 'clay.workspaces'))).toBe(false);
+      expect(await exists('.clay')).toBe(false);
+    });
+
+    it('have every other lock released where one is not, which is named', async () => {
+      await written(old(), holding('a'));
+      await named('dev');
+
+      const { locksLeft } = await adoptBackend(elsewhere(), unlockFailsAt(path.join('there', 'clay.workspaces', 'dev', 'state.json')), dir, yes);
+
+      expect(locksLeft).toEqual([expect.any(LockNotReleased)]);
+      expect(locksLeft?.[0].message).toBe('unlock failed');
+      expect(await exists(newDevLock)).toBe(true);
+      expect(await exists(devLock)).toBe(false);
+      expect(await exists('clay.state.json.lock')).toBe(false);
+      expect(() => checkBackend(elsewhere(), dir, {})).not.toThrow();
+    });
+
+    it('keep the refusal beside a lock not released, and release the others', async () => {
+      await named('dev');
+
+      const refused = adoptBackend(elsewhere(), unlockFailsAt(path.join('there', 'clay.workspaces', 'dev', 'state.json')), dir, async () => false);
+
+      await expect(refused).rejects.toMatchObject({
+        message: 'The run failed, and a lock it took or a folder it made is left',
+        errors: [{ message: 'The state was not moved, and nothing changed' }, { message: 'unlock failed' }],
+      });
+      expect(await exists(devLock)).toBe(false);
+      expect(await exists('.clay')).toBe(false);
+    });
+
+    it('keep the refusal beside a folder made for one that could not be cleared', async () => {
+      await named('dev');
+      const pruneFails = new LocalBackend(dir, path.join('there', 'state.json'));
+      const workspace = pruneFails.workspace.bind(pruneFails);
+      pruneFails.workspace = (name) =>
+        Object.assign(workspace(name), {
+          prune: async () => {
+            throw new Error('prune failed');
+          },
+        });
+
+      await expect(adoptBackend(pruneFails, previous(), dir, async () => false)).rejects.toMatchObject({
+        errors: [{ message: 'The state was not moved, and nothing changed' }, { message: 'prune failed' }],
+      });
+      expect(await exists(newDevLock)).toBe(false);
+      expect(await exists(devLock)).toBe(false);
     });
   });
 });

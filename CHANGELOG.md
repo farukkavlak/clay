@@ -106,9 +106,9 @@ a configuration means or how the state file is written.
 - Workspaces with the `local` backend: `clay workspace` with `new`, `select`, `show`,
   `list` and `delete`. Each keeps a state of its own in `clay.workspaces/<name>/`, and
   `.clay/workspace` selects one. `plan`, `apply` and `destroy` name a workspace other
-  than `default`. `clay init` refuses to move the backend while workspaces other than
-  `default` exist. `delete` refuses a workspace whose state still holds resources, unless
-  given `--force`
+  than `default`. `clay init` moves every workspace to the new backend, and refuses a
+  backend that keeps a single state while other workspaces exist. `delete` refuses a
+  workspace whose state still holds resources, unless given `--force`
 
 ### Fixed
 

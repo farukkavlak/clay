@@ -13,6 +13,17 @@ import { clay, clayOutput } from '../helpers';
 
 const FILE = 'resource "local_file" "f" {\n  path    = "f.txt"\n  content = "x"\n}\noutput "o" {\n  value = local_file.f.content\n}\n';
 
+/** Runs the command in `dir` with `answer` as its whole input, for a question it may ask. */
+async function answeredIn(dir: string, answer: string, ...args: string[]): Promise<{ code: number | null; stdout: string }> {
+  const child = spawn('node', [clay, ...args], { cwd: dir });
+  let stdout = '';
+  child.stdout.on('data', (chunk: Buffer) => (stdout += chunk.toString()));
+  child.stdin.end(answer);
+  const [code] = await once(child, 'exit');
+
+  return { code: code as number | null, stdout: stripVTControlCharacters(stdout) };
+}
+
 describe('a workspace selected in .clay/workspace', () => {
   let dir: string;
 
@@ -27,16 +38,7 @@ describe('a workspace selected in .clay/workspace', () => {
     throw new Error('Expected the command to fail');
   };
 
-  /** Runs the command with `answer` as its whole input, for a question it may ask. */
-  const answered = async (answer: string, ...args: string[]): Promise<{ code: number | null; stdout: string }> => {
-    const child = spawn('node', [clay, ...args], { cwd: dir });
-    let stdout = '';
-    child.stdout.on('data', (chunk: Buffer) => (stdout += chunk.toString()));
-    child.stdin.end(answer);
-    const [code] = await once(child, 'exit');
-
-    return { code: code as number | null, stdout: stripVTControlCharacters(stdout) };
-  };
+  const answered = (answer: string, ...args: string[]) => answeredIn(dir, answer, ...args);
 
   const select = async (content: string) => {
     await fs.mkdir(path.join(dir, '.clay'), { recursive: true });
@@ -254,21 +256,62 @@ describe('clay workspace', () => {
     expect(await resourcesIn(devState)).toEqual([]);
   });
 
-  it('keeps init from moving the backend, so no workspace is left behind', async () => {
+  it('init moves every workspace to the backend the configuration names, and keeps the old states', async () => {
     await run('apply', '--yes');
+    for (const name of ['dev', 'pr-12']) {
+      await fs.mkdir(path.join(dir, 'clay.workspaces', name), { recursive: true });
+      await fs.copyFile(path.join(dir, 'clay.state.json'), path.join(dir, 'clay.workspaces', name, 'clay.state.json'));
+    }
+    await fs.mkdir(path.join(dir, '.clay'));
+    await fs.writeFile(path.join(dir, '.clay', 'workspace'), 'pr-12\n', 'utf8');
+    await fs.mkdir(path.join(dir, 'there'));
+    await fs.writeFile(path.join(dir, 'main.clay'), `clay {\n  backend "local" {\n    path = "there/state.json"\n  }\n}\n${FILE}`, 'utf8');
+    const to = path.join('there', 'state.json');
+    const movedLine = (state: string) => `✓ Moved ${state} in "clay.state.json" to "${to}"; the old one is left as it was\n`;
+
+    expect(await run('init', '--yes')).toEqual({
+      code: 0,
+      stdout: `Initializing Clay in this directory...\n${movedLine('the state of workspace "dev"')}${movedLine('the state of workspace "pr-12"')}${movedLine('the state')}\nClay initialized successfully! 🚀\n`,
+      stderr: '',
+    });
+    expect(await run('workspace', 'list')).toMatchObject({ code: 0, stdout: '  default\n  dev\n* pr-12\n' });
+    for (const name of ['dev', 'pr-12']) expect(await resourcesIn(path.join('there', 'clay.workspaces', name, 'state.json'))).toEqual(['local_file.f']);
+    expect(await resourcesIn(to)).toEqual(['local_file.f']);
+    expect(await resourcesIn(devState)).toEqual(['local_file.f']);
+    expect(await run('plan')).toMatchObject({ code: 0, stdout: expect.stringContaining('No changes') });
+  });
+
+  it('init makes the default state where only named workspaces move, and takes them as they are when run again', async () => {
     await run('workspace', 'new', 'dev');
-    await run('apply', '--yes');
-    await fs.writeFile(path.join(dir, 'main.clay'), `clay {\n  backend "local" {\n    path = "other.json"\n  }\n}\n${FILE}`, 'utf8');
+    await fs.mkdir(path.join(dir, 'there'));
+    await fs.writeFile(path.join(dir, 'main.clay'), `clay {\n  backend "local" {\n    path = "there/state.json"\n  }\n}\n${FILE}`, 'utf8');
+    const to = path.join('there', 'state.json');
 
     expect(await run('init', '--yes')).toMatchObject({
-      code: 1,
-      stderr:
-        'Failed to initialize Clay in this directory: Workspaces other than the default one are kept with "clay.state.json" (local): "dev"; `clay init` moves only the default one, so keep this backend while they exist\n',
+      code: 0,
+      stdout: `Initializing Clay in this directory...\n✓ Moved the state of workspace "dev" in "clay.state.json" to "${to}"; the old one is left as it was\n✓ Created an empty state\n\nClay initialized successfully! 🚀\n`,
     });
+    expect(await resourcesIn(to)).toEqual([]);
+    await fs.rm(path.join(dir, '.clay', 'backend.json'));
+
+    expect(await run('init')).toMatchObject({
+      code: 0,
+      stdout: `Initializing Clay in this directory...\n✓ Took the state of workspace "dev" in "${to}", which is the same as in "clay.state.json"\n✓ Kept the state already here\n\nClay initialized successfully! 🚀\n`,
+    });
+  });
+
+  it('init asks once about every workspace, and moves none on no', async () => {
+    await run('apply', '--yes');
+    await run('workspace', 'new', 'dev');
+    await fs.mkdir(path.join(dir, 'there'));
+    await fs.writeFile(path.join(dir, 'main.clay'), `clay {\n  backend "local" {\n    path = "there/state.json"\n  }\n}\n${FILE}`, 'utf8');
+
+    const { code, stdout } = await answeredIn(dir, 'n\n', 'init');
+
+    expect(code).toBe(1);
+    expect(stdout).toContain(`Move the states of workspaces "dev", "default" in "clay.state.json" (local) to "${path.join('there', 'state.json')}" (local)?`);
+    await expect(fs.readdir(path.join(dir, 'there'))).resolves.toEqual([]);
     await expect(fs.readdir(path.join(dir, '.clay'))).resolves.toEqual(['workspace']);
-    await expect(fs.access(path.join(dir, 'other.json'))).rejects.toThrow('ENOENT');
-    expect(await resourcesIn('clay.state.json')).toEqual(['local_file.f']);
-    expect(await resourcesIn(devState)).toEqual(['local_file.f']);
   });
 
   it('select runs the commands that follow on the workspace it names', async () => {

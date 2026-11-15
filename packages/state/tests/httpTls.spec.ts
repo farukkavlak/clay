@@ -27,7 +27,7 @@ const remember = async (dir: string, backend: StateBackend) => {
 const adopt = async (dir: string, backend: StateBackend) => {
   const before = rememberedBackend(dir, CLIENT);
   await backend.lock(newLockInfo('init'));
-  return adoptBackend(backend, { backend: before, manager: new StateManager(before) }, dir, async () => true);
+  return adoptBackend(backend, { backend: before, manage: (locked) => new StateManager(locked) }, dir, async () => true);
 };
 
 const refusalOf = async (action: () => unknown): Promise<Error> => {

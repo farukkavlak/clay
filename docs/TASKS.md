@@ -1130,7 +1130,7 @@ Terraform has it since backends replaced `-state`.
       file and the environment
 - [x] Workspaces: `clay workspace new | select | list`, one state per workspace
 - [x] `clay workspace delete`, which refuses a workspace whose state still holds resources
-- [ ] `clay init` moves every workspace, not only `default`, so a backend can change while
+- [x] `clay init` moves every workspace, not only `default`, so a backend can change while
       named workspaces exist
 - [ ] `plan -detailed-exitcode`, so a script can tell no changes from changes; `plan` exits
       0 either way
