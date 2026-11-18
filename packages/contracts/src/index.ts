@@ -4,7 +4,7 @@ export { covers } from './dependency';
 export { isAttributePaths, own, readPaths, samePaths, valueAt } from './AttributePath';
 export type { AttributePath } from './AttributePath';
 export { ExactNumber, NumberError } from './ExactNumber';
-export { isName, NAME, NAME_RULE, RESERVED_TYPES } from './name';
+export { isName, isWorkspaceName, NAME, NAME_RULE, RESERVED_TYPES } from './name';
 export { isRecord } from './isRecord';
 export { jsonText } from './jsonText';
 export { memberKey } from './memberKey';

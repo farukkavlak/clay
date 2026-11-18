@@ -3,12 +3,11 @@ import { Dirent, Stats } from 'node:fs';
 import * as fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { emptyState, State, WrittenState } from '@clay/contracts';
+import { emptyState, isWorkspaceName, State, WrittenState } from '@clay/contracts';
 
 import { LockInfo, lockInfoFrom, noLockAt, otherLockAt, StateLocked } from '../lockInfo';
 import { BackendChoice, DEFAULT_WORKSPACE, NamedWorkspace } from '../StateBackend';
 import { Journal, parseState, serializeState } from '../stateFile';
-import { isWorkspaceName } from './workspaces';
 import { appendSynced, syncDir, writeSynced } from './durable';
 
 /** Undefined where nothing is there, or a file stands in the way of the path. */

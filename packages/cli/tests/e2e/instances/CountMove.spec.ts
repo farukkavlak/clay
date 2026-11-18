@@ -145,7 +145,7 @@ describe('a resource that gains or loses count', () => {
   it('runs a saved plan that moves a resource', async () => {
     await apply(suffix());
     const { 'random_string.s': id } = await ids();
-    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(suffix('1')), { 'main.clay': suffix('1') }), 'plan.json');
+    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(suffix('1')), { 'main.clay': suffix('1') }, 'default'), 'plan.json');
 
     for await (const event of newOrchestrator().runPlan(saved, suffix('1'))) if (event.type === 'failed') throw event.error;
 

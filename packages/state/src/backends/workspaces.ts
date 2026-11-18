@@ -1,14 +1,10 @@
+import { isWorkspaceName } from '@clay/contracts';
 import * as fs from 'node:fs';
 import path from 'node:path';
 
 import { replaceSynced } from './durable';
 import { Environment, variable } from './settings';
 import { DEFAULT_WORKSPACE, NamedWorkspace, StateBackend } from '../StateBackend';
-
-// A DNS label, since the name goes into paths and resource names; lowercase, as a macOS disk does not tell cases apart.
-const NAME = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
-
-export const isWorkspaceName = (name: string) => NAME.test(name);
 
 /** Refuses a name that is not a DNS label, naming where it came from, before any path is made of it. */
 export function checkWorkspaceName(name: string, source: string): string {

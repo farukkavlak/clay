@@ -114,11 +114,13 @@ export interface Plan {
 }
 
 /** Bump on any change to the file's shape after a release, so an older plan file is refused instead of misread. */
-export const PLAN_FILE_VERSION = '40.0';
+export const PLAN_FILE_VERSION = '41.0';
 
 export interface PlanFile extends Plan {
   version: string;
   timestamp: string;
   /** The configuration files, keyed by path relative to the root. A saved plan applies these, not whatever is on disk later. */
   files: Record<string, string>;
+  /** The workspace it was made in; it is applied in no other. */
+  workspace: string;
 }

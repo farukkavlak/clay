@@ -10,6 +10,7 @@ import {
   isOutput,
   isRecord,
   isType,
+  isWorkspaceName,
   parseDataAddress,
   Resource,
   Schema,
@@ -225,7 +226,16 @@ export function validatePlanFile(planFile: unknown): planFile is PlanFile {
   if (!planFile || typeof planFile !== 'object') return false;
 
   const pf = planFile as Partial<PlanFile>;
-  return pf.version === PLAN_FILE_VERSION && isTimestamp(pf.timestamp) && isConfigFiles(pf.files) && isPlan(pf) && isLineage(pf.lineage) && isVariableInputs(pf.variables);
+  return (
+    pf.version === PLAN_FILE_VERSION &&
+    isTimestamp(pf.timestamp) &&
+    isConfigFiles(pf.files) &&
+    typeof pf.workspace === 'string' &&
+    isWorkspaceName(pf.workspace) &&
+    isPlan(pf) &&
+    isLineage(pf.lineage) &&
+    isVariableInputs(pf.variables)
+  );
 }
 
 /** Without its type's schema, a resource's sets could not be shown as sets. */

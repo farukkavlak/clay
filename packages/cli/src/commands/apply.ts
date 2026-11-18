@@ -1,7 +1,7 @@
 import { Address, jsonText, Output, SENSITIVE } from '@clay/contracts';
 import { ConfigFiles, DiskFiles, InMemoryFiles, RecordingFiles, RunEvent } from '@clay/orchestrator';
 import { changedOutside, parsePlanFile, Plan, PlanAction, PlanFile, VariableInput } from '@clay/planner';
-import { StateManager } from '@clay/state';
+import { currentWorkspace, StateManager } from '@clay/state';
 import { Command } from 'commander';
 import fs from 'node:fs/promises';
 import { styleText } from 'node:util';
@@ -181,8 +181,14 @@ async function readPlanFile(planFileArg: string, files: ConfigFiles): Promise<Pl
   }
 }
 
+function checkPlanWorkspace(cwd: string, planned: string): void {
+  const current = currentWorkspace(cwd, process.env);
+  if (planned !== current) throw new Error(`The plan was made in workspace "${planned}", and this is workspace "${current}". Select "${planned}", or plan again in "${current}".`);
+}
+
 async function executeApplyFromPlan(cwd: string, planFile: PlanFile, files: ConfigFiles, options: RunFlags): Promise<number> {
   const { parallelism } = options;
+  checkPlanWorkspace(cwd, planFile.workspace);
   const { workspace, backend } = await selectedState(cwd, files);
   const manager = new StateManager(backend, lockWait(options.lockTimeout));
 

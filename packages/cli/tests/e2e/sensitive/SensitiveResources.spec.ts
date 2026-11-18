@@ -243,7 +243,7 @@ describe('a resource given a sensitive value', () => {
     });
 
     it('keeps the mark of every item through a plan saved to a file', async () => {
-      const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), { 'main.clay': config }), 'plan.json');
+      const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), { 'main.clay': config }, 'default'), 'plan.json');
       await drain(newOrchestrator().runPlan(saved, config));
 
       expect(sensitiveOf(saved)).toEqual(itemsOnly);
@@ -263,7 +263,7 @@ describe('a resource given a sensitive value', () => {
 
   it('keeps which parts are sensitive through a plan saved to a file', async () => {
     const config = resources();
-    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), { 'main.clay': config }), 'plan.json');
+    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), { 'main.clay': config }, 'default'), 'plan.json');
     await drain(newOrchestrator().runPlan(saved, config));
 
     expect(await marks('local_file.conf')).toEqual([['content']]);
@@ -273,7 +273,7 @@ describe('a resource given a sensitive value', () => {
   it('keeps a plan saved after an apply, with what the state marks', async () => {
     const config = resources();
     await apply(config);
-    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), { 'main.clay': config }), 'plan.json');
+    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), { 'main.clay': config }, 'default'), 'plan.json');
     await drain(newOrchestrator().runPlan(saved, config));
 
     expect(await marks('null_resource.n')).toEqual(TRIGGERS);

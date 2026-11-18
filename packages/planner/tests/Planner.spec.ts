@@ -372,7 +372,9 @@ describe('Planner', () => {
     it('should serialize plan correctly', () => {
       const actions: PlanAction[] = [];
       const files = { 'main.clay': 'resource "test" {}', 'm/main.clay': 'output "x" { value = "y" }' };
-      const serialized = JSON.parse(serializePlan({ serial: 0, actions, outputs: {}, prevRun: {}, prior: {}, imported: {}, schemas: {}, dataSources: {}, readAtApply: [] }, files));
+      const serialized = JSON.parse(
+        serializePlan({ serial: 0, actions, outputs: {}, prevRun: {}, prior: {}, imported: {}, schemas: {}, dataSources: {}, readAtApply: [] }, files, 'default')
+      );
 
       expect(serialized.version).toBe(PLAN_FILE_VERSION);
       expect(serialized.actions).toEqual(actions);
@@ -385,6 +387,7 @@ describe('Planner', () => {
         version: PLAN_FILE_VERSION,
         timestamp: new Date().toISOString(),
         files: { 'main.clay': 'resource "test" {}' },
+        workspace: 'default',
         serial: 0,
         actions: [],
         outputs: {},
@@ -417,6 +420,7 @@ describe('Planner', () => {
         version: PLAN_FILE_VERSION,
         timestamp: new Date().toISOString(),
         files: { 'main.clay': '' },
+        workspace: 'default',
         serial: 0,
         actions: [action],
         outputs: {},
@@ -448,6 +452,7 @@ describe('Planner', () => {
         version: PLAN_FILE_VERSION,
         timestamp: new Date().toISOString(),
         files: { 'main.clay': '' },
+        workspace: 'default',
         serial: 0,
         actions: [],
         outputs: {},
@@ -470,11 +475,11 @@ describe('Planner', () => {
       ];
       const plan = { serial: 0, actions: [], outputs: {}, prevRun: {}, prior: {}, imported: {}, schemas: {}, dataSources: {}, readAtApply: [], variables };
 
-      expect(JSON.parse(serializePlan(plan, { 'main.clay': '' })).variables).toEqual(variables);
+      expect(JSON.parse(serializePlan(plan, { 'main.clay': '' }, 'default')).variables).toEqual(variables);
     });
 
     it('should reject a plan file without the state serial it was made from', () => {
-      const planFile = { version: PLAN_FILE_VERSION, timestamp: new Date().toISOString(), files: { 'main.clay': '' }, actions: [] };
+      const planFile = { version: PLAN_FILE_VERSION, timestamp: new Date().toISOString(), files: { 'main.clay': '' }, workspace: 'default', actions: [] };
 
       expect(validatePlanFile(planFile)).toBe(false);
     });

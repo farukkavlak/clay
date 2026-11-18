@@ -45,7 +45,7 @@ async function executePlan(cwd: string, files: RecordingFiles, options: PlanOpti
     displayPlan(planned);
 
     if (out) {
-      await fs.writeFile(out, serializePlan(planned, files.snapshot()), 'utf8');
+      await fs.writeFile(out, serializePlan(planned, files.snapshot(), workspace), 'utf8');
       console.log(styleText('green', `\nPlan saved to: ${printable(out)}`));
     }
     changes = !changesNothing(planned);

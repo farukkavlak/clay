@@ -161,7 +161,7 @@ const changeEveryMember = async (at: string, size: number) => {
   const engine = orchestratorIn(at, new Pool());
 
   return timed(async () => {
-    const saved = parsePlanFile(serializePlan(await engine.plan(config), { 'main.clay': config }), 'plan.json');
+    const saved = parsePlanFile(serializePlan(await engine.plan(config), { 'main.clay': config }, 'default'), 'plan.json');
     displayPlan(saved);
     let applied = 0;
     for await (const event of engine.runPlan(saved, config)) {

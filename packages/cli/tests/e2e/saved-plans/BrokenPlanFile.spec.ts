@@ -60,7 +60,7 @@ describe('a plan file that cannot be read', () => {
 
   it('says which data source address is wrong before it shows the plan', async () => {
     const plan = { serial: 0, actions: [], outputs: {}, prevRun: {}, prior: {}, imported: {}, schemas: {}, dataSources: {}, readAtApply: ['data.local_file'] };
-    await fs.writeFile(path.join(dir, 'tfplan.json'), serializePlan(plan, { 'main.clay': '' }), 'utf8');
+    await fs.writeFile(path.join(dir, 'tfplan.json'), serializePlan(plan, { 'main.clay': '' }, 'default'), 'utf8');
 
     const output = await applyWith('tfplan.json');
 
@@ -74,7 +74,7 @@ describe('a plan file that cannot be read', () => {
   it('refuses an action at an address no configuration can spell before it shows the plan', async () => {
     const action = { type: 'DELETE' as const, resourceType: 'local_file', name: 'has space', modulePath: [] };
     const plan = { serial: 0, actions: [action], outputs: {}, prevRun: {}, prior: {}, imported: {}, schemas: { local_file: {} }, dataSources: {}, readAtApply: [] };
-    await fs.writeFile(path.join(dir, 'tfplan.json'), serializePlan(plan, { 'main.clay': '' }), 'utf8');
+    await fs.writeFile(path.join(dir, 'tfplan.json'), serializePlan(plan, { 'main.clay': '' }, 'default'), 'utf8');
 
     const output = await applyWith('tfplan.json');
 
@@ -85,7 +85,7 @@ describe('a plan file that cannot be read', () => {
 
   it('says which data source name no configuration can spell', async () => {
     const plan = { serial: 0, actions: [], outputs: {}, prevRun: {}, prior: {}, imported: {}, schemas: {}, dataSources: {}, readAtApply: ['data.local_file.a b'] };
-    await fs.writeFile(path.join(dir, 'tfplan.json'), serializePlan(plan, { 'main.clay': '' }), 'utf8');
+    await fs.writeFile(path.join(dir, 'tfplan.json'), serializePlan(plan, { 'main.clay': '' }, 'default'), 'utf8');
 
     const output = await applyWith('tfplan.json');
 
@@ -98,7 +98,7 @@ describe('a plan file that cannot be read', () => {
     ['an output no configuration can declare', { outputs: { ['o\u001B[2J']: { new: { type: types.string, value: 'v' } } } }],
   ])('refuses %s before it shows the plan', async (_, change) => {
     const plan = { serial: 0, actions: [], outputs: {}, prevRun: {}, prior: {}, imported: {}, schemas: {}, dataSources: {}, readAtApply: [] };
-    const file: unknown = { ...JSON.parse(serializePlan(plan, { 'main.clay': '' })), ...change };
+    const file: unknown = { ...JSON.parse(serializePlan(plan, { 'main.clay': '' }, 'default')), ...change };
     await fs.writeFile(path.join(dir, 'tfplan.json'), JSON.stringify(file), 'utf8');
 
     const output = await applyWith('tfplan.json');

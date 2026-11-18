@@ -926,7 +926,9 @@ plan gave and which ones the apply reads. `apply` runs that configuration, not t
 disk now, against what the refresh read, and refuses the plan if the state has changed
 since or is another state. A state gets a lineage, a random id, the first time it is
 written, and keeps it; the plan records it, so a plan is refused against a state written
-elsewhere, even one with the same serial. Each resource is given what its block in that
+elsewhere, even one with the same serial. The plan also records its workspace, and `apply`
+in another one refuses it by name before it shows the plan, even where the state there is
+a copy. Each resource is given what its block in that
 configuration says. A field of the wrong kind in the file is refused before anything
 runs.
 

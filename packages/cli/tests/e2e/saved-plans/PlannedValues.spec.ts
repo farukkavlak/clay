@@ -44,7 +44,7 @@ describe('an apply that does what the plan showed', () => {
 
   it('stops a saved plan the same way', async () => {
     const engine = newOrchestrator();
-    const saved = parsePlanFile(serializePlan(await engine.plan(copyOf('one')), { 'main.clay': copyOf('one') }), 'plan.json');
+    const saved = parsePlanFile(serializePlan(await engine.plan(copyOf('one')), { 'main.clay': copyOf('one') }, 'default'), 'plan.json');
     config = copyOf('two');
 
     await expect(run(engine, saved)).rejects.toThrow('the plan showed content = "one", but it now comes to "two". Plan again.');

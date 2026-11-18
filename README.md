@@ -115,7 +115,7 @@ id, and `clay force-unlock <id>` releases it.
 
 A saved plan carries the configuration it was made from and the state it was planned
 against. `apply` runs that configuration, not the one on disk now, and refuses the plan
-if the state has changed since.
+if the state has changed since, or if another workspace is in use.
 
 ## Resources
 

@@ -8,7 +8,7 @@ const schemas = { null_resource: {}, x: {} };
 
 const emptyPlan: Plan = { serial: 0, actions: [], outputs: {}, prevRun: {}, prior: {}, imported: {}, schemas, dataSources: {}, readAtApply: [] };
 
-const aPlanFile = (plan: Plan = emptyPlan) => serializePlan(plan, { 'main.clay': '', 'm/main.clay': '' });
+const aPlanFile = (plan: Plan = emptyPlan) => serializePlan(plan, { 'main.clay': '', 'm/main.clay': '' }, 'default');
 
 const fields = () => JSON.parse(aPlanFile()) as Record<string, unknown>;
 
@@ -36,6 +36,19 @@ describe('reading a plan file', () => {
   it('reads a destroy plan back as one, and leaves the flag out of any other', () => {
     expect(parsePlanFile(aPlanFile({ ...emptyPlan, destroy: true }), 'tfplan.json').destroy).toBe(true);
     expect(fields()).not.toHaveProperty('destroy');
+  });
+
+  it('reads back the workspace it was made in', () => {
+    expect(parsePlanFile(serializePlan(emptyPlan, { 'main.clay': '' }, 'dev'), 'tfplan.json').workspace).toBe('dev');
+  });
+
+  it.each([
+    ['left out', undefined],
+    ['not a string', 1],
+    ['empty', ''],
+    ['no workspace name', '../dev'],
+  ])('refuses a workspace that is %s', (_, workspace) => {
+    expect(read({ ...fields(), workspace })).toThrow(/^tfplan\.json is not a plan file$/);
   });
 
   it('reads back the lineage of the state it was made against, and leaves it out of a plan made with none', () => {

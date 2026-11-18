@@ -1137,7 +1137,7 @@ Terraform has it since backends replaced `-state`.
       would do counts, so a change to outputs alone or to state alone exits 2. Where a
       refresh finds drift and nothing else changes, Terraform exits 0 and Clay exits 2
 - [x] `CLAY_WORKSPACE` chooses the workspace for one command, over `.clay/workspace`
-- [ ] A saved plan names its workspace, and `apply` in another one refuses it by name. The
+- [x] A saved plan names its workspace, and `apply` in another one refuses it by name. The
       lineage alone misses a state copied by hand
 - [ ] Workspaces on the `s3` backend, which keeps one state today
 - [ ] Workspaces on the `azure` backend, which keeps one state today

@@ -325,6 +325,7 @@ describe('CLI: apply command', () => {
     it('should run the saved actions against the saved configuration, without asking again', async () => {
       const planFileContent = JSON.stringify({
         version: PLAN_FILE_VERSION,
+        workspace: 'default',
         timestamp: '2024-01-01T00:00:00.000Z',
         files: { 'main.clay': 'saved config', 'm/main.clay': 'saved module' },
         serial: 2,
@@ -372,6 +373,7 @@ describe('CLI: apply command', () => {
     it('should display outputs when returned from plan apply', async () => {
       const planFileContent = JSON.stringify({
         version: PLAN_FILE_VERSION,
+        workspace: 'default',
         timestamp: '2024-01-01T00:00:00.000Z',
         files: { 'main.clay': 'saved config', 'm/main.clay': 'saved module' },
         serial: 2,

@@ -13,6 +13,13 @@ import { clay, clayOutput } from '../helpers';
 
 const FILE = 'resource "local_file" "f" {\n  path    = "f.txt"\n  content = "x"\n}\noutput "o" {\n  value = local_file.f.content\n}\n';
 
+/** What `apply` says of a plan made in another workspace. */
+const refusedIn = (planned: string, current: string) => ({
+  code: 1,
+  stdout: '',
+  stderr: `Apply failed: The plan was made in workspace "${planned}", and this is workspace "${current}". Select "${planned}", or plan again in "${current}".\n`,
+});
+
 /** Runs the command in `dir` with `answer` as its whole input, for a question it may ask. */
 async function answeredIn(dir: string, answer: string, ...args: string[]): Promise<{ code: number | null; stdout: string }> {
   const child = spawn('node', [clay, ...args], { cwd: dir });
@@ -476,6 +483,8 @@ describe('CLAY_WORKSPACE', () => {
     await fs.writeFile(path.join(dir, selection), content, 'utf8');
   };
 
+  const changeContent = async () => fs.writeFile(path.join(dir, 'main.clay'), FILE.replace('"x"', '"y"'), 'utf8');
+
   beforeEach(async () => {
     dir = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'clay-workspace-variable-')));
     await fs.writeFile(path.join(dir, 'main.clay'), FILE, 'utf8');
@@ -493,6 +502,35 @@ describe('CLAY_WORKSPACE', () => {
     expect(await resourcesIn(stateOf('dev'))).toEqual(['local_file.f']);
     expect(await resourcesIn(stateOf('test'))).toEqual([]);
     expect(await read(selection)).toBe('test\n');
+  });
+
+  describe('with a saved plan', () => {
+    it('refuses it in another workspace, even on a copy of its state, and applies it in its own', async () => {
+      await runWith('dev', 'apply', '--yes');
+      await fs.copyFile(path.join(dir, stateOf('dev')), path.join(dir, stateOf('test')));
+      const copied = await read(stateOf('test'));
+      await changeContent();
+      await runWith('dev', 'plan', '--out', 'p.json');
+
+      expect(await runWith('test', 'apply', 'p.json')).toEqual(refusedIn('dev', 'test'));
+      expect(await read(stateOf('test'))).toBe(copied);
+      expect(await read('f.txt')).toBe('x');
+
+      expect(await runWith('dev', 'apply', 'p.json')).toMatchObject({ code: 0 });
+      expect(await read('f.txt')).toBe('y');
+    });
+
+    it('refuses one made in the default workspace in a named one', async () => {
+      await runWith('default', 'plan', '--out', 'p.json');
+
+      expect(await runWith('dev', 'apply', 'p.json')).toEqual(refusedIn('default', 'dev'));
+    });
+
+    it('names both workspaces where the one in use does not exist', async () => {
+      await runWith('dev', 'plan', '--out', 'p.json');
+
+      expect(await runWith('gone', 'apply', 'p.json')).toEqual(refusedIn('dev', 'gone'));
+    });
   });
 
   it('names the workspace where a plan starts', async () => {

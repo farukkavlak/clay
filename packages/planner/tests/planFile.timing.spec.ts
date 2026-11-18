@@ -11,7 +11,8 @@ const unknownMembers = (size: number) => {
   const members = Array.from({ length: size }, () => UNKNOWN);
   return serializePlan(
     { ...emptyPlan, actions: [{ type: 'UPDATE', resourceType: 'x', name: 'a', planned: {}, after: {}, changes: { members: { old: [], new: members } } }] },
-    { 'main.clay': '' }
+    { 'main.clay': '' },
+    'default'
   );
 };
 

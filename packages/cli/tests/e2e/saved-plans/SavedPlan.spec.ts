@@ -46,7 +46,7 @@ describe('a plan saved to a file', () => {
   `;
 
   const withOutput = (content: string) => `${fileConfig(content)}\noutput "text" { value = local_file.a.content }`;
-  const written = async (config: string) => serializePlan(await newOrchestrator().plan(config), { 'main.clay': config });
+  const written = async (config: string) => serializePlan(await newOrchestrator().plan(config), { 'main.clay': config }, 'default');
   const save = async (config: string) => parsePlanFile(await written(config), 'plan.json');
 
   const runs = (saved: Awaited<ReturnType<typeof save>>, config: string) => drain(newOrchestrator().runPlan(saved, config));
