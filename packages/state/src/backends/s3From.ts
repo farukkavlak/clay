@@ -1,7 +1,7 @@
 import { urlOf } from './httpFrom';
-import { S3Backend } from './S3Backend';
+import { LONGEST_S3_KEY, S3Backend } from './S3Backend';
 import { checkNames, Environment, Settings, variable } from './settings';
-import { checkNotBeside, LOCK_BESIDE } from './workspaces';
+import { checkNotBeside, checkNotWorkspaceState, LOCK_BESIDE } from './workspaces';
 
 const SECRETS = new Map([
   ['access_key', 'AWS_ACCESS_KEY_ID'],
@@ -10,8 +10,8 @@ const SECRETS = new Map([
 ]);
 const TAKES = ['bucket', 'key', 'region', 'endpoint', 'use_path_style'];
 
-/** A key holds 1024 bytes in UTF-8, and the lock's is the key and ".lock". */
-const LONGEST_KEY = 1024 - '.lock'.length;
+/** The lock's key is the key and ".lock". */
+const LONGEST_KEY = LONGEST_S3_KEY - '.lock'.length;
 
 /** A region is part of a host name. */
 const REGION = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -45,7 +45,9 @@ function keyOf(settings: Settings): string {
   if (bytes > LONGEST_KEY) settings.refuse(`key of backend "s3" is ${bytes} bytes long, and ${LONGEST_KEY} at most leaves room for ".lock"`, 'key');
   if (key.startsWith('/') || key.endsWith('/')) settings.refuse(`key of backend "s3" is "${key}", which must not start or end with "/"`, 'key');
   if (key.includes('//')) settings.refuse(`key of backend "s3" is "${key}", which must not hold "//"`, 'key');
-  checkNotBeside(settings, 'key', key, key.split('/'), LOCK_BESIDE);
+  const parts = key.split('/');
+  checkNotBeside(settings, 'key', key, parts, LOCK_BESIDE);
+  checkNotWorkspaceState(settings, 'key', key, parts);
 
   return key;
 }

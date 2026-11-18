@@ -664,8 +664,9 @@ the configuration. The lock, the backup and the journal sit beside the file it n
 
 A state cannot sit where Clay keeps part of another one. `path` cannot end in `.lock`,
 `.bak`, `.journal` or `.tmp`, or be `clay.workspaces/<workspace>/<file>`, in any case. The
-same holds for the default state of a directory inside such a folder. The `key` of `s3` and
-`azure` cannot end in `.lock`.
+same holds for the default state of a directory inside such a folder. The `key` of `s3`
+cannot end in `.lock` or be `clay.workspaces/<workspace>/<file>`. The `key` of `azure` cannot
+end in `.lock`.
 
 `http` keeps the state on a server, in the protocol Terraform's `http` backend uses:
 
@@ -770,7 +771,9 @@ Credentials come from where the AWS CLI finds them: `AWS_ACCESS_KEY_ID` and
 the machine. The block refuses `access_key`, `secret_key` and `token`. Clay needs
 `s3:GetObject` and `s3:PutObject` on the key and the lock, `s3:DeleteObject` on the lock,
 and `s3:ListBucket` on the bucket: without it, AWS answers 403 for an object that does not
-exist yet, and `init` cannot tell it from a refusal.
+exist yet, and `init` cannot tell it from a refusal. With workspaces, the same holds under
+`clay.workspaces/`, and `workspace delete` needs `s3:DeleteObject` on the state too.
+`workspace list` and an `init` that moves the state are refused without `s3:ListBucket`.
 
 A request that gets no answer, a 5xx or a throttling error is sent up to three times in
 all, and one try may take 30 seconds. S3 keeps no journal, so each write sends the state
@@ -911,8 +914,10 @@ A name is lowercase letters, digits and `-`, 1 to 63 of them, starting and endin
 letter or a digit.
 
 `local` keeps a workspace in `clay.workspaces/<name>/`, in the directory of the default
-state, under the file name the default state has. `new` makes that folder. `http`, `s3`
-and `azure` keep one state, and refuse a workspace other than `default`.
+state, under the file name the default state has. `new` makes that folder. `s3` keeps a
+workspace at `clay.workspaces/<name>/<file>`, next to the object `key` names and under its
+file name, with its lock beside it. `new` refuses a name whose lock's key would pass 1024
+bytes. `http` and `azure` keep one state, and refuse a workspace other than `default`.
 
 `plan`, `apply` and `destroy` name a workspace other than `default` in what they print
 first, and in the question before an apply.

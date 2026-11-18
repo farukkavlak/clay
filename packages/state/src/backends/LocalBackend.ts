@@ -9,6 +9,7 @@ import { LockInfo, lockInfoFrom, noLockAt, otherLockAt, StateLocked } from '../l
 import { BackendChoice, DEFAULT_WORKSPACE, NamedWorkspace, WORKSPACES_FOLDER } from '../StateBackend';
 import { Journal, parseState, serializeState } from '../stateFile';
 import { appendSynced, syncDir, writeSynced } from './durable';
+import { refuseIfGone } from './workspaces';
 
 /** Undefined where nothing is there, or a file stands in the way of the path. */
 async function statOf(target: string): Promise<Stats | undefined> {
@@ -252,10 +253,7 @@ export class LocalBackend implements NamedWorkspace {
     if (!taken) throw new StateLocked(await this.holder(), `remove ${this.lockFilePath}`);
 
     this.backedUp = false;
-    if (!this.mustExist || (await this.exists())) return;
-
-    await this.unlock(info.id);
-    throw this.missing();
+    if (this.mustExist) await refuseIfGone(this, info.id, () => this.missing());
   }
 
   /** A named workspace has a state, but where `workspace new` is making it; the default one runs without. */

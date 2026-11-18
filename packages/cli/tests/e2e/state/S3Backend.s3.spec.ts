@@ -38,6 +38,15 @@ describe('a state kept on a real S3 server', () => {
     }
   };
 
+  const stdoutOf = async (...args: string[]) => {
+    const { stdout } = await clayWith(...args);
+    return stdout;
+  };
+  const codeOf = async (...args: string[]) => {
+    const { code } = await clayWith(...args);
+    return code;
+  };
+
   const resourcesInBucket = async () => {
     const state = JSON.parse((await s3.text(bucket, KEY))!) as { resources: Record<string, unknown> };
     return state.resources;
@@ -87,5 +96,21 @@ describe('a state kept on a real S3 server', () => {
     expect(stderr).toContain(`State is locked by apply of ${holder.who} on elsewhere, pid ${holder.pid}`);
     expect(await resourcesInBucket()).toEqual({});
     expect(await s3.text(bucket, LOCK)).toBe(JSON.stringify(holder));
+  });
+
+  it('keeps a workspace apart from the default state, and deletes it', async () => {
+    const STATE = 'env/clay.workspaces/dev/state.json';
+    await clayWith('init');
+    await clayWith('workspace', 'new', 'dev');
+
+    expect(await codeOf('apply', '--yes')).toBe(0);
+    expect(await resourcesInBucket()).toEqual({});
+    expect(await s3.text(bucket, STATE)).toContain('local_file.f');
+    expect(await stdoutOf('workspace', 'list')).toBe('  default\n* dev\n');
+
+    await clayWith('workspace', 'select', 'default');
+    expect(await codeOf('workspace', 'delete', 'dev', '--force')).toBe(0);
+    expect(await s3.text(bucket, STATE)).toBeUndefined();
+    expect(await stdoutOf('workspace', 'list')).toBe('* default\n');
   });
 });

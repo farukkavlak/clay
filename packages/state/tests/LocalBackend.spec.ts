@@ -2,8 +2,9 @@ import { emptyState } from '@clay/contracts';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { newLockInfo } from '../src';
 import { LocalBackend } from '../src/backends/LocalBackend';
 import { emptySeen } from './emptySeen';
 
@@ -311,5 +312,14 @@ describe('LocalBackend', () => {
       const left = await fs.readdir(dir);
       expect(left.sort()).toEqual(['clay.state.json', 'clay.state.json.lock']);
     });
+  });
+
+  it('gives back the lock of a workspace whose state cannot be looked at, and says why', async () => {
+    const workspace = new LocalBackend(dir).workspace('dev');
+    await fs.mkdir(devFolder(), { recursive: true });
+    vi.spyOn(workspace, 'exists').mockRejectedValue(new Error('EACCES'));
+
+    await expect(workspace.lock({ ...newLockInfo('apply') })).rejects.toThrow('EACCES');
+    expect(await fs.readdir(devFolder())).toEqual([]);
   });
 });

@@ -40,6 +40,15 @@ describe('a state kept in S3', () => {
     }
   };
   const clayWith = (...args: string[]) => run(CREDENTIALS, ...args);
+  const stdoutOf = async (...args: string[]) => {
+    const { stdout } = await clayWith(...args);
+    return stdout;
+  };
+  const codeOf = async (...args: string[]) => {
+    const { code } = await clayWith(...args);
+    return code;
+  };
+  const resourcesOf = (object: string) => Object.keys((JSON.parse(server.text(object)!) as { resources: Record<string, unknown> }).resources);
 
   const configure = (...more: string[]) =>
     fs.writeFile(
@@ -176,5 +185,76 @@ describe('a state kept in S3', () => {
     expect(server.text('bucket/env/state.json.lock')).toBeUndefined();
     const plan = await clayWith('plan');
     expect(plan.stdout).toContain('No changes');
+  });
+
+  describe('with workspaces', () => {
+    const DEV = 'bucket/env/clay.workspaces/dev/state.json';
+
+    it('keeps each state apart through new, apply, list, select and delete', async () => {
+      await clayWith('init');
+      expect(await clayWith('workspace', 'new', 'dev')).toMatchObject({ code: 0, stdout: expect.stringContaining('Created and selected workspace "dev"') });
+
+      expect(await codeOf('apply', '--yes')).toBe(0);
+      expect(resourcesOf(DEV)).toEqual(['local_file.f']);
+      expect(resourcesOf('bucket/env/state.json')).toEqual([]);
+      expect(server.text(`${DEV}.lock`)).toBeUndefined();
+      expect(await stdoutOf('workspace', 'list')).toBe('  default\n* dev\n');
+
+      await clayWith('workspace', 'select', 'default');
+      const refused = await clayWith('workspace', 'delete', 'dev');
+      expect(refused).toMatchObject({ code: 1, stderr: expect.stringContaining('Workspace "dev" still has resources in its state') });
+
+      expect(await codeOf('workspace', 'delete', 'dev', '--force')).toBe(0);
+      expect(server.text(DEV)).toBeUndefined();
+      expect(await stdoutOf('workspace', 'list')).toBe('* default\n');
+    });
+
+    it('refuses a workspace that does not exist, and makes none', async () => {
+      await clayWith('init');
+
+      expect(await run({ ...CREDENTIALS, CLAY_WORKSPACE: 'dev' }, 'plan')).toMatchObject({ code: 1, stderr: expect.stringContaining('Workspace "dev" does not exist') });
+      expect(server.text(DEV)).toBeUndefined();
+    });
+
+    it('refuses a second workspace of one name', async () => {
+      await clayWith('init');
+      await clayWith('workspace', 'new', 'dev');
+
+      expect(await clayWith('workspace', 'new', 'dev')).toMatchObject({ code: 1, stderr: expect.stringContaining('Workspace "dev" exists already') });
+    });
+
+    it('keeps apart two configurations whose keys share a folder', async () => {
+      await clayWith('init');
+      await clayWith('workspace', 'new', 'dev');
+      server.put('bucket/env/clay.workspaces/qa/other.json', '{}');
+
+      expect(await stdoutOf('workspace', 'list')).toBe('  default\n* dev\n');
+    });
+
+    it('moves every workspace from a local state with init', async () => {
+      await fs.writeFile(path.join(dir, 'main.clay'), FILE, 'utf8');
+      await clayWith('init');
+      await clayWith('workspace', 'new', 'dev');
+      await clayWith('apply', '--yes');
+      await configure('region         = "eu-west-1"');
+
+      expect(await codeOf('init', '--yes')).toBe(0);
+
+      expect(resourcesOf(DEV)).toEqual(['local_file.f']);
+      expect(server.text(`${DEV}.lock`)).toBeUndefined();
+      expect(await stdoutOf('plan')).toContain('No changes');
+    });
+
+    it('moves every workspace back to a local state with init', async () => {
+      await clayWith('init');
+      await clayWith('workspace', 'new', 'dev');
+      await clayWith('apply', '--yes');
+      await fs.writeFile(path.join(dir, 'main.clay'), FILE, 'utf8');
+
+      expect(await codeOf('init', '--yes')).toBe(0);
+
+      expect(await exists('clay.workspaces/dev/clay.state.json')).toBe(true);
+      expect(await stdoutOf('plan')).toContain('No changes');
+    });
   });
 });

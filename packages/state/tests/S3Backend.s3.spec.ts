@@ -19,6 +19,9 @@ describe('a state kept on a real S3 server', () => {
   const backendIn = (name = bucket) =>
     new S3Backend({ bucket: name, key: KEY, region: 'us-east-1', regionInBlock: true, endpoint: new URL(s3.endpoint), pathStyle: true }, { timeout: 10, attempts: 1 });
 
+  const on = (key: string) =>
+    new S3Backend({ bucket, key, region: 'us-east-1', regionInBlock: true, endpoint: new URL(s3.endpoint), pathStyle: true }, { timeout: 10, attempts: 1 });
+
   beforeAll(() => {
     s3 = RealS3.fromEnv();
   });
@@ -98,6 +101,33 @@ describe('a state kept on a real S3 server', () => {
 
       await expect(backendIn().unlock(newLockInfo('apply').id)).rejects.toThrow('holds a lock this run did not take, so it is left in place');
       expect(JSON.parse((await s3.text(bucket, LOCK))!)).toEqual(other);
+    });
+  });
+
+  describe('its workspaces', () => {
+    const WORKSPACE = { key: 'env/ş p&q/state.json', state: 'env/ş p&q/clay.workspaces/dev/state.json' };
+
+    it('lists only the states of the default file name, under a key that needs escaping', async () => {
+      const made = on(WORKSPACE.key).workspace('dev');
+      await made.prepare?.();
+      await made.lock(newLockInfo('workspace new'));
+      expect(await made.writeIfAbsent(stateWith(1))).toBe(true);
+      await s3.put(bucket, 'env/ş p&q/clay.workspaces/other/b.json', '{}');
+      await s3.put(bucket, 'env/ş p&q/clay.workspaces/empty/state.json', '');
+
+      expect(await s3.text(bucket, WORKSPACE.state)).toBe(serializeState(stateWith(1)));
+      expect(await on(WORKSPACE.key).listWorkspaces()).toEqual(['default', 'dev']);
+    });
+
+    it('is gone once removed, and refuses a lock then', async () => {
+      await s3.put(bucket, 'env/clay.workspaces/dev/state.json', serializeState(stateWith(1)));
+      const workspace = on(KEY).workspace('dev');
+
+      await workspace.remove();
+
+      expect(await workspace.exists()).toBe(false);
+      await expect(on(KEY).workspace('dev').lock(newLockInfo('apply'))).rejects.toThrow('Workspace "dev" does not exist');
+      expect(await s3.text(bucket, 'env/clay.workspaces/dev/state.json.lock')).toBeUndefined();
     });
   });
 });

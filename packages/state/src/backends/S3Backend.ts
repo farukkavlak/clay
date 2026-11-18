@@ -1,10 +1,11 @@
-import type { S3Client, S3ServiceException } from '@aws-sdk/client-s3';
+import type { ListObjectsV2CommandOutput, S3Client, S3ServiceException } from '@aws-sdk/client-s3';
 import { emptyState, State, WrittenState } from '@clay/contracts';
 
 import { forceUnlockWith, LockInfo, lockInfoFrom, noLockAt, otherLockAt, StateLocked } from '../lockInfo';
-import { BackendChoice, StateBackend } from '../StateBackend';
+import { BackendChoice, DEFAULT_WORKSPACE, NamedWorkspace } from '../StateBackend';
 import { parseState, serializeState } from '../stateFile';
 import { NoAnswer } from './httpRequest';
+import { refuseIfGone, workspaceKey, workspaceOfKey, workspacesPrefix } from './workspaces';
 
 type Sdk = typeof import('@aws-sdk/client-s3');
 
@@ -27,6 +28,9 @@ export interface S3Limits {
 }
 
 const LIMITS: S3Limits = { timeout: 30, attempts: 3 };
+
+/** In bytes of UTF-8. */
+export const LONGEST_S3_KEY = 1024;
 
 interface Stored {
   readonly text: string;
@@ -56,64 +60,152 @@ function noAnswerOf(error: unknown, timeout: number): { readonly why: string; re
   return undefined;
 }
 
-/** The state is one object, and its lock another beside it, taken only where none is. */
-export class S3Backend implements StateBackend {
+/** The state is one object, and its lock another beside it, taken only where none is. A named workspace has one of each of its own. */
+export class S3Backend implements NamedWorkspace {
   readonly choice: BackendChoice;
   readonly location: string;
+  private readonly stateKey: string;
   private readonly lockKey: string;
   private readonly lockLocation: string;
+  private readonly listLocation: string;
+  /** Set by `prepare`, as `workspace new` makes the workspace whose lock it then takes. */
+  private making = false;
   private connection: Promise<{ readonly sdk: Sdk; readonly client: S3Client }> | undefined;
 
   constructor(
     private readonly settings: S3Settings,
-    private readonly limits: S3Limits = LIMITS
+    private readonly limits: S3Limits = LIMITS,
+    private readonly workspaceName: string = DEFAULT_WORKSPACE
   ) {
     const { bucket, key, region, regionInBlock, endpoint, pathStyle } = settings;
     const at = endpoint === undefined ? '' : ` at ${endpoint.href}`;
-    this.location = `s3://${bucket}/${key}${at}`;
-    this.lockKey = `${key}.lock`;
+    this.stateKey = workspaceKey(key, workspaceName);
+    this.location = `s3://${bucket}/${this.stateKey}${at}`;
+    this.lockKey = `${this.stateKey}.lock`;
     this.lockLocation = `s3://${bucket}/${this.lockKey}${at}`;
+    this.listLocation = `s3://${bucket}/${workspacesPrefix(key)}${at}`;
     this.choice = {
       type: 's3',
-      where: this.location,
+      where: `s3://${bucket}/${key}${at}`,
       settings: { bucket, key, ...(regionInBlock && { region }), ...(endpoint && { endpoint: endpoint.href }), use_path_style: pathStyle },
     };
   }
 
+  workspace(name: string): S3Backend {
+    return new S3Backend(this.settings, this.limits, name);
+  }
+
+  /** Every key is listed, so finding the workspaces takes no request for each. An empty object is no state, as `exists` reads it. */
+  async listWorkspaces(): Promise<string[]> {
+    const named: string[] = [];
+    let token: string | undefined;
+    do {
+      const page = await this.listed(token);
+      for (const { Key, Size } of page.Contents ?? []) {
+        const name = Key === undefined || Size === 0 ? undefined : workspaceOfKey(this.settings.key, Key);
+        if (name !== undefined) named.push(name);
+      }
+      token = this.nextToken(page);
+    } while (token !== undefined);
+
+    return [DEFAULT_WORKSPACE, ...named.sort()];
+  }
+
+  private async listed(token: string | undefined): Promise<ListObjectsV2CommandOutput> {
+    const outcome = await this.send('ListObjectsV2', this.listLocation, (sdk, client) =>
+      client.send(new sdk.ListObjectsV2Command({ Bucket: this.settings.bucket, Prefix: workspacesPrefix(this.settings.key), ContinuationToken: token }))
+    );
+    if (!outcome.refused) return outcome.output;
+    if (outcome.refused.name === 'AccessDenied')
+      throw new Error(`S3 refused to list ${this.listLocation}; finding workspaces needs s3:ListBucket on bucket "${this.settings.bucket}"`, { cause: outcome.refused });
+
+    throw this.unexpected('ListObjectsV2', this.listLocation, outcome.refused);
+  }
+
+  /** A list cut short would hide workspaces, and `init` would leave them behind. */
+  private nextToken({ IsTruncated, NextContinuationToken }: ListObjectsV2CommandOutput): string | undefined {
+    if (!IsTruncated) return undefined;
+    if (NextContinuationToken === undefined) throw new Error(`The listing of ${this.listLocation} was cut short with no way to go on`);
+
+    return NextContinuationToken;
+  }
+
+  /** S3 has no folders to make, so only the length of the lock's key is left to check. */
+  async prepare(): Promise<void> {
+    if (this.workspaceName === DEFAULT_WORKSPACE) return;
+
+    const bytes = Buffer.byteLength(this.lockKey, 'utf8');
+    if (bytes > LONGEST_S3_KEY)
+      throw new Error(
+        `The lock of workspace "${this.workspaceName}" would have a key of ${bytes} bytes, and S3 takes ${LONGEST_S3_KEY} at most; use a shorter key in the backend block`
+      );
+
+    this.making = true;
+  }
+
+  async remove(): Promise<void> {
+    if (this.workspaceName === DEFAULT_WORKSPACE) throw new Error('The state of the default workspace is not removed');
+
+    const outcome = await this.send('DeleteObject', this.location, (sdk, client) => client.send(new sdk.DeleteObjectCommand({ Bucket: this.settings.bucket, Key: this.stateKey })));
+    if (outcome.refused && !isMissing(outcome.refused)) throw this.unexpected('DeleteObject', this.location, outcome.refused);
+  }
+
+  /** A key leaves no folder behind. */
+  async prune(): Promise<void> {}
+
   async check(): Promise<void> {
-    await this.stored(this.settings.key);
+    await this.stored(this.stateKey);
   }
 
   async exists(): Promise<boolean> {
-    return (await this.stored(this.settings.key)) !== undefined;
+    return (await this.stored(this.stateKey)) !== undefined;
   }
 
   async read(): Promise<State> {
-    const stored = await this.stored(this.settings.key);
-    return stored === undefined ? emptyState() : parseState(stored.text, this.location);
+    const stored = await this.stored(this.stateKey);
+    if (stored !== undefined) return parseState(stored.text, this.location);
+    if (this.mustExist) throw this.missing();
+
+    return emptyState();
   }
 
   async write(state: WrittenState): Promise<void> {
-    const outcome = await this.put(this.settings.key, serializeState(state), false);
+    const outcome = await this.put(this.stateKey, serializeState(state), false);
     if (outcome.refused) throw this.unexpected('PutObject', this.location, outcome.refused);
   }
 
-  /** S3 writes only where no object is, so no other run can write in between. */
+  /**
+   * S3 writes only where no object is, so no other run can write in between. What it refuses is read: the same text is this write, taken
+   * by a try whose answer was lost and found by the try the SDK sent again, and an empty object is no state.
+   */
   async writeIfAbsent(state: WrittenState): Promise<boolean> {
-    const outcome = await this.put(this.settings.key, serializeState(state), true);
-    if (outcome.refused && statusOf(outcome.refused) === 412) return false;
-    if (outcome.refused) throw this.unexpected('PutObject', this.location, outcome.refused);
+    const text = serializeState(state);
+    const outcome = await this.put(this.stateKey, text, true);
+    if (!outcome.refused) return true;
+    if (statusOf(outcome.refused) !== 412) throw this.unexpected('PutObject', this.location, outcome.refused);
 
+    const stored = await this.stored(this.stateKey);
+    if (stored !== undefined) return stored.text === text;
+
+    await this.write(state);
     return true;
   }
 
-  /** A lock released between the refusal and the read is tried once more. */
+  /** A lock released between the refusal and the read is tried once more. A named workspace deleted while this run waited is refused. */
   async lock(info: LockInfo): Promise<void> {
     let held = await this.heldBy(info);
     if (held === 'gone') held = await this.heldBy(info);
-    if (held === 'taken') return;
+    if (held !== 'taken') throw new StateLocked(held === 'gone' ? undefined : held, `remove ${this.lockLocation}`);
+    if (this.mustExist) await refuseIfGone(this, info.id, () => this.missing());
+  }
 
-    throw new StateLocked(held === 'gone' ? undefined : held, `remove ${this.lockLocation}`);
+  /** A named workspace has a state, but where `workspace new` is making it; the default one runs without. */
+  private get mustExist(): boolean {
+    return this.workspaceName !== DEFAULT_WORKSPACE && !this.making;
+  }
+
+  private missing(): Error {
+    return new Error(`Workspace "${this.workspaceName}" does not exist`);
   }
 
   /** A try the SDK sent again, after the answer to one S3 took was lost, finds the lock held by this run's own id. */

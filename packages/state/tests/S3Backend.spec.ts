@@ -20,6 +20,9 @@ describe('a state kept in S3', () => {
     new S3Backend({ bucket: 'bucket', key, region: 'eu-west-1', regionInBlock: true, endpoint: new URL(server.url), pathStyle: true }, limits);
 
   const sent = () => server.received.map(({ method, path }) => `${method} ${path}`);
+  const named = (name = 'dev', limits: S3Limits = ONCE, key = 'env/state.json') => backendOn(limits, key).workspace(name);
+  const put = (key: string, body = serializeState(stateWith(1))) => server.put(`bucket/${key}`, body);
+  const listings = () => sent().filter((request) => request.replace(/\/$/, '') === 'GET /bucket').length;
 
   beforeEach(async () => {
     vi.stubEnv('AWS_ACCESS_KEY_ID', 'test-key');
@@ -103,7 +106,7 @@ describe('a state kept in S3', () => {
     expect(await backend.writeIfAbsent(stateWith(2))).toBe(false);
 
     expect(server.text('bucket/env/state.json')).toBe(serializeState(stateWith(1)));
-    expect(server.received.map(({ ifNoneMatch }) => ifNoneMatch)).toEqual(['*', '*']);
+    expect(server.received.filter(({ method }) => method === 'PUT').map(({ ifNoneMatch }) => ifNoneMatch)).toEqual(['*', '*']);
   });
 
   it('names the place and what S3 answered, where it refuses a request', async () => {
@@ -374,6 +377,198 @@ describe('a state kept in S3', () => {
 
     it('says no lock is held where none is', async () => {
       await expect(backendOn().forceUnlock('another')).rejects.toThrow(`No lock is held at s3://bucket/env/state.json.lock at ${server.url}/`);
+    });
+  });
+
+  describe('its workspaces', () => {
+    const DEV = 'env/clay.workspaces/dev/state.json';
+
+    it('keeps one next to the default state, with its own lock, and is chosen as the default one is', async () => {
+      const workspace = named();
+      const info = newLockInfo('apply');
+      await workspace.prepare?.();
+
+      await workspace.lock(info);
+      await workspace.write(stateWith(1));
+
+      expect(workspace.location).toBe(`s3://bucket/${DEV} at ${server.url}/`);
+      expect(workspace.choice).toEqual(backendOn().choice);
+      expect(server.text(`bucket/${DEV}`)).toBe(serializeState(stateWith(1)));
+      expect(JSON.parse(server.text(`bucket/${DEV}.lock`)!)).toEqual(info);
+      expect(server.text('bucket/env/state.json')).toBeUndefined();
+    });
+
+    it('keeps one at the top of the bucket where the key has no folder', () => {
+      expect(named('dev', ONCE, 'state.json').location).toBe(`s3://bucket/clay.workspaces/dev/state.json at ${server.url}/`);
+    });
+
+    it('is the default state again under the name default', () => {
+      expect(named('default').location).toBe(backendOn().location);
+    });
+
+    it('lists default first, then the names with a state of the default file name, in order', async () => {
+      for (const key of [
+        DEV,
+        'env/clay.workspaces/a/state.json',
+        'env/clay.workspaces/a-1/state.json',
+        'env/clay.workspaces/gone/state.json.lock',
+        'env/clay.workspaces/other/b.json',
+      ])
+        put(key);
+      for (const key of [
+        'env/clay.workspaces/deep/er/state.json',
+        'env/clay.workspaces/deep/state.json/state.json',
+        'env/clay.workspaces/Bad_Name/state.json',
+        'env/clay.workspaces/default/state.json',
+        'clay.workspaces/top/state.json',
+      ])
+        put(key);
+      put('env/clay.workspaces/empty/state.json', '');
+
+      expect(await backendOn().listWorkspaces()).toEqual(['default', 'a', 'a-1', 'dev']);
+    });
+
+    it('lists default alone where no workspace is', async () => {
+      expect(await backendOn().listWorkspaces()).toEqual(['default']);
+    });
+
+    it('lists the same from a named workspace', async () => {
+      put(DEV);
+
+      expect(await named('other').listWorkspaces()).toEqual(['default', 'dev']);
+    });
+
+    it('reads every page of the listing', async () => {
+      server.pageSize = 2;
+      for (const name of ['a', 'b', 'c', 'd', 'e']) put(`env/clay.workspaces/${name}/state.json`);
+
+      expect(await backendOn().listWorkspaces()).toEqual(['default', 'a', 'b', 'c', 'd', 'e']);
+      expect(listings()).toBe(3);
+    });
+
+    it('refuses a listing cut short with no way to go on', async () => {
+      server.override('GET /bucket/', { raw: 200, body: '<ListBucketResult><IsTruncated>true</IsTruncated></ListBucketResult>' });
+      server.override('GET /bucket', { raw: 200, body: '<ListBucketResult><IsTruncated>true</IsTruncated></ListBucketResult>' });
+
+      await expect(backendOn().listWorkspaces()).rejects.toThrow(`The listing of s3://bucket/env/clay.workspaces/ at ${server.url}/ was cut short with no way to go on`);
+    });
+
+    it('names the permission a refused listing needs', async () => {
+      server.override('GET /bucket/', { status: 403, code: 'AccessDenied' });
+      server.override('GET /bucket', { status: 403, code: 'AccessDenied' });
+
+      await expect(backendOn().listWorkspaces()).rejects.toThrow(
+        `S3 refused to list s3://bucket/env/clay.workspaces/ at ${server.url}/; finding workspaces needs s3:ListBucket on bucket "bucket"`
+      );
+    });
+
+    it('says what S3 answered to a listing it failed for another reason', async () => {
+      server.override('GET /bucket/', { status: 404, code: 'NoSuchBucket' });
+      server.override('GET /bucket', { status: 404, code: 'NoSuchBucket' });
+
+      await expect(backendOn().listWorkspaces()).rejects.toThrow(`ListObjectsV2 s3://bucket/env/clay.workspaces/ at ${server.url}/ answered 404 NoSuchBucket`);
+    });
+
+    it('exists only with its state', async () => {
+      expect(await named().exists()).toBe(false);
+      put(DEV);
+
+      expect(await named().exists()).toBe(true);
+    });
+
+    it('is not read as empty once its state is gone', async () => {
+      await expect(named().read()).rejects.toThrow('Workspace "dev" does not exist');
+    });
+
+    it('refuses a lock on a workspace deleted meanwhile, and leaves no lock', async () => {
+      await expect(named().lock(newLockInfo('apply'))).rejects.toThrow('Workspace "dev" does not exist');
+
+      expect(server.text(`bucket/${DEV}.lock`)).toBeUndefined();
+    });
+
+    it('gives the lock back where its state cannot be read, and says why', async () => {
+      put(DEV);
+      server.override(`GET /bucket/${DEV}`, { status: 403, code: 'AccessDenied' });
+
+      await expect(named().lock(newLockInfo('apply'))).rejects.toThrow(`GetObject s3://bucket/${DEV} at ${server.url}/ answered 403 AccessDenied`);
+      expect(server.text(`bucket/${DEV}.lock`)).toBeUndefined();
+    });
+
+    it('says how to free a lock it could not give back, and still why it stopped', async () => {
+      const info = newLockInfo('apply');
+      server.override(`GET /bucket/${DEV}.lock`, { status: 403, code: 'AccessDenied' });
+
+      await expect(named().lock(info)).rejects.toThrow(`Workspace "dev" does not exist. The lock could not be released; run clay force-unlock ${info.id}`);
+      expect(server.text(`bucket/${DEV}.lock`)).toBeDefined();
+    });
+
+    it('is locked where its state exists', async () => {
+      put(DEV);
+      const info = newLockInfo('apply');
+
+      await named().lock(info);
+
+      expect(JSON.parse(server.text(`bucket/${DEV}.lock`)!)).toEqual(info);
+    });
+
+    it('removes only its state', async () => {
+      put(DEV);
+      put(`${DEV}.lock`, 'held');
+      put('env/state.json');
+
+      await named().remove();
+      await named().prune();
+
+      expect(server.text(`bucket/${DEV}`)).toBeUndefined();
+      expect(server.text(`bucket/${DEV}.lock`)).toBe('held');
+      expect(server.text('bucket/env/state.json')).toBeDefined();
+    });
+
+    it('never removes the default state', async () => {
+      put('env/state.json');
+
+      await expect(named('default').remove()).rejects.toThrow('The state of the default workspace is not removed');
+      expect(server.text('bucket/env/state.json')).toBeDefined();
+    });
+
+    it('says what S3 answered to a removal it refused', async () => {
+      server.override(`DELETE /bucket/${DEV}`, { status: 403, code: 'AccessDenied' });
+
+      await expect(named().remove()).rejects.toThrow(`DeleteObject s3://bucket/${DEV} at ${server.url}/ answered 403 AccessDenied`);
+    });
+
+    it('takes the longest key whose lock fits', async () => {
+      await expect(named('dev', ONCE, 'k'.repeat(999)).prepare?.()).resolves.toBeUndefined();
+    });
+
+    it.each([
+      ['characters', 'k'.repeat(1000)],
+      ['bytes in UTF-8', 'ü'.repeat(500)],
+    ])('refuses a workspace whose lock would not fit, counting %s', async (_title, key) => {
+      await expect(named('dev', ONCE, key).prepare?.()).rejects.toThrow(
+        'The lock of workspace "dev" would have a key of 1025 bytes, and S3 takes 1024 at most; use a shorter key in the backend block'
+      );
+    });
+
+    it('counts a first write as done where the answer was lost and the try sent again finds it', async () => {
+      server.override(`PUT /bucket/${DEV}`, { lost: true });
+
+      expect(await named('dev', { timeout: 5, attempts: 2 }).writeIfAbsent(stateWith(1))).toBe(true);
+      expect(server.text(`bucket/${DEV}`)).toBe(serializeState(stateWith(1)));
+    });
+
+    it('does not write over another state', async () => {
+      put(DEV, serializeState(stateWith(2)));
+
+      expect(await named().writeIfAbsent(stateWith(1))).toBe(false);
+      expect(server.text(`bucket/${DEV}`)).toBe(serializeState(stateWith(2)));
+    });
+
+    it('writes over an empty object, which is no state', async () => {
+      put(DEV, '');
+
+      expect(await named().writeIfAbsent(stateWith(1))).toBe(true);
+      expect(server.text(`bucket/${DEV}`)).toBe(serializeState(stateWith(1)));
     });
   });
 });

@@ -389,7 +389,7 @@ describe('the backend init remembers', () => {
       await record({ endpoint: 'http://127.0.0.1:1/' });
 
       await expect(adoptBackend(new LocalBackend(dir), previous(), dir, unasked)).rejects.toThrow(
-        `GetObject s3://bucket/state at http://127.0.0.1:1/ got no answer (ECONNREFUSED) after 3 tries. Whether a state is left there is not known; if that server is gone for good, remove ${recordPath()} and run \`clay init\` again`
+        `ListObjectsV2 s3://bucket/clay.workspaces/ at http://127.0.0.1:1/ got no answer (ECONNREFUSED) after 3 tries. Whether a state is left there is not known; if that server is gone for good, remove ${recordPath()} and run \`clay init\` again`
       );
     });
   });

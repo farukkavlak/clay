@@ -1145,7 +1145,7 @@ Terraform has it since backends replaced `-state`.
 - [x] `CLAY_WORKSPACE` chooses the workspace for one command, over `.clay/workspace`
 - [x] A saved plan names its workspace, and `apply` in another one refuses it by name. The
       lineage alone misses a state copied by hand
-- [ ] Workspaces on the `s3` backend, which keeps one state today
+- [x] Workspaces on the `s3` backend, each state and lock an object of its own
 - [ ] Workspaces on the `azure` backend, which keeps one state today
 - [ ] `clay.workspace` reads the name of the workspace in the configuration
 - [ ] The plan lists what a resource to create holds, and names the attribute that forces a

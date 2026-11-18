@@ -70,6 +70,8 @@ function answerInstead(response: ServerResponse, override: Exclude<Override, { l
   }
 }
 
+const escaped = (text: string) => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+
 const header = (request: IncomingMessage, name: string) => request.headers[name] as string | undefined;
 
 /**
@@ -81,6 +83,8 @@ export class S3StateServer {
   readonly received: S3Received[] = [];
   /** The access key every request must be signed with, where set. */
   accessKey: string | undefined;
+  /** How many keys one answer to a listing holds. */
+  pageSize = 1000;
   private overrides = new Map<string, Override[]>();
   private server: Server;
 
@@ -136,16 +140,16 @@ export class S3StateServer {
       return;
     }
 
-    const done = this.serve(request, decodeURIComponent(url.pathname.slice(1)), body);
+    const done = this.serve(request, url, decodeURIComponent(url.pathname.slice(1)), body);
     if (override === undefined) reply(response, done);
     else response.destroy();
   }
 
   /** What a request did, or why it was refused. */
-  private serve(request: IncomingMessage, path: string, body: string): Done | Refusal {
-    const signedBy = /Credential=([^/]+)\//.exec(header(request, 'authorization') ?? '')?.[1];
-    if (this.accessKey !== undefined && signedBy !== this.accessKey) return { status: 403, code: 'InvalidAccessKeyId' };
-    if (!this.buckets.has(path.split('/')[0])) return { status: 404, code: 'NoSuchBucket' };
+  private serve(request: IncomingMessage, url: URL, path: string, body: string): Done | Refusal {
+    const refused = this.refusalOf(request, path);
+    if (refused !== undefined) return refused;
+    if (request.method === 'GET' && url.searchParams.get('list-type') === '2') return this.list(path.split('/')[0], url.searchParams);
 
     const stored = this.objects.get(path);
     if (request.method === 'GET') return stored === undefined ? { status: 404, code: 'NoSuchKey' } : { status: 200, ...stored };
@@ -153,6 +157,26 @@ export class S3StateServer {
     if (request.method === 'DELETE') return this.delete(path, stored, header(request, 'if-match'));
 
     return { status: 405, code: 'MethodNotAllowed' };
+  }
+
+  private refusalOf(request: IncomingMessage, path: string): Refusal | undefined {
+    const signedBy = /Credential=([^/]+)\//.exec(header(request, 'authorization') ?? '')?.[1];
+    if (this.accessKey !== undefined && signedBy !== this.accessKey) return { status: 403, code: 'InvalidAccessKeyId' };
+
+    return this.buckets.has(path.split('/')[0]) ? undefined : { status: 404, code: 'NoSuchBucket' };
+  }
+
+  /** Keys in order, as S3 lists them; the token is the last key of the page before. */
+  private list(bucket: string, query: URLSearchParams): Done {
+    const prefix = `${bucket}/${query.get('prefix') ?? ''}`;
+    const after = query.get('continuation-token') ?? '';
+    const keys = [...this.objects.keys()].filter((path) => path.startsWith(prefix) && path.slice(bucket.length + 1) > after).sort();
+    const page = keys.slice(0, this.pageSize);
+    const contents = page.map((path) => `<Contents><Key>${escaped(path.slice(bucket.length + 1))}</Key><Size>${Buffer.byteLength(this.objects.get(path)!.body)}</Size></Contents>`);
+    const more = keys.length > page.length;
+    const next = more ? `<NextContinuationToken>${escaped(page.at(-1)!.slice(bucket.length + 1))}</NextContinuationToken>` : '';
+
+    return { status: 200, body: `<?xml version="1.0" encoding="UTF-8"?><ListBucketResult><IsTruncated>${more}</IsTruncated>${contents.join('')}${next}</ListBucketResult>` };
   }
 
   private write(path: string, body: string, stored: Stored | undefined, ifNoneMatch: string | undefined): Done | Refusal {

@@ -2,6 +2,7 @@ import { isWorkspaceName } from '@clay/contracts';
 import * as fs from 'node:fs';
 import path from 'node:path';
 
+import { forceUnlockWith } from '../lockInfo';
 import { replaceSynced } from './durable';
 import { Environment, Settings, variable } from './settings';
 import { DEFAULT_WORKSPACE, NamedWorkspace, StateBackend, WORKSPACES_FOLDER } from '../StateBackend';
@@ -35,6 +36,28 @@ export function workspaceAt(parts: readonly string[]): string | undefined {
 export function checkNotWorkspaceState(settings: Settings, name: string, written: string, parts: readonly string[]): void {
   const workspace = workspaceAt(parts);
   if (workspace !== undefined) settings.refuse(`${name} of backend "${settings.type}" is "${written}", which is where Clay keeps the state of workspace "${workspace}"`, name);
+}
+
+/** The folder part of an object's key, with its "/", and the file name after it. */
+function splitKey(key: string): { readonly folder: string; readonly file: string } {
+  const end = key.lastIndexOf('/') + 1;
+
+  return { folder: key.slice(0, end), file: key.slice(end) };
+}
+
+/** What the key of every named workspace of an object store starts with. */
+export const workspacesPrefix = (key: string) => `${splitKey(key).folder}${WORKSPACES_FOLDER}/`;
+
+/** The key of a workspace's state, next to the default state and under its file name. */
+export function workspaceKey(key: string, workspace: string): string {
+  return workspace === DEFAULT_WORKSPACE ? key : `${workspacesPrefix(key)}${workspace}/${splitKey(key).file}`;
+}
+
+/** The named workspace whose state `listed`, a key under `workspacesPrefix(key)`, is. */
+export function workspaceOfKey(key: string, listed: string): string | undefined {
+  const [name, ...rest] = listed.slice(workspacesPrefix(key).length).split('/');
+  const isState = rest.length === 1 && rest[0] === splitKey(key).file;
+  return isState && name !== DEFAULT_WORKSPACE && isWorkspaceName(name) ? name : undefined;
 }
 
 const WORKSPACE_VARIABLE = 'CLAY_WORKSPACE';
@@ -73,6 +96,28 @@ export function currentWorkspace(workingDir: string, env: Environment): string {
 /** Selects workspace `name` for the commands that follow, with the name checked already. */
 export async function selectWorkspace(workingDir: string, name: string): Promise<void> {
   await replaceSynced(selectionOf(workingDir), `${name}\n`);
+}
+
+/**
+ * Called with the lock of a named workspace just taken, so a workspace deleted while the run waited is refused. A caller whose `lock`
+ * fails holds no lock to release, so it is given back here, whatever stopped the run.
+ */
+export async function refuseIfGone(workspace: Pick<StateBackend, 'exists' | 'unlock'>, lockId: string, missing: () => Error): Promise<void> {
+  let failure: unknown;
+  try {
+    if (await workspace.exists()) return;
+    failure = missing();
+  } catch (error) {
+    failure = error;
+  }
+
+  try {
+    await workspace.unlock(lockId);
+  } catch (unlockError) {
+    const why = failure instanceof Error ? failure.message : String(failure);
+    throw new AggregateError([failure, unlockError], `${why}. The lock could not be released; ${forceUnlockWith(lockId)}`);
+  }
+  throw failure;
 }
 
 /** The backend of named workspace `name`, whether its state exists or not. */

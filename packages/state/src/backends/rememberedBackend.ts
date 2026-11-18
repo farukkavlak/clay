@@ -50,12 +50,10 @@ export function rememberedBackend(workingDir: string, env: Environment): StateBa
   return build(recordSettings(shape.type, shape.settings, record), workingDir, env);
 }
 
-/** A journal alone counts where the state is a file, so what a stopped run recorded is not left unseen. */
-async function leftBehind(before: StateBackend, workingDir: string): Promise<boolean> {
-  if (before instanceof LocalBackend) return before.holdsAnything();
-
+/** Asks the place `init` took before, which may be gone for good. */
+async function askedOfOldPlace<T>(workingDir: string, ask: () => Promise<T>): Promise<T> {
   try {
-    return await before.exists();
+    return await ask();
   } catch (error) {
     if (error instanceof NoAnswer || error instanceof HandshakeFailed)
       throw new Error(`${error.message}. Whether a state is left there is not known; if that server is gone for good, remove ${recordOf(workingDir)} and run \`clay init\` again`, {
@@ -64,6 +62,11 @@ async function leftBehind(before: StateBackend, workingDir: string): Promise<boo
 
     throw error;
   }
+}
+
+/** A journal alone counts where the state is a file, so what a stopped run recorded is not left unseen. */
+function leftBehind(before: StateBackend, workingDir: string): Promise<boolean> {
+  return before instanceof LocalBackend ? before.holdsAnything() : askedOfOldPlace(workingDir, () => before.exists());
 }
 
 const isSame = (a: BackendChoice, b: BackendChoice) => a.type === b.type && a.where === b.where;
@@ -108,7 +111,7 @@ export async function adoptBackend(backend: StateBackend, previous: Previous, wo
   if (isDeepStrictEqual(before.choice, backend.choice)) return {};
 
   if (!isSame(before.choice, backend.choice)) {
-    const named = await namedWorkspaces(before, backend);
+    const named = await askedOfOldPlace(workingDir, () => namedWorkspaces(before, backend));
     if (named.length > 0 || (await leftBehind(before, workingDir))) return moveStates(named, backend, previous, approve, stoppable, () => writeRecord(backend.choice, workingDir));
   }
 
