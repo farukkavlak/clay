@@ -1,7 +1,7 @@
-import { ACCOUNT_KEY, AzureBackend, AzureCredential, SAS_TOKEN } from './AzureBackend';
+import { ACCOUNT_KEY, AzureBackend, AzureCredential, LONGEST_BLOB_NAME, SAS_TOKEN } from './AzureBackend';
 import { urlOf } from './httpFrom';
 import { checkNames, Environment, Settings, variable } from './settings';
-import { checkNotBeside, LOCK_BESIDE } from './workspaces';
+import { checkNotBeside, checkNotWorkspaceState, LOCK_BESIDE } from './workspaces';
 
 const SECRETS = new Map([
   ['access_key', ACCOUNT_KEY],
@@ -12,8 +12,8 @@ const TAKES = ['storage_account_name', 'container_name', 'key', 'endpoint'];
 const ACCOUNT = /^[a-z0-9]{3,24}$/;
 const CONTAINER = /^(?=.{3,63}$)[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
-/** A blob name holds 1024 characters, and the lock's is the key and ".lock". */
-const LONGEST_KEY = 1024 - '.lock'.length;
+/** The lock's name is the key and ".lock". */
+const LONGEST_KEY = LONGEST_BLOB_NAME - '.lock'.length;
 
 /** Refuses a credential written in the block, which would be checked in with it. */
 function checkNoSecrets(settings: Settings): void {
@@ -59,6 +59,7 @@ function keyOf(settings: Settings): string {
   if (parts.some((part) => part === '.' || part === '..')) settings.refuse(`key of backend "azure" is "${key}", which must not hold a "." or ".." part`, 'key');
   if (key.endsWith('.')) settings.refuse(`key of backend "azure" is "${key}", which must not end with "."`, 'key');
   checkNotBeside(settings, 'key', key, parts, LOCK_BESIDE);
+  checkNotWorkspaceState(settings, 'key', key, parts);
 
   return key;
 }

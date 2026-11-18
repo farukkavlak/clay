@@ -441,7 +441,7 @@ describe('the backend init remembers', () => {
       await record({ endpoint: `http://127.0.0.1:1/${server.account}` });
 
       await expect(adoptBackend(new LocalBackend(dir), previousIn(), dir, unasked)).rejects.toThrow(
-        `GetBlob http://127.0.0.1:1/${server.account}/state/state got no answer (ECONNREFUSED) after 3 tries. Whether a state is left there is not known; if that server is gone for good, remove ${recordPath()} and run \`clay init\` again`
+        `ListBlobs http://127.0.0.1:1/${server.account}/state/clay.workspaces/ got no answer (ECONNREFUSED) after 3 tries. Whether a state is left there is not known; if that server is gone for good, remove ${recordPath()} and run \`clay init\` again`
       );
     });
   });

@@ -30,6 +30,15 @@ describe('a state kept on a real Azure Blob server', () => {
     }
   };
 
+  const stdoutOf = async (...args: string[]) => {
+    const { stdout } = await clayWith(...args);
+    return stdout;
+  };
+  const codeOf = async (...args: string[]) => {
+    const { code } = await clayWith(...args);
+    return code;
+  };
+
   const resourcesInContainer = async () => {
     const state = JSON.parse((await azure.text(container, KEY))!) as { resources: Record<string, unknown> };
     return state.resources;
@@ -77,5 +86,21 @@ describe('a state kept on a real Azure Blob server', () => {
     expect(stderr).toContain(`State is locked by apply of ${holder.who} on elsewhere, pid ${holder.pid}`);
     expect(await resourcesInContainer()).toEqual({});
     expect(await azure.text(container, LOCK)).toBe(JSON.stringify(holder));
+  });
+
+  it('keeps a workspace apart from the default state, and deletes it', async () => {
+    const STATE = 'env/clay.workspaces/dev/state.json';
+    await clayWith('init');
+    await clayWith('workspace', 'new', 'dev');
+
+    expect(await codeOf('apply', '--yes')).toBe(0);
+    expect(await resourcesInContainer()).toEqual({});
+    expect(await azure.text(container, STATE)).toContain('local_file.f');
+    expect(await stdoutOf('workspace', 'list')).toBe('  default\n* dev\n');
+
+    await clayWith('workspace', 'select', 'default');
+    expect(await codeOf('workspace', 'delete', 'dev', '--force')).toBe(0);
+    expect(await azure.text(container, STATE)).toBeUndefined();
+    expect(await stdoutOf('workspace', 'list')).toBe('* default\n');
   });
 });

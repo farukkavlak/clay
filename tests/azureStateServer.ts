@@ -29,6 +29,8 @@ interface Done {
   readonly status: number;
   readonly etag?: string;
   readonly body?: string;
+  /** Set for a listing, which is XML where a blob is what was written. */
+  readonly xml?: boolean;
 }
 
 /** An error Azure answers with, by its status and code. */
@@ -65,7 +67,7 @@ function reply(response: ServerResponse, done: Done | Refusal): void {
   const body = done.body ?? '';
   response.writeHead(done.status, {
     ...(done.etag !== undefined && { etag: done.etag }),
-    ...(done.body !== undefined && { 'content-type': 'application/json', 'x-ms-blob-type': 'BlockBlob' }),
+    ...(done.body !== undefined && (done.xml ? { 'content-type': 'application/xml' } : { 'content-type': 'application/json', 'x-ms-blob-type': 'BlockBlob' })),
     'content-length': Buffer.byteLength(body, 'utf8'),
   });
   response.end(body);
@@ -79,6 +81,8 @@ function answerInstead(response: ServerResponse, override: Exclude<Override, { l
     response.end(override.body);
   }
 }
+
+const escaped = (text: string) => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 
 const header = (request: IncomingMessage, name: string) => request.headers[name] as string | undefined;
 
@@ -101,6 +105,8 @@ function signedOf(request: IncomingMessage, url: URL, account: string): AzureRec
 export class AzureStateServer {
   readonly blobs = new Map<string, Stored>();
   readonly received: AzureReceived[] = [];
+  /** How many blobs one answer to a listing holds. */
+  pageSize = 5000;
   private overrides = new Map<string, Override[]>();
   private server: Server;
 
@@ -163,15 +169,17 @@ export class AzureStateServer {
       return;
     }
 
-    const done = url.pathname.startsWith(`/${this.account}/`) ? this.serve(request, decodeURIComponent(path.slice(1)), body, signed) : { status: 400, code: 'InvalidUri' };
+    const done = url.pathname.startsWith(`/${this.account}/`) ? this.serve(request, url, decodeURIComponent(path.slice(1)), body, signed) : { status: 400, code: 'InvalidUri' };
     if (override === undefined) reply(response, done);
     else response.destroy();
   }
 
   /** What a request did, or why it was refused. */
-  private serve(request: IncomingMessage, path: string, body: string, signed: AzureReceived['signed']): Done | Refusal {
+  private serve(request: IncomingMessage, url: URL, path: string, body: string, signed: AzureReceived['signed']): Done | Refusal {
     if (signed === undefined) return { status: 403, code: 'AuthenticationFailed' };
     if (!this.containers.has(path.split('/')[0])) return { status: 404, code: 'ContainerNotFound' };
+
+    if (request.method === 'GET' && url.searchParams.get('comp') === 'list') return this.list(path.split('/')[0], url.searchParams);
 
     const stored = this.blobs.get(path);
     if (request.method === 'GET') return stored === undefined ? { status: 404, code: 'BlobNotFound' } : { status: 200, ...stored };
@@ -179,6 +187,26 @@ export class AzureStateServer {
     if (request.method === 'DELETE') return this.delete(path, stored, header(request, 'if-match'));
 
     return { status: 405, code: 'UnsupportedHttpVerb' };
+  }
+
+  /** Blobs in order, as Azure lists them; the marker is the last name of the page before. */
+  private list(container: string, query: URLSearchParams): Done {
+    const prefix = `${container}/${query.get('prefix') ?? ''}`;
+    const after = query.get('marker') ?? '';
+    const names = [...this.blobs.keys()].filter((path) => path.startsWith(prefix) && path.slice(container.length + 1) > after).sort();
+    const page = names.slice(0, this.pageSize);
+    const blobs = page.map((path) => {
+      const { body, etag } = this.blobs.get(path)!;
+      const properties = `<Last-Modified>Wed, 18 Nov 2026 00:00:00 GMT</Last-Modified><Etag>${escaped(etag)}</Etag><Content-Length>${Buffer.byteLength(body)}</Content-Length><BlobType>BlockBlob</BlobType>`;
+      return `<Blob><Name>${escaped(path.slice(container.length + 1))}</Name><Properties>${properties}</Properties></Blob>`;
+    });
+    const marker = names.length > page.length ? escaped(page.at(-1)!.slice(container.length + 1)) : '';
+
+    return {
+      status: 200,
+      xml: true,
+      body: `<?xml version="1.0" encoding="utf-8"?><EnumerationResults><Blobs>${blobs.join('')}</Blobs><NextMarker>${marker}</NextMarker></EnumerationResults>`,
+    };
   }
 
   private write(path: string, body: string, stored: Stored | undefined, ifNoneMatch: string | undefined): Done | Refusal {

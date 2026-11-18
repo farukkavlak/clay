@@ -131,17 +131,16 @@ describe('backendFrom', () => {
     expect(() => backendFrom(block, inside, {})).toThrow(`${path.join(inside, 'clay.state.json')} is where Clay keeps the state of workspace "dev"`);
   });
 
-  it.each(['clay.workspaces/dev/s.json', 'a/CLAY.Workspaces/Dev/s.json'])('refuses the S3 key %s, the state of a workspace', (place) => {
-    const error = errorOf(s3(`key = "${place}"\n    bucket = "b"\n    region = "eu-west-1"`));
+  describe.each([
+    ['s3', (place: string) => s3(`key = "${place}"\n    bucket = "b"\n    region = "eu-west-1"`)],
+    ['azure', (place: string) => azure(`key = "${place}"\n    storage_account_name = "acme"\n    container_name = "state"`)],
+  ])('a key of backend %s', (type, blockAt) => {
+    it.each(['clay.workspaces/dev/s.json', 'a/CLAY.Workspaces/Dev/s.json'])('is refused as %s, the state of a workspace', (place) => {
+      const error = errorOf(blockAt(place));
 
-    expect(error.message).toBe(`key of backend "s3" is "${place}", which is where Clay keeps the state of workspace "dev"`);
-    expect(error.position).toMatchObject({ line: 3, column: 11 });
-  });
-
-  it('takes an Azure key under clay.workspaces, since it keeps one state', () => {
-    expect(backendFrom(azure('key = "clay.workspaces/dev/s.json"\n    storage_account_name = "acme"\n    container_name = "state"'), dir, {}).location).toContain(
-      'clay.workspaces/dev/s.json'
-    );
+      expect(error.message).toBe(`key of backend "${type}" is "${place}", which is where Clay keeps the state of workspace "dev"`);
+      expect(error.position).toMatchObject({ line: 3, column: 11 });
+    });
   });
 
   it('refuses a local path that comes to a workspace state only once it is resolved', () => {

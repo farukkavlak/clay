@@ -30,6 +30,15 @@ describe('a state kept in Azure Blob storage', () => {
     }
   };
   const clayWith = (...args: string[]) => run(CREDENTIALS, ...args);
+  const stdoutOf = async (...args: string[]) => {
+    const { stdout } = await clayWith(...args);
+    return stdout;
+  };
+  const codeOf = async (...args: string[]) => {
+    const { code } = await clayWith(...args);
+    return code;
+  };
+  const resourcesOf = (blob: string) => Object.keys((JSON.parse(server.text(blob)!) as { resources: Record<string, unknown> }).resources);
 
   const configure = () =>
     fs.writeFile(
@@ -237,6 +246,68 @@ describe('a state kept in Azure Blob storage', () => {
       expect(code).toBe(1);
       expect(stderr).toContain(`GetBlob ${tls.url}/state/env/state.json answered 403 AuthorizationPermissionMismatch`);
       expect(stderr).toContain('the signed-in identity needs a data role on the container, such as Storage Blob Data Contributor');
+    });
+  });
+
+  describe('with workspaces', () => {
+    const DEV = 'state/env/clay.workspaces/dev/state.json';
+
+    it('keeps each state apart through new, apply, list, select and delete', async () => {
+      await clayWith('init');
+      expect(await clayWith('workspace', 'new', 'dev')).toMatchObject({ code: 0, stdout: expect.stringContaining('Created and selected workspace "dev"') });
+
+      expect(await codeOf('apply', '--yes')).toBe(0);
+      expect(resourcesOf(DEV)).toEqual(['local_file.f']);
+      expect(resourcesOf('state/env/state.json')).toEqual([]);
+      expect(server.text(`${DEV}.lock`)).toBeUndefined();
+      expect(await stdoutOf('workspace', 'list')).toBe('  default\n* dev\n');
+
+      await clayWith('workspace', 'select', 'default');
+      expect(await clayWith('workspace', 'delete', 'dev')).toMatchObject({ code: 1, stderr: expect.stringContaining('Workspace "dev" still has resources in its state') });
+
+      expect(await codeOf('workspace', 'delete', 'dev', '--force')).toBe(0);
+      expect(server.text(DEV)).toBeUndefined();
+      expect(await stdoutOf('workspace', 'list')).toBe('* default\n');
+    });
+
+    it('refuses a workspace that does not exist, and makes none', async () => {
+      await clayWith('init');
+
+      expect(await run({ ...CREDENTIALS, CLAY_WORKSPACE: 'dev' }, 'plan')).toMatchObject({ code: 1, stderr: expect.stringContaining('Workspace "dev" does not exist') });
+      expect(server.text(DEV)).toBeUndefined();
+    });
+
+    it('refuses a second workspace of one name', async () => {
+      await clayWith('init');
+      await clayWith('workspace', 'new', 'dev');
+
+      expect(await clayWith('workspace', 'new', 'dev')).toMatchObject({ code: 1, stderr: expect.stringContaining('Workspace "dev" exists already') });
+    });
+
+    it('moves every workspace from a local state with init', async () => {
+      await fs.writeFile(path.join(dir, 'main.clay'), FILE, 'utf8');
+      await clayWith('init');
+      await clayWith('workspace', 'new', 'dev');
+      await clayWith('apply', '--yes');
+      await configure();
+
+      expect(await codeOf('init', '--yes')).toBe(0);
+
+      expect(resourcesOf(DEV)).toEqual(['local_file.f']);
+      expect(server.text(`${DEV}.lock`)).toBeUndefined();
+      expect(await stdoutOf('plan')).toContain('No changes');
+    });
+
+    it('moves every workspace back to a local state with init', async () => {
+      await clayWith('init');
+      await clayWith('workspace', 'new', 'dev');
+      await clayWith('apply', '--yes');
+      await fs.writeFile(path.join(dir, 'main.clay'), FILE, 'utf8');
+
+      expect(await codeOf('init', '--yes')).toBe(0);
+
+      expect(await exists('clay.workspaces/dev/clay.state.json')).toBe(true);
+      expect(await stdoutOf('plan')).toContain('No changes');
     });
   });
 });

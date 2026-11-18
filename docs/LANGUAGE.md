@@ -664,9 +664,8 @@ the configuration. The lock, the backup and the journal sit beside the file it n
 
 A state cannot sit where Clay keeps part of another one. `path` cannot end in `.lock`,
 `.bak`, `.journal` or `.tmp`, or be `clay.workspaces/<workspace>/<file>`, in any case. The
-same holds for the default state of a directory inside such a folder. The `key` of `s3`
-cannot end in `.lock` or be `clay.workspaces/<workspace>/<file>`. The `key` of `azure` cannot
-end in `.lock`.
+same holds for the default state of a directory inside such a folder. The `key` of `s3` and
+`azure` cannot end in `.lock` or be `clay.workspaces/<workspace>/<file>`.
 
 `http` keeps the state on a server, in the protocol Terraform's `http` backend uses:
 
@@ -811,7 +810,7 @@ Credentials come from the environment, by the names the `az` CLI uses:
 `AZURE_STORAGE_KEY` holds an account key, or `AZURE_STORAGE_SAS_TOKEN` a SAS token,
 with or without its leading `?`. Setting both stops every command on the backend. The block
 refuses `access_key` and `sas_token`. A SAS token needs read, create, write and delete on
-the container.
+the container, and list for `workspace list` and an `init` that moves the state.
 
 With neither set, Clay signs in with Entra ID. This works on an account where shared keys
 are turned off. It tries, in this order:
@@ -914,10 +913,11 @@ A name is lowercase letters, digits and `-`, 1 to 63 of them, starting and endin
 letter or a digit.
 
 `local` keeps a workspace in `clay.workspaces/<name>/`, in the directory of the default
-state, under the file name the default state has. `new` makes that folder. `s3` keeps a
-workspace at `clay.workspaces/<name>/<file>`, next to the object `key` names and under its
-file name, with its lock beside it. `new` refuses a name whose lock's key would pass 1024
-bytes. `http` and `azure` keep one state, and refuse a workspace other than `default`.
+state, under the file name the default state has. `new` makes that folder. `s3` and `azure`
+keep a workspace at `clay.workspaces/<name>/<file>`, next to the object or blob `key` names
+and under its file name, with its lock beside it. `new` refuses a name whose lock's key would
+pass 1024 bytes on `s3` or 1024 characters on `azure`. `http` keeps one state, and refuses a
+workspace other than `default`.
 
 `plan`, `apply` and `destroy` name a workspace other than `default` in what they print
 first, and in the question before an apply.

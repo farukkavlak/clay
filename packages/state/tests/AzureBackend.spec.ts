@@ -18,12 +18,16 @@ const KEY: AzureCredential = { accountKey: Buffer.from('test-key').toString('bas
 describe('a state kept in Azure Blob storage', () => {
   let server: AzureStateServer;
 
-  const backendOn = (limits: AzureLimits = ONCE, credential: AzureCredential = KEY, container = 'state') =>
-    new AzureBackend({ account: server.account, container, key: 'env/state.json', endpoint: new URL(server.url), credential }, limits);
+  const backendOn = (limits: AzureLimits = ONCE, credential: AzureCredential = KEY, container = 'state', key = 'env/state.json') =>
+    new AzureBackend({ account: server.account, container, key, endpoint: new URL(server.url), credential }, limits);
+  const named = (name = 'dev', limits: AzureLimits = ONCE, key = 'env/state.json') => backendOn(limits, KEY, 'state', key).workspace(name);
+  const put = (blob: string, body = serializeState(stateWith(1))) => server.put(`state/${blob}`, body);
 
   const at = () => `${server.url}/state/env/state.json`;
   const lockAt = () => `${at()}.lock`;
+  const listAt = () => `${server.url}/state/env/clay.workspaces/`;
   const sent = () => server.received.map(({ method, path }) => `${method} ${path}`);
+  const listings = () => sent().filter((request) => request === 'GET /state').length;
 
   beforeEach(async () => {
     server = await AzureStateServer.start();
@@ -87,7 +91,7 @@ describe('a state kept in Azure Blob storage', () => {
     expect(await backend.writeIfAbsent(stateWith(2))).toBe(false);
 
     expect(server.text('state/env/state.json')).toBe(serializeState(stateWith(1)));
-    expect(server.received.map(({ ifNoneMatch }) => ifNoneMatch)).toEqual(['*', '*']);
+    expect(server.received.filter(({ method }) => method === 'PUT').map(({ ifNoneMatch }) => ifNoneMatch)).toEqual(['*', '*']);
   });
 
   it('names the place and what Azure answered, where it refuses a request', async () => {
@@ -335,6 +339,184 @@ describe('a state kept in Azure Blob storage', () => {
 
     it('says no lock is held where none is', async () => {
       await expect(backendOn().forceUnlock('another')).rejects.toThrow(`No lock is held at ${lockAt()}`);
+    });
+  });
+
+  describe('its workspaces', () => {
+    const DEV = 'env/clay.workspaces/dev/state.json';
+
+    it('keeps one next to the default state, with its own lock, and is chosen as the default one is', async () => {
+      const workspace = named();
+      const info = newLockInfo('apply');
+      await workspace.prepare();
+
+      await workspace.lock(info);
+      await workspace.write(stateWith(1));
+
+      expect(workspace.location).toBe(`${server.url}/state/${DEV}`);
+      expect(workspace.choice).toEqual(backendOn().choice);
+      expect(server.text(`state/${DEV}`)).toBe(serializeState(stateWith(1)));
+      expect(JSON.parse(server.text(`state/${DEV}.lock`)!)).toEqual(info);
+      expect(server.text('state/env/state.json')).toBeUndefined();
+    });
+
+    it('keeps one at the top of the container where the key has no folder', () => {
+      expect(named('dev', ONCE, 'state.json').location).toBe(`${server.url}/state/clay.workspaces/dev/state.json`);
+    });
+
+    it('is the default state again under the name default', () => {
+      expect(named('default').location).toBe(backendOn().location);
+    });
+
+    it('lists default first, then the names with a state of the default file name, in order', async () => {
+      for (const blob of [
+        DEV,
+        'env/clay.workspaces/a/state.json',
+        'env/clay.workspaces/a-1/state.json',
+        'env/clay.workspaces/gone/state.json.lock',
+        'env/clay.workspaces/other/b.json',
+      ])
+        put(blob);
+      for (const blob of [
+        'env/clay.workspaces/deep/er/state.json',
+        'env/clay.workspaces/deep/state.json/state.json',
+        'env/clay.workspaces/Bad_Name/state.json',
+        'env/clay.workspaces/default/state.json',
+        'clay.workspaces/top/state.json',
+      ])
+        put(blob);
+      put('env/clay.workspaces/empty/state.json', '');
+      put('env/clay.workspaces/folder', '');
+
+      expect(await backendOn().listWorkspaces()).toEqual(['default', 'a', 'a-1', 'dev']);
+    });
+
+    it('lists default alone where no workspace is', async () => {
+      expect(await backendOn().listWorkspaces()).toEqual(['default']);
+    });
+
+    it('reads every page of the listing', async () => {
+      server.pageSize = 2;
+      for (const name of ['a', 'b', 'c', 'd', 'e']) put(`env/clay.workspaces/${name}/state.json`);
+
+      expect(await backendOn().listWorkspaces()).toEqual(['default', 'a', 'b', 'c', 'd', 'e']);
+      expect(listings()).toBe(3);
+    });
+
+    it('tries a listing again after a passing failure', async () => {
+      put(DEV);
+      server.override('GET /state', { status: 503, code: 'ServerBusy' });
+
+      expect(await backendOn(TWICE).listWorkspaces()).toEqual(['default', 'dev']);
+    });
+
+    it('names the permission a refused listing needs', async () => {
+      server.override('GET /state', { status: 403, code: 'AuthorizationPermissionMismatch' });
+
+      await expect(backendOn().listWorkspaces()).rejects.toThrow(
+        `Azure refused to list ${listAt()}; finding workspaces needs permission to list the blobs of container "state": "l" in a SAS token, or a data role such as Storage Blob Data Reader`
+      );
+    });
+
+    it('says what Azure answered to a listing it failed for another reason', async () => {
+      server.override('GET /state', { status: 404, code: 'ContainerNotFound' });
+
+      await expect(backendOn().listWorkspaces()).rejects.toThrow(`ListBlobs ${listAt()} answered 404 ContainerNotFound`);
+    });
+
+    it('exists only with its state', async () => {
+      expect(await named().exists()).toBe(false);
+      put(DEV);
+
+      expect(await named().exists()).toBe(true);
+    });
+
+    it('is not read as empty once its state is gone', async () => {
+      await expect(named().read()).rejects.toThrow('Workspace "dev" does not exist');
+    });
+
+    it('refuses a lock on a workspace deleted meanwhile, and leaves no lock', async () => {
+      await expect(named().lock(newLockInfo('apply'))).rejects.toThrow('Workspace "dev" does not exist');
+
+      expect(server.text(`state/${DEV}.lock`)).toBeUndefined();
+    });
+
+    it('gives the lock back where its state cannot be read, and says why', async () => {
+      put(DEV);
+      server.override(`GET /state/${DEV}`, { status: 403, code: 'AuthorizationFailure' });
+
+      await expect(named().lock(newLockInfo('apply'))).rejects.toThrow(`GetBlob ${server.url}/state/${DEV} answered 403 AuthorizationFailure`);
+      expect(server.text(`state/${DEV}.lock`)).toBeUndefined();
+    });
+
+    it('is locked where its state exists', async () => {
+      put(DEV);
+      const info = newLockInfo('apply');
+
+      await named().lock(info);
+
+      expect(JSON.parse(server.text(`state/${DEV}.lock`)!)).toEqual(info);
+    });
+
+    it('removes only its state', async () => {
+      put(DEV);
+      put(`${DEV}.lock`, 'held');
+      put('env/state.json');
+
+      await named().remove();
+      await named().prune();
+
+      expect(server.text(`state/${DEV}`)).toBeUndefined();
+      expect(server.text(`state/${DEV}.lock`)).toBe('held');
+      expect(server.text('state/env/state.json')).toBeDefined();
+    });
+
+    it('counts a state already gone as removed', async () => {
+      await expect(named().remove()).resolves.toBeUndefined();
+    });
+
+    it('never removes the default state', async () => {
+      put('env/state.json');
+
+      await expect(named('default').remove()).rejects.toThrow('The state of the default workspace is not removed');
+      expect(server.text('state/env/state.json')).toBeDefined();
+    });
+
+    it('says what Azure answered to a removal it refused', async () => {
+      server.override(`DELETE /state/${DEV}`, { status: 403, code: 'AuthorizationFailure' });
+
+      await expect(named().remove()).rejects.toThrow(`DeleteBlob ${server.url}/state/${DEV} answered 403 AuthorizationFailure`);
+    });
+
+    it('takes the longest key whose lock fits', async () => {
+      await expect(named('dev', ONCE, 'k'.repeat(999)).prepare()).resolves.toBeUndefined();
+    });
+
+    it('refuses a workspace whose lock would not fit', async () => {
+      await expect(named('dev', ONCE, 'k'.repeat(1000)).prepare()).rejects.toThrow(
+        'The lock of workspace "dev" would have a name of 1025 characters, and Azure takes 1024 at most; use a shorter key in the backend block'
+      );
+    });
+
+    it('counts a first write as done where the answer was lost and the try sent again finds it', async () => {
+      server.override(`PUT /state/${DEV}`, { lost: true });
+
+      expect(await named('dev', TWICE).writeIfAbsent(stateWith(1))).toBe(true);
+      expect(server.text(`state/${DEV}`)).toBe(serializeState(stateWith(1)));
+    });
+
+    it('does not write over another state', async () => {
+      put(DEV, serializeState(stateWith(2)));
+
+      expect(await named().writeIfAbsent(stateWith(1))).toBe(false);
+      expect(server.text(`state/${DEV}`)).toBe(serializeState(stateWith(2)));
+    });
+
+    it('writes over an empty blob, which is no state', async () => {
+      put(DEV, '');
+
+      expect(await named().writeIfAbsent(stateWith(1))).toBe(true);
+      expect(server.text(`state/${DEV}`)).toBe(serializeState(stateWith(1)));
     });
   });
 });

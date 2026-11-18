@@ -22,6 +22,12 @@ describe('a state kept on a real Azure Blob server', () => {
       { timeout: 10, attempts: 1, wait: 0 }
     );
 
+  const on = (key: string) =>
+    new AzureBackend(
+      { account: azure.account, container, key, endpoint: new URL(azure.endpoint), credential: { accountKey: azure.accountKey } },
+      { timeout: 10, attempts: 1, wait: 0 }
+    );
+
   beforeAll(() => {
     azure = RealAzure.fromEnv();
   });
@@ -94,6 +100,33 @@ describe('a state kept on a real Azure Blob server', () => {
 
       await expect(backendIn().unlock(newLockInfo('apply').id)).rejects.toThrow('holds a lock this run did not take, so it is left in place');
       expect(JSON.parse((await azure.text(container, LOCK))!)).toEqual(other);
+    });
+  });
+
+  describe('its workspaces', () => {
+    const FOLDER = 'env/ş p&q';
+
+    it('lists only the states of the default file name, under a key that needs escaping', async () => {
+      const made = on(`${FOLDER}/state.json`).workspace('dev');
+      await made.prepare();
+      await made.lock(newLockInfo('workspace new'));
+      expect(await made.writeIfAbsent(stateWith(1))).toBe(true);
+      await azure.put(container, `${FOLDER}/clay.workspaces/other/b.json`, '{}');
+      await azure.put(container, `${FOLDER}/clay.workspaces/empty/state.json`, '');
+
+      expect(await azure.text(container, `${FOLDER}/clay.workspaces/dev/state.json`)).toBe(serializeState(stateWith(1)));
+      expect(await on(`${FOLDER}/state.json`).listWorkspaces()).toEqual(['default', 'dev']);
+    });
+
+    it('is gone once removed, and refuses a lock then', async () => {
+      await azure.put(container, 'env/clay.workspaces/dev/state.json', serializeState(stateWith(1)));
+      const workspace = on(KEY).workspace('dev');
+
+      await workspace.remove();
+
+      expect(await workspace.exists()).toBe(false);
+      await expect(on(KEY).workspace('dev').lock(newLockInfo('apply'))).rejects.toThrow('Workspace "dev" does not exist');
+      expect(await azure.text(container, 'env/clay.workspaces/dev/state.json.lock')).toBeUndefined();
     });
   });
 });
