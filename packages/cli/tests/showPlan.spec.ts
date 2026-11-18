@@ -111,6 +111,42 @@ describe('showing an attribute whose name a configuration cannot write bare', ()
   });
 });
 
+describe('showing a resource to create', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('hides only the sensitive part of a value and quotes a name a configuration cannot write bare', () => {
+    const plan: Plan = {
+      serial: 0,
+      actions: [
+        {
+          type: 'CREATE',
+          resourceType: 'x',
+          name: 'a',
+          planned: {},
+          after: { tags: { name: 'app', token: 's3cr3t' }, ['b\u007F']: 'c' },
+          sensitive: [['tags', 'token']],
+        },
+      ],
+      outputs: {},
+      prevRun: {},
+      prior: {},
+      imported: {},
+      schemas: { x: {} },
+      dataSources: {},
+      readAtApply: [],
+    };
+    const printed: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => printed.push(stripVTControlCharacters(args.join(' '))));
+
+    displayPlan(plan);
+
+    expect(printed).toContain('      tags: {"name":"app","token":(sensitive value)}');
+    expect(printed).toContain(String.raw`      "b\u007f": "c"`);
+  });
+});
+
 describe('a value that may be sensitive, as the plan shows it', () => {
   it.each([
     ['hides a known one', 'x', '(sensitive value)'],

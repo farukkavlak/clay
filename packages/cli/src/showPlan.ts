@@ -138,8 +138,14 @@ function priorOf(action: PlanAction, plan: Plan): Resource | undefined {
   return action.importedFrom === undefined ? plan.prior[action.movedFrom ?? address] : plan.imported[address];
 }
 
+function displayCreated({ after = {}, sensitive = [] }: PlanAction): void {
+  const marks = Marks.of(sensitive);
+  for (const [key, value] of Object.entries(after)) console.log(`      ${attributeName(key)}: ${show(value, marks.under(key))}`);
+}
+
 function displayAction(action: PlanAction, plan: Plan): void {
   console.log(actionLine(action, true));
+  if (action.type === 'CREATE') displayCreated(action);
   if (shownType(action) !== 'UPDATE' && action.type !== 'REPLACE') return;
 
   const prior = priorOf(action, plan);
