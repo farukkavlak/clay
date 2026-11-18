@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import path from 'node:path';
 
 import { replaceSynced } from './durable';
+import { Environment, variable } from './settings';
 import { DEFAULT_WORKSPACE, NamedWorkspace, StateBackend } from '../StateBackend';
 
 // A DNS label, since the name goes into paths and resource names; lowercase, as a macOS disk does not tell cases apart.
@@ -17,6 +18,8 @@ export function checkWorkspaceName(name: string, source: string): string {
     `Workspace name ${JSON.stringify(name)} in ${source} is not valid: use lowercase letters, digits and "-", 1 to 63 characters, starting and ending with a letter or digit`
   );
 }
+
+const WORKSPACE_VARIABLE = 'CLAY_WORKSPACE';
 
 const selectionOf = (workingDir: string) => path.join(workingDir, '.clay', 'workspace');
 
@@ -35,6 +38,18 @@ export function selectedWorkspace(workingDir: string): string {
 
   // An editor ends the file with a line break.
   return checkWorkspaceName(content.replace(/\r?\n$/, ''), file);
+}
+
+/** The workspace `CLAY_WORKSPACE` names for this one command, if it names one. */
+export function givenWorkspace(env: Environment): string | undefined {
+  const name = variable(env, WORKSPACE_VARIABLE);
+
+  return name === undefined ? undefined : checkWorkspaceName(name, WORKSPACE_VARIABLE);
+}
+
+/** The workspace a command runs on. `.clay/workspace` is not read where `CLAY_WORKSPACE` names one. */
+export function currentWorkspace(workingDir: string, env: Environment): string {
+  return givenWorkspace(env) ?? selectedWorkspace(workingDir);
 }
 
 /** Selects workspace `name` for the commands that follow, with the name checked already. */

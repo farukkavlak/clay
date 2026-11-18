@@ -888,6 +888,20 @@ workspace. `init` and `validate` do not read the selection. A selected named wor
 that has no state is refused, so a typo never starts from an empty state. So is one
 deleted while a run waited for its lock, which the run would write back.
 
+`CLAY_WORKSPACE=<name>` runs one command on a workspace, over the selected one, and leaves
+`.clay/workspace` as it is. Empty counts as unset. `init` and `validate` do not read it.
+`show` prints it and `list` marks it.
+`select` is refused while it is set. `new` makes only the workspace it names, and does not
+select it. `delete` may remove it, but still refuses the workspace `.clay/workspace`
+selects. So a pipeline can make, use and delete a workspace with the variable alone:
+
+```sh
+CLAY_WORKSPACE=pr-12 clay workspace new pr-12
+CLAY_WORKSPACE=pr-12 clay apply --yes
+CLAY_WORKSPACE=pr-12 clay destroy --yes
+CLAY_WORKSPACE=pr-12 clay workspace delete pr-12
+```
+
 A name is lowercase letters, digits and `-`, 1 to 63 of them, starting and ending with a
 letter or a digit.
 

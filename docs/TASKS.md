@@ -1136,7 +1136,7 @@ Terraform has it since backends replaced `-state`.
       apply would do nothing, 2 when it would do something, 1 on an error. What an apply
       would do counts, so a change to outputs alone or to state alone exits 2. Where a
       refresh finds drift and nothing else changes, Terraform exits 0 and Clay exits 2
-- [ ] `CLAY_WORKSPACE` chooses the workspace for one command, over `.clay/workspace`
+- [x] `CLAY_WORKSPACE` chooses the workspace for one command, over `.clay/workspace`
 - [ ] A saved plan names its workspace, and `apply` in another one refuses it by name. The
       lineage alone misses a state copied by hand
 - [ ] Workspaces on the `s3` backend, which keeps one state today

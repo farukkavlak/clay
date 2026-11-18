@@ -5,7 +5,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { LocalBackend } from '../src/backends/LocalBackend';
-import { checkWorkspaceName, namedWorkspace, selectedWorkspace, selectWorkspace, workspaceBackend } from '../src/backends/workspaces';
+import { checkWorkspaceName, currentWorkspace, givenWorkspace, namedWorkspace, selectedWorkspace, selectWorkspace, workspaceBackend } from '../src/backends/workspaces';
 import { backendAt } from './backendAt';
 
 describe('a workspace name', () => {
@@ -86,6 +86,32 @@ describe('the selected workspace', () => {
     await fs.mkdir(path.join(dir, '.clay', 'workspace'), { recursive: true });
 
     expect(() => selectedWorkspace(dir)).toThrow('EISDIR');
+  });
+});
+
+describe('the workspace of a command', () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clay-workspaces-'));
+    await selectWorkspace(dir, 'selected');
+  });
+
+  afterEach(async () => {
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it('is the one CLAY_WORKSPACE names, over the selected one', () => {
+    expect(currentWorkspace(dir, { CLAY_WORKSPACE: 'given' })).toBe('given');
+  });
+
+  it.each([[{}], [{ CLAY_WORKSPACE: '' }]])('is the selected one where %j names none', (env) => {
+    expect(currentWorkspace(dir, env)).toBe('selected');
+    expect(givenWorkspace(env)).toBeUndefined();
+  });
+
+  it('is refused where CLAY_WORKSPACE names no valid workspace, naming the variable', () => {
+    expect(() => givenWorkspace({ CLAY_WORKSPACE: 'a/b' })).toThrow('Workspace name "a/b" in CLAY_WORKSPACE is not valid');
   });
 });
 

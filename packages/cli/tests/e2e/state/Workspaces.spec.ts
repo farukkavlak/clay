@@ -449,6 +449,186 @@ describe('clay workspace', () => {
   });
 });
 
+describe('CLAY_WORKSPACE', () => {
+  let dir: string;
+
+  const runWith = async (workspace: string | undefined, ...args: string[]): Promise<{ code: number; stdout: string; stderr: string }> => {
+    const env = { ...process.env, CLAY_WORKSPACE: workspace };
+    try {
+      const { stdout, stderr } = await promisify(execFile)('node', [clay, ...args], { cwd: dir, env });
+      return { code: 0, stdout: stripVTControlCharacters(stdout), stderr: stripVTControlCharacters(stderr) };
+    } catch (error) {
+      const failed = error as { code: number; stdout: string; stderr: string };
+      return { code: failed.code, stdout: stripVTControlCharacters(failed.stdout), stderr: stripVTControlCharacters(failed.stderr) };
+    }
+  };
+  const printedWith = async (workspace: string, ...args: string[]) => {
+    const { stdout } = await runWith(workspace, ...args);
+    return stdout;
+  };
+  const stateOf = (name: string) => path.join('clay.workspaces', name, 'clay.state.json');
+  const selection = path.join('.clay', 'workspace');
+  const read = (name: string) => fs.readFile(path.join(dir, name), 'utf8');
+  const resourcesIn = async (name: string) => Object.keys((JSON.parse(await read(name)) as { resources: Record<string, unknown> }).resources);
+  const missing = (name: string) => expect(fs.access(path.join(dir, name))).rejects.toThrow('ENOENT');
+  const select = async (content: string) => {
+    await fs.mkdir(path.join(dir, '.clay'), { recursive: true });
+    await fs.writeFile(path.join(dir, selection), content, 'utf8');
+  };
+
+  beforeEach(async () => {
+    dir = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'clay-workspace-variable-')));
+    await fs.writeFile(path.join(dir, 'main.clay'), FILE, 'utf8');
+    await runWith(undefined, 'workspace', 'new', 'dev');
+    await runWith(undefined, 'workspace', 'new', 'test');
+  });
+
+  afterEach(async () => {
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it('runs one command on the workspace it names, over the selected one, which stays selected', async () => {
+    expect(await runWith('dev', 'apply', '--yes')).toMatchObject({ code: 0 });
+
+    expect(await resourcesIn(stateOf('dev'))).toEqual(['local_file.f']);
+    expect(await resourcesIn(stateOf('test'))).toEqual([]);
+    expect(await read(selection)).toBe('test\n');
+  });
+
+  it('names the workspace where a plan starts', async () => {
+    expect(await printedWith('dev', 'plan')).toMatch(/^Planning in workspace "dev"\.\.\.\n/);
+  });
+
+  it('is what every state command reads and changes', async () => {
+    await runWith('dev', 'apply', '--yes');
+
+    expect(await printedWith('dev', 'state', 'list')).toContain('local_file.f');
+    expect(await printedWith('test', 'state', 'list')).not.toContain('local_file.f');
+    expect(await printedWith('dev', 'state', 'show', 'local_file.f')).toContain('f.txt');
+    expect(await printedWith('dev', 'state', 'pull')).toContain('local_file.f');
+    expect(await printedWith('dev', 'output', '--json')).toContain('"x"');
+
+    await runWith('dev', 'state', 'mv', 'local_file.f', 'local_file.g');
+    expect(await resourcesIn(stateOf('dev'))).toEqual(['local_file.g']);
+  });
+
+  it('is the workspace whose lock force-unlock releases', async () => {
+    const gone = { id: 'left-by-a-dead-run', operation: 'apply', who: 'someone', host: 'elsewhere', pid: 4242, created: '2026-11-13T10:00:00.000Z' };
+    await fs.writeFile(path.join(dir, `${stateOf('dev')}.lock`), JSON.stringify(gone), 'utf8');
+
+    expect(await printedWith('dev', 'force-unlock', gone.id)).toBe(`Released lock ${gone.id} on ${path.join(dir, stateOf('dev'))}\n`);
+    await missing(`${stateOf('dev')}.lock`);
+  });
+
+  it('may name the default workspace, over a selected one', async () => {
+    await runWith('default', 'apply', '--yes');
+
+    expect(await resourcesIn('clay.state.json')).toEqual(['local_file.f']);
+    expect(await resourcesIn(stateOf('test'))).toEqual([]);
+  });
+
+  it('counts as unset where it is empty', async () => {
+    await runWith('', 'apply', '--yes');
+
+    expect(await resourcesIn(stateOf('test'))).toEqual(['local_file.f']);
+  });
+
+  it('is refused where it names no valid workspace, naming the variable', async () => {
+    expect(await runWith('../dev', 'plan')).toMatchObject({ code: 1, stderr: expect.stringContaining('Workspace name "../dev" in CLAY_WORKSPACE is not valid') as string });
+  });
+
+  it('is refused where its workspace does not exist, and nothing is written', async () => {
+    const result = await runWith('nope', 'apply', '--yes');
+
+    expect(result).toMatchObject({ code: 1, stderr: expect.stringContaining('Workspace "nope" does not exist') as string });
+    await missing(path.join('clay.workspaces', 'nope'));
+    await missing('f.txt');
+  });
+
+  it('leaves a selection no workspace can be named unread', async () => {
+    await select('../bad\n');
+
+    expect(await runWith('dev', 'workspace', 'show')).toEqual({ code: 0, stdout: 'dev\n', stderr: '' });
+  });
+
+  it('is not read by validate and init, which run on no workspace', async () => {
+    expect(await runWith('../dev', 'validate')).toMatchObject({ code: 0 });
+    expect(await runWith('../dev', 'init')).toMatchObject({ code: 0 });
+  });
+
+  it('is what show prints', async () => {
+    expect(await runWith('dev', 'workspace', 'show')).toEqual({ code: 0, stdout: 'dev\n', stderr: '' });
+  });
+
+  it('is what list marks', async () => {
+    expect(await runWith('dev', 'workspace', 'list')).toEqual({ code: 0, stdout: '  default\n* dev\n  test\n', stderr: '' });
+  });
+
+  it('refuses select, which it would overrule, and the selection stays', async () => {
+    expect(await runWith('dev', 'workspace', 'select', 'dev')).toEqual({
+      code: 1,
+      stdout: '',
+      stderr: 'Failed to select the workspace: CLAY_WORKSPACE chooses the workspace, so selecting one would change nothing; unset it first\n',
+    });
+    expect(await read(selection)).toBe('test\n');
+  });
+
+  it('lets new make the workspace it names, and the selection stays', async () => {
+    expect(await runWith('pr-12', 'workspace', 'new', 'pr-12')).toEqual({ code: 0, stdout: '✓ Created workspace "pr-12"\n', stderr: '' });
+
+    expect(await resourcesIn(stateOf('pr-12'))).toEqual([]);
+    expect(await read(selection)).toBe('test\n');
+  });
+
+  it('refuses new for another workspace, and makes nothing', async () => {
+    expect(await runWith('dev', 'workspace', 'new', 'pr-12')).toEqual({
+      code: 1,
+      stdout: '',
+      stderr: 'Failed to make the workspace: CLAY_WORKSPACE names workspace "dev"; unset it, or set it to "pr-12", to make "pr-12"\n',
+    });
+    await missing(path.join('clay.workspaces', 'pr-12'));
+    expect(await read(selection)).toBe('test\n');
+  });
+
+  it('lets delete remove the workspace it names, where the file selects another', async () => {
+    expect(await runWith('dev', 'workspace', 'delete', 'dev')).toEqual({ code: 0, stdout: '✓ Deleted workspace "dev"\n', stderr: '' });
+
+    await missing(path.join('clay.workspaces', 'dev'));
+    expect(await read(selection)).toBe('test\n');
+  });
+
+  it('is refused by delete where it names no valid workspace, and the workspace stays', async () => {
+    expect(await runWith('../bad', 'workspace', 'delete', 'dev')).toMatchObject({
+      code: 1,
+      stderr: expect.stringContaining('Workspace name "../bad" in CLAY_WORKSPACE is not valid') as string,
+    });
+    expect(await resourcesIn(stateOf('dev'))).toEqual([]);
+  });
+
+  it('does not let delete remove the workspace the file selects', async () => {
+    expect(await runWith('test', 'workspace', 'delete', 'test')).toMatchObject({
+      code: 1,
+      stderr: 'Failed to delete the workspace: Workspace "test" is selected; select another one before deleting it\n',
+    });
+    expect(await resourcesIn(stateOf('test'))).toEqual([]);
+  });
+
+  it('carries a workspace from new to delete with the selection untouched', async () => {
+    await fs.rm(path.join(dir, selection));
+
+    for (const command of [
+      ['workspace', 'new', 'pr-12'],
+      ['apply', '--yes'],
+      ['destroy', '--yes'],
+      ['workspace', 'delete', 'pr-12'],
+    ])
+      expect(await runWith('pr-12', ...command)).toMatchObject({ code: 0 });
+
+    await missing(path.join('clay.workspaces', 'pr-12'));
+    await missing(selection);
+  });
+});
+
 describe('clay workspace on a backend that keeps one state', () => {
   let dir: string;
   let server: HttpStateServer;

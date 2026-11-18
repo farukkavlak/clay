@@ -100,6 +100,8 @@ On top of these:
 | `clay workspace list`                                           | Lists the workspaces, with `*` before the selected one                                                                                                                                                                       |
 | `clay workspace delete <name> [-f]`                             | Deletes a workspace that has no resources in its state; `-f` deletes it anyway                                                                                                                                               |
 
+`CLAY_WORKSPACE=<name>` runs one command on a workspace, over the selected one.
+
 `clay plan --detailed-exitcode` tells a script what the plan found. It exits 0 when an
 apply would do nothing, 2 when an apply would do something, and 1 on an error. Without the
 flag, a plan that works exits 0.

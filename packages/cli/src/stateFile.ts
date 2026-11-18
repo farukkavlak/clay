@@ -1,5 +1,5 @@
 import { ConfigFiles, rootBackend } from '@clay/orchestrator';
-import { backendFrom, checkBackend, DEFAULT_WORKSPACE, selectedWorkspace, StateBackend, workspaceBackend } from '@clay/state';
+import { backendFrom, checkBackend, currentWorkspace, DEFAULT_WORKSPACE, StateBackend, workspaceBackend } from '@clay/state';
 
 /** The backend the root configuration names, not held to what `init` took: for `validate`, and for `init` itself. */
 export function namedBackend(cwd: string, files: ConfigFiles): StateBackend {
@@ -20,13 +20,13 @@ export interface SelectedState {
   backend: StateBackend;
 }
 
-/** The selected workspace and its backend, which `init` must have taken. */
+/** The workspace this command runs on and its backend, which `init` must have taken. */
 export async function selectedState(cwd: string, files: ConfigFiles): Promise<SelectedState> {
-  const workspace = selectedWorkspace(cwd);
+  const workspace = currentWorkspace(cwd, process.env);
   return { workspace, backend: await workspaceBackend(checkedBackend(cwd, files), workspace) };
 }
 
-/** The backend of the selected workspace, which `init` must have taken. */
+/** The backend of the workspace this command runs on, which `init` must have taken. */
 export async function stateFile(cwd: string, files: ConfigFiles): Promise<StateBackend> {
   const { backend } = await selectedState(cwd, files);
   return backend;

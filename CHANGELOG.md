@@ -111,6 +111,8 @@ a configuration means or how the state file is written.
   workspace whose state still holds resources, unless given `--force`
 - `plan --detailed-exitcode` exits 0 when an apply would do nothing, 2 when it would do
   something, and 1 on an error
+- `CLAY_WORKSPACE` runs one command on a workspace, over `.clay/workspace`, and leaves the
+  selection as it is
 
 ### Fixed
 

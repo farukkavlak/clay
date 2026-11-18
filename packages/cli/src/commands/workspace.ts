@@ -1,6 +1,17 @@
 import { emptyState, State } from '@clay/contracts';
 import { ConfigFiles, DiskFiles, RecordingFiles } from '@clay/orchestrator';
-import { checkWorkspaceName, DEFAULT_WORKSPACE, NamedWorkspace, namedWorkspace, selectedWorkspace, selectWorkspace, StateManager, workspaceBackend } from '@clay/state';
+import {
+  checkWorkspaceName,
+  currentWorkspace,
+  DEFAULT_WORKSPACE,
+  givenWorkspace,
+  NamedWorkspace,
+  namedWorkspace,
+  selectedWorkspace,
+  selectWorkspace,
+  StateManager,
+  workspaceBackend,
+} from '@clay/state';
 import { Command } from 'commander';
 import { styleText } from 'node:util';
 
@@ -28,8 +39,21 @@ function inThisDirectory(failure: string, work: (cwd: string, files: ConfigFiles
   };
 }
 
+/** Selects a new workspace, unless `CLAY_WORKSPACE` gave it: that holds for one command, so it leaves the selection as it was. */
+async function announceNew(cwd: string, name: string, given: string | undefined): Promise<void> {
+  if (given !== undefined) {
+    console.log(styleText('green', `✓ Created workspace "${name}"`));
+    return;
+  }
+
+  await selectWorkspace(cwd, name);
+  console.log(styleText('green', `✓ Created and selected workspace "${name}"`));
+}
+
 /** Under the lock of the new workspace, so of two made at once with one name, one is refused. */
 async function newWorkspace(cwd: string, files: ConfigFiles, name: string, lockTimeout?: number): Promise<number> {
+  const given = givenWorkspace(process.env);
+  if (given !== undefined && given !== name) throw new Error(`CLAY_WORKSPACE names workspace "${given}"; unset it, or set it to "${name}", to make "${name}"`);
   if (name === DEFAULT_WORKSPACE) throw new Error(`Workspace "${name}" exists already`);
 
   const backend = checkedBackend(cwd, files);
@@ -42,13 +66,14 @@ async function newWorkspace(cwd: string, files: ConfigFiles, name: string, lockT
     await stoppedAtOnce([manager], () => manager.lock('workspace new'));
     if (!(await manager.writeIfAbsent(emptyState()))) throw new Error(`Workspace "${name}" exists already`);
 
-    await selectWorkspace(cwd, name);
-    console.log(styleText('green', `✓ Created and selected workspace "${name}"`));
+    await announceNew(cwd, name, given);
     return 0;
   });
 }
 
 async function select(cwd: string, files: ConfigFiles, name: string): Promise<number> {
+  if (givenWorkspace(process.env) !== undefined) throw new Error('CLAY_WORKSPACE chooses the workspace, so selecting one would change nothing; unset it first');
+
   await workspaceBackend(checkedBackend(cwd, files), name);
   await selectWorkspace(cwd, name);
   console.log(styleText('green', `✓ Selected workspace "${name}"`));
@@ -72,6 +97,8 @@ async function deletedUnderLock(named: NamedWorkspace, manager: StateManager, na
 }
 
 async function deleteWorkspace(cwd: string, files: ConfigFiles, name: string, options: { force?: boolean; lockTimeout?: number }): Promise<number> {
+  // Delete does not run on this workspace, but a wrong name is still refused.
+  givenWorkspace(process.env);
   if (name === DEFAULT_WORKSPACE) throw new Error(`Workspace "${name}" always exists, and cannot be deleted`);
   if (name === selectedWorkspace(cwd)) throw new Error(`Workspace "${name}" is selected; select another one before deleting it`);
 
@@ -86,7 +113,7 @@ async function deleteWorkspace(cwd: string, files: ConfigFiles, name: string, op
 
 async function list(cwd: string, files: ConfigFiles): Promise<number> {
   const backend = checkedBackend(cwd, files);
-  const selected = selectedWorkspace(cwd);
+  const selected = currentWorkspace(cwd, process.env);
   const names = backend.listWorkspaces ? await backend.listWorkspaces() : [DEFAULT_WORKSPACE];
   for (const name of names) console.log(name === selected ? `* ${name}` : `  ${name}`);
   return 0;
@@ -112,10 +139,10 @@ export function createWorkspaceCommand(): Command {
 
   command
     .command('show')
-    .description('Print the selected workspace')
+    .description('Print the workspace commands run on')
     .action(
-      inThisDirectory('Failed to read the selected workspace:', async (cwd) => {
-        console.log(selectedWorkspace(cwd));
+      inThisDirectory('Failed to read the workspace:', async (cwd) => {
+        console.log(currentWorkspace(cwd, process.env));
         return 0;
       })
     );
@@ -130,7 +157,7 @@ export function createWorkspaceCommand(): Command {
       inThisDirectory('Failed to delete the workspace:', (cwd, files) => deleteWorkspace(cwd, files, checkWorkspaceName(name, GIVEN), options))()
     );
 
-  command.command('list').description('List the workspaces, marking the selected one').action(inThisDirectory('Failed to list the workspaces:', list));
+  command.command('list').description('List the workspaces, marking the one commands run on').action(inThisDirectory('Failed to list the workspaces:', list));
 
   return command;
 }
