@@ -34,7 +34,7 @@ const versions = new Versions();
 const resolverOver = (scopes: ScopeManager, dataSources: Map<string, Record<string, Value>>, schemas: Map<string, Schema>, instances: Instances, planned: Planned) => {
   const modules = new ModuleInstances();
 
-  return new ReferenceResolver(scopes, dataSources, schemas, new Map(), instances, modules, planned, new InstanceKeys(instances, modules), versions);
+  return new ReferenceResolver(scopes, dataSources, schemas, new Map(), instances, modules, planned, new InstanceKeys(instances, modules), versions, 'default');
 };
 
 const resolverWith = (scopes = new ScopeManager(versions), planned = new Planned(versions), dataSources = new Map<string, Record<string, Value>>()) =>

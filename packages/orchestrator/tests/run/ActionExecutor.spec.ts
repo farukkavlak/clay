@@ -126,7 +126,8 @@ describe('ActionExecutor', () => {
       modules,
       new Planned(versions),
       new InstanceKeys(instances, modules),
-      versions
+      versions,
+      'default'
     );
     limit = new Watched(DEFAULT_PARALLELISM);
     executor = new ActionExecutor(

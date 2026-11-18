@@ -47,7 +47,7 @@ export interface Registries {
 }
 
 /** Each run gets its own scopes, instances and data source values, so runs at the same time never read each other's. */
-export function newRun(stateManager: StateManager, { providers, provisioners }: Registries, files: ConfigFiles, limit: Limit): Run {
+export function newRun(stateManager: StateManager, { providers, provisioners }: Registries, files: ConfigFiles, limit: Limit, workspace: string | undefined): Run {
   const versions = new Versions();
   const scopes = new ScopeManager(versions);
   const dataSources = new Map<string, Record<string, Value>>();
@@ -58,7 +58,7 @@ export function newRun(stateManager: StateManager, { providers, provisioners }: 
   const modules = new ModuleInstances();
   const planned = new Planned(versions);
   const keys = new InstanceKeys(instances, modules);
-  const resolver = new ReferenceResolver(scopes, dataSources, schemas, dataSchemas, instances, modules, planned, keys, versions);
+  const resolver = new ReferenceResolver(scopes, dataSources, schemas, dataSchemas, instances, modules, planned, keys, versions, workspace);
   const scanner = new ReferenceScanner(modules);
   const graphBuilder = new DependencyGraphBuilder(scanner, instances, modules);
   const resourcePlanner = new ResourcePlanner(providers, limit);

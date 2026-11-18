@@ -126,6 +126,10 @@ string in one instance and a list in another, are refused at plan.
 `path.module` is the directory of the module it is written in, relative to the root, so
 `"${path.module}/index.html"` names a file next to the module.
 
+`clay.workspace` is the name of the workspace a command runs on, in every module:
+`"${clay.workspace}.txt"`, or `count = clay.workspace == "prod" ? 2 : 1`. `clay validate`
+checks a configuration for every workspace, so there it is a string not known yet.
+
 ## depends_on
 
 `depends_on = [local_file.a]` makes a resource, a data source, a module call or an output

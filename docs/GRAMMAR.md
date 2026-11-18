@@ -110,7 +110,7 @@ clay { backend "type" { attributes } }
 
 A `type` and a `name` are written as strings, and each has to spell an `IDENTIFIER`, since
 an address joins them with `.` and a reference reads them back. A `type` cannot be `var`,
-`local`, `data`, `module`, `count`, `each`, `path` or `self`, the words a reference reads
+`local`, `data`, `module`, `count`, `each`, `path`, `clay` or `self`, the words a reference reads
 as something other than a type. A variable cannot be named `source`, since a module call reads that as
 the module's path, or `count`, `for_each` or `depends_on`, which a module call keeps for
 itself.
@@ -155,7 +155,7 @@ it is written.
 references, each written out: `[local_file.a, data.local_file.d, var.v, local.l, module.m,
 module.m.out]`. Each names a whole object, so `local_file.a[0]`, `local_file.a.content`,
 `module.m[0]` and `module.m.out.x` are refused, and so is a value that is not a list, a
-string, a call, `[*]`, `count`, `each`, `path` and `self`, each where it is written. One the
+string, a call, `[*]`, `count`, `each`, `path`, `clay` and `self`, each where it is written. One the
 configuration does not declare is refused where it is written.
 
 A resource may hold one `lifecycle` block, written without `=`. It takes `prevent_destroy`
@@ -325,6 +325,7 @@ A bare reference is a value on its own: `path = var.dir`. Inside a string it is 
 | `count`    | The index of the instance being made                 | `count.index`               |
 | `each`     | The key of the instance being made, or its value     | `each.key`, `each.value`    |
 | `path`     | The directory of a module, relative to the root      | `path.module`, `path.root`  |
+| `clay`     | The name of the workspace a command runs on          | `clay.workspace`            |
 | `self`     | In a provisioner, the object it runs on              | `self.path`                 |
 | anything   | An attribute of the resource with that type and name | `local_file.a.content`      |
 
@@ -343,6 +344,10 @@ A data source is read the same way. `data.local_file.f` is an object of every at
 of its schema, with `null` for one nothing sets. With `count`, `data.local_file.f[0]` is
 one instance and `data.local_file.f` alone is the list of them; with `for_each`,
 `data.local_file.f["key"]` is one and `data.local_file.f` alone the map of them by key.
+
+`clay.workspace` is the name of the workspace a command runs on, in every module. In
+`clay validate`, and where a block is read as written, it is a string not known yet, since
+that check holds for every workspace.
 
 `path.module` is the directory of the module it is written in, relative to the root: `.`
 at the root, `web` in a module called with `source = "./web"`. In a call's inputs it is the
@@ -522,7 +527,7 @@ only after apply but its type is known.
 A name the for gives is read in its body only, with steps after it as a reference's:
 `[for f in var.files : f.path]`. In the collection, and after the `]`, the same name is a
 reference again. A name cannot be one a reference starts with, `var`, `local`, `data`,
-`module`, `count`, `each`, `path` or `self`, nor the type of a resource in the same file, nor one a
+`module`, `count`, `each`, `path`, `clay` or `self`, nor the type of a resource in the same file, nor one a
 for around it gives; the key and the value need names of their own. Terraform lets such a
 name hide what it spells; Clay refuses it where it is written.
 

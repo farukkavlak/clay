@@ -2,7 +2,7 @@ import { emptyState, Provider, Provisioner, Resource, Schema, State } from '@cla
 import { Graph } from '@clay/graph';
 import { Statement } from '@clay/parser';
 import { outputChanges, plan, Plan, VariableInput } from '@clay/planner';
-import { StateManager } from '@clay/state';
+import { DEFAULT_WORKSPACE, StateManager } from '@clay/state';
 
 import { checkApplyOrder } from './plan/applyGraph';
 import { asError } from './asError';
@@ -73,13 +73,14 @@ export class Orchestrator {
     private stateManager: StateManager,
     private providers: ProviderRegistry,
     private provisioners: ProvisionerRegistry,
-    private newRun: (limit: Limit) => Run
+    private newRun: (limit: Limit, workspace: string | undefined) => Run,
+    private workspace: string
   ) {}
 
-  static create(stateManager: StateManager, files: ConfigFiles): Orchestrator {
+  static create(stateManager: StateManager, files: ConfigFiles, workspace: string = DEFAULT_WORKSPACE): Orchestrator {
     const providers = new ProviderRegistry();
     const provisioners = new ProvisionerRegistry();
-    return new Orchestrator(stateManager, providers, provisioners, (limit) => newRun(stateManager, { providers, provisioners }, files, limit));
+    return new Orchestrator(stateManager, providers, provisioners, (limit, name) => newRun(stateManager, { providers, provisioners }, files, limit, name), workspace);
   }
 
   registerProvider(provider: Provider): void {
@@ -168,7 +169,7 @@ export class Orchestrator {
     // The actions were planned against the refreshed resources, so they run on those.
     state.resources = copyResources(saved.prior);
 
-    const { loader, graphBuilder, runner } = this.newRun(new Limit(parallelism));
+    const { loader, graphBuilder, runner } = this.newRun(new Limit(parallelism), this.workspace);
     const { root, values } = sourceOf(saved.destroy, saved.variables);
     const config = await loader.load(root, values);
     const graph = graphBuilder.buildExecutionGraph(config.loadedResources, config.loadedModules);
@@ -213,7 +214,7 @@ export class Orchestrator {
     imports: Imports,
     { root, values }: Source
   ): Promise<DesiredState & { graph: Graph<GraphNode>; root: Statement[] }> {
-    const { loader, graphBuilder, writtenCheck, desiredStateBuilder, modules } = this.newRun(limit);
+    const { loader, graphBuilder, writtenCheck, desiredStateBuilder, modules } = this.newRun(limit, walk === 'plan' ? this.workspace : undefined);
     const { mainProgram, loadedResources, loadedModules, schemas } = await loader.load(root, values);
 
     const graph = graphBuilder.buildExecutionGraph(loadedResources, loadedModules);

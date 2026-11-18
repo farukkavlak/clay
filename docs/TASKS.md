@@ -1147,7 +1147,9 @@ Terraform has it since backends replaced `-state`.
       lineage alone misses a state copied by hand
 - [x] Workspaces on the `s3` backend, each state and lock an object of its own
 - [x] Workspaces on the `azure` backend, each state and lock a blob of its own
-- [ ] `clay.workspace` reads the name of the workspace in the configuration
+- [x] `clay.workspace` reads the name of the workspace in the configuration. `validate`
+      holds for every workspace, so there it is a string not known yet; Terraform's gives the
+      selected name
 - [ ] The plan lists what a resource to create holds, and names the attribute that forces a
       replace, so the values can be read before answering `yes`
 

@@ -70,7 +70,8 @@ export class ReferenceScanner {
     const scope = scopeOf(context);
 
     switch (reference.kind) {
-      // Paths are known at load, so they are not graph nodes.
+      // Paths and the workspace are known at load, so they are not graph nodes.
+      case 'clay':
       case 'path': {
         return undefined;
       }

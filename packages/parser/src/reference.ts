@@ -63,6 +63,12 @@ export interface PathReference {
   path: Step[];
 }
 
+export interface ClayReference {
+  kind: 'clay';
+  name: 'workspace';
+  path: Step[];
+}
+
 /** The object a provisioner runs on. With no attribute, it reads the whole object. */
 export interface SelfReference {
   kind: 'self';
@@ -78,6 +84,7 @@ export type ParsedReference =
   | CountReference
   | EachReference
   | PathReference
+  | ClayReference
   | SelfReference;
 
 /** A key is spelled in brackets as it was written, since under for_each only that form names an instance. */
@@ -176,19 +183,31 @@ function pathReference(parts: Step[], position?: Position): PathReference {
   return { kind: 'path', name, path };
 }
 
+function clayReference(parts: Step[], position?: Position): ClayReference {
+  const { names, path } = split(parts, 2, position);
+  const [, name] = names;
+  if (name !== 'workspace') refuse(`Reference "${spellReference(parts)}" names nothing: clay.workspace is the name of the workspace a command runs on`, position);
+
+  return { kind: 'clay', name, path };
+}
+
+const READERS = new Map<unknown, (parts: Step[], position?: Position) => ParsedReference>([
+  ['var', variableReference],
+  ['local', localReference],
+  ['data', dataReference],
+  ['module', moduleOutputReference],
+  ['count', countReference],
+  ['each', eachReference],
+  ['path', pathReference],
+  ['clay', clayReference],
+  ['self', (parts) => ({ kind: 'self', path: parts.slice(1) })],
+]);
+
 /** Splits a reference into its target and the path into the target's value. */
 export function parseReference(parts: Step[], position?: Position): ParsedReference {
-  const head = parts.length === 0 ? undefined : stepKey(parts[0]);
-  if (head === 'var') return variableReference(parts, position);
-  if (head === 'local') return localReference(parts, position);
-  if (head === 'data') return dataReference(parts, position);
-  if (head === 'module') return moduleOutputReference(parts, position);
-  if (head === 'count') return countReference(parts, position);
-  if (head === 'each') return eachReference(parts, position);
-  if (head === 'path') return pathReference(parts, position);
-  if (head === 'self') return { kind: 'self', path: parts.slice(1) };
+  const read = parts.length === 0 ? undefined : READERS.get(stepKey(parts[0]));
 
-  return resourceReference(parts, position);
+  return (read ?? resourceReference)(parts, position);
 }
 
 /** For messages: `var.names[0]`, `length(...)`. */

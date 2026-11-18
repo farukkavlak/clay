@@ -145,7 +145,7 @@ export async function applyFromDisk(cwd: string, recording: RecordingFiles, opti
     const plan = await stoppedAtOnce([manager], async () => {
       await manager.lock(options.destroy ? 'destroy' : 'apply');
       const { refresh, parallelism, destroy, variables } = options;
-      return newOrchestrator(recording, manager).plan({ refresh, parallelism, destroy, variables });
+      return newOrchestrator(recording, manager, workspace).plan({ refresh, parallelism, destroy, variables });
     });
     // What the plan read, so the run does not read files changed while the question was open.
     const files = new InMemoryFiles(recording.snapshot());
@@ -158,7 +158,7 @@ export async function applyFromDisk(cwd: string, recording: RecordingFiles, opti
       return 1;
     }
 
-    return runAndReport((signal) => newOrchestrator(files, manager).runPlan(plan, { parallelism: options.parallelism, signal }), plan);
+    return runAndReport((signal) => newOrchestrator(files, manager, workspace).runPlan(plan, { parallelism: options.parallelism, signal }), plan);
   });
 }
 
@@ -200,7 +200,7 @@ async function executeApplyFromPlan(cwd: string, planFile: PlanFile, files: Conf
 
   return releasedAfter(manager, async () => {
     await stoppedAtOnce([manager], () => manager.lock('apply'));
-    return runAndReport((signal) => newOrchestrator(files, manager).runPlan(planFile, { parallelism, signal }), planFile);
+    return runAndReport((signal) => newOrchestrator(files, manager, workspace).runPlan(planFile, { parallelism, signal }), planFile);
   });
 }
 

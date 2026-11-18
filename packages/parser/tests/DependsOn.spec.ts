@@ -83,6 +83,7 @@ describe('Parser - depends_on', () => {
     ['count.index', '[count.index]', WAITS_FOR, at(1, 34)],
     ['each.key', '[each.key]', WAITS_FOR, at(1, 34)],
     ['path.module', '[path.module]', WAITS_FOR, at(1, 34)],
+    ['clay.workspace', '[clay.workspace]', WAITS_FOR, at(1, 34)],
     ['one instance of a module', '[module.m[0]]', 'depends_on waits for a whole object: write module.m, not module.m[0]', at(1, 34)],
     ['a module by key', '[module.m["k"]]', 'depends_on waits for a whole object: write module.m, not module.m["k"]', at(1, 34)],
     ['an output of one instance', '[module.m[0].out]', 'depends_on waits for a whole object: write module.m.out, not module.m[0].out', at(1, 34)],

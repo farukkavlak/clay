@@ -77,6 +77,10 @@ function typeOnly(value: Value, reading: Reading): Value {
   return reading.byType ? unknownAs(value) : value;
 }
 
+type OwnReference = Extract<ParsedReference, { kind: 'count' | 'each' | 'path' | 'clay' }>;
+
+const isOwn = (reference: ParsedReference): reference is OwnReference => ['count', 'each', 'path', 'clay'].includes(reference.kind);
+
 export class ReferenceResolver {
   private scopeManager: ScopeManager;
   private instances: Instances;
@@ -105,7 +109,9 @@ export class ReferenceResolver {
     modules: ModuleInstances,
     planned: Planned,
     private keys: InstanceKeys,
-    versions: Versions
+    versions: Versions,
+    /** Unset in a check, which holds for every workspace. */
+    private workspace: string | undefined
   ) {
     this.scopeManager = scopeManager;
     this.instances = instances;
@@ -183,12 +189,20 @@ export class ReferenceResolver {
     if (reference.kind === 'local') return { value: this.local(reference, where), path: reference.path };
     if (reference.kind === 'data') return this.dataSources.resolve(reference, where, position);
     if (reference.kind === 'module') return this.moduleOutputs.resolve(reference, where, position);
-    if (reference.kind === 'count') return { value: countIndex(where, position), path: reference.path };
-    if (reference.kind === 'each') return { value: this.each(reference, where, position), path: reference.path };
-    if (reference.kind === 'path') return { value: valueOf(types.string, this.directory(reference, where)), path: reference.path };
     if (reference.kind === 'self') return this.resources.resolveSelf(reference, where, state, position);
 
+    if (isOwn(reference)) return { value: this.ownValue(reference, where, position), path: reference.path };
+
     return this.resources.resolve(reference, where, state, position);
+  }
+
+  /** What the place a reference is read in gives, with nothing else to look up. */
+  private ownValue(reference: OwnReference, where: Context, position: Position): Value {
+    if (reference.kind === 'count') return countIndex(where, position);
+    if (reference.kind === 'each') return this.each(reference, where, position);
+    if (reference.kind === 'path') return valueOf(types.string, this.directory(reference, where));
+
+    return valueOf(types.string, this.workspace ?? UNKNOWN);
   }
 
   private variable(reference: VariableReference, where: Context, state: State, { variable }: Reading): Value {
@@ -218,6 +232,8 @@ export class ReferenceResolver {
   private writtenTarget(reference: ParsedReference, where: Context, position: Position): { value: Value; path: Step[] } {
     if (reference.kind === 'path') return this.resolveTarget(reference, emptyState(), where, position, READING);
     if (reference.kind === 'local') return { value: this.writtenLocal(reference, where), path: reference.path };
+    // The same check holds for every workspace.
+    if (reference.kind === 'clay') return { value: valueOf(types.string, UNKNOWN), path: reference.path };
 
     const { type, sensitive, from, path } = this.written.typeOf(reference, where, position);
     return { value: withSensitive(valueOf(type, UNKNOWN), [...sensitive, ...from.flatMap((source) => this.marksFrom(source))]), path };

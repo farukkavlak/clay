@@ -1076,7 +1076,7 @@ describe('Clay Parser', () => {
       expect(error.position).toEqual(position);
     });
 
-    it.each(['var', 'local', 'data', 'module', 'count', 'each', 'path'])('refuses "%s" as a name a for gives, which a reference reads as something else', (word) => {
+    it.each(['var', 'local', 'data', 'module', 'count', 'each', 'path', 'clay'])('refuses "%s" as a name a for gives, which a reference reads as something else', (word) => {
       const error = errorOf(`resource "t" "n" { v = [for ${word} in ["a"] : ${word}] }`);
 
       expect(error.message).toBe(`"${word}" cannot name an item in a for: a reference reads "${word}." as something else`);
@@ -1219,6 +1219,7 @@ describe('Clay Parser', () => {
       ['each', 'resource "each" "a" {}', at(1, 10)],
       ['path', 'resource "path" "a" {}', at(1, 10)],
       ['self', 'resource "self" "a" {}', at(1, 10)],
+      ['clay', 'resource "clay" "a" {}', at(1, 10)],
     ])('refuses "%s" as a type, which a reference reads as something else', (word, input, position) => {
       const error = errorOf(input);
 

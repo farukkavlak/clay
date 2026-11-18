@@ -31,7 +31,7 @@ interface PlanFlags {
 async function executePlan(cwd: string, files: RecordingFiles, options: PlanOptions, { lockTimeout, out, detailedExitcode }: PlanFlags): Promise<number> {
   const { workspace, backend } = await selectedState(cwd, files);
   const manager = new StateManager(backend, lockWait(lockTimeout));
-  const orchestrator = newOrchestrator(files, manager);
+  const orchestrator = newOrchestrator(files, manager, workspace);
 
   console.log(styleText('blue', `Planning${inWorkspace(workspace)}...`));
 
