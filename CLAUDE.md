@@ -35,7 +35,8 @@ Try the CLI in a temp directory, never in the repo: `node packages/cli/bin/clay.
   a PR, squash-merged. The PR title is the whole commit message and says the change in
   one sentence; the PR description stays empty.
 - One change per commit. Don't mix a fix with a refactor.
-- Build, tests, type check and lint pass before a commit.
+- Build, type check, lint and the tests that cover the change pass before a commit. CI
+  runs the full test suite on each push to `main` and each pull request.
 - Before giving the PR commands, run the `pr-reviewer` agent on the branch, fix what it
   finds, and tell the owner what it found.
 - Before a tag, review the whole tree, not only the diff. A diff review never sees what
