@@ -68,6 +68,13 @@ describe('a command whose work is done but whose lock is not released', () => {
     await expect(fs.access(path.join(dir, 'saved.json'))).resolves.toBeUndefined();
   });
 
+  it('plan --detailed-exitcode exits 1, not 2, with changes to show', async () => {
+    await clayOutput(dir, 'init');
+    failUnlock();
+
+    expectLockLeftAfter(await run('plan', '--detailed-exitcode'), 'Plan: 1 to add, 0 to change, 0 to destroy.');
+  });
+
   it('apply says what it applied', async () => {
     await clayOutput(dir, 'init');
     failUnlock();

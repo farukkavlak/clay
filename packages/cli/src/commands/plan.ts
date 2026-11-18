@@ -10,7 +10,7 @@ import { describeError } from '../describeError';
 import { stoppedAtOnce } from '../interruptible';
 import { inWorkspace, selectedState } from '../stateFile';
 import { printable } from '../printable';
-import { displayPlan } from '../showPlan';
+import { changesNothing, displayPlan } from '../showPlan';
 import { lockTimeoutOption, lockWait } from '../lockTimeoutOption';
 import { parallelismOption } from '../parallelismOption';
 import { refreshOption } from '../refreshOption';
@@ -18,27 +18,40 @@ import { givenFiles } from '../givenFiles';
 import { givenInputs, varOptions } from '../varOptions';
 import { releasedAfter } from '../released';
 
+/** What `--detailed-exitcode` exits with when an apply would do something. */
+const HAS_CHANGES = 2;
+
+interface PlanFlags {
+  lockTimeout: number | undefined;
+  out: string | undefined;
+  detailedExitcode: boolean;
+}
+
 /** Returns the exit code. */
-async function executePlan(cwd: string, files: RecordingFiles, options: PlanOptions, lockTimeout: number | undefined, outFile?: string): Promise<number> {
+async function executePlan(cwd: string, files: RecordingFiles, options: PlanOptions, { lockTimeout, out, detailedExitcode }: PlanFlags): Promise<number> {
   const { workspace, backend } = await selectedState(cwd, files);
   const manager = new StateManager(backend, lockWait(lockTimeout));
   const orchestrator = newOrchestrator(files, manager);
 
   console.log(styleText('blue', `Planning${inWorkspace(workspace)}...`));
 
-  return releasedAfter(manager, async () => {
+  // The 2 is decided after the release: returned from the work, it would hide a lock left behind.
+  let changes = false;
+  const code = await releasedAfter(manager, async () => {
     const planned = await stoppedAtOnce([manager], async () => {
       await manager.lock('plan');
       return orchestrator.plan(options);
     });
     displayPlan(planned);
 
-    if (outFile) {
-      await fs.writeFile(outFile, serializePlan(planned, files.snapshot()), 'utf8');
-      console.log(styleText('green', `\nPlan saved to: ${printable(outFile)}`));
+    if (out) {
+      await fs.writeFile(out, serializePlan(planned, files.snapshot()), 'utf8');
+      console.log(styleText('green', `\nPlan saved to: ${printable(out)}`));
     }
+    changes = !changesNothing(planned);
     return 0;
   });
+  return code === 0 && detailedExitcode && changes ? HAS_CHANGES : code;
 }
 
 export function createPlanCommand() {
@@ -47,6 +60,7 @@ export function createPlanCommand() {
     .description('Show changes required by the current configuration')
     .option('--out <file>', 'Save plan to file')
     .option('--destroy', 'Plan to destroy every object in state')
+    .option('--detailed-exitcode', 'Exit 0 when an apply would do nothing, 2 when it would do something, 1 on an error')
     .addOption(refreshOption())
     .addOption(parallelismOption())
     .addOption(lockTimeoutOption())
@@ -64,8 +78,7 @@ export function createPlanCommand() {
           cwd,
           files,
           { refresh: options.refresh ?? true, parallelism: options.parallelism, destroy: options.destroy ?? false, variables },
-          options.lockTimeout,
-          options.out
+          { lockTimeout: options.lockTimeout, out: options.out, detailedExitcode: options.detailedExitcode ?? false }
         );
       } catch (error: unknown) {
         console.error(styleText('red', 'Planning failed:'), describeError(error, givenFiles(files, variables)));

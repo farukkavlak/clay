@@ -109,6 +109,8 @@ a configuration means or how the state file is written.
   than `default`. `clay init` moves every workspace to the new backend, and refuses a
   backend that keeps a single state while other workspaces exist. `delete` refuses a
   workspace whose state still holds resources, unless given `--force`
+- `plan --detailed-exitcode` exits 0 when an apply would do nothing, 2 when it would do
+  something, and 1 on an error
 
 ### Fixed
 

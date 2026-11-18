@@ -100,6 +100,10 @@ On top of these:
 | `clay workspace list`                                           | Lists the workspaces, with `*` before the selected one                                                                                                                                                                       |
 | `clay workspace delete <name> [-f]`                             | Deletes a workspace that has no resources in its state; `-f` deletes it anyway                                                                                                                                               |
 
+`clay plan --detailed-exitcode` tells a script what the plan found. It exits 0 when an
+apply would do nothing, 2 when an apply would do something, and 1 on an error. Without the
+flag, a plan that works exits 0.
+
 `init`, `plan`, `apply`, `destroy`, `state mv`, `state rm`, `workspace new` and
 `workspace delete` take the state lock, and stop at once when another run holds it.
 `--lock-timeout <seconds>` makes them wait: the command says who holds the lock and tries
