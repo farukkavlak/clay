@@ -1,5 +1,5 @@
 import type { S3Client, S3ServiceException } from '@aws-sdk/client-s3';
-import { emptyState, State } from '@clay/contracts';
+import { emptyState, State, WrittenState } from '@clay/contracts';
 
 import { forceUnlockWith, LockInfo, lockInfoFrom, noLockAt, otherLockAt, StateLocked } from '../lockInfo';
 import { BackendChoice, StateBackend } from '../StateBackend';
@@ -93,13 +93,13 @@ export class S3Backend implements StateBackend {
     return stored === undefined ? emptyState() : parseState(stored.text, this.location);
   }
 
-  async write(state: State): Promise<void> {
+  async write(state: WrittenState): Promise<void> {
     const outcome = await this.put(this.settings.key, serializeState(state), false);
     if (outcome.refused) throw this.unexpected('PutObject', this.location, outcome.refused);
   }
 
   /** S3 writes only where no object is, so no other run can write in between. */
-  async writeIfAbsent(state: State): Promise<boolean> {
+  async writeIfAbsent(state: WrittenState): Promise<boolean> {
     const outcome = await this.put(this.settings.key, serializeState(state), true);
     if (outcome.refused && statusOf(outcome.refused) === 412) return false;
     if (outcome.refused) throw this.unexpected('PutObject', this.location, outcome.refused);

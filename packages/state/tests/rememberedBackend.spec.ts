@@ -1,4 +1,5 @@
-import { emptyState, State } from '@clay/contracts';
+import { emptyState, isWritten, State } from '@clay/contracts';
+import assert from 'node:assert';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import path from 'node:path';
@@ -69,6 +70,23 @@ describe('the backend init remembers', () => {
 
   afterEach(async () => {
     await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it('moves nothing where the state is gone by the time it is read', async () => {
+    await written(old(), holding('a'));
+    await adoptBackend(old(), previous(), dir, unasked);
+    const read = vi.spyOn(LocalBackend.prototype, 'read').mockImplementationOnce(async () => {
+      await fs.rm(path.join(dir, 'clay.state.json'));
+      return emptyState();
+    });
+
+    try {
+      await adoptBackend(other(), previous(), dir, unasked);
+    } finally {
+      read.mockRestore();
+    }
+
+    expect(await exists('other.json')).toBe(false);
   });
 
   it('leaves only the record behind it', async () => {
@@ -595,7 +613,9 @@ describe('the backend init remembers', () => {
       await named('pr-12');
       const copy = elsewhere().workspace('dev');
       await copy.prepare();
-      await copy.write(await old().workspace('dev').read());
+      const state = await old().workspace('dev').read();
+      assert(isWritten(state));
+      await copy.write(state);
       const approve = vi.fn(yes);
 
       const { moved } = await adoptBackend(elsewhere(), previous(), dir, approve);

@@ -1,4 +1,4 @@
-import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, State, STATE_VERSION, types } from '@clay/contracts';
+import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, STATE_VERSION, types, WrittenState } from '@clay/contracts';
 import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -77,7 +77,7 @@ describe('destroying a deposed object', () => {
   });
 
   it('waits for a resource that depends on its resource to be destroyed first', async () => {
-    const state: State = {
+    const state: WrittenState = {
       version: STATE_VERSION,
       serial: 0,
       lineage: 'lineage',
@@ -92,7 +92,7 @@ describe('destroying a deposed object', () => {
   });
 
   it('is destroyed before a resource its stored dependencies name, and before a deposed object of one', async () => {
-    const state: State = {
+    const state: WrittenState = {
       version: STATE_VERSION,
       serial: 0,
       lineage: 'lineage',
@@ -111,7 +111,7 @@ describe('destroying a deposed object', () => {
   });
 
   it('still destroys all of them where objects left at different times name each other', async () => {
-    const state: State = {
+    const state: WrittenState = {
       version: STATE_VERSION,
       serial: 0,
       lineage: 'lineage',
@@ -126,7 +126,7 @@ describe('destroying a deposed object', () => {
   });
 
   it('is destroyed after a resource that depends on what it was left by, whichever the state lists first', async () => {
-    const state: State = {
+    const state: WrittenState = {
       version: STATE_VERSION,
       serial: 0,
       lineage: 'lineage',

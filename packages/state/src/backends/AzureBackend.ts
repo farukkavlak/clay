@@ -1,6 +1,6 @@
 // The SDK is loaded with import(), which takes its ESM build; its types have to come from the same build.
 import type { ContainerClient, RestError } from '@azure/storage-blob' with { 'resolution-mode': 'import' };
-import { emptyState, State } from '@clay/contracts';
+import { emptyState, State, WrittenState } from '@clay/contracts';
 import { text } from 'node:stream/consumers';
 import { setTimeout as sleep } from 'node:timers/promises';
 
@@ -120,13 +120,13 @@ export class AzureBackend implements StateBackend {
     return stored === undefined ? emptyState() : parseState(stored.text, this.location);
   }
 
-  async write(state: State): Promise<void> {
+  async write(state: WrittenState): Promise<void> {
     const outcome = await this.put(this.settings.key, serializeState(state), false);
     if (outcome.refused) throw this.unexpected('PutBlob', this.location, outcome);
   }
 
   /** Azure writes only where no blob is, so no other run can write in between. */
-  async writeIfAbsent(state: State): Promise<boolean> {
+  async writeIfAbsent(state: WrittenState): Promise<boolean> {
     const outcome = await this.put(this.settings.key, serializeState(state), true);
     if (outcome.refused && isTaken(outcome.refused)) return false;
     if (outcome.refused) throw this.unexpected('PutBlob', this.location, outcome);

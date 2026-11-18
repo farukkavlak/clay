@@ -1,4 +1,4 @@
-import { CreateRequest, Identity, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, State, STATE_VERSION, types, UpdateRequest } from '@clay/contracts';
+import { CreateRequest, Identity, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, STATE_VERSION, types, UpdateRequest, WrittenState } from '@clay/contracts';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';
@@ -269,7 +269,7 @@ describe('an error about a resource, given a sensitive value', () => {
     });
 
     it('hides the reason of an update', async () => {
-      const state: State = {
+      const state: WrittenState = {
         version: STATE_VERSION,
         serial: 0,
         lineage: 'lineage',
@@ -303,7 +303,7 @@ describe('an error about a resource, given a sensitive value', () => {
     });
 
     it('hides the reason of a destroy of a deposed object that holds a sensitive value', async () => {
-      const state: State = {
+      const state: WrittenState = {
         version: STATE_VERSION,
         serial: 0,
         lineage: 'lineage',
@@ -374,7 +374,7 @@ describe('an error about a resource, given a sensitive value', () => {
     });
 
     it('hides the reason of an identify of a deposed object the plan destroys', async () => {
-      const state: State = {
+      const state: WrittenState = {
         version: STATE_VERSION,
         serial: 0,
         lineage: 'lineage',

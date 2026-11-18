@@ -112,8 +112,10 @@ describe('a state kept in S3', () => {
     await expect(backendOn().read()).rejects.toThrow(
       `GetObject s3://bucket/env/state.json at ${server.url}/ answered 403 InvalidAccessKeyId: InvalidAccessKeyId from the test server`
     );
-    await expect(backendOn().write(emptyState())).rejects.toThrow(`PutObject s3://bucket/env/state.json at ${server.url}/ answered 403 InvalidAccessKeyId`);
-    await expect(backendOn().writeIfAbsent(emptyState())).rejects.toThrow('answered 403 InvalidAccessKeyId');
+    await expect(backendOn().write({ ...emptyState(), lineage: 'lineage' })).rejects.toThrow(
+      `PutObject s3://bucket/env/state.json at ${server.url}/ answered 403 InvalidAccessKeyId`
+    );
+    await expect(backendOn().writeIfAbsent({ ...emptyState(), lineage: 'lineage' })).rejects.toThrow('answered 403 InvalidAccessKeyId');
   });
 
   it('names a bucket the server does not have', async () => {

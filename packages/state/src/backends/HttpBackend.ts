@@ -1,4 +1,4 @@
-import { emptyState, State } from '@clay/contracts';
+import { emptyState, State, WrittenState } from '@clay/contracts';
 import { createHash } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 
@@ -135,7 +135,7 @@ export class HttpBackend implements StateBackend {
   }
 
   /** The lock's id goes with it, so a server can refuse a write from a run that does not hold the lock. */
-  async write(state: State): Promise<void> {
+  async write(state: WrittenState): Promise<void> {
     const { address, updateMethod } = this.settings;
     const url = new URL(address);
     if (this.held) url.searchParams.set('ID', this.held.id);
@@ -145,7 +145,7 @@ export class HttpBackend implements StateBackend {
   }
 
   /** Called under the lock, since the server cannot write only where nothing is. */
-  async writeIfAbsent(state: State): Promise<boolean> {
+  async writeIfAbsent(state: WrittenState): Promise<boolean> {
     if (await this.exists()) return false;
 
     await this.write(state);

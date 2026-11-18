@@ -1,4 +1,4 @@
-import { emptyState, State } from '@clay/contracts';
+import { emptyState, WrittenState } from '@clay/contracts';
 import * as fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -50,7 +50,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   };
 });
 
-const holding = (serial: number): State => ({ ...emptyState(), lineage: 'lineage', serial });
+const holding = (serial: number): WrittenState => ({ ...emptyState(), lineage: 'lineage', serial });
 
 describe('a local write a power loss cannot undo', () => {
   let dir: string;
@@ -126,7 +126,7 @@ describe('a local write a power loss cannot undo', () => {
   });
 
   it('flushes a first state before it is linked, and the directory after', async () => {
-    await new LocalBackend(dir).writeIfAbsent(emptyState());
+    await new LocalBackend(dir).writeIfAbsent({ ...emptyState(), lineage: 'lineage' });
 
     expect(seen.steps).toEqual(['sync clay.state.json.<id>', 'link clay.state.json.<id> clay.state.json', 'sync dir', 'rm clay.state.json.<id>']);
   });

@@ -1,4 +1,5 @@
-import { types } from '@clay/contracts';
+import assert from 'node:assert';
+import { isWritten, types } from '@clay/contracts';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
@@ -252,6 +253,7 @@ describe('state and output against a real state file', () => {
   ])('%s what a deposed object reads from with %s', async (_, command, addresses, dependencies) => {
     await run(chained());
     const state = await stored();
+    assert(isWritten(state));
     state.deposed = { 'local_file.b': [{ attributes: state.resources['local_file.b'].attributes, dependencies: ['local_file.a'] }] };
     await new LocalBackend(dir).write(state);
 

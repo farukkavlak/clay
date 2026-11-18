@@ -1,4 +1,5 @@
-import { Address, Output } from '@clay/contracts';
+import assert from 'node:assert';
+import { Address, isWritten, Output } from '@clay/contracts';
 
 import { ConfigError } from '@clay/parser';
 import { parsePlanFile, serializePlan } from '@clay/planner';
@@ -317,6 +318,7 @@ describe('a module called with count', () => {
     it('refuses to guess when state keeps it in two places it may have been, where the resource is written', async () => {
       await apply(once());
       const state = await new LocalBackend(dir).read();
+      assert(isWritten(state));
       state.resources['module.web[0].local_file.page'] = { ...state.resources['module.web.local_file.page'], modulePath: [{ name: 'web', key: 0 }] };
       await new LocalBackend(dir).write(state);
       await writeModule('web', countedPage());

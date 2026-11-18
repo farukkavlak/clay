@@ -135,7 +135,7 @@ describe('the backend of a workspace', () => {
   it('is the state of a named workspace that exists', async () => {
     const named = new LocalBackend(dir).workspace('dev');
     await fs.mkdir(path.dirname(named.location), { recursive: true });
-    await named.write(emptyState());
+    await named.write({ ...emptyState(), lineage: 'lineage' });
 
     const found = await workspaceBackend(new LocalBackend(dir), 'dev');
 
@@ -143,7 +143,7 @@ describe('the backend of a workspace', () => {
   });
 
   it('is refused for a named workspace with no state, rather than started empty', async () => {
-    await new LocalBackend(dir).write(emptyState());
+    await new LocalBackend(dir).write({ ...emptyState(), lineage: 'lineage' });
 
     await expect(workspaceBackend(new LocalBackend(dir), 'dev')).rejects.toThrow('Workspace "dev" does not exist; run `clay workspace new dev` to make it');
   });

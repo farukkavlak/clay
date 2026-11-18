@@ -69,6 +69,11 @@ export interface State {
   deposed?: Record<string, DeposedObject[]>;
 }
 
+/** A state as a backend keeps it: only one not written yet has no lineage. */
+export type WrittenState = State & { lineage: string };
+
+export const isWritten = (state: State): state is WrittenState => state.lineage !== undefined;
+
 /** Bump on any change to the shape after a release. A higher version was written by a newer Clay and is refused. */
 export const STATE_VERSION = 11;
 

@@ -1,3 +1,5 @@
+import assert from 'node:assert';
+import { isWritten } from '@clay/contracts';
 import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -19,6 +21,7 @@ describe('a state that lost a value its provider keeps', () => {
   const loseId = async () => {
     const backend = new LocalBackend(dir);
     const state = await backend.read();
+    assert(isWritten(state));
     delete state.resources['command_exec.c'].attributes.id;
     await backend.write(state);
   };

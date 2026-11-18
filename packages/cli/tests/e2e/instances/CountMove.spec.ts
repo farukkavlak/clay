@@ -1,4 +1,5 @@
-import { Address } from '@clay/contracts';
+import assert from 'node:assert';
+import { Address, isWritten } from '@clay/contracts';
 
 import { parsePlanFile, serializePlan } from '@clay/planner';
 
@@ -106,6 +107,7 @@ describe('a resource that gains or loses count', () => {
     await apply(suffix('2'));
     const backend = new LocalBackend(dir);
     const state = await backend.read();
+    assert(isWritten(state));
     moveResource(state, Address.parse('random_string.s[1]'), Address.parse('random_string.s'));
     await backend.write(state);
     const before = await ids();

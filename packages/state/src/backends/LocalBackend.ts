@@ -3,7 +3,7 @@ import { Dirent, Stats } from 'node:fs';
 import * as fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { emptyState, State } from '@clay/contracts';
+import { emptyState, State, WrittenState } from '@clay/contracts';
 
 import { LockInfo, lockInfoFrom, noLockAt, otherLockAt, StateLocked } from '../lockInfo';
 import { BackendChoice, DEFAULT_WORKSPACE, NamedWorkspace } from '../StateBackend';
@@ -189,7 +189,7 @@ export class LocalBackend implements NamedWorkspace {
     }
   }
 
-  async write(state: State): Promise<void> {
+  async write(state: WrittenState): Promise<void> {
     if (!this.backedUp) await this.backUp();
 
     // Rename is atomic, so a run killed mid-write leaves the old state whole.
@@ -243,7 +243,7 @@ export class LocalBackend implements NamedWorkspace {
     this.backedUp = true;
   }
 
-  async writeIfAbsent(state: State): Promise<boolean> {
+  async writeIfAbsent(state: WrittenState): Promise<boolean> {
     return createFilled(this.filePath, serializeState(state));
   }
 

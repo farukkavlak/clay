@@ -1,4 +1,4 @@
-import { Address, CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, State, STATE_VERSION, types, UpdateRequest } from '@clay/contracts';
+import { Address, CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, State, STATE_VERSION, types, UpdateRequest, WrittenState } from '@clay/contracts';
 import { RunEvent } from '@clay/orchestrator';
 import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';
@@ -142,7 +142,7 @@ describe('replacing a resource that something reads', () => {
   });
 
   it('destroys a deposed object that reads it before it', async () => {
-    const state: State = {
+    const state: WrittenState = {
       version: STATE_VERSION,
       serial: 0,
       lineage: 'lineage',
@@ -237,7 +237,7 @@ describe('replacing a resource that something reads', () => {
   });
 
   it('takes a deposed reader for no read of the current object at its address', async () => {
-    const state: State = {
+    const state: WrittenState = {
       version: STATE_VERSION,
       serial: 0,
       lineage: 'lineage',

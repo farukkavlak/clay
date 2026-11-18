@@ -1,4 +1,5 @@
-import { Output, types } from '@clay/contracts';
+import assert from 'node:assert';
+import { isWritten, Output, types } from '@clay/contracts';
 import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -477,6 +478,7 @@ describe('apply and plan against real files', () => {
     await apply(orchestrator, chained('hello'));
     const backend = new LocalBackend(dir);
     const state = await backend.read();
+    assert(isWritten(state));
     for (const resource of Object.values(state.resources)) delete resource.dependencies;
     await backend.write(state);
 

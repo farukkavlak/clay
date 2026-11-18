@@ -1,4 +1,4 @@
-import { State } from '@clay/contracts';
+import { State, WrittenState } from '@clay/contracts';
 
 import { LockInfo } from './lockInfo';
 
@@ -29,13 +29,13 @@ export interface StateBackend {
   read(): Promise<State>;
 
   /** Replaces the state and every line appended since. */
-  write(state: State): Promise<void>;
+  write(state: WrittenState): Promise<void>;
 
   /** Adds lines of the journal, each ending in a newline, over the state last written; a backend without one is written whole instead. */
   append?(lines: string): Promise<void>;
 
   /** Called under the lock. */
-  writeIfAbsent(state: State): Promise<boolean>;
+  writeIfAbsent(state: WrittenState): Promise<boolean>;
 
   /** Throws `StateLocked` while another run holds it. */
   lock(info: LockInfo): Promise<void>;

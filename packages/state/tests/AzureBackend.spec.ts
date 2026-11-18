@@ -95,8 +95,8 @@ describe('a state kept in Azure Blob storage', () => {
     server.override('PUT /state/env/state.json', { status: 403, code: 'AuthorizationPermissionMismatch' }, { status: 403, code: 'AuthorizationPermissionMismatch' });
 
     await expect(backendOn().read()).rejects.toThrow(`GetBlob ${at()} answered 403 AuthenticationFailed: AuthenticationFailed from the test server`);
-    await expect(backendOn().write(emptyState())).rejects.toThrow(`PutBlob ${at()} answered 403 AuthorizationPermissionMismatch`);
-    await expect(backendOn().writeIfAbsent(emptyState())).rejects.toThrow('answered 403 AuthorizationPermissionMismatch');
+    await expect(backendOn().write({ ...emptyState(), lineage: 'lineage' })).rejects.toThrow(`PutBlob ${at()} answered 403 AuthorizationPermissionMismatch`);
+    await expect(backendOn().writeIfAbsent({ ...emptyState(), lineage: 'lineage' })).rejects.toThrow('answered 403 AuthorizationPermissionMismatch');
   });
 
   it('names a container the account does not have', async () => {

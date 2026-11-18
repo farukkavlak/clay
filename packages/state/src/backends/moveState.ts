@@ -1,4 +1,4 @@
-import { State } from '@clay/contracts';
+import { isWritten, WrittenState } from '@clay/contracts';
 import { isDeepStrictEqual } from 'node:util';
 
 import { LockNotReleased } from '../lockInfo';
@@ -50,7 +50,7 @@ interface Move {
 
 interface Planned {
   readonly move: Move;
-  readonly state: State;
+  readonly state: WrittenState;
   readonly copy: boolean;
 }
 
@@ -87,8 +87,11 @@ const journalAlone = ({ where }: BackendChoice) =>
   new Error(`"${where}" has a journal and no state, so there is nothing to move; remove ${where}.journal and run \`clay init\` again`);
 
 /** Called under both locks. Undefined where nothing is there, as where another run removed the state since `init` looked. */
-async function stateToMove(from: StateBackend): Promise<State | undefined> {
-  if (await from.exists()) return from.read();
+async function stateToMove(from: StateBackend): Promise<WrittenState | undefined> {
+  if (await from.exists()) {
+    const state = await from.read();
+    if (isWritten(state)) return state;
+  }
   if (from instanceof LocalBackend && (await from.holdsAnything())) throw journalAlone(from.choice);
 
   return undefined;

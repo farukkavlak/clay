@@ -47,7 +47,7 @@ describe('LocalBackend', () => {
 
   it('exists once a state is written', async () => {
     const backend = new LocalBackend(dir);
-    await backend.write(emptyState());
+    await backend.write({ ...emptyState(), lineage: 'lineage' });
 
     await expect(backend.exists()).resolves.toBe(true);
   });
@@ -82,7 +82,7 @@ describe('LocalBackend', () => {
     });
 
     it('does not exist while only the default state does', async () => {
-      await new LocalBackend(dir).write(emptyState());
+      await new LocalBackend(dir).write({ ...emptyState(), lineage: 'lineage' });
 
       await expect(new LocalBackend(dir).workspace('dev').exists()).resolves.toBe(false);
     });
@@ -211,7 +211,7 @@ describe('LocalBackend', () => {
     it('is never the default state, whose folder is not pruned', async () => {
       const backend = new LocalBackend(dir, 'kept/app.json');
       await fs.mkdir(path.join(dir, 'kept'));
-      await backend.write(emptyState());
+      await backend.write({ ...emptyState(), lineage: 'lineage' });
 
       await expect(backend.remove()).rejects.toThrow('The state of the default workspace is not removed');
       await expect(backend.exists()).resolves.toBe(true);
@@ -292,7 +292,7 @@ describe('LocalBackend', () => {
 
       const empty = await emptySeen(state, async () => {
         for (let round = 0; round < rounds; round++) {
-          await backend.writeIfAbsent(emptyState());
+          await backend.writeIfAbsent({ ...emptyState(), lineage: 'lineage' });
           await fs.rm(state);
         }
       });
@@ -305,8 +305,8 @@ describe('LocalBackend', () => {
 
       await backend.lock(lockInfo);
       await expect(backend.lock({ ...lockInfo, id: 'other' })).rejects.toThrow('State is locked by plan of me on here');
-      expect(await backend.writeIfAbsent(emptyState())).toBe(true);
-      expect(await backend.writeIfAbsent(emptyState())).toBe(false);
+      expect(await backend.writeIfAbsent({ ...emptyState(), lineage: 'lineage' })).toBe(true);
+      expect(await backend.writeIfAbsent({ ...emptyState(), lineage: 'lineage' })).toBe(false);
 
       const left = await fs.readdir(dir);
       expect(left.sort()).toEqual(['clay.state.json', 'clay.state.json.lock']);

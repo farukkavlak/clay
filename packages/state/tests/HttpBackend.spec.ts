@@ -19,7 +19,7 @@ async function runAll(backend: StateBackend): Promise<void> {
   const info = newLockInfo('apply');
   await backend.lock(info);
   await backend.read();
-  await backend.write(emptyState());
+  await backend.write({ ...emptyState(), lineage: 'lineage' });
   await backend.unlock(info.id);
 }
 
@@ -213,7 +213,7 @@ describe('a state kept on an HTTP server', () => {
 
   it.each([
     ['check', (backend: HttpBackend) => backend.check(), 'GET /state', 'GET'],
-    ['write', (backend: HttpBackend) => backend.write(emptyState()), 'POST /state', 'POST'],
+    ['write', (backend: HttpBackend) => backend.write({ ...emptyState(), lineage: 'lineage' }), 'POST /state', 'POST'],
     ['lock', (backend: HttpBackend) => backend.lock(newLockInfo('apply')), 'LOCK /lock', 'LOCK'],
   ])('refuses a %s the server fails', async (_title, act, request, method) => {
     server.override(request, { status: 500 });
@@ -223,7 +223,7 @@ describe('a state kept on an HTTP server', () => {
 
   it.each([
     ['a read', 'GET /state', 301, (backend: HttpBackend) => backend.read()],
-    ['a write', 'POST /state', 302, (backend: HttpBackend) => backend.write(emptyState())],
+    ['a write', 'POST /state', 302, (backend: HttpBackend) => backend.write({ ...emptyState(), lineage: 'lineage' })],
     ['a lock', 'LOCK /lock', 303, (backend: HttpBackend) => backend.lock(newLockInfo('apply'))],
   ])('follows no redirect of %s', async (_title, request, status, act) => {
     server.override(request, { status, location: `${server.url}/other` });
@@ -238,7 +238,7 @@ describe('a state kept on an HTTP server', () => {
   it('says a redirect with nowhere to go is one', async () => {
     server.override('POST /state', { status: 307 });
 
-    await expect(backendOn().write(emptyState())).rejects.toThrow(`POST ${server.url}/state answered 307; Clay follows no redirect`);
+    await expect(backendOn().write({ ...emptyState(), lineage: 'lineage' })).rejects.toThrow(`POST ${server.url}/state answered 307; Clay follows no redirect`);
   });
 
   it.each([201, 204])('takes and releases a lock the server answers %d', async (status) => {
@@ -248,7 +248,7 @@ describe('a state kept on an HTTP server', () => {
     const info = newLockInfo('apply');
 
     await backend.lock(info);
-    await backend.write(emptyState());
+    await backend.write({ ...emptyState(), lineage: 'lineage' });
     await backend.unlock(info.id);
 
     expect(server.received.map(({ id }) => id)).toEqual([null, info.id, null]);
@@ -709,7 +709,7 @@ describe('the http block', () => {
     const info = newLockInfo('apply');
 
     await backend.lock(info);
-    await backend.write(emptyState());
+    await backend.write({ ...emptyState(), lineage: 'lineage' });
     await backend.unlock(info.id);
 
     expect(server.received.map(({ method, path }) => `${method} ${path}`)).toEqual(['POST /lock', 'PUT /state', 'DELETE /free']);
