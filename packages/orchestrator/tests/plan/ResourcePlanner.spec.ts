@@ -56,7 +56,7 @@ describe('ResourcePlanner', () => {
 
     const planned = await plannerFor(provider).plan('thing', schema, current, written(config));
 
-    expect(planned).toEqual({ after: { ...config, made: UNKNOWN }, replace: true, config, sensitive: [] });
+    expect(planned).toEqual({ after: { ...config, made: UNKNOWN }, replace: true, forcedBy: ['path'], config, sensitive: [] });
     expect(provider.plan).toHaveBeenLastCalledWith('thing', { prior: null, proposed: config, config });
   });
 
@@ -87,6 +87,32 @@ describe('ResourcePlanner', () => {
     await plannerFor(provider).plan('thing', schema, undefined, { path: allSensitive(valueOf(types.string, 'a')) });
 
     expect(provider.plan).toHaveBeenCalledWith('thing', { prior: null, proposed: { path: 'a' }, config: { path: 'a' } });
+  });
+
+  it('names each attribute that forces a replace once, by the values that change and never by a step inside one', async () => {
+    const paths = [['path'], ['tags', 'x'], ['tags', 'y'], ['tags', 'same'], ['made']];
+    const provider = fakeProvider((request) => ({ ...planFromSchema(schema, request), after: { ...request.proposed }, replace: paths }));
+    const held = { ...current, attributes: { path: 'a', tags: { x: '1', y: '1', same: '1' }, made: 'm' } };
+
+    const planned = await plannerFor(provider).plan('thing', schema, held, written({ path: 'b', tags: { x: '2', y: '2', same: '1' } }));
+
+    expect(planned).toMatchObject({ replace: true, forcedBy: ['path', 'tags'] });
+  });
+
+  it('names nothing for a path that starts at no attribute', async () => {
+    const provider = fakeProvider((request) => ({ ...planFromSchema(schema, request), after: { ...request.proposed }, replace: [[]] }));
+
+    const planned = await plannerFor(provider).plan('thing', schema, current, written({ path: 'b', tags: { x: '1' } }));
+
+    expect(planned.replace).toBe(true);
+    expect(planned).not.toHaveProperty('forcedBy');
+  });
+
+  it('names nothing for a tainted resource, whose provider is not asked', async () => {
+    const planned = await plannerFor(fakeProvider()).plan('thing', schema, { ...current, tainted: true }, written({ path: 'b', tags: { x: '1' } }));
+
+    expect(planned.replace).toBe(true);
+    expect(planned).not.toHaveProperty('forcedBy');
   });
 
   it('replaces only where a value the provider names changes', async () => {

@@ -20,9 +20,15 @@ function protectedBy(desired: DesiredResource): Pick<PlanAction, 'preventDestroy
   return prevents(desired) ? { preventDestroy: true } : {};
 }
 
+function replacing({ replace, createBeforeDestroy, forcedBy }: DesiredResource): Pick<PlanAction, 'createBeforeDestroy' | 'forcedBy'> {
+  if (!replace) return {};
+
+  return { ...(createBeforeDestroy && { createBeforeDestroy: true as const }), ...(forcedBy && { forcedBy }) };
+}
+
 /** What an update or a replace holds of its resource beside the values. */
-function carriedOver(desired: DesiredResource): Pick<PlanAction, 'sensitive' | 'preventDestroy' | 'ignored' | 'createBeforeDestroy'> {
-  return { ...marked(desired), ...protectedBy(desired), ...ignoring(desired), ...(desired.replace && desired.createBeforeDestroy && { createBeforeDestroy: true as const }) };
+function carriedOver(desired: DesiredResource): Pick<PlanAction, 'sensitive' | 'preventDestroy' | 'ignored' | 'createBeforeDestroy' | 'forcedBy'> {
+  return { ...marked(desired), ...protectedBy(desired), ...ignoring(desired), ...replacing(desired) };
 }
 
 /** What state keeps beside the values that a no-op changes: which parts are sensitive, whether a destroy is prevented and what runs before it. */

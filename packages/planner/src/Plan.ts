@@ -10,6 +10,8 @@ export interface DesiredResource {
   /** The steps to each sensitive part of the configuration it was given. */
   sensitive: AttributePath[];
   replace: boolean;
+  /** On a replace: the attributes whose change forces it. Left out where none does. */
+  forcedBy?: string[];
   dependencies: string[];
   /** The paths of the existing resource the configuration does not change; left out where it does not exist yet. */
   ignored?: AttributePath[];
@@ -44,6 +46,8 @@ export interface PlanAction {
   sensitive?: AttributePath[];
   /** On a replace: the new object is made first, and the old one is destroyed once what reads it is updated. */
   createBeforeDestroy?: true;
+  /** On a replace: the attributes whose change forces it. Left out where none does. */
+  forcedBy?: string[];
   /** On a delete: it destroys the objects a replace left behind, not the current one. */
   deposed?: true;
   /** On a no-op: the values stay, which parts are sensitive changes. */

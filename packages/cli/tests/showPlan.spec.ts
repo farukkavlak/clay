@@ -147,6 +147,32 @@ describe('showing a resource to create', () => {
   });
 });
 
+describe('showing what forces a replace', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('quotes a name a configuration cannot write bare', () => {
+    const plan: Plan = {
+      serial: 0,
+      actions: [{ type: 'REPLACE', resourceType: 'x', name: 'a', planned: {}, after: {}, forcedBy: ['path', 'b\u007F'], changes: {} }],
+      outputs: {},
+      prevRun: {},
+      prior: {},
+      imported: {},
+      schemas: { x: {} },
+      dataSources: {},
+      readAtApply: [],
+    };
+    const printed: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => printed.push(stripVTControlCharacters(args.join(' '))));
+
+    displayPlan(plan);
+
+    expect(printed).toContain(String.raw`      replace forced by: path, "b\u007f"`);
+  });
+});
+
 describe('a value that may be sensitive, as the plan shows it', () => {
   it.each([
     ['hides a known one', 'x', '(sensitive value)'],

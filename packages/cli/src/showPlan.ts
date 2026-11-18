@@ -131,6 +131,11 @@ function displayTaint({ type }: PlanAction, prior: Resource | undefined): void {
   if (type === 'REPLACE' && prior?.tainted) console.log('      tainted, so it is replaced');
 }
 
+/** On a line of its own, since an attribute that forces a replace need not be among the changes. */
+function displayForcedBy({ forcedBy }: PlanAction): void {
+  if (forcedBy) console.log(`      replace forced by: ${forcedBy.map((name) => attributeName(name)).join(', ')}`);
+}
+
 /** The plan holds a moved resource where it was before the move, and an imported one apart. */
 function priorOf(action: PlanAction, plan: Plan): Resource | undefined {
   const address = Address.of(action).toString();
@@ -152,6 +157,7 @@ function displayAction(action: PlanAction, plan: Plan): void {
   const before = prior?.sensitive ?? [];
   const after = action.sensitive ?? [];
   displayTaint(action, prior);
+  displayForcedBy(action);
   if (action.changes) displayChanges(action.changes, plan.schemas[action.resourceType], Marks.of([...before, ...after]));
   displayMarks(before, after);
   displayProtection(prior?.preventDestroy === true, action.preventDestroy === true);

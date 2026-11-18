@@ -116,6 +116,10 @@ function isCreatedFirst(action: Record<string, unknown>): boolean {
   return action.createBeforeDestroy === undefined || (action.createBeforeDestroy === true && action.type === 'REPLACE');
 }
 
+function isForcedBy({ forcedBy, type }: Record<string, unknown>): boolean {
+  return forcedBy === undefined || (type === 'REPLACE' && Array.isArray(forcedBy) && forcedBy.length > 0 && forcedBy.every((name) => typeof name === 'string'));
+}
+
 function isDeposed(action: Record<string, unknown>): boolean {
   return action.deposed === undefined || (action.deposed === true && action.type === 'DELETE');
 }
@@ -125,9 +129,17 @@ function isIgnored(action: Record<string, unknown>): boolean {
   return action.ignored === undefined || ((action.type === 'UPDATE' || action.type === 'REPLACE') && isAttributePaths(action.ignored));
 }
 
-/** What a plan holds beside the values: the marks, the prevented destroy and the paths left as they are. */
+/** What a plan holds beside the values: the marks, the prevented destroy, the paths left as they are and what forces a replace. */
 function isStateOnly(action: Record<string, unknown>): boolean {
-  return isNoOpMark(action, 'marksChange') && isNoOpMark(action, 'provisionersChange') && isProtection(action) && isIgnored(action) && isDeposed(action) && isCreatedFirst(action);
+  return (
+    isNoOpMark(action, 'marksChange') &&
+    isNoOpMark(action, 'provisionersChange') &&
+    isProtection(action) &&
+    isIgnored(action) &&
+    isDeposed(action) &&
+    isCreatedFirst(action) &&
+    isForcedBy(action)
+  );
 }
 
 const ACTION_TYPES = new Set<unknown>(['CREATE', 'UPDATE', 'REPLACE', 'DELETE', 'NO_OP'] satisfies ActionType[]);

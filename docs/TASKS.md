@@ -1150,8 +1150,10 @@ Terraform has it since backends replaced `-state`.
 - [x] `clay.workspace` reads the name of the workspace in the configuration. `validate`
       holds for every workspace, so there it is a string not known yet; Terraform's gives the
       selected name
-- [ ] The plan lists what a resource to create holds, and names the attribute that forces a
-      replace, so the values can be read before answering `yes`
+- [x] The plan lists what a resource to create holds, and names the attribute that forces a
+      replace, so the values can be read before answering `yes`. Terraform marks the line of
+      each such attribute; Clay gives them a line of their own, `replace forced by: path`,
+      since the attribute need not be among the changes
 
 ## 4. Providers
 

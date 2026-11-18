@@ -442,6 +442,18 @@ describe('reading a plan file', () => {
     expect(read(content)).toThrow(/^tfplan\.json is not a plan file$/);
   });
 
+  it.each([
+    ['not a list', 'REPLACE', 'path'],
+    ['empty', 'REPLACE', []],
+    ['a list of anything but names', 'REPLACE', [1]],
+    ['on an update', 'UPDATE', ['path']],
+    ['on a create', 'CREATE', ['path']],
+  ])('refuses what forces a replace that is %s', (_, type, forcedBy) => {
+    const content = { ...fields(), actions: [{ type, resourceType: 'null_resource', name: 'a', forcedBy, planned: {}, after: {} }] };
+
+    expect(read(content)).toThrow(/^tfplan\.json is not a plan file$/);
+  });
+
   it('names a sensitive index that is not whole', () => {
     const content = { ...fields(), actions: [{ type: 'NO_OP', resourceType: 'null_resource', name: 'a', sensitive: [['triggers', 1.5]] }] };
 

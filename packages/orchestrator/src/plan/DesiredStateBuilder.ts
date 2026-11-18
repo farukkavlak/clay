@@ -233,6 +233,7 @@ export class DesiredStateBuilder {
       after: change.after,
       sensitive: change.sensitive,
       replace: change.replace,
+      forcedBy: change.forcedBy,
       dependencies,
       ...(block.lifecycle?.preventDestroy === true && { preventDestroy: true as const }),
       ...(ignoring && { ignored: ignoring.paths }),

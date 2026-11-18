@@ -105,6 +105,12 @@ describe('Planner', () => {
     });
   });
 
+  it('carries what forces a replace on the replace', () => {
+    const replacing = { ...desiredResource('r', { path: 'y' }), replace: true, forcedBy: ['path'] };
+
+    expect(plan([replacing], stateWith('r', { path: 'x' }))[0]).toMatchObject({ type: 'REPLACE', forcedBy: ['path'] });
+  });
+
   describe('deposed objects', () => {
     it('are destroyed beside a resource that stays, as an action of their own', () => {
       const actions = plan([desiredResource('r', { path: 'x' })], withDeposed(stateWith('r', { path: 'x' }), 'mock_resource.r'));

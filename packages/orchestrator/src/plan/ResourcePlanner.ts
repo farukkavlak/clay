@@ -20,6 +20,8 @@ export interface Ignoring {
 export interface ResourcePlan {
   after: Record<string, unknown>;
   replace: boolean;
+  /** On a replace: the attributes whose change forces it. Left out where none does, as for a tainted object. */
+  forcedBy?: string[];
   config: Record<string, unknown>;
   sensitive: AttributePath[];
 }
@@ -38,9 +40,16 @@ function proposed(prior: Record<string, unknown>, config: Record<string, unknown
   return { ...withDefaults(config, schema), ...Object.fromEntries(kept) };
 }
 
-/** Only replaces where the value at the path actually changes. */
-function replaces(paths: AttributePath[], prior: Record<string, unknown>, after: Record<string, unknown>): boolean {
-  return paths.some((path) => !isDeepStrictEqual(valueAt(prior, path), valueAt(after, path)));
+/** The paths whose value actually changes, the only ones that replace. */
+function forcing(paths: AttributePath[], prior: Record<string, unknown>, after: Record<string, unknown>): AttributePath[] {
+  return paths.filter((path) => !isDeepStrictEqual(valueAt(prior, path), valueAt(after, path)));
+}
+
+/** Attributes alone, since a step below one may be a key of a sensitive value. */
+function forcedByOf(paths: AttributePath[]): Pick<ResourcePlan, 'forcedBy'> {
+  const names = new Set(paths.map(([name]) => name).filter((name) => typeof name === 'string'));
+
+  return names.size > 0 ? { forcedBy: [...names] } : {};
 }
 
 /** `against` names where the value came from: the configuration, or the default for one it left out. */
@@ -103,18 +112,20 @@ export class ResourcePlanner {
     await hidingReason(type, sensitive, () => this.limit.run(() => provider.validate(type, config)));
     if (!current) return { ...(await this.create(provider, type, schema, config, sensitive)), sensitive };
 
+    let forced: AttributePath[] = [];
     // A tainted object is replaced whatever the configuration says.
     if (!current.tainted) {
       const request = { prior: current.attributes, proposed: proposed(current.attributes, config, schema), config };
       const change = await this.ask(provider, type, schema, request, sensitive, [...sensitive, ...(current.sensitive ?? [])]);
-      if (!replaces(change.replace, current.attributes, change.after)) {
+      forced = forcing(change.replace, current.attributes, change.after);
+      if (forced.length === 0) {
         checkKept(type, schema, current.attributes, change.after);
         return { after: change.after, replace: false, config, sensitive };
       }
     }
 
     // The old resource's values go with it, so the new one is planned from nothing.
-    return { ...(await this.create(provider, type, schema, config, sensitive)), replace: true, sensitive };
+    return { ...(await this.create(provider, type, schema, config, sensitive)), replace: true, ...forcedByOf(forced), sensitive };
   }
 
   private async create(provider: Provider, type: string, schema: Schema, config: Record<string, unknown>, sensitive: AttributePath[]): Promise<Omit<ResourcePlan, 'sensitive'>> {
