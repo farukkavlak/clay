@@ -7,7 +7,7 @@ import { newLockInfo, serializeState, StateLocked } from '../src';
 import { S3Backend } from '../src/backends/S3Backend';
 
 const resource = { resourceType: 'local_file', name: 'a', attributes: { path: 'a.txt' } };
-const stateWith = (serial: number) => ({ ...emptyState(), serial, resources: { 'local_file.a': resource } });
+const stateWith = (serial: number) => ({ ...emptyState(), serial, lineage: 'lineage-a', resources: { 'local_file.a': resource } });
 
 const KEY = 'env/state.json';
 const LOCK = `${KEY}.lock`;
