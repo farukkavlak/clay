@@ -5,7 +5,7 @@ import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 
 import { BackendChoice, StateBackend } from '../StateBackend';
-import { build } from './build';
+import { build, defaultLocal } from './build';
 import { replaceSynced } from './durable';
 import { HandshakeFailed, NoAnswer } from './httpRequest';
 import { LocalBackend } from './LocalBackend';
@@ -39,7 +39,7 @@ export function rememberedBackend(workingDir: string, env: Environment): StateBa
   try {
     content = fs.readFileSync(record, 'utf8');
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return new LocalBackend(workingDir);
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return defaultLocal(workingDir);
 
     throw error;
   }

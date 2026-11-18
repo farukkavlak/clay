@@ -84,6 +84,70 @@ describe('backendFrom', () => {
     expect(error.position).toMatchObject({ line: 2, column: 11 });
   });
 
+  describe.each([
+    ['local', 'path', (place: string) => blockOf(`path = "${place}"`)],
+    ['s3', 'key', (place: string) => s3(`key = "${place}"\n    bucket = "b"\n    region = "eu-west-1"`)],
+    ['azure', 'key', (place: string) => azure(`key = "${place}"\n    storage_account_name = "acme"\n    container_name = "state"`)],
+  ])('a place of backend %s that another state owns', (type, name, blockAt) => {
+    const refusedAt = (place: string, problem: string) => {
+      const error = errorOf(blockAt(place));
+
+      expect(error.message).toBe(`${name} of backend "${type}" is "${place}", ${problem}`);
+      expect(error.position).toMatchObject({ line: 3, column: name.length + 8 });
+    };
+
+    it.each(['s.json.lock', 'a/S.LOCK'])('refuses the lock %s', (place) => {
+      refusedAt(place, 'and a name ending in .lock is what Clay keeps beside a state');
+    });
+
+    it.each(['s.lock.json', 'clay.workspaces/s.json', 'clay.workspaces/not_a_name/s.json', 'clay.workspaces/dev/more/s.json'])('takes %s', (place) => {
+      expect(backendFrom(blockAt(place), dir, {}).location).toContain(place.split('/').at(-1));
+    });
+  });
+
+  it.each(['.bak', '.journal', '.tmp'])('refuses a local path ending in %s, which sits beside a state', (suffix) => {
+    const error = errorOf(blockOf(`path = "s.json${suffix}"`));
+
+    expect(error.message).toBe(`path of backend "local" is "s.json${suffix}", and a name ending in ${suffix} is what Clay keeps beside a state`);
+  });
+
+  it.each(['clay.workspaces/dev/s.json', 'a/CLAY.Workspaces/Dev/s.json'])('refuses the local path %s, the state of a workspace', (place) => {
+    const error = errorOf(blockOf(`path = "${place}"`));
+
+    expect(error.message).toBe(`path of backend "local" is "${place}", which is where Clay keeps the state of workspace "dev"`);
+    expect(error.position).toMatchObject({ line: 3, column: 12 });
+  });
+
+  it('refuses a local path that a workspace folder around the root makes the state of a workspace', () => {
+    expect(() => backendFrom(blockOf('path = "s.json"'), path.join(dir, 'clay.workspaces', 'dev'), {})).toThrow('which is where Clay keeps the state of workspace "dev"');
+  });
+
+  it.each([
+    ['no block', undefined],
+    ['a block with no path', blockOf('')],
+  ])('refuses the default state inside a folder of workspaces, with %s', (_title, block) => {
+    const inside = path.join(dir, 'clay.workspaces', 'dev');
+
+    expect(() => backendFrom(block, inside, {})).toThrow(`${path.join(inside, 'clay.state.json')} is where Clay keeps the state of workspace "dev"`);
+  });
+
+  it.each([
+    ['s3', () => s3('key = "clay.workspaces/dev/s.json"\n    bucket = "b"\n    region = "eu-west-1"')],
+    ['azure', () => azure('key = "clay.workspaces/dev/s.json"\n    storage_account_name = "acme"\n    container_name = "state"')],
+  ])('takes a key of backend %s under clay.workspaces, since it keeps one state', (_type, block) => {
+    expect(backendFrom(block(), dir, {}).location).toContain('clay.workspaces/dev/s.json');
+  });
+
+  it('refuses a local path that comes to a workspace state only once it is resolved', () => {
+    const error = errorOf(blockOf('path = "clay.workspaces/dev/a/../s.json"'));
+
+    expect(error.message).toBe('path of backend "local" is "clay.workspaces/dev/a/../s.json", which is where Clay keeps the state of workspace "dev"');
+  });
+
+  it('takes an S3 key ending in .bak, since only a local state has one beside it', () => {
+    expect(backendFrom(s3('key = "s.bak"\n    bucket = "b"\n    region = "eu-west-1"'), dir, {}).location).toBe('s3://b/s.bak');
+  });
+
   describe('of type http', () => {
     const ADDRESSES = 'address = "https://state.example/s"\n    lock_address = "https://state.example/l"';
 

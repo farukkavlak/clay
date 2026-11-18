@@ -5,6 +5,9 @@ import { LockInfo } from './lockInfo';
 /** Kept where the state was before workspaces, so a configuration that names none goes on as it did. */
 export const DEFAULT_WORKSPACE = 'default';
 
+/** Holds the states of named workspaces, next to the default state. */
+export const WORKSPACES_FOLDER = 'clay.workspaces';
+
 /** What `init` remembers, so a later command can tell the configuration has moved the state. */
 export interface BackendChoice {
   readonly type: string;

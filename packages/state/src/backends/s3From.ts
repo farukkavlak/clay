@@ -1,6 +1,7 @@
 import { urlOf } from './httpFrom';
 import { S3Backend } from './S3Backend';
 import { checkNames, Environment, Settings, variable } from './settings';
+import { checkNotBeside, LOCK_BESIDE } from './workspaces';
 
 const SECRETS = new Map([
   ['access_key', 'AWS_ACCESS_KEY_ID'],
@@ -44,6 +45,7 @@ function keyOf(settings: Settings): string {
   if (bytes > LONGEST_KEY) settings.refuse(`key of backend "s3" is ${bytes} bytes long, and ${LONGEST_KEY} at most leaves room for ".lock"`, 'key');
   if (key.startsWith('/') || key.endsWith('/')) settings.refuse(`key of backend "s3" is "${key}", which must not start or end with "/"`, 'key');
   if (key.includes('//')) settings.refuse(`key of backend "s3" is "${key}", which must not hold "//"`, 'key');
+  checkNotBeside(settings, 'key', key, key.split('/'), LOCK_BESIDE);
 
   return key;
 }

@@ -1,6 +1,7 @@
 import { ACCOUNT_KEY, AzureBackend, AzureCredential, SAS_TOKEN } from './AzureBackend';
 import { urlOf } from './httpFrom';
 import { checkNames, Environment, Settings, variable } from './settings';
+import { checkNotBeside, LOCK_BESIDE } from './workspaces';
 
 const SECRETS = new Map([
   ['access_key', ACCOUNT_KEY],
@@ -57,6 +58,7 @@ function keyOf(settings: Settings): string {
   if (parts.includes('')) settings.refuse(`key of backend "azure" is "${key}", which must not hold "//"`, 'key');
   if (parts.some((part) => part === '.' || part === '..')) settings.refuse(`key of backend "azure" is "${key}", which must not hold a "." or ".." part`, 'key');
   if (key.endsWith('.')) settings.refuse(`key of backend "azure" is "${key}", which must not end with "."`, 'key');
+  checkNotBeside(settings, 'key', key, parts, LOCK_BESIDE);
 
   return key;
 }

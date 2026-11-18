@@ -120,6 +120,17 @@ describe('the backend init remembers', () => {
     expect(() => checkBackend(new LocalBackend(dir), dir, {})).toThrow(`${recordPath()} is not what \`clay init\` writes; remove it and run \`clay init\``);
   });
 
+  it('refuses a record that names the lock of a state', async () => {
+    await fs.mkdir(path.dirname(recordPath()), { recursive: true });
+    await fs.writeFile(recordPath(), JSON.stringify({ type: 'local', settings: { path: 's.json.lock' } }), 'utf8');
+
+    expect(() => rememberedBackend(dir, {})).toThrow(`${recordPath()} is not what \`clay init\` writes`);
+  });
+
+  it('refuses the default state inside a folder of workspaces where no record is', () => {
+    expect(() => rememberedBackend(path.join(dir, 'clay.workspaces', 'dev'), {})).toThrow('is where Clay keeps the state of workspace "dev"');
+  });
+
   it('passes on a record it cannot read, rather than taking it as no record', async () => {
     await fs.mkdir(path.join(dir, '.clay', 'backend.json'), { recursive: true });
 

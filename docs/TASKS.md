@@ -477,6 +477,12 @@ change each.
       was applied to the state of another with the same serial: two directories after
       `init`, both at serial 0. A state now gets a lineage at its first write, the plan
       records it, and `apply` refuses another one, as Terraform does
+- [x] A state could sit where Clay keeps part of another one. With
+      `path = "../shared/clay.workspaces/dev/clay.state.json"` a configuration shared workspace
+      `dev` of the one at `../shared/clay.state.json`, and its plan destroyed that one's
+      resource. A `path` or `key` ending in `.lock` took the place of another state's lock, so
+      that state's `init` stopped as locked. Now each is refused where the backend is read.
+      Terraform checks neither
 
 ## 1. Language
 

@@ -57,6 +57,16 @@ describe('a state kept where a backend block says', () => {
     await expect(fs.access(path.join(dir, 'clay.state.json'))).rejects.toThrow('ENOENT');
   });
 
+  it.each([
+    ['the state of a workspace', 'shared/clay.workspaces/dev/s.json', 'which is where Clay keeps the state of workspace "dev"'],
+    ['the lock of a state', 'shared/s.json.lock', 'and a name ending in .lock is what Clay keeps beside a state'],
+  ])('is not started by init at %s of another configuration', async (_title, place, problem) => {
+    await write('main.clay', BLOCK.replace('kept/here.json', place) + FILE);
+
+    expect(await refusal('init')).toContain(`path of backend "local" is "${place}", ${problem}`);
+    await expect(fs.access(path.join(dir, 'shared'))).rejects.toThrow('ENOENT');
+  });
+
   it('is written there by apply, with its backup and no file at the old place', async () => {
     await clayOutput(dir, 'init');
     await clayOutput(dir, 'apply', '--yes');

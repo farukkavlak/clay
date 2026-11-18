@@ -662,6 +662,11 @@ state has to be found before anything has a value.
 empty or end in `.clay`. With no block, or no `path`, the state is `clay.state.json` next to
 the configuration. The lock, the backup and the journal sit beside the file it names.
 
+A state cannot sit where Clay keeps part of another one. `path` cannot end in `.lock`,
+`.bak`, `.journal` or `.tmp`, or be `clay.workspaces/<workspace>/<file>`, in any case. The
+same holds for the default state of a directory inside such a folder. The `key` of `s3` and
+`azure` cannot end in `.lock`.
+
 `http` keeps the state on a server, in the protocol Terraform's `http` backend uses:
 
 ```

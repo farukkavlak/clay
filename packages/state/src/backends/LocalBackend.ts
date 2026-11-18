@@ -6,7 +6,7 @@ import path from 'node:path';
 import { emptyState, isWorkspaceName, State, WrittenState } from '@clay/contracts';
 
 import { LockInfo, lockInfoFrom, noLockAt, otherLockAt, StateLocked } from '../lockInfo';
-import { BackendChoice, DEFAULT_WORKSPACE, NamedWorkspace } from '../StateBackend';
+import { BackendChoice, DEFAULT_WORKSPACE, NamedWorkspace, WORKSPACES_FOLDER } from '../StateBackend';
 import { Journal, parseState, serializeState } from '../stateFile';
 import { appendSynced, syncDir, writeSynced } from './durable';
 
@@ -39,7 +39,7 @@ async function createFilled(target: string, content: string): Promise<boolean> {
   }
 }
 
-const workspacesOf = (defaultPath: string) => path.join(path.dirname(defaultPath), 'clay.workspaces');
+const workspacesOf = (defaultPath: string) => path.join(path.dirname(defaultPath), WORKSPACES_FOLDER);
 
 /** Next to the default state, so they stay in the folder a `path` setting chooses. */
 function workspacePath(defaultPath: string, workspace: string): string {
