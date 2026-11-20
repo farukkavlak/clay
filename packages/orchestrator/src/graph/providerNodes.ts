@@ -3,7 +3,7 @@ import { Graph } from '@clay/graph';
 import { spellProvider } from '@clay/parser';
 
 import { ProviderRegistry } from '../providers/ProviderRegistry';
-import type { GraphNode } from './DependencyGraphBuilder';
+import type { GraphNode } from './nodes';
 import { append } from '../append';
 import { providerKey } from '../keys';
 

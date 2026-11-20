@@ -5,7 +5,7 @@ import { offPlan, PlanAction } from '@clay/planner';
 import { append } from '../append';
 import { ScopeManager } from '../config/ScopeManager';
 import { ReferenceResolver } from '../expressions/ReferenceResolver';
-import { GraphNode, LocalNode, OutputNode, ValueNode } from '../graph/DependencyGraphBuilder';
+import { GraphNode, LocalNode, OutputNode, ValueNode } from '../graph/nodes';
 import { countFrom } from '../instances/count';
 import { eachFrom } from '../instances/forEach';
 import { Instances } from '../instances/Instances';

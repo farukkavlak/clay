@@ -4,7 +4,7 @@ import { ActionType, PlanAction } from '@clay/planner';
 import { describe, expect, it } from 'vitest';
 
 import { ApplyNode, applyGraph } from '../../src/plan/applyGraph';
-import { GraphNode } from '../../src/graph/DependencyGraphBuilder';
+import { GraphNode } from '../../src/graph/nodes';
 
 /** Resource blocks `rec.<name>`, each edge from what is read to what reads it. */
 function config(names: string[], reads: [string, string][] = []): Graph<GraphNode> {

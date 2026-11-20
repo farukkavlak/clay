@@ -3,7 +3,7 @@ import { Graph } from '@clay/graph';
 import { spell } from '@clay/parser';
 import { PlanAction } from '@clay/planner';
 
-import { GraphNode, spellNode } from '../graph/DependencyGraphBuilder';
+import { GraphNode, spellNode } from '../graph/nodes';
 import { ConfiguredResource } from './DesiredStateBuilder';
 import { append } from '../append';
 import { blockKey } from '../keys';
