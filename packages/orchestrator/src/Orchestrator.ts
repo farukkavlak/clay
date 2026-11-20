@@ -205,7 +205,7 @@ export class Orchestrator {
 
   private async readBack(providers: ProviderInstances, key: string, resource: Resource): Promise<Record<string, unknown> | null> {
     try {
-      const provider = providers.get(resource.resourceType);
+      const provider = providers.get(resource);
       const read = await hidingReason(resource.resourceType, resource.sensitive ?? [], () => provider.read(resource.resourceType, resource.attributes), 'to read');
       if (read === null) return null;
 

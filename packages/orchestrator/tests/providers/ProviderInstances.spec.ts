@@ -15,7 +15,7 @@ describe('ProviderInstances', () => {
     const registry = new ProviderRegistry();
     registry.register(make);
 
-    expect(() => new ProviderInstances(registry, new Map(), new Limit(DEFAULT_PARALLELISM)).get('p_thing')).toThrow(
+    expect(() => new ProviderInstances(registry, new Map(), new Limit(DEFAULT_PARALLELISM)).get({ resourceType: 'p_thing' })).toThrow(
       'provider "p" is asked before it is configured, which is a bug in Clay'
     );
   });

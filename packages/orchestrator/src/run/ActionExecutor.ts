@@ -106,7 +106,7 @@ export class ActionExecutor {
       return;
     }
 
-    const provider = this.providers.get(action.resourceType);
+    const provider = this.providers.get(action);
 
     switch (action.type) {
       case 'CREATE': {
@@ -172,7 +172,7 @@ export class ActionExecutor {
   ): Promise<ResourcePlan> {
     const type = action.resourceType;
     const current = action.type === 'UPDATE' ? held(action, currentState) : undefined;
-    const final = await this.planner.plan(type, schema, current, inputs, ignoring);
+    const final = await this.planner.plan(this.providers.get(action), type, schema, current, inputs, ignoring);
     if (final.replace) throw new Error(`${type} planned at apply to replace what the plan changed in place, which is a bug in the provider`);
 
     const mismatches = offFinal(schema, after, final.after);
@@ -301,7 +301,7 @@ export class ActionExecutor {
 
   /** A replace's object, destroyed before its turn so that what it reads can be destroyed after it. */
   async destroy(action: PlanAction, currentState: State, print?: ProvisionerPrint): Promise<void> {
-    await this.executeDelete(action, this.providers.get(action.resourceType), currentState, print);
+    await this.executeDelete(action, this.providers.get(action), currentState, print);
   }
 
   async executeDelete(action: PlanAction, provider: Provider, currentState: State, print?: ProvisionerPrint): Promise<void> {

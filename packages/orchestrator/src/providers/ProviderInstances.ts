@@ -78,13 +78,13 @@ export class ProviderInstances {
     return { config: {}, sensitive: [] };
   }
 
-  get(type: string): Provider {
-    return this.instance(this.registry.get(type).name);
+  get(of: { resourceType: string }): Provider {
+    return this.instance(this.registry.get(of.resourceType).name);
   }
 
   /** Looked up apart from resources, since a type may be one and not the other. */
-  reader(type: string): Provider {
-    return this.instance(this.registry.reader(type).name);
+  reader(of: { dataSourceType: string }): Provider {
+    return this.instance(this.registry.reader(of.dataSourceType).name);
   }
 
   async validate(type: string, config: Record<string, unknown>): Promise<void> {

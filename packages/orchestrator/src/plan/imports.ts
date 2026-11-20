@@ -120,7 +120,7 @@ export class Imports {
   private async importOne({ block, address }: ImportTarget, id: string): Promise<Resource> {
     const nothing = () => refuseImport(block, `import to ${address} found no ${address.resourceType} with the id "${id}"`);
     try {
-      const provider = this.providers.get(address.resourceType);
+      const provider = this.providers.get(address);
       const given = await this.limit.run(() => provider.importResource!(address.resourceType, id));
       if (given === null) throw nothing();
 

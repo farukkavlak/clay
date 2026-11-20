@@ -103,8 +103,7 @@ export class ResourcePlanner {
    * Validates first, since planning invalid values means nothing. Unknown values are validated again at apply.
    * An ignored path is as `ignoring.prior` held it before anything reads the configuration, so a change there plans nothing.
    */
-  async plan(type: string, schema: Schema, current: Resource | undefined, written: Record<string, Value>, ignoring?: Ignoring): Promise<ResourcePlan> {
-    const provider = this.providers.get(type);
+  async plan(provider: Provider, type: string, schema: Schema, current: Resource | undefined, written: Record<string, Value>, ignoring?: Ignoring): Promise<ResourcePlan> {
     const { config, sensitive } = await this.validated(type, schema, written, ignoring);
     if (!current) return { ...(await this.create(provider, type, schema, config, sensitive)), sensitive };
 

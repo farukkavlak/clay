@@ -28,23 +28,25 @@ interface Staying {
   refuse: (message: string) => Error;
 }
 
-type Identify = (type: string, values: Record<string, unknown>, sensitive: readonly AttributePath[]) => Promise<Identity | undefined>;
+type Identify = (of: { resourceType: string }, values: Record<string, unknown>, sensitive: readonly AttributePath[]) => Promise<Identity | undefined>;
 
 const identifyWith =
   (providers: ProviderInstances, limit: Limit): Identify =>
-  async (type, values, sensitive) =>
-    await limit.run(async () => await hidingReason(type, sensitive, async () => await providers.get(type).identify?.(type, values), 'to identify'));
+  async (of, values, sensitive) => {
+    const type = of.resourceType;
+    return await limit.run(async () => await hidingReason(type, sensitive, async () => await providers.get(of).identify?.(type, values), 'to identify'));
+  };
 
 /** A failure names what was asked about. */
 async function asking(
   identify: Identify,
-  type: string,
+  of: { resourceType: string },
   values: Record<string, unknown>,
   sensitive: readonly AttributePath[],
   name: (error: unknown) => Error
 ): Promise<Identity | undefined> {
   try {
-    return await identify(type, values, sensitive);
+    return await identify(of, values, sensitive);
   } catch (error) {
     throw name(error);
   }
@@ -106,10 +108,10 @@ export async function checkSameObjects(actions: PlanAction[], desired: Configure
     Promise.allSettled(
       desired.map((resource) => {
         const placed = (error: unknown) => withPlace(error, resource.block.position, spell(resource.block), resource.address.module);
-        return asking(identify, resource.address.resourceType, resource.after, resource.sensitive, placed);
+        return asking(identify, resource.block, resource.after, resource.sensitive, placed);
       })
     ),
-    Promise.allSettled(going.map((each) => asking(identify, each.action.resourceType, each.values, each.sensitive, named(each.address)))),
+    Promise.allSettled(going.map((each) => asking(identify, each.action, each.values, each.sensitive, named(each.address)))),
   ]);
 
   for (const [index, resource] of desired.entries()) {
@@ -175,7 +177,7 @@ export class SameObjects {
   async claim(action: PlanAction, values: Record<string, unknown>, sensitive: readonly AttributePath[], state: State): Promise<void> {
     const address = Address.of(action).toString();
     // Not named: the run reports a failure by its action.
-    const identity = await this.identify(action.resourceType, values, sensitive);
+    const identity = await this.identify(action, values, sensitive);
     if (identity === undefined) return;
 
     const held = await this.heldAs(identity.key, state, address);
@@ -208,13 +210,13 @@ export class SameObjects {
 
   private async indexHeld(state: State): Promise<HeldIndex> {
     const objects = [
-      ...inAddressOrder(state.resources).map(([address, resource]) => ({ address, type: resource.resourceType, values: resource.attributes, sensitive: resource.sensitive ?? [] })),
+      ...inAddressOrder(state.resources).map(([address, resource]) => ({ address, of: resource, values: resource.attributes, sensitive: resource.sensitive ?? [] })),
       ...inAddressOrder(state.deposed ?? {}).flatMap(([address, deposed]) =>
-        deposed.map(({ attributes, sensitive = [] }) => ({ address, type: Address.parse(address).resourceType, values: attributes, sensitive }))
+        deposed.map(({ attributes, sensitive = [] }) => ({ address, of: { resourceType: Address.parse(address).resourceType }, values: attributes, sensitive }))
       ),
     ];
     const index: HeldIndex = { byKey: new Map(), failed: [] };
-    const identities = await Promise.allSettled(objects.map(async ({ type, values, sensitive }) => await this.identify(type, values, sensitive)));
+    const identities = await Promise.allSettled(objects.map(async ({ of, values, sensitive }) => await this.identify(of, values, sensitive)));
 
     for (const [at, identity] of identities.entries()) {
       const { address, values } = objects[at];

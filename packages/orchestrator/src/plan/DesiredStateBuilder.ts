@@ -301,7 +301,7 @@ export class DesiredStateBuilder {
     try {
       const schema = this.schemas.get(block.resourceType) ?? {};
       if (this.walk === 'check') return await this.resourcePlanner.check(block.resourceType, schema, attributes);
-      return await this.resourcePlanner.plan(block.resourceType, schema, current, attributes, ignoring);
+      return await this.resourcePlanner.plan(this.providers.get(block), block.resourceType, schema, current, attributes, ignoring);
     } catch (error) {
       throw withPlace(error, writtenAt(error, block), spell(block), address);
     }

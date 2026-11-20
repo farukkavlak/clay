@@ -33,7 +33,7 @@ export class DataSourceReader {
     const schema = this.dataSchemas.get(stmt.dataSourceType)!;
 
     try {
-      const provider = this.providers.reader(stmt.dataSourceType);
+      const provider = this.providers.reader(stmt);
       const given = conformed(stmt.dataSourceType, schema, inputs);
       const config = plainOf(given);
       const sensitive = marksOf(schema, given);

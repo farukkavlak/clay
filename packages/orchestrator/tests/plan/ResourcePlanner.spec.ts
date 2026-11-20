@@ -41,9 +41,11 @@ async function plannerFor(provider: Provider): Promise<ResourcePlanner> {
   return new ResourcePlanner(configured, new Limit(DEFAULT_PARALLELISM));
 }
 
-async function planWith(provider: Provider, ...request: Parameters<ResourcePlanner['plan']>): ReturnType<ResourcePlanner['plan']> {
+type PlanArgs = Parameters<ResourcePlanner['plan']> extends [Provider, ...infer Rest] ? Rest : never;
+
+async function planWith(provider: Provider, ...request: PlanArgs): ReturnType<ResourcePlanner['plan']> {
   const planner = await plannerFor(provider);
-  return planner.plan(...request);
+  return planner.plan(provider, ...request);
 }
 
 const current: Resource = { resourceType: 'thing', name: 'a', attributes: { path: 'a', tags: { x: '1' }, made: 'm' } };
