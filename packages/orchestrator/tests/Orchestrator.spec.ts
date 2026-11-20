@@ -109,6 +109,18 @@ describe('Orchestrator', () => {
       expect(() => orchestrator.registerProvider(reader())).toThrow('Provider for data source type "mock_data" already registered');
     });
 
+    // A provider refused is refused whole, so no type of it is left to plan with.
+    it.each([
+      ['a resource type', { resources: ['free', 'mock_resource'] }, 'resource "free" "a" {}', 'No provider handles "free"'],
+      ['a data source type', { resources: ['free'], dataSources: ['mock_data'] }, 'resource "free" "a" {}', 'No provider handles "free"'],
+      ['its second data source type', { resources: [], dataSources: ['new_data', 'mock_data'] }, 'data "new_data" "a" {}', 'No provider reads data source "new_data"'],
+    ])('keeps no type of a provider refused for %s that another already has', async (_, lists, config, left) => {
+      orchestrator.registerProvider(reader());
+
+      expect(() => orchestrator.registerProvider(Object.assign(new MockProvider(), lists))).toThrow('already registered');
+      await expect(orchestrator.plan(config)).rejects.toThrow(left);
+    });
+
     it('refuses a provider that lists a type as importable that it does not make', () => {
       const importer = Object.assign(new MockProvider(), { resources: ['made'], importable: ['other'], importResource: async () => null });
 

@@ -6,24 +6,23 @@ export class ProviderRegistry {
   private providers: Map<string, Provider> = new Map();
   private readers: Map<string, Provider> = new Map();
 
-  /** An importable type the provider does not make, or one with no way to import it, is a fault in the provider. */
+  /**
+   * An importable type the provider does not make, or one with no way to import it, is a fault in the provider. Everything is checked
+   * before anything is kept, so a provider refused leaves no type of it behind.
+   */
   register(provider: Provider): void {
     for (const type of provider.importable ?? []) {
       if (!provider.resources.includes(type)) throw new Error(`A provider lists "${type}" as importable, but does not make it`);
       if (!provider.importResource) throw new Error(`A provider lists "${type}" as importable, but has no importResource`);
     }
 
-    for (const resourceType of provider.resources) {
-      if (this.providers.has(resourceType)) throw new Error(`Provider for resource type "${resourceType}" already registered`);
+    const taken = provider.resources.find((type) => this.providers.has(type));
+    if (taken !== undefined) throw new Error(`Provider for resource type "${taken}" already registered`);
+    const read = provider.dataSources.find((type) => this.readers.has(type));
+    if (read !== undefined) throw new Error(`Provider for data source type "${read}" already registered`);
 
-      this.providers.set(resourceType, provider);
-    }
-
-    for (const dataSourceType of provider.dataSources) {
-      if (this.readers.has(dataSourceType)) throw new Error(`Provider for data source type "${dataSourceType}" already registered`);
-
-      this.readers.set(dataSourceType, provider);
-    }
+    for (const type of provider.resources) this.providers.set(type, provider);
+    for (const type of provider.dataSources) this.readers.set(type, provider);
   }
 
   /** Looked up apart from resources, since a type may be one and not the other. */
