@@ -1,6 +1,6 @@
 import { Schema } from '@clay/provider';
 import { ModuleAddress } from '@clay/core';
-import { AttributeValue, ConfigError, spell, Statement } from '@clay/parser';
+import { AttributeValue, ConfigError, DataBlock, ResourceBlock, spell, Statement } from '@clay/parser';
 
 import { checkNames, checkProvisionerNames } from '../checks/checkAttributes';
 import { checkDefaults } from '../values/declared';
@@ -16,6 +16,7 @@ import { tryAt, withPlace } from '../place';
 import { ReferenceResolver } from '../expressions/ReferenceResolver';
 import { ScopeManager } from '../config/ScopeManager';
 import { LoadedModule, LoadedResource, ModuleLoader, Part, RootValues } from '../config/ModuleLoader';
+import { checkProviderChoices } from '../config/providerChoices';
 
 /** The first item of each key, in the order they come. */
 function firstOfEach<T>(items: T[], keyOf: (item: T) => string): T[] {
@@ -65,7 +66,7 @@ export class ConfigLoader {
     await this.loadSchemas(loadedResources);
     await this.loadProvisionerSchemas(loadedResources);
     await this.loadDataSchemas(loadedModules);
-    this.checkProviderChoices(loadedModules);
+    checkProviderChoices(loadedModules, (block) => this.handlerOf(block));
     await this.loadConfigSchemas(mainProgram);
 
     return { mainProgram, loadedResources, loadedModules, schemas: this.schemas };
@@ -127,18 +128,8 @@ export class ConfigLoader {
     }
   }
 
-  /** After the schemas, which refuse a type no provider has. */
-  private checkProviderChoices(loadedModules: LoadedModule[]): void {
-    for (const { address, program } of loadedModules)
-      for (const stmt of program) {
-        if ((stmt.type !== 'Resource' && stmt.type !== 'Data') || !stmt.provider) continue;
-
-        const [type, handler] =
-          stmt.type === 'Resource' ? [stmt.resourceType, this.providers.get(stmt.resourceType)] : [stmt.dataSourceType, this.providers.reader(stmt.dataSourceType)];
-        const { name, position } = stmt.provider;
-        if (name !== handler.name)
-          throw withPlace(new ConfigError(`provider "${name}" does not handle "${type}"; provider "${handler.name}" does`, position), position, spell(stmt), address);
-      }
+  private handlerOf(block: ResourceBlock | DataBlock): string {
+    return (block.type === 'Resource' ? this.providers.get(block.resourceType) : this.providers.reader(block.dataSourceType)).name;
   }
 
   /** Only the root module has provider blocks. A name no provider has is refused at the block. */

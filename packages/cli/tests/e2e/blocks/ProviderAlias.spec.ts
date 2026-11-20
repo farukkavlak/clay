@@ -206,6 +206,15 @@ describe('a provider block with an alias', () => {
     expect(error).toMatchObject({ message: `${declaration} names provider "cfg" alias "east", which this module does not declare`, position: placeOf(config, 'cfg.east') });
   });
 
+  // A destroy reads only the state and the provider blocks, so a resource block it never reads cannot stop it.
+  it('destroys though a resource block names an alias no block declares', async () => {
+    await apply(BLOCKS + thing('a', WEST));
+
+    calls.splice(0);
+    await apply(BLOCKS + thing('a', '  provider = cfg.east\n'), true);
+    expect(calls).toEqual(['read a in us', 'delete a in us']);
+  });
+
   it('refuses an alias in a module, though the root declares it, where it is written', async () => {
     const child = thing('a', WEST);
     await fs.mkdir(path.join(dir, 'child'));

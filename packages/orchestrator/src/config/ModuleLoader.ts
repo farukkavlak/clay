@@ -9,7 +9,6 @@ import { withGiven } from './givenValues';
 import { required } from '../values/declared';
 import { blockKey, callKey, DataInstance, dataSourceKey, ModuleCall, scopeOf } from '../keys';
 import { ScopeManager } from './ScopeManager';
-import { checkProviderChoices, declaredInstances } from './providerChoices';
 import { providerSlice } from './providerSlice';
 
 function validationsOf(variable: VariableBlock) {
@@ -95,7 +94,6 @@ export class ModuleLoader {
     // Nothing is left to read a value, so none given is checked, not even a clay.clayvars kept beside the state.
     if (written === undefined && part === 'providers') return [];
     if (written === undefined) throw new Error('no .clay file in the directory');
-    checkProviderChoices(written, declaredInstances(written));
 
     const whole = withGiven(written, inputs);
     const slice = providerSlice(whole);
@@ -146,7 +144,6 @@ export class ModuleLoader {
     const provider = moduleProgram.find((moduleStmt) => moduleStmt.type === 'Provider');
     if (provider)
       throw new ConfigError(`module "${stmt.name}" has a ${spell(provider)} block, which only the root configuration can: a module uses its caller's providers`, provider.position);
-    checkProviderChoices(moduleProgram, new Set());
 
     return { moduleDir, moduleProgram };
   }
