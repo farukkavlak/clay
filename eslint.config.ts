@@ -6,6 +6,8 @@ import eslintConfigPrettier from 'eslint-config-prettier';
 import promise from 'eslint-plugin-promise';
 import unicorn from 'eslint-plugin-unicorn';
 import globals from 'globals';
+import { readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import tseslint from 'typescript-eslint';
 
 /** The orchestrator's folders, lowest first: each imports only from those before it, so a layer never reaches up. */
@@ -22,6 +24,32 @@ const folderOrder: Linter.Config[] = [
   ...FOLDERS.slice(0, -1).map((folder, index) => importsOnly([`${ORCHESTRATOR}/${folder}/**/*.ts`], FOLDERS.slice(index + 1))),
   { ...importsOnly([`${ORCHESTRATOR}/*.ts`], FOLDERS), ignores: [`${ORCHESTRATOR}/index.ts`, `${ORCHESTRATOR}/Orchestrator.ts`] },
 ];
+
+/** npm links every workspace into node_modules, so TypeScript finds a package its package.json leaves out. */
+function listedOnly(dir: string): Linter.Config {
+  type Manifest = { dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
+  const { dependencies = {}, devDependencies = {} } = JSON.parse(readFileSync(path.join(__dirname, dir, 'package.json'), 'utf8')) as Manifest;
+  const listed = Object.keys({ ...dependencies, ...devDependencies }).filter((name) => name.startsWith('@clay/'));
+  const message = 'A package imports only the @clay packages its package.json lists.';
+  // A rule of its own, as the folder order already sets no-restricted-imports in the orchestrator.
+  const rule: Linter.RuleEntry = ['error', { patterns: [{ group: ['@clay/*', ...listed.map((name) => `!${name}`)], message }] }];
+  const unlisted = (source: string) =>
+    `[${source}=/^@clay./]` + (listed.length > 0 ? `:not([${source}=/^@clay.(${listed.map((name) => name.replace('@clay/', '')).join('|')})$/])` : '');
+  // `await import(...)` and `typeof import(...)` are not import declarations, so the rule above passes them.
+  const dynamic: Linter.RuleEntry = [
+    'error',
+    { selector: `ImportExpression${unlisted('source.value')}`, message },
+    { selector: `TSImportType${unlisted('argument.literal.value')}`, message },
+  ];
+
+  return { files: [`${dir}/**/*.ts`], rules: { '@typescript-eslint/no-restricted-imports': rule, 'no-restricted-syntax': dynamic } };
+}
+
+const PACKAGES = ['packages', 'providers'].flatMap((root) =>
+  readdirSync(path.join(__dirname, root), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && entry.name !== 'node_modules')
+    .map((entry) => `${root}/${entry.name}`)
+);
 
 export default [
   { ignores: ['**/node_modules/**', '**/dist/**', '**/coverage/**'] },
@@ -62,6 +90,7 @@ export default [
     },
   },
   ...folderOrder,
+  ...PACKAGES.map((dir) => listedOnly(dir)),
   {
     // Tests are tables of cases and grow with what they cover.
     files: ['packages/*/src/**/*.ts', 'providers/*/src/**/*.ts'],
