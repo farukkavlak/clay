@@ -12,6 +12,7 @@
     "@azure/identity": "^4.14.1",
     "@azure/storage-blob": "^12.34.0",
     "@clay/core": "*",
-    "@clay/parser": "*"
+    "@clay/parser": "*",
+    "@clay/provider": "*"
   }
 }

@@ -1,4 +1,4 @@
-import { NumberError } from '@clay/core';
+import { NumberError } from '@clay/provider';
 
 import { Settings } from './settings';
 

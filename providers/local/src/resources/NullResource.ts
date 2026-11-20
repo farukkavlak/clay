@@ -1,4 +1,4 @@
-import { CreateRequest, PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema, types, UpdateRequest } from '@clay/core';
+import { CreateRequest, PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema, types, UpdateRequest } from '@clay/provider';
 import crypto from 'node:crypto';
 
 export class NullResource implements ResourceHandler {

@@ -1,4 +1,5 @@
-import { ModuleAddress, Schema, types } from '@clay/core';
+import { Schema, types } from '@clay/provider';
+import { ModuleAddress } from '@clay/core';
 import { Lexer, Parser, ResourceBlock } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 

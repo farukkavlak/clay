@@ -1,4 +1,5 @@
-import { Marks, MAYBE, types, UNKNOWN } from '@clay/core';
+import { types, UNKNOWN } from '@clay/provider';
+import { Marks, MAYBE } from '@clay/core';
 import { Plan } from '@clay/planner';
 import { stripVTControlCharacters } from 'node:util';
 import { afterEach, describe, expect, it, vi } from 'vitest';

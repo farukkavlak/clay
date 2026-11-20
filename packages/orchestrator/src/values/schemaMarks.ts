@@ -1,4 +1,5 @@
-import { AttributePath, MAYBE, Schema } from '@clay/core';
+import { AttributePath, Schema } from '@clay/provider';
+import { MAYBE } from '@clay/core';
 
 import { mayBeSensitive, sensitiveAmong, sensitiveOf, Value, withSensitive } from './Value';
 import { isSensitive } from './sensitive';

@@ -1,4 +1,4 @@
-import { UNKNOWN } from '@clay/core';
+import { UNKNOWN } from '@clay/provider';
 
 import { ConfigError } from '@clay/parser';
 

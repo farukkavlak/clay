@@ -1,6 +1,4 @@
-import { ExactNumber } from './ExactNumber';
-import { isRecord } from './isRecord';
-import { isUnknown } from './unknown';
+import { ExactNumber, isRecord, isUnknown } from '@clay/provider';
 
 /** Equal members have equal keys. Strings are quoted, so none collides with a number or an unknown. */
 export function memberKey(value: unknown): string {

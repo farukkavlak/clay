@@ -1,4 +1,5 @@
-import { AttributePath, EVERY_ITEM, isMarker } from '@clay/core';
+import { AttributePath } from '@clay/provider';
+import { EVERY_ITEM, isMarker } from '@clay/core';
 
 /** Steps to match, and the text the step after them must equal. */
 export type Pattern = [AttributePath, string];

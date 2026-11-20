@@ -1160,7 +1160,7 @@ Terraform has it since backends replaced `-state`.
 The CLI imports the one provider, `local`, and registers it; the registry keys providers
 by resource type, and no `provider` block exists yet.
 
-- [ ] `contracts` splits in two. It holds both the engine's contract with a provider
+- [x] `contracts` splits in two. It holds both the engine's contract with a provider
       (`Provider`, `Schema`) and value types the engine shares with itself (`Address`,
       `State`), so a provider written elsewhere would depend on the engine's own types.
       This comes before a provider can be loaded from a package
@@ -1375,7 +1375,7 @@ Nothing here changes what Clay does. Each is a place the next change has to work
       themselves, in 14 forms; only `start.ts` is shared. `placeOf`, `clayIn` and
       `errorOf` are copied word for word into 19, 12 and 7 specs
 - [ ] Each package's coverage counts what its tests import from other packages, so
-      `core` shows 64% with code the e2e tests cover. CI holds no threshold
+      a package's own figure is low for code the e2e tests cover. CI holds no threshold
 - [ ] Old test titles read `should ...` beside the plain sentences of the rest
 
 ## 6. Later

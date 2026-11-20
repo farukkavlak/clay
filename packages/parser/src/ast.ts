@@ -1,4 +1,5 @@
-import { Address, ExactNumber, InstanceKey, ModuleAddress, spellKey, Type } from '@clay/core';
+import { ExactNumber, Type } from '@clay/provider';
+import { Address, InstanceKey, ModuleAddress, spellKey } from '@clay/core';
 import { Position } from './Position';
 
 interface Node {

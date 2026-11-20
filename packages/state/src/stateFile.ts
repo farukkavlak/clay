@@ -1,4 +1,5 @@
-import { ExactNumber, inAddressOrder, isName, isOutput, isRecord, jsonText, NestingError, NumberError, readDeposed, readResources, State, STATE_VERSION } from '@clay/core';
+import { ExactNumber, isRecord, NestingError, NumberError } from '@clay/provider';
+import { inAddressOrder, isName, isOutput, jsonText, readDeposed, readResources, State, STATE_VERSION } from '@clay/core';
 
 import { replay } from './journal';
 

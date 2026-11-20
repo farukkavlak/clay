@@ -1,4 +1,4 @@
-import { UNKNOWN } from '@clay/core';
+import { UNKNOWN } from '@clay/provider';
 
 import { parsePlanFile, Plan, serializePlan } from '@clay/planner';
 

@@ -1,4 +1,4 @@
-import { Type } from '@clay/core';
+import { Type } from '@clay/provider';
 
 type Fits = (planned: Type, actual: Type) => boolean;
 

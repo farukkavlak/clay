@@ -1,4 +1,5 @@
-import { Resource, Schema, types, UNKNOWN } from '@clay/core';
+import { Schema, types, UNKNOWN } from '@clay/provider';
+import { Resource } from '@clay/core';
 import { describe, expect, it } from 'vitest';
 
 import { ignoredPaths, keepPrior } from '../../src/plan/ignoredChanges';

@@ -1,4 +1,4 @@
-import { ExactNumber, Schema, Type, types, UNKNOWN } from '@clay/core';
+import { ExactNumber, Schema, Type, types, UNKNOWN } from '@clay/provider';
 import { describe, expect, it } from 'vitest';
 
 import { conformValues as conform, SchemaMismatch } from '../../src/values/conformValues';

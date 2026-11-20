@@ -1,4 +1,4 @@
-import { types } from '@clay/core';
+import { types } from '@clay/provider';
 
 import { parsePlanFile, Plan, serializePlan } from '@clay/planner';
 

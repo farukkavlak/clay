@@ -1,4 +1,4 @@
-import type { AttributePath } from './AttributePath';
+import type { AttributePath } from '@clay/provider';
 
 /** The step to every item of a collection not known yet, which has no items to name. No list has an item -1. */
 export const EVERY_ITEM = -1;

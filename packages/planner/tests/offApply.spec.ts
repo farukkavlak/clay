@@ -1,4 +1,4 @@
-import { ExactNumber, types, UNKNOWN } from '@clay/core';
+import { ExactNumber, types, UNKNOWN } from '@clay/provider';
 import { describe, expect, it } from 'vitest';
 
 import { offApply } from '../src/index';

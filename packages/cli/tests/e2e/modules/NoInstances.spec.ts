@@ -1,4 +1,4 @@
-import { planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types } from '@clay/core';
+import { planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types } from '@clay/provider';
 import { ConfigError } from '@clay/parser';
 import { LocalProvider } from '@clay/provider-local';
 import fs from 'node:fs/promises';

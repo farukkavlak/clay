@@ -1,4 +1,4 @@
-import type { AttributePath } from './AttributePath';
+import type { AttributePath } from '@clay/provider';
 import { isExact, isMarker, isMaybe, MAYBE } from './markers';
 import { Marks } from './marks';
 

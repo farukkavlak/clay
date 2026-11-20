@@ -1,4 +1,4 @@
-import { types } from '@clay/core';
+import { types } from '@clay/provider';
 
 import { ConfigError } from '@clay/parser';
 

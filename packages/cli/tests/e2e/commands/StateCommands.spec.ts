@@ -1,5 +1,6 @@
 import assert from 'node:assert';
-import { isWritten, types } from '@clay/core';
+import { types } from '@clay/provider';
+import { isWritten } from '@clay/core';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';

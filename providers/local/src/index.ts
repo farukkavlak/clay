@@ -1,4 +1,4 @@
-import { CreateRequest, DataSourceHandler, Identity, PlannedChange, PlanRequest, Provider, ResourceHandler, Schema, UpdateRequest } from '@clay/core';
+import { CreateRequest, DataSourceHandler, Identity, PlannedChange, PlanRequest, Provider, ResourceHandler, Schema, UpdateRequest } from '@clay/provider';
 
 import { LocalFileDataSource } from './dataSources/LocalFileDataSource';
 import { CommandExecResource } from './resources/CommandExecResource';

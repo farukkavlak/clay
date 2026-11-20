@@ -1,4 +1,4 @@
-import type { AttributePath } from './AttributePath';
+import type { AttributePath } from '@clay/provider';
 import { EVERY_ITEM, EXACT, isMarker, isMaybe, MAYBE, SOMEWHERE } from './markers';
 
 /** A path as it was given, and where it stood among them, so what is left of the paths keeps their order. */

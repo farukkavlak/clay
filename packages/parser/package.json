@@ -8,6 +8,7 @@
     "test": "vitest run --coverage --config ../../vitest.config.mts"
   },
   "dependencies": {
-    "@clay/core": "*"
+    "@clay/core": "*",
+    "@clay/provider": "*"
   }
 }

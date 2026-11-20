@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { AttributePath, EVERY_ITEM, EXACT, MAYBE, SOMEWHERE } from '../src';
+import { AttributePath } from '@clay/provider';
+import { EVERY_ITEM, EXACT, MAYBE, SOMEWHERE } from '../src';
 import { Marks } from '../src/marks';
 import { sensitiveUnderAsWas } from './sensitiveUnderAsWas';
 

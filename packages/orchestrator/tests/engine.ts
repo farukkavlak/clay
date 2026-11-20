@@ -1,4 +1,4 @@
-import { Provider } from '@clay/core';
+import { Provider } from '@clay/provider';
 import { Plan } from '@clay/planner';
 import { StateManager } from '@clay/state';
 import fs from 'node:fs/promises';

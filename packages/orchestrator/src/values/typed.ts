@@ -1,4 +1,4 @@
-import { AttributePath, ExactNumber, isRecord, isUnknown, Schema, Type, typeIn } from '@clay/core';
+import { AttributePath, ExactNumber, isRecord, isUnknown, Schema, Type, typeIn } from '@clay/provider';
 
 import { setOf } from './setMembers';
 import { items, spelled } from '../spelled';

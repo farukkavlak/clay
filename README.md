@@ -198,7 +198,8 @@ the same value.
 | ---------------- | -------------------------------------------------------------- |
 | `parser`         | Turns `.clay` files into an AST                                |
 | `graph`          | Dependency graph, sorted into layers                           |
-| `core`           | Interfaces shared by the engine and providers                  |
+| `provider`       | What a provider implements: `Provider`, `Schema`, `Type`       |
+| `core`           | Types the engine packages share: addresses, state, marks       |
 | `state`          | Reads and writes state, with a lock and a backup               |
 | `planner`        | Compares config with state and lists the actions               |
 | `orchestrator`   | Loads modules, resolves references and runs the plan           |
@@ -279,8 +280,8 @@ each block means.
 
 ### A provider
 
-1. Write a package that implements `Provider` from `@clay/core`. Its `resources` and
-   `dataSources` list the types it handles.
+1. Write a package that implements `Provider` from `@clay/provider`, and depends on that
+   package only. Its `resources` and `dataSources` list the types it handles.
 2. Register it in `newOrchestrator` in `packages/cli/src/engine.ts`, and add the package to
    the dependencies in `packages/cli/package.json`. If two providers list the same type,
    Clay stops with an error.

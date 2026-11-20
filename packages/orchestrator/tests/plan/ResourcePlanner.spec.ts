@@ -1,4 +1,5 @@
-import { ExactNumber, planFromSchema, PlannedChange, PlanRequest, Provider, Resource, Schema, types, UNKNOWN } from '@clay/core';
+import { ExactNumber, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types, UNKNOWN } from '@clay/provider';
+import { Resource } from '@clay/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ResourcePlanner } from '../../src/plan/ResourcePlanner';

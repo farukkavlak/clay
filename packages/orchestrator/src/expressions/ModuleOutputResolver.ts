@@ -1,4 +1,5 @@
-import { InstanceKey, ModuleAddress, Type } from '@clay/core';
+import { Type } from '@clay/provider';
+import { InstanceKey, ModuleAddress } from '@clay/core';
 import { ModuleOutputReference, Position, spellReference, Step } from '@clay/parser';
 
 import { Repetition } from '../instances/Instances';

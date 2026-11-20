@@ -1,4 +1,4 @@
-import { AttributePath, isRecord, isUnknown, own, Type, typeAt, types, UNKNOWN } from '@clay/core';
+import { AttributePath, isRecord, isUnknown, own, Type, typeAt, types, UNKNOWN } from '@clay/provider';
 import { spellSteps, Step } from '@clay/parser';
 
 import { converted } from './conformValues';

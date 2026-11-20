@@ -1,4 +1,5 @@
-import { AttributePath, isRecord, isUnknown, own, Resource, Schema } from '@clay/core';
+import { AttributePath, isRecord, isUnknown, own, Schema } from '@clay/provider';
+import { Resource } from '@clay/core';
 import { Lifecycle } from '@clay/parser';
 
 /** The prior holds nothing there. */

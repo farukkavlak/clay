@@ -1,4 +1,5 @@
-import { AttributePath, isUnknown, State, Type, types, UNKNOWN } from '@clay/core';
+import { AttributePath, isUnknown, Type, types, UNKNOWN } from '@clay/provider';
+import { State } from '@clay/core';
 import { AttributeValue, BinaryNode, ConditionalNode, ConfigError, NegateNode, NotNode } from '@clay/parser';
 
 import { converted } from '../values/conformValues';

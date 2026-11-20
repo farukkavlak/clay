@@ -18,6 +18,7 @@
     "@clay/orchestrator": "*",
     "@clay/parser": "*",
     "@clay/planner": "*",
+    "@clay/provider": "*",
     "@clay/provider-local": "*",
     "@clay/state": "*",
     "commander": "^11.1.0"

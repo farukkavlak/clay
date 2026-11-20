@@ -1,4 +1,4 @@
-import { ExactNumber } from '@clay/core';
+import { ExactNumber } from '@clay/provider';
 import { BackendBlock, ConfigError } from '@clay/parser';
 
 /** The process environment, passed in so a backend reads no global. */

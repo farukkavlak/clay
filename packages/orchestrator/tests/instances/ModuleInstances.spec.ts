@@ -1,4 +1,5 @@
-import { ModuleAddress, types } from '@clay/core';
+import { types } from '@clay/provider';
+import { ModuleAddress } from '@clay/core';
 import { describe, expect, it } from 'vitest';
 
 import { ModuleInstances, ReadIn } from '../../src/instances/ModuleInstances';

@@ -1,8 +1,5 @@
 import type { InstanceKey, ModuleStep } from './Address';
-import type { AttributePath } from './AttributePath';
-import { isRecord } from './isRecord';
-import { isType } from './Type';
-import type { Type } from './Type';
+import { type AttributePath, isRecord, isType, type Type } from '@clay/provider';
 
 /** A provisioner run before its object is destroyed, with what it is given as the last apply resolved it. */
 export interface DestroyProvisioner {

@@ -1,4 +1,4 @@
-import { Schema, types, UNKNOWN } from '@clay/core';
+import { Schema, types, UNKNOWN } from '@clay/provider';
 import { describe, expect, it } from 'vitest';
 
 import { offFinal } from '../src/index';

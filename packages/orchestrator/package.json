@@ -12,6 +12,7 @@
     "@clay/graph": "*",
     "@clay/parser": "*",
     "@clay/planner": "*",
+    "@clay/provider": "*",
     "@clay/state": "*"
   }
 }

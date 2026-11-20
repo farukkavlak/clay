@@ -1,4 +1,4 @@
-import { AttributePath, Type, types, UNKNOWN } from '@clay/core';
+import { AttributePath, Type, types, UNKNOWN } from '@clay/provider';
 
 import { Value, valueOf, withSensitive } from '../values/Value';
 

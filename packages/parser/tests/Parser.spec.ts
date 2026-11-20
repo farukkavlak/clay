@@ -1,4 +1,4 @@
-import { ExactNumber, types } from '@clay/core';
+import { ExactNumber, types } from '@clay/provider';
 import { describe, expect, it } from 'vitest';
 
 import { BoundNode, CallNode, callsIn, DataBlock, ModuleBlock, namedIn, OutputBlock, ReferenceNode, ResourceBlock, Step, VariableBlock } from '../src/ast';

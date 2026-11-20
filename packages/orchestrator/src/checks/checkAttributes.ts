@@ -1,4 +1,4 @@
-import { Schema } from '@clay/core';
+import { Schema } from '@clay/provider';
 import { ConfigError, DataBlock, Position, ProvisionerBlock, ResourceBlock, spell } from '@clay/parser';
 
 import { nameProblem, namesOf } from '../values/conformValues';

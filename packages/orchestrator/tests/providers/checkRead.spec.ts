@@ -1,4 +1,4 @@
-import { Schema, types, UNKNOWN } from '@clay/core';
+import { Schema, types, UNKNOWN } from '@clay/provider';
 import { describe, expect, it } from 'vitest';
 
 import { checkDataSourceRead, checkDataSourceSchema, checkProvisionerSchema, checkRead, checkSchema } from '../../src/providers/providerResult';

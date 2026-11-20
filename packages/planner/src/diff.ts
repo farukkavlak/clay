@@ -1,4 +1,5 @@
-import { isUnknown, Output } from '@clay/core';
+import { isUnknown } from '@clay/provider';
+import { Output } from '@clay/core';
 import { isDeepStrictEqual } from 'node:util';
 
 import { Changes, OutputChanges, Plan } from './Plan';

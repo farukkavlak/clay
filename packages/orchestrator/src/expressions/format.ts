@@ -1,4 +1,5 @@
-import { containsUnknown, ExactNumber, isRecord, isUnknown, jsonText, NumberError, SENSITIVE, Type, UNKNOWN } from '@clay/core';
+import { containsUnknown, ExactNumber, isRecord, isUnknown, NumberError, Type, UNKNOWN } from '@clay/provider';
+import { jsonText, SENSITIVE } from '@clay/core';
 
 import { charactersOf } from './characters';
 import { shown } from '../shown';

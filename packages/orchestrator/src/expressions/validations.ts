@@ -1,4 +1,5 @@
-import { containsUnknown, ModuleAddress, State } from '@clay/core';
+import { containsUnknown } from '@clay/provider';
+import { ModuleAddress, State } from '@clay/core';
 import { AttributeValue, ConfigError, Validation } from '@clay/parser';
 
 import { checkBoolean } from './operators';

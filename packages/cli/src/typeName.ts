@@ -1,4 +1,4 @@
-import { Type } from '@clay/core';
+import { Type } from '@clay/provider';
 
 import { attributeName } from './printable';
 

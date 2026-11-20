@@ -1,4 +1,5 @@
-import { Address, AttributePath, isUnknown } from '@clay/core';
+import { AttributePath, isUnknown } from '@clay/provider';
+import { Address } from '@clay/core';
 
 import { Versions } from './Versions';
 

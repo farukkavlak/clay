@@ -1,4 +1,4 @@
-import { ExactNumber, types } from '@clay/core';
+import { ExactNumber, types } from '@clay/provider';
 
 import { ConfigError } from '@clay/parser';
 

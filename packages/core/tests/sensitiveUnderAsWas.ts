@@ -1,4 +1,5 @@
-import { AttributePath, EVERY_ITEM, exactAt, isExact, isMarker, isMaybe, MAYBE } from '../src';
+import { AttributePath } from '@clay/provider';
+import { EVERY_ITEM, exactAt, isExact, isMarker, isMaybe, MAYBE } from '../src';
 
 // sensitiveUnder as it was before marks were held by their steps, so the tree can be held against it.
 function sameStep(marked: string | number, step: string | number): boolean {

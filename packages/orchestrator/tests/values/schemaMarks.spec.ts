@@ -1,4 +1,5 @@
-import { EVERY_ITEM, MAYBE, Schema, types, UNKNOWN } from '@clay/core';
+import { Schema, types, UNKNOWN } from '@clay/provider';
+import { EVERY_ITEM, MAYBE } from '@clay/core';
 import { describe, expect, it } from 'vitest';
 
 import { marksOf, schemaRemarked } from '../../src/values/schemaMarks';

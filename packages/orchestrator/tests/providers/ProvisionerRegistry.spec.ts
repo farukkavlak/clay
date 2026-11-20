@@ -1,4 +1,4 @@
-import { Provisioner, Schema, types } from '@clay/core';
+import { Provisioner, Schema, types } from '@clay/provider';
 import { describe, expect, it } from 'vitest';
 
 import { ProvisionerRegistry } from '../../src/providers/ProvisionerRegistry';

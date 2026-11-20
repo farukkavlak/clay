@@ -1,20 +1,5 @@
-import {
-  Address,
-  AttributePath,
-  isAddress,
-  isAttributePaths,
-  isDependencies,
-  isInstanceKey,
-  isModulePath,
-  isName,
-  isOutput,
-  isRecord,
-  isType,
-  isWorkspaceName,
-  parseDataAddress,
-  Resource,
-  Schema,
-} from '@clay/core';
+import { AttributePath, isRecord, isType, Schema } from '@clay/provider';
+import { Address, isAddress, isAttributePaths, isDependencies, isInstanceKey, isModulePath, isName, isOutput, isWorkspaceName, parseDataAddress, Resource } from '@clay/core';
 
 import { ActionType, Plan, PLAN_FILE_VERSION, PlanFile } from './Plan';
 

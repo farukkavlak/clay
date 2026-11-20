@@ -1,4 +1,5 @@
-import { Address, isUnknown, ModuleAddress, Output, State, STATE_VERSION, types, UNKNOWN } from '@clay/core';
+import { isUnknown, types, UNKNOWN } from '@clay/provider';
+import { Address, ModuleAddress, Output, State, STATE_VERSION } from '@clay/core';
 import { describe, expect, it } from 'vitest';
 
 import { DesiredResource, hasChanges, outputChanges, plan, PLAN_FILE_VERSION, PlanAction, serializePlan, validatePlanFile, VariableInput } from '../src/index';

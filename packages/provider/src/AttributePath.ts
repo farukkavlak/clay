@@ -1,4 +1,3 @@
-import { ExactNumber } from './ExactNumber';
 import { isRecord } from './isRecord';
 
 /** The attribute name, then map keys and list indexes. */
@@ -20,25 +19,10 @@ export function valueAt(value: unknown, path: AttributePath): unknown {
   return at;
 }
 
-function isAttributePath(path: unknown): path is AttributePath {
-  return Array.isArray(path) && path.every((step) => typeof step === 'string' || Number.isInteger(step));
-}
-
-export function isAttributePaths(paths: unknown): paths is AttributePath[] {
-  return Array.isArray(paths) && paths.every((path) => isAttributePath(path));
-}
-
 /** The order follows how the configuration is written, so it says nothing. */
 export function samePaths(one: readonly AttributePath[], other: readonly AttributePath[]): boolean {
   const spelled = (paths: readonly AttributePath[]) => new Set(paths.map((path) => JSON.stringify(path)));
   const [left, right] = [spelled(one), spelled(other)];
 
   return left.size === right.size && [...left].every((path) => right.has(path));
-}
-
-/** An index in a path read from a file is a plain number, where every other number read from one is exact. */
-export function readPaths(paths: unknown, what: string): unknown {
-  if (!Array.isArray(paths)) return paths;
-
-  return paths.map((path: unknown) => (Array.isArray(path) ? path.map((step: unknown) => (step instanceof ExactNumber ? step.toSafeInteger(what) : step)) : path));
 }

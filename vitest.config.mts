@@ -8,6 +8,7 @@ const packages = {
   orchestrator: 'packages/orchestrator',
   parser: 'packages/parser',
   planner: 'packages/planner',
+  provider: 'packages/provider',
   state: 'packages/state',
   'provider-local': 'providers/local',
 };

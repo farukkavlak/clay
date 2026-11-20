@@ -1,4 +1,4 @@
-import { types } from '@clay/core';
+import { types } from '@clay/provider';
 import { describe, expect, it } from 'vitest';
 
 import { typeFits } from '../../src/values/typeFits';

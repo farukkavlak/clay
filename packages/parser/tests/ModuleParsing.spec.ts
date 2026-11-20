@@ -1,4 +1,4 @@
-import { ExactNumber } from '@clay/core';
+import { ExactNumber } from '@clay/provider';
 import { describe, expect, it } from 'vitest';
 
 import { ModuleBlock } from '../src/ast';

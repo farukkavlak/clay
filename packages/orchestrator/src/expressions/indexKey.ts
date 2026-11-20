@@ -1,4 +1,4 @@
-import { ExactNumber, NumberError } from '@clay/core';
+import { ExactNumber, NumberError } from '@clay/provider';
 import { AttributeValue, ConfigError, nameOf, Position, Step } from '@clay/parser';
 
 import { article, described, hasText, nullSource, Value } from '../values/Value';

@@ -1,4 +1,5 @@
-import { isUnknown, State, types } from '@clay/core';
+import { isUnknown, types } from '@clay/provider';
+import { State } from '@clay/core';
 import { AttributeValue, ConfigError, nameOf, TemplatePart } from '@clay/parser';
 
 import { Context } from '../keys';

@@ -1,23 +1,5 @@
-import {
-  AttributePath,
-  EVERY_ITEM,
-  EXACT,
-  exactAt,
-  isExact,
-  isMarker,
-  isMaybe,
-  isRecord,
-  isUnknown,
-  MAYBE,
-  marksOnly,
-  own,
-  sensitiveUnder,
-  SOMEWHERE,
-  Type,
-  typeAt,
-  types,
-  UNKNOWN,
-} from '@clay/core';
+import { AttributePath, isRecord, isUnknown, own, Type, typeAt, types, UNKNOWN } from '@clay/provider';
+import { EVERY_ITEM, EXACT, exactAt, isExact, isMarker, isMaybe, MAYBE, marksOnly, sensitiveUnder, SOMEWHERE } from '@clay/core';
 
 import { PathTree } from './PathTree';
 import { everyItemPlaces, Pattern, Patterns } from './Patterns';

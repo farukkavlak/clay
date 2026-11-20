@@ -1,4 +1,5 @@
-import { AttributePath, ExactNumber, isRecord, isUnknown, NestingError, NumberError, readPaths, readResources, UNKNOWN, unknownPaths } from '@clay/core';
+import { AttributePath, ExactNumber, isRecord, isUnknown, NestingError, NumberError, UNKNOWN, unknownPaths } from '@clay/provider';
+import { readPaths, readResources } from '@clay/core';
 
 import { checkDataAddresses, checkImported, checkSchemasCover, validatePlanFile } from './checkPlanFile';
 import { Changes, Plan, PLAN_FILE_VERSION, PlanAction, PlanFile } from './Plan';

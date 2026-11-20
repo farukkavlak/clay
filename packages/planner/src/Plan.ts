@@ -1,4 +1,5 @@
-import { Address, AttributePath, DestroyProvisioner, InstanceKey, ModuleStep, Output, Resource, Schema } from '@clay/core';
+import { AttributePath, Schema } from '@clay/provider';
+import { Address, DestroyProvisioner, InstanceKey, ModuleStep, Output, Resource } from '@clay/core';
 
 export type ActionType = 'CREATE' | 'UPDATE' | 'REPLACE' | 'DELETE' | 'NO_OP';
 

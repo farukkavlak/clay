@@ -1,4 +1,4 @@
-import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types } from '@clay/core';
+import { CreateRequest, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types } from '@clay/provider';
 import { RunEvent } from '@clay/orchestrator';
 import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';

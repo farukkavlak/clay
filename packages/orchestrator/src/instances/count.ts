@@ -1,4 +1,4 @@
-import { ExactNumber, isUnknown } from '@clay/core';
+import { ExactNumber, isUnknown } from '@clay/provider';
 
 import { NotKnownYet } from './NotKnownYet';
 import { described, nullSource, Value } from '../values/Value';

@@ -1,4 +1,4 @@
-import { Provider, Schema } from '@clay/core';
+import { Provider, Schema } from '@clay/provider';
 
 import { checkDataSourceSchema, checkSchema } from './providerResult';
 

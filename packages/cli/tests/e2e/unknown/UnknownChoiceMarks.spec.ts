@@ -1,4 +1,4 @@
-import { types, UNKNOWN } from '@clay/core';
+import { types, UNKNOWN } from '@clay/provider';
 
 import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';

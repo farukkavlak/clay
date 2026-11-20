@@ -1,4 +1,5 @@
-import { ExactNumber, isAddress, isRecord, NestingError, NumberError, readDeposed, readResources, State } from '@clay/core';
+import { ExactNumber, isRecord, NestingError, NumberError } from '@clay/provider';
+import { isAddress, readDeposed, readResources, State } from '@clay/core';
 
 /** What one address holds after an action, which changes no other, and the serial the state has once it is read with the line. */
 export function journalLine(state: State, key: string, serial: number): string {

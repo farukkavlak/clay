@@ -1,4 +1,5 @@
-import { Address, Resource, samePaths, State } from '@clay/core';
+import { samePaths } from '@clay/provider';
+import { Address, Resource, State } from '@clay/core';
 import { isDeepStrictEqual } from 'node:util';
 
 import { calculateDiff } from './diff';

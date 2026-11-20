@@ -1,4 +1,5 @@
-import { EVERY_ITEM, EXACT, ExactNumber, holdsFirst, isMaybe, MAYBE, sensitiveUnder, SOMEWHERE, types, UNKNOWN } from '@clay/core';
+import { ExactNumber, types, UNKNOWN } from '@clay/provider';
+import { EVERY_ITEM, EXACT, holdsFirst, isMaybe, MAYBE, sensitiveUnder, SOMEWHERE } from '@clay/core';
 import { ConfigError } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 

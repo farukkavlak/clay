@@ -1,4 +1,5 @@
-import { Address, Schema, State, STATE_VERSION, types, UNKNOWN } from '@clay/core';
+import { Schema, types, UNKNOWN } from '@clay/provider';
+import { Address, State, STATE_VERSION } from '@clay/core';
 import { parseReference, ResourceReference } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 

@@ -1,4 +1,5 @@
-import { emptyState, types } from '@clay/core';
+import { types } from '@clay/provider';
+import { emptyState } from '@clay/core';
 import { backendFrom, StateBackend, StateManager } from '@clay/state';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, Mock, vi } from 'vitest';

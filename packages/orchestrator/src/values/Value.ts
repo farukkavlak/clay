@@ -1,4 +1,5 @@
-import { AttributePath, containsUnknown, EVERY_ITEM, ExactNumber, isMaybe, isRecord, Marks, marksOnly, Output, own, Type, typeAt, types, UNKNOWN } from '@clay/core';
+import { AttributePath, containsUnknown, ExactNumber, isRecord, own, Type, typeAt, types, UNKNOWN } from '@clay/provider';
+import { EVERY_ITEM, isMaybe, Marks, marksOnly, Output } from '@clay/core';
 
 /**
  * `data` is a string, an `ExactNumber`, a boolean, null, an array (list, set, tuple) or a record (map, object), with UNKNOWN at any depth.

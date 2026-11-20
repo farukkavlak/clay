@@ -1,4 +1,5 @@
-import { Address, EVERY_ITEM, ModuleAddress, Schema, Type, types } from '@clay/core';
+import { Schema, Type, types } from '@clay/provider';
+import { Address, EVERY_ITEM, ModuleAddress } from '@clay/core';
 import { DataReference, ModuleOutputReference, parseReference, ResourceReference, spell } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 

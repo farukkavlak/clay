@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ExactNumber } from '@clay/core';
+import { ExactNumber } from '@clay/provider';
 
 import { ConfigError } from '../src/ConfigError';
 import { Step } from '../src/ast';

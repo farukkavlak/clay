@@ -1,4 +1,4 @@
-import { ExactNumber, types, UNKNOWN } from '@clay/core';
+import { ExactNumber, types, UNKNOWN } from '@clay/provider';
 
 import { ConfigError } from '@clay/parser';
 import { parsePlanFile, serializePlan } from '@clay/planner';

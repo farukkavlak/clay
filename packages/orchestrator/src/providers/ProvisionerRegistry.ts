@@ -1,4 +1,4 @@
-import { Provisioner, Schema } from '@clay/core';
+import { Provisioner, Schema } from '@clay/provider';
 
 import { checkProvisionerSchema } from './providerResult';
 

@@ -1,4 +1,5 @@
-import { containsUnknown, ExactNumber, memberKey } from '@clay/core';
+import { containsUnknown, ExactNumber } from '@clay/provider';
+import { memberKey } from '@clay/core';
 
 /** Numbers by value, the rest by key. Only number keys start with `#`, so numbers stay together. */
 function byMember([leftKey, left]: [string, unknown], [rightKey, right]: [string, unknown]): number {

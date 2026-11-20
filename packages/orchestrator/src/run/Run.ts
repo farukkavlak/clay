@@ -1,4 +1,4 @@
-import { Schema } from '@clay/core';
+import { Schema } from '@clay/provider';
 import { StateManager } from '@clay/state';
 
 import { ActionExecutor } from './ActionExecutor';

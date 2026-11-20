@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { types } from '@clay/core';
+import { types } from '@clay/provider';
 import { PLAN_FILE_VERSION, serializePlan } from '@clay/planner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 

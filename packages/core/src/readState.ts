@@ -1,7 +1,7 @@
+import { ExactNumber, isRecord, NumberError } from '@clay/provider';
+
 import { Address, isAddress, isInstanceKey, isModulePath } from './Address';
-import { isAttributePaths, readPaths } from './AttributePath';
-import { ExactNumber, NumberError } from './ExactNumber';
-import { isRecord } from './isRecord';
+import { isAttributePaths, readPaths } from './readPaths';
 import type { DeposedObject, DestroyProvisioner, Resource } from './State';
 
 /** The blocks an object was made after, whose objects its delete must come before. A dependency names no instance of its block. */

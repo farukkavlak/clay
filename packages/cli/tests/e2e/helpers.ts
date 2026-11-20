@@ -1,5 +1,5 @@
 import { DiskFiles, Orchestrator, PlanOptions, RunEvent, RunOptions } from '@clay/orchestrator';
-import { Provider } from '@clay/core';
+import { Provider } from '@clay/provider';
 import { ConfigError } from '@clay/parser';
 import { Plan } from '@clay/planner';
 import { LocalProvider } from '@clay/provider-local';
