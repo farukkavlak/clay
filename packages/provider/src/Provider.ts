@@ -56,6 +56,9 @@ export interface Provider {
 
   readonly resources: string[];
 
+  /** Called on each instance a run makes, before the run asks it anything else; left out where there is nothing to set. */
+  configure?(config: Record<string, unknown>): Promise<void>;
+
   /** A type may also be a resource type, as a file is both written and read. */
   readonly dataSources: string[];
 

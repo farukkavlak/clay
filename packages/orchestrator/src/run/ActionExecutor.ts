@@ -7,7 +7,7 @@ import { conformValues } from '../values/conformValues';
 import { keepPrior } from '../plan/ignoredChanges';
 import { checkNesting, heldBy, hidingReason, inconsistent, tooDeep } from '../providers/providerResult';
 import { Limit } from '../providers/Limit';
-import { ProviderRegistry } from '../providers/ProviderRegistry';
+import { ProviderInstances } from '../providers/ProviderInstances';
 import { SameObjects } from '../checks/sameObject';
 import { ReferenceResolver } from '../expressions/ReferenceResolver';
 import { shown } from '../shown';
@@ -80,7 +80,7 @@ export interface Running {
 
 export class ActionExecutor {
   constructor(
-    private providers: ProviderRegistry,
+    private providers: ProviderInstances,
     private provisioners: ProvisionerRunner,
     private resolver: ReferenceResolver,
     private planner: ResourcePlanner,

@@ -187,8 +187,9 @@ function readersOf(readers: Readers, address: Address): string[] {
   return [...found];
 }
 
-function addDestroy(graph: Graph<ApplyNode>, key: string, { action, madeBy }: Going): void {
+function addDestroy(graph: Graph<ApplyNode>, key: string, { action, madeBy }: Going, provider: string | undefined): void {
   graph.addNode(destroyKey(key), { kind: 'destroy', action });
+  if (provider) graph.addEdge(provider, destroyKey(key));
   if (isPlainReplace(action)) graph.addEdge(destroyKey(key), blockKey(Address.of(action)));
   if (madeBy) graph.addEdge(madeBy, destroyKey(key));
 }
@@ -283,7 +284,8 @@ export function applyGraph(config: Graph<GraphNode>, actions: PlanAction[], stat
     return byBlock(key) ? blockKey(Address.of(going.get(key)!.action)) : destroyKey(key);
   };
 
-  for (const [key, object] of going) if (!byBlock(key)) addDestroy(graph, key, object);
+  const providers = new Map([...config.entries()].flatMap(([key, node]) => (node.kind === 'provider' ? node.resources.map((type) => [type, key] as const) : [])));
+  for (const [key, object] of going) if (!byBlock(key)) addDestroy(graph, key, object, providers.get(object.action.resourceType));
   for (const key of next.keys()) if (isWait(key)) graph.addNode(key, { kind: 'wait' });
   for (const [key, reads] of next) for (const read of reads) graph.addEdge(nodeOf(key), nodeOf(read));
   addWaits(graph, going, nodeOf, readersOfBlocks(actions, state));

@@ -6,6 +6,7 @@ import { Loaded, LoadedModule } from '../config/ModuleLoader';
 import { blockKey } from '../keys';
 import { withPlace } from '../place';
 import { Limit } from '../providers/Limit';
+import { ProviderInstances } from '../providers/ProviderInstances';
 import { ProviderRegistry } from '../providers/ProviderRegistry';
 import { checkKeys, ImportTarget, ImportTo, refuseImport } from './importTargets';
 
@@ -80,7 +81,7 @@ export class Imports {
   private imports: ImportTo[] = [];
 
   constructor(
-    private readonly providers: ProviderRegistry,
+    private readonly providers: ProviderInstances,
     private readonly limit: Limit,
     private readonly readBack: ReadBack
   ) {}

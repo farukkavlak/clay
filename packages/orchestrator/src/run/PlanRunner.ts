@@ -19,6 +19,7 @@ import { RunEvent } from './RunEvent';
 import { Approved, Checked, checkActionsMatch, checkOutputsMatch, dataNamed, plannedOutputs } from './savedPlanChecks';
 import { streamed } from './streamed';
 import { Step, walkTogether } from './walkTogether';
+import { isProvider } from '../graph/providerNodes';
 
 /** In declared order, so the state does not depend on which resolved first; one not reached keeps its old value. */
 function holdOutputs(state: State, { resolved, declared }: Applying): void {
@@ -114,7 +115,7 @@ export class PlanRunner {
     const reach = (key: string) => this.reach(key, graph.getNode(key)!, applying, state, pace.signal, destroyed);
 
     try {
-      return yield* walkTogether(graph.topologicalSort().flat(), graph, reach, pace.parallelism, isFailure);
+      return yield* walkTogether(graph.passing(isProvider(graph)), graph, reach, pace.parallelism, isFailure);
     } finally {
       holdOutputs(state, applying);
     }

@@ -20,6 +20,8 @@ import { checkSameObjects } from './checks/sameObject';
 import { ConfigFiles } from './config/ConfigFiles';
 import { inputsFor } from './config/givenValues';
 import { RootValues } from './config/ModuleLoader';
+import { addProviders } from './graph/providerNodes';
+import { ProviderInstances } from './providers/ProviderInstances';
 import { ProviderRegistry } from './providers/ProviderRegistry';
 import { ProvisionerRegistry } from './providers/ProvisionerRegistry';
 import { newRun, Run } from './run/Run';
@@ -92,8 +94,9 @@ export class Orchestrator {
     return new Orchestrator(stateManager, providers, provisioners, (limit, name) => newRun(stateManager, { providers, provisioners }, files, limit, name), workspace);
   }
 
-  registerProvider(provider: Provider): void {
-    this.providers.register(provider);
+  /** `create` makes a new instance for each run that needs the provider, and one at once that is never configured. */
+  registerProvider(create: () => Provider): void {
+    this.providers.register(create);
   }
 
   registerProvisioner(provisioner: Provisioner): void {
@@ -108,7 +111,8 @@ export class Orchestrator {
     const prevRun = await this.stateManager.read();
     // Planning applies the moves to a copy; the plan keeps the resources at their old addresses.
     const currentState = copyForMoves(prevRun);
-    const steps = this.planSteps(limit, refresh);
+    const run = this.newRun(limit, this.workspace);
+    const steps = this.planSteps(run.providers, limit, refresh);
     const { moves, imports } = steps;
     const {
       resources: desiredResources,
@@ -118,7 +122,7 @@ export class Orchestrator {
       readAtApply,
       graph,
       root,
-    } = await this.resolveAndCheck(currentState, 'plan', steps, limit, sourceOf(destroy, variables));
+    } = await this.resolveAndCheck(run, currentState, 'plan', steps, sourceOf(destroy, variables));
     const prior = await this.refreshRest(steps, currentState, prevRun);
 
     imports.adopt(currentState, desiredResources);
@@ -129,7 +133,7 @@ export class Orchestrator {
       (address) => imports.idOf(address)
     );
     checkPreventDestroy(actions, desiredResources, currentState.resources);
-    await checkSameObjects(actions, desiredResources, currentState, this.providers, limit);
+    await checkSameObjects(actions, desiredResources, currentState, run.providers, limit);
     checkApplyOrder(graph, actions, currentState, desiredResources);
     // The refresh only drops resources, so prior has no type prevRun lacks.
     const types = [...actions, ...Object.values(prevRun.resources)].map((resource) => resource.resourceType);
@@ -151,12 +155,12 @@ export class Orchestrator {
     };
   }
 
-  private planSteps(limit: Limit, refresh: boolean): Steps {
+  private planSteps(providers: ProviderInstances, limit: Limit, refresh: boolean): Steps {
     const moves = new Moves();
-    const imports = new Imports(this.providers, limit, (key, resource) => this.readBack(key, resource));
+    const imports = new Imports(providers, limit, (key, resource) => this.readBack(providers, key, resource));
     if (!refresh) return { moves, imports };
 
-    return { moves, imports, refresh: new Refresh(limit, moves, (key, resource) => this.readBack(key, resource)) };
+    return { moves, imports, refresh: new Refresh(limit, moves, (key, resource) => this.readBack(providers, key, resource)) };
   }
 
   /** Reads the objects no block reached, and gives what the refresh read at the addresses the state held them at. */
@@ -178,8 +182,9 @@ export class Orchestrator {
    */
   async validate(): Promise<void> {
     const limit = new Limit(DEFAULT_PARALLELISM);
-    const imports = new Imports(this.providers, limit, (key, resource) => this.readBack(key, resource));
-    await this.resolveAndCheck(emptyState(), 'check', { moves: new Moves(), imports }, limit, { values: { unset: 'unknown' } });
+    const run = this.newRun(limit, undefined);
+    const imports = new Imports(run.providers, limit, (key, resource) => this.readBack(run.providers, key, resource));
+    await this.resolveAndCheck(run, emptyState(), 'check', { moves: new Moves(), imports }, { values: { unset: 'unknown' } });
   }
 
   /**
@@ -198,12 +203,13 @@ export class Orchestrator {
     const { root, values } = sourceOf(saved.destroy, saved.variables);
     const config = await loader.load(root, values);
     const graph = graphBuilder.buildExecutionGraph(config.loadedResources, config.loadedModules);
+    addProviders(graph, this.providers, state);
     yield* runner.run(saved, config, graph, state, { parallelism, signal });
   }
 
-  private async readBack(key: string, resource: Resource): Promise<Record<string, unknown> | null> {
+  private async readBack(providers: ProviderInstances, key: string, resource: Resource): Promise<Record<string, unknown> | null> {
     try {
-      const provider = this.providers.get(resource.resourceType);
+      const provider = providers.get(resource.resourceType);
       const read = await hidingReason(resource.resourceType, resource.sensitive ?? [], () => provider.read(resource.resourceType, resource.attributes), 'to read');
       if (read === null) return null;
 
@@ -221,16 +227,16 @@ export class Orchestrator {
    * block; a check only reads the ids.
    */
   private async resolveAndCheck(
+    { loader, graphBuilder, writtenCheck, desiredStateBuilder, modules }: Run,
     state: State,
     walk: Walk,
     { moves, imports, refresh }: Steps,
-    limit: Limit,
     { root, values }: Source
   ): Promise<DesiredState & { graph: Graph<GraphNode>; root: Statement[] }> {
-    const { loader, graphBuilder, writtenCheck, desiredStateBuilder, modules } = this.newRun(limit, walk === 'plan' ? this.workspace : undefined);
     const { mainProgram, loadedResources, loadedModules, schemas } = await loader.load(root, values);
 
     const graph = graphBuilder.buildExecutionGraph(loadedResources, loadedModules);
+    addProviders(graph, this.providers, state);
     checkAttributes(loadedResources, schemas);
     await writtenCheck.check(loadedResources, loadedModules, graph);
     const moved = movesIn(loadedModules);

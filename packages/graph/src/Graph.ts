@@ -1,5 +1,17 @@
 import { walk } from './walk';
 
+/** Where `id` goes in `sorted` so it stays sorted by `before`. */
+function insertionPoint(sorted: string[], id: string, before: (one: string, other: string) => number): number {
+  let [low, high] = [0, sorted.length];
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (before(sorted[middle], id) <= 0) low = middle + 1;
+    else high = middle;
+  }
+
+  return low;
+}
+
 export class Graph<T> {
   private nodes: Map<string, T> = new Map();
   private adjacencyList: Map<string, Set<string>> = new Map();
@@ -61,9 +73,71 @@ export class Graph<T> {
     return result;
   }
 
-  /** Visits the nodes as `walk` says, in the order `topologicalSort` gives. */
-  async walk(visit: (id: string) => Promise<void> | void): Promise<void> {
-    await walk(this.topologicalSort().flat(), this, visit);
+  /** Visits the nodes as `walk` says, in the order `topologicalSort` gives, or `passing` gives where `passed` is given. */
+  async walk(visit: (id: string) => Promise<void> | void, passed?: (id: string) => boolean): Promise<void> {
+    await walk(passed ? this.passing(passed) : this.topologicalSort().flat(), this, visit);
+  }
+
+  /**
+   * Every node, in the order `topologicalSort` gives the graph without the nodes `passed` names, as if each path through them were an edge.
+   * Each of those goes just before the first node that waits for it, or after the last it waits for where nothing waits for it.
+   */
+  passing(passed: (id: string) => boolean): string[] {
+    const through = (id: string, step: (at: string) => string[]) => this.beyond(id, step, passed);
+    const kept = new Graph<null>();
+    for (const id of this.nodes.keys()) if (!passed(id)) kept.addNode(id, null);
+    for (const id of kept.nodes.keys()) for (const dependency of through(id, (at) => this.dependenciesOf(at))) kept.addEdge(dependency, id);
+
+    const order = kept.topologicalSort().flat();
+    const at = new Map(order.map((id, index) => [id, index]));
+    const rank = new Map(
+      this.topologicalSort()
+        .flat()
+        .map((id, index) => [id, index])
+    );
+    const placeOf = (id: string) => {
+      const waiting = through(id, (step) => this.dependentsOf(step)).map((dependent) => at.get(dependent)!);
+      if (waiting.length > 0) return Math.min(...waiting) - 0.5;
+
+      return Math.max(-1, ...through(id, (step) => this.dependenciesOf(step)).map((dependency) => at.get(dependency)!)) + 0.5;
+    };
+    const place = new Map([...this.nodes.keys()].map((id) => [id, passed(id) ? placeOf(id) : at.get(id)!]));
+
+    return this.orderedBy((one, other) => place.get(one)! - place.get(other)! || rank.get(one)! - rank.get(other)!);
+  }
+
+  /** A topological order that takes, of the nodes ready, the one `before` puts first, so no edge is ever broken. */
+  private orderedBy(before: (one: string, other: string) => number): string[] {
+    const inDegree = this.calculateInDegrees();
+    const ready = [...inDegree].filter(([, degree]) => degree === 0).map(([id]) => id);
+    ready.sort(before);
+    const order: string[] = [];
+
+    for (let id = ready.shift(); id !== undefined; id = ready.shift()) {
+      order.push(id);
+      for (const next of this.adjacencyList.get(id)!) {
+        inDegree.set(next, inDegree.get(next)! - 1);
+        if (inDegree.get(next) === 0) ready.splice(insertionPoint(ready, next, before), 0, next);
+      }
+    }
+
+    return order;
+  }
+
+  /** The nodes `step` reaches from `id` that `passed` does not name, going on through those it does. */
+  private beyond(id: string, step: (at: string) => string[], passed: (id: string) => boolean): string[] {
+    const found = new Set<string>();
+    const seen = new Set<string>();
+    const stack = step(id);
+
+    for (let at = stack.pop(); at !== undefined; at = stack.pop()) {
+      if (seen.has(at)) continue;
+      seen.add(at);
+      if (passed(at)) stack.push(...step(at));
+      else found.add(at);
+    }
+
+    return [...found];
   }
 
   /** Each node once every node before it is placed, with its layer; a node in a cycle is never placed. */

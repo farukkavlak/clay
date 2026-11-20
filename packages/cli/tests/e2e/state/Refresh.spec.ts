@@ -93,7 +93,7 @@ describe('a plan that reads each resource back', () => {
   it('refuses a resource in state that no provider handles, when told not to read', async () => {
     const engine = engineIn(dir);
 
-    await expect(engine.plan('', { refresh: false })).rejects.toThrow('No provider handles "local_file"');
+    await expect(engine.plan('', { refresh: false })).rejects.toThrow('local_file.a: No provider handles "local_file"');
   });
 
   // A plan never writes state.

@@ -43,6 +43,13 @@ const layers = (graph: Graph<ApplyNode>) =>
     .filter((layer) => layer.length > 0);
 
 describe('applyGraph', () => {
+  it('destroys an object after the provider of its type is configured', () => {
+    const graph = config([]);
+    graph.addNode('provider:rec', { kind: 'provider', name: 'rec', resources: ['rec'], module: ModuleAddress.root });
+
+    expect(applyGraph(graph, [going('rec.a')], holding(object('rec.a'))).dependentsOf('provider:rec')).toEqual(['destroy:rec.a']);
+  });
+
   it('leaves a replace that reads nothing going away to its block', () => {
     const graph = applyGraph(config(['a', 'b'], [['a', 'b']]), [act('REPLACE', 'a'), act('UPDATE', 'b')], stateOf([held('a'), held('b', 'a')]));
 

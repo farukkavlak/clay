@@ -6,7 +6,7 @@ import { conformed, writtenAt } from '../values/conformValues';
 import { DataInstance } from '../keys';
 import { checkDataSourceGiven, checkDataSourceRead, heldBy, hidingReason } from '../providers/providerResult';
 import { Limit } from '../providers/Limit';
-import { ProviderRegistry } from '../providers/ProviderRegistry';
+import { ProviderInstances } from '../providers/ProviderInstances';
 import { withPlace } from '../place';
 import { marksOf, schemaRemarked } from '../values/schemaMarks';
 import { typedValues } from '../values/typed';
@@ -21,7 +21,7 @@ function remarked(values: Record<string, Value>, given: Record<string, Value>): 
 /** Asks a data source's provider for what it reads, and keeps it where references find it. */
 export class DataSourceReader {
   constructor(
-    private providers: ProviderRegistry,
+    private providers: ProviderInstances,
     // Loaded with the configuration, before any data source is read.
     private dataSchemas: Map<string, Schema>,
     private dataSources: Map<string, Record<string, Value>>,

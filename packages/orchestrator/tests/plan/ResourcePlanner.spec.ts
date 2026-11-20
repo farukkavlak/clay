@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ResourcePlanner } from '../../src/plan/ResourcePlanner';
 import { Limit } from '../../src/providers/Limit';
+import { ProviderInstances } from '../../src/providers/ProviderInstances';
 import { ProviderRegistry } from '../../src/providers/ProviderRegistry';
 import { DEFAULT_PARALLELISM } from '../../src/run/parallelism';
 import { allSensitive, inferred, Value, valueOf, withSensitive } from '../../src/values/Value';
@@ -31,11 +32,18 @@ function fakeProvider(plan: (request: PlanRequest) => PlannedChange = (request) 
   } satisfies Provider;
 }
 
-function plannerFor(provider: Provider): ResourcePlanner {
+async function plannerFor(provider: Provider): Promise<ResourcePlanner> {
   const providers = new ProviderRegistry();
-  providers.register(provider);
+  providers.register(() => provider);
+  const configured = new ProviderInstances(providers, new Limit(DEFAULT_PARALLELISM));
+  await configured.configure(provider.name);
 
-  return new ResourcePlanner(providers, new Limit(DEFAULT_PARALLELISM));
+  return new ResourcePlanner(configured, new Limit(DEFAULT_PARALLELISM));
+}
+
+async function planWith(provider: Provider, ...request: Parameters<ResourcePlanner['plan']>): ReturnType<ResourcePlanner['plan']> {
+  const planner = await plannerFor(provider);
+  return planner.plan(...request);
 }
 
 const current: Resource = { resourceType: 'thing', name: 'a', attributes: { path: 'a', tags: { x: '1' }, made: 'm' } };
@@ -44,7 +52,7 @@ describe('ResourcePlanner', () => {
   it('plans a change in place as its provider plans it', async () => {
     const config = { path: 'a', tags: { x: '2' } };
 
-    expect(await plannerFor(fakeProvider()).plan('thing', schema, current, written(config))).toEqual({
+    expect(await planWith(fakeProvider(), 'thing', schema, current, written(config))).toEqual({
       after: { ...config, made: UNKNOWN },
       replace: false,
       config,
@@ -56,7 +64,7 @@ describe('ResourcePlanner', () => {
     const provider = fakeProvider();
     const config = { path: 'b', tags: { x: '1' } };
 
-    const planned = await plannerFor(provider).plan('thing', schema, current, written(config));
+    const planned = await planWith(provider, 'thing', schema, current, written(config));
 
     expect(planned).toEqual({ after: { ...config, made: UNKNOWN }, replace: true, forcedBy: ['path'], config, sensitive: [] });
     expect(provider.plan).toHaveBeenLastCalledWith('thing', { prior: null, proposed: config, config });
@@ -67,7 +75,7 @@ describe('ResourcePlanner', () => {
     const provider = fakeProvider();
     const converted = { path: '5', tags: {} };
 
-    const planned = await plannerFor(provider).plan('thing', schema, undefined, written({ path: ExactNumber.parse('5'), tags: {} }));
+    const planned = await planWith(provider, 'thing', schema, undefined, written({ path: ExactNumber.parse('5'), tags: {} }));
 
     expect(provider.validate).toHaveBeenCalledWith('thing', converted);
     expect(provider.plan).toHaveBeenCalledWith('thing', { prior: null, proposed: converted, config: converted });
@@ -79,14 +87,14 @@ describe('ResourcePlanner', () => {
     const marked = (path: string) => ({ path: allSensitive(valueOf(types.string, path)), tags });
     const sensitive = [['path'], ['tags', 'y']];
 
-    expect(await plannerFor(fakeProvider()).plan('thing', schema, undefined, marked('a'))).toMatchObject({ replace: false, sensitive });
-    expect(await plannerFor(fakeProvider()).plan('thing', schema, current, marked('a'))).toMatchObject({ replace: false, sensitive });
-    expect(await plannerFor(fakeProvider()).plan('thing', schema, current, marked('b'))).toMatchObject({ replace: true, sensitive });
+    expect(await planWith(fakeProvider(), 'thing', schema, undefined, marked('a'))).toMatchObject({ replace: false, sensitive });
+    expect(await planWith(fakeProvider(), 'thing', schema, current, marked('a'))).toMatchObject({ replace: false, sensitive });
+    expect(await planWith(fakeProvider(), 'thing', schema, current, marked('b'))).toMatchObject({ replace: true, sensitive });
   });
 
   it('sends the provider a sensitive value as it is, with no mark', async () => {
     const provider = fakeProvider();
-    await plannerFor(provider).plan('thing', schema, undefined, { path: allSensitive(valueOf(types.string, 'a')) });
+    await planWith(provider, 'thing', schema, undefined, { path: allSensitive(valueOf(types.string, 'a')) });
 
     expect(provider.plan).toHaveBeenCalledWith('thing', { prior: null, proposed: { path: 'a' }, config: { path: 'a' } });
   });
@@ -96,7 +104,7 @@ describe('ResourcePlanner', () => {
     const provider = fakeProvider((request) => ({ ...planFromSchema(schema, request), after: { ...request.proposed }, replace: paths }));
     const held = { ...current, attributes: { path: 'a', tags: { x: '1', y: '1', same: '1' }, made: 'm' } };
 
-    const planned = await plannerFor(provider).plan('thing', schema, held, written({ path: 'b', tags: { x: '2', y: '2', same: '1' } }));
+    const planned = await planWith(provider, 'thing', schema, held, written({ path: 'b', tags: { x: '2', y: '2', same: '1' } }));
 
     expect(planned).toMatchObject({ replace: true, forcedBy: ['path', 'tags'] });
   });
@@ -104,14 +112,14 @@ describe('ResourcePlanner', () => {
   it('names nothing for a path that starts at no attribute', async () => {
     const provider = fakeProvider((request) => ({ ...planFromSchema(schema, request), after: { ...request.proposed }, replace: [[]] }));
 
-    const planned = await plannerFor(provider).plan('thing', schema, current, written({ path: 'b', tags: { x: '1' } }));
+    const planned = await planWith(provider, 'thing', schema, current, written({ path: 'b', tags: { x: '1' } }));
 
     expect(planned.replace).toBe(true);
     expect(planned).not.toHaveProperty('forcedBy');
   });
 
   it('names nothing for a tainted resource, whose provider is not asked', async () => {
-    const planned = await plannerFor(fakeProvider()).plan('thing', schema, { ...current, tainted: true }, written({ path: 'b', tags: { x: '1' } }));
+    const planned = await planWith(fakeProvider(), 'thing', schema, { ...current, tainted: true }, written({ path: 'b', tags: { x: '1' } }));
 
     expect(planned.replace).toBe(true);
     expect(planned).not.toHaveProperty('forcedBy');
@@ -120,7 +128,7 @@ describe('ResourcePlanner', () => {
   it('replaces only where a value the provider names changes', async () => {
     const provider = fakeProvider((request) => ({ ...planFromSchema(schema, request), replace: [['path']] }));
 
-    expect(await plannerFor(provider).plan('thing', schema, current, written({ path: 'a', tags: { x: '2' } }))).toMatchObject({ replace: false });
+    expect(await planWith(provider, 'thing', schema, current, written({ path: 'a', tags: { x: '2' } }))).toMatchObject({ replace: false });
   });
 
   it.each([
@@ -129,7 +137,7 @@ describe('ResourcePlanner', () => {
   ])('replaces where a value inside an attribute %s', async (_, tags, replace) => {
     const provider = fakeProvider((request) => ({ ...planFromSchema(schema, request), replace: [['tags', 'x']] }));
 
-    expect(await plannerFor(provider).plan('thing', schema, current, written({ path: 'a', tags }))).toMatchObject({ replace });
+    expect(await planWith(provider, 'thing', schema, current, written({ path: 'a', tags }))).toMatchObject({ replace });
   });
 
   it.each([
@@ -138,13 +146,13 @@ describe('ResourcePlanner', () => {
   ])('refuses a plan that %s a value the configuration sets', async (_, change, message) => {
     const provider = fakeProvider((request) => ({ after: change(planFromSchema(schema, request).after), replace: [] }));
 
-    await expect(plannerFor(provider).plan('thing', schema, undefined, written({ path: 'a' }))).rejects.toThrow(message);
+    await expect(planWith(provider, 'thing', schema, undefined, written({ path: 'a' }))).rejects.toThrow(message);
   });
 
   it('refuses a plan with a value the configuration does not set and the provider does not compute', async () => {
     const provider = fakeProvider((request) => ({ after: { ...request.proposed, extra: 'x' }, replace: [] }));
 
-    await expect(plannerFor(provider).plan('thing', schema, undefined, written({ path: 'a' }))).rejects.toThrow(
+    await expect(planWith(provider, 'thing', schema, undefined, written({ path: 'a' }))).rejects.toThrow(
       'thing planned extra, which the configuration does not set and thing does not compute'
     );
   });
@@ -155,7 +163,7 @@ describe('ResourcePlanner', () => {
     const remaking = (request: PlanRequest) => ({ after: { ...planFromSchema(keeping, request).after, serial: UNKNOWN }, replace: [] });
 
     it('refuses a provider that plans it as not known on a change in place', async () => {
-      await expect(plannerFor(fakeProvider(remaking)).plan('thing', keeping, held, written({ path: 'a', tags: { x: '2' } }))).rejects.toThrow(
+      await expect(planWith(fakeProvider(remaking), 'thing', keeping, held, written({ path: 'a', tags: { x: '2' } }))).rejects.toThrow(
         'thing planned serial as known after apply on a change in place, though it keeps it until it is replaced, which is a bug in the provider'
       );
     });
@@ -163,7 +171,10 @@ describe('ResourcePlanner', () => {
     it('takes it as not known on a replacement, which makes it again', async () => {
       const provider = fakeProvider((request) => ({ ...remaking(request), replace: [['path']] }));
 
-      expect(await plannerFor(provider).plan('thing', keeping, held, written({ path: 'b', tags: { x: '1' } }))).toMatchObject({ after: { serial: UNKNOWN }, replace: true });
+      expect(await planWith(provider, 'thing', keeping, held, written({ path: 'b', tags: { x: '1' } }))).toMatchObject({
+        after: { serial: UNKNOWN },
+        replace: true,
+      });
     });
   });
 
@@ -171,14 +182,14 @@ describe('ResourcePlanner', () => {
     const provider = fakeProvider();
     provider.validate.mockRejectedValue(new Error('path is wrong'));
 
-    await expect(plannerFor(provider).plan('thing', schema, undefined, written({ path: 'a' }))).rejects.toThrow('path is wrong');
+    await expect(planWith(provider, 'thing', schema, undefined, written({ path: 'a' }))).rejects.toThrow('path is wrong');
     expect(provider.plan).not.toHaveBeenCalled();
   });
 
   it('asks the provider to check a value not known yet, as it is', async () => {
     const provider = fakeProvider();
 
-    await plannerFor(provider).plan('thing', schema, undefined, written({ path: 'a', tags: { x: UNKNOWN } }));
+    await planWith(provider, 'thing', schema, undefined, written({ path: 'a', tags: { x: UNKNOWN } }));
 
     expect(provider.validate).toHaveBeenCalledWith('thing', { path: 'a', tags: { x: UNKNOWN } });
     expect(provider.plan).toHaveBeenCalled();

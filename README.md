@@ -284,9 +284,13 @@ each block means.
 1. Write a package that implements `Provider` from `@clay/provider`, and depends on that
    package only. Its `name` is what a configuration calls it, such as `local`. Its
    `resources` and `dataSources` list the types it handles.
-2. Register it in `newOrchestrator` in `packages/cli/src/engine.ts`, and add the package to
-   the dependencies in `packages/cli/package.json`. If two providers have the same name or
-   list the same type, Clay stops with an error.
+2. Register a function that makes one, as `() => new LocalProvider()`, in `newOrchestrator`
+   in `packages/cli/src/engine.ts`, and add the package to the dependencies in
+   `packages/cli/package.json`. If two providers have the same name or list the same type,
+   Clay stops with an error. Each run makes its own instance and calls its `configure`,
+   where it has one, before it asks it anything. The instance made at registration is
+   never configured: it gives the name, the types and the schemas, and checks a block with
+   `validate`.
 3. Add a row for the package to the Packages table above.
 
 ## Develop

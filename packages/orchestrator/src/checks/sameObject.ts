@@ -8,7 +8,7 @@ import { asError } from '../asError';
 import { ConfiguredResource } from '../plan/DesiredStateBuilder';
 import { withPlace } from '../place';
 import { hidingReason } from '../providers/providerResult';
-import { ProviderRegistry } from '../providers/ProviderRegistry';
+import { ProviderInstances } from '../providers/ProviderInstances';
 import { Limit, taken } from '../providers/Limit';
 
 /** An object the plan destroys: a delete's, a deposed one, or the old one of a replace. */
@@ -31,7 +31,7 @@ interface Staying {
 type Identify = (type: string, values: Record<string, unknown>, sensitive: readonly AttributePath[]) => Promise<Identity | undefined>;
 
 const identifyWith =
-  (providers: ProviderRegistry, limit: Limit): Identify =>
+  (providers: ProviderInstances, limit: Limit): Identify =>
   async (type, values, sensitive) =>
     await limit.run(async () => await hidingReason(type, sensitive, async () => await providers.get(type).identify?.(type, values), 'to identify'));
 
@@ -96,7 +96,7 @@ function planned(resource: ConfiguredResource, created: Set<string>): Staying {
 }
 
 /** Two objects that are one real thing, as two files at one path, would overwrite or destroy each other. Only the provider can tell. */
-export async function checkSameObjects(actions: PlanAction[], desired: ConfiguredResource[], state: State, providers: ProviderRegistry, limit: Limit): Promise<void> {
+export async function checkSameObjects(actions: PlanAction[], desired: ConfiguredResource[], state: State, providers: ProviderInstances, limit: Limit): Promise<void> {
   const identify = identifyWith(providers, limit);
   const staying = new Map<string, Staying>();
   const created = new Set(actions.filter((action) => action.type === 'CREATE').map((action) => Address.of(action).toString()));
@@ -162,7 +162,7 @@ export class SameObjects {
   /** Built at the first claim, so each claim looks its thing up instead of going over every object again. */
   private held?: Promise<HeldIndex>;
 
-  constructor(providers: ProviderRegistry, limit: Limit) {
+  constructor(providers: ProviderInstances, limit: Limit) {
     this.identify = identifyWith(providers, limit);
   }
 

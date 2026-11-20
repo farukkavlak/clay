@@ -40,13 +40,16 @@ export type GraphNode =
   | ({ kind: 'local' } & LocalNode)
   | ({ kind: 'output' } & OutputNode)
   | ({ kind: 'module'; block: ModuleBlock } & InModule)
-  | ({ kind: 'data'; block: DataBlock } & InModule);
+  | ({ kind: 'data'; block: DataBlock } & InModule)
+  /** The resource types it makes, so an object of one is destroyed after it is configured. */
+  | ({ kind: 'provider'; name: string; resources: readonly string[] } & InModule);
 
 /** `module.m.var.x`; a resource's key already is its address. */
 export function spellNode(key: string, node: GraphNode): string {
   if (node.kind === 'resource') return key;
   if (node.kind === 'module') return node.module.child(node.block.name).toString();
   if (node.kind === 'data') return dataSourceAddress(node.module.toString(), node.block.dataSourceType, node.block.name);
+  if (node.kind === 'provider') return `provider "${node.name}"`;
 
   const scope = node.module.toString();
   return `${scope ? `${scope}.` : ''}${SPELLED[node.kind]}.${node.name}`;

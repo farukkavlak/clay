@@ -6,7 +6,7 @@ import { conformed } from '../values/conformValues';
 import { keepPrior } from './ignoredChanges';
 import { heldBy, hidingReason, undisclosed } from '../providers/providerResult';
 import { Limit } from '../providers/Limit';
-import { ProviderRegistry } from '../providers/ProviderRegistry';
+import { ProviderInstances } from '../providers/ProviderInstances';
 import { shown } from '../shown';
 import { marksOf } from '../values/schemaMarks';
 import { plainOf, sensitiveAmong, Value, valueOf, withSensitive } from '../values/Value';
@@ -95,7 +95,7 @@ function valuesOf(schema: Schema, { config, sensitive }: { config: Record<string
 
 export class ResourcePlanner {
   constructor(
-    private providers: ProviderRegistry,
+    private providers: ProviderInstances,
     private limit: Limit
   ) {}
 

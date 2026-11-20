@@ -9,6 +9,16 @@ function groups(graph: Graph<string>): string[][] {
   return [...byRoot.values()].map((nodes) => nodes.sort()).sort((a, b) => a[0].localeCompare(b[0]));
 }
 
+/** `edges` as `from>to`, each node named once in the order given. */
+const graphOf = (nodes: string, edges: string[] = []) => {
+  const graph = new Graph<null>();
+  for (const id of nodes.split(' ')) graph.addNode(id, null);
+  for (const edge of edges) graph.addEdge(...(edge.split('>') as [string, string]));
+  return graph;
+};
+
+const isP = (id: string) => id.startsWith('p');
+
 describe('Graph', () => {
   it('should add nodes', () => {
     const graph = new Graph<string>();
@@ -132,6 +142,42 @@ describe('Graph', () => {
 
     expect(cycle).toHaveLength(length + 1);
     expect([cycle[0], cycle[1], cycle.at(-2), cycle.at(-1)]).toEqual(['n0', `n${length - 1}`, 'n1', 'n0']);
+  });
+
+  describe('passing', () => {
+    it('orders the rest as if a node passed were not there', () => {
+      const graph = graphOf('a c b x p', ['a>c', 'x>b', 'p>a', 'p>c', 'p>b']);
+
+      expect(graph.passing(isP)).toEqual(['p', 'a', 'x', 'c', 'b']);
+    });
+
+    it('carries what a node passed waits for on to what waits for it, and puts it between', () => {
+      const graph = graphOf('a b x p', ['x>p', 'p>a', 'b>x']);
+
+      expect(graph.passing(isP)).toEqual(['b', 'x', 'p', 'a']);
+    });
+
+    it('puts a node passed that nothing waits for after what it waits for', () => {
+      expect(graphOf('a b p', ['a>p']).passing(isP)).toEqual(['a', 'p', 'b']);
+    });
+
+    it('keeps every edge where a node passed waits for another that is placed later', () => {
+      const graph = graphOf('x e1 e2 e3 d p1 p2', ['x>p1', 'p1>p2', 'p1>d', 'e1>e2', 'e2>e3', 'e3>d']);
+      const order = graph.passing(isP);
+
+      for (const [from, to] of [
+        ['x', 'p1'],
+        ['p1', 'p2'],
+        ['p1', 'd'],
+        ['e3', 'd'],
+      ])
+        expect(order.indexOf(from)).toBeLessThan(order.indexOf(to));
+      expect(order.filter((id) => !isP(id))).toEqual(['x', 'e1', 'e2', 'e3', 'd']);
+    });
+
+    it('keeps two nodes passed in their own order', () => {
+      expect(graphOf('a p2 p1', ['p1>p2', 'p2>a']).passing(isP)).toEqual(['p1', 'p2', 'a']);
+    });
   });
 
   describe('components', () => {

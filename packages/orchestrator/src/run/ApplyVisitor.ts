@@ -18,6 +18,7 @@ import { outputAs } from '../values/declared';
 import { typeFits } from '../values/typeFits';
 import { outputOf, Value } from '../values/Value';
 import { RunEvent } from './RunEvent';
+import { ProviderInstances } from '../providers/ProviderInstances';
 import { Approved, Checked, PlannedOutput, undeclared } from './savedPlanChecks';
 
 /** What a run applies each block with. */
@@ -46,11 +47,13 @@ export class ApplyVisitor {
     private resolver: ReferenceResolver,
     private instances: Instances,
     private modules: ModuleInstances,
-    private reader: DataSourceReader
+    private reader: DataSourceReader,
+    private providers: ProviderInstances
   ) {}
 
   /** Gives the actions of a resource block, checked; the other kinds are resolved or read. */
   async *visit(key: string, node: GraphNode, { named, outputs, resolved, read, blocks, byBlock }: Applying, state: State): AsyncGenerator<RunEvent, PlanAction[]> {
+    if (node.kind === 'provider') await this.providers.configure(node.name);
     if (node.kind === 'module') this.expandCall(node, state);
     if (node.kind === 'data') yield* this.readData(node, named.get(key), read, state);
     if (node.kind === 'local') this.resolveLocal(node, state);

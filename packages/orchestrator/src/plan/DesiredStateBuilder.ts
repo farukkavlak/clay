@@ -29,6 +29,8 @@ import { Versions } from '../values/Versions';
 import { Ignoring, ResourcePlan, ResourcePlanner } from './ResourcePlanner';
 import { keptFor, Provisioning } from '../providers/Provisioning';
 import { Queue } from '../Queue';
+import { ProviderInstances } from '../providers/ProviderInstances';
+import { isProvider } from '../graph/providerNodes';
 
 /** With the block it was planned from, so a refusal can point at it. */
 export interface ConfiguredResource extends DesiredResource {
@@ -93,7 +95,8 @@ export class DesiredStateBuilder {
     private provisioning: Provisioning,
     private data: DataPlanner,
     private reads: PlanReader,
-    private versions: Versions
+    private versions: Versions,
+    private providers: ProviderInstances
   ) {}
 
   /** The blocks that say it, and every block they read, through any others. A module's block is one for all its instances. */
@@ -138,7 +141,7 @@ export class DesiredStateBuilder {
 
     await graph.walk(async (key) => {
       found.set(key, await this.planNode(key, graph.getNode(key)!, byKey, graph, state));
-    });
+    }, isProvider(graph));
 
     return this.desiredFrom(graph, found);
   }
@@ -154,6 +157,10 @@ export class DesiredStateBuilder {
       }
       case 'data': {
         return { reads: await this.data.plan(key, node, graph, state, this.walk) };
+      }
+      case 'provider': {
+        await this.providers.configure(node.name);
+        return {};
       }
       case 'output': {
         // A module's own output never reaches the plan, so only the root's one instance gives one.
@@ -173,7 +180,7 @@ export class DesiredStateBuilder {
     // A map, so an output named `__proto__` is a key like any other.
     const rootOutputs = new Map<string, Output>();
 
-    for (const key of graph.topologicalSort().flat()) {
+    for (const key of graph.passing(isProvider(graph))) {
       const { resources = [], reads = [], output } = found.get(key)!;
       desired.resources.push(...resources);
       for (const { at, read } of reads)

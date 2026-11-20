@@ -9,6 +9,7 @@ import { ResourcePlanner } from '../../src/plan/ResourcePlanner';
 import { ModuleInstances } from '../../src/instances/ModuleInstances';
 import { Planned } from '../../src/values/Planned';
 import { Versions } from '../../src/values/Versions';
+import { ProviderInstances } from '../../src/providers/ProviderInstances';
 import { ProviderRegistry } from '../../src/providers/ProviderRegistry';
 import { ProvisionerRegistry } from '../../src/providers/ProvisionerRegistry';
 import { Provisioning } from '../../src/providers/Provisioning';
@@ -95,7 +96,7 @@ describe('ActionExecutor', () => {
   let versions: Versions;
   let limit: Watched;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     mockState = emptyState();
     mockProvider = {
       name: 'mock',
@@ -115,7 +116,7 @@ describe('ActionExecutor', () => {
     };
 
     providers = new ProviderRegistry();
-    providers.register(mockProvider);
+    providers.register(() => mockProvider);
     const instances = new Instances();
     const modules = new ModuleInstances();
     versions = new Versions();
@@ -132,12 +133,14 @@ describe('ActionExecutor', () => {
       'default'
     );
     limit = new Watched(DEFAULT_PARALLELISM);
+    const configured = new ProviderInstances(providers, limit);
+    await configured.configure(mockProvider.name);
     executor = new ActionExecutor(
-      providers,
+      configured,
       new ProvisionerRunner(new Provisioning(new ProvisionerRegistry(), limit), resolver),
       resolver,
-      new ResourcePlanner(providers, limit),
-      new SameObjects(providers, limit),
+      new ResourcePlanner(configured, limit),
+      new SameObjects(configured, limit),
       versions,
       limit
     );
@@ -588,7 +591,7 @@ describe('ActionExecutor', () => {
   describe('each provider call', () => {
     let calls: string[];
 
-    beforeEach(() => {
+    beforeEach(async () => {
       calls = [];
       const seen = (call: string) => calls.push(`${call} ${limit.inside > 0 ? 'in turn' : 'outside'}`);
       vi.mocked(mockProvider.getSchema).mockImplementation(async () => {

@@ -18,6 +18,7 @@ import { ConfigFiles } from '../config/ConfigFiles';
 import { Instances } from '../instances/Instances';
 import { ModuleInstances } from '../instances/ModuleInstances';
 import { Planned } from '../values/Planned';
+import { ProviderInstances } from '../providers/ProviderInstances';
 import { ProviderRegistry } from '../providers/ProviderRegistry';
 import { ProvisionerRegistry } from '../providers/ProvisionerRegistry';
 import { Provisioning } from '../providers/Provisioning';
@@ -38,6 +39,8 @@ export interface Run {
   desiredStateBuilder: DesiredStateBuilder;
   runner: PlanRunner;
   modules: ModuleInstances;
+  /** The run's own instances, which its walk configures. */
+  providers: ProviderInstances;
 }
 
 /** What the engine has registered, which every run shares. */
@@ -56,14 +59,15 @@ export function newRun(stateManager: StateManager, { providers, provisioners }: 
   const provisionerSchemas = new Map<string, Schema>();
   const instances = new Instances();
   const modules = new ModuleInstances();
+  const configured = new ProviderInstances(providers, limit);
   const planned = new Planned(versions);
   const keys = new InstanceKeys(instances, modules);
   const resolver = new ReferenceResolver(scopes, dataSources, schemas, dataSchemas, instances, modules, planned, keys, versions, workspace);
   const scanner = new ReferenceScanner(modules);
   const graphBuilder = new DependencyGraphBuilder(scanner, instances, modules);
-  const resourcePlanner = new ResourcePlanner(providers, limit);
+  const resourcePlanner = new ResourcePlanner(configured, limit);
   const provisioning = new Provisioning(provisioners, limit);
-  const reader = new DataSourceReader(providers, dataSchemas, dataSources, versions, limit);
+  const reader = new DataSourceReader(configured, dataSchemas, dataSources, versions, limit);
   const planReader = new PlanReader(resolver, instances);
 
   return {
@@ -95,14 +99,16 @@ export function newRun(stateManager: StateManager, { providers, provisioners }: 
       provisioning,
       new DataPlanner(graphBuilder, instances, modules, planned, reader, planReader),
       planReader,
-      versions
+      versions,
+      configured
     ),
     runner: new PlanRunner(
       stateManager,
-      new ActionExecutor(providers, new ProvisionerRunner(provisioning, resolver), resolver, resourcePlanner, new SameObjects(providers, limit), versions, limit),
-      new ApplyVisitor(scopes, resolver, instances, modules, reader),
+      new ActionExecutor(configured, new ProvisionerRunner(provisioning, resolver), resolver, resourcePlanner, new SameObjects(configured, limit), versions, limit),
+      new ApplyVisitor(scopes, resolver, instances, modules, reader, configured),
       instances
     ),
     modules,
+    providers: configured,
   };
 }

@@ -13,13 +13,19 @@ function checkProvider(provider: Provider): void {
   }
 }
 
+/**
+ * One instance of each provider, never configured, answers what a provider is: its name, its types, its schemas, and whether a block is
+ * valid. Each run makes its own instances to configure and work with.
+ */
 export class ProviderRegistry {
   private providers: Map<string, Provider> = new Map();
   private readers: Map<string, Provider> = new Map();
   private named: Map<string, Provider> = new Map();
+  private factories: Map<string, () => Provider> = new Map();
 
   /** Everything is checked before anything is kept, so a provider refused leaves no type of it behind. */
-  register(provider: Provider): void {
+  register(create: () => Provider): void {
+    const provider = create();
     checkProvider(provider);
     if (this.named.has(provider.name)) throw new Error(`A provider named "${provider.name}" is already registered`);
 
@@ -31,6 +37,19 @@ export class ProviderRegistry {
     for (const type of provider.resources) this.providers.set(type, provider);
     for (const type of provider.dataSources) this.readers.set(type, provider);
     this.named.set(provider.name, provider);
+    this.factories.set(provider.name, create);
+  }
+
+  /** A new instance, not configured yet. */
+  create(name: string): Provider {
+    const create = this.factories.get(name);
+    if (!create) throw new Error(`No provider is named "${name}"`);
+
+    return create();
+  }
+
+  resourcesOf(name: string): readonly string[] {
+    return this.named.get(name)?.resources ?? [];
   }
 
   /** Looked up apart from resources, since a type may be one and not the other. */
@@ -39,6 +58,10 @@ export class ProviderRegistry {
     if (!provider) throw new Error(`No provider reads data source "${type}"`);
 
     return provider;
+  }
+
+  handles(type: string): boolean {
+    return this.providers.has(type);
   }
 
   get(type: string): Provider {

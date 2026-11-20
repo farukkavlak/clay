@@ -14,8 +14,9 @@ export class TestEngine {
     private write: (config: string) => Promise<void>
   ) {}
 
-  registerProvider(provider: Provider): void {
-    this.engine.registerProvider(provider);
+  /** A provider given as an instance stands for every instance a run makes, so a test can look into what the run did with it. */
+  registerProvider(provider: Provider | (() => Provider)): void {
+    this.engine.registerProvider(typeof provider === 'function' ? provider : () => provider);
   }
 
   async plan(config: string, options?: { refresh?: boolean }): Promise<Plan> {

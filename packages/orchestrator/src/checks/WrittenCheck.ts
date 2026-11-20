@@ -21,6 +21,7 @@ import { checkWritten } from '../expressions/validations';
 import { plainOf, Value } from '../values/Value';
 import { GraphNode } from '../graph/DependencyGraphBuilder';
 import { LoadedModule, LoadedResource } from '../config/ModuleLoader';
+import { isProvider } from '../graph/providerNodes';
 
 /** Checks every value once as written, so a block is checked even when it makes no instance. */
 export class WrittenCheck {
@@ -56,7 +57,7 @@ export class WrittenCheck {
     const asked: Promise<unknown>[] = [];
 
     try {
-      for (const key of graph.topologicalSort().flat()) asked.push(this.checkNode(graph.getNode(key)!, key, resources));
+      for (const key of graph.passing(isProvider(graph))) asked.push(this.checkNode(graph.getNode(key)!, key, resources));
     } catch (error) {
       await inOrder(asked);
       throw error;

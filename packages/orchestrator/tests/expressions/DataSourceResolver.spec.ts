@@ -7,6 +7,7 @@ import { Instances } from '../../src/instances/Instances';
 import { DataInstance } from '../../src/keys';
 import { DataSourceReader } from '../../src/plan/DataSourceReader';
 import { Limit } from '../../src/providers/Limit';
+import { ProviderInstances } from '../../src/providers/ProviderInstances';
 import { ProviderRegistry } from '../../src/providers/ProviderRegistry';
 import { DEFAULT_PARALLELISM } from '../../src/run/parallelism';
 import { Value, valueOf } from '../../src/values/Value';
@@ -26,7 +27,13 @@ const counted = (module = ModuleAddress.root) => {
   const versions = new Versions();
   instances.declare(new DataInstance(module.withoutKeys(), 'src', 's').block, 'count');
   instances.setCount(new DataInstance(module, 'src', 's').block, 2);
-  const reader = new DataSourceReader(new ProviderRegistry(), schemas, dataSources, versions, new Limit(DEFAULT_PARALLELISM));
+  const reader = new DataSourceReader(
+    new ProviderInstances(new ProviderRegistry(), new Limit(DEFAULT_PARALLELISM)),
+    schemas,
+    dataSources,
+    versions,
+    new Limit(DEFAULT_PARALLELISM)
+  );
   const keep = (key: number, v: string) => reader.use(new DataInstance(module, 'src', 's', key), { v: { type: types.string, value: v } });
   keep(0, 'zero');
   keep(1, 'one');

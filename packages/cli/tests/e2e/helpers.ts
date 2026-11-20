@@ -20,8 +20,9 @@ export class TestEngine {
     private write: (config: string) => Promise<void>
   ) {}
 
-  registerProvider(provider: Provider): void {
-    this.engine.registerProvider(provider);
+  /** A provider given as an instance stands for every instance a run makes, so a test can look into what the run did with it. */
+  registerProvider(provider: Provider | (() => Provider)): void {
+    this.engine.registerProvider(typeof provider === 'function' ? provider : () => provider);
   }
 
   async plan(config: string, options?: PlanOptions): Promise<Plan> {
@@ -72,8 +73,8 @@ export function engineIn(dir: string): TestEngine {
   return new TestEngine(Orchestrator.create(manager, new DiskFiles(dir)), manager, (config) => fs.writeFile(path.join(dir, 'main.clay'), config, 'utf8'));
 }
 
-/** An engine on the state and the files in `dir`, with the providers given, or the local one where none is. */
-export function orchestratorIn(dir: string, ...providers: Provider[]): TestEngine {
+/** An engine on the state and the files in `dir`, with the providers given, or the local one where none is; a factory makes each run its own. */
+export function orchestratorIn(dir: string, ...providers: (Provider | (() => Provider))[]): TestEngine {
   const engine = engineIn(dir);
   for (const provider of providers.length > 0 ? providers : [new LocalProvider()]) engine.registerProvider(provider);
   return engine;
