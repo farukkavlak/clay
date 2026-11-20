@@ -11,6 +11,7 @@ import { start } from '../start';
 
 /** Plans the label as configured, then upper-cases it and adds a value it never planned. */
 class LoudProvider implements Provider {
+  readonly name: string = 'loud_provider';
   readonly resources = ['loud'];
   readonly dataSources: string[] = [];
 
@@ -51,6 +52,7 @@ class LoudProvider implements Provider {
 
 /** Creates as told and reads back its input plus `extra`. */
 class EchoProvider extends LoudProvider {
+  override readonly name: string = 'echo_provider';
   override readonly resources = ['echo'];
 
   constructor(private extra: Record<string, unknown> = {}) {
@@ -68,6 +70,7 @@ class EchoProvider extends LoudProvider {
 
 /** A data source that returns what it is told to. */
 class DataReader extends LoudProvider {
+  override readonly name: string = 'data_reader';
   override readonly resources: string[] = [];
   override readonly dataSources = ['vague'];
 
@@ -89,6 +92,7 @@ class DataReader extends LoudProvider {
 
 /** Declares `note` and never sets it. */
 class NotelessProvider extends LoudProvider {
+  override readonly name: string = 'noteless_provider';
   override readonly resources = ['noteless'];
 
   override async getSchema(): Promise<Schema> {
@@ -106,6 +110,7 @@ class NotelessProvider extends LoudProvider {
 
 /** Marks a non-computed value `kept`. */
 class MuddledEcho extends EchoProvider {
+  override readonly name: string = 'muddled_echo';
   override async getSchema(): Promise<Schema> {
     return { label: { type: types.string, required: true, kept: true } };
   }
@@ -113,6 +118,7 @@ class MuddledEcho extends EchoProvider {
 
 /** Plans its id from the name, then creates it with another. */
 class MisnamingProvider extends LoudProvider {
+  override readonly name: string = 'misnaming_provider';
   override readonly resources = ['named'];
 
   override async getSchema(): Promise<Schema> {
@@ -130,6 +136,7 @@ class MisnamingProvider extends LoudProvider {
 }
 
 class MistypingProvider extends LoudProvider {
+  override readonly name: string = 'mistyping_provider';
   override async plan(_type: string, request: PlanRequest): Promise<PlannedChange> {
     const { after, replace } = planFromSchema(await this.getSchema(), request);
     return { after: { ...after, label: [after.label] }, replace };
@@ -138,6 +145,7 @@ class MistypingProvider extends LoudProvider {
 
 /** Plans a different id every time. */
 class FickleProvider extends MisnamingProvider {
+  override readonly name: string = 'fickle_provider';
   private plans = 0;
 
   override async plan(_type: string, request: PlanRequest): Promise<PlannedChange> {
@@ -161,6 +169,7 @@ function nestedListType(levels: number): Type {
 
 /** Plans `out` as `planned` and makes it as `made`, however deep either is. */
 class DeepProvider extends LoudProvider {
+  override readonly name: string = 'deep_provider';
   override readonly resources = ['deep'];
 
   constructor(
@@ -190,6 +199,7 @@ class DeepProvider extends LoudProvider {
 
 /** Gives `extra` a default nested `levels` deep. */
 class DeepDefaultEcho extends EchoProvider {
+  override readonly name: string = 'deep_default_echo';
   constructor(private levels: number) {
     super();
   }
@@ -201,6 +211,7 @@ class DeepDefaultEcho extends EchoProvider {
 
 /** Gives its label a list type nested `levels` deep. */
 class DeepSchemaEcho extends EchoProvider {
+  override readonly name: string = 'deep_schema_echo';
   constructor(private levels: number) {
     super();
   }

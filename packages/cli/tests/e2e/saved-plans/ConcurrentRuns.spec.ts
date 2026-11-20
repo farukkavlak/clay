@@ -33,6 +33,7 @@ const events = async (run: AsyncGenerator<RunEvent>): Promise<RunEvent[]> => {
 
 /** Holds the creation of "a" until it is let go, so a test can do something while a run is half way. */
 class Gate implements Provider {
+  readonly name: string = 'gate';
   readonly resources = ['gate'];
   readonly dataSources = ['gate_word'];
   readonly reached = latch();

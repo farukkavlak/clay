@@ -14,6 +14,7 @@ const command = (text: string) => `resource "command_exec" "c" { command = "echo
 
 /** Plans a normalized path, unlike what the configuration sets. */
 class TidyProvider implements Provider {
+  readonly name: string = 'tidy_provider';
   readonly resources = ['tidy'];
   readonly dataSources: string[] = [];
 

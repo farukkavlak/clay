@@ -18,6 +18,7 @@ const pause = (ms: number) =>
 
 /** Takes a moment to destroy and notes when each destroy starts and ends. */
 class Noting implements Provider {
+  readonly name: string = 'noting';
   readonly resources = ['rec'];
   readonly dataSources = [];
   readonly seen: string[] = [];

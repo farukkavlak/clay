@@ -17,6 +17,7 @@ const RULE = types.object({ mode: types.string, port: types.number }, ['port']);
  * As a data source it returns the `size` and the `rule` it is given.
  */
 class TallyProvider implements Provider {
+  readonly name: string = 'tally_provider';
   readonly resources = ['tally'];
   readonly dataSources = ['tally'];
 
@@ -65,6 +66,7 @@ type Rule = Record<string, unknown>;
 
 /** Gives `rule` back as `shape` makes it, from a create and from a data source read. */
 class ShapingProvider extends TallyProvider {
+  override readonly name: string = 'shaping_provider';
   constructor(private readonly shape: (rule: Rule) => Rule) {
     super();
   }

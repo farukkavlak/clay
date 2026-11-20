@@ -13,6 +13,7 @@ const DATA_SCHEMA: Schema = { id: { type: types.string, computed: true }, name: 
 
 /** Aborts the run while it creates or deletes a resource, so that one finishes and nothing after it starts. */
 class Interrupting implements Provider {
+  readonly name: string = 'interrupting';
   readonly resources = ['mock_resource'];
   readonly dataSources = ['mock_data'];
   readonly created: string[] = [];

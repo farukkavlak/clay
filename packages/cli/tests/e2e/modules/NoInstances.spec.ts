@@ -11,6 +11,7 @@ const TAGGED: Schema = { tags: { type: types.set(types.string), required: true }
 
 /** A resource that holds what it is given as a set; it is only planned. */
 class Tagger implements Provider {
+  readonly name: string = 'tagger';
   readonly resources = ['tagged'];
   readonly dataSources: string[] = [];
 

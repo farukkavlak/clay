@@ -10,6 +10,7 @@ import { apply } from './apply';
 import { engineIn, engineOn, TestEngine } from './engine';
 
 class MockProvider implements Provider {
+  readonly name: string = 'mock';
   readonly resources = ['mock_resource'];
   readonly dataSources: string[] = [];
   private createdResources: Map<string, Record<string, unknown>> = new Map();
@@ -71,7 +72,7 @@ class MockProvider implements Provider {
   }
 }
 
-const reader = () => Object.assign(new MockProvider(), { resources: [], dataSources: ['mock_data'] });
+const reader = (name = 'reader') => Object.assign(new MockProvider(), { name, resources: [], dataSources: ['mock_data'] });
 
 describe('Orchestrator', () => {
   let tmpDir: string;
@@ -99,14 +100,14 @@ describe('Orchestrator', () => {
       expect(() => newOrchestrator.registerProvider(mockProvider)).not.toThrow();
     });
 
-    it('should throw error if provider already registered', () => {
-      expect(() => orchestrator.registerProvider(mockProvider)).toThrow('already registered');
+    it('refuses a second provider for a resource type one already makes', () => {
+      expect(() => orchestrator.registerProvider(Object.assign(new MockProvider(), { name: 'other' }))).toThrow('Provider for resource type "mock_resource" already registered');
     });
 
     it('refuses a second provider for a data source type one already reads', () => {
       orchestrator.registerProvider(reader());
 
-      expect(() => orchestrator.registerProvider(reader())).toThrow('Provider for data source type "mock_data" already registered');
+      expect(() => orchestrator.registerProvider(reader('other_reader'))).toThrow('Provider for data source type "mock_data" already registered');
     });
 
     // A provider refused is refused whole, so no type of it is left to plan with.
@@ -117,7 +118,7 @@ describe('Orchestrator', () => {
     ])('keeps no type of a provider refused for %s that another already has', async (_, lists, config, left) => {
       orchestrator.registerProvider(reader());
 
-      expect(() => orchestrator.registerProvider(Object.assign(new MockProvider(), lists))).toThrow('already registered');
+      expect(() => orchestrator.registerProvider(Object.assign(new MockProvider(), { name: 'refused', ...lists }))).toThrow(/type ".*" already registered/);
       await expect(orchestrator.plan(config)).rejects.toThrow(left);
     });
 
@@ -125,6 +126,19 @@ describe('Orchestrator', () => {
       const importer = Object.assign(new MockProvider(), { resources: ['made'], importable: ['other'], importResource: async () => null });
 
       expect(() => engineOn(new StateManager(new LocalBackend(tmpDir))).registerProvider(importer)).toThrow('A provider lists "other" as importable, but does not make it');
+    });
+
+    // A name picks one provider, so two with one name could each be meant.
+    it('refuses a second provider with a name one already has, and keeps none of its types', async () => {
+      expect(() => orchestrator.registerProvider(Object.assign(new MockProvider(), { resources: ['free'] }))).toThrow('A provider named "mock" is already registered');
+      await expect(orchestrator.plan('resource "free" "a" {}')).rejects.toThrow('No provider handles "free"');
+    });
+
+    it('refuses a provider whose name no configuration could write, and keeps none of its types', async () => {
+      const unnamed = Object.assign(new MockProvider(), { name: 'two words', resources: ['free'] });
+
+      expect(() => orchestrator.registerProvider(unnamed)).toThrow('A provider is named "two words", which is a bug in the provider: a name starts with a letter or underscore');
+      await expect(orchestrator.plan('resource "free" "a" {}')).rejects.toThrow('No provider handles "free"');
     });
 
     it('refuses a provider that lists a type as importable but cannot import', () => {

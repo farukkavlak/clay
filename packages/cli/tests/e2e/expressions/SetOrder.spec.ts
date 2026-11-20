@@ -17,6 +17,7 @@ const reversed = (value: unknown) => (Array.isArray(value) ? [...value].reverse(
 
 /** Holds `members` (set of strings), `order` (list of strings) and `groups` (set of sets), and returns them reordered, as a remote API may. */
 class PoolProvider implements Provider {
+  readonly name: string = 'pool_provider';
   readonly resources = ['pool'];
   readonly dataSources = ['pool'];
 
@@ -63,6 +64,7 @@ class PoolProvider implements Provider {
 
 /** Reads `a` removed and `x` added, as if changed outside Clay. */
 class ChangedPool extends PoolProvider {
+  override readonly name: string = 'changed_pool';
   override async read(type: string, prior: Record<string, unknown>): Promise<Record<string, unknown> | null> {
     const read = await super.read(type, prior);
     const members = Array.isArray(read?.members) ? read.members.filter((member) => member !== 'a') : [];
@@ -71,6 +73,7 @@ class ChangedPool extends PoolProvider {
 }
 
 class RegroupingPool extends PoolProvider {
+  override readonly name: string = 'regrouping_pool';
   override async plan(type: string, request: PlanRequest): Promise<PlannedChange> {
     const change = await super.plan(type, request);
     return { ...change, after: { ...change.after, groups: reversed(change.after.groups) } };

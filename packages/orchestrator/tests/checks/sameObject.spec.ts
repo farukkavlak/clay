@@ -11,6 +11,7 @@ import { engineOn, TestEngine } from '../engine';
 
 /** A thing named by `place` in any case, which a change of `label` replaces. */
 class PlacedProvider implements Provider {
+  readonly name: string = 'placed_provider';
   readonly resources = ['placed'];
   /** The start of each place that can no longer be told, as a disk changed under a run. */
   lost = 'lost';

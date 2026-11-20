@@ -18,6 +18,7 @@ const SCHEMA: Schema = {
 
 /** Makes `token` itself; the schema says it is sensitive. */
 class Vault implements Provider {
+  readonly name: string = 'vault';
   readonly resources = ['vault'];
   readonly dataSources = ['vault_lookup'];
 
@@ -64,6 +65,7 @@ class Vault implements Provider {
 
 /** Refuses a resource given a secret and every data source, with a message that quotes the configuration. */
 class Quoting extends Vault {
+  override readonly name: string = 'quoting';
   override async validate(_type: string, inputs: Record<string, unknown>): Promise<void> {
     if (inputs.secret === undefined) return;
 

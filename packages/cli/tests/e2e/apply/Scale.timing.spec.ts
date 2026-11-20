@@ -15,6 +15,7 @@ const SCHEMA: Schema = { name: { type: types.string, required: true } };
 
 /** Each object is the thing its name says, so the engine asks which object is which. */
 class Things implements Provider {
+  readonly name: string = 'things';
   readonly resources = ['thing'];
   readonly dataSources = [];
 
@@ -61,6 +62,7 @@ const POOL: Schema = { id: { type: types.string, computed: true, kept: true }, m
 
 /** Holds a set of members, and returns them in reverse, as a remote API may. */
 class Pool implements Provider {
+  readonly name: string = 'pool';
   readonly resources = ['pool'];
   readonly dataSources = [];
 

@@ -14,6 +14,7 @@ import { start } from '../start';
 
 /** Holds `members`, a set of strings, and computes its id at apply. */
 class PoolProvider implements Provider {
+  readonly name: string = 'pool_provider';
   readonly resources = ['pool'];
   readonly dataSources = [];
 

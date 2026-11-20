@@ -10,6 +10,7 @@ import { engineOn, TestEngine } from './engine';
 
 /** `constructor` is a name every plain object already answers to, and a provider is free to use it for a resource type. */
 class InheritedNameProvider implements Provider {
+  readonly name: string = 'inherited_name_provider';
   readonly resources = ['constructor'];
   readonly dataSources: string[] = [];
 

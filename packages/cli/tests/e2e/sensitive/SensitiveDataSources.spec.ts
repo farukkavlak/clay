@@ -14,6 +14,7 @@ const REFUSED = (name: string) => `output "${name}" holds a sensitive value; wri
 
 /** Reads back the tags it is given. */
 class Tagged implements Provider {
+  readonly name: string = 'tagged';
   readonly resources: string[] = [];
   readonly dataSources = ['tagged'];
 

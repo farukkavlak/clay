@@ -51,6 +51,9 @@ export function planFromSchema(schema: Schema, { prior, proposed, config }: Plan
 
 /** Numbers in inputs arrive as `ExactNumber`, never rounded. */
 export interface Provider {
+  /** What a configuration names it by, as `local`; one name per provider. */
+  readonly name: string;
+
   readonly resources: string[];
 
   /** A type may also be a resource type, as a file is both written and read. */

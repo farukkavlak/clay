@@ -16,6 +16,7 @@ const SCHEMA: Schema = {
 
 /** Notes each create, update and destroy in the order they happen. A name in `failing` cannot be made or destroyed. */
 class Rec implements Provider {
+  readonly name: string = 'rec';
   readonly resources = ['rec'];
   readonly dataSources = [];
   readonly seen: string[] = [];

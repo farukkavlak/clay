@@ -22,6 +22,7 @@ const pause = (ms: number) =>
  * One whose `mode` is `<call> after <name>` ends that call only once the same call for `<name>` has. A resource's `id` is its name, known once it is made.
  */
 export class Slow implements Provider {
+  readonly name: string = 'slow';
   readonly dataSources: string[];
   running = 0;
   most = 0;

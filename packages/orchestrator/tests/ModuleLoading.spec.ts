@@ -50,6 +50,7 @@ describe('Orchestrator - Module Loading', () => {
   let files: Record<string, string>;
   let orchestrator: TestEngine;
   let mockProvider: {
+    name: string;
     resources: string[];
     dataSources: string[];
     validate: Mock;
@@ -70,6 +71,7 @@ describe('Orchestrator - Module Loading', () => {
     tmpDir = await fsPromises.mkdtemp(path.join(os.tmpdir(), 'orchestrator-module-test-'));
 
     mockProvider = {
+      name: 'mock',
       resources: ['test_resource'],
       dataSources: [],
       validate: vi.fn(),

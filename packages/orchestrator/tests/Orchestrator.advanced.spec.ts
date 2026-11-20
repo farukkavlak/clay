@@ -9,6 +9,7 @@ import { apply } from './apply';
 import { engineOn, TestEngine } from './engine';
 
 class MockProvider implements Provider {
+  readonly name: string = 'mock_provider';
   readonly resources = ['mock_resource'];
   readonly dataSources: string[] = [];
   private createdResources: Map<string, Record<string, unknown>> = new Map();

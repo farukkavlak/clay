@@ -17,6 +17,7 @@ const SCHEMAS: Record<string, Schema> = {
 
 /** Plans its default other than its schema gives it. */
 class Wayward implements Provider {
+  readonly name: string = 'wayward';
   readonly resources = ['lamp', 'vault'];
   readonly dataSources: string[] = [];
 

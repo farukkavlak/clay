@@ -25,6 +25,7 @@ const hidden = (doing: string) => `failed ${doing}; a value given to it is sensi
 const secretIn = (type: string) => `${MODULE}resource "${type}" "a" { label = module.db.secret }`;
 
 class Base implements Provider {
+  readonly name: string = 'base';
   readonly resources: string[] = [];
   readonly dataSources: string[] = [];
 
@@ -65,6 +66,7 @@ class Base implements Provider {
 
 /** Applies a label upper-cased, with a value it never planned. */
 class Loud extends Base {
+  override readonly name: string = 'loud';
   override readonly resources = ['loud'];
 
   override async create(_type: string, { config }: CreateRequest): Promise<Record<string, unknown>> {
@@ -74,6 +76,7 @@ class Loud extends Base {
 
 /** Plans a label the configuration did not set. */
 class Wrong extends Base {
+  override readonly name: string = 'wrong';
   override readonly resources = ['wrong'];
 
   override async plan(_type: string, request: PlanRequest): Promise<PlannedChange> {
@@ -88,6 +91,7 @@ const SECRET = (label: unknown) => String(label).startsWith('hunter');
 
 /** Plans a label the configuration did not set, for a secret label only. */
 class WrongOnSecret extends Base {
+  override readonly name: string = 'wrong_on_secret';
   override readonly resources = ['wrong_on_secret'];
 
   override async plan(_type: string, request: PlanRequest): Promise<PlannedChange> {
@@ -98,6 +102,7 @@ class WrongOnSecret extends Base {
 
 /** Throws from its plan, quoting a secret label. */
 class PlanThrowing extends Base {
+  override readonly name: string = 'plan_throwing';
   override readonly resources = ['plan_throwing'];
 
   override async plan(type: string, request: PlanRequest): Promise<PlannedChange> {
@@ -108,6 +113,7 @@ class PlanThrowing extends Base {
 
 /** Throws a string, not an Error, quoting the label. */
 class Shouting extends Base {
+  override readonly name: string = 'shouting';
   override readonly resources = ['shouting'];
 
   override async validate(_type: string, config: Record<string, unknown>): Promise<void> {
@@ -117,6 +123,7 @@ class Shouting extends Base {
 
 /** Refuses a label, and says which in words of its own. */
 class Refusing extends Base {
+  override readonly name: string = 'refusing';
   override readonly resources = ['refusing'];
 
   override async validate(_type: string, config: Record<string, unknown>): Promise<void> {
@@ -126,6 +133,7 @@ class Refusing extends Base {
 
 /** Refuses what a data block gives, and reads back something else. */
 class Reader extends Base {
+  override readonly name: string = 'reader';
   override readonly dataSources = ['reader'];
 
   override async validateDataSource(_type: string, config: Record<string, unknown>): Promise<void> {
@@ -134,6 +142,7 @@ class Reader extends Base {
 }
 
 class Altering extends Base {
+  override readonly name: string = 'altering';
   override readonly dataSources = ['altering'];
 
   override async readDataSource(): Promise<Record<string, unknown>> {
@@ -143,6 +152,7 @@ class Altering extends Base {
 
 /** Throws at apply, quoting the label it was given or holds. */
 class Throwing extends Base {
+  override readonly name: string = 'throwing';
   override readonly resources = ['throwing'];
   override readonly dataSources = ['throwing'];
 
@@ -161,6 +171,7 @@ class Throwing extends Base {
 
 /** Throws when it destroys or reads back what it holds, quoting the label. */
 class Holding extends Base {
+  override readonly name: string = 'holding';
   override readonly resources = ['holding'];
   failRead = false;
   failIdentify = false;

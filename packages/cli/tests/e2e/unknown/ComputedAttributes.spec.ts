@@ -11,6 +11,7 @@ import { start } from '../start';
 
 /** Computes `made` on create and update, unless the configuration sets it. */
 class StampProvider implements Provider {
+  readonly name: string = 'stamp_provider';
   readonly resources = ['stamp'];
   readonly dataSources: string[] = [];
 
@@ -56,6 +57,7 @@ class StampProvider implements Provider {
 
 /** Computes `tags`, a map of strings. */
 class TaggedStampProvider extends StampProvider {
+  override readonly name: string = 'tagged_stamp_provider';
   override async getSchema(): Promise<Schema> {
     return { ...(await super.getSchema()), tags: { type: types.map(types.string), computed: true } };
   }
@@ -67,6 +69,7 @@ class TaggedStampProvider extends StampProvider {
 
 /** Declares `made` computed, then does not return it. */
 class ForgetfulStampProvider extends StampProvider {
+  override readonly name: string = 'forgetful_stamp_provider';
   override async create(_type: string, { config }: CreateRequest): Promise<Record<string, unknown>> {
     return { ...config, id: 'stamp-id' };
   }
@@ -74,6 +77,7 @@ class ForgetfulStampProvider extends StampProvider {
 
 /** Computes a `kept` `serial`; a change to `size` replaces the resource. */
 class SerialStampProvider extends StampProvider {
+  override readonly name: string = 'serial_stamp_provider';
   override async getSchema(): Promise<Schema> {
     return { ...(await super.getSchema()), size: { type: types.string, forceNew: true }, serial: { type: types.string, computed: true, kept: true } };
   }
@@ -89,6 +93,7 @@ class SerialStampProvider extends StampProvider {
 
 /** Plans `made` itself, creates from that plan, and records each create request. */
 class PlannedStampProvider extends StampProvider {
+  override readonly name: string = 'planned_stamp_provider';
   readonly creates: CreateRequest[] = [];
   readonly updates: UpdateRequest[] = [];
 

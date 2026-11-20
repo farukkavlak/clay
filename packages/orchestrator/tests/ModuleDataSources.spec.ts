@@ -49,6 +49,7 @@ describe('Orchestrator - Phase 5: Scoped Data Sources', () => {
   let files: Record<string, string>;
   let orchestrator: TestEngine;
   let mockProvider: {
+    name: string;
     resources: string[];
     dataSources: string[];
     validate: Mock;
@@ -68,6 +69,7 @@ describe('Orchestrator - Phase 5: Scoped Data Sources', () => {
     tmpDir = await fsPromises.mkdtemp(path.join(os.tmpdir(), 'orchestrator-datasources-test-'));
 
     mockProvider = {
+      name: 'mock',
       resources: ['test_resource'],
       dataSources: ['aws_ami'],
       validate: vi.fn(),

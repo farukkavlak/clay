@@ -98,6 +98,7 @@ describe('ActionExecutor', () => {
   beforeEach(() => {
     mockState = emptyState();
     mockProvider = {
+      name: 'mock',
       resources: ['test'],
       dataSources: [],
       validate: vi.fn(),

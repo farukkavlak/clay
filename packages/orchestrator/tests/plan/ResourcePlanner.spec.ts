@@ -15,6 +15,7 @@ const schema: Schema = { path: { type: types.string, forceNew: true }, tags: { t
 
 function fakeProvider(plan: (request: PlanRequest) => PlannedChange = (request) => planFromSchema(schema, request)) {
   return {
+    name: 'fake',
     resources: ['thing'],
     dataSources: [],
     getSchema: async () => schema,

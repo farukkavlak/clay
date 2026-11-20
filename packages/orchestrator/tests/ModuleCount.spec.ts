@@ -12,6 +12,7 @@ import { engineOn, TestEngine } from './engine';
 const schema: Schema = { value: { type: types.string } };
 
 const recorder: Provider = {
+  name: 'recorder',
   resources: ['rec'],
   dataSources: [],
   getSchema: async () => schema,

@@ -9,6 +9,7 @@ import { RandomStringResource } from './resources/RandomStringResource';
 const importableIn = (handlers: Map<string, ResourceHandler>) => [...handlers].flatMap(([type, handler]) => (handler.importResource ? [type] : []));
 
 export class LocalProvider implements Provider {
+  readonly name = 'local';
   private readonly handlers = new Map<string, ResourceHandler>([
     ['local_file', new LocalFileResource()],
     ['random_string', new RandomStringResource()],

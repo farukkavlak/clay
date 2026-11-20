@@ -25,6 +25,7 @@ function used(config: Record<string, unknown>): string | undefined {
 
 /** As a cloud does: an object another one uses cannot be destroyed, and one cannot use an object that does not exist. */
 class Using implements Provider {
+  readonly name: string = 'using';
   readonly resources = ['rec'];
   readonly dataSources = [];
   readonly seen: string[] = [];
