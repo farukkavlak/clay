@@ -1,4 +1,4 @@
-import { types } from '@clay/contracts';
+import { types } from '@clay/core';
 import { describe, expect, it } from 'vitest';
 
 import { growth, LINEAR } from '../../../../tests/growth';

@@ -3,7 +3,7 @@ import { Dirent, Stats } from 'node:fs';
 import * as fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { emptyState, isWorkspaceName, State, WrittenState } from '@clay/contracts';
+import { emptyState, isWorkspaceName, State, WrittenState } from '@clay/core';
 
 import { LockInfo, lockInfoFrom, noLockAt, otherLockAt, StateLocked } from '../lockInfo';
 import { BackendChoice, DEFAULT_WORKSPACE, NamedWorkspace, WORKSPACES_FOLDER } from '../StateBackend';

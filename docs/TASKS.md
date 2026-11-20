@@ -1375,7 +1375,7 @@ Nothing here changes what Clay does. Each is a place the next change has to work
       themselves, in 14 forms; only `start.ts` is shared. `placeOf`, `clayIn` and
       `errorOf` are copied word for word into 19, 12 and 7 specs
 - [ ] Each package's coverage counts what its tests import from other packages, so
-      `contracts` shows 64% with code the e2e tests cover. CI holds no threshold
+      `core` shows 64% with code the e2e tests cover. CI holds no threshold
 - [ ] Old test titles read `should ...` beside the plain sentences of the rest
 
 ## 6. Later

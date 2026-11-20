@@ -1,4 +1,4 @@
-import { emptyState } from '@clay/contracts';
+import { emptyState } from '@clay/core';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';

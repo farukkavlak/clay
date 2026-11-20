@@ -1,4 +1,4 @@
-import { Address, AttributePath, isExact, isMaybe, isRecord, isUnknown, jsonText, Marks, memberKey, Output, Resource, samePaths, Schema, SENSITIVE } from '@clay/contracts';
+import { Address, AttributePath, isExact, isMaybe, isRecord, isUnknown, jsonText, Marks, memberKey, Output, Resource, samePaths, Schema, SENSITIVE } from '@clay/core';
 import { changedOutside, Changes, changesState, Drift, keptChange, OutputChanges, Plan, PlanAction } from '@clay/planner';
 import { isDeepStrictEqual, styleText } from 'node:util';
 

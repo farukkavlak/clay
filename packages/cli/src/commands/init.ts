@@ -1,4 +1,4 @@
-import { emptyState } from '@clay/contracts';
+import { emptyState } from '@clay/core';
 import { DiskFiles, RecordingFiles } from '@clay/orchestrator';
 import { adoptBackend, Approve, DEFAULT_WORKSPACE, Moved, MovedWorkspace, rememberedBackend, StateBackend, StateManager, Stoppable } from '@clay/state';
 import { Command } from 'commander';

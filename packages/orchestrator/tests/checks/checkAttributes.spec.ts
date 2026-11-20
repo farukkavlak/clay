@@ -1,4 +1,4 @@
-import { ModuleAddress, Schema, types } from '@clay/contracts';
+import { ModuleAddress, Schema, types } from '@clay/core';
 import { Lexer, Parser, ResourceBlock } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 

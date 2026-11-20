@@ -1,4 +1,4 @@
-import { AttributePath, containsUnknown, isRecord, isUnknown, memberKey, own, Schema, Type, typeAt, typeIn, UNKNOWN, unknownPaths, valueAt } from '@clay/contracts';
+import { AttributePath, containsUnknown, isRecord, isUnknown, memberKey, own, Schema, Type, typeAt, typeIn, UNKNOWN, unknownPaths, valueAt } from '@clay/core';
 import { isDeepStrictEqual } from 'node:util';
 
 export interface Mismatch {

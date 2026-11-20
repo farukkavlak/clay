@@ -1,4 +1,4 @@
-import { AttributePath, ExactNumber, isExact, isMaybe, isRecord, isUnknown, MAYBE, NumberError, Schema, SENSITIVE, Type, typeAt, UNKNOWN } from '@clay/contracts';
+import { AttributePath, ExactNumber, isExact, isMaybe, isRecord, isUnknown, MAYBE, NumberError, Schema, SENSITIVE, Type, typeAt, UNKNOWN } from '@clay/core';
 import { DataBlock, Position, ResourceBlock } from '@clay/parser';
 
 import { setOf } from './setMembers';

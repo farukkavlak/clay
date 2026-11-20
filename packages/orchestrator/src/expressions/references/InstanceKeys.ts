@@ -1,4 +1,4 @@
-import { Address, InstanceKey } from '@clay/contracts';
+import { Address, InstanceKey } from '@clay/core';
 import { ParsedReference, Position, spellReference, Step } from '@clay/parser';
 
 import { Instances, repetitionOfKey } from '../../instances/Instances';

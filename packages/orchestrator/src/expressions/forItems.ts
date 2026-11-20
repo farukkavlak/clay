@@ -1,4 +1,4 @@
-import { AttributePath, EVERY_ITEM, EXACT, ExactNumber, holdsFirst, isMarker, isUnknown, SENSITIVE, sensitiveUnder, Type, typeAt, types, UNKNOWN } from '@clay/contracts';
+import { AttributePath, EVERY_ITEM, EXACT, ExactNumber, holdsFirst, isMarker, isUnknown, SENSITIVE, sensitiveUnder, Type, typeAt, types, UNKNOWN } from '@clay/core';
 import { ConfigError, ForNode, Position } from '@clay/parser';
 
 import { append } from '../append';

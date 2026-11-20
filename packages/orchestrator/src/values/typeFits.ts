@@ -1,4 +1,4 @@
-import { Type } from '@clay/contracts';
+import { Type } from '@clay/core';
 
 type Fits = (planned: Type, actual: Type) => boolean;
 

@@ -1,4 +1,4 @@
-import { emptyState } from '@clay/contracts';
+import { emptyState } from '@clay/core';
 import { BackendBlock, parseModule } from '@clay/parser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 

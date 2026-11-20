@@ -1,4 +1,4 @@
-import { Address, AttributePath, InstanceKey, Schema, sensitiveUnder, State, UNKNOWN } from '@clay/contracts';
+import { Address, AttributePath, InstanceKey, Schema, sensitiveUnder, State, UNKNOWN } from '@clay/core';
 import { Position, ResourceReference, SelfReference, spellReference, Step } from '@clay/parser';
 
 import { Instances, Repetition } from '../instances/Instances';

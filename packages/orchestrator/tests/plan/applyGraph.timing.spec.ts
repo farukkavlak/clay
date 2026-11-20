@@ -1,4 +1,4 @@
-import { Address, ModuleAddress, STATE_VERSION } from '@clay/contracts';
+import { Address, ModuleAddress, STATE_VERSION } from '@clay/core';
 import { Graph } from '@clay/graph';
 import { describe, expect, it } from 'vitest';
 

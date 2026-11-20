@@ -1,4 +1,4 @@
-import { ModuleAddress, Type } from '@clay/contracts';
+import { ModuleAddress, Type } from '@clay/core';
 import { AttributeValue, DataBlock, LocalBlock, ModuleBlock, OutputBlock, Position, ResourceBlock, TypeDefaults, Validation } from '@clay/parser';
 
 import { callKey, Context, ModuleCall } from '../keys';

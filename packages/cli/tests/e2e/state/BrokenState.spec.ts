@@ -1,4 +1,4 @@
-import { STATE_VERSION } from '@clay/contracts';
+import { STATE_VERSION } from '@clay/core';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';

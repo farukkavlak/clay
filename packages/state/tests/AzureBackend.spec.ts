@@ -1,4 +1,4 @@
-import { emptyState } from '@clay/contracts';
+import { emptyState } from '@clay/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { AzureStateServer } from '../../../tests/azureStateServer';

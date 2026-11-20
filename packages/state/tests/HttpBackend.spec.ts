@@ -1,4 +1,4 @@
-import { emptyState } from '@clay/contracts';
+import { emptyState } from '@clay/core';
 import { BackendBlock, parseModule } from '@clay/parser';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';

@@ -1,4 +1,4 @@
-import { EVERY_ITEM, ExactNumber, State, UNKNOWN } from '@clay/contracts';
+import { EVERY_ITEM, ExactNumber, State, UNKNOWN } from '@clay/core';
 import { parsePlanFile, serializePlan } from '@clay/planner';
 
 import fs from 'node:fs/promises';

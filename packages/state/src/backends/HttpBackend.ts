@@ -1,4 +1,4 @@
-import { emptyState, State, WrittenState } from '@clay/contracts';
+import { emptyState, State, WrittenState } from '@clay/core';
 import { createHash } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 

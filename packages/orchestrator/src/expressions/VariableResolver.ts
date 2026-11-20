@@ -1,4 +1,4 @@
-import { ModuleAddress, State, types, UNKNOWN } from '@clay/contracts';
+import { ModuleAddress, State, types, UNKNOWN } from '@clay/core';
 import { AttributeValue, VariableReference } from '@clay/parser';
 import { SchemaMismatch } from '../values/conformValues';
 import { givenTo } from '../values/declared';

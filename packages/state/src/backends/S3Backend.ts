@@ -1,5 +1,5 @@
 import type { ListObjectsV2CommandOutput, S3Client, S3ServiceException } from '@aws-sdk/client-s3';
-import { emptyState, State, WrittenState } from '@clay/contracts';
+import { emptyState, State, WrittenState } from '@clay/core';
 
 import { forceUnlockWith, LockInfo, lockInfoFrom, noLockAt, otherLockAt, StateLocked } from '../lockInfo';
 import { BackendChoice, DEFAULT_WORKSPACE, NamedWorkspace } from '../StateBackend';

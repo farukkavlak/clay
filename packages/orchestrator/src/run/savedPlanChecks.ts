@@ -1,4 +1,4 @@
-import { Address, ModuleAddress, Output, parseDataAddress, State } from '@clay/contracts';
+import { Address, ModuleAddress, Output, parseDataAddress, State } from '@clay/core';
 import { Graph } from '@clay/graph';
 import { OutputBlock, spell, Statement } from '@clay/parser';
 import { Plan, PlanAction } from '@clay/planner';

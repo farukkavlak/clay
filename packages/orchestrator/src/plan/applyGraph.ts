@@ -1,4 +1,4 @@
-import { Address, covers, State } from '@clay/contracts';
+import { Address, covers, State } from '@clay/core';
 import { Graph } from '@clay/graph';
 import { spell } from '@clay/parser';
 import { PlanAction } from '@clay/planner';

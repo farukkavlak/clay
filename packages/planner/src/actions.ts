@@ -1,4 +1,4 @@
-import { Address, Resource, samePaths, State } from '@clay/contracts';
+import { Address, Resource, samePaths, State } from '@clay/core';
 import { isDeepStrictEqual } from 'node:util';
 
 import { calculateDiff } from './diff';

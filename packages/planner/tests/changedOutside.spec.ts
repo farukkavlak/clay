@@ -1,4 +1,4 @@
-import { Resource } from '@clay/contracts';
+import { Resource } from '@clay/core';
 import { describe, expect, it } from 'vitest';
 
 import { changedOutside, Plan } from '../src/index';

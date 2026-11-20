@@ -1,4 +1,4 @@
-import { Address } from '@clay/contracts';
+import { Address } from '@clay/core';
 import { parsePlanFile, serializePlan } from '@clay/planner';
 import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';

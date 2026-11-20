@@ -1,4 +1,4 @@
-import { AttributePath, containsUnknown, own, PlannedChange, PlanRequest, Provider, Resource, Schema, sensitiveUnder, touchesSensitive, valueAt } from '@clay/contracts';
+import { AttributePath, containsUnknown, own, PlannedChange, PlanRequest, Provider, Resource, Schema, sensitiveUnder, touchesSensitive, valueAt } from '@clay/core';
 import { isDeepStrictEqual } from 'node:util';
 
 import { conformed } from '../values/conformValues';

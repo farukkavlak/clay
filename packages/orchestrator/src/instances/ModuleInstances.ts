@@ -1,4 +1,4 @@
-import { InstanceKey, ModuleAddress } from '@clay/contracts';
+import { InstanceKey, ModuleAddress } from '@clay/core';
 import { AttributeValue, ModuleBlock } from '@clay/parser';
 
 import { countFrom, indexesOf } from './count';

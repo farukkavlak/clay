@@ -1,4 +1,4 @@
-import { Address, inAddressOrder, Marks, Resource, State } from '@clay/contracts';
+import { Address, inAddressOrder, Marks, Resource, State } from '@clay/core';
 import { DiskFiles, RecordingFiles } from '@clay/orchestrator';
 import { forgetDependencies, moveResource, serializeState, StateBackend, StateManager } from '@clay/state';
 import { Command } from 'commander';

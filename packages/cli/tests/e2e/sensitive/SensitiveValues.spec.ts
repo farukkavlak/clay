@@ -1,4 +1,4 @@
-import { ExactNumber, UNKNOWN } from '@clay/contracts';
+import { ExactNumber, UNKNOWN } from '@clay/core';
 
 import fs from 'node:fs/promises';
 import os from 'node:os';

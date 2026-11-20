@@ -1,4 +1,4 @@
-import { ExactNumber, Type, types, UNKNOWN } from '@clay/contracts';
+import { ExactNumber, Type, types, UNKNOWN } from '@clay/core';
 import { AttributeValue, TypeDefaults } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 

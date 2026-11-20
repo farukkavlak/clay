@@ -1,4 +1,4 @@
-import { UNKNOWN } from '@clay/contracts';
+import { UNKNOWN } from '@clay/core';
 import { describe, expect, it } from 'vitest';
 
 import { inconsistent } from '../../src/providers/providerResult';

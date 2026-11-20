@@ -1,4 +1,4 @@
-import { Address, Resource } from '@clay/contracts';
+import { Address, Resource } from '@clay/core';
 import { spell } from '@clay/parser';
 import { PlanAction } from '@clay/planner';
 

@@ -1,4 +1,4 @@
-import { CreateRequest, Identity, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types } from '@clay/contracts';
+import { CreateRequest, Identity, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types } from '@clay/core';
 
 import { Signals } from '../../../../tests/signals';
 

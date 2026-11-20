@@ -1,4 +1,4 @@
-import { types, UNKNOWN } from '@clay/contracts';
+import { types, UNKNOWN } from '@clay/core';
 import { Orchestrator } from '@clay/orchestrator';
 import { stripVTControlCharacters } from 'node:util';
 import { beforeEach, describe, expect, it, vi } from 'vitest';

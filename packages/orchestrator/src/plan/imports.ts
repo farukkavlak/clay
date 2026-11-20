@@ -1,4 +1,4 @@
-import { Address, ModuleAddress, Resource, State } from '@clay/contracts';
+import { Address, ModuleAddress, Resource, State } from '@clay/core';
 import { ImportBlock, spell } from '@clay/parser';
 import { DesiredResource, PlanAction } from '@clay/planner';
 

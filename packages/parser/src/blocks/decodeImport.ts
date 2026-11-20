@@ -1,4 +1,4 @@
-import { Address } from '@clay/contracts';
+import { Address } from '@clay/core';
 
 import { AttributeValue, ImportBlock, ImportKey, namedIn, Step } from '../ast';
 import { Attribute, Block } from '../body';

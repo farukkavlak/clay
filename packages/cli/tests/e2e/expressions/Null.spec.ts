@@ -1,4 +1,4 @@
-import { types } from '@clay/contracts';
+import { types } from '@clay/core';
 
 import { ConfigError } from '@clay/parser';
 

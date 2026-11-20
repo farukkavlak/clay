@@ -1,16 +1,4 @@
-import {
-  AttributePath,
-  containsUnknown,
-  isType,
-  isUnknown,
-  MAX_NESTING,
-  nestingOf,
-  Schema,
-  SchemaDefinition,
-  touchesSensitive,
-  typeNestingOf,
-  unknownPaths,
-} from '@clay/contracts';
+import { AttributePath, containsUnknown, isType, isUnknown, MAX_NESTING, nestingOf, Schema, SchemaDefinition, touchesSensitive, typeNestingOf, unknownPaths } from '@clay/core';
 import { Mismatch, offFinal } from '@clay/planner';
 import { isDeepStrictEqual } from 'node:util';
 

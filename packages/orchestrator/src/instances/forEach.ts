@@ -1,4 +1,4 @@
-import { isUnknown } from '@clay/contracts';
+import { isUnknown } from '@clay/core';
 
 import { NotKnownYet } from './NotKnownYet';
 import { child, described, isAllSensitive, nullSource, Value } from '../values/Value';

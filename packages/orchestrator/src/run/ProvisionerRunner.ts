@@ -1,4 +1,4 @@
-import { Address, DestroyProvisioner, Resource, State } from '@clay/contracts';
+import { Address, DestroyProvisioner, Resource, State } from '@clay/core';
 import { ProvisionerBlock, ResourceBlock, spell } from '@clay/parser';
 
 import { ReferenceResolver } from '../expressions/ReferenceResolver';

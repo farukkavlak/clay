@@ -2,7 +2,7 @@
   "files": [],
   "references": [
     {
-      "path": "./packages/contracts"
+      "path": "./packages/core"
     },
     {
       "path": "./packages/graph"

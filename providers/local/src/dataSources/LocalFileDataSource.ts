@@ -1,4 +1,4 @@
-import { DataSourceHandler, Schema, types } from '@clay/contracts';
+import { DataSourceHandler, Schema, types } from '@clay/core';
 import fs from 'node:fs/promises';
 
 export class LocalFileDataSource implements DataSourceHandler {

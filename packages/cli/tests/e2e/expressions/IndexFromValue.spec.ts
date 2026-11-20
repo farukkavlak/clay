@@ -1,4 +1,4 @@
-import { UNKNOWN } from '@clay/contracts';
+import { UNKNOWN } from '@clay/core';
 import { RunEvent } from '@clay/orchestrator';
 
 import { LocalBackend } from '@clay/state';

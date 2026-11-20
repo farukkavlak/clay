@@ -1,4 +1,4 @@
-import { emptyState } from '@clay/contracts';
+import { emptyState } from '@clay/core';
 import { LocalBackend, parseState } from '@clay/state';
 import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';

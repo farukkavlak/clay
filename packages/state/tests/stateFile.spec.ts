@@ -1,4 +1,4 @@
-import { emptyState, ExactNumber, STATE_VERSION } from '@clay/contracts';
+import { emptyState, ExactNumber, STATE_VERSION } from '@clay/core';
 import { describe, expect, it } from 'vitest';
 
 import { journalLine } from '../src/journal';

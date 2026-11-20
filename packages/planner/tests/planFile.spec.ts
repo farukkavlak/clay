@@ -1,4 +1,4 @@
-import { ExactNumber, isUnknown, types, UNKNOWN } from '@clay/contracts';
+import { ExactNumber, isUnknown, types, UNKNOWN } from '@clay/core';
 import { describe, expect, it } from 'vitest';
 
 import { parsePlanFile, Plan, serializePlan } from '../src/index';

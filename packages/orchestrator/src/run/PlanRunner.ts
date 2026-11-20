@@ -1,4 +1,4 @@
-import { Address, Resource, State } from '@clay/contracts';
+import { Address, Resource, State } from '@clay/core';
 import { Graph } from '@clay/graph';
 import { changesState, PlanAction } from '@clay/planner';
 import { moveResources, StateManager } from '@clay/state';

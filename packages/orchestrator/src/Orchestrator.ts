@@ -1,4 +1,4 @@
-import { emptyState, Provider, Provisioner, Resource, Schema, State } from '@clay/contracts';
+import { emptyState, Provider, Provisioner, Resource, Schema, State } from '@clay/core';
 import { Graph } from '@clay/graph';
 import { Statement } from '@clay/parser';
 import { outputChanges, plan, Plan, VariableInput } from '@clay/planner';

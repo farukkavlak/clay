@@ -1,4 +1,4 @@
-import { emptyState } from '@clay/contracts';
+import { emptyState } from '@clay/core';
 import { BackendBlock, ConfigError, parseModule } from '@clay/parser';
 import { generateKeyPairSync } from 'node:crypto';
 import { readFileSync } from 'node:fs';

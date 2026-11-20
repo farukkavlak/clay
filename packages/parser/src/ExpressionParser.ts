@@ -1,4 +1,4 @@
-import { ExactNumber, NumberError, RESERVED_TYPES } from '@clay/contracts';
+import { ExactNumber, NumberError, RESERVED_TYPES } from '@clay/core';
 
 import { AttributeValue, BinaryOperator, BoundNode, CallNode, ForNode, ReferenceNode, Step, TemplatePart } from './ast';
 import { checkKey } from './checkKey';

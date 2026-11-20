@@ -1,4 +1,4 @@
-import { NAME } from '@clay/contracts';
+import { NAME } from '@clay/core';
 
 import type { AttributeValue, BoundNode, CallNode, ReferenceNode, Step } from './ast';
 import { ConfigError } from './ConfigError';

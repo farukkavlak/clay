@@ -1,4 +1,4 @@
-import { InstanceKey } from '@clay/contracts';
+import { InstanceKey } from '@clay/core';
 
 import { indexesOf } from './count';
 import { Value } from '../values/Value';

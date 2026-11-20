@@ -1,4 +1,4 @@
-import { isWorkspaceName } from '@clay/contracts';
+import { isWorkspaceName } from '@clay/core';
 import * as fs from 'node:fs';
 import path from 'node:path';
 

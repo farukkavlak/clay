@@ -1,4 +1,4 @@
-import { STATE_VERSION } from '@clay/contracts';
+import { STATE_VERSION } from '@clay/core';
 import { adoptBackend, backendFrom, StateBackend, StateManager } from '@clay/state';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

@@ -1,4 +1,4 @@
-import { emptyState } from '@clay/contracts';
+import { emptyState } from '@clay/core';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { getCACertificates } from 'node:tls';

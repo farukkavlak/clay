@@ -1,4 +1,4 @@
-import { ExactNumber, UNKNOWN } from '@clay/contracts';
+import { ExactNumber, UNKNOWN } from '@clay/core';
 import { describe, expect, it } from 'vitest';
 
 import { setOf } from '../../src/values/setMembers';

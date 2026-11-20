@@ -1,4 +1,4 @@
-import { AttributePath, Output, Schema, sensitiveUnder, UNKNOWN } from '@clay/contracts';
+import { AttributePath, Output, Schema, sensitiveUnder, UNKNOWN } from '@clay/core';
 import { DataBlock, spell } from '@clay/parser';
 
 import { conformed, writtenAt } from '../values/conformValues';

@@ -1,4 +1,4 @@
-import { Address, ExactNumber, ModuleAddress, types } from '@clay/contracts';
+import { Address, ExactNumber, ModuleAddress, types } from '@clay/core';
 import { ModuleOutputReference, parseReference, Step } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 

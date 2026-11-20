@@ -1,4 +1,4 @@
-import { Address, InstanceKey, ModuleAddress, spellKey } from '@clay/contracts';
+import { Address, InstanceKey, ModuleAddress, spellKey } from '@clay/core';
 import { Position } from '@clay/parser';
 
 /**

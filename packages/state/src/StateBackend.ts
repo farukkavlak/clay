@@ -1,4 +1,4 @@
-import { State, WrittenState } from '@clay/contracts';
+import { State, WrittenState } from '@clay/core';
 
 import { LockInfo } from './lockInfo';
 

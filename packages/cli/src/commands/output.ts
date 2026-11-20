@@ -1,4 +1,4 @@
-import { jsonText, Output, SENSITIVE } from '@clay/contracts';
+import { jsonText, Output, SENSITIVE } from '@clay/core';
 import { DiskFiles, RecordingFiles } from '@clay/orchestrator';
 import { StateManager } from '@clay/state';
 import { Command } from 'commander';

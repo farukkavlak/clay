@@ -3,7 +3,7 @@ import { configDefaults, defineConfig } from 'vitest/config';
 
 const packages = {
   cli: 'packages/cli',
-  contracts: 'packages/contracts',
+  core: 'packages/core',
   graph: 'packages/graph',
   orchestrator: 'packages/orchestrator',
   parser: 'packages/parser',

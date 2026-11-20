@@ -1,4 +1,4 @@
-import { Address, ModuleAddress, State } from '@clay/contracts';
+import { Address, ModuleAddress, State } from '@clay/core';
 import { Graph } from '@clay/graph';
 import { DataBlock, spell } from '@clay/parser';
 

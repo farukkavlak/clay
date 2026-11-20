@@ -1,4 +1,4 @@
-import { Address, ModuleAddress, Resource, State, STATE_VERSION } from '@clay/contracts';
+import { Address, ModuleAddress, Resource, State, STATE_VERSION } from '@clay/core';
 import { Graph } from '@clay/graph';
 import { ActionType, PlanAction } from '@clay/planner';
 import { describe, expect, it } from 'vitest';

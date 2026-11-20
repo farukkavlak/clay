@@ -1,4 +1,4 @@
-import { CreateRequest, Identity, isUnknown, own, PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema, types, UpdateRequest } from '@clay/contracts';
+import { CreateRequest, Identity, isUnknown, own, PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema, types, UpdateRequest } from '@clay/core';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 

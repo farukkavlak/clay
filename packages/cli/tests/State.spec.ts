@@ -1,4 +1,4 @@
-import { emptyState } from '@clay/contracts';
+import { emptyState } from '@clay/core';
 import { StateManager } from '@clay/state';
 import { afterEach, beforeEach, describe, expect, it, Mock, vi } from 'vitest';
 

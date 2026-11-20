@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
 
-import { AttributePath, containsUnknown, EVERY_ITEM, EXACT, ExactNumber, holdsFirst, isMarker, isUnknown, sensitiveUnder, SOMEWHERE, Type, types, UNKNOWN } from '@clay/contracts';
+import { AttributePath, containsUnknown, EVERY_ITEM, EXACT, ExactNumber, holdsFirst, isMarker, isUnknown, sensitiveUnder, SOMEWHERE, Type, types, UNKNOWN } from '@clay/core';
 import { CallNode, ConfigError } from '@clay/parser';
 
 import { charactersOf } from './characters';

@@ -1,4 +1,4 @@
-import { isWritten, WrittenState } from '@clay/contracts';
+import { isWritten, WrittenState } from '@clay/core';
 import { isDeepStrictEqual } from 'node:util';
 
 import { LockNotReleased } from '../lockInfo';

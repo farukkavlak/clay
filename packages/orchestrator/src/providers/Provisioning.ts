@@ -1,4 +1,4 @@
-import { AttributePath, DestroyProvisioner } from '@clay/contracts';
+import { AttributePath, DestroyProvisioner } from '@clay/core';
 import { ProvisionerBlock } from '@clay/parser';
 
 import { conformed, SchemaMismatch } from '../values/conformValues';

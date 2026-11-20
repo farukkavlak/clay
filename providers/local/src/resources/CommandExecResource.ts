@@ -1,4 +1,4 @@
-import { CreateRequest, PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema, types, UpdateRequest } from '@clay/contracts';
+import { CreateRequest, PlannedChange, planFromSchema, PlanRequest, ResourceHandler, Schema, types, UpdateRequest } from '@clay/core';
 import { exec } from 'node:child_process';
 import crypto from 'node:crypto';
 import { promisify } from 'node:util';

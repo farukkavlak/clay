@@ -1,4 +1,4 @@
-import { Type, types } from '@clay/contracts';
+import { Type, types } from '@clay/core';
 
 import { AttributeValue, CallNode, TypeDefaults } from './ast';
 import { checkConstant } from './checkConstant';

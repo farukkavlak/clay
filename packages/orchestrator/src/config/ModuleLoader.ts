@@ -1,4 +1,4 @@
-import { Address, ModuleAddress, Type, types } from '@clay/contracts';
+import { Address, ModuleAddress, Type, types } from '@clay/core';
 import { VariableInput } from '@clay/planner';
 import { ConfigError, ModuleBlock, ModuleFile, OutputBlock, parseModule, ResourceBlock, Statement, spell, VariableBlock } from '@clay/parser';
 import path from 'node:path';

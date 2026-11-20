@@ -1,4 +1,4 @@
-import { isUnknown, Provisioner, Schema, types } from '@clay/contracts';
+import { isUnknown, Provisioner, Schema, types } from '@clay/core';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { Readable } from 'node:stream';

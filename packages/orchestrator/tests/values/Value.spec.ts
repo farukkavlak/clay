@@ -1,4 +1,4 @@
-import { ExactNumber, types, UNKNOWN } from '@clay/contracts';
+import { ExactNumber, types, UNKNOWN } from '@clay/core';
 import { describe, expect, it } from 'vitest';
 
 import { child, described, inferred, valueOf, withSensitive } from '../../src/values/Value';

@@ -1,4 +1,4 @@
-import { emptyState } from '@clay/contracts';
+import { emptyState } from '@clay/core';
 import { serializeState } from '@clay/state';
 import { execFile, spawn } from 'node:child_process';
 import { once } from 'node:events';

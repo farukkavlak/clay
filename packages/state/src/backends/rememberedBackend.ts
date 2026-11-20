@@ -1,4 +1,4 @@
-import { isRecord } from '@clay/contracts';
+import { isRecord } from '@clay/core';
 import { ConfigError, Position } from '@clay/parser';
 import * as fs from 'node:fs';
 import path from 'node:path';

@@ -1,4 +1,4 @@
-import { MAX_NESTING } from '@clay/contracts';
+import { MAX_NESTING } from '@clay/core';
 
 import { ConfigError } from './ConfigError';
 import { Position } from './Position';

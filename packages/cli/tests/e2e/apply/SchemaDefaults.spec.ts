@@ -1,4 +1,4 @@
-import { planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types } from '@clay/contracts';
+import { planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types } from '@clay/core';
 
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend } from '@clay/state';

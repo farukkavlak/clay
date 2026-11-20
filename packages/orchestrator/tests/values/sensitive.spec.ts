@@ -1,4 +1,4 @@
-import { EVERY_ITEM, EXACT, ExactNumber, holdsFirst, isMaybe, MAYBE, sensitiveUnder, SOMEWHERE, types, UNKNOWN } from '@clay/contracts';
+import { EVERY_ITEM, EXACT, ExactNumber, holdsFirst, isMaybe, MAYBE, sensitiveUnder, SOMEWHERE, types, UNKNOWN } from '@clay/core';
 import { ConfigError } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 

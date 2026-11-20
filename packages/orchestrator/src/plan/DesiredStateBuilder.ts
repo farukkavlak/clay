@@ -1,4 +1,4 @@
-import { Address, AttributePath, DestroyProvisioner, ModuleAddress, Output, Resource, samePaths, Schema, State } from '@clay/contracts';
+import { Address, AttributePath, DestroyProvisioner, ModuleAddress, Output, Resource, samePaths, Schema, State } from '@clay/core';
 import { Graph } from '@clay/graph';
 import { AttributeValue, ImportBlock, ResourceBlock, spell } from '@clay/parser';
 import { DesiredResource, hasChanges } from '@clay/planner';

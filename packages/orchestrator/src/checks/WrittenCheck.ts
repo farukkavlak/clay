@@ -1,4 +1,4 @@
-import { ModuleAddress, Schema } from '@clay/contracts';
+import { ModuleAddress, Schema } from '@clay/core';
 import { Graph } from '@clay/graph';
 import { AttributeValue, DataBlock, ModuleBlock, OutputBlock, Position, ProvisionerBlock, ResourceBlock, spell, VariableBlock } from '@clay/parser';
 

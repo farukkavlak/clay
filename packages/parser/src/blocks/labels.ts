@@ -1,4 +1,4 @@
-import { isName, NAME_RULE, RESERVED_TYPES } from '@clay/contracts';
+import { isName, NAME_RULE, RESERVED_TYPES } from '@clay/core';
 
 import { Label } from '../ast';
 import { Header } from '../body';

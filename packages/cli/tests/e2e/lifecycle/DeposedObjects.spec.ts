@@ -1,4 +1,4 @@
-import { DeposedObject, State } from '@clay/contracts';
+import { DeposedObject, State } from '@clay/core';
 
 import fs from 'node:fs/promises';
 import os from 'node:os';

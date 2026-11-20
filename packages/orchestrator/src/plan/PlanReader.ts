@@ -1,4 +1,4 @@
-import { State } from '@clay/contracts';
+import { State } from '@clay/core';
 import { AttributeValue, DataBlock, ResourceBlock, spell, Statement } from '@clay/parser';
 
 import { ReferenceResolver } from '../expressions/ReferenceResolver';

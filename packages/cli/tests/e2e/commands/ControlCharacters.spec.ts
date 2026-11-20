@@ -1,4 +1,4 @@
-import { STATE_VERSION } from '@clay/contracts';
+import { STATE_VERSION } from '@clay/core';
 import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';

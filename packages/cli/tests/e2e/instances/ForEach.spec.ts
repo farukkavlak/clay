@@ -1,4 +1,4 @@
-import { types } from '@clay/contracts';
+import { types } from '@clay/core';
 import { RunEvent } from '@clay/orchestrator';
 import { ConfigError } from '@clay/parser';
 import { parsePlanFile, serializePlan } from '@clay/planner';

@@ -1,4 +1,4 @@
-import { AttributePath, EVERY_ITEM } from '@clay/contracts';
+import { AttributePath, EVERY_ITEM } from '@clay/core';
 
 /**
  * Paths by their steps, so a path is found by walking its own steps and not by holding it against every other.

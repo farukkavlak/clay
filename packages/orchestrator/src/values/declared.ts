@@ -1,4 +1,4 @@
-import { AttributePath, isRecord, isUnknown, Type, typeAt, types } from '@clay/contracts';
+import { AttributePath, isRecord, isUnknown, Type, typeAt, types } from '@clay/core';
 import { AttributeValue, TypeDefaults } from '@clay/parser';
 
 import { converted, SchemaMismatch, toldWhole } from './conformValues';

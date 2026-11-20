@@ -1,4 +1,4 @@
-import { Address, ExactNumber, isUnknown, UNKNOWN } from '@clay/contracts';
+import { Address, ExactNumber, isUnknown, UNKNOWN } from '@clay/core';
 import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';

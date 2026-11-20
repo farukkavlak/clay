@@ -1,4 +1,4 @@
-import { State } from '@clay/contracts';
+import { State } from '@clay/core';
 import { AttributeValue } from '@clay/parser';
 
 import { Context } from '../keys';

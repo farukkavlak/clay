@@ -1,4 +1,4 @@
-import { CreateRequest, emptyState, planFromSchema, PlanRequest, Schema, types, UNKNOWN, UpdateRequest } from '@clay/contracts';
+import { CreateRequest, emptyState, planFromSchema, PlanRequest, Schema, types, UNKNOWN, UpdateRequest } from '@clay/core';
 import { plan } from '@clay/planner';
 import fsPromises from 'node:fs/promises';
 import os from 'node:os';

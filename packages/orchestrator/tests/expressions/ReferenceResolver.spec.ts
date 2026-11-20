@@ -1,4 +1,4 @@
-import { Address, ExactNumber, ModuleAddress, Schema, State, STATE_VERSION, types, UNKNOWN } from '@clay/contracts';
+import { Address, ExactNumber, ModuleAddress, Schema, State, STATE_VERSION, types, UNKNOWN } from '@clay/core';
 import { AttributeValue, ConfigError, Lexer, OutputBlock, Parser, TemplatePart } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 

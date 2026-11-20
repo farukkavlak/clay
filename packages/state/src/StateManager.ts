@@ -1,4 +1,4 @@
-import { State, STATE_VERSION } from '@clay/contracts';
+import { State, STATE_VERSION } from '@clay/core';
 import { randomUUID } from 'node:crypto';
 
 import { journalLine } from './journal';

@@ -1,4 +1,4 @@
-import { Address, jsonText, Output, SENSITIVE } from '@clay/contracts';
+import { Address, jsonText, Output, SENSITIVE } from '@clay/core';
 import { ConfigFiles, DiskFiles, InMemoryFiles, RecordingFiles, RunEvent } from '@clay/orchestrator';
 import { changedOutside, parsePlanFile, Plan, PlanAction, PlanFile, VariableInput } from '@clay/planner';
 import { currentWorkspace, StateManager } from '@clay/state';

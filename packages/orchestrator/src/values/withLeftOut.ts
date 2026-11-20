@@ -1,4 +1,4 @@
-import { Type } from '@clay/contracts';
+import { Type } from '@clay/core';
 
 export type ObjectType = Extract<Type, { kind: 'object' }>;
 

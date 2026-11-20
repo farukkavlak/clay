@@ -1,4 +1,4 @@
-import { Schema } from '@clay/contracts';
+import { Schema } from '@clay/core';
 import { AttributeValue, ConfigError, spell, Statement } from '@clay/parser';
 
 import { checkNames, checkProvisionerNames } from '../checks/checkAttributes';

@@ -1,4 +1,4 @@
-import { Address } from '@clay/contracts';
+import { Address } from '@clay/core';
 import { LocalBackend } from '@clay/state';
 import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';

@@ -1,4 +1,4 @@
-import { Address, CreateRequest, emptyState, ExactNumber, PlanRequest, Provider, Schema, State, types, UNKNOWN, UpdateRequest } from '@clay/contracts';
+import { Address, CreateRequest, emptyState, ExactNumber, PlanRequest, Provider, Schema, State, types, UNKNOWN, UpdateRequest } from '@clay/core';
 import { PlanAction } from '@clay/planner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 

@@ -1,4 +1,4 @@
-import { ExactNumber, Schema, types, UNKNOWN } from '@clay/contracts';
+import { ExactNumber, Schema, types, UNKNOWN } from '@clay/core';
 import { describe, expect, it } from 'vitest';
 
 import { typed, typedValues, TypeMismatch } from '../../src/values/typed';

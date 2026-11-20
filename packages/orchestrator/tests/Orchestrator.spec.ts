@@ -1,4 +1,4 @@
-import { CreateRequest, emptyState, ExactNumber, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types, UpdateRequest } from '@clay/contracts';
+import { CreateRequest, emptyState, ExactNumber, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, types, UpdateRequest } from '@clay/core';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';

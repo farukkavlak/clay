@@ -1,4 +1,4 @@
-import { isUnknown } from '@clay/contracts';
+import { isUnknown } from '@clay/core';
 
 /** For messages; marks unknown parts. */
 export function shown(value: unknown): string {

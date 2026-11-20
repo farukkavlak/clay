@@ -1,4 +1,4 @@
-import { jsonText, NAME } from '@clay/contracts';
+import { jsonText, NAME } from '@clay/core';
 
 // C0 but tab and line feed, DEL, C1, and the direction marks and controls that make a line show other than it is.
 // eslint-disable-next-line no-control-regex -- matching control characters is what this is for.

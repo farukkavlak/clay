@@ -1,4 +1,4 @@
-import { Address, Output } from '@clay/contracts';
+import { Address, Output } from '@clay/core';
 import { ConfigError } from '@clay/parser';
 import { parsePlanFile, serializePlan } from '@clay/planner';
 

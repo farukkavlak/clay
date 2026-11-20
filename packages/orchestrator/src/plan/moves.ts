@@ -1,4 +1,4 @@
-import { Address, InstanceKey, ModuleAddress, ModuleStep, Resource, spellKey, State } from '@clay/contracts';
+import { Address, InstanceKey, ModuleAddress, ModuleStep, Resource, spellKey, State } from '@clay/core';
 import { Graph } from '@clay/graph';
 import { MovedBlock, spell } from '@clay/parser';
 import { PlanAction } from '@clay/planner';

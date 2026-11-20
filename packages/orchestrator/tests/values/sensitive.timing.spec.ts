@@ -1,4 +1,4 @@
-import { EVERY_ITEM, EXACT, MAYBE } from '@clay/contracts';
+import { EVERY_ITEM, EXACT, MAYBE } from '@clay/core';
 import { describe, expect, it } from 'vitest';
 
 import { growth, LINEAR } from '../../../../tests/growth';

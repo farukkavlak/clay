@@ -2,7 +2,7 @@ import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import path from 'node:path';
 
-import { emptyState, State, STATE_VERSION } from '@clay/contracts';
+import { emptyState, State, STATE_VERSION } from '@clay/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { LocalBackend } from '../src/backends/LocalBackend';

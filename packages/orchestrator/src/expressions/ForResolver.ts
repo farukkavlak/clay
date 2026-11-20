@@ -1,4 +1,4 @@
-import { AttributePath, EVERY_ITEM, isUnknown, sensitiveUnder, SOMEWHERE, State, Type, types, UNKNOWN } from '@clay/contracts';
+import { AttributePath, EVERY_ITEM, isUnknown, sensitiveUnder, SOMEWHERE, State, Type, types, UNKNOWN } from '@clay/core';
 import { AttributeValue, ForNode } from '@clay/parser';
 
 import {

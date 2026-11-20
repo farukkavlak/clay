@@ -1,4 +1,4 @@
-import { Address, AttributePath, DeposedObject, Provider, Resource, Schema, State, touchesSensitive } from '@clay/contracts';
+import { Address, AttributePath, DeposedObject, Provider, Resource, Schema, State, touchesSensitive } from '@clay/core';
 import { AttributeValue, ResourceBlock, spell } from '@clay/parser';
 import { offApply, offFinal, offPlan, PlanAction } from '@clay/planner';
 

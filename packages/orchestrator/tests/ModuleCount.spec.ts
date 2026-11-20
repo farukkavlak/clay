@@ -1,4 +1,4 @@
-import { Address, planFromSchema, Provider, Schema, types } from '@clay/contracts';
+import { Address, planFromSchema, Provider, Schema, types } from '@clay/core';
 import { LocalBackend, StateManager } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';

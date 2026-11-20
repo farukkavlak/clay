@@ -1,6 +1,6 @@
 // The SDK is loaded with import(), which takes its ESM build; its types have to come from the same build.
 import type { ContainerClient, ContainerListBlobFlatSegmentResponse, RestError } from '@azure/storage-blob' with { 'resolution-mode': 'import' };
-import { emptyState, State, WrittenState } from '@clay/contracts';
+import { emptyState, State, WrittenState } from '@clay/core';
 import { text } from 'node:stream/consumers';
 import { setTimeout as sleep } from 'node:timers/promises';
 

@@ -1,4 +1,4 @@
-import { types, UNKNOWN } from '@clay/contracts';
+import { types, UNKNOWN } from '@clay/core';
 import { describe, expect, it } from 'vitest';
 
 import { offPlan } from '../src/index';

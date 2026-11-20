@@ -1,4 +1,4 @@
-import { emptyState, State } from '@clay/contracts';
+import { emptyState, State } from '@clay/core';
 import { ConfigFiles, DiskFiles, RecordingFiles } from '@clay/orchestrator';
 import {
   checkWorkspaceName,

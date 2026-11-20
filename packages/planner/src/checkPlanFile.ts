@@ -14,7 +14,7 @@ import {
   parseDataAddress,
   Resource,
   Schema,
-} from '@clay/contracts';
+} from '@clay/core';
 
 import { ActionType, Plan, PLAN_FILE_VERSION, PlanFile } from './Plan';
 

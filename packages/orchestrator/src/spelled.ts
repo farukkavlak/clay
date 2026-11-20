@@ -1,4 +1,4 @@
-import { AttributePath } from '@clay/contracts';
+import { AttributePath } from '@clay/core';
 
 /** `tags["a"][0]`. */
 export function spelled(path: AttributePath): string {

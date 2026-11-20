@@ -1,4 +1,4 @@
-import { Address, ModuleAddress } from '@clay/contracts';
+import { Address, ModuleAddress } from '@clay/core';
 import { describe, expect, it } from 'vitest';
 
 import { ModuleInstances } from '../../../src/instances/ModuleInstances';

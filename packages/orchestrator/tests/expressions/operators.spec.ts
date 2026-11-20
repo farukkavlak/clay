@@ -1,4 +1,4 @@
-import { ExactNumber, Marks, types, UNKNOWN } from '@clay/contracts';
+import { ExactNumber, Marks, types, UNKNOWN } from '@clay/core';
 import { ConfigError } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 

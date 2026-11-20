@@ -1,4 +1,4 @@
-import { Output } from '@clay/contracts';
+import { Output } from '@clay/core';
 import { PlanAction } from '@clay/planner';
 
 /**

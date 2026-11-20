@@ -1,4 +1,4 @@
-import { ExactNumber } from '@clay/contracts';
+import { ExactNumber } from '@clay/core';
 import { describe, expect, it } from 'vitest';
 
 import { DataBlock } from '../src/ast';

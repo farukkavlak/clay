@@ -1,4 +1,4 @@
-import { Address, ModuleAddress, parseMovable } from '@clay/contracts';
+import { Address, ModuleAddress, parseMovable } from '@clay/core';
 
 import { AttributeValue, MovedBlock } from '../ast';
 import { Attribute, Block } from '../body';

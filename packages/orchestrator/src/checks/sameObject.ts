@@ -1,4 +1,4 @@
-import { Address, AttributePath, Identity, inAddressOrder, State } from '@clay/contracts';
+import { Address, AttributePath, Identity, inAddressOrder, State } from '@clay/core';
 import { spell } from '@clay/parser';
 import { PlanAction } from '@clay/planner';
 

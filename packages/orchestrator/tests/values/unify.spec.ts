@@ -1,4 +1,4 @@
-import { ExactNumber, Type, types, UNKNOWN } from '@clay/contracts';
+import { ExactNumber, Type, types, UNKNOWN } from '@clay/core';
 import { describe, expect, it } from 'vitest';
 
 import { convertedLater, itemTypes, joinedLater, laterOf, unified, unifiedLater, Unjoinable } from '../../src/values/unify';

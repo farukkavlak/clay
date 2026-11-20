@@ -1,4 +1,4 @@
-import { Address, ExactNumber, InstanceKey, isUnknown, ModuleAddress } from '@clay/contracts';
+import { Address, ExactNumber, InstanceKey, isUnknown, ModuleAddress } from '@clay/core';
 import { AttributeValue, ImportBlock, ModuleBlock, ResourceBlock, spell } from '@clay/parser';
 
 import { eachFrom } from '../instances/forEach';

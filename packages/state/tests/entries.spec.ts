@@ -1,4 +1,4 @@
-import { Address, emptyState, State } from '@clay/contracts';
+import { Address, emptyState, State } from '@clay/core';
 import { describe, expect, it } from 'vitest';
 
 import { forgetDependencies, moveResource, moveResources } from '../src/entries';

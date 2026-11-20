@@ -14,7 +14,7 @@
     "test": "vitest run --coverage --config ../../vitest.config.mts"
   },
   "dependencies": {
-    "@clay/contracts": "*",
+    "@clay/core": "*",
     "@clay/orchestrator": "*",
     "@clay/parser": "*",
     "@clay/planner": "*",

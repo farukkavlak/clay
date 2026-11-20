@@ -1,4 +1,4 @@
-import { Address, ModuleAddress, ModuleStep, State } from '@clay/contracts';
+import { Address, ModuleAddress, ModuleStep, State } from '@clay/core';
 
 /** Changes the dependencies of every resource and deposed object. */
 function mapDependencies(state: State, change: (dependencies: string[]) => string[]): void {

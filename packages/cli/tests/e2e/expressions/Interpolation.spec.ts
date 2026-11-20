@@ -1,4 +1,4 @@
-import { ExactNumber } from '@clay/contracts';
+import { ExactNumber } from '@clay/core';
 
 import { ConfigError } from '@clay/parser';
 

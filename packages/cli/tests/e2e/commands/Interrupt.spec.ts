@@ -1,4 +1,4 @@
-import { State } from '@clay/contracts';
+import { State } from '@clay/core';
 import { ChildProcess, execFile, spawn } from 'node:child_process';
 import { once } from 'node:events';
 import fs from 'node:fs/promises';

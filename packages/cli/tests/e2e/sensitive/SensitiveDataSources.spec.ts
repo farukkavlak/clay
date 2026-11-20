@@ -1,4 +1,4 @@
-import { CreateRequest, PlannedChange, PlanRequest, planFromSchema, Provider, Schema, State, types } from '@clay/contracts';
+import { CreateRequest, PlannedChange, PlanRequest, planFromSchema, Provider, Schema, State, types } from '@clay/core';
 
 import { parsePlanFile, serializePlan } from '@clay/planner';
 import { LocalProvider } from '@clay/provider-local';

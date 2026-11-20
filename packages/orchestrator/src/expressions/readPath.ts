@@ -1,4 +1,4 @@
-import { isUnknown, sensitiveUnder, Type, typeAt } from '@clay/contracts';
+import { isUnknown, sensitiveUnder, Type, typeAt } from '@clay/core';
 import { ConfigError, Position, spellSteps, Step, stepKey } from '@clay/parser';
 
 import { article, child, sensitiveOf, Value } from '../values/Value';

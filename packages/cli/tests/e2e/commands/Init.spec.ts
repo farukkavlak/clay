@@ -1,4 +1,4 @@
-import { STATE_VERSION } from '@clay/contracts';
+import { STATE_VERSION } from '@clay/core';
 import { LocalBackend, newLockInfo } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';

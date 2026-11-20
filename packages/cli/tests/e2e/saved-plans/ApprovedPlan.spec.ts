@@ -1,4 +1,4 @@
-import { emptyState } from '@clay/contracts';
+import { emptyState } from '@clay/core';
 import { LocalProvider } from '@clay/provider-local';
 import { newLockInfo } from '@clay/state';
 import fs from 'node:fs/promises';

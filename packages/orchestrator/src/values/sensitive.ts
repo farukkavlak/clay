@@ -17,7 +17,7 @@ import {
   typeAt,
   types,
   UNKNOWN,
-} from '@clay/contracts';
+} from '@clay/core';
 
 import { PathTree } from './PathTree';
 import { everyItemPlaces, Pattern, Patterns } from './Patterns';

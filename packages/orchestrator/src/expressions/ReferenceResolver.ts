@@ -1,4 +1,4 @@
-import { Address, AttributePath, emptyState, ExactNumber, MAX_NESTING, ModuleAddress, Schema, State, typeNestingOf, types, UNKNOWN } from '@clay/contracts';
+import { Address, AttributePath, emptyState, ExactNumber, MAX_NESTING, ModuleAddress, Schema, State, typeNestingOf, types, UNKNOWN } from '@clay/core';
 import {
   AttributeValue,
   BoundNode,

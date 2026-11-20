@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { Address, isWritten } from '@clay/contracts';
+import { Address, isWritten } from '@clay/core';
 
 import { parsePlanFile, serializePlan } from '@clay/planner';
 

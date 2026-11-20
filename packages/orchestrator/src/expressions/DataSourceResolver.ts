@@ -1,4 +1,4 @@
-import { InstanceKey, Schema, Type } from '@clay/contracts';
+import { InstanceKey, Schema, Type } from '@clay/core';
 import { DataReference, Position, Step } from '@clay/parser';
 
 import { Instances, Repetition } from '../instances/Instances';
