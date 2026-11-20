@@ -143,6 +143,15 @@ describe('a moved block', () => {
     expect(error.message).toContain('local_file.a cannot move to local_file.b: the state already holds local_file.b[0]');
   });
 
+  // Moves are judged by the state as it was written, before anything is read back.
+  it('refuses a move to a held address though the object it moves was deleted by hand', async () => {
+    await apply(file('a') + counted('b', 1));
+    await fs.rm(path.join(dir, 'f.txt'));
+
+    const error = await errorOf(() => orchestratorIn(dir).plan(counted('b', 1) + moved('local_file.a', 'local_file.b')));
+    expect(error.message).toContain('local_file.a cannot move to local_file.b: the state already holds local_file.b[0]');
+  });
+
   it('destroys at the new address a to the configuration does not declare', async () => {
     await apply(file('a'));
 

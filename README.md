@@ -134,18 +134,19 @@ from a sensitive one is sensitive too: `local_file.id` where `path` is, `stdout`
 
 ## How a run goes
 
-1. Each resource in state is read back from its provider, ten at once or as many as
-   `--parallelism` says, so a change made by hand shows up. A resource found gone is
-   made again, or forgotten if the configuration dropped it. `plan` and `apply` take
-   `--refresh=false` to skip this and plan against the state alone. An apply writes what was read, even when nothing else changes. A saved plan is
-   applied as it was made, so `apply <plan>` reads nothing and refuses the flag. A read
-   that returns a value not known, or a name the schema does not have, stops the run as
-   a bug in the provider.
-2. The parser turns the `.clay` files of the directory and of every module they name
+1. The parser turns the `.clay` files of the directory and of every module they name
    into a tree, with the file, line and column on every node.
-3. The graph builder links each resource, variable, local and output to what it reads,
-   and sorts them so nothing runs before what it needs. A cycle or a reference to
-   nothing stops here.
+2. The graph builder links each resource, variable, local and output to what it reads,
+   and sorts them so nothing runs before what it needs. A cycle, a reference to nothing
+   or an attribute the schema does not have stops here, before any provider reads.
+3. During planning, as each resource is reached, its objects in state are read back
+   from its provider, so a change made by hand shows up. One the configuration dropped is read
+   once planning is done. A resource found gone is made again, or forgotten if the
+   configuration dropped it. `plan` and `apply` take `--refresh=false` to skip this and
+   plan against the state alone. An apply writes what was read, even when nothing else
+   changes. A saved plan is applied as it was made, so `apply <plan>` reads nothing and
+   refuses the flag. A read that returns a value not known, or a name the schema does
+   not have, stops the run as a bug in the provider.
 4. Each value is resolved once what it reads is, so blocks that do not read each other
    are planned together, ten provider calls at once or as many as `--parallelism` says.
    Each is held to the type its schema names. The provider checks it and plans what the

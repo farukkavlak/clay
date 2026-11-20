@@ -156,6 +156,10 @@ a configuration means or how the state file is written.
 - A saved plan is applied only to the state it was made against. Each state gets a
   lineage at its first write and keeps it. Before, a plan made in another directory was
   applied to any state with the same serial
+- A plan reads each resource back as it reaches it, after the configuration is loaded and
+  checked. A mistake in the configuration was reported only after every read, and a
+  failed read hid it. A `moved` block is now judged by the state as written, so a move
+  to an address the state holds is refused even when the object it moves is gone
 
 ## 0.1.0 - 2026-09-21
 

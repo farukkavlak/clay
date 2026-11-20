@@ -1,4 +1,5 @@
 import { changedOutside } from '@clay/planner';
+import { LocalProvider } from '@clay/provider-local';
 import { LocalBackend } from '@clay/state';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -10,7 +11,7 @@ import { createPlanCommand } from '../../../src/commands/plan';
 import { engineIn, orchestratorIn } from '../helpers';
 import { start } from '../start';
 
-describe('a plan that reads each resource back first', () => {
+describe('a plan that reads each resource back', () => {
   let dir: string;
   let file: string;
   let config: string;
@@ -31,6 +32,7 @@ describe('a plan that reads each resource back first', () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await fs.rm(dir, { recursive: true, force: true });
   });
 
@@ -109,6 +111,26 @@ describe('a plan that reads each resource back first', () => {
     await fs.mkdir(file);
 
     await expect(newOrchestrator().plan(config)).rejects.toMatchObject({ message: expect.stringMatching(/^local_file\.a: EISDIR/) as string, cause: { code: 'EISDIR' } });
+  });
+
+  it('refuses a mistake in the configuration before it reads anything, so a failed read does not hide it', async () => {
+    const read = vi.spyOn(LocalProvider.prototype, 'read');
+    await fs.rm(file);
+    await fs.mkdir(file);
+
+    await expect(newOrchestrator().plan(config.replace('content', 'contnt'))).rejects.toThrow('local_file has no attribute "contnt"');
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it('reads each object once, one the configuration dropped too', async () => {
+    const other = path.join(dir, 'b.txt');
+    const both = `${config}\nresource "local_file" "b" { path = "${other}" content = "b" }`;
+    for await (const event of start(newOrchestrator(), both)) if (event.type === 'failed') throw event.error;
+    const read = vi.spyOn(LocalProvider.prototype, 'read');
+
+    await newOrchestrator().plan(config);
+
+    expect(read.mock.calls.map(([, prior]) => prior.path)).toEqual([file, other]);
   });
 
   describe('from the command line', () => {

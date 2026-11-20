@@ -12,6 +12,7 @@ import { DesiredState } from './plan/DesiredStateBuilder';
 import { Walk } from './plan/PlanReader';
 import { applyMoves, checkMovedAway, copyForMoves, copyResources, Moves, movesIn } from './plan/moves';
 import { checkImports, Imports, importsIn } from './plan/imports';
+import { Refresh } from './plan/refresh';
 import { checkRead, heldBy, hidingReason } from './providers/providerResult';
 import { checkAttributes } from './checks/checkAttributes';
 import { checkPreventDestroy } from './checks/preventDestroy';
@@ -56,6 +57,13 @@ function keptInputs(destroy: boolean, root: Statement[], given: VariableInput[])
   return variables.length > 0 ? { variables } : {};
 }
 
+/** What a walk records as it goes. */
+interface Steps {
+  moves: Moves;
+  imports: Imports;
+  refresh?: Refresh;
+}
+
 export interface RunOptions {
   /** How many actions run at once. */
   parallelism?: number;
@@ -98,11 +106,10 @@ export class Orchestrator {
     this.stateManager.requireLock('A plan');
     const limit = new Limit(parallelism);
     const prevRun = await this.stateManager.read();
-    const prior = refresh ? await this.refresh(prevRun, limit) : prevRun;
     // Planning applies the moves to a copy; the plan keeps the resources at their old addresses.
-    const currentState = copyForMoves(prior);
-    const moves = new Moves();
-    const imports = new Imports(this.providers, limit, (key, resource) => this.readBack(key, resource));
+    const currentState = copyForMoves(prevRun);
+    const steps = this.planSteps(limit, refresh);
+    const { moves, imports } = steps;
     const {
       resources: desiredResources,
       outputs,
@@ -111,7 +118,8 @@ export class Orchestrator {
       readAtApply,
       graph,
       root,
-    } = await this.resolveAndCheck(currentState, 'plan', moves, limit, imports, sourceOf(destroy, variables));
+    } = await this.resolveAndCheck(currentState, 'plan', steps, limit, sourceOf(destroy, variables));
+    const prior = await this.refreshRest(steps, currentState, prevRun);
 
     imports.adopt(currentState, desiredResources);
     const actions = plan(
@@ -143,6 +151,22 @@ export class Orchestrator {
     };
   }
 
+  private planSteps(limit: Limit, refresh: boolean): Steps {
+    const moves = new Moves();
+    const imports = new Imports(this.providers, limit, (key, resource) => this.readBack(key, resource));
+    if (!refresh) return { moves, imports };
+
+    return { moves, imports, refresh: new Refresh(limit, moves, (key, resource) => this.readBack(key, resource)) };
+  }
+
+  /** Reads the objects no block reached, and gives what the refresh read at the addresses the state held them at. */
+  private async refreshRest({ refresh }: Steps, state: State, prevRun: State): Promise<State> {
+    if (!refresh) return prevRun;
+
+    await refresh.rest(state);
+    return refresh.prior(prevRun);
+  }
+
   private async schemasOf(types: string[], limit: Limit): Promise<Record<string, Schema>> {
     const unique = [...new Set(types)];
     return Object.fromEntries(await inOrder(unique.map(async (type) => [type, await limit.run(() => this.providers.schema(type))] as const)));
@@ -155,7 +179,7 @@ export class Orchestrator {
   async validate(): Promise<void> {
     const limit = new Limit(DEFAULT_PARALLELISM);
     const imports = new Imports(this.providers, limit, (key, resource) => this.readBack(key, resource));
-    await this.resolveAndCheck(emptyState(), 'check', new Moves(), limit, imports, { values: { unset: 'unknown' } });
+    await this.resolveAndCheck(emptyState(), 'check', { moves: new Moves(), imports }, limit, { values: { unset: 'unknown' } });
   }
 
   /**
@@ -177,20 +201,6 @@ export class Orchestrator {
     yield* runner.run(saved, config, graph, state, { parallelism, signal });
   }
 
-  /** A resource the provider no longer finds is dropped; the plan recreates it if the configuration still has it. */
-  private async refresh(state: State, limit: Limit): Promise<State> {
-    const held = Object.entries(state.resources);
-    const read = await inOrder(held.map(([key, resource]) => limit.run(() => this.readBack(key, resource))));
-    const resources: State['resources'] = {};
-
-    for (const [index, [key, resource]] of held.entries()) {
-      const attributes = read[index];
-      if (attributes !== null) resources[key] = { ...resource, attributes };
-    }
-
-    return { ...state, resources };
-  }
-
   private async readBack(key: string, resource: Resource): Promise<Record<string, unknown> | null> {
     try {
       const provider = this.providers.get(resource.resourceType);
@@ -206,13 +216,15 @@ export class Orchestrator {
     }
   }
 
-  /** Applies every move to `state` before anything reads it, and each import as the walk reaches its instance; a check only reads the ids. */
+  /**
+   * Applies every move to `state` before anything reads it, each import as the walk reaches its instance and each refresh as it reaches its
+   * block; a check only reads the ids.
+   */
   private async resolveAndCheck(
     state: State,
     walk: Walk,
-    moves: Moves,
+    { moves, imports, refresh }: Steps,
     limit: Limit,
-    imports: Imports,
     { root, values }: Source
   ): Promise<DesiredState & { graph: Graph<GraphNode>; root: Statement[] }> {
     const { loader, graphBuilder, writtenCheck, desiredStateBuilder, modules } = this.newRun(limit, walk === 'plan' ? this.workspace : undefined);
@@ -226,7 +238,7 @@ export class Orchestrator {
     const importsTo = checkImports(importing, { resources: loadedResources, modules: loadedModules }, this.providers);
     applyMoves(moved, state, moves);
     imports.take(importsTo);
-    const desired = await desiredStateBuilder.build(loadedResources, graph, state, schemas, walk, moves, imports);
+    const desired = await desiredStateBuilder.build(loadedResources, graph, state, schemas, walk, moves, imports, refresh);
     const declared = loadedModules.flatMap(({ address }) => (address.isRoot() ? [] : modules.of(address)));
     checkMovedAway(moved, desired.resources, declared);
     // A check may not know a count or for_each, so it makes no instance of the block.

@@ -23,6 +23,7 @@ import { LoadedResource } from '../config/ModuleLoader';
 import { inOrder } from '../providers/Limit';
 import { Moves } from './moves';
 import { Imports } from './imports';
+import { Refresh } from './refresh';
 import { idFrom, ImportTarget, targetsOf } from './importTargets';
 import { Versions } from '../values/Versions';
 import { Ignoring, ResourcePlan, ResourcePlanner } from './ResourcePlanner';
@@ -79,6 +80,7 @@ export class DesiredStateBuilder {
   private walk: Walk = 'plan';
   private moves = new Moves();
   private imports?: Imports;
+  private refresh?: Refresh;
 
   constructor(
     private scopeManager: ScopeManager,
@@ -111,7 +113,7 @@ export class DesiredStateBuilder {
 
   /**
    * Applies count moves, and imports where `imports` is given, to `state`, a copy the plan never writes, records each in `moves` or
-   * `imports`, and plans the actions against it.
+   * `imports`, and plans the actions against it. Where `refresh` is given, each object is read back as the walk reaches its block.
    */
   async build(
     loadedResources: LoadedResource[],
@@ -120,12 +122,15 @@ export class DesiredStateBuilder {
     schemas: Map<string, Schema>,
     walk: Walk,
     moves: Moves,
-    imports?: Imports
+    imports?: Imports,
+    refresh?: Refresh
   ): Promise<DesiredState> {
     this.planned.begin();
     this.schemas = schemas;
     this.moves = moves;
     this.imports = imports;
+    this.refresh = refresh;
+    refresh?.begin(state);
     this.walk = walk;
     this.createsFirst = this.createFirst(loadedResources, graph);
     const byKey = new Map(loadedResources.map((r) => [r.address.toString(), r]));
@@ -196,6 +201,8 @@ export class DesiredStateBuilder {
   private async planResource(key: string, loaded: LoadedResource, graph: Graph<GraphNode>, state: State): Promise<ConfiguredResource[]> {
     const { address, block } = loaded;
     const blocks = this.graphBuilder.resourceDependencies(graph, key);
+    // First, so an import goes where the object the state held is gone.
+    await this.refresh?.block(address, state);
     this.needImports(address, state);
 
     const planned = await inOrder(

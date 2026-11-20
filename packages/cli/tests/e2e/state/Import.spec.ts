@@ -81,6 +81,15 @@ describe('an import block', () => {
     expect(await planned(config)).toEqual([['NO_OP', 'local_file.a', undefined]]);
   });
 
+  // The state is read back first, so the object it held is known to be gone.
+  it('imports to an address whose object in state was deleted by hand', async () => {
+    const other = path.join(dir, 'other.txt');
+    await apply(resource('a', 'kept', '', other));
+    await fs.rm(other);
+
+    expect(await planned(resource('a') + imported('local_file.a', file))).toEqual([['NO_OP', 'local_file.a', file]]);
+  });
+
   it('imports to an instance of a counted resource', async () => {
     const config = resource('a', 'kept', 'count = 1') + imported('local_file.a[0]', file);
 

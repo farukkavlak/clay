@@ -8,5 +8,5 @@ function parseRefresh(value: string): boolean {
 }
 
 export function refreshOption(): Option {
-  return new Option('--refresh <bool>', 'Read each resource from its provider before planning (default: true)').argParser(parseRefresh);
+  return new Option('--refresh <bool>', 'Read each resource back from its provider while planning (default: true)').argParser(parseRefresh);
 }

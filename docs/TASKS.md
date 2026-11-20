@@ -1168,7 +1168,7 @@ by resource type, and no `provider` block exists yet.
       aliases for a second instance of the same provider. Once they exist, a destroy works
       out only the `provider` blocks and what they read; today it reads no value from the
       configuration
-- [ ] A plan refreshes after the configuration loads, as Terraform does. It reads every
+- [x] A plan refreshes after the configuration loads, as Terraform does. It reads every
       resource first today, so a mistake in `main.clay` is reported only after every read
       and a read error hides it, and a provider configured by a `provider` block would be
       asked to read before it is configured

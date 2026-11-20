@@ -508,11 +508,12 @@ describe('a schema a provider gives', () => {
     });
   });
 
+  // Dropped from the configuration, so only the refresh asks for the schema.
   it('is refused the same way when the refresh reads it', async () => {
     const config = 'resource "echo" "a" { label = "a" }';
     for await (const event of start(newOrchestrator(new EchoProvider()), config)) if (event.type === 'failed') throw event.error;
 
-    await expect(newOrchestrator(new MuddledEcho()).plan(config)).rejects.toThrow(`echo.a: ${refused}`);
+    await expect(newOrchestrator(new MuddledEcho()).plan('')).rejects.toThrow(`echo.a: ${refused}`);
   });
 });
 
