@@ -1,5 +1,5 @@
 import { Address, InstanceKey, ModuleAddress, spellKey } from '@clay/core';
-import { Position } from '@clay/parser';
+import { Position, ResourceBlock } from '@clay/parser';
 
 /**
  * Dependency graph keys. They are built here and never parsed.
@@ -26,9 +26,12 @@ export function callKey(module: ModuleAddress): string {
   return scope ? `${scope}.module:${name}` : `module:${name}`;
 }
 
+/** The instance a resource block names, left out for the default one as state and the plan leave it out. */
+export const aliasIn = ({ provider }: ResourceBlock): { alias?: string } => (provider?.alias === undefined ? {} : { alias: provider.alias });
+
 /** No address has a `:`, so this is apart from every block; only the root module has providers. */
-export function providerKey(name: string): string {
-  return `provider:${name}`;
+export function providerKey(name: string, alias: string | undefined): string {
+  return alias === undefined ? `provider:${name}` : `provider:${name}.${alias}`;
 }
 
 /** Shared by every instance of the resource, in every instance of its module. */

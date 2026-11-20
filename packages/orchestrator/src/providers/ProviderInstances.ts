@@ -1,8 +1,10 @@
 import { AttributePath, Provider, Schema } from '@clay/provider';
-import { ModuleAddress } from '@clay/core';
-import { AttributeValue, ProviderBlock, spell } from '@clay/parser';
+import { ModuleAddress, Resource } from '@clay/core';
+import { PlanAction } from '@clay/planner';
+import { AttributeValue, DataBlock, ProviderBlock, ResourceBlock, spell, spellProvider } from '@clay/parser';
 
 import { asError } from '../asError';
+import { providerKey } from '../keys';
 import { tryAt, withPlace } from '../place';
 import { conformed, nameProblem, namesOf, writtenAt } from '../values/conformValues';
 import { marksOf } from '../values/schemaMarks';
@@ -16,6 +18,15 @@ export interface Written {
   block: ProviderBlock;
   read: (value: AttributeValue) => Value;
 }
+
+/** A block names its instance in `provider`; a plan action or an object in state keeps the alias, which anything else must say. */
+export type Handled = ResourceBlock | Resource | PlanAction | { resourceType: string; alias: string | undefined };
+
+const aliasOf = (of: Handled): string | undefined => {
+  // Only a block has a position.
+  if ('position' in of) return of.provider?.alias;
+  return of.alias;
+};
 
 /** What `configure` is given, and the paths of it that are sensitive. */
 interface Configuration {
@@ -40,7 +51,8 @@ export class ProviderInstances {
   async configure(name: string, written?: Written): Promise<void> {
     const { config, sensitive } = await this.check(name, written);
     const provider = this.registry.create(name);
-    const type = `provider "${name}"`;
+    const alias = written?.block.alias?.value;
+    const type = spellProvider(name, alias);
     try {
       await hidingReason(type, sensitive, () => this.limit.run(async () => provider.configure?.(config)), 'to configure');
     } catch (error) {
@@ -49,7 +61,7 @@ export class ProviderInstances {
       throw new Error(`${type}: ${asError(error).message}`, { cause: error });
     }
 
-    this.configured.set(name, provider);
+    this.configured.set(providerKey(name, alias), provider);
   }
 
   /** What the block sets, held to the provider's schema for it; a check goes no further, since a value may not be known yet. */
@@ -78,13 +90,13 @@ export class ProviderInstances {
     return { config: {}, sensitive: [] };
   }
 
-  get(of: { resourceType: string }): Provider {
-    return this.instance(this.registry.get(of.resourceType).name);
+  get(of: Handled): Provider {
+    return this.instance(this.registry.get(of.resourceType).name, aliasOf(of));
   }
 
   /** Looked up apart from resources, since a type may be one and not the other. */
-  reader(of: { dataSourceType: string }): Provider {
-    return this.instance(this.registry.reader(of.dataSourceType).name);
+  reader(block: DataBlock): Provider {
+    return this.instance(this.registry.reader(block.dataSourceType).name, block.provider?.alias);
   }
 
   async validate(type: string, config: Record<string, unknown>): Promise<void> {
@@ -99,9 +111,9 @@ export class ProviderInstances {
     return this.registry.schema(type);
   }
 
-  private instance(name: string): Provider {
-    const provider = this.configured.get(name);
-    if (!provider) throw new Error(`provider "${name}" is asked before it is configured, which is a bug in Clay`);
+  private instance(name: string, alias: string | undefined): Provider {
+    const provider = this.configured.get(providerKey(name, alias));
+    if (!provider) throw new Error(`${spellProvider(name, alias)} is asked before it is configured, which is a bug in Clay`);
 
     return provider;
   }

@@ -102,10 +102,18 @@ export interface ProvisionerBlock extends Node {
   attributes: Record<string, AttributeValue>;
 }
 
+/** `local` or `local.west`: the provider instance that handles a block's objects. */
+export interface ProviderChoice extends Node {
+  name: string;
+  alias?: string;
+}
+
 export interface ResourceBlock extends Node {
   type: 'Resource';
   resourceType: string;
   name: string;
+  /** Read by the engine, never sent to the provider. Left out for the default instance. */
+  provider?: ProviderChoice;
   /** Read by the engine, never sent to the provider. */
   count?: AttributeValue;
   /** Read by the engine, never sent to the provider. */
@@ -164,6 +172,8 @@ export interface DataBlock extends Node {
   type: 'Data';
   dataSourceType: string;
   name: string;
+  /** Read by the engine, never sent to the provider. Left out for the default instance. */
+  provider?: ProviderChoice;
   /** Read by the engine, never sent to the provider. */
   count?: AttributeValue;
   /** Read by the engine, never sent to the provider. */
@@ -189,6 +199,8 @@ export interface ModuleBlock extends Node {
 export interface ProviderBlock extends Node {
   type: 'Provider';
   name: string;
+  /** Read by the engine, never sent to the provider. Left out on the default instance. */
+  alias?: Label;
   attributes: Record<string, AttributeValue>;
 }
 
@@ -246,6 +258,11 @@ export interface BackendBlock extends Node {
 export type Statement = ResourceBlock | VariableBlock | OutputBlock | DataBlock | ModuleBlock | ProviderBlock | LocalBlock | MovedBlock | ImportBlock | BackendBlock;
 export type Program = Statement[];
 
+/** A provider block, or the instance it configures. */
+export function spellProvider(name: string, alias: string | undefined): string {
+  return alias === undefined ? `provider "${name}"` : `provider "${name}" alias "${alias}"`;
+}
+
 /** `resource "local_file" "a"`, `module "m"`, `moved from local_file.a`, `import to local_file.a`. */
 export function spell(statement: Statement): string {
   if (statement.type === 'Resource') return `resource "${statement.resourceType}" "${statement.name}"`;
@@ -253,6 +270,7 @@ export function spell(statement: Statement): string {
   if (statement.type === 'Moved') return `moved from ${statement.from}`;
   if (statement.type === 'Import') return `import to ${spellImportTo(statement)}`;
   if (statement.type === 'Backend') return 'a backend';
+  if (statement.type === 'Provider') return spellProvider(statement.name, statement.alias?.value);
   return `${statement.type.toLowerCase()} "${statement.name}"`;
 }
 

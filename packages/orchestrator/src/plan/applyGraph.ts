@@ -187,11 +187,19 @@ function readersOf(readers: Readers, address: Address): string[] {
   return [...found];
 }
 
-function addDestroy(graph: Graph<ApplyNode>, key: string, { action, madeBy }: Going, provider: string | undefined): void {
+function addDestroy(graph: Graph<ApplyNode>, key: string, { action, madeBy }: Going, providers: string[]): void {
   graph.addNode(destroyKey(key), { kind: 'destroy', action });
-  if (provider) graph.addEdge(provider, destroyKey(key));
+  for (const provider of providers) graph.addEdge(provider, destroyKey(key));
   if (isPlainReplace(action)) graph.addEdge(destroyKey(key), blockKey(Address.of(action)));
   if (madeBy) graph.addEdge(madeBy, destroyKey(key));
+}
+
+/** Each instance of the type's provider, since a move may have taken the object from the address it is destroyed at. */
+function providersOf(config: Graph<GraphNode>): (going: Going) => string[] {
+  const byType = new Map<string, string[]>();
+  for (const [key, node] of config.entries()) if (node.kind === 'provider') for (const type of node.resources) append(byType, type, key);
+
+  return (going) => byType.get(going.action.resourceType) ?? [];
 }
 
 /** `from` and every node it reaches by `stepsFrom`. */
@@ -284,8 +292,8 @@ export function applyGraph(config: Graph<GraphNode>, actions: PlanAction[], stat
     return byBlock(key) ? blockKey(Address.of(going.get(key)!.action)) : destroyKey(key);
   };
 
-  const providers = new Map([...config.entries()].flatMap(([key, node]) => (node.kind === 'provider' ? node.resources.map((type) => [type, key] as const) : [])));
-  for (const [key, object] of going) if (!byBlock(key)) addDestroy(graph, key, object, providers.get(object.action.resourceType));
+  const providers = providersOf(config);
+  for (const [key, object] of going) if (!byBlock(key)) addDestroy(graph, key, object, providers(object));
   for (const key of next.keys()) if (isWait(key)) graph.addNode(key, { kind: 'wait' });
   for (const [key, reads] of next) for (const read of reads) graph.addEdge(nodeOf(key), nodeOf(read));
   addWaits(graph, going, nodeOf, readersOfBlocks(actions, state));

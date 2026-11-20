@@ -73,12 +73,12 @@ describe('a state file that is not valid state', () => {
     [
       'a deposed object whose dependencies are not a list',
       `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{},"deposed":{"local_file.a":[{"attributes":{},"dependencies":"x"}]}}`,
-      'a deposed object of "local_file.a" has no attributes, or its sensitive, dependencies or destroy provisioners',
+      'a deposed object of "local_file.a" has no attributes, or its alias, sensitive, dependencies or destroy provisioners',
     ],
     [
       'a deposed object with a dependency that is not an address',
       `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{},"deposed":{"local_file.a":[{"attributes":{},"dependencies":[42]}]}}`,
-      'a deposed object of "local_file.a" has no attributes, or its sensitive, dependencies or destroy provisioners',
+      'a deposed object of "local_file.a" has no attributes, or its alias, sensitive, dependencies or destroy provisioners',
     ],
     [
       'a resource with a dependency that is a number',
@@ -93,7 +93,7 @@ describe('a state file that is not valid state', () => {
     [
       'a deposed object whose sensitive parts are not steps',
       `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{},"deposed":{"local_file.a":[{"attributes":{},"sensitive":"content"}]}}`,
-      'a deposed object of "local_file.a" has no attributes, or its sensitive, dependencies or destroy provisioners',
+      'a deposed object of "local_file.a" has no attributes, or its alias, sensitive, dependencies or destroy provisioners',
     ],
     [
       'a deposed object with a sensitive index that is not whole',
@@ -103,7 +103,7 @@ describe('a state file that is not valid state', () => {
     [
       'a deposed object whose destroy provisioners are not a list',
       `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{},"deposed":{"local_file.a":[{"attributes":{},"destroyProvisioners":{}}]}}`,
-      'a deposed object of "local_file.a" has no attributes, or its sensitive, dependencies or destroy provisioners are not what they should be',
+      'a deposed object of "local_file.a" has no attributes, or its alias, sensitive, dependencies or destroy provisioners are not what they should be',
     ],
     [
       'a destroy provisioner of a deposed object with a sensitive index that is not whole',
@@ -188,7 +188,7 @@ describe('a state file that is not valid state', () => {
     [
       'a deposed object with a dependency on one instance',
       `{"version":${STATE_VERSION},"serial":0,"lineage":"lineage","resources":{},"deposed":{"local_file.a":[{"attributes":{},"dependencies":["local_file.b[\\"x\\"]"]}]}}`,
-      'a deposed object of "local_file.a" has no attributes, or its sensitive, dependencies or destroy provisioners',
+      'a deposed object of "local_file.a" has no attributes, or its alias, sensitive, dependencies or destroy provisioners',
     ],
     [
       'a dependency no configuration can spell',

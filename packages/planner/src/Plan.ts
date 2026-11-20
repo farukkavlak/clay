@@ -5,6 +5,8 @@ export type ActionType = 'CREATE' | 'UPDATE' | 'REPLACE' | 'DELETE' | 'NO_OP';
 
 export interface DesiredResource {
   address: Address;
+  /** The provider instance its block names; left out for the default instance. */
+  alias?: string;
   attributes: Record<string, unknown>;
   /** As the provider plans it after apply; UNKNOWN where only the apply knows a value. */
   after: Record<string, unknown>;
@@ -35,6 +37,8 @@ export interface PlanAction {
   name: string;
   modulePath?: readonly ModuleStep[];
   key?: InstanceKey;
+  /** The provider instance that makes or changes the object, left out for the default one. A delete asks the instance the state names. */
+  alias?: string;
   /** Its state address before a moved block, or a count that came or went, moved it; the move runs before the action. */
   movedFrom?: string;
   /** On a no-op, an update or a replace: the id this plan imported its object by. The import runs before the action. */
@@ -119,7 +123,7 @@ export interface Plan {
 }
 
 /** Bump on any change to the file's shape after a release, so an older plan file is refused instead of misread. */
-export const PLAN_FILE_VERSION = '41.0';
+export const PLAN_FILE_VERSION = '42.0';
 
 export interface PlanFile extends Plan {
   version: string;

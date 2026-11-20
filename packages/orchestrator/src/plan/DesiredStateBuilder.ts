@@ -8,7 +8,7 @@ import { writtenAt } from '../values/conformValues';
 import { givenTo, outputAs } from '../values/declared';
 import { ignoredPaths } from './ignoredChanges';
 import { Instances } from '../instances/Instances';
-import { Context, contextIn, DataInstance, enclosing, scopeOf, sharedModule } from '../keys';
+import { aliasIn, Context, contextIn, DataInstance, enclosing, scopeOf, sharedModule } from '../keys';
 import { ModuleInstances } from '../instances/ModuleInstances';
 import { Planned } from '../values/Planned';
 import { tryAt, withPlace } from '../place';
@@ -31,6 +31,8 @@ import { keptFor, Provisioning } from '../providers/Provisioning';
 import { Queue } from '../Queue';
 import { ProviderInstances } from '../providers/ProviderInstances';
 import { isProvider } from '../graph/providerNodes';
+
+const movesInstance = (current: Resource, block: ResourceBlock) => current.alias !== block.provider?.alias;
 
 /** With the block it was planned from, so a refusal can point at it. */
 export interface ConfiguredResource extends DesiredResource {
@@ -250,6 +252,7 @@ export class DesiredStateBuilder {
 
     return {
       address,
+      ...aliasIn(block),
       block,
       attributes: change.config,
       after: change.after,
@@ -268,16 +271,16 @@ export class DesiredStateBuilder {
   private async currentAt(address: Address, block: ResourceBlock, state: State): Promise<Resource | undefined> {
     tryAt(block.position, spell(block), address, () => this.moveIn(address, state));
     const importing = this.imports?.neededAt(address);
-    if (importing) await this.importIn(importing, state);
+    if (importing) await this.importIn(importing, block, state);
 
     return state.resources[address.toString()];
   }
 
   /** The id is read here, after everything it reads; a check reads it as far as it is known, and imports nothing. */
-  private async importIn(target: ImportTarget, state: State): Promise<void> {
+  private async importIn(target: ImportTarget, to: ResourceBlock, state: State): Promise<void> {
     const { block, item } = target;
     const id = this.reads.readAt(this.walk, block.id, block, item ?? ModuleAddress.root, state, (value) => idFrom(value, item));
-    if (id !== undefined && this.walk === 'plan') await this.imports!.importBy(target, id, state);
+    if (id !== undefined && this.walk === 'plan') await this.imports!.importBy(target, to, id, state);
   }
 
   /** Before any instance of the resource is planned, so each finds whether an import goes to it. */
@@ -290,18 +293,22 @@ export class DesiredStateBuilder {
     this.imports!.need(targetsOf(importsTo, read, this.instances), state);
   }
 
-  /** Nothing to ignore in what does not exist yet, or in what is replaced because it is tainted. */
+  /** Nothing to ignore in what does not exist yet, or in what is replaced because it is tainted or moves to another provider instance. */
   private ignoringIn(block: ResourceBlock, current: Resource | undefined): Ignoring | undefined {
     const paths = ignoredPaths(block.lifecycle?.ignoreChanges, this.schemas.get(block.resourceType) ?? {});
 
-    return current && !current.tainted && paths.length > 0 ? { prior: current, paths } : undefined;
+    return current && !current.tainted && !movesInstance(current, block) && paths.length > 0 ? { prior: current, paths } : undefined;
   }
 
   private async askProvider(address: Address, block: ResourceBlock, current: Resource | undefined, attributes: Record<string, Value>, ignoring?: Ignoring): Promise<ResourcePlan> {
     try {
       const schema = this.schemas.get(block.resourceType) ?? {};
       if (this.walk === 'check') return await this.resourcePlanner.check(block.resourceType, schema, attributes);
-      return await this.resourcePlanner.plan(this.providers.get(block), block.resourceType, schema, current, attributes, ignoring);
+      const provider = this.providers.get(block);
+      // The old object stays with the instance that made it, which may not see where the new one goes.
+      if (current && movesInstance(current, block))
+        return { ...(await this.resourcePlanner.plan(provider, block.resourceType, schema, undefined, attributes)), replace: true, forcedBy: ['provider'] };
+      return await this.resourcePlanner.plan(provider, block.resourceType, schema, current, attributes, ignoring);
     } catch (error) {
       throw withPlace(error, writtenAt(error, block), spell(block), address);
     }

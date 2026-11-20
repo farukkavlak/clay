@@ -5,6 +5,7 @@ import { ConfigError } from '../ConfigError';
 import { attributesIn, attributesOnly, refuseBlock } from './attributes';
 import { checkBackendArgument, checkClayHeader, decodeClay, refuseClayArgument } from './decodeClay';
 import { decodeData } from './decodeData';
+import { readAlias } from './providerChoice';
 import { checkImportArgument, decodeImport } from './decodeImport';
 import { decodeModule } from './decodeModule';
 import { checkMovedArgument, decodeMoved } from './decodeMoved';
@@ -24,7 +25,9 @@ interface Kind {
 }
 
 function decodeProvider(block: Block, name: string): ProviderBlock {
-  return { type: 'Provider', name, attributes: attributesIn(block.body), position: block.position };
+  const { alias, ...attributes } = attributesIn(block.body);
+
+  return { type: 'Provider', name, ...(alias && { alias: readAlias(alias) }), attributes, position: block.position };
 }
 
 /** A statement for each name, so several blocks merge and a name set twice is a duplicate like any other. */

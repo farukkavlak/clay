@@ -1,11 +1,11 @@
 import { ModuleAddress, State } from '@clay/core';
 import { Graph } from '@clay/graph';
-import { AttributeValue, callsIn, DataBlock, ModuleBlock, Position, ProviderBlock, ReferenceNode, spell, Statement } from '@clay/parser';
+import { AttributeValue, callsIn, DataBlock, ModuleBlock, Position, ProviderBlock, ReferenceNode, spell, spellProvider, Statement } from '@clay/parser';
 
 import { Instances, Repetition } from '../instances/Instances';
 import { Declared, declaredOf } from '../values/declared';
 import { functionCalled } from '../expressions/functions';
-import { blockKey, callKey, Context, dataSourceAddress, dataSourceKey, localKey, ModuleCall, outputKey, providerKey, scopeOf, variableKey } from '../keys';
+import { aliasIn, blockKey, callKey, Context, dataSourceAddress, dataSourceKey, localKey, ModuleCall, outputKey, providerKey, scopeOf, variableKey } from '../keys';
 import { ProviderRegistry } from '../providers/ProviderRegistry';
 import { addProviders } from './providerNodes';
 import { ModuleInstances } from '../instances/ModuleInstances';
@@ -37,21 +37,22 @@ export type LocalNode = ValueNode & { value: AttributeValue };
 const SPELLED = { variable: 'var', local: 'local', output: 'output' };
 
 export type GraphNode =
-  | ({ kind: 'resource' } & InModule)
+  /** `alias` is the provider instance its block names, left out for the default one. */
+  | ({ kind: 'resource'; alias?: string } & InModule)
   | ({ kind: 'variable' } & ValueNode)
   | ({ kind: 'local' } & LocalNode)
   | ({ kind: 'output' } & OutputNode)
   | ({ kind: 'module'; block: ModuleBlock } & InModule)
   | ({ kind: 'data'; block: DataBlock } & InModule)
   /** The resource types it makes, so an object of one is destroyed after it is configured; `block` where the configuration sets it. */
-  | ({ kind: 'provider'; name: string; resources: readonly string[]; block?: ProviderBlock } & InModule);
+  | ({ kind: 'provider'; name: string; alias?: string; resources: readonly string[]; block?: ProviderBlock } & InModule);
 
 /** `module.m.var.x`; a resource's key already is its address. */
 export function spellNode(key: string, node: GraphNode): string {
   if (node.kind === 'resource') return key;
   if (node.kind === 'module') return node.module.child(node.block.name).toString();
   if (node.kind === 'data') return dataSourceAddress(node.module.toString(), node.block.dataSourceType, node.block.name);
-  if (node.kind === 'provider') return `provider "${node.name}"`;
+  if (node.kind === 'provider') return spellProvider(node.name, node.alias);
 
   const scope = node.module.toString();
   return `${scope ? `${scope}.` : ''}${SPELLED[node.kind]}.${node.name}`;
@@ -134,7 +135,7 @@ export class DependencyGraphBuilder {
     this.references.clear();
     this.outputs = new Map(loadedModules.map((mod) => [scopeOf(mod.address), [...outputsOf(mod.program).keys()]]));
 
-    for (const { uniqueId, address } of loadedResources) graph.addNode(uniqueId, { kind: 'resource', module: address.module });
+    for (const { uniqueId, address, block } of loadedResources) graph.addNode(uniqueId, { kind: 'resource', module: address.module, ...aliasIn(block) });
     for (const [key, node] of this.valueNodes(loadedModules)) graph.addNode(key, node);
 
     const moduleScopes = new Set(loadedModules.map((mod) => scopeOf(mod.address)));
@@ -333,7 +334,11 @@ export class DependencyGraphBuilder {
   private setBlockNodes(stmt: Statement, module: ModuleAddress, nodes: Map<string, GraphNode>): void {
     if (stmt.type === 'Module') this.setCallNodes(stmt, nodes, module);
     if (stmt.type === 'Data') nodes.set(dataSourceKey(scopeOf(module), stmt.dataSourceType, stmt.name), { kind: 'data', module, block: stmt });
-    if (stmt.type === 'Provider') nodes.set(providerKey(stmt.name), { kind: 'provider', module, name: stmt.name, resources: this.providers.resourcesOf(stmt.name), block: stmt });
+    if (stmt.type === 'Provider') {
+      const alias = stmt.alias?.value;
+      const node = { kind: 'provider' as const, module, name: stmt.name, ...(alias !== undefined && { alias }), resources: this.providers.resourcesOf(stmt.name), block: stmt };
+      nodes.set(providerKey(stmt.name, alias), node);
+    }
   }
 
   // An input is read in the call and overrides the default.

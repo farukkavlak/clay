@@ -583,7 +583,7 @@ describe('ActionExecutor', () => {
         name: 'main',
       };
 
-      await expect(executor.executeDelete(action, mockProvider, mockState)).rejects.toThrow(/^state holds no object for it, so the plan was made from another state$/);
+      await expect(executor.executeDelete(action, mockState)).rejects.toThrow(/^state holds no object for it, so the plan was made from another state$/);
       expect(mockProvider.delete).not.toHaveBeenCalled();
     });
   });

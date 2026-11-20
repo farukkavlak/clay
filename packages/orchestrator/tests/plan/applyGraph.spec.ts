@@ -50,6 +50,17 @@ describe('applyGraph', () => {
     expect(applyGraph(graph, [going('rec.a')], holding(object('rec.a'))).dependentsOf('provider:rec')).toEqual(['destroy:rec.a']);
   });
 
+  // A move may have taken the object from the address it is destroyed at, so which instance made it is not looked up there.
+  it('destroys an object after every instance of the provider of its type is configured', () => {
+    const graph = config([]);
+    graph.addNode('provider:rec', { kind: 'provider', name: 'rec', resources: ['rec'], module: ModuleAddress.root });
+    graph.addNode('provider:rec.west', { kind: 'provider', name: 'rec', alias: 'west', resources: ['rec'], module: ModuleAddress.root });
+
+    const order = applyGraph(graph, [going('rec.a')], holding(object('rec.a')));
+
+    expect([order.dependentsOf('provider:rec'), order.dependentsOf('provider:rec.west')]).toEqual([['destroy:rec.a'], ['destroy:rec.a']]);
+  });
+
   it('leaves a replace that reads nothing going away to its block', () => {
     const graph = applyGraph(config(['a', 'b'], [['a', 'b']]), [act('REPLACE', 'a'), act('UPDATE', 'b')], stateOf([held('a'), held('b', 'a')]));
 

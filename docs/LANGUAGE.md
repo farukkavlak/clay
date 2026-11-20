@@ -675,8 +675,33 @@ left to read. Such a block is refused at the value
 it writes, with the chain it reads through: `provider "cloud" reads local.r ->
 local_file.f`. A block that reads a data source of its own provider is a dependency cycle.
 
-Only the root module has provider blocks, one for each provider; a module uses its
-caller's. `clay validate` checks the block with values not known yet and configures no
+A second instance of a provider has a block with an `alias`, a name in quotes. A
+resource or a data source picks it with `provider`; without one, it takes the instance
+with no alias:
+
+```
+provider "cloud" { region = "eu" }
+
+provider "cloud" {
+  alias  = "us"
+  region = "us"
+}
+
+resource "cloud_bucket" "logs" {
+  provider = cloud.us
+}
+```
+
+`provider` is written out, as `cloud` or `cloud.us`. An alias no block in the module
+declares, or a provider that does not handle the block's type, is refused where it is
+written. The state records the instance that made each object, so a refresh and a destroy
+ask the same one. An object whose block now names another instance is replaced: the old
+one is destroyed by the instance that made it, and the plan says `replace forced by:
+provider`. An object in state whose instance has no block left is refused at the plan,
+naming both, since nothing could refresh or destroy it.
+
+Only the root module has provider blocks, one for each provider and alias; a module uses
+its caller's. `clay validate` checks the block with values not known yet and configures no
 provider. `clay destroy` works out only the provider blocks and what they read, so a
 variable only the rest reads needs no value, and a reference only the rest makes is not
 checked. Every file is still parsed. With no `.clay` file left, a destroy reads no value,

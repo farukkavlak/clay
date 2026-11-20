@@ -65,6 +65,7 @@ export class ConfigLoader {
     await this.loadSchemas(loadedResources);
     await this.loadProvisionerSchemas(loadedResources);
     await this.loadDataSchemas(loadedModules);
+    this.checkProviderChoices(loadedModules);
     await this.loadConfigSchemas(mainProgram);
 
     return { mainProgram, loadedResources, loadedModules, schemas: this.schemas };
@@ -124,6 +125,20 @@ export class ConfigLoader {
       this.dataSchemas.set(stmt.dataSourceType, schema);
       checkNames(stmt, schema, address);
     }
+  }
+
+  /** After the schemas, which refuse a type no provider has. */
+  private checkProviderChoices(loadedModules: LoadedModule[]): void {
+    for (const { address, program } of loadedModules)
+      for (const stmt of program) {
+        if ((stmt.type !== 'Resource' && stmt.type !== 'Data') || !stmt.provider) continue;
+
+        const [type, handler] =
+          stmt.type === 'Resource' ? [stmt.resourceType, this.providers.get(stmt.resourceType)] : [stmt.dataSourceType, this.providers.reader(stmt.dataSourceType)];
+        const { name, position } = stmt.provider;
+        if (name !== handler.name)
+          throw withPlace(new ConfigError(`provider "${name}" does not handle "${type}"; provider "${handler.name}" does`, position), position, spell(stmt), address);
+      }
   }
 
   /** Only the root module has provider blocks. A name no provider has is refused at the block. */

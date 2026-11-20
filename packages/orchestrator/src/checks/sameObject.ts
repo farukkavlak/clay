@@ -8,12 +8,14 @@ import { asError } from '../asError';
 import { ConfiguredResource } from '../plan/DesiredStateBuilder';
 import { withPlace } from '../place';
 import { hidingReason } from '../providers/providerResult';
-import { ProviderInstances } from '../providers/ProviderInstances';
+import { Handled, ProviderInstances } from '../providers/ProviderInstances';
 import { Limit, taken } from '../providers/Limit';
 
 /** An object the plan destroys: a delete's, a deposed one, or the old one of a replace. */
 interface Going {
   action: PlanAction;
+  /** As the state holds it, which says the instance that made it. */
+  of: Handled;
   address: string;
   deposed: boolean;
   values: Record<string, unknown>;
@@ -28,7 +30,7 @@ interface Staying {
   refuse: (message: string) => Error;
 }
 
-type Identify = (of: { resourceType: string }, values: Record<string, unknown>, sensitive: readonly AttributePath[]) => Promise<Identity | undefined>;
+type Identify = (of: Handled, values: Record<string, unknown>, sensitive: readonly AttributePath[]) => Promise<Identity | undefined>;
 
 const identifyWith =
   (providers: ProviderInstances, limit: Limit): Identify =>
@@ -40,7 +42,7 @@ const identifyWith =
 /** A failure names what was asked about. */
 async function asking(
   identify: Identify,
-  of: { resourceType: string },
+  of: Handled,
   values: Record<string, unknown>,
   sensitive: readonly AttributePath[],
   name: (error: unknown) => Error
@@ -57,10 +59,18 @@ const named = (address: string) => (error: unknown) => new Error(`${address}: ${
 function goingIn(actions: PlanAction[], state: State): Going[] {
   return actions.flatMap<Going>((action) => {
     const address = Address.of(action).toString();
-    if (action.deposed) return (state.deposed?.[address] ?? []).map(({ attributes, sensitive = [] }) => ({ action, address, deposed: true, values: attributes, sensitive }));
+    if (action.deposed)
+      return (state.deposed?.[address] ?? []).map(({ alias, attributes, sensitive = [] }) => ({
+        action,
+        of: { resourceType: action.resourceType, alias },
+        address,
+        deposed: true,
+        values: attributes,
+        sensitive,
+      }));
     if (action.type === 'DELETE' || action.type === 'REPLACE') {
-      const { attributes, sensitive = [] } = state.resources[address];
-      return [{ action, address, deposed: false, values: attributes, sensitive }];
+      const held = state.resources[address];
+      return [{ action, of: held, address, deposed: false, values: held.attributes, sensitive: held.sensitive ?? [] }];
     }
 
     return [];
@@ -111,7 +121,7 @@ export async function checkSameObjects(actions: PlanAction[], desired: Configure
         return asking(identify, resource.block, resource.after, resource.sensitive, placed);
       })
     ),
-    Promise.allSettled(going.map((each) => asking(identify, each.action, each.values, each.sensitive, named(each.address)))),
+    Promise.allSettled(going.map((each) => asking(identify, each.of, each.values, each.sensitive, named(each.address)))),
   ]);
 
   for (const [index, resource] of desired.entries()) {
@@ -212,7 +222,7 @@ export class SameObjects {
     const objects = [
       ...inAddressOrder(state.resources).map(([address, resource]) => ({ address, of: resource, values: resource.attributes, sensitive: resource.sensitive ?? [] })),
       ...inAddressOrder(state.deposed ?? {}).flatMap(([address, deposed]) =>
-        deposed.map(({ attributes, sensitive = [] }) => ({ address, of: { resourceType: Address.parse(address).resourceType }, values: attributes, sensitive }))
+        deposed.map(({ alias, attributes, sensitive = [] }) => ({ address, of: { resourceType: Address.parse(address).resourceType, alias }, values: attributes, sensitive }))
       ),
     ];
     const index: HeldIndex = { byKey: new Map(), failed: [] };

@@ -105,6 +105,11 @@ function isForcedBy({ forcedBy, type }: Record<string, unknown>): boolean {
   return forcedBy === undefined || (type === 'REPLACE' && Array.isArray(forcedBy) && forcedBy.length > 0 && forcedBy.every((name) => typeof name === 'string'));
 }
 
+/** A delete asks the instance the state names. */
+function isAlias({ alias, type }: Record<string, unknown>): boolean {
+  return alias === undefined || (typeof alias === 'string' && isName(alias) && type !== 'DELETE');
+}
+
 function isDeposed(action: Record<string, unknown>): boolean {
   return action.deposed === undefined || (action.deposed === true && action.type === 'DELETE');
 }
@@ -146,6 +151,7 @@ function isAction(action: unknown): boolean {
   return (
     isRecord(action) &&
     isActionAt(action) &&
+    isAlias(action) &&
     isMovedFrom(action) &&
     isImportedFrom(action) &&
     isStateOnly(action) &&
