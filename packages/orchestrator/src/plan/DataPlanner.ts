@@ -3,7 +3,7 @@ import { Graph } from '@clay/graph';
 import { DataBlock, spell } from '@clay/parser';
 
 import { DependencyGraphBuilder } from '../graph/DependencyGraphBuilder';
-import { GraphNode } from '../graph/nodes';
+import { DataNode, GraphNode } from '../graph/nodes';
 import { Instances } from '../instances/Instances';
 import { ModuleInstances } from '../instances/ModuleInstances';
 import { DataInstance, enclosing, sharedModule } from '../keys';
@@ -32,24 +32,24 @@ export class DataPlanner {
   ) {}
 
   /** Each module instance reads its own, and waits for the apply on its own. A check reads none. */
-  async plan(key: string, { module, block }: Extract<GraphNode, { kind: 'data' }>, graph: Graph<GraphNode>, state: State, walk: Walk): Promise<DataRead[]> {
+  async plan(key: string, node: DataNode, graph: Graph<GraphNode>, state: State, walk: Walk): Promise<DataRead[]> {
     const blocks = this.graphBuilder.resourceDependencies(graph, key);
-    const reads = await inOrder(this.modules.of(module).map((instance) => this.readIn(block, blocks, instance, state, walk)));
+    const reads = await inOrder(this.modules.of(node.module).map((instance) => this.readIn(node, blocks, instance, state, walk)));
 
     return reads.flat();
   }
 
-  private async readIn(block: DataBlock, blocks: string[], instance: ModuleAddress, state: State, walk: Walk): Promise<DataRead[]> {
+  private async readIn(node: DataNode, blocks: string[], instance: ModuleAddress, state: State, walk: Walk): Promise<DataRead[]> {
     const waits = walk === 'check' || this.waitsForApply(blocks, instance);
 
-    return inOrder(this.dataInstances(block, instance, state, walk).map((at) => this.readData(block, at, state, waits)));
+    return inOrder(this.dataInstances(node.block, instance, state, walk).map((at) => this.readData(node, at, state, waits)));
   }
 
-  private async readData(block: DataBlock, at: DataInstance, state: State, waits: boolean): Promise<DataRead> {
-    const inputs = this.resolveInputs(block, state, at);
-    if (!waits) return { at, read: await this.reader.read(block, inputs, at) };
+  private async readData(node: DataNode, at: DataInstance, state: State, waits: boolean): Promise<DataRead> {
+    const inputs = this.resolveInputs(node.block, state, at);
+    if (!waits) return { at, read: await this.reader.read(node, inputs, at) };
 
-    await this.reader.defer(block, inputs, at);
+    await this.reader.defer(node.block, inputs, at);
     return { at };
   }
 

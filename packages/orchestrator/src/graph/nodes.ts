@@ -26,15 +26,18 @@ export type LocalNode = ValueNode & { value: AttributeValue };
 const SPELLED = { variable: 'var', local: 'local', output: 'output' };
 
 export type GraphNode =
-  /** `alias` is the provider instance its block names, left out for the default one. */
+  /** `alias` is the provider instance its block takes, left out for the default one. */
   | ({ kind: 'resource'; alias?: string } & InModule)
   | ({ kind: 'variable' } & ValueNode)
   | ({ kind: 'local' } & LocalNode)
   | ({ kind: 'output' } & OutputNode)
   | ({ kind: 'module'; block: ModuleBlock } & InModule)
-  | ({ kind: 'data'; block: DataBlock } & InModule)
+  /** `alias` as on a resource. */
+  | ({ kind: 'data'; block: DataBlock; alias?: string } & InModule)
   /** The resource types it makes, so an object of one is destroyed after it is configured; `block` where the configuration sets it. */
   | ({ kind: 'provider'; name: string; alias?: string; resources: readonly string[]; block?: ProviderBlock } & InModule);
+
+export type DataNode = Extract<GraphNode, { kind: 'data' }>;
 
 /** `module.m.var.x`; a resource's key already is its address. */
 export function spellNode(key: string, node: GraphNode): string {

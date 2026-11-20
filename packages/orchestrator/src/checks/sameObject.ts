@@ -118,7 +118,7 @@ export async function checkSameObjects(actions: PlanAction[], desired: Configure
     Promise.allSettled(
       desired.map((resource) => {
         const placed = (error: unknown) => withPlace(error, resource.block.position, spell(resource.block), resource.address.module);
-        return asking(identify, resource.block, resource.after, resource.sensitive, placed);
+        return asking(identify, { resourceType: resource.block.resourceType, alias: resource.alias }, resource.after, resource.sensitive, placed);
       })
     ),
     Promise.allSettled(going.map((each) => asking(identify, each.of, each.values, each.sensitive, named(each.address)))),

@@ -4,6 +4,7 @@ import { DataBlock, spell } from '@clay/parser';
 
 import { conformed, writtenAt } from '../values/conformValues';
 import { DataInstance } from '../keys';
+import { DataNode } from '../graph/nodes';
 import { checkDataSourceGiven, checkDataSourceRead, heldBy, hidingReason } from '../providers/providerResult';
 import { Limit } from '../providers/Limit';
 import { ProviderInstances } from '../providers/ProviderInstances';
@@ -29,11 +30,11 @@ export class DataSourceReader {
     private limit: Limit
   ) {}
 
-  async read(stmt: DataBlock, inputs: Record<string, Value>, at: DataInstance): Promise<Record<string, Value>> {
+  async read({ block: stmt, alias }: DataNode, inputs: Record<string, Value>, at: DataInstance): Promise<Record<string, Value>> {
     const schema = this.dataSchemas.get(stmt.dataSourceType)!;
 
     try {
-      const provider = this.providers.reader(stmt);
+      const provider = this.providers.reader(stmt.dataSourceType, alias);
       const given = conformed(stmt.dataSourceType, schema, inputs);
       const config = plainOf(given);
       const sensitive = marksOf(schema, given);

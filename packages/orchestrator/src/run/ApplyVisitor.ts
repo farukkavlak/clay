@@ -5,7 +5,7 @@ import { offPlan, PlanAction } from '@clay/planner';
 import { append } from '../append';
 import { ScopeManager } from '../config/ScopeManager';
 import { ReferenceResolver } from '../expressions/ReferenceResolver';
-import { GraphNode, LocalNode, OutputNode, ValueNode } from '../graph/nodes';
+import { DataNode, GraphNode, LocalNode, OutputNode, ValueNode } from '../graph/nodes';
 import { countFrom } from '../instances/count';
 import { eachFrom } from '../instances/forEach';
 import { Instances } from '../instances/Instances';
@@ -100,11 +100,12 @@ export class ApplyVisitor {
 
   /** The plan's value, or a read now, after what it reads has run. A plan that has neither was made from another configuration. */
   private async *readData(
-    { module, block }: Extract<GraphNode, { kind: 'data' }>,
+    node: DataNode,
     named = new Set<string>(),
     { dataSources, dataSensitive }: Pick<Approved, 'dataSources' | 'dataSensitive'>,
     state: State
   ): AsyncGenerator<RunEvent> {
+    const { module, block } = node;
     const made = this.modules.of(module).flatMap((instance) => this.dataInstances(block, instance, state));
     const making = new Set(made.map((at) => at.toString()));
 
@@ -121,7 +122,7 @@ export class ApplyVisitor {
       // `named` holds a read at apply for each instance with no value.
       if (!named.has(address)) throw withPlace(new Error(`The plan has no value for ${address}, which the configuration declares`), block.position, spell(block), at);
 
-      await this.reader.read(block, this.resolveInputs(block, state, at), at);
+      await this.reader.read(node, this.resolveInputs(block, state, at), at);
       yield { type: 'read', address };
     }
   }

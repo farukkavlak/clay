@@ -38,7 +38,7 @@ function addForBlocks(graph: Graph<GraphNode>, registry: ProviderRegistry, add: 
       add(registry.get(type).name, node.alias, key);
       append(blocksOf, type, key);
     }
-    if (node.kind === 'data') add(registry.reader(node.block.dataSourceType).name, node.block.provider?.alias, key);
+    if (node.kind === 'data') add(registry.reader(node.block.dataSourceType).name, node.alias, key);
   }
 
   return blocksOf;
@@ -50,7 +50,7 @@ function addForBlocks(graph: Graph<GraphNode>, registry: ProviderRegistry, add: 
  * its type waits for that one too: a move may take it to any of them. A provider nothing needs and no block sets is never configured.
  */
 export function addProviders(graph: Graph<GraphNode>, registry: ProviderRegistry, state: State): void {
-  // The parser holds every alias a block names to a provider block, so only an object in state can name a missing one.
+  // Loading holds every alias a block names to a provider block, so only an object in state can name a missing one.
   const add: Add = (name, alias, dependent) => {
     const key = providerKey(name, alias);
     if (!graph.hasNode(key)) graph.addNode(key, { kind: 'provider', name, resources: registry.resourcesOf(name), module: ModuleAddress.root });

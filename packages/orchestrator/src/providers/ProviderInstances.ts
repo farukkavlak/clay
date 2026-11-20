@@ -1,7 +1,7 @@
 import { AttributePath, Provider, Schema } from '@clay/provider';
 import { ModuleAddress, Resource } from '@clay/core';
 import { PlanAction } from '@clay/planner';
-import { AttributeValue, DataBlock, ProviderBlock, ResourceBlock, spell, spellProvider } from '@clay/parser';
+import { AttributeValue, ProviderBlock, spell, spellProvider } from '@clay/parser';
 
 import { asError } from '../asError';
 import { providerKey } from '../keys';
@@ -19,14 +19,11 @@ export interface Written {
   read: (value: AttributeValue) => Value;
 }
 
-/** A block names its instance in `provider`; a plan action or an object in state keeps the alias, which anything else must say. */
-export type Handled = ResourceBlock | Resource | PlanAction | { resourceType: string; alias: string | undefined };
-
-const aliasOf = (of: Handled): string | undefined => {
-  // Only a block has a position.
-  if ('position' in of) return of.provider?.alias;
-  return of.alias;
-};
+/**
+ * A plan action or an object in state keeps the alias of its instance, which anything else must say. A block, which has a position, is
+ * refused: the instance it takes depends on its module, and its graph node holds it.
+ */
+export type Handled = (Resource | PlanAction | { resourceType: string; alias: string | undefined }) & { position?: never };
 
 /** What `configure` is given, and the paths of it that are sensitive. */
 interface Configuration {
@@ -91,12 +88,12 @@ export class ProviderInstances {
   }
 
   get(of: Handled): Provider {
-    return this.instance(this.registry.get(of.resourceType).name, aliasOf(of));
+    return this.instance(this.registry.get(of.resourceType).name, of.alias);
   }
 
   /** Looked up apart from resources, since a type may be one and not the other. */
-  reader(block: DataBlock): Provider {
-    return this.instance(this.registry.reader(block.dataSourceType).name, block.provider?.alias);
+  reader(type: string, alias: string | undefined): Provider {
+    return this.instance(this.registry.reader(type).name, alias);
   }
 
   async validate(type: string, config: Record<string, unknown>): Promise<void> {

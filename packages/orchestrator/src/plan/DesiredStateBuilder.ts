@@ -33,7 +33,7 @@ import { Queue } from '../Queue';
 import { ProviderInstances } from '../providers/ProviderInstances';
 import { isProvider } from '../graph/providerNodes';
 
-const movesInstance = (current: Resource, block: ResourceBlock) => current.alias !== block.provider?.alias;
+const movesInstance = (current: Resource, alias: string | undefined) => current.alias !== alias;
 
 /** With the block it was planned from, so a refusal can point at it. */
 export interface ConfiguredResource extends DesiredResource {
@@ -156,7 +156,7 @@ export class DesiredStateBuilder {
         return {};
       }
       case 'resource': {
-        return { resources: await this.planResource(key, byKey.get(key)!, graph, state) };
+        return { resources: await this.planResource(key, byKey.get(key)!, node.alias, graph, state) };
       }
       case 'data': {
         return { reads: await this.data.plan(key, node, graph, state, this.walk) };
@@ -215,37 +215,38 @@ export class DesiredStateBuilder {
     this.modules.expandCall(module, block, (value, parse, caller) => this.reads.readAt(this.walk, value, block, caller, state, parse));
   }
 
-  private async planResource(key: string, loaded: LoadedResource, graph: Graph<GraphNode>, state: State): Promise<ConfiguredResource[]> {
-    const { address, block } = loaded;
+  private async planResource(key: string, { address, block }: LoadedResource, alias: string | undefined, graph: Graph<GraphNode>, state: State): Promise<ConfiguredResource[]> {
     const blocks = this.graphBuilder.resourceDependencies(graph, key);
     // First, so an import goes where the object the state held is gone.
     await this.refresh?.block(address, state);
     this.needImports(address, state);
 
     const planned = await inOrder(
-      this.modules.of(address.module).map(async (module) => this.planBlock(new Address(module, address.resourceType, address.name), block, dependenciesOf(blocks, module), state))
+      this.modules
+        .of(address.module)
+        .map(async (module) => this.planBlock(new Address(module, address.resourceType, address.name), block, alias, dependenciesOf(blocks, module), state))
     );
 
     return planned.flat();
   }
 
-  private async planBlock(address: Address, block: ResourceBlock, dependencies: string[], state: State): Promise<ConfiguredResource[]> {
+  private async planBlock(address: Address, block: ResourceBlock, alias: string | undefined, dependencies: string[], state: State): Promise<ConfiguredResource[]> {
     const key = address.toString();
-    if (!block.count && !block.forEach) return [await this.planInstance(address, block, dependencies, state)];
+    if (!block.count && !block.forEach) return [await this.planInstance(address, block, alias, dependencies, state)];
 
     this.reads.setKeys(this.walk, key, block, address, state);
 
     return inOrder(
       (this.instances.keysOf(key) ?? []).map(async (instance) =>
-        this.planInstance(new Address(address.module, address.resourceType, address.name, instance), block, dependencies, state)
+        this.planInstance(new Address(address.module, address.resourceType, address.name, instance), block, alias, dependencies, state)
       )
     );
   }
 
-  private async planInstance(address: Address, block: ResourceBlock, dependencies: string[], state: State): Promise<ConfiguredResource> {
-    const current = await this.currentAt(address, block, state);
-    const ignoring = this.ignoringIn(block, current);
-    const change = await this.askProvider(address, block, current, this.resolveForPlan(block, state, address), ignoring);
+  private async planInstance(address: Address, block: ResourceBlock, alias: string | undefined, dependencies: string[], state: State): Promise<ConfiguredResource> {
+    const current = await this.currentAt(address, block, alias, state);
+    const ignoring = this.ignoringIn(block, alias, current);
+    const change = await this.askProvider(address, block, alias, current, this.resolveForPlan(block, state, address), ignoring);
     const values = changes(current, change);
     // A change of values or of marks goes in, so a reader takes the marks from the plan too.
     if (values || !samePaths(current?.sensitive ?? [], change.sensitive)) this.planned.set(address, change.after, change.sensitive, values);
@@ -253,7 +254,7 @@ export class DesiredStateBuilder {
 
     return {
       address,
-      ...aliasIn(block),
+      ...aliasIn(alias),
       block,
       attributes: change.config,
       after: change.after,
@@ -269,19 +270,19 @@ export class DesiredStateBuilder {
   }
 
   /** What the state holds at the instance once a count that came or went has moved it there, or an import block has taken it over. */
-  private async currentAt(address: Address, block: ResourceBlock, state: State): Promise<Resource | undefined> {
+  private async currentAt(address: Address, block: ResourceBlock, alias: string | undefined, state: State): Promise<Resource | undefined> {
     tryAt(block.position, spell(block), address, () => this.moveIn(address, state));
     const importing = this.imports?.neededAt(address);
-    if (importing) await this.importIn(importing, block, state);
+    if (importing) await this.importIn(importing, alias, state);
 
     return state.resources[address.toString()];
   }
 
   /** The id is read here, after everything it reads; a check reads it as far as it is known, and imports nothing. */
-  private async importIn(target: ImportTarget, to: ResourceBlock, state: State): Promise<void> {
+  private async importIn(target: ImportTarget, alias: string | undefined, state: State): Promise<void> {
     const { block, item } = target;
     const id = this.reads.readAt(this.walk, block.id, block, item ?? ModuleAddress.root, state, (value) => idFrom(value, item));
-    if (id !== undefined && this.walk === 'plan') await this.imports!.importBy(target, to, id, state);
+    if (id !== undefined && this.walk === 'plan') await this.imports!.importBy(target, alias, id, state);
   }
 
   /** Before any instance of the resource is planned, so each finds whether an import goes to it. */
@@ -295,19 +296,26 @@ export class DesiredStateBuilder {
   }
 
   /** Nothing to ignore in what does not exist yet, or in what is replaced because it is tainted or moves to another provider instance. */
-  private ignoringIn(block: ResourceBlock, current: Resource | undefined): Ignoring | undefined {
+  private ignoringIn(block: ResourceBlock, alias: string | undefined, current: Resource | undefined): Ignoring | undefined {
     const paths = ignoredPaths(block.lifecycle?.ignoreChanges, this.schemas.get(block.resourceType) ?? {});
 
-    return current && !current.tainted && !movesInstance(current, block) && paths.length > 0 ? { prior: current, paths } : undefined;
+    return current && !current.tainted && !movesInstance(current, alias) && paths.length > 0 ? { prior: current, paths } : undefined;
   }
 
-  private async askProvider(address: Address, block: ResourceBlock, current: Resource | undefined, attributes: Record<string, Value>, ignoring?: Ignoring): Promise<ResourcePlan> {
+  private async askProvider(
+    address: Address,
+    block: ResourceBlock,
+    alias: string | undefined,
+    current: Resource | undefined,
+    attributes: Record<string, Value>,
+    ignoring?: Ignoring
+  ): Promise<ResourcePlan> {
     try {
       const schema = this.schemas.get(block.resourceType) ?? {};
       if (this.walk === 'check') return await this.resourcePlanner.check(block.resourceType, schema, attributes);
-      const provider = this.providers.get(block);
+      const provider = this.providers.get({ resourceType: block.resourceType, alias });
       // The old object stays with the instance that made it, which may not see where the new one goes.
-      if (current && movesInstance(current, block))
+      if (current && movesInstance(current, alias))
         return { ...(await this.resourcePlanner.plan(provider, block.resourceType, schema, undefined, attributes)), replace: true, forcedBy: ['provider'] };
       return await this.resourcePlanner.plan(provider, block.resourceType, schema, current, attributes, ignoring);
     } catch (error) {

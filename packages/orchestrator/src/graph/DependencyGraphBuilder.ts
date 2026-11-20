@@ -93,7 +93,7 @@ export class DependencyGraphBuilder {
     this.references.clear();
     this.outputs = new Map(loadedModules.map((mod) => [scopeOf(mod.address), [...outputsOf(mod.program).keys()]]));
 
-    for (const { uniqueId, address, block } of loadedResources) graph.addNode(uniqueId, { kind: 'resource', module: address.module, ...aliasIn(block) });
+    for (const { uniqueId, address, block } of loadedResources) graph.addNode(uniqueId, { kind: 'resource', module: address.module, ...aliasIn(block.provider?.alias) });
     for (const [key, node] of this.valueNodes(loadedModules)) graph.addNode(key, node);
 
     const moduleScopes = new Set(loadedModules.map((mod) => scopeOf(mod.address)));
@@ -291,7 +291,7 @@ export class DependencyGraphBuilder {
 
   private setBlockNodes(stmt: Statement, module: ModuleAddress, nodes: Map<string, GraphNode>): void {
     if (stmt.type === 'Module') this.setCallNodes(stmt, nodes, module);
-    if (stmt.type === 'Data') nodes.set(dataSourceKey(scopeOf(module), stmt.dataSourceType, stmt.name), { kind: 'data', module, block: stmt });
+    if (stmt.type === 'Data') nodes.set(dataSourceKey(scopeOf(module), stmt.dataSourceType, stmt.name), { kind: 'data', module, block: stmt, ...aliasIn(stmt.provider?.alias) });
     if (stmt.type === 'Provider') {
       const alias = stmt.alias?.value;
       const node = { kind: 'provider' as const, module, name: stmt.name, ...(alias !== undefined && { alias }), resources: this.providers.resourcesOf(stmt.name), block: stmt };
