@@ -56,7 +56,10 @@ export interface Provider {
 
   readonly resources: string[];
 
-  /** Called on each instance a run makes, before the run asks it anything else; left out where there is nothing to set. */
+  /** What a `provider` block may set; left out where it takes nothing. */
+  getConfigSchema?(): Promise<Schema>;
+
+  /** Called on each instance a run makes, before the run asks it anything else, with what its `provider` block sets; left out where there is nothing to set. */
   configure?(config: Record<string, unknown>): Promise<void>;
 
   /** A type may also be a resource type, as a file is both written and read. */

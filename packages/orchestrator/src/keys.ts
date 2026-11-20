@@ -26,6 +26,11 @@ export function callKey(module: ModuleAddress): string {
   return scope ? `${scope}.module:${name}` : `module:${name}`;
 }
 
+/** No address has a `:`, so this is apart from every block; only the root module has providers. */
+export function providerKey(name: string): string {
+  return `provider:${name}`;
+}
+
 /** Shared by every instance of the resource, in every instance of its module. */
 export function blockKey(address: Address): string {
   return new Address(address.module.withoutKeys(), address.resourceType, address.name).toString();

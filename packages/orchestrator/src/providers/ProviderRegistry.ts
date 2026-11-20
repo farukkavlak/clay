@@ -1,7 +1,7 @@
 import { isName, NAME_RULE } from '@clay/core';
 import { Provider, Schema } from '@clay/provider';
 
-import { checkDataSourceSchema, checkSchema } from './providerResult';
+import { checkConfigSchema, checkDataSourceSchema, checkSchema } from './providerResult';
 
 /** A name no configuration can write, an importable type the provider does not make, or one with no way to import it, is a fault in the provider. */
 function checkProvider(provider: Provider): void {
@@ -78,6 +78,14 @@ export class ProviderRegistry {
 
   async schema(type: string): Promise<Schema> {
     return checkSchema(type, await this.get(type).getSchema(type));
+  }
+
+  /** What a `provider` block for it may set. */
+  async configSchema(name: string): Promise<Schema> {
+    const provider = this.named.get(name);
+    if (!provider) throw new Error(`No provider is named "${name}"`);
+
+    return checkConfigSchema(name, (await provider.getConfigSchema?.()) ?? {});
   }
 
   async dataSourceSchema(type: string): Promise<Schema> {

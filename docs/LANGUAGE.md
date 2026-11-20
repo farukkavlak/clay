@@ -647,6 +647,41 @@ reads one makes the instances the plan showed. A `count` or `for_each` that read
 apply reads is refused at plan, since the plan cannot show its instances. A plan file
 holds them unencrypted, a secret a data source read among them.
 
+## Providers
+
+A `provider` block sets what a provider is configured with. Each plan and apply makes a
+new instance of the provider and configures it with these values before it asks it
+anything. `local` takes nothing, so `provider "local" {}` sets nothing; a provider that
+takes a region would be written:
+
+```
+variable "region" { default = "eu" }
+
+provider "cloud" {
+  region = var.region
+}
+```
+
+The block names the provider, as the provider names itself. Its attributes are held to
+the provider's schema for its configuration, as a resource's are to its own: a name the
+schema does not have, a value of the wrong type or a required one left out is refused
+where it is written. A provider with no block is configured with nothing, which a
+provider that requires a value refuses.
+
+A provider block may read variables, locals, data sources and functions. It may not read
+a resource or a module, even through a local or a data source's `depends_on`: a provider
+is configured before the resources it makes, and a destroy configures it with no resource
+left to read. Such a block is refused at the value
+it writes, with the chain it reads through: `provider "cloud" reads local.r ->
+local_file.f`. A block that reads a data source of its own provider is a dependency cycle.
+
+Only the root module has provider blocks, one for each provider; a module uses its
+caller's. `clay validate` checks the block with values not known yet and configures no
+provider. `clay destroy` works out only the provider blocks and what they read, so a
+variable only the rest reads needs no value, and a reference only the rest makes is not
+checked. Every file is still parsed. With no `.clay` file left, a destroy reads no value,
+and configures each provider with nothing.
+
 ## Backend
 
 A `clay` block in the root module names where the state lives:

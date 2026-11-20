@@ -19,8 +19,7 @@ import { checkPreventDestroy } from './checks/preventDestroy';
 import { checkSameObjects } from './checks/sameObject';
 import { ConfigFiles } from './config/ConfigFiles';
 import { inputsFor } from './config/givenValues';
-import { RootValues } from './config/ModuleLoader';
-import { addProviders } from './graph/providerNodes';
+import { Part, RootValues } from './config/ModuleLoader';
 import { ProviderInstances } from './providers/ProviderInstances';
 import { ProviderRegistry } from './providers/ProviderRegistry';
 import { ProvisionerRegistry } from './providers/ProvisionerRegistry';
@@ -35,27 +34,24 @@ export interface PlanOptions {
   refresh?: boolean;
   /** How many calls to providers run at once. */
   parallelism?: number;
-  /** Plans for a root module that declares nothing, so every object in state is destroyed. */
+  /** Plans for a root module of its provider blocks and what they read alone, so every object in state is destroyed. */
   destroy?: boolean;
-  /** Values for root variables from outside the configuration, in order; a destroy reads none. */
+  /** Values for root variables from outside the configuration, in order; a destroy reads only those its provider blocks read. */
   variables?: VariableInput[];
 }
 
-/** What a load is given: the root module in place of its files, and the values of its variables. */
+/** What a load is given: the values of the root module's variables, and how much of the configuration it works out. */
 interface Source {
-  root?: Statement[];
-  values?: RootValues;
+  values: RootValues;
+  part?: Part;
 }
 
-/**
- * A destroy reads no value from the configuration, so a variable it lacks or a value it cannot work out does not stop it. Its root
- * declares no variable, so it takes no value given for one.
- */
-const sourceOf = (destroy: boolean | undefined, variables: VariableInput[] = []): Source => (destroy ? { root: [] } : { values: { inputs: variables } });
+/** A destroy works out only the provider blocks and what they read, so a value only the rest reads, or a reference only the rest makes, does not stop it. */
+const sourceOf = (destroy: boolean | undefined, variables: VariableInput[] = []): Source => ({ values: { inputs: variables }, ...(destroy && { part: 'providers' as const }) });
 
 /** Kept in the plan, so the apply reads the values the plan read, and no other value the environment held. */
-function keptInputs(destroy: boolean, root: Statement[], given: VariableInput[]): { variables?: VariableInput[] } {
-  const variables = destroy ? [] : inputsFor(root, given);
+function keptInputs(root: Statement[], given: VariableInput[]): { variables?: VariableInput[] } {
+  const variables = inputsFor(root, given);
   return variables.length > 0 ? { variables } : {};
 }
 
@@ -151,7 +147,7 @@ export class Orchestrator {
       ...(Object.keys(dataSensitive).length > 0 && { dataSensitive }),
       readAtApply,
       ...(destroy && { destroy: true }),
-      ...keptInputs(destroy, root, variables),
+      ...keptInputs(root, variables),
     };
   }
 
@@ -200,10 +196,10 @@ export class Orchestrator {
     state.resources = copyResources(saved.prior);
 
     const { loader, graphBuilder, runner } = this.newRun(new Limit(parallelism), this.workspace);
-    const { root, values } = sourceOf(saved.destroy, saved.variables);
-    const config = await loader.load(root, values);
+    const { values, part } = sourceOf(saved.destroy, saved.variables);
+    const config = await loader.load(values, part);
     const graph = graphBuilder.buildExecutionGraph(config.loadedResources, config.loadedModules);
-    addProviders(graph, this.providers, state);
+    graphBuilder.withProviders(graph, state);
     yield* runner.run(saved, config, graph, state, { parallelism, signal });
   }
 
@@ -231,12 +227,12 @@ export class Orchestrator {
     state: State,
     walk: Walk,
     { moves, imports, refresh }: Steps,
-    { root, values }: Source
+    { values, part }: Source
   ): Promise<DesiredState & { graph: Graph<GraphNode>; root: Statement[] }> {
-    const { mainProgram, loadedResources, loadedModules, schemas } = await loader.load(root, values);
+    const { mainProgram, loadedResources, loadedModules, schemas } = await loader.load(values, part);
 
     const graph = graphBuilder.buildExecutionGraph(loadedResources, loadedModules);
-    addProviders(graph, this.providers, state);
+    graphBuilder.withProviders(graph, state);
     checkAttributes(loadedResources, schemas);
     await writtenCheck.check(loadedResources, loadedModules, graph);
     const moved = movesIn(loadedModules);

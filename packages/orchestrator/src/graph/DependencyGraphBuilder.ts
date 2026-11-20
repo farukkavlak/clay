@@ -1,11 +1,13 @@
-import { ModuleAddress } from '@clay/core';
+import { ModuleAddress, State } from '@clay/core';
 import { Graph } from '@clay/graph';
-import { AttributeValue, callsIn, DataBlock, ModuleBlock, Position, ReferenceNode, spell, Statement } from '@clay/parser';
+import { AttributeValue, callsIn, DataBlock, ModuleBlock, Position, ProviderBlock, ReferenceNode, spell, Statement } from '@clay/parser';
 
 import { Instances, Repetition } from '../instances/Instances';
 import { Declared, declaredOf } from '../values/declared';
 import { functionCalled } from '../expressions/functions';
-import { blockKey, callKey, Context, dataSourceAddress, dataSourceKey, localKey, ModuleCall, outputKey, scopeOf, variableKey } from '../keys';
+import { blockKey, callKey, Context, dataSourceAddress, dataSourceKey, localKey, ModuleCall, outputKey, providerKey, scopeOf, variableKey } from '../keys';
+import { ProviderRegistry } from '../providers/ProviderRegistry';
+import { addProviders } from './providerNodes';
 import { ModuleInstances } from '../instances/ModuleInstances';
 import { placed, tryAt, withPlace } from '../place';
 import { COUNT_INDEX_OUTSIDE, eachOutside, readCall, readInstance, SELF_OUTSIDE } from '../expressions/references/instance';
@@ -41,8 +43,8 @@ export type GraphNode =
   | ({ kind: 'output' } & OutputNode)
   | ({ kind: 'module'; block: ModuleBlock } & InModule)
   | ({ kind: 'data'; block: DataBlock } & InModule)
-  /** The resource types it makes, so an object of one is destroyed after it is configured. */
-  | ({ kind: 'provider'; name: string; resources: readonly string[] } & InModule);
+  /** The resource types it makes, so an object of one is destroyed after it is configured; `block` where the configuration sets it. */
+  | ({ kind: 'provider'; name: string; resources: readonly string[]; block?: ProviderBlock } & InModule);
 
 /** `module.m.var.x`; a resource's key already is its address. */
 export function spellNode(key: string, node: GraphNode): string {
@@ -123,7 +125,8 @@ export class DependencyGraphBuilder {
   constructor(
     private scanner: ReferenceScanner,
     private instances: Instances,
-    private modules: ModuleInstances
+    private modules: ModuleInstances,
+    private providers: ProviderRegistry
   ) {}
 
   buildExecutionGraph(loadedResources: LoadedResource[], loadedModules: LoadedModule[]): Graph<GraphNode> {
@@ -145,6 +148,12 @@ export class DependencyGraphBuilder {
     return graph;
   }
 
+  /** Once the configuration's own nodes are in, so a provider block that reads a block of its own provider is a cycle like any other. */
+  withProviders(graph: Graph<GraphNode>, state: State): void {
+    addProviders(graph, this.providers, state);
+    this.refuseCycle(graph);
+  }
+
   /** Reported at a reference in the cycle, so the error points at a line to change. A call's edges to its own nodes have no reference, but they alone never close a cycle. */
   private refuseCycle(graph: Graph<GraphNode>): void {
     const cycle = graph.findCycle();
@@ -162,6 +171,14 @@ export class DependencyGraphBuilder {
     if (node.kind === 'output') this.addWaits(node.dependsOn, graph, { key, declaration: node.declaration, context: node.context }, moduleScopes);
     if (node.kind === 'module') this.addCallDependencies(key, node.block, node.module, graph, moduleScopes);
     if (node.kind === 'data') this.addDataDependencies(key, node.block, node.module, graph, moduleScopes);
+    if (node.kind === 'provider' && node.block) this.addProviderDependencies(key, node.block, graph, moduleScopes);
+  }
+
+  private addProviderDependencies(key: string, block: ProviderBlock, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
+    const dependent = { key, declaration: spell(block), context: ModuleAddress.root };
+
+    for (const value of Object.values(block.attributes))
+      tryAt(value.position, dependent.declaration, ModuleAddress.root, () => this.addDependencies(value, graph, dependent, moduleScopes));
   }
 
   private addValueDependencies(key: string, node: ValueNode, graph: Graph<GraphNode>, moduleScopes: Set<string>): void {
@@ -310,8 +327,13 @@ export class DependencyGraphBuilder {
         position: stmt.value.position,
         declaration,
       });
+    this.setBlockNodes(stmt, module, nodes);
+  }
+
+  private setBlockNodes(stmt: Statement, module: ModuleAddress, nodes: Map<string, GraphNode>): void {
     if (stmt.type === 'Module') this.setCallNodes(stmt, nodes, module);
-    if (stmt.type === 'Data') nodes.set(dataSourceKey(scope, stmt.dataSourceType, stmt.name), { kind: 'data', module, block: stmt });
+    if (stmt.type === 'Data') nodes.set(dataSourceKey(scopeOf(module), stmt.dataSourceType, stmt.name), { kind: 'data', module, block: stmt });
+    if (stmt.type === 'Provider') nodes.set(providerKey(stmt.name), { kind: 'provider', module, name: stmt.name, resources: this.providers.resourcesOf(stmt.name), block: stmt });
   }
 
   // An input is read in the call and overrides the default.

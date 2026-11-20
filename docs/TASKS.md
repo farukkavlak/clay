@@ -1158,7 +1158,8 @@ Terraform has it since backends replaced `-state`.
 ## 4. Providers
 
 The CLI imports the one provider, `local`, and registers it; the registry keys providers
-by resource type, and no `provider` block exists yet.
+by resource type. A `provider` block configures the one instance of a provider; there is
+no alias for a second yet.
 
 - [x] `contracts` splits in two. It holds both the engine's contract with a provider
       (`Provider`, `Schema`) and value types the engine shares with itself (`Address`,

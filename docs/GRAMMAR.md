@@ -68,7 +68,7 @@ same way, a line at a time, until its closing line; one still open at the end is
 where it opens.
 
 There are no keywords. `resource`, `data`, `variable`, `locals`, `output`, `module`,
-`moved`, `import` and `clay` start a block only at the top level; anywhere else they are ordinary identifiers, so
+`provider`, `moved`, `import` and `clay` start a block only at the top level; anywhere else they are ordinary identifiers, so
 `data = "x"` inside a block is an attribute. `for` right after `[` or `{`, and `in` after
 its names, start a for expression; `[for.a.id]` is still a list holding a reference, and
 `{ for = 1 }` a map with a key named `for`.
@@ -103,6 +103,7 @@ variable "name" { attributes }
 locals { attributes }
 output "name" { value = value }
 module "name" { attributes }
+provider "name" { attributes }
 moved { from = address to = address }
 import { for_each = expression to = address id = expression }
 clay { backend "type" { attributes } }
@@ -144,6 +145,7 @@ What the engine reads from each:
 | `locals`   | every attribute, as a value of any kind; it may read anything a resource's attribute may, another local among them                                                    |
 | `output`   | `value`; `type`, read below; `sensitive`, which hides the value of a root output wherever it is printed; `description`, checked and dropped; `depends_on`             |
 | `module`   | `source`, a literal string naming a directory relative to the file; `count` or `for_each`, and `depends_on`; every other attribute is an input                        |
+| `provider` | every attribute, held to the provider's schema for its configuration; only in the root module, once for each provider                                                 |
 | `moved`    | `from` and `to`, each a resource or module address written out                                                                                                        |
 | `import`   | `to`, a resource address written out, `id`, an expression, and optionally `for_each`                                                                                  |
 | `clay`     | one `backend` block, with one label, its type; its attributes are constants, and what each type takes is checked by the backend                                       |

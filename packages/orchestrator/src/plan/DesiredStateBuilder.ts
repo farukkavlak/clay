@@ -159,7 +159,7 @@ export class DesiredStateBuilder {
         return { reads: await this.data.plan(key, node, graph, state, this.walk) };
       }
       case 'provider': {
-        if (this.walk === 'plan') await this.providers.configure(node.name);
+        await this.planProvider(node, state);
         return {};
       }
       case 'output': {
@@ -172,6 +172,13 @@ export class DesiredStateBuilder {
         return {};
       }
     }
+  }
+
+  /** A check configures none, since a value of the block may not be known yet. */
+  private async planProvider({ name, block }: Extract<GraphNode, { kind: 'provider' }>, state: State): Promise<void> {
+    const written = block && { block, read: (value: AttributeValue) => this.reads.resolveOrUnknown(value, state, ModuleAddress.root) };
+
+    await (this.walk === 'plan' ? this.providers.configure(name, written) : this.providers.check(name, written));
   }
 
   /** In the graph's order, as a walk one node at a time would find them, so a plan lists the same however the provider answers. */

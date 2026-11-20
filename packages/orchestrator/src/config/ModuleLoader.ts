@@ -9,10 +9,14 @@ import { withGiven } from './givenValues';
 import { required } from '../values/declared';
 import { blockKey, callKey, DataInstance, dataSourceKey, ModuleCall, scopeOf } from '../keys';
 import { ScopeManager } from './ScopeManager';
+import { providerSlice } from './providerSlice';
 
 function validationsOf(variable: VariableBlock) {
   return variable.validations && { validations: { rules: variable.validations, declaration: spell(variable) } };
 }
+
+/** How much of the configuration a run works out: a destroy needs only the provider blocks and what they read. */
+export type Part = 'all' | 'providers';
 
 /** What the root module's variables are given from outside the configuration. */
 export interface RootValues {
@@ -63,14 +67,10 @@ export class ModuleLoader {
     private scopeManager: ScopeManager
   ) {}
 
-  /** `root` stands in for the root module's files, which are then not read. */
-  async loadModuleTree(root?: Statement[], { inputs = [], unset }: RootValues = {}): Promise<Loaded & { root: Statement[] }> {
+  async loadModuleTree({ inputs = [], unset }: RootValues = {}, part: Part = 'all'): Promise<Loaded & { root: Statement[] }> {
     const loaded: Loaded = { resources: [], modules: [] };
     this.contents.clear();
-
-    const written = root ?? this.parseConfig('.');
-    if (written === undefined) throw new Error('no .clay file in the directory');
-    const rootProgram = withGiven(written, inputs);
+    const rootProgram = this.rootProgram(inputs, part);
 
     const parentAddress = ModuleAddress.root;
     loaded.modules.push({ address: parentAddress, program: rootProgram });
@@ -86,6 +86,18 @@ export class ModuleLoader {
       } else if (stmt.type === 'Module') await this.loadChildModule(stmt, '.', parentAddress, loaded, ['.']);
 
     return { ...loaded, root: rootProgram };
+  }
+
+  /** A destroy goes on with no file, since what it destroys is in the state. Every value given is checked against the whole module. */
+  private rootProgram(inputs: readonly VariableInput[], part: Part): Statement[] {
+    const written = this.parseConfig('.');
+    // Nothing is left to read a value, so none given is checked, not even a clay.clayvars kept beside the state.
+    if (written === undefined && part === 'providers') return [];
+    if (written === undefined) throw new Error('no .clay file in the directory');
+
+    const whole = withGiven(written, inputs);
+    const slice = providerSlice(whole);
+    return part === 'providers' ? slice : whole;
   }
 
   private async loadChildModule(stmt: ModuleBlock, parentDir: string, parentAddress: ModuleAddress, loaded: Loaded, loadingDirs: string[]): Promise<void> {
@@ -129,6 +141,9 @@ export class ModuleLoader {
     const backend = moduleProgram.find((moduleStmt) => moduleStmt.type === 'Backend');
     if (backend)
       throw new ConfigError(`module "${stmt.name}" names a backend, which only the root configuration can: a module keeps its state with its caller's`, backend.position);
+    const provider = moduleProgram.find((moduleStmt) => moduleStmt.type === 'Provider');
+    if (provider)
+      throw new ConfigError(`module "${stmt.name}" has a ${spell(provider)} block, which only the root configuration can: a module uses its caller's providers`, provider.position);
 
     return { moduleDir, moduleProgram };
   }

@@ -1,8 +1,8 @@
-import { LocalBlock, Statement } from '../ast';
+import { LocalBlock, ProviderBlock, Statement } from '../ast';
 import { Attribute, Block, Header, Inside, Schema } from '../body';
 import { checkKey } from '../checkKey';
 import { ConfigError } from '../ConfigError';
-import { attributesOnly, refuseBlock } from './attributes';
+import { attributesIn, attributesOnly, refuseBlock } from './attributes';
 import { checkBackendArgument, checkClayHeader, decodeClay, refuseClayArgument } from './decodeClay';
 import { decodeData } from './decodeData';
 import { checkImportArgument, decodeImport } from './decodeImport';
@@ -21,6 +21,10 @@ interface Kind {
   opening: string;
   checkLabels?: (header: Header) => void;
   decode: (block: Block, labels: string[]) => Statement[];
+}
+
+function decodeProvider(block: Block, name: string): ProviderBlock {
+  return { type: 'Provider', name, attributes: attributesIn(block.body), position: block.position };
 }
 
 /** A statement for each name, so several blocks merge and a name set twice is a duplicate like any other. */
@@ -50,6 +54,7 @@ const KINDS = new Map<string, Kind>([
   ],
   ['output', { labels: named('output'), opening: "Expect '{' after output name.", decode: (block, labels) => [decodeOutput(block, labels)] }],
   ['module', { labels: named('module'), opening: "Expect '{' after module name.", decode: (block, labels) => [decodeModule(block, labels)] }],
+  ['provider', { labels: named('provider'), opening: "Expect '{' after provider name.", decode: (block, [name]) => [decodeProvider(block, name)] }],
   ['locals', { labels: [], opening: "Expect '{' after 'locals'.", decode: decodeLocals }],
   ['moved', { labels: [], opening: "Expect '{' after 'moved'.", decode: (block) => [decodeMoved(block)] }],
   ['import', { labels: [], opening: "Expect '{' after 'import'.", decode: (block) => [decodeImport(block)] }],

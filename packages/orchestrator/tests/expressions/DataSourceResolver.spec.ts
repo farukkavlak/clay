@@ -28,7 +28,7 @@ const counted = (module = ModuleAddress.root) => {
   instances.declare(new DataInstance(module.withoutKeys(), 'src', 's').block, 'count');
   instances.setCount(new DataInstance(module, 'src', 's').block, 2);
   const reader = new DataSourceReader(
-    new ProviderInstances(new ProviderRegistry(), new Limit(DEFAULT_PARALLELISM)),
+    new ProviderInstances(new ProviderRegistry(), new Map(), new Limit(DEFAULT_PARALLELISM)),
     schemas,
     dataSources,
     versions,

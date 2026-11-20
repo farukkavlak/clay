@@ -1,6 +1,6 @@
 import { AttributePath, ExactNumber, isRecord, isUnknown, NumberError, Schema, Type, typeAt, UNKNOWN } from '@clay/provider';
 import { isExact, isMaybe, MAYBE, SENSITIVE } from '@clay/core';
-import { DataBlock, Position, ResourceBlock } from '@clay/parser';
+import { DataBlock, Position, ProviderBlock, ResourceBlock } from '@clay/parser';
 
 import { setOf } from './setMembers';
 import { shown } from '../shown';
@@ -20,7 +20,7 @@ export class SchemaMismatch extends Error {
   }
 }
 
-export function writtenAt(error: unknown, block: ResourceBlock | DataBlock): Position {
+export function writtenAt(error: unknown, block: ResourceBlock | DataBlock | ProviderBlock): Position {
   return error instanceof SchemaMismatch && error.attribute !== undefined ? block.attributes[error.attribute].position : block.position;
 }
 

@@ -1,4 +1,5 @@
 import { Schema } from '@clay/provider';
+import { ModuleAddress } from '@clay/core';
 import { AttributeValue, ConfigError, spell, Statement } from '@clay/parser';
 
 import { checkNames, checkProvisionerNames } from '../checks/checkAttributes';
@@ -14,7 +15,7 @@ import { Limit, taken } from '../providers/Limit';
 import { tryAt, withPlace } from '../place';
 import { ReferenceResolver } from '../expressions/ReferenceResolver';
 import { ScopeManager } from '../config/ScopeManager';
-import { LoadedModule, LoadedResource, ModuleLoader, RootValues } from '../config/ModuleLoader';
+import { LoadedModule, LoadedResource, ModuleLoader, Part, RootValues } from '../config/ModuleLoader';
 
 /** The first item of each key, in the order they come. */
 function firstOfEach<T>(items: T[], keyOf: (item: T) => string): T[] {
@@ -43,15 +44,15 @@ export class ConfigLoader {
     private providers: ProviderRegistry,
     private provisioners: ProvisionerRegistry,
     private provisionerSchemas: Map<string, Schema>,
+    private configSchemas: Map<string, Schema>,
     private instances: Instances,
     private modules: ModuleInstances,
     private planned: Planned,
     private limit: Limit
   ) {}
 
-  /** `root` stands in for the root module's files, which are then not read. */
-  async load(root?: Statement[], values?: RootValues): Promise<LoadedConfig> {
-    const { resources: loadedResources, modules: loadedModules, root: mainProgram } = await this.moduleLoader.loadModuleTree(root, values);
+  async load(values?: RootValues, part?: Part): Promise<LoadedConfig> {
+    const { resources: loadedResources, modules: loadedModules, root: mainProgram } = await this.moduleLoader.loadModuleTree(values, part);
     this.checkDefaults(loadedModules);
 
     for (const { uniqueId, block } of loadedResources) {
@@ -64,6 +65,7 @@ export class ConfigLoader {
     await this.loadSchemas(loadedResources);
     await this.loadProvisionerSchemas(loadedResources);
     await this.loadDataSchemas(loadedModules);
+    await this.loadConfigSchemas(mainProgram);
 
     return { mainProgram, loadedResources, loadedModules, schemas: this.schemas };
   }
@@ -121,6 +123,18 @@ export class ConfigLoader {
       const schema = this.dataSchemas.get(stmt.dataSourceType) ?? taken(loaded.get(stmt.dataSourceType)!);
       this.dataSchemas.set(stmt.dataSourceType, schema);
       checkNames(stmt, schema, address);
+    }
+  }
+
+  /** Only the root module has provider blocks. A name no provider has is refused at the block. */
+  private async loadConfigSchemas(program: Statement[]): Promise<void> {
+    const blocks = program.filter((stmt) => stmt.type === 'Provider');
+    const schemas = await Promise.allSettled(blocks.map((block) => this.asked(block, ModuleAddress.root, () => this.providers.configSchema(block.name))));
+
+    for (const [index, block] of blocks.entries()) {
+      const schema = taken(schemas[index]);
+      this.configSchemas.set(block.name, schema);
+      checkNames(block, schema, ModuleAddress.root);
     }
   }
 

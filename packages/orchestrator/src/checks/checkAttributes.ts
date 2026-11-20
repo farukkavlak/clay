@@ -1,14 +1,17 @@
 import { Schema } from '@clay/provider';
-import { ConfigError, DataBlock, Position, ProvisionerBlock, ResourceBlock, spell } from '@clay/parser';
+import { ConfigError, DataBlock, Position, ProviderBlock, ProvisionerBlock, ResourceBlock, spell } from '@clay/parser';
 
 import { nameProblem, namesOf } from '../values/conformValues';
 import { LoadedResource } from '../config/ModuleLoader';
 import { Context } from '../keys';
 import { withPlace } from '../place';
 
-type Block = ResourceBlock | DataBlock;
+type Block = ResourceBlock | DataBlock | ProviderBlock;
 
-const typeOf = (block: Block): string => (block.type === 'Resource' ? block.resourceType : block.dataSourceType);
+function typeOf(block: Block): string {
+  if (block.type === 'Provider') return spell(block);
+  return block.type === 'Resource' ? block.resourceType : block.dataSourceType;
+}
 
 /** A computed-only value set in the configuration would show in the plan and never be applied. A `null` sets nothing. */
 function computedSet(block: Block, schema: Schema): { message: string; position: Position } | undefined {

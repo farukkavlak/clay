@@ -2,6 +2,7 @@ import { Address, ModuleAddress } from '@clay/core';
 import { AttributeValue, ReferenceNode, Statement } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
+import { ProviderRegistry } from '../../src/providers/ProviderRegistry';
 import { DependencyGraphBuilder } from '../../src/graph/DependencyGraphBuilder';
 import { LoadedModule, LoadedResource } from '../../src/config/ModuleLoader';
 import { Instances } from '../../src/instances/Instances';
@@ -26,7 +27,7 @@ function module(modulePath: string[], program: Statement[]): LoadedModule {
 describe('DependencyGraphBuilder', () => {
   const instances = new Instances();
   const modules = new ModuleInstances();
-  const builder = new DependencyGraphBuilder(new ReferenceScanner(modules), instances, modules);
+  const builder = new DependencyGraphBuilder(new ReferenceScanner(modules), instances, modules, new ProviderRegistry());
 
   it('should run a resource after the one it reads from', () => {
     const main = resource('main', { id: ref('resource', 'dep', 'id') });

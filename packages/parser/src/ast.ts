@@ -185,6 +185,13 @@ export interface ModuleBlock extends Node {
   attributes: Record<string, AttributeValue>;
 }
 
+/** How the provider `name` is configured; its arguments are checked against the provider's schema for them. */
+export interface ProviderBlock extends Node {
+  type: 'Provider';
+  name: string;
+  attributes: Record<string, AttributeValue>;
+}
+
 /** One name of a `locals` block, so the names of several blocks are told apart like any other statements. */
 export interface LocalBlock extends Node {
   type: 'Local';
@@ -236,7 +243,7 @@ export interface BackendBlock extends Node {
   attributes: Record<string, AttributeValue>;
 }
 
-export type Statement = ResourceBlock | VariableBlock | OutputBlock | DataBlock | ModuleBlock | LocalBlock | MovedBlock | ImportBlock | BackendBlock;
+export type Statement = ResourceBlock | VariableBlock | OutputBlock | DataBlock | ModuleBlock | ProviderBlock | LocalBlock | MovedBlock | ImportBlock | BackendBlock;
 export type Program = Statement[];
 
 /** `resource "local_file" "a"`, `module "m"`, `moved from local_file.a`, `import to local_file.a`. */

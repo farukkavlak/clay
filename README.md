@@ -60,6 +60,7 @@ each with a type. A string reads other values with `${...}`.
 | `locals { name = }`              | Values the file works out once and reads by name                 |
 | `output "name" { value = }`      | A value the file gives back; a module's caller reads it          |
 | `module "name" { source = }`     | Another directory with its own `.clay` files, called with inputs |
+| `provider "name" { ... }`        | What a provider is configured with, in the root module           |
 
 On top of these:
 
@@ -83,10 +84,10 @@ On top of these:
 | Command                                                         | Does                                                                                                                                                                                                                         |
 | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `clay init [-y]`                                                | Takes the backend the configuration names; moves a state left at the old place, or creates an empty one; `-y` skips the question                                                                                             |
-| `clay validate`                                                 | Resolves references and checks values with the schema and the provider; reads no state and no data source                                                                                                                    |
+| `clay validate`                                                 | Resolves references and checks values with the schema and the provider; reads no state and no data source, and configures no provider                                                                                        |
 | `clay plan [--destroy] [--var n=v] [--var-file f] [--out file]` | Shows what `apply` would do; `--destroy` plans to destroy every object in state; `--var`, `--var-file`, `clay.clayvars` or `CLAY_VAR_n` give root variables values; `--out` saves the plan with its configuration and values |
 | `clay apply [plan] [--var n=v] [--var-file f] [-y]`             | Runs the plan it shows, or a saved one with the values it was made with; `-y` skips the question                                                                                                                             |
-| `clay destroy [-y]`                                             | Destroys every object in state, each before what it reads; of the configuration it reads only the backend block                                                                                                              |
+| `clay destroy [--var n=v] [--var-file f] [-y]`                  | Destroys every object in state, each before what it reads; of the configuration it works out only the backend block, the provider blocks and what they read                                                                  |
 | `clay output [--json]`                                          | Prints the root outputs from the last apply; `--json` gives each with its type, a sensitive one too                                                                                                                          |
 | `clay state list`                                               | Lists the resources in state, and `<addr> (deposed)` for an address that holds deposed objects                                                                                                                               |
 | `clay state show <addr>`                                        | Prints one resource as it is in state, and each deposed object under it                                                                                                                                                      |
@@ -283,7 +284,8 @@ each block means.
 
 1. Write a package that implements `Provider` from `@clay/provider`, and depends on that
    package only. Its `name` is what a configuration calls it, such as `local`. Its
-   `resources` and `dataSources` list the types it handles.
+   `resources` and `dataSources` list the types it handles. `getConfigSchema` names what
+   a `provider` block for it may set, and `configure` is given those values.
 2. Register a function that makes one, as `() => new LocalProvider()`, in `newOrchestrator`
    in `packages/cli/src/engine.ts`, and add the package to the dependencies in
    `packages/cli/package.json`. If two providers have the same name or list the same type,

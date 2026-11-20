@@ -139,15 +139,23 @@ export function checkSchema(type: string, schema: Schema): Schema {
   return schema;
 }
 
-/** A provisioner only takes what the configuration gives, so a flag about what a provider plans or computes is a bug in it. */
-export function checkProvisionerSchema(type: string, schema: Schema): Schema {
-  checkTypes(`provisioner ${type}`, schema);
+/** What only takes what the configuration gives has nothing planned or computed, so a flag about that is a bug in it. */
+function checkGivenOnly(what: string, owner: string, schema: Schema): Schema {
+  checkTypes(what, schema);
   for (const [name, definition] of Object.entries(schema)) {
     const flag = (['forceNew', 'computed', 'optional', 'kept', 'sensitiveWith', 'default'] as const).find((key) => definition[key] !== undefined);
-    if (flag) throw new Error(`provisioner ${type} gives ${name} ${flag}, but only a resource takes it, which is a bug in the provisioner`);
+    if (flag) throw new Error(`${what} gives ${name} ${flag}, but only a resource takes it, which is a bug in the ${owner}`);
   }
 
   return schema;
+}
+
+export function checkProvisionerSchema(type: string, schema: Schema): Schema {
+  return checkGivenOnly(`provisioner ${type}`, 'provisioner', schema);
+}
+
+export function checkConfigSchema(name: string, schema: Schema): Schema {
+  return checkGivenOnly(`provider "${name}"`, 'provider', schema);
 }
 
 /** A data source is only read, so `forceNew` or `kept` in its schema is a provider bug. */

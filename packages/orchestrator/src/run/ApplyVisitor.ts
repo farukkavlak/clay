@@ -53,7 +53,7 @@ export class ApplyVisitor {
 
   /** Gives the actions of a resource block, checked; the other kinds are resolved or read. */
   async *visit(key: string, node: GraphNode, { named, outputs, resolved, read, blocks, byBlock }: Applying, state: State): AsyncGenerator<RunEvent, PlanAction[]> {
-    if (node.kind === 'provider') await this.providers.configure(node.name);
+    if (node.kind === 'provider') await this.configure(node, state);
     if (node.kind === 'module') this.expandCall(node, state);
     if (node.kind === 'data') yield* this.readData(node, named.get(key), read, state);
     if (node.kind === 'local') this.resolveLocal(node, state);
@@ -62,6 +62,10 @@ export class ApplyVisitor {
     if (node.kind === 'output') this.resolveInEvery(node, { outputs, resolved }, state);
 
     return node.kind === 'resource' ? this.actionsOf(blocks.get(key)!, node.module, byBlock.get(key) ?? [], state) : [];
+  }
+
+  private async configure({ name, block }: Extract<GraphNode, { kind: 'provider' }>, state: State): Promise<void> {
+    await this.providers.configure(name, block && { block, read: (value) => this.resolver.resolveValue(value, state, ModuleAddress.root) });
   }
 
   /**

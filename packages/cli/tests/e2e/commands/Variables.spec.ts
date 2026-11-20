@@ -270,11 +270,33 @@ describe('values for root variables from --var, variables files and the environm
     expect(stderr).toContain('on CLAY_VAR_x line 1:\n\n  1: [var.y]');
   });
 
-  it('plans a destroy with a value given, which it does not read', async () => {
+  it('plans a destroy with no value for a variable no provider block reads', async () => {
+    await configure('variable "x" {}');
+
+    expect(await ok('plan', '--destroy')).toContain('No changes');
+  });
+
+  it('takes --var in a destroy, and refuses one for a variable the root does not declare', async () => {
+    await configure('variable "x" {}');
+
+    expect(await ok('destroy', '-y', '--var', 'x=1')).toContain('No changes');
+    expect(await refused('destroy', '-y', '--var', 'y=1')).toContain('--var gives a value to "y", which the root module does not declare as a variable');
+  });
+
+  it('destroys with no .clay file left, reading no value a clay.clayvars still gives', async () => {
+    await configure(`variable "x" {}\nresource "local_file" "a" {\n  path = "${path.join(dir, 'b.txt')}"\n  content = var.x\n}`);
+    await write('clay.clayvars', 'x = "hi"');
+    await ok('apply', '-y');
+    await fs.rm(path.join(dir, 'main.clay'));
+
+    expect(await ok('destroy', '-y')).toContain('1 destroyed');
+  });
+
+  it('refuses a mistake in the values a destroy is given, as a plan does', async () => {
     await configure('variable "x" {}');
     await write('clay.clayvars', 'x = [');
 
-    expect(await ok('plan', '--destroy', '--var', 'y=1')).toContain('No changes');
+    expect(await refused('plan', '--destroy')).toContain("Expect ']' after list.");
   });
 
   it('takes the values a --var-file holds, each as a value written in the configuration', async () => {

@@ -133,7 +133,7 @@ describe('ActionExecutor', () => {
       'default'
     );
     limit = new Watched(DEFAULT_PARALLELISM);
-    const configured = new ProviderInstances(providers, limit);
+    const configured = new ProviderInstances(providers, new Map(), limit);
     await configured.configure(mockProvider.name);
     executor = new ActionExecutor(
       configured,

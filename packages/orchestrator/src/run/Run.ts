@@ -57,14 +57,15 @@ export function newRun(stateManager: StateManager, { providers, provisioners }: 
   const schemas = new Map<string, Schema>();
   const dataSchemas = new Map<string, Schema>();
   const provisionerSchemas = new Map<string, Schema>();
+  const configSchemas = new Map<string, Schema>();
   const instances = new Instances();
   const modules = new ModuleInstances();
-  const configured = new ProviderInstances(providers, limit);
+  const configured = new ProviderInstances(providers, configSchemas, limit);
   const planned = new Planned(versions);
   const keys = new InstanceKeys(instances, modules);
   const resolver = new ReferenceResolver(scopes, dataSources, schemas, dataSchemas, instances, modules, planned, keys, versions, workspace);
   const scanner = new ReferenceScanner(modules);
-  const graphBuilder = new DependencyGraphBuilder(scanner, instances, modules);
+  const graphBuilder = new DependencyGraphBuilder(scanner, instances, modules, providers);
   const resourcePlanner = new ResourcePlanner(configured, limit);
   const provisioning = new Provisioning(provisioners, limit);
   const reader = new DataSourceReader(configured, dataSchemas, dataSources, versions, limit);
@@ -81,6 +82,7 @@ export function newRun(stateManager: StateManager, { providers, provisioners }: 
       providers,
       provisioners,
       provisionerSchemas,
+      configSchemas,
       instances,
       modules,
       planned,

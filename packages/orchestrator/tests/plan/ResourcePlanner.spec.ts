@@ -35,7 +35,7 @@ function fakeProvider(plan: (request: PlanRequest) => PlannedChange = (request) 
 async function plannerFor(provider: Provider): Promise<ResourcePlanner> {
   const providers = new ProviderRegistry();
   providers.register(() => provider);
-  const configured = new ProviderInstances(providers, new Limit(DEFAULT_PARALLELISM));
+  const configured = new ProviderInstances(providers, new Map(), new Limit(DEFAULT_PARALLELISM));
   await configured.configure(provider.name);
 
   return new ResourcePlanner(configured, new Limit(DEFAULT_PARALLELISM));

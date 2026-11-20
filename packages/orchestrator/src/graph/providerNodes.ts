@@ -2,10 +2,8 @@ import { Address, ModuleAddress, State } from '@clay/core';
 import { Graph } from '@clay/graph';
 
 import { ProviderRegistry } from '../providers/ProviderRegistry';
-import { GraphNode } from './DependencyGraphBuilder';
-
-/** No address has a `:`, so this is apart from every block. */
-export const providerKey = (name: string) => `provider:${name}`;
+import type { GraphNode } from './DependencyGraphBuilder';
+import { providerKey } from '../keys';
 
 /** For `passing`: the blocks are ordered by what they read, as if their provider were not there. */
 export const isProvider =
@@ -22,8 +20,9 @@ function typesHeld(state: State): [string, string][] {
 }
 
 /**
- * A node for each provider a block or an object in state needs, before every block of its types, so the walk configures it first. An object in
- * state may be refreshed or destroyed with no block left. A provider nothing needs is never configured.
+ * A node for each provider a block or an object in state needs, beside those a provider block made, before every block of its types, so the walk
+ * configures it first. An object in state may be refreshed or destroyed with no block left. A provider nothing needs and no block sets is never
+ * configured.
  */
 export function addProviders(graph: Graph<GraphNode>, registry: ProviderRegistry, state: State): void {
   const add = (name: string, dependent?: string) => {
