@@ -10,7 +10,7 @@ import { start } from '../start';
 
 const SCHEMA: Schema = { label: { type: types.string, required: true } };
 
-/** Refuses every call until it is configured, and notes each call with the instance it came to. */
+/** Refuses every call but a check until it is configured, and a check once it is; notes each call with the instance it came to. */
 class Strict implements Provider {
   static made = 0;
   readonly name: string = 'strict';
@@ -37,7 +37,13 @@ class Strict implements Provider {
     return SCHEMA;
   }
 
-  async validate(): Promise<void> {}
+  private checked(call: string): void {
+    if (this.configured) throw new Error(`${call} asked of a configured instance`);
+  }
+
+  async validate(): Promise<void> {
+    this.checked('validate');
+  }
 
   async plan(_type: string, request: PlanRequest): Promise<PlannedChange> {
     this.asked('plan');
@@ -67,7 +73,9 @@ class Strict implements Provider {
     return SCHEMA;
   }
 
-  async validateDataSource(): Promise<void> {}
+  async validateDataSource(): Promise<void> {
+    this.checked('validateDataSource');
+  }
 
   async readDataSource(_type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
     this.asked('readDataSource');
@@ -120,10 +128,11 @@ describe('the instances of a provider', () => {
     expect(log).toEqual(['5 configure', '5 read', '6 configure', '6 delete']);
   });
 
-  it('configures one for validate, which plans', async () => {
+  // So a validate needs no credentials, and a value it cannot know yet is no matter.
+  it('configures none for validate, which plans from the schema', async () => {
     await engine().validate(THING);
 
-    expect(log).toEqual(['2 configure', '2 plan']);
+    expect(log).toEqual([]);
   });
 
   it('configures no provider that nothing needs', async () => {

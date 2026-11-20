@@ -287,10 +287,11 @@ each block means.
 2. Register a function that makes one, as `() => new LocalProvider()`, in `newOrchestrator`
    in `packages/cli/src/engine.ts`, and add the package to the dependencies in
    `packages/cli/package.json`. If two providers have the same name or list the same type,
-   Clay stops with an error. Each run makes its own instance and calls its `configure`,
-   where it has one, before it asks it anything. The instance made at registration is
-   never configured: it gives the name, the types and the schemas, and checks a block with
-   `validate`.
+   Clay stops with an error. Each plan and apply makes its own instance and calls its
+   `configure`, where it has one, before it asks it anything. The instance made at
+   registration is never configured: it gives the name, the types and the schemas, and
+   checks every block with `validate`. `clay validate` asks only that one, so it needs no
+   credentials.
 3. Add a row for the package to the Packages table above.
 
 ## Develop

@@ -159,7 +159,7 @@ export class DesiredStateBuilder {
         return { reads: await this.data.plan(key, node, graph, state, this.walk) };
       }
       case 'provider': {
-        await this.providers.configure(node.name);
+        if (this.walk === 'plan') await this.providers.configure(node.name);
         return {};
       }
       case 'output': {
@@ -292,7 +292,9 @@ export class DesiredStateBuilder {
 
   private async askProvider(address: Address, block: ResourceBlock, current: Resource | undefined, attributes: Record<string, Value>, ignoring?: Ignoring): Promise<ResourcePlan> {
     try {
-      return await this.resourcePlanner.plan(block.resourceType, this.schemas.get(block.resourceType) ?? {}, current, attributes, ignoring);
+      const schema = this.schemas.get(block.resourceType) ?? {};
+      if (this.walk === 'check') return await this.resourcePlanner.check(block.resourceType, schema, attributes);
+      return await this.resourcePlanner.plan(block.resourceType, schema, current, attributes, ignoring);
     } catch (error) {
       throw withPlace(error, writtenAt(error, block), spell(block), address);
     }

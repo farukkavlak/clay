@@ -177,8 +177,8 @@ export class Orchestrator {
   }
 
   /**
-   * Plans against an empty state and reads no data source, so what a resource or a data source gives is unknown and everything else is checked.
-   * A root variable with no value is unknown too, since only a plan is given one.
+   * Plans against an empty state from the schemas alone, configures no provider and reads no data source, so what a resource or a data
+   * source gives is unknown and everything else is checked. A root variable with no value is unknown too, since only a plan is given one.
    */
   async validate(): Promise<void> {
     const limit = new Limit(DEFAULT_PARALLELISM);

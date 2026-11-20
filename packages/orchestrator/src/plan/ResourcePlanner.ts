@@ -1,4 +1,4 @@
-import { AttributePath, containsUnknown, own, PlannedChange, PlanRequest, Provider, Schema, valueAt } from '@clay/provider';
+import { AttributePath, containsUnknown, own, planFromSchema, PlannedChange, PlanRequest, Provider, Schema, valueAt } from '@clay/provider';
 import { Resource, sensitiveUnder, touchesSensitive } from '@clay/core';
 import { isDeepStrictEqual } from 'node:util';
 
@@ -105,12 +105,7 @@ export class ResourcePlanner {
    */
   async plan(type: string, schema: Schema, current: Resource | undefined, written: Record<string, Value>, ignoring?: Ignoring): Promise<ResourcePlan> {
     const provider = this.providers.get(type);
-    const given = conformed(type, schema, written);
-    const kept = ignoring ? keepPrior(plainOf(given), sensitiveAmong(given), ignoring.prior, ignoring.paths) : { config: plainOf(given), sensitive: sensitiveAmong(given) };
-    // After keepPrior, so an attribute made from an ignored one follows the mark it keeps.
-    const { config } = kept;
-    const sensitive = marksOf(schema, valuesOf(schema, kept));
-    await hidingReason(type, sensitive, () => this.limit.run(() => provider.validate(type, config)));
+    const { config, sensitive } = await this.validated(type, schema, written, ignoring);
     if (!current) return { ...(await this.create(provider, type, schema, config, sensitive)), sensitive };
 
     let forced: AttributePath[] = [];
@@ -127,6 +122,25 @@ export class ResourcePlanner {
 
     // The old resource's values go with it, so the new one is planned from nothing.
     return { ...(await this.create(provider, type, schema, config, sensitive)), replace: true, ...forcedByOf(forced), sensitive };
+  }
+
+  /** For a check, which configures no provider to ask: a create planned from the schema alone. */
+  async check(type: string, schema: Schema, written: Record<string, Value>): Promise<ResourcePlan> {
+    const { config, sensitive } = await this.validated(type, schema, written);
+    const { after } = planFromSchema(schema, { prior: null, proposed: withDefaults(config, schema), config });
+
+    return { after, replace: false, config, sensitive };
+  }
+
+  private async validated(type: string, schema: Schema, written: Record<string, Value>, ignoring?: Ignoring): Promise<Pick<ResourcePlan, 'config' | 'sensitive'>> {
+    const given = conformed(type, schema, written);
+    const kept = ignoring ? keepPrior(plainOf(given), sensitiveAmong(given), ignoring.prior, ignoring.paths) : { config: plainOf(given), sensitive: sensitiveAmong(given) };
+    // After keepPrior, so an attribute made from an ignored one follows the mark it keeps.
+    const { config } = kept;
+    const sensitive = marksOf(schema, valuesOf(schema, kept));
+    await hidingReason(type, sensitive, () => this.limit.run(() => this.providers.validate(type, config)));
+
+    return { config, sensitive };
   }
 
   private async create(provider: Provider, type: string, schema: Schema, config: Record<string, unknown>, sensitive: AttributePath[]): Promise<Omit<ResourcePlan, 'sensitive'>> {

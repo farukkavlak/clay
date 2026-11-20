@@ -67,7 +67,7 @@ export interface Provider {
 
   getSchema(type: string): Promise<Schema>;
 
-  /** Throws on invalid inputs. An input may be UNKNOWN until apply, and is checked then. */
+  /** Throws on invalid inputs. Asked of an instance never configured. An input may be UNKNOWN until apply, and is checked then. */
   validate(type: string, inputs: Record<string, unknown>): Promise<void>;
 
   /** `planFromSchema` is a default that plans from the schema alone. */
@@ -79,7 +79,7 @@ export interface Provider {
   /** Separate from the resource schema, since one type may be both with different attributes. */
   getDataSourceSchema(type: string): Promise<Schema>;
 
-  /** Throws on invalid inputs. An input may be UNKNOWN until the data source is read, and is checked again then. */
+  /** Throws on invalid inputs. Asked of an instance never configured. An input may be UNKNOWN until the data source is read, and is checked again then. */
   validateDataSource(type: string, inputs: Record<string, unknown>): Promise<void>;
 
   readDataSource(type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>>;

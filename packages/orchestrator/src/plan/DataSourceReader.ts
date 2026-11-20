@@ -37,7 +37,7 @@ export class DataSourceReader {
       const given = conformed(stmt.dataSourceType, schema, inputs);
       const config = plainOf(given);
       const sensitive = marksOf(schema, given);
-      await hidingReason(stmt.dataSourceType, sensitive, () => this.limit.run(() => provider.validateDataSource(stmt.dataSourceType, config)));
+      await hidingReason(stmt.dataSourceType, sensitive, () => this.limit.run(() => this.providers.validateDataSource(stmt.dataSourceType, config)));
       const read = await hidingReason(stmt.dataSourceType, sensitive, () => this.limit.run(() => provider.readDataSource(stmt.dataSourceType, config)), 'to read');
       const held = heldBy(stmt.dataSourceType, 'read', schema, read);
       checkDataSourceRead(stmt.dataSourceType, schema, plainOf(held));
@@ -60,8 +60,7 @@ export class DataSourceReader {
     try {
       const given = conformed(stmt.dataSourceType, schema, inputs);
       const config = plainOf(given);
-      const provider = this.providers.reader(stmt.dataSourceType);
-      await hidingReason(stmt.dataSourceType, marksOf(schema, given), () => this.limit.run(() => provider.validateDataSource(stmt.dataSourceType, config)));
+      await hidingReason(stmt.dataSourceType, marksOf(schema, given), () => this.limit.run(() => this.providers.validateDataSource(stmt.dataSourceType, config)));
       const later = Object.entries(schema).map(([name, { type }]) => [name, valueOf(type, UNKNOWN)]);
       return this.keep(at, schemaRemarked(schema, remarked({ ...Object.fromEntries(later), ...typedValues(schema, config) }, given), given));
     } catch (error) {
