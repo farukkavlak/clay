@@ -86,13 +86,6 @@ describe('Parser - provider block', () => {
     expect(error.position).toMatchObject({ line: 2, column: 14 });
   });
 
-  it('refuses an alias the module does not declare, where it is written', () => {
-    const error = errorOf('provider "local" { alias = "east" }\ndata "local_file" "f" {\n  provider = local.west\n}');
-
-    expect(error.message).toBe('data "local_file" "f" names provider "local" alias "west", which this module does not declare');
-    expect(error.position).toMatchObject({ line: 3, column: 14 });
-  });
-
   it.each([
     ['no name', 'provider {}', "Expect provider name string after 'provider'.", 10],
     ['a name that is no identifier', 'provider "a.b" {}', 'Invalid name "a.b": a name', 10],

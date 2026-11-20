@@ -193,16 +193,31 @@ describe('a provider block with an alias', () => {
     expect(error).toMatchObject({ message: `provider "local" does not handle "${type}"; provider "cfg" does`, position: placeOf(config, 'local\n') });
   });
 
-  it('refuses an alias no block declares, where it is written', async () => {
-    const config = BLOCKS + thing('a', '  provider = cfg.east\n');
+  it.each([
+    ['resource', 'resource "cfg_thing" "a"', thing('a', '  provider = cfg.east\n')],
+    ['data source', 'data "cfg_data" "d"', 'data "cfg_data" "d" {\n  label = "d"\n  provider = cfg.east\n}\n'],
+  ])('refuses an alias no block declares on a %s, where it is written', async (_kind, declaration, block) => {
+    const config = BLOCKS + block;
 
     const error = await engine()
       .plan(config)
       .catch((error_: unknown) => error_);
 
+    expect(error).toMatchObject({ message: `${declaration} names provider "cfg" alias "east", which this module does not declare`, position: placeOf(config, 'cfg.east') });
+  });
+
+  it('refuses an alias in a module, though the root declares it, where it is written', async () => {
+    const child = thing('a', WEST);
+    await fs.mkdir(path.join(dir, 'child'));
+    await fs.writeFile(path.join(dir, 'child', 'main.clay'), child);
+
+    const error = await engine()
+      .plan(`${BLOCKS}module "m" {\n  source = "./child"\n}\n`)
+      .catch((error_: unknown) => error_);
+
     expect(error).toMatchObject({
-      message: 'resource "cfg_thing" "a" names provider "cfg" alias "east", which this module does not declare',
-      position: placeOf(config, 'cfg.east'),
+      message: 'resource "cfg_thing" "a" names provider "cfg" alias "west", which this module does not declare',
+      position: { file: 'child/main.clay', ...placeOf(child, 'cfg.west') },
     });
   });
 });

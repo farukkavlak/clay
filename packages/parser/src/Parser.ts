@@ -1,4 +1,4 @@
-import { AttributeValue, Program, spell, spellProvider } from './ast';
+import { AttributeValue, Program, spell } from './ast';
 import { Attribute } from './body';
 import { decodeBlock, SCHEMA } from './blocks/schema';
 import { BodyParser } from './BodyParser';
@@ -56,17 +56,6 @@ function checkDeclaredOnce(program: Program): void {
   }
 }
 
-/** An alias names a provider block of the same module; with none, a block takes the default instance, which needs no block. */
-function checkProviderChoices(program: Program): void {
-  const declared = new Set(program.flatMap((statement) => (statement.type === 'Provider' ? [spellProvider(statement.name, statement.alias?.value)] : [])));
-  for (const statement of program) {
-    if ((statement.type !== 'Resource' && statement.type !== 'Data') || statement.provider?.alias === undefined) continue;
-
-    const { name, alias, position } = statement.provider;
-    if (!declared.has(spellProvider(name, alias))) throw new ConfigError(`${spell(statement)} names ${spellProvider(name, alias)}, which this module does not declare`, position);
-  }
-}
-
 /** A for name that equals a resource type would shadow every reference to that type. */
 function checkForNames(program: Program, forNames: Token[]): void {
   const types = new Set(program.flatMap((statement) => (statement.type === 'Resource' ? [statement.resourceType] : [])));
@@ -82,7 +71,6 @@ export function parseModule(files: ModuleFile[]): Program {
   const forNames = parsers.flatMap((parser) => parser.forNames);
 
   checkDeclaredOnce(program);
-  checkProviderChoices(program);
   checkForNames(program, forNames);
   return program;
 }
