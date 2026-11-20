@@ -3,7 +3,7 @@ import { Graph } from '@clay/graph';
 import { describe, expect, it } from 'vitest';
 
 import { growth, LINEAR } from '../../../../tests/growth';
-import { GraphNode } from '../../src/graph/DependencyGraphBuilder';
+import { GraphNode } from '../../src/graph/nodes';
 import { applyGraph } from '../../src/plan/applyGraph';
 
 /** How long ordering a replace of each of `size` instances of one block takes. */

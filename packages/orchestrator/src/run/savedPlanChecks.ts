@@ -3,7 +3,7 @@ import { Graph } from '@clay/graph';
 import { OutputBlock, spell, Statement } from '@clay/parser';
 import { Plan, PlanAction } from '@clay/planner';
 
-import { GraphNode } from '../graph/DependencyGraphBuilder';
+import { GraphNode } from '../graph/nodes';
 import { Instances, repetitionOfKey } from '../instances/Instances';
 import { blockKey, dataSourceKey, scopeOf } from '../keys';
 import { withPlace } from '../place';

@@ -17,6 +17,8 @@ export interface Resource {
   name: string;
   modulePath?: readonly ModuleStep[];
   key?: InstanceKey;
+  /** The provider instance that made it, so a refresh or destroy asks the same one. Left out for the default instance. */
+  alias?: string;
   attributes: Record<string, unknown>;
   /** The steps to each sensitive part of `attributes`, left out where there is none. The values themselves are held as they are. */
   sensitive?: AttributePath[];
@@ -44,6 +46,8 @@ export function isOutput(output: unknown): output is Output {
 
 /** An earlier object of a resource that a replace has left behind, held until its provider destroys it. */
 export interface DeposedObject {
+  /** As the current object had it. */
+  alias?: string;
   attributes: Record<string, unknown>;
   /** The steps to each sensitive part of `attributes`, left out where there is none. */
   sensitive?: AttributePath[];
@@ -72,7 +76,7 @@ export type WrittenState = State & { lineage: string };
 export const isWritten = (state: State): state is WrittenState => state.lineage !== undefined;
 
 /** Bump on any change to the shape after a release. A higher version was written by a newer Clay and is refused. */
-export const STATE_VERSION = 11;
+export const STATE_VERSION = 12;
 
 export function emptyState(): State {
   return { version: STATE_VERSION, serial: 0, resources: {} };

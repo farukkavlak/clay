@@ -1,6 +1,7 @@
 import { ExactNumber, isRecord, NumberError } from '@clay/provider';
 
 import { Address, isAddress, isInstanceKey, isModulePath } from './Address';
+import { isName } from './name';
 import { isAttributePaths, readPaths } from './readPaths';
 import type { DeposedObject, DestroyProvisioner, Resource } from './State';
 
@@ -23,9 +24,12 @@ function isDestroyProvisioners(value: unknown): value is DestroyProvisioner[] | 
   return value === undefined || (Array.isArray(value) && value.every((provisioner) => isDestroyProvisioner(provisioner)));
 }
 
+const isAlias = (alias: unknown) => alias === undefined || (typeof alias === 'string' && isName(alias));
+
 /** What a resource keeps beside its values, each left out where there is none. */
 function isKeptBesideValues(value: Record<string, unknown>): boolean {
   return (
+    isAlias(value.alias) &&
     (value.sensitive === undefined || isAttributePaths(value.sensitive)) &&
     (value.preventDestroy === undefined || value.preventDestroy === true) &&
     (value.tainted === undefined || value.tainted === true) &&
@@ -34,7 +38,7 @@ function isKeptBesideValues(value: Record<string, unknown>): boolean {
   );
 }
 
-/** Checks what the engine reads without asking: the address fields, `attributes`, `sensitive`, `preventDestroy`, `tainted`, `destroyProvisioners` and `dependencies`. */
+/** Checks what the engine reads without asking: the address fields, `alias`, `attributes`, `sensitive`, `preventDestroy`, `tainted`, `destroyProvisioners` and `dependencies`. */
 function isResource(value: unknown): value is Resource {
   return (
     isRecord(value) &&
@@ -82,6 +86,7 @@ function checkResources(resources: Record<string, unknown>, say: (problem: strin
 function isDeposedObject(value: unknown): value is DeposedObject {
   return (
     isRecord(value) &&
+    isAlias(value.alias) &&
     isRecord(value.attributes) &&
     (value.sensitive === undefined || isAttributePaths(value.sensitive)) &&
     isDependencies(value.dependencies) &&
@@ -113,7 +118,8 @@ export function readDeposed(deposed: unknown, say: (problem: string) => never): 
 
     for (const object of objects as unknown[]) {
       readDeposedPaths(object, address, say);
-      if (!isDeposedObject(object)) say(`a deposed object of "${address}" has no attributes, or its sensitive, dependencies or destroy provisioners are not what they should be`);
+      if (!isDeposedObject(object))
+        say(`a deposed object of "${address}" has no attributes, or its alias, sensitive, dependencies or destroy provisioners are not what they should be`);
     }
   }
 }

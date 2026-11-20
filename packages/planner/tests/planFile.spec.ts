@@ -420,6 +420,17 @@ describe('reading a plan file', () => {
     expect(read(content)).toThrow('tfplan.json is not a plan file: an ignored index: 1.5 is not a whole number');
   });
 
+  // A delete asks the instance the state names, so a plan that named another could not be followed.
+  it.each([
+    ['no name', 'UPDATE', 'a.b'],
+    ['on a delete', 'DELETE', 'west'],
+  ])('refuses an alias that is %s', (_, type, alias) => {
+    const withValues = type === 'UPDATE' ? { planned: {}, after: {} } : {};
+    const content = { ...fields(), actions: [{ type, resourceType: 'null_resource', name: 'a', alias, ...withValues }] };
+
+    expect(read(content)).toThrow(/^tfplan\.json is not a plan file$/);
+  });
+
   it.each([
     ['anything but true', 'DELETE', false],
     ['on an update', 'UPDATE', true],

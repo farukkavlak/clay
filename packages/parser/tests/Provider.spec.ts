@@ -35,6 +35,64 @@ describe('Parser - provider block', () => {
     expect(error.position).toMatchObject({ file: '1.clay', line: 1 });
   });
 
+  it('reads an alias apart from the arguments', () => {
+    const [, provider] = parse('provider "local" {}', 'provider "local" {\n  alias = "west"\n  region = "us"\n}') as ProviderBlock[];
+
+    expect(provider).toMatchObject({ name: 'local', alias: { value: 'west', position: { file: '1.clay', line: 2 } } });
+    expect(Object.keys(provider.attributes)).toEqual(['region']);
+  });
+
+  it('refuses two blocks with one alias, at the second', () => {
+    const error = errorOf('provider "local" { alias = "west" }', 'provider "local" { alias = "west" }');
+
+    expect(error.message).toBe('provider "local" alias "west" is declared twice, first on 0.clay line 1');
+    expect(error.position).toMatchObject({ file: '1.clay', line: 1 });
+  });
+
+  it.each([
+    ['an alias that is not written out', 'provider "a" {\n  alias = var.x\n}', 'alias is a name in quotes, as in alias = "west"'],
+    ['an alias that is no name', 'provider "a" {\n  alias = "a.b"\n}', 'Invalid alias "a.b": an alias starts with'],
+  ])('refuses %s, where it is written', (_title, content, message) => {
+    const error = errorOf(content);
+
+    expect(error.message).toContain(message);
+    expect(error.position).toMatchObject({ line: 2, column: 11 });
+  });
+
+  it.each([
+    ['resource', 'resource "local_file" "f" {\n  provider = local.west\n}'],
+    ['data source', 'data "local_file" "f" {\n  provider = local.west\n}'],
+  ])('reads the instance a %s names, apart from its arguments', (_kind, block) => {
+    const [, statement] = parse('provider "local" { alias = "west" }', block);
+
+    expect(statement).toMatchObject({ provider: { name: 'local', alias: 'west', position: { file: '1.clay', line: 2, column: 14 } }, attributes: {} });
+  });
+
+  it('reads a provider named with no alias as the default instance, which needs no block', () => {
+    const [statement] = parse('resource "local_file" "f" {\n  provider = local\n}');
+
+    expect(statement).toMatchObject({ provider: { name: 'local' } });
+    expect(Object.hasOwn((statement as { provider: object }).provider, 'alias')).toBe(false);
+  });
+
+  it.each([
+    ['a string', '"local"'],
+    ['three steps', 'local.west.x'],
+    ['an index', 'local[0]'],
+  ])('refuses a provider written as %s, where it is written', (_title, value) => {
+    const error = errorOf(`resource "local_file" "f" {\n  provider = ${value}\n}`);
+
+    expect(error.message).toBe('provider names a provider and, for a second instance, its alias, as in provider = local.west');
+    expect(error.position).toMatchObject({ line: 2, column: 14 });
+  });
+
+  it('refuses an alias the module does not declare, where it is written', () => {
+    const error = errorOf('provider "local" { alias = "east" }\ndata "local_file" "f" {\n  provider = local.west\n}');
+
+    expect(error.message).toBe('data "local_file" "f" names provider "local" alias "west", which this module does not declare');
+    expect(error.position).toMatchObject({ line: 3, column: 14 });
+  });
+
   it.each([
     ['no name', 'provider {}', "Expect provider name string after 'provider'.", 10],
     ['a name that is no identifier', 'provider "a.b" {}', 'Invalid name "a.b": a name', 10],

@@ -7,7 +7,7 @@ import { DEFAULT_WORKSPACE, StateManager } from '@clay/state';
 
 import { checkApplyOrder } from './plan/applyGraph';
 import { asError } from './asError';
-import { GraphNode } from './graph/DependencyGraphBuilder';
+import { GraphNode } from './graph/nodes';
 import { DesiredState } from './plan/DesiredStateBuilder';
 import { Walk } from './plan/PlanReader';
 import { applyMoves, checkMovedAway, copyForMoves, copyResources, Moves, movesIn } from './plan/moves';

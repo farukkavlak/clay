@@ -5,6 +5,10 @@ import { isDeepStrictEqual } from 'node:util';
 import { calculateDiff } from './diff';
 import { DesiredResource, PlanAction } from './Plan';
 
+function instanceOf({ alias }: DesiredResource): Pick<PlanAction, 'alias'> {
+  return alias === undefined ? {} : { alias };
+}
+
 function marked({ sensitive }: DesiredResource): Pick<PlanAction, 'sensitive'> {
   return sensitive.length > 0 ? { sensitive } : {};
 }
@@ -64,6 +68,7 @@ function processExistingResource(actions: PlanAction[], desired: DesiredResource
     actions.push({
       type: 'NO_OP',
       ...desired.address.fields(),
+      ...instanceOf(desired),
       ...origin,
       ...marked(desired),
       ...protectedBy(desired),
@@ -76,6 +81,7 @@ function processExistingResource(actions: PlanAction[], desired: DesiredResource
   actions.push({
     type: desired.replace ? 'REPLACE' : 'UPDATE',
     ...desired.address.fields(),
+    ...instanceOf(desired),
     ...origin,
     planned: desired.attributes,
     after: desired.after,
@@ -104,6 +110,7 @@ export function plan(desiredResources: DesiredResource[], currentState: State, m
       actions.push({
         type: 'CREATE',
         ...desired.address.fields(),
+        ...instanceOf(desired),
         planned: desired.attributes,
         after: desired.after,
         ...marked(desired),

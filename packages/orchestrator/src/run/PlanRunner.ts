@@ -4,7 +4,7 @@ import { changesState, PlanAction } from '@clay/planner';
 import { moveResources, StateManager } from '@clay/state';
 
 import { asError } from '../asError';
-import { GraphNode } from '../graph/DependencyGraphBuilder';
+import { GraphNode } from '../graph/nodes';
 import { Instances } from '../instances/Instances';
 import { blockKey } from '../keys';
 import { ApplyNode, applyGraph } from '../plan/applyGraph';

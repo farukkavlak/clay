@@ -19,7 +19,7 @@ import { marksOf } from '../values/schemaMarks';
 import { ScopeManager } from '../config/ScopeManager';
 import { checkWritten } from '../expressions/validations';
 import { plainOf, Value } from '../values/Value';
-import { GraphNode } from '../graph/DependencyGraphBuilder';
+import { GraphNode } from '../graph/nodes';
 import { LoadedModule, LoadedResource } from '../config/ModuleLoader';
 import { isProvider } from '../graph/providerNodes';
 

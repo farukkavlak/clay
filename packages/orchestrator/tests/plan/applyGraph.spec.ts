@@ -4,7 +4,7 @@ import { ActionType, PlanAction } from '@clay/planner';
 import { describe, expect, it } from 'vitest';
 
 import { ApplyNode, applyGraph } from '../../src/plan/applyGraph';
-import { GraphNode } from '../../src/graph/DependencyGraphBuilder';
+import { GraphNode } from '../../src/graph/nodes';
 
 /** Resource blocks `rec.<name>`, each edge from what is read to what reads it. */
 function config(names: string[], reads: [string, string][] = []): Graph<GraphNode> {
@@ -48,6 +48,17 @@ describe('applyGraph', () => {
     graph.addNode('provider:rec', { kind: 'provider', name: 'rec', resources: ['rec'], module: ModuleAddress.root });
 
     expect(applyGraph(graph, [going('rec.a')], holding(object('rec.a'))).dependentsOf('provider:rec')).toEqual(['destroy:rec.a']);
+  });
+
+  // A move may have taken the object from the address it is destroyed at, so which instance made it is not looked up there.
+  it('destroys an object after every instance of the provider of its type is configured', () => {
+    const graph = config([]);
+    graph.addNode('provider:rec', { kind: 'provider', name: 'rec', resources: ['rec'], module: ModuleAddress.root });
+    graph.addNode('provider:rec.west', { kind: 'provider', name: 'rec', alias: 'west', resources: ['rec'], module: ModuleAddress.root });
+
+    const order = applyGraph(graph, [going('rec.a')], holding(object('rec.a')));
+
+    expect([order.dependentsOf('provider:rec'), order.dependentsOf('provider:rec.west')]).toEqual([['destroy:rec.a'], ['destroy:rec.a']]);
   });
 
   it('leaves a replace that reads nothing going away to its block', () => {

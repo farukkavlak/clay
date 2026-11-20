@@ -4,6 +4,7 @@ import { ConfigError } from '../ConfigError';
 import { stepKey } from '../reference';
 import { attributesIn, attributesOnly, flagOf } from './attributes';
 import { dependsOnOf } from './dependsOn';
+import { providerChoiceOf } from './providerChoice';
 
 const isAll = (value: AttributeValue) => value.type === 'Reference' && value.value.length === 1 && 'name' in value.value[0] && value.value[0].name === 'all';
 
@@ -93,6 +94,7 @@ export function decodeResource(block: Block, [resourceType, name]: string[]): Re
     count,
     for_each: forEach,
     depends_on: dependsOn,
+    provider,
     ...attributes
   } = attributesIn(block.body, (inner) => {
     if (inner.name === 'provisioner') provisioners.push(decodeProvisioner(inner));
@@ -107,6 +109,7 @@ export function decodeResource(block: Block, [resourceType, name]: string[]): Re
     ...(count && { count }),
     ...(forEach && { forEach }),
     ...(dependsOn && { dependsOn: dependsOnOf(dependsOn) }),
+    ...(provider && { provider: providerChoiceOf(provider) }),
     ...(lifecycle && { lifecycle }),
     ...(provisioners.length > 0 && { provisioners }),
     attributes,

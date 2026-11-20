@@ -183,6 +183,32 @@ describe('reading a state file', () => {
     expect(read({ version: STATE_VERSION, serial: 0, lineage: 'lineage', resources: {}, outputs })().outputs).toEqual(outputs);
   });
 
+  it.each([
+    ['no text', 1],
+    ['no name', 'a.b'],
+  ])('refuses an alias that is %s, on an object and on a deposed one', (_, alias) => {
+    const object = { resourceType: 'local_file', name: 'a', alias, attributes: {} };
+    const held = { version: STATE_VERSION, serial: 0, lineage: 'lineage', resources: { 'local_file.a': object } };
+    const deposed = { version: STATE_VERSION, serial: 0, lineage: 'lineage', resources: {}, deposed: { 'local_file.a': [{ alias, attributes: {} }] } };
+
+    expect(read(held)).toThrow('clay.state.json is not valid state: "local_file.a" is not a resource');
+    expect(read(deposed)).toThrow('clay.state.json is not valid state: a deposed object of "local_file.a" has no attributes, or its alias,');
+  });
+
+  it('reads an alias on an object and on a deposed one', () => {
+    const content = {
+      version: STATE_VERSION,
+      serial: 0,
+      lineage: 'lineage',
+      resources: { 'local_file.a': { resourceType: 'local_file', name: 'a', alias: 'west', attributes: {} } },
+      deposed: { 'local_file.a': [{ alias: 'west', attributes: {} }] },
+    };
+
+    const state = read(content)();
+    expect(state.resources['local_file.a'].alias).toBe('west');
+    expect(state.deposed?.['local_file.a'][0].alias).toBe('west');
+  });
+
   // A later check would also refuse the entry, so the test pins the message.
   it.each([
     ['text', 'local_file.a', 'm'],

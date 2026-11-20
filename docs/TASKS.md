@@ -1158,17 +1158,19 @@ Terraform has it since backends replaced `-state`.
 ## 4. Providers
 
 The CLI imports the one provider, `local`, and registers it; the registry keys providers
-by resource type. A `provider` block configures the one instance of a provider; there is
-no alias for a second yet.
+by resource type. A `provider` block configures an instance of a provider, and one with
+an `alias` a second instance.
 
 - [x] `contracts` splits in two. It holds both the engine's contract with a provider
       (`Provider`, `Schema`) and value types the engine shares with itself (`Address`,
       `State`), so a provider written elsewhere would depend on the engine's own types.
       This comes before a provider can be loaded from a package
-- [ ] Provider instances with configuration: `provider "aws" { region = "..." }`, and
-      aliases for a second instance of the same provider. Once they exist, a destroy works
-      out only the `provider` blocks and what they read; today it reads no value from the
-      configuration
+- [x] Provider instances with configuration: `provider "aws" { region = "..." }`, and
+      aliases for a second instance of the same provider. A destroy works out only the
+      `provider` blocks and what they read
+- [ ] A module call passes provider instances to its module, as in
+      `providers = { cloud = cloud.us }`. A module uses its caller's default instances
+      today, and a block in it can name no alias
 - [x] A plan refreshes after the configuration loads, as Terraform does. It reads every
       resource first today, so a mistake in `main.clay` is reported only after every read
       and a read error hides it, and a provider configured by a `provider` block would be

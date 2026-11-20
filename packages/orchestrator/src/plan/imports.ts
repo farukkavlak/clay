@@ -1,5 +1,5 @@
 import { Address, ModuleAddress, Resource, State } from '@clay/core';
-import { ImportBlock, spell } from '@clay/parser';
+import { ImportBlock, ResourceBlock, spell } from '@clay/parser';
 import { DesiredResource, PlanAction } from '@clay/planner';
 
 import { Loaded, LoadedModule } from '../config/ModuleLoader';
@@ -110,22 +110,23 @@ export class Imports {
     return this.needed.get(address.toString());
   }
 
-  /** Into `state` as the walk reaches the instance, so the instance is planned against what was imported. */
-  async importBy(target: ImportTarget, id: string, state: State): Promise<void> {
+  /** Into `state` as the walk reaches the instance, so it is planned against what was imported; `to`'s block names the instance that imports. */
+  async importBy(target: ImportTarget, to: ResourceBlock, id: string, state: State): Promise<void> {
     const key = target.address.toString();
-    state.resources[key] = await this.importOne(target, id);
+    state.resources[key] = await this.importOne(target, to, id);
     this.ids.set(key, id);
   }
 
-  private async importOne({ block, address }: ImportTarget, id: string): Promise<Resource> {
+  private async importOne({ block, address }: ImportTarget, to: ResourceBlock, id: string): Promise<Resource> {
     const nothing = () => refuseImport(block, `import to ${address} found no ${address.resourceType} with the id "${id}"`);
     try {
-      const provider = this.providers.get(address);
+      const provider = this.providers.get(to);
       const given = await this.limit.run(() => provider.importResource!(address.resourceType, id));
       if (given === null) throw nothing();
 
       // Read with no marks: they come from the block, which is planned after the import.
-      const resource: Resource = { ...fieldsOf(address), attributes: given };
+      const alias = to.provider?.alias;
+      const resource: Resource = { ...fieldsOf(address), ...(alias !== undefined && { alias }), attributes: given };
       const attributes = await this.limit.run(() => this.readBack(address.toString(), resource));
       if (attributes === null) throw nothing();
 

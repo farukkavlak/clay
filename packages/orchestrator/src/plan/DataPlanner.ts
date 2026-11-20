@@ -2,7 +2,8 @@ import { Address, ModuleAddress, State } from '@clay/core';
 import { Graph } from '@clay/graph';
 import { DataBlock, spell } from '@clay/parser';
 
-import { DependencyGraphBuilder, GraphNode } from '../graph/DependencyGraphBuilder';
+import { DependencyGraphBuilder } from '../graph/DependencyGraphBuilder';
+import { GraphNode } from '../graph/nodes';
 import { Instances } from '../instances/Instances';
 import { ModuleInstances } from '../instances/ModuleInstances';
 import { DataInstance, enclosing, sharedModule } from '../keys';

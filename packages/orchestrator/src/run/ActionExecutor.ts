@@ -51,6 +51,7 @@ function offPlanMessage(off: NonNullable<ReturnType<typeof offPlan>>, hidden: At
 /** After any it already has for the address, so the oldest goes first. A tainted object keeps nothing to run before its destroy. */
 function depose(state: State, key: string, old: Resource): void {
   const left: DeposedObject = {
+    ...(old.alias !== undefined && { alias: old.alias }),
     attributes: old.attributes,
     ...(old.sensitive && { sensitive: old.sensitive }),
     ...(old.dependencies && { dependencies: old.dependencies }),
@@ -105,6 +106,10 @@ export class ActionExecutor {
       await this.recordUnchanged(action, currentState, running);
       return;
     }
+    if (action.type === 'DELETE') {
+      await (action.deposed ? this.executeDeleteDeposed(action, currentState, running.print) : this.executeDelete(action, currentState, running.print));
+      return;
+    }
 
     const provider = this.providers.get(action);
 
@@ -119,10 +124,6 @@ export class ActionExecutor {
       }
       case 'REPLACE': {
         await this.executeReplace(action, provider, currentState, running);
-        break;
-      }
-      case 'DELETE': {
-        await (action.deposed ? this.executeDeleteDeposed(action, provider, currentState, running.print) : this.executeDelete(action, provider, currentState, running.print));
         break;
       }
       default: {
@@ -219,7 +220,7 @@ export class ActionExecutor {
       return;
     }
 
-    await this.executeDelete(action, provider, currentState, running.print);
+    await this.executeDelete(action, currentState, running.print);
     await this.create(action, provider, currentState, sending, running);
   }
 
@@ -242,6 +243,7 @@ export class ActionExecutor {
     const key = contextAddress.toString();
     currentState.resources[key] = {
       ...contextAddress.fields(),
+      ...(action.alias !== undefined && { alias: action.alias }),
       attributes,
       dependencies: action.dependencies ?? [],
     };
@@ -282,7 +284,7 @@ export class ActionExecutor {
   }
 
   /** One at a time, oldest first, each after what it kept to run before its destroy, and gone from state once destroyed, so a failure leaves the rest to the next run. */
-  async executeDeleteDeposed(action: PlanAction, provider: Provider, currentState: State, print?: ProvisionerPrint): Promise<void> {
+  async executeDeleteDeposed(action: PlanAction, currentState: State, print?: ProvisionerPrint): Promise<void> {
     const address = Address.of(action).toString();
     const { deposed } = currentState;
     const objects = deposed?.[address];
@@ -291,6 +293,7 @@ export class ActionExecutor {
     while (objects.length > 0) {
       const [object] = objects;
       await this.provisioners.runBeforeDestroy(object, print);
+      const provider = this.providers.get({ resourceType: action.resourceType, alias: object.alias });
       await hidingReason(action.resourceType, object.sensitive ?? [], () => this.limit.run(() => provider.delete(action.resourceType, object.attributes)), 'to destroy');
       objects.shift();
     }
@@ -301,11 +304,13 @@ export class ActionExecutor {
 
   /** A replace's object, destroyed before its turn so that what it reads can be destroyed after it. */
   async destroy(action: PlanAction, currentState: State, print?: ProvisionerPrint): Promise<void> {
-    await this.executeDelete(action, this.providers.get(action), currentState, print);
+    await this.executeDelete(action, currentState, print);
   }
 
-  async executeDelete(action: PlanAction, provider: Provider, currentState: State, print?: ProvisionerPrint): Promise<void> {
+  /** By the instance that made the object, which a replace may have moved to another. */
+  async executeDelete(action: PlanAction, currentState: State, print?: ProvisionerPrint): Promise<void> {
     const object = held(action, currentState);
+    const provider = this.providers.get(object);
     await this.provisioners.runBeforeDestroy(object, print);
     const { attributes, sensitive = [] } = object;
     await hidingReason(action.resourceType, sensitive, () => this.limit.run(() => provider.delete(action.resourceType, attributes)), 'to destroy');
