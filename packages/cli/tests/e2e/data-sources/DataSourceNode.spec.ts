@@ -173,7 +173,15 @@ describe('a data source in the graph', () => {
     const planned = await clayIn('plan');
     const applied = await clayIn('apply', '--yes');
 
-    expect(planned).toContain('  + local_file.a will be created\n  <= data.local_file.read will be read during apply\n');
+    expect(planned).toContain(
+      [
+        '  + local_file.a will be created',
+        `      path: ${JSON.stringify(file)}`,
+        '      content: "new"',
+        `      id: ${JSON.stringify(file)}`,
+        '  <= data.local_file.read will be read during apply\n',
+      ].join('\n')
+    );
     expect(planned).toContain('Plan: 1 to add, 0 to change, 0 to destroy.');
     expect(applied).toContain('  + local_file.a created\n  <= data.local_file.read read\n');
   });
