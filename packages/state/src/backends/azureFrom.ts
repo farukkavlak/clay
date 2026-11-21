@@ -1,6 +1,6 @@
 import { ACCOUNT_KEY, AzureBackend, AzureCredential, LONGEST_BLOB_NAME, SAS_TOKEN } from './AzureBackend';
 import { urlOf } from './httpFrom';
-import { checkNames, Environment, Settings, variable } from './settings';
+import { checkNames, checkNoSecrets, Environment, requiredText, Settings, variable } from './settings';
 import { checkNotBeside, checkNotWorkspaceState, LOCK_BESIDE } from './workspaces';
 
 const SECRETS = new Map([
@@ -15,23 +15,8 @@ const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
 /** The lock's name is the key and ".lock". */
 const LONGEST_KEY = LONGEST_BLOB_NAME - '.lock'.length;
 
-/** Refuses a credential written in the block, which would be checked in with it. */
-function checkNoSecrets(settings: Settings): void {
-  for (const name of settings.names) {
-    const holder = SECRETS.get(name);
-    if (holder !== undefined) settings.refuse(`${name} of backend "azure" is read from ${holder}, never from the configuration, which is checked in`, name);
-  }
-}
-
-function required(settings: Settings, name: string): string {
-  const value = settings.text(name);
-  if (value === undefined) settings.refuse(`backend "azure" needs "${name}"`);
-
-  return value;
-}
-
 function accountOf(settings: Settings): string {
-  const account = required(settings, 'storage_account_name');
+  const account = requiredText(settings, 'storage_account_name');
   if (!ACCOUNT.test(account))
     settings.refuse(`storage_account_name of backend "azure" is "${account}", and an account name is 3 to 24 lowercase letters and digits`, 'storage_account_name');
 
@@ -39,7 +24,7 @@ function accountOf(settings: Settings): string {
 }
 
 function containerOf(settings: Settings): string {
-  const container = required(settings, 'container_name');
+  const container = requiredText(settings, 'container_name');
   if (!CONTAINER.test(container))
     settings.refuse(
       `container_name of backend "azure" is "${container}", and a container name is 3 to 63 lowercase letters, digits and single hyphens between them`,
@@ -51,7 +36,7 @@ function containerOf(settings: Settings): string {
 
 /** The SDK resolves "." and ".." in the path, which would name another blob, or one in another container. */
 function keyOf(settings: Settings): string {
-  const key = required(settings, 'key');
+  const key = requiredText(settings, 'key');
   const parts = key.split('/');
   if (key.length > LONGEST_KEY) settings.refuse(`key of backend "azure" is ${key.length} characters long, and ${LONGEST_KEY} at most leaves room for ".lock"`, 'key');
   if (key.startsWith('/') || key.endsWith('/')) settings.refuse(`key of backend "azure" is "${key}", which must not start or end with "/"`, 'key');
@@ -96,7 +81,7 @@ function checkSignedOver(settings: Settings, endpoint: URL | undefined, credenti
 }
 
 export function azureFrom(settings: Settings, _workingDir: string, env: Environment): AzureBackend {
-  checkNoSecrets(settings);
+  checkNoSecrets(settings, SECRETS);
   checkNames(settings, TAKES);
 
   const account = accountOf(settings);

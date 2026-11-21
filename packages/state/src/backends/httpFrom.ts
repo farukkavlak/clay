@@ -2,7 +2,7 @@ import { HttpBackend } from './HttpBackend';
 import { credentialsFrom, PASSWORD, USERNAME } from './httpCredentials';
 import { RETRY_NAMES, retryFrom } from './httpRetry';
 import { caFrom, CLIENT_CERTIFICATE, CLIENT_KEY, clientFrom } from './httpTls';
-import { checkNames, Environment, Settings } from './settings';
+import { checkNames, checkNoSecrets, Environment, requiredText, Settings } from './settings';
 
 const SECRETS = new Map([
   ['username', USERNAME],
@@ -56,20 +56,7 @@ function methodOf(settings: Settings, name: string, fallback: string): string {
 }
 
 /** Each address is required where it is not implied, so a run can never write the state without the lock. */
-function required(settings: Settings, name: string): URL {
-  const value = settings.text(name);
-  if (value === undefined) settings.refuse(`backend "http" needs "${name}"`);
-
-  return urlOf(settings, value, name);
-}
-
-/** Refuses a credential written in the block, which would be checked in with it. */
-function checkNoSecrets(settings: Settings): void {
-  for (const name of settings.names) {
-    const holder = SECRETS.get(name);
-    if (holder !== undefined) settings.refuse(`${name} of backend "http" is read from ${holder}, never from the configuration, which is checked in`, name);
-  }
-}
+const requiredUrl = (settings: Settings, name: string): URL => urlOf(settings, requiredText(settings, name), name);
 
 /** A CA file with no https address to ask is a mistake in the address or the setting. A client certificate is the environment's, which serves every backend, so it goes only where an address is https. */
 function checkHttps(settings: Settings, addresses: readonly URL[]): void {
@@ -78,11 +65,11 @@ function checkHttps(settings: Settings, addresses: readonly URL[]): void {
 }
 
 export function httpFrom(settings: Settings, workingDir: string, env: Environment): HttpBackend {
-  checkNoSecrets(settings);
+  checkNoSecrets(settings, SECRETS);
   checkNames(settings, TAKES);
 
-  const address = required(settings, 'address');
-  const lockAddress = required(settings, 'lock_address');
+  const address = requiredUrl(settings, 'address');
+  const lockAddress = requiredUrl(settings, 'lock_address');
   const unlock = settings.text('unlock_address');
   const unlockAddress = unlock === undefined ? lockAddress : urlOf(settings, unlock, 'unlock_address');
   checkHttps(settings, [address, lockAddress, unlockAddress]);

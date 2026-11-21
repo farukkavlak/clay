@@ -91,6 +91,22 @@ export function recordSettings(type: string, values: Readonly<Record<string, unk
   };
 }
 
+/** A text setting the backend cannot do without. */
+export function requiredText(settings: Settings, name: string): string {
+  const value = settings.text(name);
+  if (value === undefined) settings.refuse(`backend "${settings.type}" needs "${name}"`);
+
+  return value;
+}
+
+/** Refuses a credential written in the block, which would be checked in with it. `secrets` maps each name to where it is read from instead. */
+export function checkNoSecrets(settings: Settings, secrets: ReadonlyMap<string, string>): void {
+  for (const name of settings.names) {
+    const holder = secrets.get(name);
+    if (holder !== undefined) settings.refuse(`${name} of backend "${settings.type}" is read from ${holder}, never from the configuration, which is checked in`, name);
+  }
+}
+
 /** Refuses a setting the backend does not take. */
 export function checkNames(settings: Settings, takes: readonly string[]): void {
   for (const name of settings.names)

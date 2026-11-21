@@ -1,12 +1,12 @@
 import { urlOf } from './httpFrom';
 import { LONGEST_S3_KEY, S3Backend } from './S3Backend';
-import { checkNames, Environment, Settings, variable } from './settings';
+import { checkNames, checkNoSecrets, Environment, requiredText, Settings, variable } from './settings';
 import { checkNotBeside, checkNotWorkspaceState, LOCK_BESIDE } from './workspaces';
 
 const SECRETS = new Map([
-  ['access_key', 'AWS_ACCESS_KEY_ID'],
-  ['secret_key', 'AWS_SECRET_ACCESS_KEY'],
-  ['token', 'AWS_SESSION_TOKEN'],
+  ['access_key', 'AWS_ACCESS_KEY_ID, a profile or a role'],
+  ['secret_key', 'AWS_SECRET_ACCESS_KEY, a profile or a role'],
+  ['token', 'AWS_SESSION_TOKEN, a profile or a role'],
 ]);
 const TAKES = ['bucket', 'key', 'region', 'endpoint', 'use_path_style'];
 
@@ -16,23 +16,8 @@ const LONGEST_KEY = LONGEST_S3_KEY - '.lock'.length;
 /** A region is part of a host name. */
 const REGION = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-/** Refuses a credential written in the block, which would be checked in with it. */
-function checkNoSecrets(settings: Settings): void {
-  for (const name of settings.names) {
-    const holder = SECRETS.get(name);
-    if (holder !== undefined) settings.refuse(`${name} of backend "s3" is read from ${holder}, a profile or a role, never from the configuration, which is checked in`, name);
-  }
-}
-
-function required(settings: Settings, name: string): string {
-  const value = settings.text(name);
-  if (value === undefined) settings.refuse(`backend "s3" needs "${name}"`);
-
-  return value;
-}
-
 function bucketOf(settings: Settings): string {
-  const bucket = required(settings, 'bucket');
+  const bucket = requiredText(settings, 'bucket');
   if (bucket.includes('/')) settings.refuse(`bucket of backend "s3" is "${bucket}", and a bucket name holds no "/"`, 'bucket');
 
   return bucket;
@@ -40,7 +25,7 @@ function bucketOf(settings: Settings): string {
 
 /** S3 lists a key ending in "/" as a folder, and one with an empty part names another object than the path it reads as. */
 function keyOf(settings: Settings): string {
-  const key = required(settings, 'key');
+  const key = requiredText(settings, 'key');
   const bytes = Buffer.byteLength(key, 'utf8');
   if (bytes > LONGEST_KEY) settings.refuse(`key of backend "s3" is ${bytes} bytes long, and ${LONGEST_KEY} at most leaves room for ".lock"`, 'key');
   if (key.startsWith('/') || key.endsWith('/')) settings.refuse(`key of backend "s3" is "${key}", which must not start or end with "/"`, 'key');
@@ -69,7 +54,7 @@ function endpointOf(settings: Settings): URL | undefined {
 }
 
 export function s3From(settings: Settings, _workingDir: string, env: Environment): S3Backend {
-  checkNoSecrets(settings);
+  checkNoSecrets(settings, SECRETS);
   checkNames(settings, TAKES);
 
   const { region, inBlock } = regionOf(settings, env);
