@@ -25,7 +25,7 @@ class PlacedProvider implements Provider {
     };
   }
 
-  async plan(type: string, request: PlanRequest): Promise<PlannedChange> {
+  async plan(_type: string, request: PlanRequest): Promise<PlannedChange> {
     return planFromSchema(await this.getSchema(), request);
   }
 

@@ -5,16 +5,13 @@ import { AttributeValue, ConfigError, DataBlock, ResourceBlock, spell, Statement
 import { checkNames, checkProvisionerNames } from '../checks/checkAttributes';
 import { checkDefaults } from '../values/declared';
 import { Context, dataSourceKey } from '../keys';
-import { Value } from '../values/Value';
 import { Instances } from '../instances/Instances';
 import { ModuleInstances } from '../instances/ModuleInstances';
-import { Planned } from '../values/Planned';
 import { ProviderRegistry } from '../providers/ProviderRegistry';
 import { ProvisionerRegistry } from '../providers/ProvisionerRegistry';
 import { Limit, taken } from '../providers/Limit';
 import { tryAt, withPlace } from '../place';
 import { ReferenceResolver } from '../expressions/ReferenceResolver';
-import { ScopeManager } from '../config/ScopeManager';
 import { LoadedModule, LoadedResource, ModuleLoader, Part, RootValues } from '../config/ModuleLoader';
 import { checkProviderChoices } from '../config/providerChoices';
 import { Schemas, SchemaTable } from '../providers/Schemas';
@@ -37,15 +34,12 @@ export interface LoadedConfig {
 export class ConfigLoader {
   constructor(
     private moduleLoader: ModuleLoader,
-    private scopeManager: ScopeManager,
-    private dataSources: Map<string, Record<string, Value>>,
     private schemas: Schemas,
     private resolver: ReferenceResolver,
     private providers: ProviderRegistry,
     private provisioners: ProvisionerRegistry,
     private instances: Instances,
     private modules: ModuleInstances,
-    private planned: Planned,
     private limit: Limit
   ) {}
 

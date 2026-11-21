@@ -76,7 +76,7 @@ class ShapingProvider extends TallyProvider {
     return { ...made, rule: this.shape(made.rule as Rule) };
   }
 
-  override async readDataSource(type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+  override async readDataSource(_type: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
     return { ...inputs, rule: this.shape(inputs.rule as Rule) };
   }
 }

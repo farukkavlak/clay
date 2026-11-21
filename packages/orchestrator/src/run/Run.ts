@@ -69,7 +69,7 @@ export function newRun(stateManager: StateManager, { providers, provisioners }: 
   const planReader = new PlanReader(resolver, instances);
 
   return {
-    loader: new ConfigLoader(new ModuleLoader(files, scopes), scopes, dataSources, schemas, resolver, providers, provisioners, instances, modules, planned, limit),
+    loader: new ConfigLoader(new ModuleLoader(files, scopes), schemas, resolver, providers, provisioners, instances, modules, limit),
     graphBuilder,
     writtenCheck: new WrittenCheck(resolver, scopes, schemas, providers, provisioners, limit),
     desiredStateBuilder: new DesiredStateBuilder(
