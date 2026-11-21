@@ -1,4 +1,4 @@
-import { Schema, Type } from '@clay/provider';
+import { Type } from '@clay/provider';
 import { InstanceKey } from '@clay/core';
 import { DataReference, Position, Step } from '@clay/parser';
 
@@ -8,6 +8,7 @@ import { objectOf, sensitiveOf, Value, valueOf, withSensitive } from '../values/
 import { Versions } from '../values/Versions';
 import { everyType, readInstance } from './references/instance';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
+import { SchemaTable } from '../providers/Schemas';
 
 /** Every instance of a block, as built from its keys, until one of its instances is read again. */
 interface EveryRead {
@@ -23,7 +24,7 @@ export class DataSourceResolver {
   constructor(
     private dataSources: Map<string, Record<string, Value>>,
     // Loaded with the configuration, before any data source is read.
-    private dataSchemas: Map<string, Schema>,
+    private dataSchemas: SchemaTable,
     private instances: Instances,
     private versions: Versions
   ) {}
@@ -51,8 +52,7 @@ export class DataSourceResolver {
 
   /** Not known until its count or for_each is; its type is known before then. */
   private every(reference: DataReference, scope: string, repetition: Repetition, spelled: string): Value {
-    // The graph has already refused undeclared data sources, and every one has its schema.
-    const type = everyType(repetition, this.dataSchemas.get(reference.type)!);
+    const type = everyType(repetition, this.dataSchemas.get(reference.type));
     const at = dataSourceKey(scope, reference.type, reference.name);
     const keys = this.instances.keysOf(at);
     if (keys === undefined) throw new UnresolvedReferenceError(`${spelled} is known only once its ${repetition} is read`, type);

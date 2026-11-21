@@ -8,6 +8,7 @@ import { ProviderInstances } from '../../src/providers/ProviderInstances';
 import { ProviderRegistry } from '../../src/providers/ProviderRegistry';
 import { DEFAULT_PARALLELISM } from '../../src/run/parallelism';
 import { allSensitive, inferred, Value, valueOf, withSensitive } from '../../src/values/Value';
+import { tableOf } from '../schemas';
 
 /** As the configuration writes them: a list is a tuple and a map an object. */
 const written = (config: Record<string, unknown>): Record<string, Value> => Object.fromEntries(Object.entries(config).map(([name, data]) => [name, valueOf(inferred(data), data)]));
@@ -35,7 +36,7 @@ function fakeProvider(plan: (request: PlanRequest) => PlannedChange = (request) 
 async function plannerFor(provider: Provider): Promise<ResourcePlanner> {
   const providers = new ProviderRegistry();
   providers.register(() => provider);
-  const configured = new ProviderInstances(providers, new Map(), new Limit(DEFAULT_PARALLELISM));
+  const configured = new ProviderInstances(providers, tableOf([], 'provider'), new Limit(DEFAULT_PARALLELISM));
   await configured.configure(provider.name);
 
   return new ResourcePlanner(configured, new Limit(DEFAULT_PARALLELISM));

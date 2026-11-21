@@ -5,6 +5,7 @@ import { Limit } from '../../src/providers/Limit';
 import { ProviderInstances } from '../../src/providers/ProviderInstances';
 import { ProviderRegistry } from '../../src/providers/ProviderRegistry';
 import { DEFAULT_PARALLELISM } from '../../src/run/parallelism';
+import { tableOf } from '../schemas';
 
 // Only what the registry reads; nothing else is asked.
 const make = () => ({ name: 'p', resources: ['p_thing'], dataSources: [] }) as unknown as Provider;
@@ -15,7 +16,7 @@ describe('ProviderInstances', () => {
     const registry = new ProviderRegistry();
     registry.register(make);
 
-    expect(() => new ProviderInstances(registry, new Map(), new Limit(DEFAULT_PARALLELISM)).get({ resourceType: 'p_thing', alias: undefined })).toThrow(
+    expect(() => new ProviderInstances(registry, tableOf([], 'provider'), new Limit(DEFAULT_PARALLELISM)).get({ resourceType: 'p_thing', alias: undefined })).toThrow(
       'provider "p" is asked before it is configured, which is a bug in Clay'
     );
   });

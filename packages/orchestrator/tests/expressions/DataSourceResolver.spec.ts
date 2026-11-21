@@ -1,4 +1,4 @@
-import { Schema, types } from '@clay/provider';
+import { types } from '@clay/provider';
 import { Address, ModuleAddress } from '@clay/core';
 import { DataReference, parseReference } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
@@ -14,11 +14,12 @@ import { Value, valueOf } from '../../src/values/Value';
 import { Versions } from '../../src/values/Versions';
 import { DataSourceResolver } from '../../src/expressions/DataSourceResolver';
 import { steps } from '../ast';
+import { tableOf } from '../schemas';
 
 const ref = (spelled: string) => parseReference(steps(...spelled.split('.'))) as DataReference;
 
 const context = Address.root('resource', 'main');
-const schemas = new Map<string, Schema>([['src', { v: { type: types.string } }]]);
+const schemas = tableOf([['src', { v: { type: types.string } }]]);
 
 /** `data.src.s` with `count = 2` in a module instance, read through a reader that keeps what a plan read. */
 const counted = (module = ModuleAddress.root) => {
@@ -28,7 +29,7 @@ const counted = (module = ModuleAddress.root) => {
   instances.declare(new DataInstance(module.withoutKeys(), 'src', 's').block, 'count');
   instances.setCount(new DataInstance(module, 'src', 's').block, 2);
   const reader = new DataSourceReader(
-    new ProviderInstances(new ProviderRegistry(), new Map(), new Limit(DEFAULT_PARALLELISM)),
+    new ProviderInstances(new ProviderRegistry(), tableOf(), new Limit(DEFAULT_PARALLELISM)),
     schemas,
     dataSources,
     versions,

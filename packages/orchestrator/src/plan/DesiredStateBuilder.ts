@@ -1,4 +1,4 @@
-import { AttributePath, samePaths, Schema } from '@clay/provider';
+import { AttributePath, samePaths } from '@clay/provider';
 import { Address, DestroyProvisioner, ModuleAddress, Output, Resource, State } from '@clay/core';
 import { Graph } from '@clay/graph';
 import { AttributeValue, ImportBlock, ResourceBlock, spell } from '@clay/parser';
@@ -32,6 +32,7 @@ import { keptFor, Provisioning } from '../providers/Provisioning';
 import { Queue } from '../Queue';
 import { ProviderInstances } from '../providers/ProviderInstances';
 import { isProvider } from '../graph/providerNodes';
+import { SchemaTable } from '../providers/Schemas';
 
 const movesInstance = (current: Resource, alias: string | undefined) => current.alias !== alias;
 
@@ -80,7 +81,6 @@ function dependenciesOf(blocks: string[], reader: ModuleAddress): string[] {
  * Each created or changed instance is stored in `planned` as its provider planned it; a reader gets those values, UNKNOWN included.
  */
 export class DesiredStateBuilder {
-  private schemas = new Map<string, Schema>();
   private createsFirst = new Set<ResourceBlock>();
   private walk: Walk = 'plan';
   private moves = new Moves();
@@ -99,7 +99,8 @@ export class DesiredStateBuilder {
     private data: DataPlanner,
     private reads: PlanReader,
     private versions: Versions,
-    private providers: ProviderInstances
+    private providers: ProviderInstances,
+    private schemas: SchemaTable
   ) {}
 
   /** The blocks that say it, and every block they read, through any others. A module's block is one for all its instances. */
@@ -121,18 +122,8 @@ export class DesiredStateBuilder {
    * Applies count moves, and imports where `imports` is given, to `state`, a copy the plan never writes, records each in `moves` or
    * `imports`, and plans the actions against it. Where `refresh` is given, each object is read back as the walk reaches its block.
    */
-  async build(
-    loadedResources: LoadedResource[],
-    graph: Graph<GraphNode>,
-    state: State,
-    schemas: Map<string, Schema>,
-    walk: Walk,
-    moves: Moves,
-    imports?: Imports,
-    refresh?: Refresh
-  ): Promise<DesiredState> {
+  async build(loadedResources: LoadedResource[], graph: Graph<GraphNode>, state: State, walk: Walk, moves: Moves, imports?: Imports, refresh?: Refresh): Promise<DesiredState> {
     this.planned.begin();
-    this.schemas = schemas;
     this.moves = moves;
     this.imports = imports;
     this.refresh = refresh;
@@ -297,7 +288,7 @@ export class DesiredStateBuilder {
 
   /** Nothing to ignore in what does not exist yet, or in what is replaced because it is tainted or moves to another provider instance. */
   private ignoringIn(block: ResourceBlock, alias: string | undefined, current: Resource | undefined): Ignoring | undefined {
-    const paths = ignoredPaths(block.lifecycle?.ignoreChanges, this.schemas.get(block.resourceType) ?? {});
+    const paths = ignoredPaths(block.lifecycle?.ignoreChanges, this.schemas.get(block.resourceType));
 
     return current && !current.tainted && !movesInstance(current, alias) && paths.length > 0 ? { prior: current, paths } : undefined;
   }
@@ -311,7 +302,7 @@ export class DesiredStateBuilder {
     ignoring?: Ignoring
   ): Promise<ResourcePlan> {
     try {
-      const schema = this.schemas.get(block.resourceType) ?? {};
+      const schema = this.schemas.get(block.resourceType);
       if (this.walk === 'check') return await this.resourcePlanner.check(block.resourceType, schema, attributes);
       const provider = this.providers.get({ resourceType: block.resourceType, alias });
       // The old object stays with the instance that made it, which may not see where the new one goes.

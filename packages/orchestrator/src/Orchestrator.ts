@@ -229,18 +229,18 @@ export class Orchestrator {
     { moves, imports, refresh }: Steps,
     { values, part }: Source
   ): Promise<DesiredState & { graph: Graph<GraphNode>; root: Statement[] }> {
-    const { mainProgram, loadedResources, loadedModules, schemas } = await loader.load(values, part);
+    const { mainProgram, loadedResources, loadedModules, resourceSchemas } = await loader.load(values, part);
 
     const graph = graphBuilder.buildExecutionGraph(loadedResources, loadedModules);
     graphBuilder.withProviders(graph, state);
-    checkAttributes(loadedResources, schemas);
+    checkAttributes(loadedResources, resourceSchemas);
     await writtenCheck.check(loadedResources, loadedModules, graph);
     const moved = movesIn(loadedModules);
     const importing = importsIn(loadedModules);
     const importsTo = checkImports(importing, { resources: loadedResources, modules: loadedModules }, this.providers);
     applyMoves(moved, state, moves);
     imports.take(importsTo);
-    const desired = await desiredStateBuilder.build(loadedResources, graph, state, schemas, walk, moves, imports, refresh);
+    const desired = await desiredStateBuilder.build(loadedResources, graph, state, walk, moves, imports, refresh);
     const declared = loadedModules.flatMap(({ address }) => (address.isRoot() ? [] : modules.of(address)));
     checkMovedAway(moved, desired.resources, declared);
     // A check may not know a count or for_each, so it makes no instance of the block.

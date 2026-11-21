@@ -13,6 +13,7 @@ import { UnresolvedReferenceError } from '../../src/expressions/UnresolvedRefere
 import { ScopeManager } from '../../src/config/ScopeManager';
 import { Value, valueOf } from '../../src/values/Value';
 import { ref, steps, str } from '../ast';
+import { schemasOf } from '../schemas';
 
 const position = { file: 'main.clay', line: 1, column: 1 };
 const num = (text: string): AttributeValue => ({ type: 'Number', value: ExactNumber.parse(text), position });
@@ -32,14 +33,20 @@ const state: State = {
 
 const versions = new Versions();
 
-const resolverOver = (scopes: ScopeManager, dataSources: Map<string, Record<string, Value>>, schemas: Map<string, Schema>, instances: Instances, planned: Planned) => {
+const resolverOver = (
+  scopes: ScopeManager,
+  dataSources: Map<string, Record<string, Value>>,
+  schemas: Iterable<readonly [string, Schema]>,
+  instances: Instances,
+  planned: Planned
+) => {
   const modules = new ModuleInstances();
 
-  return new ReferenceResolver(scopes, dataSources, schemas, new Map(), instances, modules, planned, new InstanceKeys(instances, modules), versions, 'default');
+  return new ReferenceResolver(scopes, dataSources, schemasOf(schemas), instances, modules, planned, new InstanceKeys(instances, modules), versions, 'default');
 };
 
 const resolverWith = (scopes = new ScopeManager(versions), planned = new Planned(versions), dataSources = new Map<string, Record<string, Value>>()) =>
-  resolverOver(scopes, dataSources, new Map(), new Instances(), planned);
+  resolverOver(scopes, dataSources, [['resource', {}]], new Instances(), planned);
 
 /** A template reading a resource not in state, so only the apply knows it. */
 const readLater = () => resolverWith().resolveValue(template('id: ', reference('resource', 'later', 'id')), state, context);
@@ -428,7 +435,7 @@ describe('ReferenceResolver', () => {
         resources: { 'module.app[0].resource.dep[1]': { resourceType: 'resource', name: 'dep', attributes: { id: 'one' } } },
       };
 
-      const read = resolverOver(new ScopeManager(versions), new Map(), new Map(), instances, new Planned(versions)).resolveValue(
+      const read = resolverOver(new ScopeManager(versions), new Map(), [['resource', {}]], instances, new Planned(versions)).resolveValue(
         reference('resource', 'dep', 1, 'id'),
         held,
         inInstance(ModuleAddress.root.child('app', 0))

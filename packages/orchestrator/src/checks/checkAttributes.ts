@@ -5,6 +5,7 @@ import { nameProblem, namesOf } from '../values/conformValues';
 import { LoadedResource } from '../config/ModuleLoader';
 import { Context } from '../keys';
 import { withPlace } from '../place';
+import { SchemaTable } from '../providers/Schemas';
 
 type Block = ResourceBlock | DataBlock | ProviderBlock;
 
@@ -59,6 +60,6 @@ export function checkProvisionerNames({ provisionerType, attributes, position }:
 }
 
 /** Once per block, so a block with no instance is checked too. */
-export function checkAttributes(loaded: LoadedResource[], schemas: Map<string, Schema>): void {
-  for (const { block, address } of loaded) checkNames(block, schemas.get(block.resourceType) ?? {}, address);
+export function checkAttributes(loaded: LoadedResource[], schemas: SchemaTable): void {
+  for (const { block, address } of loaded) checkNames(block, schemas.get(block.resourceType), address);
 }

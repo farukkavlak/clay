@@ -1,4 +1,4 @@
-import { Schema, types, UNKNOWN } from '@clay/provider';
+import { types, UNKNOWN } from '@clay/provider';
 import { Address, State, STATE_VERSION } from '@clay/core';
 import { parseReference, ResourceReference } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
@@ -10,6 +10,7 @@ import { ResourceResolver } from '../../src/expressions/ResourceResolver';
 import { UnresolvedReferenceError } from '../../src/expressions/UnresolvedReferenceError';
 import { valueOf } from '../../src/values/Value';
 import { steps } from '../ast';
+import { tableOf } from '../schemas';
 
 const versions = new Versions();
 
@@ -18,7 +19,7 @@ const ref = (spelled: string) => parseReference(steps(...spelled.split('.'))) as
 const held = (id: string, tags: Record<string, unknown>) => ({ resourceType: 'item', name: 'a', attributes: { id, tags } });
 
 describe('ResourceResolver', () => {
-  const resolver = new ResourceResolver(new Instances(), new Planned(versions), new Map(), versions);
+  const resolver = new ResourceResolver(new Instances(), new Planned(versions), tableOf([['resource', {}]]), versions);
   const context = Address.root('resource', 'main');
 
   const mockState: State = {
@@ -49,7 +50,7 @@ describe('ResourceResolver', () => {
   });
 
   it('reads a value as the type its schema names', () => {
-    const schemas = new Map<string, Schema>([['resource', { settings: { type: types.map(types.string) } }]]);
+    const schemas = tableOf([['resource', { settings: { type: types.map(types.string) } }]]);
     const { value: result } = new ResourceResolver(new Instances(), new Planned(versions), schemas, versions).resolve(ref('resource.test.settings'), context, mockState);
 
     expect(result).toEqual(valueOf(types.map(types.string), { type: 'a', value: 'b' }));
@@ -75,7 +76,7 @@ describe('ResourceResolver', () => {
 
   // A schema attribute missing from state was left out.
   it('reads a name its schema has and state does not hold as null, of the type the schema names', () => {
-    const named = new ResourceResolver(new Instances(), new Planned(versions), new Map([['resource', { note: { type: types.string } }]]), versions);
+    const named = new ResourceResolver(new Instances(), new Planned(versions), tableOf([['resource', { note: { type: types.string } }]]), versions);
 
     expect(named.resolve(ref('resource.test.note'), context, mockState).value).toEqual(valueOf(types.string, null));
   });
@@ -93,7 +94,7 @@ describe('ResourceResolver', () => {
   it('reads what an update leaves in state, not what it read before', () => {
     const resource = { ...mockState.resources['resource.test'] };
     const state = { ...mockState, resources: { 'resource.test': resource } };
-    const reading = new ResourceResolver(new Instances(), new Planned(versions), new Map(), versions);
+    const reading = new ResourceResolver(new Instances(), new Planned(versions), tableOf([['resource', {}]]), versions);
     reading.resolve(ref('resource.test.simple'), context, state);
 
     resource.attributes = { ...resource.attributes, simple: 'updated' };
@@ -105,7 +106,7 @@ describe('ResourceResolver', () => {
   describe('an instance the plan will create or change', () => {
     const planned = new Planned(versions);
     planned.set(Address.parse('resource.test'), { simple: 'new', later: UNKNOWN, made: UNKNOWN }, [], true);
-    const planning = new ResourceResolver(new Instances(), planned, new Map([['resource', { made: { type: types.list(types.string), computed: true } }]]), versions);
+    const planning = new ResourceResolver(new Instances(), planned, tableOf([['resource', { made: { type: types.list(types.string), computed: true } }]]), versions);
 
     it('reads what its configuration sets, not what state holds', () => {
       expect(planning.resolve(ref('resource.test.simple'), context, mockState).value.data).toBe('new');
@@ -116,7 +117,7 @@ describe('ResourceResolver', () => {
       marked.set(Address.parse('resource.test'), { simple: 'new', settings: { type: 'a', value: UNKNOWN } }, [['simple'], ['settings', 'value']], true);
       const state = { ...mockState, resources: { 'resource.test': { ...mockState.resources['resource.test'], sensitive: [['id']] } } };
       const read = (spelled: string) =>
-        new ResourceResolver(new Instances(), marked, new Map([['resource', {}]]), versions).resolve(ref(spelled), context, state).value.marks?.paths();
+        new ResourceResolver(new Instances(), marked, tableOf([['resource', {}]]), versions).resolve(ref(spelled), context, state).value.marks?.paths();
 
       expect(read('resource.test.simple')).toEqual([[]]);
       expect(read('resource.test.settings')).toEqual([['value']]);
@@ -127,7 +128,7 @@ describe('ResourceResolver', () => {
       const again = new Planned(versions);
       const sensitive = [['settings']];
       again.set(Address.parse('resource.test'), { simple: 'first' }, sensitive, true);
-      const reading = new ResourceResolver(new Instances(), again, new Map(), versions);
+      const reading = new ResourceResolver(new Instances(), again, tableOf([['resource', {}]]), versions);
       reading.resolve(ref('resource.test.simple'), context, mockState);
 
       again.set(Address.parse('resource.test'), { simple: 'second' }, sensitive, true);
@@ -145,14 +146,14 @@ describe('ResourceResolver', () => {
 
     // Nothing sets it, so it reads as null.
     it('reads a name its schema has and nothing sets as null, of the type the schema names', () => {
-      const named = new ResourceResolver(new Instances(), planned, new Map([['resource', { note: { type: types.string } }]]), versions);
+      const named = new ResourceResolver(new Instances(), planned, tableOf([['resource', { note: { type: types.string } }]]), versions);
 
       expect(named.resolve(ref('resource.test.note'), context, mockState).value).toEqual(valueOf(types.string, null));
     });
   });
 
   describe('every instance of a block with count or for_each', () => {
-    const schemas = new Map<string, Schema>([['item', { id: { type: types.string, computed: true }, tags: { type: types.map(types.dynamic) } }]]);
+    const schemas = tableOf([['item', { id: { type: types.string, computed: true }, tags: { type: types.map(types.dynamic) } }]]);
     const item = types.object({ id: types.string, tags: types.map(types.dynamic) });
     const state: State = {
       version: STATE_VERSION,

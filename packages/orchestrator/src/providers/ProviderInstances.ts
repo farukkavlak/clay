@@ -12,6 +12,7 @@ import { plainOf, Value } from '../values/Value';
 import { hidingReason } from './providerResult';
 import { Limit } from './Limit';
 import { ProviderRegistry } from './ProviderRegistry';
+import { SchemaTable } from './Schemas';
 
 /** A provider block, and how a value it writes is read in the root module. */
 export interface Written {
@@ -41,7 +42,7 @@ export class ProviderInstances {
   constructor(
     private readonly registry: ProviderRegistry,
     // Loaded with the configuration, for each provider block.
-    private readonly configSchemas: Map<string, Schema>,
+    private readonly configSchemas: SchemaTable,
     private readonly limit: Limit
   ) {}
 
@@ -67,7 +68,7 @@ export class ProviderInstances {
 
     const { block, read } = written;
     const declaration = spell(block);
-    const schema = this.configSchemas.get(name)!;
+    const schema = this.configSchemas.get(name);
     const values = Object.fromEntries(
       Object.entries(block.attributes).map(([key, value]) => [key, tryAt(value.position, declaration, ModuleAddress.root, () => read(value))] as const)
     );

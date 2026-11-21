@@ -11,6 +11,7 @@ import { TypeMismatch, typedValues } from '../values/typed';
 import { objectOf, sensitiveOf, Value, valueOf, withSensitive } from '../values/Value';
 import { everyType, noAttribute, readInstance, readSelf, SELF_OUTSIDE } from './references/instance';
 import { UnresolvedReferenceError } from './UnresolvedReferenceError';
+import { SchemaTable } from '../providers/Schemas';
 
 /** A name only the apply sets is unknown; any other unplanned name is null. Names outside the schema were refused earlier. */
 function plannedAttribute(instance: PlannedInstance, name: string): unknown {
@@ -58,13 +59,13 @@ export class ResourceResolver {
   constructor(
     private instances: Instances,
     private planned: Planned,
-    private schemas: Map<string, Schema>,
+    private schemas: SchemaTable,
     private versions: Versions
   ) {}
 
   /** Returns the attribute and the steps still to take into it, the whole instance where the reference names no attribute, or every instance where it names no instance. */
   resolve(reference: ResourceReference, context: Context, state: State, position?: Position): { value: Value; path: Step[] } {
-    const schema = this.schemas.get(reference.type) ?? {};
+    const schema = this.schemas.get(reference.type);
     const block = new Address(moduleOf(context), reference.type, reference.name);
     const { every, key, attribute, path } = readInstance(`${reference.type}.${reference.name}`, reference.path, this.instances.repetitionOf(blockKey(block)), position);
     if (every) return { value: this.every(reference, block, every, schema, state, position), path };
@@ -83,7 +84,7 @@ export class ResourceResolver {
     // The graph refuses `self` anywhere but in a provisioner, whose context is its instance.
     if (!(context instanceof Address)) throw placed(SELF_OUTSIDE, position);
 
-    const schema = this.schemas.get(context.resourceType) ?? {};
+    const schema = this.schemas.get(context.resourceType);
     const { attribute, path } = readSelf(reference.path, position);
     const held = this.heldAt(context, context.resourceType, schema, state, position);
     if (!held) throw new UnresolvedReferenceError(`self is known only once ${context.toString()} is made`);

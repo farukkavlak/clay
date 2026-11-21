@@ -1,4 +1,4 @@
-import { AttributePath, Schema, UNKNOWN } from '@clay/provider';
+import { AttributePath, UNKNOWN } from '@clay/provider';
 import { Output, sensitiveUnder } from '@clay/core';
 import { DataBlock, spell } from '@clay/parser';
 
@@ -13,6 +13,7 @@ import { marksOf, schemaRemarked } from '../values/schemaMarks';
 import { typedValues } from '../values/typed';
 import { plainOf, sensitiveOf, Value, valueOf, withSensitive } from '../values/Value';
 import { Versions } from '../values/Versions';
+import { SchemaTable } from '../providers/Schemas';
 
 /** A data source gives back, at an attribute it was given, the marks it was given with. */
 function remarked(values: Record<string, Value>, given: Record<string, Value>): Record<string, Value> {
@@ -24,14 +25,14 @@ export class DataSourceReader {
   constructor(
     private providers: ProviderInstances,
     // Loaded with the configuration, before any data source is read.
-    private dataSchemas: Map<string, Schema>,
+    private dataSchemas: SchemaTable,
     private dataSources: Map<string, Record<string, Value>>,
     private versions: Versions,
     private limit: Limit
   ) {}
 
   async read({ block: stmt, alias }: DataNode, inputs: Record<string, Value>, at: DataInstance): Promise<Record<string, Value>> {
-    const schema = this.dataSchemas.get(stmt.dataSourceType)!;
+    const schema = this.dataSchemas.get(stmt.dataSourceType);
 
     try {
       const provider = this.providers.reader(stmt.dataSourceType, alias);
@@ -56,7 +57,7 @@ export class DataSourceReader {
 
   /** Not read now: what the configuration gives is known and checked, and the rest is unknown. */
   async defer(stmt: DataBlock, inputs: Record<string, Value>, at: DataInstance): Promise<Record<string, Value>> {
-    const schema = this.dataSchemas.get(stmt.dataSourceType)!;
+    const schema = this.dataSchemas.get(stmt.dataSourceType);
 
     try {
       const given = conformed(stmt.dataSourceType, schema, inputs);

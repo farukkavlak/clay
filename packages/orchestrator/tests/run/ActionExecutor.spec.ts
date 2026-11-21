@@ -21,6 +21,7 @@ import { ScopeManager } from '../../src/config/ScopeManager';
 import { Limit } from '../../src/providers/Limit';
 import { DEFAULT_PARALLELISM } from '../../src/run/parallelism';
 import { str } from '../ast';
+import { schemasOf, tableOf } from '../schemas';
 
 /** An action with what its block gives, which the run hands over beside it. */
 type Step = PlanAction & { attributes?: Written };
@@ -123,8 +124,7 @@ describe('ActionExecutor', () => {
     const resolver = new ReferenceResolver(
       new ScopeManager(versions),
       new Map(),
-      new Map(),
-      new Map(),
+      schemasOf(),
       instances,
       modules,
       new Planned(versions),
@@ -133,7 +133,7 @@ describe('ActionExecutor', () => {
       'default'
     );
     limit = new Watched(DEFAULT_PARALLELISM);
-    const configured = new ProviderInstances(providers, new Map(), limit);
+    const configured = new ProviderInstances(providers, tableOf([], 'provider'), limit);
     await configured.configure(mockProvider.name);
     executor = new ActionExecutor(
       configured,

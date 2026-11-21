@@ -1,4 +1,4 @@
-import { Schema, Type, types } from '@clay/provider';
+import { Type, types } from '@clay/provider';
 import { Address, EVERY_ITEM, ModuleAddress } from '@clay/core';
 import { DataReference, ModuleOutputReference, parseReference, ResourceReference, spell } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
@@ -9,10 +9,11 @@ import { WrittenTypes } from '../../../src/expressions/references/WrittenTypes';
 import { ScopeManager } from '../../../src/config/ScopeManager';
 import { Versions } from '../../../src/values/Versions';
 import { dataBlock, outputBlock, resourceBlock, steps, str } from '../../ast';
+import { schemasOf } from '../../schemas';
 
 const position = { file: 'main.clay', line: 1, column: 1 };
 
-const schemas = new Map<string, Schema>([['random_string', { id: { type: types.string, computed: true }, length: { type: types.number, required: true } }]]);
+const schemas = schemasOf([['random_string', { id: { type: types.string, computed: true }, length: { type: types.number, required: true } }]]);
 
 /** Every block is declared at load, with what it is given. */
 const declaring = (type: string, name: string, attributes = {}) => {
@@ -23,7 +24,7 @@ const declaring = (type: string, name: string, attributes = {}) => {
 };
 
 const typeOf = (instances: Instances, ...path: (string | number)[]) =>
-  new WrittenTypes(declaring('random_string', 's'), schemas, new Map(), instances, new ModuleInstances()).typeOf(
+  new WrittenTypes(declaring('random_string', 's'), schemas, instances, new ModuleInstances()).typeOf(
     parseReference(steps('random_string', 's', ...path)) as ResourceReference,
     ModuleAddress.root,
     position
@@ -58,10 +59,10 @@ describe('the type a resource reference will have, read before any instance exis
 });
 
 describe('the marks a resource reference will have, read before any instance exists', () => {
-  const marked = new Map<string, Schema>([['secret_string', { value: { type: types.string, computed: true, sensitive: true }, length: { type: types.number, required: true } }]]);
+  const marked = schemasOf([['secret_string', { value: { type: types.string, computed: true, sensitive: true }, length: { type: types.number, required: true } }]]);
 
   const marksOf = (instances: Instances, ...path: (string | number)[]) =>
-    new WrittenTypes(declaring('secret_string', 's'), marked, new Map(), instances, new ModuleInstances()).typeOf(
+    new WrittenTypes(declaring('secret_string', 's'), marked, instances, new ModuleInstances()).typeOf(
       parseReference(steps('secret_string', 's', ...path)) as ResourceReference,
       ModuleAddress.root,
       position
@@ -85,13 +86,13 @@ describe('the marks a resource reference will have, read before any instance exi
 });
 
 describe('the marks a data source reference will have, read before any instance exists', () => {
-  const marked = new Map<string, Schema>([['secret_file', { value: { type: types.string, computed: true, sensitive: true }, path: { type: types.string, required: true } }]]);
+  const marked = schemasOf([], [['secret_file', { value: { type: types.string, computed: true, sensitive: true }, path: { type: types.string, required: true } }]]);
 
   const scopes = new ScopeManager(new Versions());
   scopes.declareBlock('data:secret_file.f', { block: dataBlock('secret_file', 'f'), context: ModuleAddress.root });
 
   const marksOf = (instances: Instances, ...path: (string | number)[]) =>
-    new WrittenTypes(scopes, new Map(), marked, instances, new ModuleInstances()).typeOf(
+    new WrittenTypes(scopes, marked, instances, new ModuleInstances()).typeOf(
       parseReference(steps('data', 'secret_file', 'f', ...path)) as DataReference,
       ModuleAddress.root,
       position
@@ -133,7 +134,7 @@ const outputOf = (repetition: 'count' | 'for_each' | undefined, ...path: (string
   const modules = new ModuleInstances();
   if (repetition) modules.declare(ModuleAddress.root.child('n'), repetition);
 
-  return new WrittenTypes(scopes, new Map(), new Map(), new Instances(), modules).typeOf(
+  return new WrittenTypes(scopes, schemasOf(), new Instances(), modules).typeOf(
     parseReference(steps('module', 'n', ...path)) as ModuleOutputReference,
     ModuleAddress.root,
     position
@@ -165,7 +166,7 @@ describe('the values whose marks a reference takes, read before any instance exi
     const instances = new Instances();
     if (repetition) instances.declare('random_string.s', repetition);
 
-    return new WrittenTypes(declaring('random_string', 's', { length: LENGTH }), schemas, new Map(), instances, new ModuleInstances()).typeOf(
+    return new WrittenTypes(declaring('random_string', 's', { length: LENGTH }), schemas, instances, new ModuleInstances()).typeOf(
       parseReference(steps('random_string', 's', ...path)) as ResourceReference,
       ModuleAddress.root,
       position

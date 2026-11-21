@@ -28,6 +28,7 @@ import { DeclaredBlock, ScopeManager } from '../../config/ScopeManager';
 import { Value, valueOf, withSensitive } from '../../values/Value';
 import { itemsOf, sharedMarks } from '../../values/sensitive';
 import { everyOf, everyType, instanceType, noAttribute, outputsType, readCall, readInstance, readSelf, SELF_OUTSIDE } from './instance';
+import { Schemas } from '../../providers/Schemas';
 
 /** Paths are known at load and a local is read as written, so they are not here. */
 type Unread = VariableReference | DataReference | ModuleOutputReference | ResourceReference | CountReference | EachReference | SelfReference;
@@ -87,8 +88,7 @@ function fromSchema(schema: Schema, every: Repetition | undefined, attribute: st
 export class WrittenTypes {
   constructor(
     private scopeManager: ScopeManager,
-    private schemas: Map<string, Schema>,
-    private dataSchemas: Map<string, Schema>,
+    private schemas: Schemas,
     private instances: Instances,
     private modules: ModuleInstances
   ) {}
@@ -139,7 +139,7 @@ export class WrittenTypes {
     const spelled = `data.${reference.type}.${reference.name}`;
     const key = dataSourceKey(scopeOf(moduleOf(where).withoutKeys()), reference.type, reference.name);
     const { every, attribute, path } = readInstance(spelled, reference.path, this.instances.repetitionOf(key), position);
-    const schema = this.dataSchemas.get(reference.type)!;
+    const schema = this.schemas.dataSources.get(reference.type);
     if (attribute !== undefined && !Object.hasOwn(schema, attribute)) throw placed(`Attribute "${attribute}" not found on data source "${spelled}"`, position);
 
     return { ...fromSchema(schema, every, attribute), from: sourcesOf(this.valuesOf(key, schema), every, attribute), path };
@@ -164,8 +164,7 @@ export class WrittenTypes {
   private resourceType(reference: ResourceReference, where: Context, position: Position): Written {
     const block = blockKey(new Address(moduleOf(where), reference.type, reference.name));
     const { every, attribute, path } = readInstance(`${reference.type}.${reference.name}`, reference.path, this.instances.repetitionOf(block), position);
-    // Every schema is loaded by now.
-    const schema = this.schemas.get(reference.type)!;
+    const schema = this.schemas.resources.get(reference.type);
     if (attribute !== undefined && !Object.hasOwn(schema, attribute)) throw placed(noAttribute(reference.type, attribute), position);
 
     return { ...fromSchema(schema, every, attribute), from: sourcesOf(this.valuesOf(block, schema), every, attribute), path };
@@ -178,7 +177,7 @@ export class WrittenTypes {
 
     const block = blockKey(where);
     const { attribute, path } = readSelf(reference.path, position);
-    const schema = this.schemas.get(where.resourceType)!;
+    const schema = this.schemas.resources.get(where.resourceType);
     if (attribute !== undefined && !Object.hasOwn(schema, attribute)) throw placed(noAttribute(where.resourceType, attribute), position);
 
     return { ...fromSchema(schema, undefined, attribute), from: sourcesOf(this.valuesOf(block, schema), undefined, attribute), path };

@@ -22,15 +22,14 @@ import { plainOf, Value } from '../values/Value';
 import { GraphNode } from '../graph/nodes';
 import { LoadedModule, LoadedResource } from '../config/ModuleLoader';
 import { isProvider } from '../graph/providerNodes';
+import { Schemas } from '../providers/Schemas';
 
 /** Checks every value once as written, so a block is checked even when it makes no instance. */
 export class WrittenCheck {
   constructor(
     private resolver: ReferenceResolver,
     private scopeManager: ScopeManager,
-    private schemas: Map<string, Schema>,
-    private dataSchemas: Map<string, Schema>,
-    private provisionerSchemas: Map<string, Schema>,
+    private schemas: Schemas,
     private providers: ProviderRegistry,
     private provisioners: ProvisionerRegistry,
     private limit: Limit
@@ -76,8 +75,7 @@ export class WrittenCheck {
 
   private checkResource({ address, block }: LoadedResource): Promise<unknown> {
     const declaration = spell(block);
-    // Every schema is loaded by now.
-    const schema = this.schemas.get(block.resourceType)!;
+    const schema = this.schemas.resources.get(block.resourceType);
 
     this.checkRepetition(block, declaration, address);
     const given = this.checkAttributes(block.resourceType, block.attributes, schema, declaration, address);
@@ -92,8 +90,7 @@ export class WrittenCheck {
 
   /** As a resource's attributes are checked, in the resource's instance; gives the provisioner's own check, to be asked. */
   private checkProvisioner({ provisionerType: { value: type }, attributes, position }: ProvisionerBlock, block: ResourceBlock, address: Context): () => Promise<void> {
-    // Loaded with the names checked.
-    const schema = this.provisionerSchemas.get(type)!;
+    const schema = this.schemas.provisioners.get(type);
     const given = this.checkAttributes(type, attributes, schema, spell(block), address);
 
     return () => this.ask(type, given, schema, () => this.provisioners.get(type).validate(plainOf(given)), position, block, address);
@@ -101,8 +98,7 @@ export class WrittenCheck {
 
   private checkData(block: DataBlock, module: ModuleAddress): Promise<void> {
     const declaration = spell(block);
-    // Every data schema is loaded by now, its names checked.
-    const schema = this.dataSchemas.get(block.dataSourceType)!;
+    const schema = this.schemas.dataSources.get(block.dataSourceType);
 
     this.checkRepetition(block, declaration, module);
     // In the block, so `each.value` finds its for_each.

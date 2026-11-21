@@ -1,4 +1,4 @@
-import { AttributePath, ExactNumber, MAX_NESTING, Schema, typeNestingOf, types, UNKNOWN } from '@clay/provider';
+import { AttributePath, ExactNumber, MAX_NESTING, typeNestingOf, types, UNKNOWN } from '@clay/provider';
 import { Address, emptyState, ModuleAddress, State } from '@clay/core';
 import {
   AttributeValue,
@@ -47,6 +47,7 @@ import { ForResolver } from './ForResolver';
 import { isOperation, OperationResolver } from './OperationResolver';
 import { TemplateResolver } from './TemplateResolver';
 import { IndexReader, Reader } from './IndexReader';
+import { Schemas } from '../providers/Schemas';
 
 const LITERALS = { String: types.string, Number: types.number, Boolean: types.bool };
 
@@ -104,8 +105,7 @@ export class ReferenceResolver {
   constructor(
     scopeManager: ScopeManager,
     dataSources: Map<string, Record<string, Value>>,
-    schemas: Map<string, Schema>,
-    dataSchemas: Map<string, Schema>,
+    schemas: Schemas,
     instances: Instances,
     modules: ModuleInstances,
     planned: Planned,
@@ -119,10 +119,10 @@ export class ReferenceResolver {
     this.planned = planned;
     this.modules = modules;
     this.variables = new VariableResolver(scopeManager, this);
-    this.dataSources = new DataSourceResolver(dataSources, dataSchemas, instances, versions);
+    this.dataSources = new DataSourceResolver(dataSources, schemas.dataSources, instances, versions);
     this.moduleOutputs = new ModuleOutputResolver(scopeManager, modules, versions);
-    this.resources = new ResourceResolver(instances, planned, schemas, versions);
-    this.written = new WrittenTypes(scopeManager, schemas, dataSchemas, instances, modules);
+    this.resources = new ResourceResolver(instances, planned, schemas.resources, versions);
+    this.written = new WrittenTypes(scopeManager, schemas, instances, modules);
     // Bound, not wrapped, so a nested read costs no extra stack frame.
     const evaluator: Evaluator = {
       resolveIn: this.resolveIn.bind(this),

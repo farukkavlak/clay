@@ -1,4 +1,3 @@
-import { Schema } from '@clay/provider';
 import { StateManager } from '@clay/state';
 
 import { ActionExecutor } from './ActionExecutor';
@@ -20,6 +19,7 @@ import { ModuleInstances } from '../instances/ModuleInstances';
 import { Planned } from '../values/Planned';
 import { ProviderInstances } from '../providers/ProviderInstances';
 import { ProviderRegistry } from '../providers/ProviderRegistry';
+import { Schemas } from '../providers/Schemas';
 import { ProvisionerRegistry } from '../providers/ProvisionerRegistry';
 import { Provisioning } from '../providers/Provisioning';
 import { InstanceKeys } from '../expressions/references/InstanceKeys';
@@ -54,42 +54,24 @@ export function newRun(stateManager: StateManager, { providers, provisioners }: 
   const versions = new Versions();
   const scopes = new ScopeManager(versions);
   const dataSources = new Map<string, Record<string, Value>>();
-  const schemas = new Map<string, Schema>();
-  const dataSchemas = new Map<string, Schema>();
-  const provisionerSchemas = new Map<string, Schema>();
-  const configSchemas = new Map<string, Schema>();
+  const schemas = new Schemas();
   const instances = new Instances();
   const modules = new ModuleInstances();
-  const configured = new ProviderInstances(providers, configSchemas, limit);
+  const configured = new ProviderInstances(providers, schemas.configs, limit);
   const planned = new Planned(versions);
   const keys = new InstanceKeys(instances, modules);
-  const resolver = new ReferenceResolver(scopes, dataSources, schemas, dataSchemas, instances, modules, planned, keys, versions, workspace);
+  const resolver = new ReferenceResolver(scopes, dataSources, schemas, instances, modules, planned, keys, versions, workspace);
   const scanner = new ReferenceScanner(modules);
   const graphBuilder = new DependencyGraphBuilder(scanner, instances, modules, providers);
   const resourcePlanner = new ResourcePlanner(configured, limit);
   const provisioning = new Provisioning(provisioners, limit);
-  const reader = new DataSourceReader(configured, dataSchemas, dataSources, versions, limit);
+  const reader = new DataSourceReader(configured, schemas.dataSources, dataSources, versions, limit);
   const planReader = new PlanReader(resolver, instances);
 
   return {
-    loader: new ConfigLoader(
-      new ModuleLoader(files, scopes),
-      scopes,
-      dataSources,
-      schemas,
-      dataSchemas,
-      resolver,
-      providers,
-      provisioners,
-      provisionerSchemas,
-      configSchemas,
-      instances,
-      modules,
-      planned,
-      limit
-    ),
+    loader: new ConfigLoader(new ModuleLoader(files, scopes), scopes, dataSources, schemas, resolver, providers, provisioners, instances, modules, planned, limit),
     graphBuilder,
-    writtenCheck: new WrittenCheck(resolver, scopes, schemas, dataSchemas, provisionerSchemas, providers, provisioners, limit),
+    writtenCheck: new WrittenCheck(resolver, scopes, schemas, providers, provisioners, limit),
     desiredStateBuilder: new DesiredStateBuilder(
       scopes,
       resolver,
@@ -102,7 +84,8 @@ export function newRun(stateManager: StateManager, { providers, provisioners }: 
       new DataPlanner(graphBuilder, instances, modules, planned, reader, planReader),
       planReader,
       versions,
-      configured
+      configured,
+      schemas.resources
     ),
     runner: new PlanRunner(
       stateManager,

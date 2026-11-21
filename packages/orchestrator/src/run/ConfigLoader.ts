@@ -17,6 +17,7 @@ import { ReferenceResolver } from '../expressions/ReferenceResolver';
 import { ScopeManager } from '../config/ScopeManager';
 import { LoadedModule, LoadedResource, ModuleLoader, Part, RootValues } from '../config/ModuleLoader';
 import { checkProviderChoices } from '../config/providerChoices';
+import { Schemas, SchemaTable } from '../providers/Schemas';
 
 /** The first item of each key, in the order they come. */
 function firstOfEach<T>(items: T[], keyOf: (item: T) => string): T[] {
@@ -30,7 +31,7 @@ export interface LoadedConfig {
   mainProgram: Statement[];
   loadedResources: LoadedResource[];
   loadedModules: LoadedModule[];
-  schemas: Map<string, Schema>;
+  resourceSchemas: SchemaTable;
 }
 
 export class ConfigLoader {
@@ -38,14 +39,10 @@ export class ConfigLoader {
     private moduleLoader: ModuleLoader,
     private scopeManager: ScopeManager,
     private dataSources: Map<string, Record<string, Value>>,
-    // A Map, since a resource type may be named `constructor`, which a plain object already has.
-    private schemas: Map<string, Schema>,
-    private dataSchemas: Map<string, Schema>,
+    private schemas: Schemas,
     private resolver: ReferenceResolver,
     private providers: ProviderRegistry,
     private provisioners: ProvisionerRegistry,
-    private provisionerSchemas: Map<string, Schema>,
-    private configSchemas: Map<string, Schema>,
     private instances: Instances,
     private modules: ModuleInstances,
     private planned: Planned,
@@ -69,7 +66,7 @@ export class ConfigLoader {
     checkProviderChoices(loadedModules, (block) => this.handlerOf(block));
     await this.loadConfigSchemas(mainProgram);
 
-    return { mainProgram, loadedResources, loadedModules, schemas: this.schemas };
+    return { mainProgram, loadedResources, loadedModules, resourceSchemas: this.schemas.resources };
   }
 
   /** Before anything reads a variable or an output, so a bad default is reported at the default. */
@@ -89,10 +86,10 @@ export class ConfigLoader {
 
   /** Loaded before any value is resolved, since resolving needs the schema's types. A failure names the first block of its type. */
   private async loadSchemas(loaded: LoadedResource[]): Promise<void> {
-    const firsts = firstOfEach(loaded, ({ block }) => block.resourceType).filter(({ block }) => !this.schemas.has(block.resourceType));
+    const firsts = firstOfEach(loaded, ({ block }) => block.resourceType).filter(({ block }) => !this.schemas.resources.has(block.resourceType));
     const schemas = await Promise.allSettled(firsts.map(({ block, address }) => this.asked(block, address, () => this.providers.schema(block.resourceType))));
 
-    for (const [index, { block }] of firsts.entries()) this.schemas.set(block.resourceType, taken(schemas[index]));
+    for (const [index, { block }] of firsts.entries()) this.schemas.resources.set(block.resourceType, taken(schemas[index]));
   }
 
   /** With each block's names checked; a type no provisioner has is refused at its label. */
@@ -104,27 +101,29 @@ export class ConfigLoader {
     }
 
     const firsts = firstOfEach(blocks, ({ provisioner }) => provisioner.provisionerType.value).filter(
-      ({ provisioner }) => !this.provisionerSchemas.has(provisioner.provisionerType.value)
+      ({ provisioner }) => !this.schemas.provisioners.has(provisioner.provisionerType.value)
     );
     const schemas = await Promise.allSettled(
       firsts.map(({ block, address, provisioner }) => this.asked(block, address, () => this.provisioners.schema(provisioner.provisionerType.value)))
     );
-    for (const [index, { provisioner }] of firsts.entries()) this.provisionerSchemas.set(provisioner.provisionerType.value, taken(schemas[index]));
+    for (const [index, { provisioner }] of firsts.entries()) this.schemas.provisioners.set(provisioner.provisionerType.value, taken(schemas[index]));
 
-    for (const { provisioner, block, address } of blocks) checkProvisionerNames(provisioner, this.provisionerSchemas.get(provisioner.provisionerType.value)!, block, address);
+    for (const { provisioner, block, address } of blocks) checkProvisionerNames(provisioner, this.schemas.provisioners.get(provisioner.provisionerType.value), block, address);
   }
 
   /** With its names checked, so a misspelled input is refused before anything is read. */
   private async loadDataSchemas(loadedModules: LoadedModule[]): Promise<void> {
     const blocks = loadedModules.flatMap(({ address, program }) => program.flatMap((stmt) => (stmt.type === 'Data' ? [{ stmt, address }] : [])));
-    const firsts = firstOfEach(blocks, ({ stmt }) => stmt.dataSourceType).filter(({ stmt }) => !this.dataSchemas.has(stmt.dataSourceType));
+    const firsts = firstOfEach(blocks, ({ stmt }) => stmt.dataSourceType).filter(({ stmt }) => !this.schemas.dataSources.has(stmt.dataSourceType));
     const schemas = await Promise.allSettled(firsts.map(({ stmt, address }) => this.asked(stmt, address, () => this.providers.dataSourceSchema(stmt.dataSourceType))));
     const loaded = new Map(firsts.map(({ stmt }, index) => [stmt.dataSourceType, schemas[index]]));
 
+    // In the order written, so a block's misspelled name comes before a later type that fails to load.
     for (const { stmt, address } of blocks) {
-      const schema = this.dataSchemas.get(stmt.dataSourceType) ?? taken(loaded.get(stmt.dataSourceType)!);
-      this.dataSchemas.set(stmt.dataSourceType, schema);
-      checkNames(stmt, schema, address);
+      const type = stmt.dataSourceType;
+      const asked = loaded.get(type);
+      if (asked !== undefined && !this.schemas.dataSources.has(type)) this.schemas.dataSources.set(type, taken(asked));
+      checkNames(stmt, this.schemas.dataSources.get(type), address);
     }
   }
 
@@ -139,7 +138,7 @@ export class ConfigLoader {
 
     for (const [index, block] of blocks.entries()) {
       const schema = taken(schemas[index]);
-      this.configSchemas.set(block.name, schema);
+      this.schemas.configs.set(block.name, schema);
       checkNames(block, schema, ModuleAddress.root);
     }
   }
