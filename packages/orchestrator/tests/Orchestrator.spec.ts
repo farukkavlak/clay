@@ -93,13 +93,6 @@ describe('Orchestrator', () => {
   });
 
   describe('Provider Registration', () => {
-    it('should register a provider', () => {
-      const backend = new LocalBackend(tmpDir);
-      const stateManager = new StateManager(backend);
-      const newOrchestrator = engineOn(stateManager);
-      expect(() => newOrchestrator.registerProvider(mockProvider)).not.toThrow();
-    });
-
     it('refuses a second provider for a resource type one already makes', () => {
       expect(() => orchestrator.registerProvider(Object.assign(new MockProvider(), { name: 'other' }))).toThrow('Provider for resource type "mock_resource" already registered');
     });
@@ -195,9 +188,7 @@ describe('Orchestrator', () => {
       const stateManager = new StateManager(backend);
       const state = await stateManager.read();
 
-      expect(state.resources['mock_resource.test']).toBeDefined();
-      expect(state.resources['mock_resource.test'].resourceType).toBe('mock_resource');
-      expect(state.resources['mock_resource.test'].name).toBe('test');
+      expect(state.resources['mock_resource.test']).toMatchObject({ resourceType: 'mock_resource', name: 'test', attributes: { name: 'test_value' } });
     });
 
     it('should handle resources with mixed attribute types', async () => {
@@ -405,10 +396,12 @@ describe('Orchestrator', () => {
 
       expect(final.size).toBe(3);
 
-      expect(state.resources['mock_resource.keep']).toBeDefined();
-      expect(state.resources['mock_resource.update']).toBeDefined();
-      expect(state.resources['mock_resource.create']).toBeDefined();
-      expect(state.resources['mock_resource.delete']).toBeUndefined();
+      expect(Object.keys(state.resources).sort()).toEqual(['mock_resource.create', 'mock_resource.keep', 'mock_resource.update']);
+      expect(state.resources).toMatchObject({
+        'mock_resource.keep': { attributes: { name: 'keep_value' } },
+        'mock_resource.update': { attributes: { name: 'new_value' } },
+        'mock_resource.create': { attributes: { name: 'create_value' } },
+      });
     });
   });
 

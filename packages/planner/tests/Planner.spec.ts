@@ -1,6 +1,6 @@
 import { isUnknown, types, UNKNOWN } from '@clay/provider';
 import { Address, ModuleAddress, Output, State, STATE_VERSION } from '@clay/core';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DesiredResource, hasChanges, outputChanges, plan, PLAN_FILE_VERSION, PlanAction, serializePlan, validatePlanFile, VariableInput } from '../src/index';
 
@@ -376,9 +376,14 @@ describe('Planner', () => {
   });
 
   describe('Plan Serialization', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
     it('should serialize plan correctly', () => {
       const actions: PlanAction[] = [];
       const files = { 'main.clay': 'resource "test" {}', 'm/main.clay': 'output "x" { value = "y" }' };
+      vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-01-02T03:04:05.006Z') });
       const serialized = JSON.parse(
         serializePlan({ serial: 0, actions, outputs: {}, prevRun: {}, prior: {}, imported: {}, schemas: {}, dataSources: {}, readAtApply: [] }, files, 'default')
       );
@@ -386,7 +391,7 @@ describe('Planner', () => {
       expect(serialized.version).toBe(PLAN_FILE_VERSION);
       expect(serialized.actions).toEqual(actions);
       expect(serialized.files).toEqual(files);
-      expect(serialized.timestamp).toBeDefined();
+      expect(serialized.timestamp).toBe('2026-01-02T03:04:05.006Z');
     });
 
     it('should validate correct plan file', () => {

@@ -102,10 +102,7 @@ describe('Orchestrator - Data Sources', () => {
     const stateManager = new StateManager(backend);
     const state = await stateManager.read();
 
-    const resource = state.resources['mock_resource.app'];
-    expect(resource).toBeDefined();
-    expect(resource.attributes.owner).toBe('testuser');
-    expect(resource.attributes.contact).toBe('test@example.com');
+    expect(state.resources['mock_resource.app']).toMatchObject({ attributes: { owner: 'testuser', contact: 'test@example.com' } });
   });
 
   it('should refuse an attribute a data source only inherited', async () => {

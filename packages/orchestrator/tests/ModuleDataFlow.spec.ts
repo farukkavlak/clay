@@ -127,9 +127,7 @@ describe('Orchestrator - Phase 4: Data Flow', () => {
     expect(writeMock).toHaveBeenCalled();
     const stateArg = writeMock.mock.calls[0][0];
 
-    const resource = stateArg.resources['test_resource.res'];
-    expect(resource).toBeDefined();
-    expect(resource.attributes.region).toBe('us-east-1');
+    expect(stateArg.resources['test_resource.res']).toMatchObject({ attributes: { region: 'us-east-1' } });
   });
 
   it('should pass inputs to child module variables', async () => {
@@ -259,8 +257,6 @@ resource "test_resource" "instance" {
 
     const stateArg = writeMock.mock.calls[0][0];
 
-    const dbResource = stateArg.resources['module.db.test_resource.instance'];
-    expect(dbResource).toBeDefined();
-    expect(dbResource.attributes.name).toBe('production-db');
+    expect(stateArg.resources['module.db.test_resource.instance']).toMatchObject({ attributes: { name: 'production-db' } });
   });
 });

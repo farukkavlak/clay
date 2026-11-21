@@ -277,13 +277,13 @@ describe('state and output against a real state file', () => {
 
   it.each(['show', 'rm'])('refuses a name every object has, rather than reading one off the prototype, for %s', async (command) => {
     await applyConfig();
+    const before = await fs.readFile(path.join(dir, 'clay.state.json'), 'utf8');
 
     await createStateCommand().parseAsync(['node', 'clay', command, 'constructor']);
 
-    const state = await stored();
     expect(printed.join('\n')).toContain('Invalid address "constructor": an address ends with a type and a name');
     expect(printed.join('\n')).not.toContain('resource "undefined"');
-    expect(state.resources['local_file.a']).toBeDefined();
+    expect(await fs.readFile(path.join(dir, 'clay.state.json'), 'utf8')).toBe(before);
   });
 
   it.each([
@@ -312,12 +312,12 @@ describe('state and output against a real state file', () => {
 
   it('refuses an mv that changes the type', async () => {
     await applyConfig();
+    const before = await fs.readFile(path.join(dir, 'clay.state.json'), 'utf8');
 
     await createStateCommand().parseAsync(['node', 'clay', 'mv', 'local_file.a', 'random_string.a']);
 
     expect(printed.join('\n')).toContain('Cannot move local_file.a to random_string.a: the type changes');
-    const state = await stored();
-    expect(state.resources['local_file.a']).toBeDefined();
+    expect(await fs.readFile(path.join(dir, 'clay.state.json'), 'utf8')).toBe(before);
   });
 
   it('reads what the engine wrote for output', async () => {

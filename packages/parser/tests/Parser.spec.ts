@@ -122,7 +122,7 @@ describe('Clay Parser', () => {
       const parser = makeParser(input);
       const ast = parser.parse();
       expect(ast).toHaveLength(1);
-      expect((ast[0] as ResourceBlock).attributes.key).toBeDefined();
+      expect((ast[0] as ResourceBlock).attributes.key).toMatchObject({ type: 'String', value: 'value' });
     });
 
     it('should ignore comment at EOF without newline', () => {

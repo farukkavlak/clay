@@ -499,7 +499,7 @@ describe('a state kept in S3', () => {
       server.override(`GET /bucket/${DEV}.lock`, { status: 403, code: 'AccessDenied' });
 
       await expect(named().lock(info)).rejects.toThrow(`Workspace "dev" does not exist. The lock could not be released; run clay force-unlock ${info.id}`);
-      expect(server.text(`bucket/${DEV}.lock`)).toBeDefined();
+      expect(JSON.parse(server.text(`bucket/${DEV}.lock`)!)).toEqual(info);
     });
 
     it('is locked where its state exists', async () => {
@@ -521,14 +521,14 @@ describe('a state kept in S3', () => {
 
       expect(server.text(`bucket/${DEV}`)).toBeUndefined();
       expect(server.text(`bucket/${DEV}.lock`)).toBe('held');
-      expect(server.text('bucket/env/state.json')).toBeDefined();
+      expect(server.text('bucket/env/state.json')).toBe(serializeState(stateWith(1)));
     });
 
     it('never removes the default state', async () => {
       put('env/state.json');
 
       await expect(named('default').remove()).rejects.toThrow('The state of the default workspace is not removed');
-      expect(server.text('bucket/env/state.json')).toBeDefined();
+      expect(server.text('bucket/env/state.json')).toBe(serializeState(stateWith(1)));
     });
 
     it('says what S3 answered to a removal it refused', async () => {

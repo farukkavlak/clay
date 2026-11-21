@@ -152,8 +152,7 @@ describe('CLI: state command', () => {
 
       const writtenState = writeMock.mock.calls[0][0];
       expect(writtenState.resources['test.t1']).toBeUndefined();
-      expect(writtenState.resources['test.new']).toBeDefined();
-      expect(writtenState.resources['test.new'].attributes.val).toBe('foo');
+      expect(writtenState.resources['test.new']).toMatchObject({ attributes: { val: 'foo' } });
 
       expect(unlockMock).toHaveBeenCalled();
       expect(consoleLogSpy).toHaveBeenCalledWith('Successfully moved resource.');

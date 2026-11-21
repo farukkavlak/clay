@@ -468,7 +468,7 @@ describe('a state kept in Azure Blob storage', () => {
 
       expect(server.text(`state/${DEV}`)).toBeUndefined();
       expect(server.text(`state/${DEV}.lock`)).toBe('held');
-      expect(server.text('state/env/state.json')).toBeDefined();
+      expect(server.text('state/env/state.json')).toBe(serializeState(stateWith(1)));
     });
 
     it('counts a state already gone as removed', async () => {
@@ -479,7 +479,7 @@ describe('a state kept in Azure Blob storage', () => {
       put('env/state.json');
 
       await expect(named('default').remove()).rejects.toThrow('The state of the default workspace is not removed');
-      expect(server.text('state/env/state.json')).toBeDefined();
+      expect(server.text('state/env/state.json')).toBe(serializeState(stateWith(1)));
     });
 
     it('says what Azure answered to a removal it refused', async () => {
