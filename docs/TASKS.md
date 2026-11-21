@@ -1283,8 +1283,8 @@ Nothing here changes what Clay does. Each is a place the next change has to work
       `UnresolvedReferenceError` that six places catch and turn back into a value. Whether an
       unknown is an error also hangs on `Planned.begin()`, a mode that is never reset
 - [ ] `ReferenceResolver` builds its own resolvers instead of taking them in its
-      constructor, and `DesiredStateBuilder` and `ConfigLoader` take ten collaborators each,
-      most of them maps every component writes to
+      constructor, and `DesiredStateBuilder` takes thirteen collaborators, most of them maps
+      every component writes to
 - [ ] `tryAt`, `withPlace`, `hidingReason` and the refresh's `readBack` catch every error, so
       a `TypeError` in the engine is reported as a mistake in the configuration, or hidden
       as "failed on its configuration"

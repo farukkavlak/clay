@@ -2,6 +2,7 @@ import { StateManager } from '@clay/state';
 
 import { ActionExecutor } from './ActionExecutor';
 import { ConfigLoader } from './ConfigLoader';
+import { SchemaLoader } from './SchemaLoader';
 import { DataSourceReader } from '../plan/DataSourceReader';
 import { DependencyGraphBuilder } from '../graph/DependencyGraphBuilder';
 import { DataPlanner } from '../plan/DataPlanner';
@@ -69,7 +70,7 @@ export function newRun(stateManager: StateManager, { providers, provisioners }: 
   const planReader = new PlanReader(resolver, instances);
 
   return {
-    loader: new ConfigLoader(new ModuleLoader(files, scopes), schemas, resolver, providers, provisioners, instances, modules, limit),
+    loader: new ConfigLoader(new ModuleLoader(files, scopes), new SchemaLoader(schemas, providers, provisioners, limit), resolver, providers, instances, modules),
     graphBuilder,
     writtenCheck: new WrittenCheck(resolver, scopes, schemas, providers, provisioners, limit),
     desiredStateBuilder: new DesiredStateBuilder(
