@@ -3,7 +3,7 @@ import { ModuleAddress } from '@clay/core';
 import { Lexer, Parser, ResourceBlock } from '@clay/parser';
 import { describe, expect, it } from 'vitest';
 
-import { checkNames } from '../../src/checks/checkAttributes';
+import { checkNames } from '../../src/checks/checkNames';
 
 const schema: Schema = {
   name: { type: types.string, required: true },

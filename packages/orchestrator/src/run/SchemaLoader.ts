@@ -2,7 +2,7 @@ import { Schema } from '@clay/provider';
 import { ModuleAddress } from '@clay/core';
 import { ConfigError, DataBlock, ResourceBlock, spell, Statement } from '@clay/parser';
 
-import { checkNames, checkProvisionerNames } from '../checks/checkAttributes';
+import { checkNames, checkProvisionerNames } from '../checks/checkNames';
 import { Context } from '../keys';
 import { ProviderRegistry } from '../providers/ProviderRegistry';
 import { ProvisionerRegistry } from '../providers/ProvisionerRegistry';
