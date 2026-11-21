@@ -28,7 +28,6 @@ export interface LoadedConfig {
   mainProgram: Statement[];
   loadedResources: LoadedResource[];
   loadedModules: LoadedModule[];
-  resourceSchemas: SchemaTable;
 }
 
 export class ConfigLoader {
@@ -60,7 +59,7 @@ export class ConfigLoader {
     checkProviderChoices(loadedModules, (block) => this.handlerOf(block));
     await this.loadConfigSchemas(mainProgram);
 
-    return { mainProgram, loadedResources, loadedModules, resourceSchemas: this.schemas.resources };
+    return { mainProgram, loadedResources, loadedModules };
   }
 
   /** Before anything reads a variable or an output, so a bad default is reported at the default. */
@@ -78,12 +77,14 @@ export class ConfigLoader {
     }
   }
 
-  /** Loaded before any value is resolved, since resolving needs the schema's types. A failure names the first block of its type. */
+  /** Loaded before any value is resolved, since resolving needs the schema's types. */
   private async loadSchemas(loaded: LoadedResource[]): Promise<void> {
-    const firsts = firstOfEach(loaded, ({ block }) => block.resourceType).filter(({ block }) => !this.schemas.resources.has(block.resourceType));
-    const schemas = await Promise.allSettled(firsts.map(({ block, address }) => this.asked(block, address, () => this.providers.schema(block.resourceType))));
-
-    for (const [index, { block }] of firsts.entries()) this.schemas.resources.set(block.resourceType, taken(schemas[index]));
+    await this.loadChecked(
+      loaded,
+      ({ resourceType }) => resourceType,
+      this.schemas.resources,
+      (type) => this.providers.schema(type)
+    );
   }
 
   /** With each block's names checked; a type no provisioner has is refused at its label. */
@@ -105,19 +106,33 @@ export class ConfigLoader {
     for (const { provisioner, block, address } of blocks) checkProvisionerNames(provisioner, this.schemas.provisioners.get(provisioner.provisionerType.value), block, address);
   }
 
-  /** With its names checked, so a misspelled input is refused before anything is read. */
   private async loadDataSchemas(loadedModules: LoadedModule[]): Promise<void> {
-    const blocks = loadedModules.flatMap(({ address, program }) => program.flatMap((stmt) => (stmt.type === 'Data' ? [{ stmt, address }] : [])));
-    const firsts = firstOfEach(blocks, ({ stmt }) => stmt.dataSourceType).filter(({ stmt }) => !this.schemas.dataSources.has(stmt.dataSourceType));
-    const schemas = await Promise.allSettled(firsts.map(({ stmt, address }) => this.asked(stmt, address, () => this.providers.dataSourceSchema(stmt.dataSourceType))));
-    const loaded = new Map(firsts.map(({ stmt }, index) => [stmt.dataSourceType, schemas[index]]));
+    const blocks = loadedModules.flatMap(({ address, program }) => program.flatMap((block) => (block.type === 'Data' ? [{ block, address }] : [])));
+    await this.loadChecked(
+      blocks,
+      ({ dataSourceType }) => dataSourceType,
+      this.schemas.dataSources,
+      (type) => this.providers.dataSourceSchema(type)
+    );
+  }
+
+  /** Each type asked once, and each block's names checked, so a misspelled name is refused before anything is read. A failure names the first block of its type. */
+  private async loadChecked<B extends ResourceBlock | DataBlock>(
+    blocks: { block: B; address: Context }[],
+    typeOf: (block: B) => string,
+    table: SchemaTable,
+    ask: (type: string) => Promise<Schema>
+  ): Promise<void> {
+    const firsts = firstOfEach(blocks, ({ block }) => typeOf(block)).filter(({ block }) => !table.has(typeOf(block)));
+    const schemas = await Promise.allSettled(firsts.map(({ block, address }) => this.asked(block, address, () => ask(typeOf(block)))));
+    const loaded = new Map(firsts.map(({ block }, index) => [typeOf(block), schemas[index]]));
 
     // In the order written, so a block's misspelled name comes before a later type that fails to load.
-    for (const { stmt, address } of blocks) {
-      const type = stmt.dataSourceType;
+    for (const { block, address } of blocks) {
+      const type = typeOf(block);
       const asked = loaded.get(type);
-      if (asked !== undefined && !this.schemas.dataSources.has(type)) this.schemas.dataSources.set(type, taken(asked));
-      checkNames(stmt, this.schemas.dataSources.get(type), address);
+      if (asked !== undefined && !table.has(type)) table.set(type, taken(asked));
+      checkNames(block, table.get(type), address);
     }
   }
 

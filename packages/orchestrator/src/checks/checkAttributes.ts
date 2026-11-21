@@ -2,10 +2,8 @@ import { Schema } from '@clay/provider';
 import { ConfigError, DataBlock, Position, ProviderBlock, ProvisionerBlock, ResourceBlock, spell } from '@clay/parser';
 
 import { nameProblem, namesOf } from '../values/conformValues';
-import { LoadedResource } from '../config/ModuleLoader';
 import { Context } from '../keys';
 import { withPlace } from '../place';
-import { SchemaTable } from '../providers/Schemas';
 
 type Block = ResourceBlock | DataBlock | ProviderBlock;
 
@@ -44,7 +42,7 @@ function problemIn(block: Block, schema: Schema): { message: string; position: P
   return computedSet(block, schema) ?? ignoredProblem(block, schema) ?? (named && { message: named.message, position: block.position });
 }
 
-/** Runs before any value is resolved. */
+/** Runs before any value is resolved, once per block, so a block with no instance is checked too. */
 export function checkNames(block: Block, schema: Schema, address: Context): void {
   const problem = problemIn(block, schema);
   if (problem) throw withPlace(new ConfigError(problem.message, problem.position), problem.position, spell(block), address);
@@ -57,9 +55,4 @@ export function checkProvisionerNames({ provisionerType, attributes, position }:
 
   const at = named.set === undefined ? position : attributes[named.set].position;
   throw withPlace(new ConfigError(named.message, at), at, spell(within), address);
-}
-
-/** Once per block, so a block with no instance is checked too. */
-export function checkAttributes(loaded: LoadedResource[], schemas: SchemaTable): void {
-  for (const { block, address } of loaded) checkNames(block, schemas.get(block.resourceType), address);
 }

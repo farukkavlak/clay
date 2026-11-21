@@ -14,7 +14,6 @@ import { applyMoves, checkMovedAway, copyForMoves, copyResources, Moves, movesIn
 import { checkImports, Imports, importsIn } from './plan/imports';
 import { Refresh } from './plan/refresh';
 import { checkRead, heldBy, hidingReason } from './providers/providerResult';
-import { checkAttributes } from './checks/checkAttributes';
 import { checkPreventDestroy } from './checks/preventDestroy';
 import { checkSameObjects } from './checks/sameObject';
 import { ConfigFiles } from './config/ConfigFiles';
@@ -229,11 +228,10 @@ export class Orchestrator {
     { moves, imports, refresh }: Steps,
     { values, part }: Source
   ): Promise<DesiredState & { graph: Graph<GraphNode>; root: Statement[] }> {
-    const { mainProgram, loadedResources, loadedModules, resourceSchemas } = await loader.load(values, part);
+    const { mainProgram, loadedResources, loadedModules } = await loader.load(values, part);
 
     const graph = graphBuilder.buildExecutionGraph(loadedResources, loadedModules);
     graphBuilder.withProviders(graph, state);
-    checkAttributes(loadedResources, resourceSchemas);
     await writtenCheck.check(loadedResources, loadedModules, graph);
     const moved = movesIn(loadedModules);
     const importing = importsIn(loadedModules);

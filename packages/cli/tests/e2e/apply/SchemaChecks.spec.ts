@@ -85,6 +85,14 @@ const withNull = new ShapingProvider(({ mode }) => ({ mode, port: null }));
 const leftOut = new ShapingProvider(({ mode }) => ({ mode }));
 const filled = new ShapingProvider(({ mode }) => ({ mode, port: ExactNumber.parse('80') }));
 
+/** A tally whose schema has dropped `pair`, as after a provider upgrade. */
+class PairlessProvider extends TallyProvider {
+  override async getSchema(): Promise<Schema> {
+    const { pair: _pair, ...rest } = await super.getSchema();
+    return rest;
+  }
+}
+
 describe('a configuration held to the schema', () => {
   let dir: string;
   let file: string;
@@ -121,6 +129,12 @@ describe('a configuration held to the schema', () => {
       position: { file: 'main.clay', line: 4, column: 13 },
       block: 'resource "local_file" "a"',
     });
+  });
+
+  it('refuses a name the resource does not have before a value in it that does not resolve', async () => {
+    const config = `resource "local_file" "a" {\n  path    = "${file}"\n  contnet = local_file.missing.content\n}`;
+
+    await expect(newOrchestrator().plan(config)).rejects.toThrow('local_file has no attribute "contnet"');
   });
 
   // Names are checked once per block, even one that makes no instance.
@@ -206,6 +220,16 @@ describe('a configuration held to the schema', () => {
 
     const { resources } = await new LocalBackend(dir).read();
     expect(resources['tally.t'].attributes).toMatchObject({ rule: { mode: '1', port: ExactNumber.parse('80') }, pair: ['2', ExactNumber.parse('3')] });
+  });
+
+  it('refuses a saved plan that sets a name its resource no longer has, where it is written', async () => {
+    const config = 'resource "tally" "t" {\n  pair = ["a", 1]\n}';
+    const saved = parsePlanFile(serializePlan(await newOrchestrator().plan(config), { 'main.clay': config }, 'default'), 'plan.json');
+    const run = async () => {
+      for await (const event of newOrchestrator(new PairlessProvider()).runPlan(saved, config)) if (event.type === 'failed') throw event.error;
+    };
+
+    await expect(run()).rejects.toMatchObject({ message: 'tally has no attribute "pair"', position: { line: 2, column: 10 } });
   });
 
   it('takes null for a name its object type requires, since null is a value of every type', async () => {
