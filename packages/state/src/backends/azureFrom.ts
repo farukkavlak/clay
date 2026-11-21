@@ -1,6 +1,6 @@
 import { ACCOUNT_KEY, AzureBackend, AzureCredential, LONGEST_BLOB_NAME, SAS_TOKEN } from './AzureBackend';
+import { checkObjectKey } from './objectKey';
 import { checkNames, checkNoSecrets, Environment, requiredText, Settings, urlOf, variable } from './settings';
-import { checkNotBeside, checkNotWorkspaceState, LOCK_BESIDE } from './workspaces';
 
 const SECRETS = new Map([
   ['access_key', ACCOUNT_KEY],
@@ -36,14 +36,10 @@ function containerOf(settings: Settings): string {
 /** The SDK resolves "." and ".." in the path, which would name another blob, or one in another container. */
 function keyOf(settings: Settings): string {
   const key = requiredText(settings, 'key');
-  const parts = key.split('/');
   if (key.length > LONGEST_KEY) settings.refuse(`key of backend "azure" is ${key.length} characters long, and ${LONGEST_KEY} at most leaves room for ".lock"`, 'key');
-  if (key.startsWith('/') || key.endsWith('/')) settings.refuse(`key of backend "azure" is "${key}", which must not start or end with "/"`, 'key');
-  if (parts.includes('')) settings.refuse(`key of backend "azure" is "${key}", which must not hold "//"`, 'key');
+  const parts = checkObjectKey(settings, key);
   if (parts.some((part) => part === '.' || part === '..')) settings.refuse(`key of backend "azure" is "${key}", which must not hold a "." or ".." part`, 'key');
   if (key.endsWith('.')) settings.refuse(`key of backend "azure" is "${key}", which must not end with "."`, 'key');
-  checkNotBeside(settings, 'key', key, parts, LOCK_BESIDE);
-  checkNotWorkspaceState(settings, 'key', key, parts);
 
   return key;
 }

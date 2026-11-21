@@ -1,6 +1,6 @@
+import { checkObjectKey } from './objectKey';
 import { LONGEST_S3_KEY, S3Backend } from './S3Backend';
 import { checkNames, checkNoSecrets, Environment, requiredText, Settings, urlOf, variable } from './settings';
-import { checkNotBeside, checkNotWorkspaceState, LOCK_BESIDE } from './workspaces';
 
 const SECRETS = new Map([
   ['access_key', 'AWS_ACCESS_KEY_ID, a profile or a role'],
@@ -22,16 +22,11 @@ function bucketOf(settings: Settings): string {
   return bucket;
 }
 
-/** S3 lists a key ending in "/" as a folder, and one with an empty part names another object than the path it reads as. */
 function keyOf(settings: Settings): string {
   const key = requiredText(settings, 'key');
   const bytes = Buffer.byteLength(key, 'utf8');
   if (bytes > LONGEST_KEY) settings.refuse(`key of backend "s3" is ${bytes} bytes long, and ${LONGEST_KEY} at most leaves room for ".lock"`, 'key');
-  if (key.startsWith('/') || key.endsWith('/')) settings.refuse(`key of backend "s3" is "${key}", which must not start or end with "/"`, 'key');
-  if (key.includes('//')) settings.refuse(`key of backend "s3" is "${key}", which must not hold "//"`, 'key');
-  const parts = key.split('/');
-  checkNotBeside(settings, 'key', key, parts, LOCK_BESIDE);
-  checkNotWorkspaceState(settings, 'key', key, parts);
+  checkObjectKey(settings, key);
 
   return key;
 }
