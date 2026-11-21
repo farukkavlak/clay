@@ -232,7 +232,7 @@ export class Orchestrator {
 
     const graph = graphBuilder.buildExecutionGraph(loadedResources, loadedModules);
     graphBuilder.withProviders(graph, state);
-    await writtenCheck.check(loadedResources, loadedModules, graph);
+    await writtenCheck.check(loadedModules, graph);
     const moved = movesIn(loadedModules);
     const importing = importsIn(loadedModules);
     const importsTo = checkImports(importing, { resources: loadedResources, modules: loadedModules }, this.providers);

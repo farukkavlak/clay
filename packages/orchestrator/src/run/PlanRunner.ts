@@ -102,7 +102,6 @@ export class PlanRunner {
       named,
       outputs,
       read,
-      blocks: new Map(config.loadedResources.map(({ uniqueId, block }) => [uniqueId, block])),
       byBlock: groupBy(
         actions.filter((action) => action.type !== 'DELETE'),
         blockKey
@@ -135,8 +134,10 @@ export class PlanRunner {
     if (signal?.aborted && node.kind === 'data') return false;
 
     const actions = yield* this.visitor.visit(key, node, applying, state);
+    if (node.kind !== 'resource') return [];
+
+    const resource = node.block;
     return actions.map((action) => {
-      const resource = applying.blocks.get(key)!;
       const running = { written: resource.attributes, destroyed: destroyed.get(Address.of(action).toString()), resource };
       return () => this.step(action, state, signal, running);
     });

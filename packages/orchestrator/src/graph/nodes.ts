@@ -1,5 +1,5 @@
 import { ModuleAddress } from '@clay/core';
-import { AttributeValue, DataBlock, ModuleBlock, Position, ProviderBlock, ReferenceNode, spellProvider } from '@clay/parser';
+import { AttributeValue, DataBlock, ModuleBlock, Position, ProviderBlock, ReferenceNode, ResourceBlock, spellProvider } from '@clay/parser';
 
 import { dataSourceAddress, ModuleCall } from '../keys';
 import { Declared } from '../values/declared';
@@ -27,7 +27,7 @@ const SPELLED = { variable: 'var', local: 'local', output: 'output' };
 
 export type GraphNode =
   /** `alias` is the provider instance its block takes, left out for the default one. */
-  | ({ kind: 'resource'; alias?: string } & InModule)
+  | ({ kind: 'resource'; block: ResourceBlock; alias?: string } & InModule)
   | ({ kind: 'variable' } & ValueNode)
   | ({ kind: 'local' } & LocalNode)
   | ({ kind: 'output' } & OutputNode)
@@ -37,6 +37,7 @@ export type GraphNode =
   /** The resource types it makes, so an object of one is destroyed after it is configured; `block` where the configuration sets it. */
   | ({ kind: 'provider'; name: string; alias?: string; resources: readonly string[]; block?: ProviderBlock } & InModule);
 
+export type ResourceNode = Extract<GraphNode, { kind: 'resource' }>;
 export type DataNode = Extract<GraphNode, { kind: 'data' }>;
 
 /** `module.m.var.x`; a resource's key already is its address. */

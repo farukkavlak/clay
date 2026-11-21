@@ -19,7 +19,7 @@ import { carried, outputOf, sensitiveAmong, Value } from '../values/Value';
 import { DataPlanner, DataRead } from './DataPlanner';
 import { PlanReader, Walk } from './PlanReader';
 import { DependencyGraphBuilder } from '../graph/DependencyGraphBuilder';
-import { GraphNode, LocalNode, OutputNode, ValueNode } from '../graph/nodes';
+import { GraphNode, LocalNode, OutputNode, ResourceNode, ValueNode } from '../graph/nodes';
 import { LoadedResource } from '../config/ModuleLoader';
 import { inOrder } from '../providers/Limit';
 import { Moves } from './moves';
@@ -130,24 +130,23 @@ export class DesiredStateBuilder {
     refresh?.begin(state);
     this.walk = walk;
     this.createsFirst = this.createFirst(loadedResources, graph);
-    const byKey = new Map(loadedResources.map((r) => [r.address.toString(), r]));
     const found = new Map<string, Found>();
 
     await graph.walk(async (key) => {
-      found.set(key, await this.planNode(key, graph.getNode(key), byKey, graph, state));
+      found.set(key, await this.planNode(key, graph.getNode(key), graph, state));
     }, isProvider(graph));
 
     return this.desiredFrom(graph, found);
   }
 
-  private async planNode(key: string, node: GraphNode, byKey: Map<string, LoadedResource>, graph: Graph<GraphNode>, state: State): Promise<Found> {
+  private async planNode(key: string, node: GraphNode, graph: Graph<GraphNode>, state: State): Promise<Found> {
     switch (node.kind) {
       case 'module': {
         this.planCall(node, state);
         return {};
       }
       case 'resource': {
-        return { resources: await this.planResource(key, byKey.get(key)!, node.alias, graph, state) };
+        return { resources: await this.planResource(key, node, graph, state) };
       }
       case 'data': {
         return { reads: await this.data.plan(key, node, graph, state, this.walk) };
@@ -206,16 +205,15 @@ export class DesiredStateBuilder {
     this.modules.expandCall(module, block, (value, parse, caller) => this.reads.readAt(this.walk, value, block, caller, state, parse));
   }
 
-  private async planResource(key: string, { address, block }: LoadedResource, alias: string | undefined, graph: Graph<GraphNode>, state: State): Promise<ConfiguredResource[]> {
+  private async planResource(key: string, { module, block, alias }: ResourceNode, graph: Graph<GraphNode>, state: State): Promise<ConfiguredResource[]> {
+    const address = new Address(module, block.resourceType, block.name);
     const blocks = this.graphBuilder.resourceDependencies(graph, key);
     // First, so an import goes where the object the state held is gone.
     await this.refresh?.block(address, state);
     this.needImports(address, state);
 
     const planned = await inOrder(
-      this.modules
-        .of(address.module)
-        .map(async (module) => this.planBlock(new Address(module, address.resourceType, address.name), block, alias, dependenciesOf(blocks, module), state))
+      this.modules.of(module).map(async (instance) => this.planBlock(new Address(instance, block.resourceType, block.name), block, alias, dependenciesOf(blocks, instance), state))
     );
 
     return planned.flat();

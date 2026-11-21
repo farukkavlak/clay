@@ -5,11 +5,12 @@ import { describe, expect, it } from 'vitest';
 
 import { ApplyNode, applyGraph } from '../../src/plan/applyGraph';
 import { GraphNode } from '../../src/graph/nodes';
+import { recBlock } from './recBlock';
 
 /** Resource blocks `rec.<name>`, each edge from what is read to what reads it. */
 function config(names: string[], reads: [string, string][] = []): Graph<GraphNode> {
   const graph = new Graph<GraphNode>();
-  for (const name of names) graph.addNode(`rec.${name}`, { kind: 'resource', module: ModuleAddress.root });
+  for (const name of names) graph.addNode(`rec.${name}`, { kind: 'resource', module: ModuleAddress.root, block: recBlock(name) });
   for (const [read, reader] of reads) graph.addEdge(`rec.${read}`, `rec.${reader}`);
 
   return graph;
@@ -297,7 +298,7 @@ describe('applyGraph', () => {
 
     it('makes what stays wait only for the objects in the module instance it names', () => {
       const graph = new Graph<GraphNode>();
-      graph.addNode('module.p.rec.r', { kind: 'resource', module: ModuleAddress.root.child('p') });
+      graph.addNode('module.p.rec.r', { kind: 'resource', module: ModuleAddress.root.child('p'), block: recBlock('r') });
       const other = 'module.p[1].module.q[0].rec.a';
       const state = holding(object(other), object('module.p[0].rec.r', 'module.p[0].module.q.rec.a'));
 

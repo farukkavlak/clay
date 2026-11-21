@@ -24,7 +24,6 @@ import { Approved, Checked, PlannedOutput, undeclared } from './savedPlanChecks'
 /** What a run applies each block with. */
 export interface Applying extends Checked {
   read: Omit<Approved, 'actions' | 'outputs'>;
-  blocks: Map<string, ResourceBlock>;
   byBlock: Map<string, PlanAction[]>;
   /** The root outputs' names, in the order the configuration gives them. */
   declared: string[];
@@ -52,7 +51,7 @@ export class ApplyVisitor {
   ) {}
 
   /** Gives the actions of a resource block, checked; the other kinds are resolved or read. */
-  async *visit(key: string, node: GraphNode, { named, outputs, resolved, read, blocks, byBlock }: Applying, state: State): AsyncGenerator<RunEvent, PlanAction[]> {
+  async *visit(key: string, node: GraphNode, { named, outputs, resolved, read, byBlock }: Applying, state: State): AsyncGenerator<RunEvent, PlanAction[]> {
     if (node.kind === 'provider') await this.configure(node, state);
     if (node.kind === 'module') this.expandCall(node, state);
     if (node.kind === 'data') yield* this.readData(node, named.get(key), read, state);
@@ -61,7 +60,7 @@ export class ApplyVisitor {
     // Only this output: a sibling may read a resource made later.
     if (node.kind === 'output') this.resolveInEvery(node, { outputs, resolved }, state);
 
-    return node.kind === 'resource' ? this.actionsOf(blocks.get(key)!, node.module, byBlock.get(key) ?? [], state) : [];
+    return node.kind === 'resource' ? this.actionsOf(node.block, node.module, byBlock.get(key) ?? [], state) : [];
   }
 
   private async configure({ name, block }: Extract<GraphNode, { kind: 'provider' }>, state: State): Promise<void> {

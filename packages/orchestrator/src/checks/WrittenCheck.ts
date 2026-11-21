@@ -1,5 +1,5 @@
 import { Schema } from '@clay/provider';
-import { ModuleAddress } from '@clay/core';
+import { Address, ModuleAddress } from '@clay/core';
 import { Graph } from '@clay/graph';
 import { AttributeValue, DataBlock, ModuleBlock, OutputBlock, Position, ProvisionerBlock, ResourceBlock, spell, VariableBlock } from '@clay/parser';
 
@@ -19,8 +19,8 @@ import { marksOf } from '../values/schemaMarks';
 import { ScopeManager } from '../config/ScopeManager';
 import { checkWritten } from '../expressions/validations';
 import { plainOf, Value } from '../values/Value';
-import { GraphNode } from '../graph/nodes';
-import { LoadedModule, LoadedResource } from '../config/ModuleLoader';
+import { GraphNode, ResourceNode } from '../graph/nodes';
+import { LoadedModule } from '../config/ModuleLoader';
 import { isProvider } from '../graph/providerNodes';
 import { Schemas } from '../providers/Schemas';
 
@@ -36,8 +36,8 @@ export class WrittenCheck {
   ) {}
 
   /** Runs after names are checked, so each has a type in its schema. */
-  async check(loadedResources: LoadedResource[], loadedModules: LoadedModule[], graph: Graph<GraphNode>): Promise<void> {
-    await this.checkBlocks(loadedResources, graph);
+  async check(loadedModules: LoadedModule[], graph: Graph<GraphNode>): Promise<void> {
+    await this.checkBlocks(graph);
 
     for (const { address, program } of loadedModules)
       for (const stmt of program) {
@@ -51,12 +51,11 @@ export class WrittenCheck {
    * Each after the locals and blocks it reads, so no check reads down a chain of them, which can be longer than the call stack.
    * The checks stop at the first that fails; providers are asked all at once, and an earlier refusal of theirs comes first.
    */
-  private async checkBlocks(loadedResources: LoadedResource[], graph: Graph<GraphNode>): Promise<void> {
-    const resources = new Map(loadedResources.map((loaded) => [loaded.uniqueId, loaded]));
+  private async checkBlocks(graph: Graph<GraphNode>): Promise<void> {
     const asked: Promise<unknown>[] = [];
 
     try {
-      for (const key of graph.passing(isProvider(graph))) asked.push(this.checkNode(graph.getNode(key), key, resources));
+      for (const key of graph.passing(isProvider(graph))) asked.push(this.checkNode(graph.getNode(key)));
     } catch (error) {
       await inOrder(asked);
       throw error;
@@ -65,15 +64,16 @@ export class WrittenCheck {
   }
 
   /** The provider's answer, once the rest is checked. */
-  private checkNode(node: GraphNode, key: string, resources: Map<string, LoadedResource>): Promise<unknown> {
+  private checkNode(node: GraphNode): Promise<unknown> {
     if (node.kind === 'local') this.read(node.value, node.declaration, node.module);
-    if (node.kind === 'resource') return this.checkResource(resources.get(key)!);
+    if (node.kind === 'resource') return this.checkResource(node);
     if (node.kind === 'data') return this.checkData(node.block, node.module);
 
     return Promise.resolve();
   }
 
-  private checkResource({ address, block }: LoadedResource): Promise<unknown> {
+  private checkResource({ module, block }: ResourceNode): Promise<unknown> {
+    const address = new Address(module, block.resourceType, block.name);
     const declaration = spell(block);
     const schema = this.schemas.resources.get(block.resourceType);
 

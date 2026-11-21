@@ -5,11 +5,12 @@ import { describe, expect, it } from 'vitest';
 import { growth, LINEAR } from '../../../../tests/growth';
 import { GraphNode } from '../../src/graph/nodes';
 import { applyGraph } from '../../src/plan/applyGraph';
+import { recBlock } from './recBlock';
 
 /** How long ordering a replace of each of `size` instances of one block takes. */
 function replaced(size: number): number {
   const config = new Graph<GraphNode>();
-  config.addNode('rec.a', { kind: 'resource', module: ModuleAddress.root });
+  config.addNode('rec.a', { kind: 'resource', module: ModuleAddress.root, block: recBlock('a') });
   const addresses = Array.from({ length: size }, (_, index) => Address.parse(`rec.a[${index}]`));
   const actions = addresses.map((address) => ({ type: 'REPLACE' as const, ...address.fields() }));
   const resources = Object.fromEntries(addresses.map((address) => [address.toString(), { ...address.fields(), attributes: {}, dependencies: [] }]));

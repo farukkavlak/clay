@@ -93,7 +93,7 @@ export class DependencyGraphBuilder {
     this.references.clear();
     this.outputs = new Map(loadedModules.map((mod) => [scopeOf(mod.address), [...outputsOf(mod.program).keys()]]));
 
-    for (const { uniqueId, address, block } of loadedResources) graph.addNode(uniqueId, { kind: 'resource', module: address.module, ...aliasIn(block.provider?.alias) });
+    for (const { uniqueId, address, block } of loadedResources) graph.addNode(uniqueId, { kind: 'resource', module: address.module, block, ...aliasIn(block.provider?.alias) });
     for (const [key, node] of this.valueNodes(loadedModules)) graph.addNode(key, node);
 
     const moduleScopes = new Set(loadedModules.map((mod) => scopeOf(mod.address)));
