@@ -1,6 +1,5 @@
 import { ACCOUNT_KEY, AzureBackend, AzureCredential, LONGEST_BLOB_NAME, SAS_TOKEN } from './AzureBackend';
-import { urlOf } from './httpFrom';
-import { checkNames, checkNoSecrets, Environment, requiredText, Settings, variable } from './settings';
+import { checkNames, checkNoSecrets, Environment, requiredText, Settings, urlOf, variable } from './settings';
 import { checkNotBeside, checkNotWorkspaceState, LOCK_BESIDE } from './workspaces';
 
 const SECRETS = new Map([

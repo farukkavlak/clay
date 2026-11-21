@@ -1,6 +1,5 @@
-import { urlOf } from './httpFrom';
 import { LONGEST_S3_KEY, S3Backend } from './S3Backend';
-import { checkNames, checkNoSecrets, Environment, requiredText, Settings, variable } from './settings';
+import { checkNames, checkNoSecrets, Environment, requiredText, Settings, urlOf, variable } from './settings';
 import { checkNotBeside, checkNotWorkspaceState, LOCK_BESIDE } from './workspaces';
 
 const SECRETS = new Map([

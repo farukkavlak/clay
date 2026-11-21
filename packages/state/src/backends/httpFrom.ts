@@ -2,7 +2,7 @@ import { HttpBackend } from './HttpBackend';
 import { credentialsFrom, PASSWORD, USERNAME } from './httpCredentials';
 import { RETRY_NAMES, retryFrom } from './httpRetry';
 import { caFrom, CLIENT_CERTIFICATE, CLIENT_KEY, clientFrom } from './httpTls';
-import { checkNames, checkNoSecrets, Environment, requiredText, Settings } from './settings';
+import { checkNames, checkNoSecrets, Environment, requiredText, Settings, urlOf } from './settings';
 
 const SECRETS = new Map([
   ['username', USERNAME],
@@ -16,34 +16,6 @@ const TAKES = ['address', 'update_method', 'lock_address', 'lock_method', 'unloc
 const METHOD = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
 /** CONNECT opens a tunnel, and TRACE and TRACK echo the request back: none of them keeps a state. */
 const FORBIDDEN = new Set(['CONNECT', 'TRACE', 'TRACK']);
-
-function parsed(settings: Settings, value: string, name: string): URL {
-  try {
-    return new URL(value);
-  } catch (error) {
-    if (error instanceof TypeError) settings.refuse(`${name} of backend "${settings.type}" is "${value}", which is not a URL`, name);
-
-    throw error;
-  }
-}
-
-/** Credentials in the address would be printed in every message that names where the state is. */
-export function urlProblem(url: URL): 'scheme' | 'credentials' | undefined {
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') return 'scheme';
-  if (url.username !== '' || url.password !== '') return 'credentials';
-
-  return undefined;
-}
-
-/** The value is left out of the refusal of credentials, which would print them. */
-export function urlOf(settings: Settings, value: string, name: string): URL {
-  const url = parsed(settings, value, name);
-  const problem = urlProblem(url);
-  if (problem === 'scheme') settings.refuse(`${name} of backend "${settings.type}" is "${value}", and only http and https are taken`, name);
-  if (problem === 'credentials') settings.refuse(`${name} of backend "${settings.type}" holds credentials, which would be printed wherever the address is`, name);
-
-  return url;
-}
 
 function methodOf(settings: Settings, name: string, fallback: string): string {
   const value = settings.text(name);
