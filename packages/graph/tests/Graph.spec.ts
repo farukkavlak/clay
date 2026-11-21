@@ -26,6 +26,18 @@ describe('Graph', () => {
     expect(graph.getNode('A')).toBe('Data A');
   });
 
+  it('refuses to give a node it does not hold, naming it', () => {
+    const graph = new Graph<string>();
+    graph.addNode('A', 'Data A');
+    expect(() => graph.getNode('B')).toThrow('Node B does not exist');
+  });
+
+  it('gives a node it holds even when its data is empty', () => {
+    const graph = new Graph<null>();
+    graph.addNode('A', null);
+    expect(graph.getNode('A')).toBeNull();
+  });
+
   it('should throw when adding duplicate node', () => {
     const graph = new Graph<string>();
     graph.addNode('A', 'val');

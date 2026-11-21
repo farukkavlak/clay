@@ -38,8 +38,8 @@ const going = (address: string): PlanAction => ({ type: 'DELETE', ...Address.par
 /** The order as layers, where a wait node, which runs nothing, holds nothing back a layer. */
 const layers = (graph: Graph<ApplyNode>) =>
   graph
-    .topologicalSort((key) => graph.getNode(key)!.kind === 'wait')
-    .map((layer) => layer.filter((key) => graph.getNode(key)!.kind !== 'wait').sort())
+    .topologicalSort((key) => graph.getNode(key).kind === 'wait')
+    .map((layer) => layer.filter((key) => graph.getNode(key).kind !== 'wait').sort())
     .filter((layer) => layer.length > 0);
 
 describe('applyGraph', () => {

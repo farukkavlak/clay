@@ -99,7 +99,7 @@ describe('DependencyGraphBuilder', () => {
     const kinds = graph
       .topologicalSort()
       .flat()
-      .map((key) => graph.getNode(key)!.kind)
+      .map((key) => graph.getNode(key).kind)
       .sort();
 
     expect(kinds).toEqual(['resource', 'variable']);

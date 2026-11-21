@@ -134,7 +134,7 @@ export class DesiredStateBuilder {
     const found = new Map<string, Found>();
 
     await graph.walk(async (key) => {
-      found.set(key, await this.planNode(key, graph.getNode(key)!, byKey, graph, state));
+      found.set(key, await this.planNode(key, graph.getNode(key), byKey, graph, state));
     }, isProvider(graph));
 
     return this.desiredFrom(graph, found);

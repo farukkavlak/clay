@@ -11,7 +11,7 @@ import { providerKey } from '../keys';
 export const isProvider =
   <T extends { kind: string }>(graph: Graph<T>) =>
   (key: string) =>
-    graph.getNode(key)?.kind === 'provider';
+    graph.getNode(key).kind === 'provider';
 
 /** An object in state: its address, its type and the provider instance that made it. Deposed ones too. */
 interface Held {

@@ -33,8 +33,11 @@ export class Graph<T> {
     this.reverseList.get(to)!.add(from);
   }
 
-  getNode(id: string): T | undefined {
-    return this.nodes.get(id);
+  getNode(id: string): T {
+    if (!this.nodes.has(id)) throw new Error(`Node ${id} does not exist`);
+
+    // Held, so the data is a T even where it is itself empty.
+    return this.nodes.get(id) as T;
   }
 
   hasNode(id: string): boolean {

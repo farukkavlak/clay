@@ -118,7 +118,7 @@ export class DependencyGraphBuilder {
     const cycle = graph.findCycle();
     if (!cycle) return;
 
-    const message = `Dependency cycle detected: ${cycle.map((key) => spellNode(key, graph.getNode(key)!)).join(' -> ')}`;
+    const message = `Dependency cycle detected: ${cycle.map((key) => spellNode(key, graph.getNode(key))).join(' -> ')}`;
     for (const [i, node] of cycle.slice(0, -1).entries()) {
       const reference = this.references.get(edgeKey(cycle[i + 1], node));
       if (reference) throw withPlace(new Error(message), reference.position, reference.declaration, reference.context);
@@ -234,7 +234,7 @@ export class DependencyGraphBuilder {
         if (seen.has(dependency)) continue;
         seen.add(dependency);
 
-        if (graph.getNode(dependency)!.kind === 'resource') found.add(dependency);
+        if (graph.getNode(dependency).kind === 'resource') found.add(dependency);
         else queue.push(dependency);
       }
 

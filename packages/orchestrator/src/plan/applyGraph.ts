@@ -259,7 +259,7 @@ function refuseLoop(graph: Graph<ApplyNode>, going: Map<string, Going>): void {
   if (!loop) return;
 
   const steps = loop.slice(0, -1).flatMap((key) => {
-    const node = graph.getNode(key)!;
+    const node = graph.getNode(key);
     return node.kind === 'wait' ? [] : [spellApply(key, node)];
   });
   const message = `No order applies this plan: ${steps[0]} waits for ${[...steps.slice(1), steps[0]].join(', which waits for ')}`;

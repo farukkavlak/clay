@@ -112,7 +112,7 @@ export class PlanRunner {
     };
     // Each replace's object destroyed before its block runs, kept for what it ignored.
     const destroyed = new Map<string, Resource>();
-    const reach = (key: string) => this.reach(key, graph.getNode(key)!, applying, state, pace.signal, destroyed);
+    const reach = (key: string) => this.reach(key, graph.getNode(key), applying, state, pace.signal, destroyed);
 
     try {
       return yield* walkTogether(graph.passing(isProvider(graph)), graph, reach, pace.parallelism, isFailure);

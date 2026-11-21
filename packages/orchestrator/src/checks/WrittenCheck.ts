@@ -56,7 +56,7 @@ export class WrittenCheck {
     const asked: Promise<unknown>[] = [];
 
     try {
-      for (const key of graph.passing(isProvider(graph))) asked.push(this.checkNode(graph.getNode(key)!, key, resources));
+      for (const key of graph.passing(isProvider(graph))) asked.push(this.checkNode(graph.getNode(key), key, resources));
     } catch (error) {
       await inOrder(asked);
       throw error;
