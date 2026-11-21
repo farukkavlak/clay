@@ -13,6 +13,7 @@ async function waited(size: number): Promise<number> {
 
 describe('a limit', () => {
   it('starts work that waits in time that grows with it', async () => {
-    expect(await growth(8000, repeated(waited, 10))).toBeLessThan(LINEAR);
+    // Below 4000 an Array.shift queue is still cheap; far above it, waiting promises fill the heap.
+    expect(await growth(4000, repeated(waited, 20))).toBeLessThan(LINEAR);
   });
 });
