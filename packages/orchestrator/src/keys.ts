@@ -20,10 +20,9 @@ export function outputKey(scope: string, name: string): string {
 
 /** Runs before anything inside the module. */
 export function callKey(module: ModuleAddress): string {
-  const scope = new ModuleAddress(module.path.slice(0, -1)).toString();
-  const { name } = module.path.at(-1)!;
+  const scope = module.caller.toString();
 
-  return scope ? `${scope}.module:${name}` : `module:${name}`;
+  return scope ? `${scope}.module:${module.name}` : `module:${module.name}`;
 }
 
 /** Left out for the default instance, as state and the plan leave it out. */
@@ -85,12 +84,12 @@ export class ModuleCall {
   constructor(public readonly instance: ModuleAddress) {}
 
   get caller(): ModuleAddress {
-    return new ModuleAddress(this.instance.path.slice(0, -1));
+    return this.instance.caller;
   }
 
   /** As `module.a[1].module.b`, shared by every instance it makes there. */
   get call(): ModuleAddress {
-    return this.caller.child(this.instance.path.at(-1)!.name);
+    return this.caller.child(this.instance.name);
   }
 }
 

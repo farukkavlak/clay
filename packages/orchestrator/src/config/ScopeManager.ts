@@ -27,6 +27,8 @@ export interface DeclaredBlock<B = ResourceBlock | DataBlock> {
   context: Context;
 }
 
+const named = (scope: string) => scope || 'the root module';
+
 /** Variables per module, since each instance reads the same values; locals and outputs per instance, since each has its own. */
 export class ScopeManager {
   private variables: Map<string, Map<string, VariableValue>> = new Map();
@@ -49,14 +51,26 @@ export class ScopeManager {
     return this.variables.get(scope)?.get(name);
   }
 
+  /** The graph refuses an undeclared variable before anything reads one. */
+  declaredVariable(scope: string, name: string): VariableValue {
+    const variable = this.getVariable(scope, name);
+    if (variable === undefined) throw new Error(`variable "${name}" is not declared in ${named(scope)}, which is a bug`);
+
+    return variable;
+  }
+
   /** Per module, not per instance: every instance declares the same locals. */
   declareLocal(scope: string, local: LocalBlock): void {
     if (!this.declaredLocals.has(scope)) this.declaredLocals.set(scope, new Map());
     this.declaredLocals.get(scope)!.set(local.name, local);
   }
 
-  declaredLocal(scope: string, name: string): LocalBlock | undefined {
-    return this.declaredLocals.get(scope)?.get(name);
+  /** The graph refuses an undeclared local before anything reads one. */
+  declaredLocal(scope: string, name: string): LocalBlock {
+    const local = this.declaredLocals.get(scope)?.get(name);
+    if (local === undefined) throw new Error(`local "${name}" is not declared in ${named(scope)}, which is a bug`);
+
+    return local;
   }
 
   setLocal(scope: string, name: string, value: Value): void {
@@ -94,8 +108,12 @@ export class ScopeManager {
     this.declaredBlocks.set(key, block);
   }
 
-  declaredBlock(key: string): DeclaredBlock | undefined {
-    return this.declaredBlocks.get(key);
+  /** Every block is declared at load, before anything reads one. */
+  declaredBlock(key: string): DeclaredBlock {
+    const block = this.declaredBlocks.get(key);
+    if (block === undefined) throw new Error(`${key} is not declared, which is a bug`);
+
+    return block;
   }
 
   /** Per call, not per instance of the module that makes it. */
@@ -103,8 +121,12 @@ export class ScopeManager {
     this.declaredCalls.set(key, call);
   }
 
-  declaredCall(key: string): DeclaredBlock<ModuleBlock> | undefined {
-    return this.declaredCalls.get(key);
+  /** Every module call is declared at load, before anything reads one. */
+  declaredCall(key: string): DeclaredBlock<ModuleBlock> {
+    const call = this.declaredCalls.get(key);
+    if (call === undefined) throw new Error(`${key} is not declared, which is a bug`);
+
+    return call;
   }
 
   /** Each output's type, `dynamic` where it names none. */
@@ -116,7 +138,11 @@ export class ScopeManager {
     this.directories.set(scope, directory);
   }
 
-  getDirectory(scope: string): string | undefined {
-    return this.directories.get(scope);
+  /** Every called module is loaded, with its directory, before anything in it is read. */
+  getDirectory(scope: string): string {
+    const directory = this.directories.get(scope);
+    if (directory === undefined) throw new Error(`the directory of ${named(scope)} is not loaded, which is a bug`);
+
+    return directory;
   }
 }

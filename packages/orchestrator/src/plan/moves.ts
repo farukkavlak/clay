@@ -176,8 +176,7 @@ function movedModule(module: ModuleAddress, move: Move, { from, to }: ModuleMove
   if (!head || !under(module.path.slice(head.length), from.path, whole)) return undefined;
 
   const [moved, ...below] = module.path.slice(head.length + from.path.length - 1);
-  const [{ name }] = to.path.slice(-1);
-  const target = whole ? [...to.path.slice(0, -1), moved.key === undefined ? { name } : { name, key: moved.key }] : to.path;
+  const target = whole ? to.caller.child(to.name, moved.key).path : to.path;
 
   return new ModuleAddress([...head, ...target, ...below]);
 }

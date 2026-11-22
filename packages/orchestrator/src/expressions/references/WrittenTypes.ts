@@ -106,9 +106,9 @@ export class WrittenTypes {
     return this.resourceType(reference, where, position);
   }
 
-  /** The graph has already refused undeclared variables; each is declared once for all instances of its module. */
+  /** Each is declared once for all instances of its module. */
   private variableType(reference: VariableReference, scope: string): Written {
-    const variable = this.scopeManager.getVariable(scope, reference.name)!;
+    const variable = this.scopeManager.declaredVariable(scope, reference.name);
     const { type = types.dynamic, sensitive, value, context, block } = variable;
     const held: Source['held'] = (read, readNode) => givenTo('variable', reference.name, read, variable, readNode);
 
@@ -127,9 +127,9 @@ export class WrittenTypes {
 
   /** The block `where` is in, and where its for_each is read; the graph refuses `each` anywhere else first. */
   private repeated(where: Context): DeclaredBlock<ResourceBlock | DataBlock | ModuleBlock> {
-    if (where instanceof ModuleCall) return this.scopeManager.declaredCall(callKey(where.call.withoutKeys()))!;
-    if (where instanceof DataInstance) return this.scopeManager.declaredBlock(dataSourceKey(scopeOf(where.module.withoutKeys()), where.type, where.name))!;
-    if (where instanceof Address) return this.scopeManager.declaredBlock(blockKey(where))!;
+    if (where instanceof ModuleCall) return this.scopeManager.declaredCall(callKey(where.call.withoutKeys()));
+    if (where instanceof DataInstance) return this.scopeManager.declaredBlock(dataSourceKey(scopeOf(where.module.withoutKeys()), where.type, where.name));
+    if (where instanceof Address) return this.scopeManager.declaredBlock(blockKey(where));
 
     throw new Error('each.value was read outside a block');
   }
@@ -188,7 +188,7 @@ export class WrittenTypes {
 
   /** Every block is declared at load, and each value is held in the type its schema gives it. */
   private valuesOf(key: string, schema: Schema): Values {
-    const { block, context } = this.scopeManager.declaredBlock(key)!;
+    const { block, context } = this.scopeManager.declaredBlock(key);
     const type = block.type === 'Resource' ? block.resourceType : block.dataSourceType;
     const declaration = spell(block);
 

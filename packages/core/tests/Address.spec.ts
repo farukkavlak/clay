@@ -169,6 +169,20 @@ describe('Address', () => {
       expect(ModuleAddress.root.child('app', 0).child('db').child('web', 'a').withoutKeys().toString()).toBe('module.app.module.db.module.web');
     });
 
+    it('gives the module instance that calls a module, and the name of its call', () => {
+      const db = ModuleAddress.root.child('app', 0).child('db', 'x');
+
+      expect([db.caller.toString(), db.name]).toEqual(['module.app[0]', 'db']);
+      expect(ModuleAddress.root.child('app').caller).toEqual(ModuleAddress.root);
+    });
+
+    it.each([
+      ['caller', () => ModuleAddress.root.caller],
+      ['name', () => ModuleAddress.root.name],
+    ])('says it is a bug where the %s of the root module is asked for', (_, ask) => {
+      expect(ask).toThrow(new Error('the root module has no call, which is a bug'));
+    });
+
     it('leaves the module it grows from as it was', () => {
       const app = ModuleAddress.root.child('app');
       app.child('db');

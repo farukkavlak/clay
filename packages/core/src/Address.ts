@@ -47,6 +47,23 @@ export class ModuleAddress {
     return this.path.length === 0;
   }
 
+  /** The module instance whose call made this one. */
+  get caller(): ModuleAddress {
+    return this.call().caller;
+  }
+
+  /** The name of the call that made this module. */
+  get name(): string {
+    return this.call().step.name;
+  }
+
+  private call(): { caller: ModuleAddress; step: ModuleStep } {
+    const step = this.path.at(-1);
+    if (step === undefined) throw new Error('the root module has no call, which is a bug');
+
+    return { caller: new ModuleAddress(this.path.slice(0, -1)), step };
+  }
+
   withoutKeys(): ModuleAddress {
     return new ModuleAddress(this.path.map(({ name }) => ({ name })));
   }

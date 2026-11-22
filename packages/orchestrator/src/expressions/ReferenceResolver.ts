@@ -224,8 +224,8 @@ export class ReferenceResolver {
   /** Placed at the local, so a mistake in it is not reported at whatever reads it first. */
   private writtenLocal(reference: LocalReference, where: Context): Value {
     const module = moduleOf(where).withoutKeys();
-    // The graph has already refused undeclared locals, and one that reads itself.
-    const local = this.scopeManager.declaredLocal(scopeOf(module), reference.name)!;
+    // The graph has already refused one that reads itself.
+    const local = this.scopeManager.declaredLocal(scopeOf(module), reference.name);
     const read = this.writtenLocals.get(local.value) ?? tryAt(local.value.position, spell(local), module, () => this.readAsWritten(local.value, module));
 
     this.writtenLocals.set(local.value, read);
@@ -276,8 +276,7 @@ export class ReferenceResolver {
   private directory(reference: PathReference, where: Context): string {
     if (reference.name === 'root') return '.';
 
-    // Every called module is loaded, with its directory, before anything in it is read.
-    return this.scopeManager.getDirectory(scopeOf(moduleOf(where).withoutKeys()))!;
+    return this.scopeManager.getDirectory(scopeOf(moduleOf(where).withoutKeys()));
   }
 
   resolveAttributes(attributes: Record<string, AttributeValue>, state: State, context?: Context): Record<string, Value> {
