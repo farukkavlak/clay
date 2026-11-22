@@ -254,6 +254,13 @@ describe('ReferenceResolver', () => {
       expect(read('[for s in [] : s]')).toEqual(valueOf(types.tuple([]), []));
     });
 
+    // The parser binds a name only inside its for.
+    it('says it is a bug where a name bound by a for is read outside one', () => {
+      const bound: AttributeValue = { type: 'Bound', value: steps('s'), position };
+
+      expect(() => resolverWith().resolveValue(bound, state, context)).toThrow(new Error('"s" is read as the name a for gives, but no for gives it, which is a bug'));
+    });
+
     it('refuses a step an item does not have, where the step is written', () => {
       expect(() => read('[for o in [{ p = "x" }] : o.q]')).toThrow(new ConfigError('o has no key "q"', atColumn(48)));
     });

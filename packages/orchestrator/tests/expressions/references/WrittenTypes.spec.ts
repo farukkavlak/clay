@@ -156,6 +156,10 @@ describe('the marks a module output reference will have, read before any instanc
   it.each(['count', 'for_each'] as const)('is the output written sensitive under every instance, with %s, where the reference names none', (repetition) => {
     expect(outputMarksOf(repetition)).toEqual([[EVERY_ITEM, 'size']]);
   });
+
+  it('says it is a bug where the module declares no such output, which the graph refuses first', () => {
+    expect(() => outputOf(undefined, 'nope')).toThrow(new Error('module.n has no output "nope", which is a bug'));
+  });
 });
 
 describe('the values whose marks a reference takes, read before any instance exists', () => {

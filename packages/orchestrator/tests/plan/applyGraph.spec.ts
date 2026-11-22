@@ -3,7 +3,7 @@ import { Graph } from '@clay/graph';
 import { ActionType, PlanAction } from '@clay/planner';
 import { describe, expect, it } from 'vitest';
 
-import { ApplyNode, applyGraph } from '../../src/plan/applyGraph';
+import { ApplyNode, applyGraph, checkApplyOrder } from '../../src/plan/applyGraph';
 import { GraphNode } from '../../src/graph/nodes';
 import { resourceBlock } from '../ast';
 
@@ -42,6 +42,19 @@ const layers = (graph: Graph<ApplyNode>) =>
     .topologicalSort((key) => graph.getNode(key).kind === 'wait')
     .map((layer) => layer.filter((key) => graph.getNode(key).kind !== 'wait').sort())
     .filter((layer) => layer.length > 0);
+
+/** The create-first replace of rec.x waits for itself through rec.r. */
+const waitsForItself = () => ({
+  graph: config(
+    ['a', 'x', 'r'],
+    [
+      ['a', 'r'],
+      ['x', 'r'],
+    ]
+  ),
+  actions: [act('REPLACE', 'a'), act('REPLACE', 'x', { createBeforeDestroy: true }), act('UPDATE', 'r', { dependencies: ['rec.a', 'rec.x'] })],
+  state: stateOf([held('a'), held('x', 'a'), held('r', 'a', 'x')]),
+});
 
 describe('applyGraph', () => {
   it('destroys an object after the provider of its type is configured', () => {
@@ -130,17 +143,15 @@ describe('applyGraph', () => {
   });
 
   it('refuses an order that waits for itself, naming each step', () => {
-    const graph = config(
-      ['a', 'x', 'r'],
-      [
-        ['a', 'r'],
-        ['x', 'r'],
-      ]
-    );
-    const actions = [act('REPLACE', 'a'), act('REPLACE', 'x', { createBeforeDestroy: true }), act('UPDATE', 'r', { dependencies: ['rec.a', 'rec.x'] })];
-    const state = stateOf([held('a'), held('x', 'a'), held('r', 'a', 'x')]);
+    const { graph, actions, state } = waitsForItself();
 
     expect(() => applyGraph(graph, actions, state)).toThrow('No order applies this plan: rec.a waits for destroying the old rec.x, which waits for rec.r, which waits for rec.a');
+  });
+
+  it('says it is a bug where the create-first replace in a refused order has no block', () => {
+    const { graph, actions, state } = waitsForItself();
+
+    expect(() => checkApplyOrder(graph, actions, state, [])).toThrow(new Error('no block plans rec.x, a create-first replace, which is a bug'));
   });
 
   it('names a replace destroyed apart in a refused order', () => {

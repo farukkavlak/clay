@@ -68,7 +68,10 @@ export class ModuleInstances {
   of(module: ModuleAddress): ModuleAddress[] {
     if (module.isRoot()) return [module];
 
-    return this.instances.get(module.toString())!;
+    const instances = this.instances.get(module.toString());
+    if (instances === undefined) throw new Error(`the instances of ${module} are asked for before its call is run, which is a bug`);
+
+    return instances;
   }
 
   /** `call` is the call in one caller instance, as `module.a[1].module.b`. */

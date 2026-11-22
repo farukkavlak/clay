@@ -185,7 +185,11 @@ export class ApplyVisitor {
       const value = this.resolveOutput(node, instance, state);
       if (!instance.isRoot()) continue;
 
-      this.checkOutput(node, value, outputs.get(node.name)!);
+      // The saved plan was checked to have every root output before the run.
+      const planned = outputs.get(node.name);
+      if (planned === undefined) throw new Error(`the plan has no output "${node.name}" to check it against, which is a bug`);
+
+      this.checkOutput(node, value, planned);
       resolved.set(node.name, outputOf(value, node.declared.sensitive));
     }
   }

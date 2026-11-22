@@ -180,7 +180,10 @@ export class ReferenceResolver {
   private resolveBound(node: BoundNode, state: State, context: Context | undefined, reading: Reading): Value {
     const [first, ...path] = node.value;
     const name = String(stepKey(first));
-    const read: Reader = (steps) => readPath(reading.given.get(name)!, name, steps, node.position);
+    const given = reading.given.get(name);
+    if (given === undefined) throw new Error(`"${name}" is read as the name a for gives, but no for gives it, which is a bug`);
+
+    const read: Reader = (steps) => readPath(given, name, steps, node.position);
 
     return this.indexes.readWith({ node, state, context, reading }, path, read);
   }

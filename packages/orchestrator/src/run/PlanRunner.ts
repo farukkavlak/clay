@@ -1,4 +1,4 @@
-import { Address, Resource, State } from '@clay/core';
+import { Address, Output, Resource, State } from '@clay/core';
 import { Graph } from '@clay/graph';
 import { changesState, PlanAction } from '@clay/planner';
 import { moveResources, StateManager } from '@clay/state';
@@ -23,7 +23,13 @@ import { isProvider } from '../graph/providerNodes';
 
 /** In declared order, so the state does not depend on which resolved first; one not reached keeps its old value. */
 function holdOutputs(state: State, { resolved, declared }: Applying): void {
-  state.outputs = Object.fromEntries(declared.filter((name) => resolved.has(name)).map((name) => [name, resolved.get(name)!]));
+  const outputs: Record<string, Output> = {};
+  for (const name of declared) {
+    const output = resolved.get(name);
+    if (output !== undefined) outputs[name] = output;
+  }
+
+  state.outputs = outputs;
 }
 
 /** Held until nothing else runs, so a reader that stops at a failure cannot cut an action short. */

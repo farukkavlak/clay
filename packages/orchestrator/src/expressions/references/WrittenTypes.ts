@@ -157,7 +157,10 @@ export class WrittenTypes {
     if (output === undefined) return { type: outputsType(outputs), sensitive: marked(sensitive), from, path };
 
     // The graph has already refused undeclared outputs.
-    return { type: outputs.get(output)!, sensitive: sensitive.includes(output) ? WHOLE : [], from, path };
+    const type = outputs.get(output);
+    if (type === undefined) throw new Error(`${call} has no output "${output}", which is a bug`);
+
+    return { type, sensitive: sensitive.includes(output) ? WHOLE : [], from, path };
   }
 
   /** The type of the attribute, of the whole instance where the reference names none, or of every instance where it names no instance. */

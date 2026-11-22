@@ -310,7 +310,9 @@ export function checkApplyOrder(config: Graph<GraphNode>, actions: PlanAction[],
     if (!(error instanceof NoApplyOrder)) throw error;
 
     // A create-first replace is planned from its block, so the block is there.
-    const found = desired.find((resource) => resource.address.toString() === error.createFirst.toString())!;
+    const found = desired.find((resource) => resource.address.toString() === error.createFirst.toString());
+    if (found === undefined) throw new Error(`no block plans ${error.createFirst}, a create-first replace, which is a bug`, { cause: error });
+
     throw withPlace(error, found.block.position, spell(found.block), found.address.module);
   }
 }

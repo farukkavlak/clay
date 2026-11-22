@@ -15,6 +15,10 @@ describe('ModuleInstances', () => {
     expect(new ModuleInstances().of(ModuleAddress.root)).toEqual([ModuleAddress.root]);
   });
 
+  it('says it is a bug where the instances of a module are asked for before its call is run', () => {
+    expect(() => new ModuleInstances().of(ModuleAddress.root.child('a'))).toThrow(new Error('the instances of module.a are asked for before its call is run, which is a bug'));
+  });
+
   it('makes the instance of a module in a module under the instance of the module that calls it', () => {
     const modules = new ModuleInstances();
 

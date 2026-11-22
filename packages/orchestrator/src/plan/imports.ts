@@ -150,10 +150,10 @@ export class Imports {
    * changes nothing plans no change of marks, protection or provisioners.
    */
   adopt(state: State, desired: DesiredResource[]): void {
-    const byAddress = new Map(desired.map((resource) => [resource.address.toString(), resource]));
+    for (const { address, sensitive, dependencies, preventDestroy, destroyProvisioners } of desired) {
+      const key = address.toString();
+      if (!this.ids.has(key)) continue;
 
-    for (const key of this.ids.keys()) {
-      const { sensitive, dependencies, preventDestroy, destroyProvisioners } = byAddress.get(key)!;
       state.resources[key] = {
         ...state.resources[key],
         ...(sensitive.length > 0 && { sensitive }),
