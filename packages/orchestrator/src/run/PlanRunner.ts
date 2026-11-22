@@ -1,4 +1,4 @@
-import { Address, Output, Resource, State } from '@clay/core';
+import { Address, Resource, State } from '@clay/core';
 import { Graph } from '@clay/graph';
 import { changesState, PlanAction } from '@clay/planner';
 import { moveResources, StateManager } from '@clay/state';
@@ -23,13 +23,13 @@ import { isProvider } from '../graph/providerNodes';
 
 /** In declared order, so the state does not depend on which resolved first; one not reached keeps its old value. */
 function holdOutputs(state: State, { resolved, declared }: Applying): void {
-  const outputs: Record<string, Output> = {};
-  for (const name of declared) {
-    const output = resolved.get(name);
-    if (output !== undefined) outputs[name] = output;
-  }
-
-  state.outputs = outputs;
+  // Built from entries, so an output named `__proto__` is a key and not the prototype.
+  state.outputs = Object.fromEntries(
+    declared.flatMap((name) => {
+      const output = resolved.get(name);
+      return output === undefined ? [] : [[name, output]];
+    })
+  );
 }
 
 /** Held until nothing else runs, so a reader that stops at a failure cannot cut an action short. */
