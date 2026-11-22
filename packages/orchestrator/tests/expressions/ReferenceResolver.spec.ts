@@ -12,13 +12,12 @@ import { ReferenceResolver } from '../../src/expressions/ReferenceResolver';
 import { UnresolvedReferenceError } from '../../src/expressions/UnresolvedReferenceError';
 import { ScopeManager } from '../../src/config/ScopeManager';
 import { Value, valueOf } from '../../src/values/Value';
-import { ref, steps, str } from '../ast';
+import { map, ref, steps, str } from '../ast';
 import { schemasOf } from '../schemas';
 
 const position = { file: 'main.clay', line: 1, column: 1 };
 const num = (text: string): AttributeValue => ({ type: 'Number', value: ExactNumber.parse(text), position });
 const list = (...value: AttributeValue[]): AttributeValue => ({ type: 'List', value, position });
-const map = (value: Record<string, AttributeValue>): AttributeValue => ({ type: 'Map', value, position });
 const template = (...value: TemplatePart[]): AttributeValue => ({ type: 'Template', value, position });
 const reference = (...parts: (string | number)[]) => ({ type: 'Reference' as const, value: steps(...parts), position });
 

@@ -10,6 +10,13 @@ export const steps = (...parts: (string | number | Step)[]): Step[] =>
 
 export const ref = (...parts: string[]): AttributeValue => ({ type: 'Reference', value: steps(...parts), position });
 
+export const map = (value: Record<string, AttributeValue>): AttributeValue => ({
+  type: 'Map',
+  value,
+  keys: Object.fromEntries(Object.keys(value).map((key) => [key, { position }])),
+  position,
+});
+
 export const resourceBlock = (resourceType: string, name: string, attributes: Record<string, AttributeValue> = {}): ResourceBlock => ({
   type: 'Resource',
   resourceType,

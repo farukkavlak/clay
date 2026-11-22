@@ -72,8 +72,13 @@ export type AttributeValue =
   | NegateNode
   | ConditionalNode
   | (Node & { type: 'List'; value: AttributeValue[] })
-  /** `quoted` holds the keys written in quotes, at their quote, and is left out where none is. */
-  | (Node & { type: 'Map'; value: Record<string, AttributeValue>; quoted?: Record<string, Position> });
+  | (Node & { type: 'Map'; value: Record<string, AttributeValue>; keys: Record<string, MapKey> });
+
+/** Where a map key is written, at its quote where it has one. */
+export interface MapKey {
+  position: Position;
+  quoted?: true;
+}
 
 /** An attribute, then the keys and indexes below it, as written in `ignore_changes`. */
 export interface IgnoredPath {
@@ -192,7 +197,15 @@ export interface ModuleBlock extends Node {
   forEach?: AttributeValue;
   /** What every block in the module waits for. */
   dependsOn?: ReferenceNode[];
+  /** The caller's instance each provider in the module takes in place of its default one. */
+  providers?: ProviderPass[];
   attributes: Record<string, AttributeValue>;
+}
+
+/** `name = to` in a module call's `providers`, placed at the key. */
+export interface ProviderPass extends Node {
+  name: string;
+  to: ProviderChoice;
 }
 
 /** How the provider `name` is configured; its arguments are checked against the provider's schema for them. */

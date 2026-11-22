@@ -1,4 +1,4 @@
-import { AttributeValue, DataBlock, ResourceBlock, spell, Statement } from '@clay/parser';
+import { AttributeValue, spell, Statement } from '@clay/parser';
 
 import { checkDefaults } from '../values/declared';
 import { dataSourceKey } from '../keys';
@@ -8,7 +8,7 @@ import { ProviderRegistry } from '../providers/ProviderRegistry';
 import { tryAt } from '../place';
 import { ReferenceResolver } from '../expressions/ReferenceResolver';
 import { LoadedModule, LoadedResource, ModuleLoader, Part, RootValues } from '../config/ModuleLoader';
-import { checkProviderChoices } from '../config/providerChoices';
+import { checkProviderChoices, checkProviderPasses } from '../config/providerChoices';
 import { SchemaLoader } from './SchemaLoader';
 
 export interface LoadedConfig {
@@ -39,7 +39,8 @@ export class ConfigLoader {
     this.declareData(loadedModules);
     this.declareCalls(loadedModules);
     await this.schemaLoader.forBlocks(loadedResources, loadedModules);
-    checkProviderChoices(loadedModules, (block) => this.handlerOf(block));
+    checkProviderChoices(loadedModules, (block) => this.providers.handlerOf(block));
+    checkProviderPasses(loadedModules, (name) => this.providers.has(name));
     await this.schemaLoader.forProviderBlocks(mainProgram);
 
     return { mainProgram, loadedResources, loadedModules };
@@ -58,11 +59,6 @@ export class ConfigLoader {
         checkDefaults(holder, stmt.name, stmt.valueType, { tree: stmt.defaults, read }, (node, check) => tryAt(node.position, declaration, address, check));
       }
     }
-  }
-
-  /** Once the schemas are loaded, since a type no provider handles is refused there, at its block. */
-  private handlerOf(block: ResourceBlock | DataBlock): string {
-    return (block.type === 'Resource' ? this.providers.get(block.resourceType) : this.providers.reader(block.dataSourceType)).name;
   }
 
   /** Apart from a resource's, since a data source and a resource may share a type and a name. */

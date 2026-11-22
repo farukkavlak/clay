@@ -1,4 +1,5 @@
-import { ConfigError, DataBlock, ProviderChoice, ResourceBlock, spell, spellProvider, Statement } from '@clay/parser';
+import { ModuleAddress } from '@clay/core';
+import { ConfigError, DataBlock, ModuleBlock, ProviderChoice, ProviderPass, ResourceBlock, spell, spellProvider, Statement } from '@clay/parser';
 
 import { withPlace } from '../place';
 import { LoadedModule } from './ModuleLoader';
@@ -35,4 +36,52 @@ export function checkProviderChoices(loadedModules: LoadedModule[], handlerOf: H
       if (problem !== undefined) throw withPlace(new ConfigError(problem, position), position, spell(stmt), address);
     }
   }
+}
+
+/** What is wrong with what a call passes, if anything, and where: the caller gives only what it has. */
+function passProblem({ name, to, position }: ProviderPass, declared: ReadonlySet<string>, isProvider: (name: string) => boolean): ConfigError | undefined {
+  if (!isProvider(name)) return new ConfigError(`No provider is named "${name}"`, position);
+  if (to.alias !== undefined && !declared.has(spellProvider(name, to.alias)))
+    return new ConfigError(`providers passes ${spellProvider(name, to.alias)}, which this module does not declare`, to.position);
+
+  return undefined;
+}
+
+/** Each call's `providers`, refused where it is written. */
+export function checkProviderPasses(loadedModules: LoadedModule[], isProvider: (name: string) => boolean): void {
+  for (const { address, program } of loadedModules) {
+    const declared = declaredInstances(program);
+
+    for (const stmt of program) {
+      if (stmt.type !== 'Module') continue;
+
+      for (const pass of stmt.providers ?? []) {
+        const problem = passProblem(pass, declared, isProvider);
+        if (problem !== undefined) throw withPlace(problem, problem.position, spell(stmt), address);
+      }
+    }
+  }
+}
+
+/** The alias of the root instance a block in a module takes, left out for the default one. The provider is asked for only where a call passes one. */
+export type RootAlias = (module: ModuleAddress, provider: () => string, alias: string | undefined) => string | undefined;
+
+/** Through each call on the way up: a provider its call does not pass takes the caller's default one. */
+export function rootAliases(loadedModules: LoadedModule[]): RootAlias {
+  const calls = new Map<string, ModuleBlock>();
+  for (const { address, program } of loadedModules) for (const stmt of program) if (stmt.type === 'Module') calls.set(address.child(stmt.name).toString(), stmt);
+
+  const inRoot: RootAlias = (module, provider, alias) => {
+    if (module.isRoot()) return alias;
+    // A module has no provider block, so its blocks name no alias.
+    if (alias !== undefined) throw new Error(`${module} names ${spellProvider(provider(), alias)}, which no call passes it, which is a bug`);
+
+    const call = calls.get(module.toString());
+    if (call === undefined) throw new Error(`no call makes ${module}, which is a bug`);
+
+    const pass = call.providers?.find(({ name }) => name === provider());
+    return inRoot(module.caller, provider, pass?.to.alias);
+  };
+
+  return inRoot;
 }

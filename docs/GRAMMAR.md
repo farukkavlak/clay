@@ -113,8 +113,8 @@ A `type` and a `name` are written as strings, and each has to spell an `IDENTIFI
 an address joins them with `.` and a reference reads them back. A `type` cannot be `var`,
 `local`, `data`, `module`, `count`, `each`, `path`, `clay` or `self`, the words a reference reads
 as something other than a type. A variable cannot be named `source`, since a module call reads that as
-the module's path, or `count`, `for_each` or `depends_on`, which a module call keeps for
-itself.
+the module's path, or `count`, `for_each`, `depends_on` or `providers`, which a module call
+keeps for itself.
 
 `attributes` is zero or more `name = value` pairs, in any order, without separators, and
 no name twice.
@@ -144,7 +144,7 @@ What the engine reads from each:
 | `variable` | `default`, a constant: no reference or function call; `type`, read below; `sensitive`; `description`, checked and dropped; another attribute is refused where written                |
 | `locals`   | every attribute, as a value of any kind; it may read anything a resource's attribute may, another local among them                                                                   |
 | `output`   | `value`; `type`, read below; `sensitive`, which hides the value of a root output wherever it is printed; `description`, checked and dropped; `depends_on`                            |
-| `module`   | `source`, a literal string naming a directory relative to the file; `count` or `for_each`, and `depends_on`; every other attribute is an input                                       |
+| `module`   | `source`, a literal string naming a directory relative to the file; `count` or `for_each`, `depends_on` and `providers`, read by the engine; every other attribute is an input       |
 | `provider` | `alias`, a literal string, read by the engine; every other attribute, held to the provider's schema for its configuration; only in the root module, once for each provider and alias |
 | `moved`    | `from` and `to`, each a resource or module address written out                                                                                                                       |
 | `import`   | `to`, a resource address written out, `id`, an expression, and optionally `for_each`                                                                                                 |

@@ -5,7 +5,7 @@ import { ConfigError } from '../ConfigError';
 import { typedBodyOf, TypedRules } from './typedBody';
 
 /** Reserved by a module call, so no module input may use them. */
-const CALL_ARGUMENTS = new Set(['count', 'for_each', 'depends_on']);
+const CALL_ARGUMENTS = new Set(['count', 'for_each', 'depends_on', 'providers']);
 
 /** Checked with the label, before the body is read. */
 export function checkVariableName({ value, position }: Label): void {

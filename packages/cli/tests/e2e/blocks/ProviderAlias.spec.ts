@@ -230,3 +230,127 @@ describe('a provider block with an alias', () => {
     });
   });
 });
+
+const call = (name: string, more = '') => `module "${name}" {\n  source = "./${name}"\n${more}}\n`;
+const TO_WEST = '  providers = { cfg = cfg.west }\n';
+
+describe('a module call that passes provider instances', () => {
+  let dir: string;
+  let calls: string[];
+
+  const engine = () => orchestratorIn(dir, () => new Regional(calls), new LocalProvider());
+
+  const apply = async (config: string, destroy = false) => {
+    const run = engine();
+    const planned = await run.plan(config, { destroy });
+    for await (const event of run.runPlan(planned, config)) if (event.type === 'failed') throw event.error;
+  };
+
+  const refusal = (config: string) =>
+    engine()
+      .plan(config)
+      .catch((error_: unknown) => error_);
+
+  const state = async () => JSON.parse(await fs.readFile(path.join(dir, 'clay.state.json'), 'utf8')) as State;
+
+  const writeModule = async (name: string, content: string) => {
+    await fs.mkdir(path.join(dir, name), { recursive: true });
+    await fs.writeFile(path.join(dir, name, 'main.clay'), content);
+  };
+
+  beforeEach(async () => {
+    dir = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'clay-module-providers-')));
+    calls = [];
+  });
+
+  afterEach(async () => {
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it('makes, refreshes and destroys an object in a module by the instance its call passes, which the state records', async () => {
+    await writeModule('m', thing('a'));
+    await writeModule('n', thing('b'));
+    const config = BLOCKS + call('m', TO_WEST) + call('n');
+
+    await apply(config);
+    expect([...calls].sort()).toEqual(['create a in us', 'create b in eu']);
+    const { resources } = await state();
+    expect(resources['module.m.cfg_thing.a'].alias).toBe('west');
+    expect(Object.hasOwn(resources['module.n.cfg_thing.b'], 'alias')).toBe(false);
+
+    calls.splice(0);
+    await apply(config, true);
+    expect([...calls].sort()).toEqual(['delete a in us', 'delete b in eu', 'read a in us', 'read b in eu']);
+  });
+
+  it('reads a data source in a module by the instance its call passes', async () => {
+    await writeModule('m', 'data "cfg_data" "d" { label = "d" }\n');
+
+    await engine().plan(BLOCKS + call('m', TO_WEST));
+
+    expect(calls).toEqual(['read data d in us']);
+  });
+
+  it.each([
+    ['passes nothing', ''],
+    ['passes its own default instance', '  providers = { cfg = cfg }\n'],
+  ])('passes the instance a module takes on to a module it calls that %s', async (_, middle) => {
+    await writeModule('m', call('g', middle));
+    await writeModule('m/g', thing('a'));
+
+    await apply(BLOCKS + call('m', TO_WEST));
+
+    expect(calls).toEqual(['create a in us']);
+  });
+
+  it('passes the same instance to every instance of a call with count', async () => {
+    await writeModule('m', thing('a'));
+
+    await apply(BLOCKS + call('m', `  count = 2\n${TO_WEST}`));
+
+    expect(calls).toEqual(['create a in us', 'create a in us']);
+  });
+
+  it.each([
+    [
+      'a value that is not a map',
+      '  providers = cfg.west\n',
+      'cfg.west',
+      'providers maps a provider of the module to an instance of the caller, as in providers = { local = local.west }',
+    ],
+    ['a provider named in quotes', '  providers = { "cfg" = cfg.west }\n', '"cfg" =', 'providers names each provider without quotes'],
+    ['a key that is not the provider of its value', '  providers = { clod = cfg.west }\n', 'cfg.west }', 'providers gives provider "clod" an instance of provider "cfg"'],
+    ['an instance of another provider', '  providers = { cfg = local }\n', 'local }', 'providers gives provider "cfg" an instance of provider "local"'],
+    [
+      'a value that names no instance',
+      '  providers = { cfg = "west" }\n',
+      '"west" }',
+      'providers maps a provider of the module to an instance of the caller, as in providers = { local = local.west }',
+    ],
+    ['an alias the caller does not declare', '  providers = { cfg = cfg.east }\n', 'cfg.east', 'providers passes provider "cfg" alias "east", which this module does not declare'],
+  ])('refuses %s, where it is written', async (_, providers, needle, message) => {
+    await writeModule('m', thing('a'));
+    const config = BLOCKS + call('m', providers);
+
+    expect(await refusal(config)).toMatchObject({ message, position: placeOf(config, needle) });
+  });
+
+  it('refuses a key that names no provider, where it is written', async () => {
+    await writeModule('m', thing('a'));
+    const config = BLOCKS + call('m', '  providers = { clod = clod }\n');
+
+    expect(await refusal(config)).toMatchObject({ message: 'No provider is named "clod"', position: placeOf(config, 'clod =') });
+  });
+
+  // A module has no provider block, so it has no alias to pass.
+  it('refuses an alias passed by a module, though the root declares it, where it is written', async () => {
+    const middle = call('g', TO_WEST);
+    await writeModule('m', middle);
+    await writeModule('m/g', thing('a'));
+
+    expect(await refusal(BLOCKS + call('m', TO_WEST))).toMatchObject({
+      message: 'providers passes provider "cfg" alias "west", which this module does not declare',
+      position: { file: 'm/main.clay', ...placeOf(middle, 'cfg.west') },
+    });
+  });
+});

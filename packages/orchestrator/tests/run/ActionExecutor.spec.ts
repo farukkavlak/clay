@@ -20,7 +20,7 @@ import { SameObjects } from '../../src/checks/sameObject';
 import { ScopeManager } from '../../src/config/ScopeManager';
 import { Limit } from '../../src/providers/Limit';
 import { DEFAULT_PARALLELISM } from '../../src/run/parallelism';
-import { str } from '../ast';
+import { map, str } from '../ast';
 import { schemasOf, tableOf } from '../schemas';
 
 /** An action with what its block gives, which the run hands over beside it. */
@@ -33,7 +33,7 @@ const withTags = (tags: Record<string, string>): Step => ({
   type: 'CREATE',
   resourceType: 'test',
   name: 'main',
-  attributes: { tags: { type: 'Map', value: Object.fromEntries(Object.entries(tags).map(([key, value]) => [key, str(value)])), position: str('').position } },
+  attributes: { tags: map(Object.fromEntries(Object.entries(tags).map(([key, value]) => [key, str(value)]))) },
   planned: { tags: { a: UNKNOWN, b: 'x' } },
   after: { tags: { a: UNKNOWN, b: 'x' } },
 });

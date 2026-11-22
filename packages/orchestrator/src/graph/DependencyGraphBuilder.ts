@@ -1,6 +1,6 @@
 import { ModuleAddress, State } from '@clay/core';
 import { Graph } from '@clay/graph';
-import { AttributeValue, callsIn, DataBlock, ModuleBlock, Position, ProviderBlock, ReferenceNode, spell, Statement } from '@clay/parser';
+import { AttributeValue, callsIn, DataBlock, ModuleBlock, Position, ProviderBlock, ReferenceNode, ResourceBlock, spell, Statement } from '@clay/parser';
 
 import { Instances, Repetition } from '../instances/Instances';
 import { declaredOf } from '../values/declared';
@@ -14,6 +14,7 @@ import { placed, tryAt, withPlace } from '../place';
 import { COUNT_INDEX_OUTSIDE, eachOutside, readCall, readInstance, SELF_OUTSIDE } from '../expressions/references/instance';
 import { Reference, ReferenceScanner } from '../expressions/references/ReferenceScanner';
 import { LoadedModule, LoadedResource, outputsOf } from '../config/ModuleLoader';
+import { rootAliases } from '../config/providerChoices';
 import { Queue } from '../Queue';
 
 function inputNames(attributes: Record<string, AttributeValue>): string[] {
@@ -70,6 +71,8 @@ interface Dependent {
 
 type ReferencePlace = Omit<Dependent, 'key' | 'given'> & { position: Position };
 
+type AliasOf = (module: ModuleAddress, block: ResourceBlock | DataBlock) => { alias?: string };
+
 const edgeKey = (from: string, to: string) => `${from} -> ${to}`;
 
 const inside = (module: ModuleAddress, scope: string) => {
@@ -93,8 +96,9 @@ export class DependencyGraphBuilder {
     this.references.clear();
     this.outputs = new Map(loadedModules.map((mod) => [scopeOf(mod.address), [...outputsOf(mod.program).keys()]]));
 
-    for (const { uniqueId, address, block } of loadedResources) graph.addNode(uniqueId, { kind: 'resource', module: address.module, block, ...aliasIn(block.provider?.alias) });
-    for (const [key, node] of this.valueNodes(loadedModules)) graph.addNode(key, node);
+    const aliasOf = this.aliasesIn(loadedModules);
+    for (const { uniqueId, address, block } of loadedResources) graph.addNode(uniqueId, { kind: 'resource', module: address.module, block, ...aliasOf(address.module, block) });
+    for (const [key, node] of this.valueNodes(loadedModules, aliasOf)) graph.addNode(key, node);
 
     const moduleScopes = new Set(loadedModules.map((mod) => scopeOf(mod.address)));
     for (const [key, node] of graph.entries()) this.addNodeDependencies(key, node, graph, moduleScopes);
@@ -241,16 +245,22 @@ export class DependencyGraphBuilder {
     return [...found].sort();
   }
 
+  /** A block in a module takes the root instance its calls pass down. */
+  private aliasesIn(loadedModules: LoadedModule[]): AliasOf {
+    const inRoot = rootAliases(loadedModules);
+    return (module, block) => aliasIn(inRoot(module, () => this.providers.handlerOf(block), block.provider?.alias));
+  }
+
   /** Variables, locals, outputs and data sources are nodes, so they run after what they read and before what reads them. */
-  private valueNodes(loadedModules: LoadedModule[]): Map<string, GraphNode> {
+  private valueNodes(loadedModules: LoadedModule[], aliasOf: AliasOf): Map<string, GraphNode> {
     const nodes = new Map<string, GraphNode>();
 
-    for (const { address, program } of loadedModules) for (const stmt of program) this.setNodes(stmt, address, nodes);
+    for (const { address, program } of loadedModules) for (const stmt of program) this.setNodes(stmt, address, nodes, aliasOf);
 
     return nodes;
   }
 
-  private setNodes(stmt: Statement, module: ModuleAddress, nodes: Map<string, GraphNode>): void {
+  private setNodes(stmt: Statement, module: ModuleAddress, nodes: Map<string, GraphNode>, aliasOf: AliasOf): void {
     const scope = scopeOf(module);
     const declaration = spell(stmt);
 
@@ -286,12 +296,12 @@ export class DependencyGraphBuilder {
         position: stmt.value.position,
         declaration,
       });
-    this.setBlockNodes(stmt, module, nodes);
+    this.setBlockNodes(stmt, module, nodes, aliasOf);
   }
 
-  private setBlockNodes(stmt: Statement, module: ModuleAddress, nodes: Map<string, GraphNode>): void {
+  private setBlockNodes(stmt: Statement, module: ModuleAddress, nodes: Map<string, GraphNode>, aliasOf: AliasOf): void {
     if (stmt.type === 'Module') this.setCallNodes(stmt, nodes, module);
-    if (stmt.type === 'Data') nodes.set(dataSourceKey(scopeOf(module), stmt.dataSourceType, stmt.name), { kind: 'data', module, block: stmt, ...aliasIn(stmt.provider?.alias) });
+    if (stmt.type === 'Data') nodes.set(dataSourceKey(scopeOf(module), stmt.dataSourceType, stmt.name), { kind: 'data', module, block: stmt, ...aliasOf(module, stmt) });
     if (stmt.type === 'Provider') {
       const alias = stmt.alias?.value;
       const node = { kind: 'provider' as const, module, name: stmt.name, ...(alias !== undefined && { alias }), resources: this.providers.resourcesOf(stmt.name), block: stmt };

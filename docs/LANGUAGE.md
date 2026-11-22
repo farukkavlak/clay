@@ -700,8 +700,25 @@ one is destroyed by the instance that made it, and the plan says `replace forced
 provider`. An object in state whose instance has no block left is refused at the plan,
 naming both, since nothing could refresh or destroy it.
 
-Only the root module has provider blocks, one for each provider and alias; a module uses
-its caller's. `clay validate` checks the block with values not known yet and configures no
+Only the root module has provider blocks, one for each provider and alias. A module takes
+its caller's default instances, or the ones its call passes with `providers`:
+
+```
+module "logs" {
+  source    = "./logs"
+  providers = { cloud = cloud.us }
+}
+```
+
+Each key names a provider of the module, and its value an instance of the same provider in
+the caller, written out as `provider` is. Every block in `logs` that takes the default
+`cloud` takes `cloud.us`, and so does every module `logs` calls, unless its own call
+passes another. Every instance of a call with `count` or `for_each` takes the same ones,
+and the state records the root instance. A key no provider has, a value of another
+provider, or an alias the caller does not declare is refused where it is written. A
+module has no provider block, so it has no alias to pass.
+
+`clay validate` checks the block with values not known yet and configures no
 provider. `clay destroy` works out only the provider blocks and what they read, so a
 variable only the rest reads needs no value, and a reference only the rest makes is not
 checked. Every file is still parsed. With no `.clay` file left, a destroy reads no value,

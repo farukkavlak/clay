@@ -1168,9 +1168,9 @@ an `alias` a second instance.
 - [x] Provider instances with configuration: `provider "aws" { region = "..." }`, and
       aliases for a second instance of the same provider. A destroy works out only the
       `provider` blocks and what they read
-- [ ] A module call passes provider instances to its module, as in
-      `providers = { cloud = cloud.us }`. A module uses its caller's default instances
-      today, and a block in it can name no alias
+- [ ] A module call passes provider aliases to its module, as in
+      `providers = { cloud.west = cloud.us }`, so a block in it can name an alias. A call
+      passes only default instances today, as in `providers = { cloud = cloud.us }`
 - [x] A plan refreshes after the configuration loads, as Terraform does. It reads every
       resource first today, so a mistake in `main.clay` is reported only after every read
       and a read error hides it, and a provider configured by a `provider` block would be

@@ -230,7 +230,12 @@ describe('Clay Parser', () => {
     it('takes a dash in an attribute name and in a map key, as the same identifier rule does', () => {
       const attributes = attributesOf('resource "local_file" "a" { my-attr = { my-key = 1 } }');
 
-      expect(attributes['my-attr']).toEqual({ type: 'Map', value: { 'my-key': { type: 'Number', value: ExactNumber.parse('1'), position: at(1, 50) } }, position: at(1, 39) });
+      expect(attributes['my-attr']).toEqual({
+        type: 'Map',
+        value: { 'my-key': { type: 'Number', value: ExactNumber.parse('1'), position: at(1, 50) } },
+        keys: { 'my-key': { position: at(1, 41) } },
+        position: at(1, 39),
+      });
     });
 
     it('takes a word a reference spells as a name, which an address reads without doubt', () => {
@@ -1126,7 +1131,12 @@ describe('Clay Parser', () => {
     });
 
     it('keeps a map with a key named for', () => {
-      expect(valueOf('{ for = 1 }')).toEqual({ type: 'Map', value: { for: { type: 'Number', value: ExactNumber.parse('1'), position: at(1, 32) } }, position: at(1, 24) });
+      expect(valueOf('{ for = 1 }')).toEqual({
+        type: 'Map',
+        value: { for: { type: 'Number', value: ExactNumber.parse('1'), position: at(1, 32) } },
+        keys: { for: { position: at(1, 26) } },
+        position: at(1, 24),
+      });
     });
 
     it('finds the references in its key', () => {
@@ -1288,7 +1298,7 @@ describe('Clay Parser', () => {
       expect(error.position).toEqual(at(1, 10));
     });
 
-    it.each(['count', 'for_each', 'depends_on'])('refuses a variable named "%s", which a module call keeps for itself', (name) => {
+    it.each(['count', 'for_each', 'depends_on', 'providers'])('refuses a variable named "%s", which a module call keeps for itself', (name) => {
       const error = errorOf(`variable "${name}" { default = 2 }`);
 
       expect(error.message).toBe(`"${name}" cannot be a variable name: a module call keeps it for itself.`);
@@ -1572,7 +1582,7 @@ describe('Clay Parser', () => {
 
       expect(variable.defaults).toEqual({
         element: {
-          values: { a: { type: 'Map', value: {}, position: at(2, 75) } },
+          values: { a: { type: 'Map', value: {}, keys: {}, position: at(2, 75) } },
           within: {
             a: { values: { b: { type: 'Boolean', value: true, position: at(2, 65) } } },
             c: { within: { 1: { values: { d: { type: 'Number', value: ExactNumber.parse('1'), position: at(2, 138) } } } } },

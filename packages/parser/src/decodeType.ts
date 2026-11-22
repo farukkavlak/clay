@@ -110,8 +110,8 @@ function objectTypes(call: CallNode, decode: Decode): ParsedType {
   const within: Record<string, TypeDefaults> = {};
   for (const [name, written] of Object.entries(held.value)) {
     // A reference reads an attribute by its bare name, so an object type names each one that way.
-    const quoted = held.quoted?.[name];
-    if (quoted) throw new ConfigError('An object type names its attributes without quotes', quoted);
+    const key = held.keys[name];
+    if (key.quoted) throw new ConfigError('An object type names its attributes without quotes', key.position);
 
     const attribute = attributeType(written, decode);
     attributes[name] = attribute.type;

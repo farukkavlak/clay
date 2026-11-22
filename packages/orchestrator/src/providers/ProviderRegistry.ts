@@ -1,4 +1,5 @@
 import { isName, NAME_RULE } from '@clay/core';
+import { DataBlock, ResourceBlock } from '@clay/parser';
 import { Provider, Schema } from '@clay/provider';
 
 import { checkConfigSchema, checkDataSourceSchema, checkSchema } from './providerResult';
@@ -62,6 +63,15 @@ export class ProviderRegistry {
 
   handles(type: string): boolean {
     return this.providers.has(type);
+  }
+
+  has(name: string): boolean {
+    return this.named.has(name);
+  }
+
+  /** The name of the provider that handles a resource or reads a data source. */
+  handlerOf(block: ResourceBlock | DataBlock): string {
+    return (block.type === 'Resource' ? this.get(block.resourceType) : this.reader(block.dataSourceType)).name;
   }
 
   get(type: string): Provider {
